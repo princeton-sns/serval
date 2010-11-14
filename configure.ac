@@ -5,7 +5,7 @@ AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE
 
-AM_PROG_CC_C_O
+AC_PROG_CC
 AC_PROG_CXX
 AC_PROG_CPP
 AC_PROG_LIBTOOL
@@ -13,9 +13,13 @@ AC_PROG_INSTALL
 
 AM_CONFIG_HEADER(config.h)
 
+dnl Clear CFLAGS and CXXFLAGS
+CFLAGS=
+CXXFLAGS=
+
 dnl Set some decent default flags
-CFLAGS="${CFLAGS} -Wall"
-CXXFLAGS="${CXXFLAGS} -Wall"
+CFLAGS="$CFLAGS -Wall -O2"
+CXXFLAGS="$CXXFLAGS -Wall -O2"
 EXTRA_DEFINES=
 
 top_dir=${PWD}
@@ -54,6 +58,8 @@ AM_CONDITIONAL([DEBUG], [test x$debug = xyes])
 if test x$debug = xyes
 then      
      EXTRA_DEFINES="${EXTRA_DEFINES} -DENABLE_DEBUG"
+     CFLAGS="$CFLAGS -g"  
+     CXXFLAGS="$CXXFLAGS -g"
 fi
 
 dnl Option to set gprof
@@ -87,23 +93,24 @@ esac],[unittest=no])
 AM_CONDITIONAL([UNITTEST], [test x$unittest = xyes])
 
 dnl Check for OpenSSL and development headers
-AC_CHECK_LIB(crypto,RSA_sign,
-                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)
+#AC_CHECK_LIB(crypto,DSA_sign,
+#                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)
 
-CPPFLAGS="${SAVE_CPPFLAGS}"
-CFLAGS="${SAVE_CFLAGS}"
-LDFLAGS="${SAVE_LDFLAGS}"
-
+#CPPFLAGS="${SAVE_CPPFLAGS}"
+#CFLAGS="${SAVE_CFLAGS}"
+#LDFLAGS="${SAVE_LDFLAGS}"
+#EXTRA_CFLAGS=
 dnl export these variable (so Makefile substitutions
 dnl can be made. 
 CPPFLAGS="${CPPFLAGS} ${EXTRA_DEFINES}"
 #CFLAGS="${CFLAGS} ${EXTRA_DEFINES}"
 #CXXFLAGS="${CXXFLAGS} ${EXTRA_DEFINES}"
+
 AC_SUBST(EXTRA_DEFINES)
-AC_SUBST(CFLAGS)
-AC_SUBST(CXXFLAGS)
-AC_SUBST(LDFLAGS)
-AC_SUBST(CPPFLAGS)
+#AC_SUBST(CFLAGS)
+#AC_SUBST(CXXFLAGS)
+#AC_SUBST(LDFLAGS)
+#AC_SUBST(CPPFLAGS)
 
 dnl
 dnl Output
