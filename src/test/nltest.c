@@ -4,6 +4,8 @@
 #include <sys/socket.h>
 #include <linux/netlink.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define NETLINK_SCAFFOLD 17
 

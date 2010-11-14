@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _ATOMIC_H_
 #define _ATOMIC_H_
 
@@ -55,6 +56,23 @@ static inline void atomic_dec(atomic_t *v)
 #define atomic_sub_and_test(i, v)       (atomic_sub_return((i), (v)) == 0)
 #define atomic_dec_and_test(v)          (atomic_sub_return(1, (v)) == 0)
 #define atomic_inc_and_test(v)          (atomic_add_return(1, (v)) == 0)
+
+/**
+ * atomic_read - read atomic variable
+ * @v: pointer of type atomic_t
+ *
+ * Atomically reads the value of @v.
+ */
+#define atomic_read(v)	(*(volatile int *)&(v)->value)
+
+/**
+ * atomic_set - set atomic variable
+ * @v: pointer of type atomic_t
+ * @i: required value
+ *
+ * Atomically sets the value of @v to @i.
+ */
+#define atomic_set(v, i) (((v)->value) = (i))
 
 #endif
 

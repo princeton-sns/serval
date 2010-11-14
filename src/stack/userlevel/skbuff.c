@@ -95,12 +95,11 @@ nodata:
 
 struct sk_buff *skb_dequeue(struct sk_buff_head *list)
 {
-	unsigned long flags;
 	struct sk_buff *result;
 
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock_irqsave(&list->lock, 0);
 	result = __skb_dequeue(list);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock_irqrestore(&list->lock, 0);
 	return result;
 }
 
@@ -114,12 +113,11 @@ struct sk_buff *skb_dequeue(struct sk_buff_head *list)
  */
 struct sk_buff *skb_dequeue_tail(struct sk_buff_head *list)
 {
-	unsigned long flags;
 	struct sk_buff *result;
 
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock_irqsave(&list->lock, 0);
 	result = __skb_dequeue_tail(list);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock_irqrestore(&list->lock, 0);
 	return result;
 }
 
@@ -151,11 +149,9 @@ void skb_queue_purge(struct sk_buff_head *list)
  */
 void skb_queue_head(struct sk_buff_head *list, struct sk_buff *newsk)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock(&list->lock);
 	__skb_queue_head(list, newsk);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock(&list->lock);
 }
 
 /**
@@ -171,11 +167,9 @@ void skb_queue_head(struct sk_buff_head *list, struct sk_buff *newsk)
  */
 void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock(&list->lock);
 	__skb_queue_tail(list, newsk);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock(&list->lock);
 }
 
 /**
@@ -190,11 +184,9 @@ void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk)
  */
 void skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock(&list->lock);
 	__skb_unlink(skb, list);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock(&list->lock);
 }
 
 /**
@@ -209,11 +201,9 @@ void skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
  */
 void skb_append(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock(&list->lock);
 	__skb_queue_after(list, old, newsk);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock(&list->lock);
 }
 
 /**
@@ -230,10 +220,8 @@ void skb_append(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head 
  */
 void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list)
 {
-	unsigned long flags;
-
-	spin_lock_irqsave(&list->lock, flags);
+	spin_lock(&list->lock);
 	__skb_insert(newsk, old->prev, old, list);
-	spin_unlock_irqrestore(&list->lock, flags);
+	spin_unlock(&list->lock);
 }
 

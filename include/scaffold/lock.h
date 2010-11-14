@@ -24,6 +24,9 @@ typedef pthread_mutex_t spinlock_t;
 #define spin_trylock_bh(x) pthread_mutex_trylock(x)
 #define spin_unlock_bh(x) pthread_mutex_unlock(x)
 
+#define spin_lock_irqsave(x, flags) pthread_mutex_lock(x)
+#define spin_unlock_irqrestore(x, flags) pthread_mutex_unlock(x)
+
 typedef pthread_mutex_t rwlock_t;
 
 #define rwlock_init(x) pthread_mutex_init(x, NULL)

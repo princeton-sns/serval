@@ -1,4 +1,5 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#include <linux/ip.h>
 #include <scaffold/platform.h>
 #include "scaffold_sock.h"
 #include <userlevel/skbuff.h>
@@ -45,7 +46,7 @@ void __exit scaffold_table_fini(struct scaffold_table *table)
                         release_sock(&ssk->sk);
                 }
 
-                spin_unlock_bh(&table->hash[i].lock);                        
+                spin_unlock_bh(&table->hash[i].lock);           
 	}
 
         FREE(table);
@@ -99,6 +100,9 @@ static struct sock *scaffold_table_lookup(struct scaffold_table *table,
 
 struct sock *scaffold_table_lookup_skb(struct sk_buff *skb)
 {
+	//struct sock *sk;
+	//const struct iphdr *iph = ip_hdr(skb);
+
 
         return NULL;
 }

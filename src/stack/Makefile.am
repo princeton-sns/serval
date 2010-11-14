@@ -3,17 +3,20 @@ bin_PROGRAMS = scaffold
 scaffold_SOURCES = \
 	scaffold_sock.c \
 	userlevel/sock.c \
+	userlevel/skbuff.c \
+	userlevel/timer.c \
 	userlevel/scaffold.c
 
 scaffold_DEPENDENCIES = \
 	scaffold_sock.h \
 	userlevel/sock.h \
 	userlevel/net.h \
-	userlevel/skbuff.h
+	userlevel/skbuff.h \
+	userlevel/timer.h
 
-scaffold_CXXFLAGS =-I$(top_builddir)/include -I$(top_builddir)/stack
-scaffold_CFLAGS =-I$(top_builddir)/include -I$(top_builddir)/stack
-scaffold_LDFLAGS =-lpthread
+scaffold_CPPFLAGS =-I$(top_builddir)/include -I$(top_builddir)/stack
+#scaffold_CFLAGS = $(CFLAGS)
+scaffold_LDFLAGS =-lpthread -lrt
 
 #lib_LTLIBRARIES = libstack.la
 #libstack_la_SOURCES = scaffold_sock.c

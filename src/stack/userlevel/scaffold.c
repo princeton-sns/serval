@@ -11,6 +11,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
+#include "timer.h"
 
 LIST_HEAD(client_list);
 static unsigned int num_clients = 0;
@@ -24,7 +25,7 @@ void signal_handler(int sig)
 
 struct client {
 	int sock;
-	int id;
+	unsigned int id;
 	int pipefd[2];
 	int should_exit;
         pthread_t thr;
@@ -98,9 +99,18 @@ static int client_signal_exit(struct client *c)
 
 static int client_signal_lower(struct client *c)
 {
+	ssize_t sz;
+	int ret = 0;
 	char r = 'r';
 
-	return read(c->pipefd[1], &r, 1);
+	do {
+		sz = read(c->pipefd[1], &r, 1);
+
+		if (sz == 1)
+			ret = 1;
+	} while (sz > 0);
+
+	return sz == -1 ? -1 : ret;
 }
 
 static int fd_make_async(int fd)
@@ -130,17 +140,84 @@ static int fd_make_async(int fd)
     return 0;
 }
 
+#define MAX(x, y) (x >= y ? x : y)
+
 static void *client_thread(void *arg)
 {
 	struct client *c = (struct client *)arg;
-
+	
+	if (timer_list_per_thread_init(c->id) == -1)
+		return NULL;
+	
 	while (!c->should_exit) {
+		struct timespec timeout, *to = NULL;
+		fd_set readfds;
+		int ret, nfds;
+		
+		FD_ZERO(&readfds);
+		FD_SET(c->sock, &readfds);
+		FD_SET(c->pipefd[0], &readfds);
+		nfds = MAX(c->sock, c->pipefd[0]) + 1;
 
+		ret = timer_list_get_next_timeout(&timeout);
+
+		if (ret == -1) {
+			/* Timer list error. Exit? */
+			break;
+		} else if (ret == 0) {
+			/* No timer */
+			to = NULL;
+		} else {
+			to = &timeout;
+		}
+
+		ret = pselect(nfds, &readfds, NULL, NULL, to, &c->mask);
+
+		if (ret == -1) {
+			/* Error */
+			break;
+		} else if (ret == 0) {
+			/* Timeout */
+			LOG_DBG("Client %u timeout\n", c->id);
+			timer_list_handle_timeout();
+		} else {
+			if (FD_ISSET(c->pipefd[0], &readfds)) {
+				/* Signal received, probably exit */
+				client_signal_lower(c);
+				LOG_DBG("Client %u exit signal\n", c->id);
+				continue;
+			}
+			if (FD_ISSET(c->sock, &readfds)) {
+				/* Socket readable */
+				LOG_DBG("Client %u socket readable\n", c->id);
+			} 
+		}
 	}
 
 	client_close(c);
 
 	return NULL;
+}
+
+static void test_timer_callback(unsigned long data)
+{
+	LOG_DBG("Test timer callback\n");
+}
+
+static DEFINE_TIMER(test_timer, test_timer_callback, 5000000, 2);
+
+static void *test_client_thread(void *arg)
+{
+	struct client *c = (struct client *)arg;
+	
+	if (timer_list_per_thread_init(c->id) == -1)
+		return NULL;
+
+	test_timer.entry.next = NULL;
+
+	add_timer(&test_timer);
+	
+	return client_thread(arg);
 }
 
 static int client_start(struct client *c)
@@ -155,13 +232,27 @@ static int client_start(struct client *c)
 
 	return ret;
 }
+static int test_client_start(struct client *c)
+{
+	int ret;
+
+	ret = pthread_create(&c->thr, NULL, test_client_thread, c);
+        
+        if (ret != 0) {
+                LOG_ERR("could not start client thread\n");
+        }
+
+	return ret;
+}
+
+#define SERVER_PATH "/tmp/scaffold.sock"
 
 static int server_run(void)
 {	
 	sigset_t mask, origmask;
 	int server_sock, ret = 0;
 	struct sockaddr_un sa;
-	char buf[128];
+	//char buf[128];
 
         sigaddset(&mask, SIGTERM);
         sigaddset(&mask, SIGHUP);
@@ -186,7 +277,7 @@ static int server_run(void)
 	
 	memset(&sa, 0, sizeof(sa));
 	sa.sun_family = AF_UNIX;
-	strcpy(sa.sun_path, "/tmp/scaffold.sock");
+	strcpy(sa.sun_path, SERVER_PATH);
 	
 	ret = bind(server_sock, (struct sockaddr *)&sa, sizeof(sa));
 
@@ -203,7 +294,19 @@ static int server_run(void)
 			strerror(errno));
 		goto out_close_sock;
 	}
+	{
+		/* Start a test client */
+		struct client *c;
 
+		c = client_create(-1, &sa, &origmask);
+		ret = test_client_start(c);
+		
+		if (ret == -1) {
+			LOG_ERR("Could not start client\n");
+			client_destroy(c);
+		}
+	}
+				
 	while (!should_exit) {
 		fd_set readfds;
                         
@@ -245,13 +348,13 @@ static int server_run(void)
 					close(client_sock);
 				} else {
 					LOG_INF("accepted new client\n");
-				}
-				
-				ret = client_start(c);
-
-				if (ret == -1) {
-					LOG_ERR("Could not start client\n");
-					client_destroy(c);
+					
+					ret = client_start(c);
+					
+					if (ret == -1) {
+						LOG_ERR("Could not start client\n");
+						client_destroy(c);
+					}
 				}
 			}
 		}
@@ -267,6 +370,7 @@ static int server_run(void)
 	}
 out_close_sock:
 	close(server_sock);
+	unlink(SERVER_PATH);
 	return ret;
 }
 
