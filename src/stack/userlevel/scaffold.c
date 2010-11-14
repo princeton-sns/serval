@@ -15,7 +15,7 @@
 
 LIST_HEAD(client_list);
 static unsigned int num_clients = 0;
-static int should_exit = 0;
+static volatile int should_exit = 0;
 
 void signal_handler(int sig)
 {
@@ -29,13 +29,13 @@ struct client {
 	int pipefd[2];
 	int should_exit;
         pthread_t thr;
-        sigset_t mask;
+        sigset_t sigset;
 	struct sockaddr_un sa;
 	struct list_head link;
 };
 
 static struct client *client_create(int sock, struct sockaddr_un *sa, 
-				    sigset_t *mask)
+				    sigset_t *sigset)
 {
 	struct client *c;
 
@@ -48,9 +48,12 @@ static struct client *client_create(int sock, struct sockaddr_un *sa,
 	
 	c->sock = sock;
 	c->id = num_clients++;
+	LOG_DBG("client id is %u\n", c->id);
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));
-	memcpy(&c->mask, mask, sizeof(*mask));
+
+	if (sigset)
+		memcpy(&c->sigset, sigset, sizeof(*sigset));
 	
 	if (pipe(c->pipefd) != 0) {
 		LOG_ERR("could not open client pipe : %s\n",
@@ -149,6 +152,8 @@ static void *client_thread(void *arg)
 	if (timer_list_per_thread_init(c->id) == -1)
 		return NULL;
 	
+	LOG_DBG("Client %u running\n", c->id);
+
 	while (!c->should_exit) {
 		struct timespec timeout, *to = NULL;
 		fd_set readfds;
@@ -171,10 +176,18 @@ static void *client_thread(void *arg)
 			to = &timeout;
 		}
 
-		ret = pselect(nfds, &readfds, NULL, NULL, to, &c->mask);
+		/* ret = pselect(nfds, &readfds, NULL, NULL, to, &c->sigset); */
+		ret = pselect(nfds, &readfds, NULL, NULL, to, NULL);
 
 		if (ret == -1) {
+			if (errno == EINTR) {
+				LOG_INF("client %u select interrupted\n", 
+					c->id);
+				continue;
+			}
 			/* Error */
+			LOG_ERR("client %u select error...\n",
+				c->id);
 			break;
 		} else if (ret == 0) {
 			/* Timeout */
@@ -194,6 +207,7 @@ static void *client_thread(void *arg)
 		}
 	}
 
+	LOG_DBG("Client %u exits\n", c->id);
 	client_close(c);
 
 	return NULL;
@@ -204,7 +218,9 @@ static void test_timer_callback(unsigned long data)
 	LOG_DBG("Test timer callback\n");
 }
 
-static DEFINE_TIMER(test_timer, test_timer_callback, 5000000, 2);
+static DEFINE_TIMER(test_timer5s, test_timer_callback, 5000000, 2);
+static DEFINE_TIMER(test_timer7s, test_timer_callback, 7000000, 2);
+static DEFINE_TIMER(test_timer10s, test_timer_callback, 10000000, 2);
 
 static void *test_client_thread(void *arg)
 {
@@ -213,10 +229,10 @@ static void *test_client_thread(void *arg)
 	if (timer_list_per_thread_init(c->id) == -1)
 		return NULL;
 
-	test_timer.entry.next = NULL;
+	add_timer(&test_timer7s);
+	add_timer(&test_timer5s);
+	add_timer(&test_timer10s);
 
-	add_timer(&test_timer);
-	
 	return client_thread(arg);
 }
 
@@ -249,18 +265,21 @@ static int test_client_start(struct client *c)
 
 static int server_run(void)
 {	
-	sigset_t mask, origmask;
+	sigset_t sigset, orig_sigset;
 	int server_sock, ret = 0;
 	struct sockaddr_un sa;
-	//char buf[128];
 
-        sigaddset(&mask, SIGTERM);
-        sigaddset(&mask, SIGHUP);
-        sigaddset(&mask, SIGINT);
+	sigemptyset(&sigset);
+        sigaddset(&sigset, SIGTERM);
+        sigaddset(&sigset, SIGHUP);
+        sigaddset(&sigset, SIGINT);
 	
         /* Block the signals we are watching here so that we can
          * handle them in pselect instead. */
-        pthread_sigmask(SIG_BLOCK, &mask, &origmask);
+        sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
+	
+	if (should_exit)
+		return 0;
 
 	server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -298,7 +317,7 @@ static int server_run(void)
 		/* Start a test client */
 		struct client *c;
 
-		c = client_create(-1, &sa, &origmask);
+		c = client_create(-1, &sa, &orig_sigset);
 		ret = test_client_start(c);
 		
 		if (ret == -1) {
@@ -315,12 +334,11 @@ static int server_run(void)
 
 		LOG_DBG("waiting for connection...\n");
 		
-		ret = pselect(server_sock + 1, &readfds, NULL, NULL, NULL, &origmask);
+		ret = pselect(server_sock + 1, &readfds, NULL, NULL, NULL, &orig_sigset);
                 
 		if (ret == -1) {
 			if (errno == EINTR) {
 				LOG_INF("select interrupted\n");
-				should_exit = 1;
 				continue;
 			}
 			LOG_ERR("select error...\n");
@@ -342,7 +360,7 @@ static int server_run(void)
 			} else {
 				struct client *c;
 
-				c = client_create(client_sock, &sa, &origmask);
+				c = client_create(client_sock, &sa, &orig_sigset);
 				
 				if (!c) {
 					close(client_sock);
@@ -361,11 +379,13 @@ static int server_run(void)
 	}
 	
 	while (!list_empty(&client_list)) {
-		struct client *c = list_entry(&client_list, struct client, link);
-		
-		client_signal_exit(c);
+		struct client *c = list_first_entry(&client_list, 
+						    struct client, link);
 		LOG_INF("Joining with client %u\n", c->id);
-		pthread_join(c->thr, NULL);
+		client_signal_exit(c);
+		if (pthread_join(c->thr, NULL) != 0) {
+			LOG_ERR("pthread_join failed for client %u\n", c->id);
+		}
 		client_destroy(c);
 	}
 out_close_sock:

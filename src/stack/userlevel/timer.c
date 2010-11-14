@@ -33,20 +33,15 @@ static inline int timer_list_unlock(struct timer_list_head *tlh)
 	return pthread_mutex_unlock(&tlh->lock);
 }
 
-static void timer_free(struct timer_list *tl)
-{
-	free(tl);
-}
-
 static void timer_list_head_destructor(void *arg)
 {
 	struct timer_list_head *tlh = (struct timer_list_head *)arg;
 	
 	while (!list_empty(&tlh->head)) {
-		struct timer_list *tl = list_entry(tlh->head.next, 
-						   struct timer_list, entry);
-		del_timer(tl);
-		timer_free(tl);
+		struct timer_list *tl = list_first_entry(&tlh->head, 
+							 struct timer_list, 
+							 entry);
+		list_del(&tl->entry);
 	}
 
 	pthread_mutex_destroy(&tlh->lock);
@@ -87,13 +82,12 @@ int timer_list_get_next_timeout(struct timespec *timeout)
 	}
 
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
-		
+
 	if (clock_gettime(CLOCK, &now) == -1) {
 		LOG_DBG("clock_gettime failed: %s\n", strerror(errno));
 		timer_list_unlock(tlh);
 		return -1;
 	}
-	
 	memcpy(timeout, &timer->expires_abs, sizeof(*timeout));
 	timespec_sub(timeout, &now);
 	timer_list_unlock(tlh);
@@ -213,13 +207,15 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
 	} else {
+		unsigned int num = 0;
 		struct timer_list *tl = NULL;
 		/* Find place where to insert based on absolute time */
 		list_for_each_entry(tl, &tlh->head, entry) {
 			if (timespec_lt(&timer->expires_abs, &tl->expires_abs)) {
-				list_add(&timer->entry, &tl->entry);
+				list_add_tail(&timer->entry, &tl->entry);
 				goto insert_done;
 			}
+			num++;
 		}
 		/* if (tl == &tlh->head) */
 		list_add_tail(&timer->entry, &tlh->head);
