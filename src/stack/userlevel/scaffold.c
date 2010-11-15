@@ -12,110 +12,20 @@
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
 #include "timer.h"
+#include "client.h"
 
 LIST_HEAD(client_list);
 static unsigned int num_clients = 0;
 static volatile int should_exit = 0;
+
+#define MAX(x, y) (x >= y ? x : y)
 
 void signal_handler(int sig)
 {
         printf("signal caught! exiting...\n");
         should_exit = 1;       
 }
-
-struct client {
-	int sock;
-	unsigned int id;
-	int pipefd[2];
-	int should_exit;
-        pthread_t thr;
-        sigset_t sigset;
-	struct sockaddr_un sa;
-	struct list_head link;
-};
-
-static struct client *client_create(int sock, struct sockaddr_un *sa, 
-				    sigset_t *sigset)
-{
-	struct client *c;
-
-	c = (struct client *)malloc(sizeof(struct client));
-
-	if (!c)
-		return NULL;
-
-	memset(c, 0, sizeof(struct client));
-	
-	c->sock = sock;
-	c->id = num_clients++;
-	LOG_DBG("client id is %u\n", c->id);
-	c->should_exit = 0;
-	memcpy(&c->sa, sa, sizeof(*sa));
-
-	if (sigset)
-		memcpy(&c->sigset, sigset, sizeof(*sigset));
-	
-	if (pipe(c->pipefd) != 0) {
-		LOG_ERR("could not open client pipe : %s\n",
-			strerror(errno));
-		free(c);
-		return NULL;
-	}
-	
-	INIT_LIST_HEAD(&c->link);
-	list_add_tail(&c->link, &client_list);
-
-	return c;
-}
-
-static int client_close(struct client *c)
-{
-	int ret;
-
-	ret = close(c->sock);
-	c->sock = -1;
-
-	return ret;
-}
-
-static void client_destroy(struct client *c)
-{
-	if (c->sock)
-		client_close(c);
-
-	list_del(&c->link);
-	free(c);
-}
-
-static int client_signal_raise(struct client *c)
-{
-	char w = 'w';
-
-	return write(c->pipefd[1], &w, 1);
-}
-
-static int client_signal_exit(struct client *c)
-{
-	c->should_exit = 1;
-	return client_signal_raise(c);
-}
-
-static int client_signal_lower(struct client *c)
-{
-	ssize_t sz;
-	int ret = 0;
-	char r = 'r';
-
-	do {
-		sz = read(c->pipefd[1], &r, 1);
-
-		if (sz == 1)
-			ret = 1;
-	} while (sz > 0);
-
-	return sz == -1 ? -1 : ret;
-}
-
+#if 0
 static int fd_make_async(int fd)
 {
     int flags;
@@ -142,131 +52,50 @@ static int fd_make_async(int fd)
 
     return 0;
 }
+#endif
 
-#define MAX(x, y) (x >= y ? x : y)
-
-static void *client_thread(void *arg)
+static int garbage_collect_clients(void)
 {
-	struct client *c = (struct client *)arg;
-	
-	if (timer_list_per_thread_init(c->id) == -1)
-		return NULL;
-	
-	LOG_DBG("Client %u running\n", c->id);
+	int num = 0;
+	struct list_head *pos, *tmp;
 
-	while (!c->should_exit) {
-		struct timespec timeout, *to = NULL;
-		fd_set readfds;
-		int ret, nfds;
+	list_for_each_safe(pos, tmp, &client_list) {
+		struct client *c = client_list_entry(pos);
 		
-		FD_ZERO(&readfds);
-		FD_SET(c->sock, &readfds);
-		FD_SET(c->pipefd[0], &readfds);
-		nfds = MAX(c->sock, c->pipefd[0]) + 1;
-
-		ret = timer_list_get_next_timeout(&timeout);
-
-		if (ret == -1) {
-			/* Timer list error. Exit? */
-			break;
-		} else if (ret == 0) {
-			/* No timer */
-			to = NULL;
-		} else {
-			to = &timeout;
-		}
-
-		/* ret = pselect(nfds, &readfds, NULL, NULL, to, &c->sigset); */
-		ret = pselect(nfds, &readfds, NULL, NULL, to, NULL);
-
-		if (ret == -1) {
-			if (errno == EINTR) {
-				LOG_INF("client %u select interrupted\n", 
-					c->id);
-				continue;
+		if (client_get_state(c) == CLIENT_STATE_GARBAGE) {
+			LOG_INF("Garbage collecting client %u\n", client_get_id(c));
+			
+			if (pthread_join(client_get_thread(c), NULL) != 0) {
+				if (errno == EINVAL) {
+					LOG_DBG("Client %u probably detached\n", 
+						client_get_id(c));
+				} else {
+					LOG_ERR("Client %u could not be joined\n", 
+						client_get_id(c));
+				}
 			}
-			/* Error */
-			LOG_ERR("client %u select error...\n",
-				c->id);
-			break;
-		} else if (ret == 0) {
-			/* Timeout */
-			LOG_DBG("Client %u timeout\n", c->id);
-			timer_list_handle_timeout();
-		} else {
-			if (FD_ISSET(c->pipefd[0], &readfds)) {
-				/* Signal received, probably exit */
-				client_signal_lower(c);
-				LOG_DBG("Client %u exit signal\n", c->id);
-				continue;
-			}
-			if (FD_ISSET(c->sock, &readfds)) {
-				/* Socket readable */
-				LOG_DBG("Client %u socket readable\n", c->id);
-			} 
+			/* Destroying the client also removes it from
+			 * the client list */
+			client_destroy(c);
+			num++;
 		}
 	}
-
-	LOG_DBG("Client %u exits\n", c->id);
-	client_close(c);
-
-	return NULL;
+	return num;
 }
 
-static void test_timer_callback(unsigned long data)
-{
-	LOG_DBG("Test timer callback\n");
-}
+#define NUM_SERVER_SOCKS 2
+#define UDP_SERVER_PATH "/tmp/scaffold-udp.sock"
+#define TCP_SERVER_PATH "/tmp/scaffold-tcp.sock"
 
-static DEFINE_TIMER(test_timer5s, test_timer_callback, 5000000, 2);
-static DEFINE_TIMER(test_timer7s, test_timer_callback, 7000000, 2);
-static DEFINE_TIMER(test_timer10s, test_timer_callback, 10000000, 2);
-
-static void *test_client_thread(void *arg)
-{
-	struct client *c = (struct client *)arg;
-	
-	if (timer_list_per_thread_init(c->id) == -1)
-		return NULL;
-
-	add_timer(&test_timer7s);
-	add_timer(&test_timer5s);
-	add_timer(&test_timer10s);
-
-	return client_thread(arg);
-}
-
-static int client_start(struct client *c)
-{
-	int ret;
-
-	ret = pthread_create(&c->thr, NULL, client_thread, c);
-        
-        if (ret != 0) {
-                LOG_ERR("could not start client thread\n");
-        }
-
-	return ret;
-}
-static int test_client_start(struct client *c)
-{
-	int ret;
-
-	ret = pthread_create(&c->thr, NULL, test_client_thread, c);
-        
-        if (ret != 0) {
-                LOG_ERR("could not start client thread\n");
-        }
-
-	return ret;
-}
-
-#define SERVER_PATH "/tmp/scaffold.sock"
+static const char *server_sock_path[] = {
+	UDP_SERVER_PATH,
+	TCP_SERVER_PATH
+};
 
 static int server_run(void)
 {	
 	sigset_t sigset, orig_sigset;
-	int server_sock, ret = 0;
+	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
 
 	sigemptyset(&sigset);
@@ -281,60 +110,82 @@ static int server_run(void)
 	if (should_exit)
 		return 0;
 
-	server_sock = socket(AF_UNIX, SOCK_STREAM, 0);
+	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
+		server_sock[i] = socket(AF_UNIX, SOCK_STREAM, 0);
 
-	if (server_sock == -1) {
-		LOG_ERR("could not open AF_UNIX server socket : %s\n",
-			strerror(errno));
-		return -1;
-	}
-
-	ret = fd_make_async(server_sock);
-
-	if (ret == -1)
-		goto out_close_sock;
-	
-	memset(&sa, 0, sizeof(sa));
-	sa.sun_family = AF_UNIX;
-	strcpy(sa.sun_path, SERVER_PATH);
-	
-	ret = bind(server_sock, (struct sockaddr *)&sa, sizeof(sa));
-
-	if (ret == -1) {
-		LOG_ERR("bind failed for AF_UNIX socket : %s\n",
-			strerror(errno));
-		goto out_close_sock;
-	}
-	
-	ret = listen(server_sock, 10);
-
-	if (ret == -1) {
-		LOG_ERR("listen failed for AF_UNIX socket : %s\n",
-			strerror(errno));
-		goto out_close_sock;
-	}
-	{
-		/* Start a test client */
-		struct client *c;
-
-		c = client_create(-1, &sa, &orig_sigset);
-		ret = test_client_start(c);
+		if (server_sock[i] == -1) {
+			LOG_ERR("Failure. AF_UNIX server socket %s : %s\n", 
+				server_sock_path[i], strerror(errno));
+			return -1;
+		}
+		/* 
+		ret = fd_make_async(server_sock[i]);
 		
+		if (ret == -1)
+			goto out_close_socks;
+		*/
+
+		memset(&sa, 0, sizeof(sa));
+		sa.sun_family = AF_UNIX;
+		strcpy(sa.sun_path, server_sock_path[i]);
+	
+		ret = bind(server_sock[i], (struct sockaddr *)&sa, sizeof(sa));
+
 		if (ret == -1) {
-			LOG_ERR("Could not start client\n");
-			client_destroy(c);
+			LOG_ERR("bind failed for AF_UNIX socket %s : %s\n",
+				server_sock_path[i], strerror(errno));
+			goto out_close_socks;
+		}
+	
+		ret = listen(server_sock[i], 10);
+
+		if (ret == -1) {
+			LOG_ERR("listen failed for AF_UNIX socket %s : %s\n",
+				server_sock_path[i], strerror(errno));
+			goto out_close_socks;
 		}
 	}
-				
+#ifdef ENABLE_TEST_CLIENTS
+	{
+		/* Start some test clients */
+		int i;
+		for (i = 0; i < 3; i++) {
+			struct client *c;
+			
+			c = client_create(CLIENT_TYPE_UDP, -1, 
+					  num_clients++, &sa, &orig_sigset);
+			
+			if (!c)
+				break;
+
+			list_add_tail(&c->link, &client_list);
+
+			ret = test_client_start(c);
+		
+			if (ret == -1) {
+				LOG_ERR("Could not start client\n");
+				client_destroy(c);
+				break;
+			}
+		}
+	}
+#endif	
+	LOG_DBG("Server starting\n");
+
 	while (!should_exit) {
 		fd_set readfds;
-                        
-		FD_ZERO(&readfds);
-		FD_SET(server_sock, &readfds);
+		struct timespec timeout = { 10, 0 };
+		int maxfd = -1;
 
-		LOG_DBG("waiting for connection...\n");
+		FD_ZERO(&readfds);
+
+		for (i = 0; i < NUM_SERVER_SOCKS; i++) {
+			FD_SET(server_sock[i], &readfds);
+			maxfd = MAX(maxfd, server_sock[i]);
+		}
 		
-		ret = pselect(server_sock + 1, &readfds, NULL, NULL, NULL, &orig_sigset);
+		ret = pselect(maxfd + 1, &readfds, 
+			      NULL, NULL, &timeout, &orig_sigset);
                 
 		if (ret == -1) {
 			if (errno == EINTR) {
@@ -343,29 +194,42 @@ static int server_run(void)
 			}
 			LOG_ERR("select error...\n");
 			break;                                        
+		} else if (ret == 0) {
+			/* Timeout, do garbage collection */
+			garbage_collect_clients();
+			continue;
 		}
 		
-		LOG_INF("incoming client\n");
-
-		if (FD_ISSET(server_sock, &readfds)) {
-			int client_sock;
-			socklen_t addrlen;
-			
-			client_sock = accept(server_sock, 
-					     (struct sockaddr *)&sa, &addrlen);
-                        
-			if (client_sock == -1) {
-				LOG_ERR("accept() failed : %s\n", 
-					strerror(errno));
-			} else {
+		LOG_INF("client event\n");
+		
+		for (i = 0; i < NUM_SERVER_SOCKS; i++) {
+			if (FD_ISSET(server_sock[i], &readfds)) {
+				int client_sock;
+				socklen_t addrlen = 0;
 				struct client *c;
-
-				c = client_create(client_sock, &sa, &orig_sigset);
+				
+				client_sock = accept(server_sock[i], 
+						     (struct sockaddr *)&sa, &addrlen);
+				
+				if (client_sock == -1) {
+					LOG_ERR("accept() failed : %s\n", 
+						strerror(errno));
+					continue;
+				} 
+					
+				/* TODO: should use something
+				 * more explicit for the
+				 * client type than the
+				 * 'i' variable */
+				c = client_create(i, client_sock, num_clients++, 
+						  &sa, &orig_sigset);
 				
 				if (!c) {
 					close(client_sock);
 				} else {
 					LOG_INF("accepted new client\n");
+					
+					client_list_add(c, &client_list);
 					
 					ret = client_start(c);
 					
@@ -379,18 +243,25 @@ static int server_run(void)
 	}
 	
 	while (!list_empty(&client_list)) {
-		struct client *c = list_first_entry(&client_list, 
-						    struct client, link);
-		LOG_INF("Joining with client %u\n", c->id);
+		struct client *c = client_list_first_entry(&client_list);
+
+		LOG_INF("Joining with client %u\n", client_get_id(c));
 		client_signal_exit(c);
-		if (pthread_join(c->thr, NULL) != 0) {
-			LOG_ERR("pthread_join failed for client %u\n", c->id);
+
+		if (pthread_join(client_get_thread(c), NULL) != 0) {
+			if (errno == EINVAL) {
+				LOG_DBG("Client %u probably detached\n", client_get_id(c));
+			} else {
+				LOG_ERR("Client %u could not be joined\n", client_get_id(c));
+			}
 		}
 		client_destroy(c);
 	}
-out_close_sock:
-	close(server_sock);
-	unlink(SERVER_PATH);
+out_close_socks:
+	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
+		close(server_sock[i]);
+		unlink(server_sock_path[i]);
+	}
 	return ret;
 }
 

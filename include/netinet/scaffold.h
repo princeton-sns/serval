@@ -4,6 +4,7 @@
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
+#include <arpa/inet.h>
 
 #if defined(__KERNEL__)
 #include <linux/socket.h>
@@ -51,14 +52,21 @@ enum scaffold_state {
 
 struct service_id {
         union { 
-                uint8_t	u_sid8[20];
-                uint16_t u_sid16[10];
-                uint32_t u_sid32[5];
+                uint8_t	u_sid8[2];
+                uint16_t u_sid16;
+                /* uint32_t u_sid32[]; */
         } sid_u;
-#define s_sid sid_u.u_oid8
-#define s_sid16 sid_u.u_oid16
-#define s_sid32 sid_u.u_oid32
+#define s_sid sid_u.u_sid8
+#define s_sid16 sid_u.u_sid16
+#define s_sid32 sid_u.u_sid32
 };
+
+static inline const char *service_id_to_str(struct service_id *srvid)
+{
+        static char str[20];
+        snprintf(str, 20, "%u", ntohs(srvid->s_sid16));
+        return str;
+}
 
 struct sock_id {
         uint16_t sid_id;

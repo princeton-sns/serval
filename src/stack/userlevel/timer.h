@@ -20,7 +20,7 @@ struct timer_list {
 		.entry = { NULL, NULL },                        \
 		.function = (_function),			\
 		.expires = (_expires),				\
-                .expires_abs = { .tv_sec = 0, .tv_nsec = 0 },   \
+                .expires_abs = { 0, 0 },                        \
 		.data = (_data),				\
 	}
 

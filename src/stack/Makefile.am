@@ -5,6 +5,8 @@ scaffold_SOURCES = \
 	userlevel/sock.c \
 	userlevel/skbuff.c \
 	userlevel/timer.c \
+	userlevel/msg_ipc.c \
+	userlevel/client.c \
 	userlevel/scaffold.c
 
 scaffold_DEPENDENCIES = \
@@ -12,7 +14,9 @@ scaffold_DEPENDENCIES = \
 	userlevel/sock.h \
 	userlevel/net.h \
 	userlevel/skbuff.h \
-	userlevel/timer.h
+	userlevel/timer.h \
+	userlevel/msg_ipc.h \
+	userlevel/client.h
 
 scaffold_CPPFLAGS =-I$(top_builddir)/include -I$(top_builddir)/stack
 #scaffold_CFLAGS = $(CFLAGS)
