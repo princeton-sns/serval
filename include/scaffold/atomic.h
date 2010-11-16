@@ -10,6 +10,8 @@ typedef struct {
 	int value;
 } atomic_t;
 
+#define ATOMIC_INIT(i)	{ (i) }
+
 static inline int atomic_read(atomic_t *v)
 {
 	return __sync_add_and_fetch(&v->value, 0);

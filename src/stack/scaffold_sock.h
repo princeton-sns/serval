@@ -16,6 +16,9 @@
 struct scaffold_sock {
 	/* NOTE: sk has to be the first member */
 	struct sock		sk;
+#if !defined(__KERNEL__)
+        struct client           *client;
+#endif
         struct sock_id          sockid;
         struct service_id       local_sid;
         struct service_id       peer_sid;

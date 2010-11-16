@@ -1,4 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+
+#if defined(__KERNEL__)
 #include <linux/errno.h>
 #include <linux/types.h>
 #include <linux/socket.h>
@@ -17,12 +19,9 @@
 #include <linux/udp.h>
 #include <linux/proc_fs.h>
 #include <net/protocol.h>
-#include <netinet/scaffold.h>
-#include <scaffold_sock.h>
-#include <scaffold_udp_sock.h>
-#include <scaffold_tcp_sock.h>
-#include <scaffold/debug.h>
-#include "scaffold_netlink.h"
+#include "linux/scaffold_netlink.h"
+
+#define FREE_SKB(skb) kfree_skb(skb)
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Scaffold socket API for Linux");
@@ -48,6 +47,22 @@ static uint debug = 0;
 module_param(debug, uint, 0);
 MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif
+
+#else /* USERLEVEL */
+#include <userlevel/wait.h>
+#include <userlevel/sock.h>
+#include <userlevel/net.h>
+#include <userlevel/skbuff.h>
+
+#endif /* __KERNEL__ */
+
+/* Common includes */
+#include <scaffold_sock.h>
+#include <scaffold_udp_sock.h>
+#include <scaffold_tcp_sock.h>
+#include <scaffold/debug.h>
+#include <scaffold/atomic.h>
+#include <netinet/scaffold.h>
 
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
@@ -107,7 +122,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 //        ret = sfnet_handle_bind_socket(sk, &sfaddr->ssf_sid, &cond);
 
         if (ret < 0) {
-                printk(KERN_ERR "af_scaffold: bind failed\n");
+                LOG_ERR("af_scaffold: bind failed\n");
                 release_sock(sk);
                 return ret;
         }
@@ -119,7 +134,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
            do not wait for a reply 
         */
         if (ret == 1) {
-                printk(KERN_DEBUG "af_scaffold: bind in controller mode\n");
+                LOG_DBG("af_scaffold: bind in controller mode\n");
                 release_sock(sk);
                 ret = 0;
         } else if (ret == 0) {
@@ -128,10 +143,10 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = wait_event_interruptible(*sk_sleep(sk), cond != 1);
 
                 if (ret != 0) {
-                        printk(KERN_ERR "af_scaffold: bind interrupted\n");
+                        LOG_ERR("af_scaffold: bind interrupted\n");
                 } else {
                         ret = cond;
-                        printk(KERN_ERR "af_scaffold: bind returned %d\n", ret);
+                        LOG_ERR("af_scaffold: bind returned %d\n", ret);
                 }
         } else {
                 release_sock(sk);
@@ -273,11 +288,11 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         if (0 /* sfnet_handle_connect_socket(sk, &sfaddr->sf_oid, 
                  sfaddr->sf_flags, &connect_ret) != 0 */) {
                 release_sock(sk);
-                printk(KERN_ERR "connect() failed, connect_ret=%d\n", connect_ret);
+                LOG_ERR("connect() failed, connect_ret=%d\n", connect_ret);
                 return ret;
         }        
 
-        printk("<1>waiting for connect\n");
+        LOG_DBG("waiting for connect\n");
 
         if (nonblock) {
                 if (ret == 0)
@@ -291,13 +306,13 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
                 /* Check if we were interrupted */
                 if (ret == 0) {
                         if (connect_ret == 0) {
-                                printk("<1>connect returned, connect_ret=%d\n", connect_ret);
+                                LOG_DBG("connect returned, connect_ret=%d\n", connect_ret);
                                 
                                 if (connect_ret == 0) {
                                         sock->state = SS_CONNECTED;
                                 }
                         } else {
-                                printk(KERN_ERR "connect() wait for BOUND failed, connect_ret=%d\n", connect_ret);
+                                LOG_ERR("connect() wait for BOUND failed, connect_ret=%d\n", connect_ret);
                                 ret = connect_ret;
                         }
                 }
@@ -327,7 +342,7 @@ static int scaffold_sendmsg(struct kiocb *kiocb, struct socket *sock,
                 memcpy(&dst_sid, &scaffold_sk(sk)->peer_sid, sizeof(struct service_id));
         }
         
-        //printk("sendmsg() to serviceId=%u\n", ntohs(dst_oid.s_oid));
+        //LOG_DBG("sendmsg() to serviceId=%u\n", ntohs(dst_oid.s_oid));
                
         lock_sock(sk);
         
@@ -364,7 +379,7 @@ static int scaffold_sendmsg(struct kiocb *kiocb, struct socket *sock,
                         ret = wait_event_interruptible(*sk_sleep(sk), (atomic_read(&sk->sk_wmem_alloc) << 1) < sk->sk_sndbuf);
                         
                         if (ret != 0) {
-                                printk("<1>wait for write memory interrupted\n");
+                                LOG_DBG("wait for write memory interrupted\n");
                                 return ret;
                         }
 
@@ -373,8 +388,8 @@ static int scaffold_sendmsg(struct kiocb *kiocb, struct socket *sock,
                         ret = len;
                 }
         } else if (ret < 0) {
-                printk("<1>%s send_socket returned error %d\n", 
-                       __FUNCTION__, ret);
+                LOG_DBG("%s send_socket returned error %d\n", 
+                        __FUNCTION__, ret);
         }
 
         if (ret > 0) {
@@ -439,7 +454,7 @@ static int scaffold_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
 			retval = sock_intr_errno(timeo);
 			break;
 		}
-                //printk("waiting for data\n");
+                //LOG_DBG("waiting for data\n");
 
 		sk_wait_data(sk, &timeo);
 		continue;
@@ -472,7 +487,7 @@ static int scaffold_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
                         }
                 }
                 
-                //printk("dequeing skb with length %u len=%zu retval=%d\n", skb->len, len, retval);
+                //LOG_DBG("dequeing skb with length %u len=%zu retval=%d\n", skb->len, len, retval);
 
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */
@@ -513,7 +528,7 @@ static int scaffold_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
        
         if (msg->msg_namelen < sizeof(struct sockaddr_sf)) {
                 retval = -EINVAL;
-                printk("address length is incorrect\n");
+                LOG_DBG("address length is incorrect\n");
                 goto out;
         }
 
@@ -566,8 +581,8 @@ static int scaffold_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
                          * in buffer. We can then safely assume that
                          * reading 0 from buffer indicates there is no
                          * more data in the stream. */ 
-                        printk("<1>%s: SOCK_DONE set, tot_bytes_read=%zu\n", 
-                               __FUNCTION__, tot_bytes_read);
+                        LOG_DBG("%s: SOCK_DONE set, tot_bytes_read=%zu\n", 
+                                __FUNCTION__, tot_bytes_read);
                         retval = 0;
                         break;
                 }
@@ -616,10 +631,10 @@ static int scaffold_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
 
                 if (retval < 0) {
                         /* Exception. Bailout! */
-                        printk("could not copy data, len=%zu\n", len);
+                        LOG_DBG("could not copy data, len=%zu\n", len);
 			break;
 		} else if (retval == 0) {
-                        printk("<1>%s: retval is 0 after recv_socket\n", __FUNCTION__);
+                        LOG_DBG("%s: retval is 0 after recv_socket\n", __FUNCTION__);
                 }
                 tot_bytes_read += len;
 		break;
@@ -670,10 +685,10 @@ int scaffold_release(struct socket *sock)
 
         // This is done in destruct too?
         while ((skb = skb_dequeue(&sk->sk_receive_queue)) != NULL) {
-                kfree_skb(skb);
+                FREE_SKB(skb);
 	}
 
-        printk(KERN_DEBUG "SCAFFOLD socket %p released, refcount=%d, tot_bytes_sent=%lu\n", 
+        LOG_DBG("SCAFFOLD socket %p released, refcount=%d, tot_bytes_sent=%lu\n", 
                sk, atomic_read(&sk->sk_refcnt) - 1, scaffold_sk(sk)->tot_bytes_sent);
         
 	sock_put(sk);
@@ -681,12 +696,12 @@ int scaffold_release(struct socket *sock)
         return err;
 }
 
+#if defined(__KERNEL__)
 static unsigned int scaffold_poll(struct file *file, struct socket *sock, 
                                   poll_table *wait)
 {
 	struct sock *sk = sock->sk;
-	unsigned int mask;
-
+	unsigned int mask = 0;
 	poll_wait(file, sk_sleep(sk), wait);
 	mask = 0;
 
@@ -753,13 +768,14 @@ static int scaffold_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 
 	return ret;
 }
+#endif
 
 static int scaffold_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
 	//struct scaffold_sock *scaff = scaffold_sk(sk);
 	int rc;
 
-        printk("%s: received data\n", __FUNCTION__);
+        LOG_DBG("%s: received data\n", __FUNCTION__);
 
         // Queue skbs on socket for reading via recv() or recvmsg()
         if ((rc = sock_queue_rcv_skb(sk,skb)) < 0) {
@@ -769,13 +785,13 @@ static int scaffold_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
                 }
 		goto drop;
 	}
-        printk("%s: skb queued\n", __FUNCTION__);
+        LOG_DBG("%s: skb queued\n", __FUNCTION__);
  
         return 0;
 drop:
-        printk("%s: skb queue error!\n", __FUNCTION__);
+        LOG_DBG("%s: skb queue error!\n", __FUNCTION__);
 
-        kfree_skb(skb);
+        FREE_SKB(skb);
 
         return -1;
 }
@@ -803,19 +819,21 @@ static const struct proto_ops scaffold_dgram_ops = {
 	.release =	scaffold_release,
 	.bind =		scaffold_bind,
 	.connect =	scaffold_connect,
-	.socketpair =	sock_no_socketpair,
 	.accept =	scaffold_accept,
 	.getname =	scaffold_getname,
-	.poll =	        scaffold_poll,
-	.ioctl =	scaffold_ioctl,
 	.listen =	scaffold_listen,
 	.shutdown =	scaffold_shutdown,
-	.setsockopt =	sock_no_setsockopt,
-	.getsockopt =	sock_no_getsockopt,
 	.sendmsg =	scaffold_sendmsg,
 	.recvmsg =	scaffold_dgram_recvmsg,
+#if defined(__KERNEL__)
+	.setsockopt =	sock_no_setsockopt,
+	.getsockopt =	sock_no_getsockopt,
+	.socketpair =	sock_no_socketpair,
+	.poll =	        scaffold_poll,
+	.ioctl =	scaffold_ioctl,
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,
+#endif
 };
 
 /* 
@@ -828,19 +846,21 @@ static const struct proto_ops scaffold_stream_ops = {
 	.release =	scaffold_release,
 	.bind =		scaffold_bind,
 	.connect =	scaffold_connect,
-	.socketpair =	sock_no_socketpair,
 	.accept =	scaffold_accept,
 	.getname =	scaffold_getname,
-	.poll =	        scaffold_poll,
-	.ioctl =	scaffold_ioctl,
 	.listen =	scaffold_listen,
 	.shutdown =	scaffold_shutdown,
-	.setsockopt =	sock_no_setsockopt,
-	.getsockopt =	sock_no_getsockopt,
 	.sendmsg =	scaffold_sendmsg,
 	.recvmsg =	scaffold_stream_recvmsg,
+#if defined(__KERNEL__)
+	.setsockopt =	sock_no_setsockopt,
+	.getsockopt =	sock_no_getsockopt,
+	.socketpair =	sock_no_socketpair,
+	.poll =	        scaffold_poll,
+	.ioctl =	scaffold_ioctl,
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,
+#endif
 };
 
 /* 
@@ -948,10 +968,12 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
 
 			release_sock(sk);
 
+#if defined(__KERNEL__)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
                         local_bh_disable();
                         sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
                         local_bh_enable();
+#endif
 #endif
 			return sk;
 		} 
@@ -969,19 +991,20 @@ static void scaffold_sock_destruct(struct sock *sk)
 	skb_queue_purge(&sk->sk_receive_queue);
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
-		printk(KERN_INFO "Attempt to release alive scaffold socket: %p\n", sk);
+		LOG_DBG("Attempt to release alive scaffold socket: %p\n", sk);
 		return;
 	}
 
 	atomic_dec(&scaffold_nr_socks);
 
+#if defined(__KERNEL__)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
 	local_bh_disable();
 	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
 	local_bh_enable();
 #endif
-
-	printk(KERN_DEBUG "SCAFFOLD socket %p destroyed, %d are still alive.\n", 
+#endif
+	LOG_DBG("SCAFFOLD socket %p destroyed, %d are still alive.\n", 
                sk, atomic_read(&scaffold_nr_socks));
 }
 
@@ -1002,7 +1025,7 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 	sk->sk_destruct	= scaffold_sock_destruct;
         //scaffold_sk(sk)->sfsock = NULL;
         
-        printk(KERN_DEBUG "SCAFFOLD socket %p created, %d are alive.\n", 
+        LOG_DBG("SCAFFOLD socket %p created, %d are alive.\n", 
                sk, atomic_read(&scaffold_nr_socks) + 1);
 
         return sk;
@@ -1062,10 +1085,12 @@ out:
                 atomic_dec(&scaffold_nr_socks);
                 ret = -ENOMEM;
         } else {
+#if defined(__KERNEL__)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
 		local_bh_disable();
 		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 		local_bh_enable();
+#endif
 #endif
 	}
         return ret;
@@ -1084,7 +1109,7 @@ static int scaffold_ip_rcv(struct sk_buff *skb)
 
 static void scaffold_ip_err(struct sk_buff *skb, u32 info)
 {
-        kfree_skb(skb);
+        FREE_SKB(skb);
 }
 */
 
@@ -1111,7 +1136,7 @@ static struct net_protocol scaffold_protocol = {
 	.no_policy =	1,
 };
 */
-
+#if defined(__KERNEL__)
 static int scaffold_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
 {
@@ -1143,6 +1168,8 @@ static int scaffold_netdev_event(struct notifier_block *this,
 static struct notifier_block netdev_notifier = {
       notifier_call:scaffold_netdev_event,
 };
+#endif /* __KERNEL__ */
+
 /*
 static int scaffold_inetaddr_event(struct notifier_block *this,
 				  unsigned long event, void *ptr)
@@ -1183,49 +1210,50 @@ int __init scaffold_init(void)
 {
         int err = 0;
 
-        printk("Loaded scaffold protocol module\n");
+        LOG_DBG("Loaded scaffold protocol module\n");
+        /*
+        if (inet_add_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD) < 0) {
+                LOG_CRIT("%s: Cannot register Scaffold IP protocol\n", __func__);
+                goto out_scaffold_protocol_failure;
+        }
+        
+        */
+
+#if defined(__KERNEL__)
+	err = register_netdevice_notifier(&netdev_notifier);
+
+	if (err < 0) {
+                LOG_CRIT("%s: Cannot register netdevice notifier\n", __func__);
+                goto fail_netdev_notifier;
+        }
+        err = scaffold_netlink_init();
+        
+	if (err < 0) {
+                LOG_CRIT("%s: Cannot create netlink socket\n", __func__);
+                goto fail_netlink;
+        }
+#endif
 
         err = proto_register(&scaffold_udp_proto, 1);
 
 	if (err != 0) {
-		printk(KERN_CRIT "%s: Cannot create scaffold_sock SLAB cache!\n",
+		LOG_CRIT("%s: Cannot create scaffold_sock SLAB cache!\n",
 		       __func__);
-		goto fail;
+		goto fail_proto;
 	}
         
         err = sock_register(&scaffold_family_ops);
 
         if (err != 0) {
-                printk(KERN_CRIT "%s: Cannot register socket family\n", 
+                LOG_CRIT("%s: Cannot register socket family\n", 
                        __func__);
                 goto fail_sock_register;
         }
-        /*
-        if (inet_add_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD) < 0) {
-                printk(KERN_CRIT "%s: Cannot register Scaffold IP protocol\n", __func__);
-                goto out_scaffold_protocol_failure;
-        }
-        */
-        
-	err = register_netdevice_notifier(&netdev_notifier);
-
-	if (err < 0) {
-                printk(KERN_CRIT "%s: Cannot register netdevice notifier\n", __func__);
-                goto fail_netdev_notifier;
-        }
-
-        err = scaffold_netlink_init();
-        
-	if (err < 0) {
-                printk(KERN_CRIT "%s: Cannot create netlink socket\n", __func__);
-                goto fail_netlink;
-        }
-
         /*   
 	err = register_inetaddr_notifier(&inetaddr_notifier);
         
         if (err < 0) {
-                printk(KERN_CRIT "%s: Cannot register inetaddr notifier\n", __func__);
+                LOG_CRIT("%s: Cannot register inetaddr notifier\n", __func__);
                 goto out_scaffold_inetaddr_notifier_failure;
         }
         */
@@ -1246,19 +1274,19 @@ int __init scaffold_init(void)
 #endif
 out:
         return err;
-        
-fail_netlink:
-          unregister_netdevice_notifier(&netdev_notifier);
-fail_netdev_notifier:
         /*
           inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD);
           out_scaffold_protocol_failure:
         */
 	sock_unregister(PF_SCAFFOLD);
 fail_sock_register:
-	proto_unregister(&scaffold_udp_proto);
-        
-fail:
+	proto_unregister(&scaffold_udp_proto);     
+fail_proto:
+#if defined(__KERNEL__)
+fail_netlink:
+        unregister_netdevice_notifier(&netdev_notifier);
+fail_netdev_notifier:
+#endif
         goto out;      
 }
 
@@ -1270,16 +1298,21 @@ void __exit scaffold_fini(void)
         
         /* dev_remove_pack(&scaffold_packet_type); */
 	/* unregister_inetaddr_notifier(&inetaddr_notifier); */
-        scaffold_netlink_fini();
-	unregister_netdevice_notifier(&netdev_notifier);
+
+	/* unregister_netdevice_notifier(&netdev_notifier); */
         /* inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD); */
+#if defined(__KERNEL__)
+        scaffold_netlink_fini();
+#endif
      	sock_unregister(PF_SCAFFOLD);
 	proto_unregister(&scaffold_udp_proto);
 
-        printk("Unloaded scaffold protocol module\n");
+        LOG_INF("Unloaded scaffold protocol module\n");
 }
 
+#if defined(__KERNEL__)
 module_init(scaffold_init)
 module_exit(scaffold_fini)
 
 MODULE_ALIAS_NETPROTO(PF_SCAFFOLD);
+#endif

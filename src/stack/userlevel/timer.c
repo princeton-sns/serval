@@ -12,7 +12,6 @@ struct timer_internal {
 };
 
 struct timer_list_head {
-	unsigned int thread_id;
 	unsigned long num_timers;
 	struct list_head head;
 	pthread_mutex_t lock;
@@ -120,23 +119,23 @@ int timer_list_handle_timeout(void)
 	return 1;
 }
 
-static void make_key(void)
+static void make_list_key(void)
 {
 	pthread_key_create(&timer_list_head_key, timer_list_head_destructor);
 }
 
-int timer_list_per_thread_init(unsigned int thread_id)
+int timer_list_per_thread_init()
 {
 	struct timer_list_head *tlh;
 	pthread_mutexattr_t attr;
 	int ret;      
 
-	pthread_once(&key_once, make_key);
-	
+	pthread_once(&key_once, make_list_key);	
+
 	/* Check if init was already done for this thread */
 	if (timer_list_get())
 		return 0;
-	
+
 	tlh = (struct timer_list_head *)malloc(sizeof(*tlh));
 
 	if (!tlh)
@@ -150,7 +149,6 @@ int timer_list_per_thread_init(unsigned int thread_id)
 	}
 
 	memset(tlh, 0, sizeof(*tlh));
-	tlh->thread_id = thread_id;
 	INIT_LIST_HEAD(&tlh->head);
 	tlh->num_timers = 0;
 	/* Make mutex recursive */
@@ -160,6 +158,12 @@ int timer_list_per_thread_init(unsigned int thread_id)
 	pthread_mutexattr_destroy(&attr);
 
 	return 1;
+}
+
+void init_timer(struct timer_list *timer)
+{
+        memset(timer, 0, sizeof(*timer));
+        INIT_LIST_HEAD(&timer->entry);
 }
 
 void add_timer(struct timer_list *timer)

@@ -9,6 +9,8 @@
 
 typedef pthread_mutex_t spinlock_t;
 
+#define DEFINE_SPINLOCK(x) spinlock_t x = PTHREAD_MUTEX_INITIALIZER
+
 #define spin_lock_init(x) pthread_mutex_init(x, NULL)
 #define spin_lock_init_recursive(x) {                              \
 	pthread_mutexattr_t attr;                                  \
@@ -29,13 +31,15 @@ typedef pthread_mutex_t spinlock_t;
 
 typedef pthread_mutex_t rwlock_t;
 
-#define rwlock_init(x) pthread_mutex_init(x, NULL)
-#define rwlock_lock(x) pthread_mutex_lock(x)
-#define rwlock_trylock(x) pthread_mutex_trylock(x)
-#define rwlock_unlock(x) pthread_mutex_unlock(x)
+#define DEFINE_RWLOCK(x) rwlock_t x = PTHREAD_MUTEX_INITIALIZER
 
-#define rwlock_trylock_bh(x) pthread_mutex_trylock(x)
-#define rwlock_unlock_bh(x) pthread_mutex_unlock(x)
+#define rwlock_init(x) pthread_mutex_init(x, NULL)
+#define write_lock(x) pthread_mutex_lock(x)
+#define read_lock(x) pthread_mutex_lock(x)
+#define write_trylock(x) pthread_mutex_trylock(x)
+#define read_trylock(x) pthread_mutex_trylock(x)
+#define write_unlock(x) pthread_mutex_unlock(x)
+#define read_unlock(x) pthread_mutex_unlock(x)
 
 #endif /* __KERNEL__ */
 

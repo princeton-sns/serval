@@ -1,20 +1,25 @@
 bin_PROGRAMS = scaffold
 
 scaffold_SOURCES = \
+	af_scaffold.c \
 	scaffold_sock.c \
 	userlevel/sock.c \
+	userlevel/socket.c \
 	userlevel/skbuff.c \
 	userlevel/timer.c \
+	userlevel/wait.c \
 	userlevel/msg_ipc.c \
 	userlevel/client.c \
 	userlevel/scaffold.c
 
 scaffold_DEPENDENCIES = \
+	af_scaffold.h \
 	scaffold_sock.h \
 	userlevel/sock.h \
 	userlevel/net.h \
 	userlevel/skbuff.h \
 	userlevel/timer.h \
+	userlevel/wait.h \
 	userlevel/msg_ipc.h \
 	userlevel/client.h
 
@@ -36,9 +41,9 @@ KDIR = /lib/modules/$(KERNEL_VER)/build
 TARGETS = scaffold.ko
 
 SCAFFOLD_KERNEL_DEPS = \
-	linux/af_scaffold.c \
 	linux/scaffold_netlink.c \
 	linux/proc.c \
+	af_scaffold.c \
 	scaffold_sock.c
 
 all: scaffold.ko

@@ -1,4 +1,5 @@
 #include <string.h>
+#include <sys/uio.h>
 #include <scaffold/debug.h>
 #include <scaffold/platform.h>
 #include <scaffold/lock.h>
@@ -26,8 +27,7 @@ static void skb_release_all(struct sk_buff *skb)
 	skb_release_data(skb);
 }
 
-
-static void __free_skb(struct sk_buff *skb)
+void __free_skb(struct sk_buff *skb)
 {
 	skb_release_all(skb);
 	free(skb);
@@ -83,7 +83,6 @@ nodata:
 	free(skb);
 	return NULL;
 }
-
 /**
  *	skb_dequeue - remove from the head of the queue
  *	@list: list to dequeue from
@@ -225,3 +224,9 @@ void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head 
 	spin_unlock(&list->lock);
 }
 
+int skb_copy_datagram_iovec(const struct sk_buff *from,
+                            int offset, struct iovec *to,
+                            int size)
+{
+	return 0;
+}

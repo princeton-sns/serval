@@ -14,18 +14,27 @@
 #include <errno.h> 
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
+
+/* Allows convenient wrapping of kernel-style error codes (negative
+ * error codes) into userlevel ones. */
+#define KERN_ERR(err) (-(err))
+#define KERN_STRERROR(err) (strerror(KERN_ERR(err)))
+
 #endif /* __KERNEL__ */
 
 typedef enum {
 	LOG_LEVEL_INF = 0,
 	LOG_LEVEL_DBG,
 	LOG_LEVEL_ERR,
+	LOG_LEVEL_CRIT,
 } log_level_t;
 
 static const char *log_level_str[] = {
 	"INF",
 	"DBG",
-	"ERR"
+	"ERR",
+        "CRIT"
 };
 
 static inline void logme(log_level_t level, const char *func, const char *format, ...)
@@ -48,6 +57,7 @@ static inline void logme(log_level_t level, const char *func, const char *format
 			s = stdout;
 			break;
 		case LOG_LEVEL_ERR:
+		case LOG_LEVEL_CRIT:
 			s = stderr;
 			break;
 		}
@@ -62,6 +72,7 @@ static inline void logme(log_level_t level, const char *func, const char *format
 
 #if defined(ENABLE_DEBUG)
 
+#define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
@@ -72,6 +83,7 @@ static inline void logme(log_level_t level, const char *func, const char *format
 
 #else
 
+#define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_DBG(fmt, ...)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)

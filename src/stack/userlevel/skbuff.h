@@ -57,6 +57,10 @@ struct sk_buff {
 	atomic_t		users;
 };
 
+void __free_skb(struct sk_buff *skb);
+void free_skb(struct sk_buff *);
+struct sk_buff *alloc_skb(unsigned int size);
+
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
 	return skb->data_len;
@@ -248,7 +252,7 @@ static inline int skb_network_offset(const struct sk_buff *skb)
 	return skb_network_header(skb) - skb->data;
 }
 
-extern void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list);
+void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list);
 static inline void __skb_insert(struct sk_buff *newsk,
 				struct sk_buff *prev, struct sk_buff *next,
 				struct sk_buff_head *list)
@@ -324,7 +328,7 @@ static inline void __skb_queue_before(struct sk_buff_head *list,
  *
  *	A buffer cannot be placed on two lists at the same time.
  */
-extern void skb_queue_head(struct sk_buff_head *list, struct sk_buff *newsk);
+void skb_queue_head(struct sk_buff_head *list, struct sk_buff *newsk);
 static inline void __skb_queue_head(struct sk_buff_head *list,
 				    struct sk_buff *newsk)
 {
@@ -341,7 +345,7 @@ static inline void __skb_queue_head(struct sk_buff_head *list,
  *
  *	A buffer cannot be placed on two lists at the same time.
  */
-extern void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk);
+void skb_queue_tail(struct sk_buff_head *list, struct sk_buff *newsk);
 static inline void __skb_queue_tail(struct sk_buff_head *list,
 				   struct sk_buff *newsk)
 {
@@ -352,7 +356,7 @@ static inline void __skb_queue_tail(struct sk_buff_head *list,
  * remove sk_buff from list. _Must_ be called atomically, and with
  * the list known..
  */
-extern void	   skb_unlink(struct sk_buff *skb, struct sk_buff_head *list);
+void skb_unlink(struct sk_buff *skb, struct sk_buff_head *list);
 static inline void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
 	struct sk_buff *next, *prev;
@@ -408,6 +412,7 @@ static inline struct sk_buff *skb_peek_tail(struct sk_buff_head *list_)
 	return list;
 }
 
+
 /**
  *	__skb_dequeue - remove from the head of the queue
  *	@list: list to dequeue from
@@ -416,7 +421,7 @@ static inline struct sk_buff *skb_peek_tail(struct sk_buff_head *list_)
  *	so must be used with appropriate locks held only. The head item is
  *	returned or %NULL if the list is empty.
  */
-extern struct sk_buff *skb_dequeue(struct sk_buff_head *list);
+struct sk_buff *skb_dequeue(struct sk_buff_head *list);
 static inline struct sk_buff *__skb_dequeue(struct sk_buff_head *list)
 {
 	struct sk_buff *skb = skb_peek(list);
@@ -433,7 +438,7 @@ static inline struct sk_buff *__skb_dequeue(struct sk_buff_head *list)
  *	so must be used with appropriate locks held only. The tail item is
  *	returned or %NULL if the list is empty.
  */
-extern struct sk_buff *skb_dequeue_tail(struct sk_buff_head *list);
+struct sk_buff *skb_dequeue_tail(struct sk_buff_head *list);
 static inline struct sk_buff *__skb_dequeue_tail(struct sk_buff_head *list)
 {
 	struct sk_buff *skb = skb_peek_tail(list);
@@ -441,6 +446,24 @@ static inline struct sk_buff *__skb_dequeue_tail(struct sk_buff_head *list)
 		__skb_unlink(skb, list);
 	return skb;
 }
+
+/**
+ *	__skb_queue_purge - empty a list
+ *	@list: list to empty
+ *
+ *	Delete all buffers on an &sk_buff list. Each buffer is removed from
+ *	the list and one reference dropped. This function does not take the
+ *	list lock and the caller must hold the relevant locks to use it.
+ */
+void skb_queue_purge(struct sk_buff_head *list);
+static inline void __skb_queue_purge(struct sk_buff_head *list)
+{
+	struct sk_buff *skb;
+	while ((skb = __skb_dequeue(list)) != NULL)
+		free_skb(skb);
+}
+
+#include <linux/ip.h>
 
 static inline struct iphdr *ip_hdr(const struct sk_buff *skb)
 {
@@ -452,8 +475,16 @@ static inline struct iphdr *ipip_hdr(const struct sk_buff *skb)
 	return (struct iphdr *)skb_transport_header(skb);
 }
 
-void free_skb(struct sk_buff *);
-struct sk_buff *alloc_skb(unsigned int size);
+int skb_copy_datagram_iovec(const struct sk_buff *from,
+                            int offset, struct iovec *to,
+                            int size);
+
+#include <linux/udp.h>
+
+static inline struct udphdr *udp_hdr(const struct sk_buff *skb)
+{
+	return (struct udphdr *)skb_transport_header(skb);
+}
 
 #endif /* __KERNEL__ */
 

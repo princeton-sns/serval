@@ -9,8 +9,9 @@
 #include <net/sock.h>
 #include <linux/wait.h>
 #include <linux/skbuff.h>
-#include <netinet/scaffold.h>
 
 #endif /* __KERNEL__ */
+
+#include <netinet/scaffold.h>
 
 #endif /* AF_SCAFFOLD_H */

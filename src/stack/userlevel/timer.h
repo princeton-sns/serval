@@ -8,6 +8,8 @@
 #include <scaffold/list.h>
 #include <time.h>
 
+#define CLOCK CLOCK_THREAD_CPUTIME_ID
+
 struct timer_list {	
 	struct list_head entry;
         unsigned long expires;
@@ -16,8 +18,8 @@ struct timer_list {
 	unsigned long data;
 };
 
-#define TIMER_INITIALIZER(_function, _expires, _data) {		\
-		.entry = { NULL, NULL },                        \
+#define TIMER_INITIALIZER(_name, _function, _expires, _data) {		\
+		.entry = { &_name.entry, &_name.entry },                        \
 		.function = (_function),			\
 		.expires = (_expires),				\
                 .expires_abs = { 0, 0 },                        \
@@ -26,10 +28,10 @@ struct timer_list {
 
 #define DEFINE_TIMER(_name, _function, _expires, _data)		\
 	struct timer_list _name =				\
-		TIMER_INITIALIZER(_function, _expires, _data)
+		TIMER_INITIALIZER(_name, _function, _expires, _data)
 
 /* User-level specific functions */
-int timer_list_per_thread_init(unsigned int thread_id);
+int timer_list_per_thread_init(void);
 int timer_list_get_next_timeout(struct timespec *);
 int timer_list_handle_timeout(void);
 
@@ -38,6 +40,8 @@ static inline int timer_pending(const struct timer_list *timer)
 {
 	return timer->entry.next != NULL;
 }
+
+void init_timer(struct timer_list *timer);
 void add_timer(struct timer_list *timer);
 int del_timer(struct timer_list * timer);
 int mod_timer(struct timer_list *timer, unsigned long expires);

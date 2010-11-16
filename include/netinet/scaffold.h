@@ -4,13 +4,13 @@
 
 #include <linux/types.h>
 #include <asm/byteorder.h>
-#include <arpa/inet.h>
 
 #if defined(__KERNEL__)
 #include <linux/socket.h>
 #else
 #include <stdint.h>
 #include <sys/socket.h>
+#include <arpa/inet.h>
 #endif
 
 #define AF_SCAFFOLD 27

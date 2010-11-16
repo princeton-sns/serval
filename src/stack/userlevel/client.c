@@ -7,14 +7,18 @@
 #include <sys/un.h>
 #include <pthread.h>
 #include <signal.h>
+#include <errno.h>
 #include "client.h"
 #include "timer.h"
 #include "msg_ipc.h"
+#include "net.h"
+#include <scaffold_sock.h>
 
 struct client {
 	client_type_t type;
 	client_state_t state;
-	int sock;
+	int fd;
+        struct socket *sock;
 	unsigned int id;
 	int pipefd[2];
 	int should_exit;
@@ -24,6 +28,14 @@ struct client {
 	struct timer_list timer;
 	struct list_head link;
 };
+
+static pthread_key_t client_key;
+static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+
+static void make_client_key(void)
+{
+	pthread_key_create(&client_key, NULL);
+}
 
 typedef int (*msg_handler_t)(struct client *, struct msg_ipc *);
 
@@ -67,6 +79,21 @@ static void dummy_timer_callback(unsigned long data)
 	LOG_DBG("Timer callback for client %u\n", c->id);
 }
 
+struct client *client_get_current(void)
+{
+        return (struct client *)pthread_getspecific(client_key); 
+}
+
+static inline int client_type_to_prot_type(client_type_t type)
+{
+        if (type == CLIENT_TYPE_UDP)
+                return SOCK_DGRAM;
+        if (type == CLIENT_TYPE_TCP)
+                return SOCK_STREAM;
+        
+        return -1;
+}
+
 /*
   Create client.
 
@@ -80,6 +107,9 @@ struct client *client_create(client_type_t type,
 			     sigset_t *sigset)
 {
 	struct client *c;
+        int err;
+
+	pthread_once(&key_once, make_client_key);
 
 	c = (struct client *)malloc(sizeof(struct client));
 
@@ -90,7 +120,17 @@ struct client *client_create(client_type_t type,
 	
 	c->type = type;
 	c->state = CLIENT_STATE_NOT_RUNNING;
-	c->sock = sock;
+	c->fd = sock;
+
+        err = sock_create(PF_SCAFFOLD, 
+                          client_type_to_prot_type(type), 
+                          0, &c->sock);
+        if (err < 0) {
+                LOG_ERR("Could not create socket: %s\n", KERN_STRERROR(err));
+                free(c);
+                return NULL;                        
+        }
+
 	c->id = id;
 	LOG_DBG("client id is %u\n", c->id);
 	c->should_exit = 0;
@@ -139,19 +179,34 @@ static int client_close(struct client *c)
 {
 	int ret;
 
-	ret = close(c->sock);
-	c->sock = -1;
+	ret = close(c->fd);
+	c->fd = -1;
 
 	return ret;
 }
 
 void client_destroy(struct client *c)
 {
-	if (c->sock)
+	if (c->fd)
 		client_close(c);
 
 	list_del(&c->link);
 	free(c);
+}
+
+int client_signal_pending(struct client *c)
+{
+        char r = 'r';
+        ssize_t ret;
+
+        ret = recv(c->pipefd[0], &r, 1, MSG_DONTWAIT | MSG_PEEK);
+
+        if (ret == -1) {
+                if (errno == EWOULDBLOCK || errno == EAGAIN)
+                        return 0;
+                return -1;
+        }
+        return 0;
 }
 
 int client_signal_raise(struct client *c)
@@ -193,7 +248,7 @@ int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg)
 
 	msg_ipc_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
 	
-	return msg_ipc_write(c->sock, &rsp.msghdr);
+	return msg_ipc_write(c->fd, &rsp.msghdr);
 }
 
 int client_handle_connect_req_msg(struct client *c, struct msg_ipc *msg)
@@ -211,7 +266,7 @@ static int client_handle_msg(struct client *c)
 	struct msg_ipc *msg;
 	int ret;
 	
-	ret = msg_ipc_read(c->sock, &msg);
+	ret = msg_ipc_read(c->fd, &msg);
 
 	if (ret < 1)
 		return ret;
@@ -228,10 +283,18 @@ static int client_handle_msg(struct client *c)
 static void *client_thread(void *arg)
 {
 	struct client *c = (struct client *)arg;
-	
+	int ret;
+
 	c->state = CLIENT_STATE_RUNNING;
 
-	if (timer_list_per_thread_init(c->id) == -1)
+	ret = pthread_setspecific(client_key, c);
+
+	if (ret != 0) {
+                LOG_ERR("Could not set client key\n");
+		return NULL;
+	}
+
+	if (timer_list_per_thread_init() == -1)
 		return NULL;
 	
 	LOG_DBG("Client %u running\n", c->id);
@@ -239,15 +302,15 @@ static void *client_thread(void *arg)
 	while (!c->should_exit) {
 		struct timespec timeout, *to = NULL;
 		fd_set readfds;
-		int ret, nfds;
+		int nfds;
 		
 		FD_ZERO(&readfds);
 		FD_SET(c->pipefd[0], &readfds);
 
-		if (c->sock != -1)
-			FD_SET(c->sock, &readfds);
+		if (c->fd != -1)
+			FD_SET(c->fd, &readfds);
 
-		nfds = MAX(c->sock, c->pipefd[0]) + 1;
+		nfds = MAX(c->fd, c->pipefd[0]) + 1;
 
 		ret = timer_list_get_next_timeout(&timeout);
 
@@ -285,7 +348,7 @@ static void *client_thread(void *arg)
 				LOG_DBG("Client %u exit signal\n", c->id);
 				continue;
 			}
-			if (FD_ISSET(c->sock, &readfds)) {
+			if (FD_ISSET(c->fd, &readfds)) {
 				/* Socket readable */
 				LOG_DBG("Client %u socket readable\n", c->id);
 				ret = client_handle_msg(c);
@@ -310,7 +373,7 @@ static void *test_client_thread(void *arg)
 {
 	struct client *c = (struct client *)arg;
 	
-	if (timer_list_per_thread_init(c->id) == -1)
+	if (timer_list_per_thread_init() == -1)
 		return NULL;
 
 	add_timer(&c->timer);

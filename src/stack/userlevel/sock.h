@@ -12,18 +12,34 @@
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
 #include <scaffold/list.h>
+#include <pthread.h>
+#include <errno.h>
 #include "skbuff.h"
 #include "net.h"
+#include "wait.h"
+#include "timer.h"
 
 struct sk_buff;
 struct proto;
+
+#define O_NONBLOCK 0x1
+
+#define SHUTDOWN_MASK	3
+#define RCV_SHUTDOWN	1
+#define SEND_SHUTDOWN	2
 
 struct sock {
 	unsigned short          sk_family;
         struct hlist_node	sk_node;
 	atomic_t		sk_refcnt;
 	//int			skc_tx_queue_mapping;
+        unsigned int		sk_shutdown  : 2,
+				sk_no_check  : 2,
+				sk_userlocks : 4,
+				sk_protocol  : 8,
+				sk_type      : 16;
         unsigned int	        sk_hash;
+	wait_queue_head_t	sk_wq;
         unsigned char	        sk_state;
 	int			sk_rcvbuf;
         spinlock_t              sk_lock;
@@ -33,6 +49,8 @@ struct sock {
 	atomic_t		sk_wmem_alloc;
 	atomic_t		sk_omem_alloc;
 	atomic_t		sk_drops;
+	unsigned short		sk_ack_backlog;
+	unsigned short		sk_max_ack_backlog;
 	int			sk_sndbuf;
 	struct sk_buff_head	sk_receive_queue;
 	struct sk_buff_head	sk_write_queue;
@@ -41,9 +59,9 @@ struct sock {
 	unsigned long	        sk_lingertime;
 	long			sk_rcvtimeo;
 	long			sk_sndtimeo;
-	//struct timer_list	sk_timer;
+	struct timer_list	sk_timer;
 	struct sk_buff		*sk_send_head;
-
+        
         void (*sk_destruct)(struct sock *sk);
 	void (*sk_state_change)(struct sock *sk);
 	void (*sk_data_ready)(struct sock *sk, int bytes);
@@ -57,6 +75,7 @@ struct kiocb;
 #define __user 
 
 struct proto {
+        struct module           *owner;
 	void			(*close)(struct sock *sk, 
 					long timeout);
 	int			(*connect)(struct sock *sk,
@@ -100,7 +119,19 @@ struct proto {
 	struct list_head	node;
 };
 
-extern int proto_register(struct proto *prot, int *);
+static inline int sock_no_getsockopt(struct socket *s, int a, 
+                                     int b, char __user *c, int __user *d)
+{
+        return -1;
+}
+
+static inline int sock_no_setsockopt(struct socket *s, int a, int b, 
+                                     char __user *c, unsigned int d)
+{
+        return -1;
+}
+
+extern int proto_register(struct proto *prot, int);
 extern void proto_unregister(struct proto *prot);
 
 enum sock_flags {
@@ -117,6 +148,78 @@ enum sock_flags {
 };
 
 #define sock_net(s) ((s)->sk_net)
+
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+	return &sk->sk_wq;
+}
+
+static inline void sock_orphan(struct sock *sk)
+{
+        /*
+	write_lock_bh(&sk->sk_callback_lock);
+	sock_set_flag(sk, SOCK_DEAD);
+	sk_set_socket(sk, NULL);
+	sk->sk_wq  = NULL;
+	write_unlock_bh(&sk->sk_callback_lock);
+        */
+        
+}
+
+static inline void sock_graft(struct sock *sk, struct socket *parent)
+{
+        /*
+	write_lock_bh(&sk->sk_callback_lock);
+	rcu_assign_pointer(sk->sk_wq, parent->wq);
+	parent->sk = sk;
+	sk_set_socket(sk, parent);
+	security_sock_graft(sk, parent);
+	write_unlock_bh(&sk->sk_callback_lock);
+        */
+}
+
+int sk_wait_data(struct sock *sk, long *timeo);
+
+static inline int sock_writeable(const struct sock *sk) 
+{
+	return atomic_read(&sk->sk_wmem_alloc) < (sk->sk_sndbuf >> 1);
+}
+
+static inline long sock_rcvtimeo(const struct sock *sk, int noblock)
+{
+	return noblock ? 0 : sk->sk_rcvtimeo;
+}
+
+static inline long sock_sndtimeo(const struct sock *sk, int noblock)
+{
+	return noblock ? 0 : sk->sk_sndtimeo;
+}
+
+
+void sk_reset_timer(struct sock *sk, struct timer_list* timer,
+                    unsigned long expires);
+void sk_stop_timer(struct sock *sk, struct timer_list* timer);
+int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb);
+int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb);
+
+static inline void sk_eat_skb(struct sock *sk, struct sk_buff *skb, int copied_early)
+{
+	__skb_unlink(skb, &sk->sk_receive_queue);
+	__free_skb(skb);
+}
+
+static inline int sock_error(struct sock *sk)
+{
+        return 0;
+}
+
+static inline int sock_intr_errno(long timeo)
+{
+	return timeo == MAX_SCHEDULE_TIMEOUT ? -ERESTARTSYS : -EINTR;
+}
+
+
+void sock_init_data(struct socket *sock, struct sock *sk);
 
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
