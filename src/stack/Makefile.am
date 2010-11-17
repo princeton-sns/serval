@@ -1,6 +1,6 @@
 bin_PROGRAMS = scaffold
 
-scaffold_SOURCES = \	
+scaffold_SOURCES = \
 	debug.c \
 	af_scaffold.c \
 	scaffold_sock.c \
@@ -36,6 +36,7 @@ scaffold_LDFLAGS =-lpthread -lrt
 noinst_HEADERS = \
 	scaffold_sock.h
 
+if KERNEL
 # scaffold module
 KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
@@ -58,3 +59,4 @@ clean-local:
 	rm -f *~
 	rm -f linux/*~
 	rm -f userlevel/*~
+endif # KERNEL

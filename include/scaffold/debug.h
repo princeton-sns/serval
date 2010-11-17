@@ -20,7 +20,6 @@
  * error codes) into userlevel ones. */
 #define KERN_ERR(err) (-(err))
 #define KERN_STRERROR(err) (strerror(KERN_ERR(err)))
-
 #endif /* __KERNEL__ */
 
 typedef enum {
@@ -30,7 +29,7 @@ typedef enum {
 	LOG_LEVEL_CRIT,
 } log_level_t;
 
-extern void logme(log_level_t level, const char *func, const char *format, ...);
+void logme(log_level_t level, const char *func, const char *format, ...);
 
 #if defined(ENABLE_DEBUG)
 

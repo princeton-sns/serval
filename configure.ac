@@ -93,6 +93,16 @@ esac],[unittest=no])
 
 AM_CONDITIONAL([UNITTEST], [test x$unittest = xyes])
 
+AC_ARG_ENABLE([kernel],
+AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
+[case "${enableval}" in
+  yes) kernel=yes ;;
+  no)  kernel=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
+esac],[kernel=yes])
+
+AM_CONDITIONAL([KERNEL], [test x$kernel = xyes])
+
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
 #                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)
@@ -129,7 +139,7 @@ AC_OUTPUT
 
 echo
 #echo "Build user level.........................$userlevel"
-#echo "Build Linux module.......................$linuxmodule"
+echo "Build kernel module......................$kernel"
 #echo "Build unit tests.........................$unittest"
 #echo "Use native sockets API for clients.......$native_api"
 echo "Enable debug output......................$debug"
