@@ -53,6 +53,9 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #include <userlevel/net.h>
 #include <userlevel/skbuff.h>
 
+extern int packet_init(void);
+extern void packet_fini(void);
+
 #endif /* __KERNEL__ */
 
 /* Common includes */
@@ -1235,30 +1238,35 @@ int __init scaffold_init(void)
 	err = register_netdevice_notifier(&netdev_notifier);
 
 	if (err < 0) {
-                LOG_CRIT("%s: Cannot register netdevice notifier\n", __func__);
+                LOG_CRIT("Cannot register netdevice notifier\n");
                 goto fail_netdev_notifier;
         }
         err = scaffold_netlink_init();
         
 	if (err < 0) {
-                LOG_CRIT("%s: Cannot create netlink socket\n", __func__);
+                LOG_CRIT("Cannot create netlink socket\n");
                 goto fail_netlink;
         }
+#else
+        err = packet_init();
+
+        if (err != 0) {
+		LOG_CRIT("Cannot init packet socket!\n");
+		goto fail_packet;
+	}
 #endif
 
         err = proto_register(&scaffold_udp_proto, 1);
 
 	if (err != 0) {
-		LOG_CRIT("%s: Cannot create scaffold_sock SLAB cache!\n",
-		       __func__);
+		LOG_CRIT("Cannot create scaffold_sock SLAB cache!\n");
 		goto fail_proto;
 	}
         
         err = sock_register(&scaffold_family_ops);
 
         if (err != 0) {
-                LOG_CRIT("%s: Cannot register socket family\n", 
-                       __func__);
+                LOG_CRIT("Cannot register socket family\n");
                 goto fail_sock_register;
         }
         /*   
@@ -1298,6 +1306,8 @@ fail_proto:
 fail_netlink:
         unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
+#else
+fail_packet:
 #endif
         goto out;      
 }
@@ -1315,6 +1325,8 @@ void __exit scaffold_fini(void)
         /* inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD); */
 #if defined(__KERNEL__)
         scaffold_netlink_fini();
+#else
+        packet_fini();
 #endif
      	sock_unregister(PF_SCAFFOLD);
 	proto_unregister(&scaffold_udp_proto);

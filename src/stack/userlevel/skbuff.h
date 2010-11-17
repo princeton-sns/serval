@@ -20,7 +20,6 @@ typedef unsigned int sk_buff_data_t;
 
 #define SKB_LINEAR_ASSERT(skb) BUG_ON(skb_is_nonlinear(skb))
 
-
 struct sk_buff_head {
 	/* These two members must be first. */
 	struct sk_buff	*next;

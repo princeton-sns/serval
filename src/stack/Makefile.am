@@ -11,6 +11,7 @@ scaffold_SOURCES = \
 	userlevel/wait.c \
 	userlevel/msg_ipc.c \
 	userlevel/client.c \
+	userlevel/packet.c \
 	userlevel/scaffold.c
 
 scaffold_DEPENDENCIES = \
