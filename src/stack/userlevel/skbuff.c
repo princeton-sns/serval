@@ -3,7 +3,7 @@
 #include <scaffold/debug.h>
 #include <scaffold/platform.h>
 #include <scaffold/lock.h>
-#include "skbuff.h"
+#include <scaffold/skbuff.h>
 
 static void skb_release_head_state(struct sk_buff *skb)
 {
@@ -229,4 +229,55 @@ int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int size)
 {
 	return 0;
+}
+
+static void skb_over_panic(struct sk_buff *skb, int sz, void *here)
+{
+	LOG_CRIT("skb_over_panic: text:%p len:%d put:%d head:%p "
+		 "data:%p tail:%#lx end:%#lx dev:%s\n",
+		 here, skb->len, sz, skb->head, skb->data,
+		 (unsigned long)skb->tail, (unsigned long)skb->end,
+		 skb->dev ? skb->dev->name : "<NULL>");
+	exit(-1);
+}
+
+static void skb_under_panic(struct sk_buff *skb, int sz, void *here)
+{
+	LOG_CRIT("skb_under_panic: text:%p len:%d put:%d head:%p "
+		 "data:%p tail:%#lx end:%#lx dev:%s\n",
+		 here, skb->len, sz, skb->head, skb->data,
+		 (unsigned long)skb->tail, (unsigned long)skb->end,
+		 skb->dev ? skb->dev->name : "<NULL>");
+	exit(-1);
+}
+
+unsigned char *skb_put(struct sk_buff *skb, unsigned int len)
+{
+	unsigned char *tmp = skb_tail_pointer(skb);
+	SKB_LINEAR_ASSERT(skb);
+	skb->tail += len;
+	skb->len  += len;
+	if (unlikely(skb->tail > skb->end))
+		skb_over_panic(skb, len, __builtin_return_address(0));
+	return tmp;
+}
+
+unsigned char *skb_push(struct sk_buff *skb, unsigned int len)
+{
+	skb->data -= len;
+	skb->len  += len;
+	if (unlikely(skb->data<skb->head))
+		skb_under_panic(skb, len, __builtin_return_address(0));
+	return skb->data;
+}
+
+unsigned char *skb_pull(struct sk_buff *skb, unsigned int len)
+{
+	return skb_pull_inline(skb, len);
+}
+
+void skb_trim(struct sk_buff *skb, unsigned int len)
+{
+	if (skb->len > len)
+		__skb_trim(skb, len);
 }

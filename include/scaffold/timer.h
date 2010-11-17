@@ -10,6 +10,8 @@
 
 #define CLOCK CLOCK_THREAD_CPUTIME_ID
 
+/* #define PER_THREAD_TIMER_LIST 0 */
+
 struct timer_list {	
 	struct list_head entry;
         unsigned long expires;
@@ -18,8 +20,8 @@ struct timer_list {
 	unsigned long data;
 };
 
-#define TIMER_INITIALIZER(_name, _function, _expires, _data) {		\
-		.entry = { &_name.entry, &_name.entry },                        \
+#define TIMER_INITIALIZER(_name, _function, _expires, _data) {  \
+		.entry = { NULL, NULL },                        \
 		.function = (_function),			\
 		.expires = (_expires),				\
                 .expires_abs = { 0, 0 },                        \
@@ -31,7 +33,11 @@ struct timer_list {
 		TIMER_INITIALIZER(_name, _function, _expires, _data)
 
 /* User-level specific functions */
+
+#if defined(PER_THREAD_TIMER_LIST)
 int timer_list_per_thread_init(void);
+#endif
+
 int timer_list_get_next_timeout(struct timespec *);
 int timer_list_handle_timeout(void);
 

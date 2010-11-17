@@ -1,5 +1,8 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/debug.h>
+#include <scaffold/timer.h>
+#include <scaffold/net.h>
+#include <scaffold_sock.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -10,11 +13,8 @@
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include "client.h"
-#include "timer.h"
-#include "msg_ipc.h"
-#include "net.h"
-#include <scaffold_sock.h>
+#include <userlevel/client.h>
+#include <userlevel/msg_ipc.h>
 
 struct client {
 	client_type_t type;
@@ -351,13 +351,13 @@ static void *client_thread(void *arg)
 		return NULL;
 	}
 
+#if defined(PER_THREAD_TIMER_LIST)
 	if (timer_list_per_thread_init() == -1)
 		return NULL;
-	
+#endif
 	LOG_DBG("Client %u running\n", c->id);
 
 	while (!c->should_exit) {
-		struct timespec timeout, *to = NULL;
 		fd_set readfds;
 		int nfds;
 		
@@ -369,20 +369,8 @@ static void *client_thread(void *arg)
 
 		nfds = MAX(c->fd, c->pipefd[0]) + 1;
 
-		ret = timer_list_get_next_timeout(&timeout);
-
-		if (ret == -1) {
-			/* Timer list error. Exit? */
-			break;
-		} else if (ret == 0) {
-			/* No timer */
-			to = NULL;
-		} else {
-			to = &timeout;
-		}
-
 		/* ret = pselect(nfds, &readfds, NULL, NULL, to, &c->sigset); */
-		ret = pselect(nfds, &readfds, NULL, NULL, to, NULL);
+		ret = pselect(nfds, &readfds, NULL, NULL, NULL, NULL);
 
 		if (ret == -1) {
 			if (errno == EINTR) {
@@ -397,7 +385,6 @@ static void *client_thread(void *arg)
 		} else if (ret == 0) {
 			/* Timeout */
 			LOG_DBG("Client %u timeout\n", c->id);
-			timer_list_handle_timeout();
 		} else {
 			if (FD_ISSET(c->pipefd[0], &readfds)) {
 				/* Signal received, probably exit */
@@ -429,10 +416,10 @@ static void *client_thread(void *arg)
 static void *test_client_thread(void *arg)
 {
 	struct client *c = (struct client *)arg;
-	
+#if defined(PER_THREAD_TIMER_LIST)
 	if (timer_list_per_thread_init() == -1)
 		return NULL;
-
+#endif
 	add_timer(&c->timer);
 
 	return client_thread(arg);

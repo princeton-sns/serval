@@ -10,10 +10,16 @@
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
 #include <stdint.h>
+#include <net/if.h>
 
 struct sock;
 struct sk_buff;
 typedef unsigned int sk_buff_data_t;
+
+struct net_device {
+        int ifindex;
+        char name[IFNAMSIZ];
+};
 
 #define FREE_SKB(skb) free_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz)
@@ -40,7 +46,7 @@ struct sk_buff {
 	struct sk_buff		*prev;
         
 	struct sock		*sk;
-	//struct net_device	*dev;
+	struct net_device	*dev;
 	unsigned int		len,
 				data_len;
 	uint16_t		mac_len,
@@ -93,7 +99,18 @@ static inline void skb_set_tail_pointer(struct sk_buff *skb, const int offset)
 	skb->tail += offset;
 }
 
-extern unsigned char *skb_put(struct sk_buff *skb, unsigned int len);
+static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
+{
+	if (unlikely(skb->data_len)) {
+		return;
+	}
+	skb->len = len;
+	skb_set_tail_pointer(skb, len);
+}
+
+void skb_trim(struct sk_buff *skb, unsigned int len);
+
+unsigned char *skb_put(struct sk_buff *skb, unsigned int len);
 static inline unsigned char *__skb_put(struct sk_buff *skb, unsigned int len)
 {
 	unsigned char *tmp = skb_tail_pointer(skb);
@@ -103,7 +120,7 @@ static inline unsigned char *__skb_put(struct sk_buff *skb, unsigned int len)
 	return tmp;
 }
 
-extern unsigned char *skb_push(struct sk_buff *skb, unsigned int len);
+unsigned char *skb_push(struct sk_buff *skb, unsigned int len);
 static inline unsigned char *__skb_push(struct sk_buff *skb, unsigned int len)
 {
 	skb->data -= len;
@@ -111,7 +128,7 @@ static inline unsigned char *__skb_push(struct sk_buff *skb, unsigned int len)
 	return skb->data;
 }
 
-extern unsigned char *skb_pull(struct sk_buff *skb, unsigned int len);
+unsigned char *skb_pull(struct sk_buff *skb, unsigned int len);
 static inline unsigned char *__skb_pull(struct sk_buff *skb, unsigned int len)
 {
 	skb->len -= len;
@@ -124,7 +141,7 @@ static inline unsigned char *skb_pull_inline(struct sk_buff *skb, unsigned int l
 	return unlikely(len > skb->len) ? NULL : __skb_pull(skb, len);
 }
 
-extern unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta);
+unsigned char *__pskb_pull_tail(struct sk_buff *skb, int delta);
 
 static inline unsigned char *__pskb_pull(struct sk_buff *skb, unsigned int len)
 {

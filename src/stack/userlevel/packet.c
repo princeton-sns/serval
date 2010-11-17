@@ -1,8 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-
 #include <sys/socket.h>
 #include <netpacket/packet.h>
 #include <net/ethernet.h> /* the L2 protocols */
+#include <netinet/ether.h>
+#include <net/if_packet.h>
 #include <scaffold/debug.h>
 #include <string.h>
 #include <errno.h>
@@ -10,8 +11,8 @@
 #include <unistd.h>
 #include <poll.h>
 #include <arpa/inet.h>
-
-#include "skbuff.h"
+#include <scaffold/skbuff.h>
+#include <input.h>
 
 static int psock = -1;
 static int pipefd[2] = { -1, -1 };
@@ -56,8 +57,11 @@ void *packet_thread(void *arg)
                                 struct sk_buff *skb;
                                 struct sockaddr_ll lladdr;
                                 socklen_t addrlen = sizeof(lladdr);
-                                char buf[RCVLEN];
-                                
+                                unsigned char buf[RCVLEN];
+                                char srcstr[18], dststr[18];
+                                struct ether_header *ethh = 
+                                        (struct ether_header *)buf;
+
                                 ret = recvfrom(psock, buf, RCVLEN, 0,
                                                (struct sockaddr *)&lladdr, 
                                                &addrlen);
@@ -71,15 +75,56 @@ void *packet_thread(void *arg)
                                         continue;
                                 }
                                 
-                                LOG_DBG("Received IP packet\n");
+                                switch (lladdr.sll_pkttype) {
+                                case PACKET_HOST:
+                                        /*
+                                case PACKET_BROADCAST:
+                                case PACKET_MULTICAST:
+                                        */
+                                        break;
+                                case PACKET_OUTGOING:
+                                case PACKET_OTHERHOST:
+                                case PACKET_LOOPBACK:
+                                default:
+                                        continue;                          
+                                }
+                                
+                                /* 
+                                   Must copy src and dst strings here since ether_ntoa
+                                   uses a static char buffer and therefore cannot 
+                                   be used twice on the same line.
+                                */
+                                strcpy(srcstr, 
+                                       ether_ntoa((struct ether_addr *)ethh->ether_shost));
+                                strcpy(dststr, 
+                                       ether_ntoa((struct ether_addr *)ethh->ether_dhost));
+                                
+                                LOG_DBG("Received raw packet if=%d [%s %s]\n", 
+                                        lladdr.sll_ifindex, srcstr, dststr);
                                 
                                 skb = alloc_skb(ret);
                                 
                                 if (!skb)
                                         continue;
                                 
-                         
-                                free_skb(skb);
+                                memcpy(skb->data, buf, ret);
+
+                                skb_set_mac_header(skb, 0);
+                                skb_set_network_header(skb, sizeof(*ethh));
+                                skb_pull(skb, sizeof(*ethh));
+
+                                ret = scaffold_input(skb);
+
+                                switch (ret) {
+                                case INPUT_KEEP:
+                                        break;
+                                case INPUT_ERROR:
+                                        LOG_ERR("input handler returned error\n");
+                                case INPUT_OK:
+                                default:
+                                        free_skb(skb);
+                                        break;
+                                }
                         }
                 }
         }
@@ -88,7 +133,7 @@ void *packet_thread(void *arg)
 
 int packet_init(void)
 {
-	psock = socket(AF_PACKET, SOCK_DGRAM, htons(ETH_P_IP));
+	psock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP));
 
         if (psock == -1) {
                 LOG_ERR("packet socket: %s\n", strerror(errno));

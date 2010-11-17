@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <sys/types.h>  
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -8,12 +9,13 @@
 #include <pthread.h>
 #include <sys/select.h>
 #include <errno.h>
+#include <libgen.h>
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
+#include <scaffold/timer.h>
 #include <af_scaffold.h>
-#include "timer.h"
-#include "client.h"
+#include <userlevel/client.h>
 
 LIST_HEAD(client_list);
 static unsigned int num_clients = 0;
@@ -55,7 +57,10 @@ static int fd_make_async(int fd)
 }
 #endif
 
-static int garbage_collect_clients(void)
+static void garbage_collect_clients(unsigned long data);
+static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 10000000, 0);
+
+void garbage_collect_clients(unsigned long data)
 {
 	int num = 0;
 	struct list_head *pos, *tmp;
@@ -81,7 +86,8 @@ static int garbage_collect_clients(void)
 			num++;
 		}
 	}
-	return num;
+	/* Schedule us again */
+	add_timer(&garbage_timer);
 }
 
 #define NUM_SERVER_SOCKS 2
@@ -137,7 +143,15 @@ static int server_run(void)
 				server_sock_path[i], strerror(errno));
 			goto out_close_socks;
 		}
-	
+
+		ret = chmod(server_sock_path[i], S_IRWXU|S_IRWXG|S_IRWXO);
+
+		if (ret == -1) {
+			LOG_ERR("chmod file %s : %s\n",
+				server_sock_path[i], strerror(errno));
+			goto out_close_socks;
+		}
+
 		ret = listen(server_sock[i], 10);
 
 		if (ret == -1) {
@@ -172,10 +186,12 @@ static int server_run(void)
 	}
 #endif	
 	LOG_DBG("Server starting\n");
+	/* Add garbage collection timer */
+	add_timer(&garbage_timer);
 
 	while (!should_exit) {
 		fd_set readfds;
-		struct timespec timeout = { 10, 0 };
+		struct timespec *to = NULL, timeout = { 0, 0 };
 		int maxfd = -1;
 
 		FD_ZERO(&readfds);
@@ -184,9 +200,21 @@ static int server_run(void)
 			FD_SET(server_sock[i], &readfds);
 			maxfd = MAX(maxfd, server_sock[i]);
 		}
+
+		ret = timer_list_get_next_timeout(&timeout);
+
+		if (ret == -1) {
+			/* Timer list error. Exit? */
+			break;
+		} else if (ret == 0) {
+			/* No timer */
+			to = NULL;
+		} else {
+			to = &timeout;
+		}
 		
 		ret = pselect(maxfd + 1, &readfds, 
-			      NULL, NULL, &timeout, &orig_sigset);
+			      NULL, NULL, to, &orig_sigset);
                 
 		if (ret == -1) {
 			if (errno == EINTR) {
@@ -196,8 +224,8 @@ static int server_run(void)
 			LOG_ERR("select error...\n");
 			break;                                        
 		} else if (ret == 0) {
-			/* Timeout, do garbage collection */
-			garbage_collect_clients();
+			/* Timeout, handle timers */
+			timer_list_handle_timeout();
 			continue;
 		}
 		
@@ -270,7 +298,13 @@ int main(int argc, char **argv)
 {        
 	struct sigaction action;
 	int ret;
-
+	
+	if (getuid() != 0 && geteuid() != 0) {
+		fprintf(stderr, "%s must run as uid=0 (root)\n",
+			basename(argv[0]));
+			return -1;
+	}
+	
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         

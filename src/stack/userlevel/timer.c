@@ -1,11 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/debug.h>
+#include <scaffold/lock.h>
+#include <scaffold/timer.h>
 #include <string.h>
 #include <pthread.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include "timer.h"
 
 struct timer_internal {
 	struct timespec expire_abs;
@@ -17,8 +18,16 @@ struct timer_list_head {
 	pthread_mutex_t lock;
 };
 
+#if !defined(PER_THREAD_TIMER_LIST)
+static struct timer_list_head timer_list = {
+        .num_timers = 0,
+        .head = { &timer_list.head, &timer_list.head },
+        .lock = PTHREAD_MUTEX_INITIALIZER
+};
+#else
 static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+#endif
 
 #define CLOCK CLOCK_THREAD_CPUTIME_ID
 
@@ -32,6 +41,7 @@ static inline int timer_list_unlock(struct timer_list_head *tlh)
 	return pthread_mutex_unlock(&tlh->lock);
 }
 
+#if defined(PER_THREAD_TIMER_LIST)
 static void timer_list_head_destructor(void *arg)
 {
 	struct timer_list_head *tlh = (struct timer_list_head *)arg;
@@ -47,10 +57,15 @@ static void timer_list_head_destructor(void *arg)
 
 	free(tlh);
 }
+#endif
 
 static inline struct timer_list_head *timer_list_get(void)
 {
+#if defined(PER_THREAD_TIMER_LIST)
 	return (struct timer_list_head *)pthread_getspecific(timer_list_head_key);
+#else
+        return &timer_list;
+#endif
 }
 
 static inline struct timer_list_head *timer_list_get_locked(void)
@@ -119,6 +134,7 @@ int timer_list_handle_timeout(void)
 	return 1;
 }
 
+#if defined(PER_THREAD_TIMER_LIST)
 static void make_list_key(void)
 {
 	pthread_key_create(&timer_list_head_key, timer_list_head_destructor);
@@ -164,6 +180,7 @@ int timer_list_per_thread_init()
 #endif
 	return 1;
 }
+#endif
 
 void init_timer(struct timer_list *timer)
 {

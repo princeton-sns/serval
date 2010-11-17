@@ -1,12 +1,13 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/list.h>
 #include <scaffold/lock.h>
 #include <scaffold/debug.h>
+#include <scaffold/net.h>
+#include <scaffold/wait.h>
 #include <linux/net.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
-#include "net.h"
-#include "wait.h"
 
 #define SOCK_MAX (SOCK_PACKET + 1)
 

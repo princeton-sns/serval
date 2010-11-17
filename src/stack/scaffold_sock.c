@@ -1,8 +1,8 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <linux/ip.h>
 #include <scaffold/platform.h>
+#include <scaffold/skbuff.h>
 #include "scaffold_sock.h"
-#include <userlevel/skbuff.h>
 
 struct scaffold_table scaffold_table;
 

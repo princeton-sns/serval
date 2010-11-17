@@ -5,7 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <scaffold/debug.h>
-#include "msg_ipc.h"
+#include <userlevel/msg_ipc.h>
 
 static const char *msg_ipc_str[] = {
 	"MSG_UNKNOWN",

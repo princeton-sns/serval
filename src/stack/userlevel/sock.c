@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/debug.h>
 #include <scaffold/lock.h>
+#include <scaffold/timer.h>
+#include <scaffold/sock.h>
+#include <scaffold/wait.h>
 #include <pthread.h>
-#include "timer.h"
-#include "sock.h"
-#include "wait.h"
 
 struct net init_net;
 

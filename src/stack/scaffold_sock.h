@@ -5,8 +5,8 @@
 #include <netinet/scaffold.h>
 #include <scaffold/list.h>
 #include <scaffold/lock.h>
-#include <userlevel/sock.h>
-#include <userlevel/net.h>
+#include <scaffold/sock.h>
+#include <scaffold/net.h>
 
 #if !defined(__KERNEL__)
 #include <string.h>

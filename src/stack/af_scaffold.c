@@ -4,12 +4,10 @@
 #include <linux/types.h>
 #include <linux/socket.h>
 #include <linux/sockios.h>
-#include <linux/net.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/netdevice.h>
 #include <linux/inetdevice.h>
-#include <linux/skbuff.h>
 #include <linux/version.h>
 #include <linux/poll.h>
 #include <linux/file.h>
@@ -18,7 +16,7 @@
 #include <linux/udp.h>
 #include <linux/proc_fs.h>
 #include <net/protocol.h>
-#include "linux/scaffold_netlink.h"
+#include <linux/scaffold_netlink.h>
 
 #define FREE_SKB(skb) kfree_skb(skb)
 
@@ -48,10 +46,6 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif
 
 #else /* USERLEVEL */
-#include <userlevel/wait.h>
-#include <userlevel/sock.h>
-#include <userlevel/net.h>
-#include <userlevel/skbuff.h>
 
 extern int packet_init(void);
 extern void packet_fini(void);
@@ -62,6 +56,10 @@ extern void packet_fini(void);
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/atomic.h>
+#include <scaffold/wait.h>
+#include <scaffold/sock.h>
+#include <scaffold/net.h>
+#include <scaffold/skbuff.h>
 #include <netinet/scaffold.h>
 #include <scaffold_sock.h>
 #include <scaffold_udp_sock.h>
