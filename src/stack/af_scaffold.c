@@ -119,6 +119,8 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         
         lock_sock(sk);
 
+        LOG_DBG("handling bind\n");
+
 //        ret = sfnet_handle_bind_socket(sk, &sfaddr->ssf_sid, &cond);
 
         if (ret < 0) {
@@ -139,7 +141,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = 0;
         } else if (ret == 0) {
                 release_sock(sk);
-                /* Sleep and wait response or timeout */
+                /* Sleep and wait for response or timeout */
                 ret = wait_event_interruptible(*sk_sleep(sk), cond != 1);
 
                 if (ret != 0) {
@@ -164,6 +166,8 @@ static int scaffold_listen(struct socket *sock, int backlog)
 		return -EOPNOTSUPP;		
 	
         lock_sock(sk);
+
+        LOG_DBG("listening on socket\n");
 
 	if (sk->sk_state == SF_UNBOUND) {
                 sk->sk_max_ack_backlog = backlog;               
@@ -883,7 +887,7 @@ static struct proto scaffold_tcp_proto = {
 
 
 struct sock *scaffold_accept_dequeue(struct sock *parent, 
-                                            struct socket *newsock)
+                                     struct socket *newsock)
 {
 	struct sock *sk = NULL;
 
@@ -1040,6 +1044,8 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol, i
         int ret = 0;
         uint16_t proto;
         
+        LOG_DBG("Creating SCAFFOLD socket\n");
+
         if (protocol && (protocol != SF_PROTO_UDP && protocol != SF_PROTO_TCP))
 		return -EPROTONOSUPPORT;
         

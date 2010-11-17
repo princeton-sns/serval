@@ -41,6 +41,7 @@ static int sock_def_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 
 static inline void sock_lock_init(struct sock *sk)
 {
+        LOG_DBG("Initializing sock lock\n");
 	spin_lock_init(&(sk)->sk_lock);
 }
 
@@ -55,7 +56,16 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_rcvbuf		=	RCV_BUF_DEFAULT;
 	sk->sk_sndbuf		=       SND_BUF_DEFAULT;
 	sk->sk_state		=	0;
+	sk_set_socket(sk, sock);
 	sock_set_flag(sk, SOCK_ZAPPED);
+        
+        if (sock) {
+		sk->sk_type	=	sock->type;
+		sk->sk_wq	=	sock->wq;
+		sock->sk	=	sk;
+	} else
+		sk->sk_wq	=	NULL;
+
 	sk->sk_state_change	=	sock_def_wakeup;
 	sk->sk_data_ready	=	sock_def_readable;
 	sk->sk_write_space	=	sock_def_write_space;
@@ -64,7 +74,8 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_write_pending	=	0;
 	sk->sk_rcvtimeo		=	MAX_SCHEDULE_TIMEOUT;
 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
-        init_waitqueue_head(sk_sleep(sk));
+
+        rwlock_init(&sk->sk_callback_lock);
 	atomic_set(&sk->sk_refcnt, 1);
 	atomic_set(&sk->sk_drops, 0);
 }
@@ -76,7 +87,7 @@ static struct sock *sk_prot_alloc(struct proto *prot, int family)
 	sk = (struct sock *)malloc(prot->obj_size);
 
 	if (sk) {
-
+                memset(sk, 0, prot->obj_size);
 	}
 
 	return sk;
@@ -111,12 +122,6 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 	}
 
 	return sk;
-}
-
-static void sk_destroy(struct sock *sk)
-{
-        sk->sk_destruct(sk);
-        destroy_waitqueue_head(sk_sleep(sk));
 }
 
 int proto_register(struct proto *prot, int ignore)

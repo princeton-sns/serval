@@ -14,6 +14,8 @@
 #include <scaffold/list.h>
 #include <pthread.h>
 #include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "skbuff.h"
 #include "net.h"
 #include "wait.h"
@@ -21,8 +23,6 @@
 
 struct sk_buff;
 struct proto;
-
-#define O_NONBLOCK 0x1
 
 #define SHUTDOWN_MASK	3
 #define RCV_SHUTDOWN	1
@@ -39,9 +39,10 @@ struct sock {
 				sk_protocol  : 8,
 				sk_type      : 16;
         unsigned int	        sk_hash;
-	wait_queue_head_t	sk_wq;
+	struct socket_wq  	*sk_wq;
         unsigned char	        sk_state;
 	int			sk_rcvbuf;
+	int			sk_tx_queue_mapping;
         spinlock_t              sk_lock;
         struct net              *sk_net;
         struct proto            *sk_prot;
@@ -57,9 +58,11 @@ struct sock {
 	int			sk_write_pending;
 	unsigned long 		sk_flags;
 	unsigned long	        sk_lingertime;
+	rwlock_t		sk_callback_lock;
 	long			sk_rcvtimeo;
 	long			sk_sndtimeo;
 	struct timer_list	sk_timer;
+	struct socket		*sk_socket;
 	struct sk_buff		*sk_send_head;
         
         void (*sk_destruct)(struct sock *sk);
@@ -149,33 +152,25 @@ enum sock_flags {
 
 #define sock_net(s) ((s)->sk_net)
 
-static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+static inline void sk_tx_queue_set(struct sock *sk, int tx_queue)
 {
-	return &sk->sk_wq;
+	sk->sk_tx_queue_mapping = tx_queue;
 }
 
-static inline void sock_orphan(struct sock *sk)
+static inline void sk_tx_queue_clear(struct sock *sk)
 {
-        /*
-	write_lock_bh(&sk->sk_callback_lock);
-	sock_set_flag(sk, SOCK_DEAD);
-	sk_set_socket(sk, NULL);
-	sk->sk_wq  = NULL;
-	write_unlock_bh(&sk->sk_callback_lock);
-        */
-        
+	sk->sk_tx_queue_mapping = -1;
 }
 
-static inline void sock_graft(struct sock *sk, struct socket *parent)
+static inline int sk_tx_queue_get(const struct sock *sk)
 {
-        /*
-	write_lock_bh(&sk->sk_callback_lock);
-	rcu_assign_pointer(sk->sk_wq, parent->wq);
-	parent->sk = sk;
-	sk_set_socket(sk, parent);
-	security_sock_graft(sk, parent);
-	write_unlock_bh(&sk->sk_callback_lock);
-        */
+	return sk ? sk->sk_tx_queue_mapping : -1;
+}
+
+static inline void sk_set_socket(struct sock *sk, struct socket *sock)
+{
+	sk_tx_queue_clear(sk);
+	sk->sk_socket = sock;
 }
 
 int sk_wait_data(struct sock *sk, long *timeo);
@@ -225,7 +220,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
 
 static inline void sk_free(struct sock *sk)
-{
+{        
         if (sk->sk_destruct)
                 sk->sk_destruct(sk);
         free(sk);
@@ -266,6 +261,29 @@ static inline int sock_flag(struct sock *sk, enum sock_flags flag)
 {
 	return sk->sk_flags & (0x1 << flag);
 }
+
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+        return sk->sk_wq ? &sk->sk_wq->wait : NULL;
+}
+
+static inline void sock_orphan(struct sock *sk)
+{
+	write_lock(&sk->sk_callback_lock);
+	sock_set_flag(sk, SOCK_DEAD);
+	sk_set_socket(sk, NULL);
+	sk->sk_wq  = NULL;
+	write_unlock(&sk->sk_callback_lock);
+}
+
+static inline void sock_graft(struct sock *sk, struct socket *parent)
+{
+	write_lock(&sk->sk_callback_lock);
+	parent->sk = sk;
+	sk_set_socket(sk, parent);
+	write_unlock(&sk->sk_callback_lock);
+}
+
 
 #endif /* __KERNEL__ */
 

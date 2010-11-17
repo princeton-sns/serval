@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "net.h"
+#include "wait.h"
 
 #define SOCK_MAX (SOCK_PACKET + 1)
 
@@ -60,15 +61,35 @@ static struct socket *sock_alloc(void)
 {
 	struct socket *sock;
 
-	sock = (struct socket *)malloc(sizeof(*sock));
+	sock = (struct socket *)malloc(sizeof(struct socket));
 
 	if (!sock)
 		return NULL;
 	
 	memset(sock, 0, sizeof(*sock));
 
-		
+	sock->state = SS_UNCONNECTED;
+	sock->flags = 0;
+	sock->ops = NULL;
+	sock->wq = (struct socket_wq *)malloc(sizeof(struct socket_wq));
+
+	if (!sock->wq) {
+		free(sock);
+		return NULL;
+	}
+	
+	init_waitqueue_head(&sock->wq->wait);
+
 	return sock;
+}
+
+static void sock_free(struct socket *sock)
+{
+	if (sock->wq) {
+		destroy_waitqueue_head(&sock->wq->wait);
+		free(sock->wq);
+	}	
+	free(sock);
 }
 
 int sock_create(int family, int type, int protocol,
@@ -113,10 +134,12 @@ out_unlock:
 
 void sock_release(struct socket *sock)
 {
+	LOG_DBG("socket of type=%d released\n", sock->type);
+
 	if (sock->ops) {
 		sock->ops->release(sock);
 		sock->ops = NULL;
 	}
-	free(sock);
+	sock_free(sock);
 }
 

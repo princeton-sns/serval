@@ -1,13 +1,18 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#define _GNU_SOURCE /* For ppoll to be defined */
 #include "wait.h"
 #include "timer.h"
 #include "client.h"
 
 #include <pthread.h>
+#include <sys/select.h>
+#include <poll.h>
 
 static pthread_key_t wq_key;
 static pthread_key_t w_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+
+#define MAX(x, y) (x >= y ? x : y)
 
 void init_waitqueue_head(wait_queue_head_t *q)
 {
@@ -23,20 +28,24 @@ void destroy_waitqueue_head(wait_queue_head_t *q)
 void init_wait(wait_queue_t *w)
 {        
 	pthread_mutex_init(&w->lock, NULL);
-	pthread_cond_init(&w->cond, NULL);
+	if (pipe(w->pipefd) == -1) {
+                LOG_ERR("pipe: %s\n", strerror(errno));
+        }
 	INIT_LIST_HEAD(&w->thread_list);
 }
 
 void destroy_wait(wait_queue_t *w)
 {
         pthread_mutex_destroy(&w->lock);
-        pthread_cond_destroy(&w->cond);
+        close(w->pipefd[0]);
+        close(w->pipefd[1]);
 }
 
 int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
 			  void *key)
 {
-	return pthread_cond_signal(&curr->cond);
+        char w = 'w';
+	return write(curr->pipefd[1], &w, 1);
 }
 
 /* 
@@ -50,11 +59,13 @@ long schedule_timeout(long timeo)
 {        
         wait_queue_head_t *q = (wait_queue_head_t *)pthread_getspecific(wq_key);
         wait_queue_t *w = (wait_queue_t *)pthread_getspecific(w_key);
+        struct client *c = (struct client *)client_get_current();
         struct timespec now, later;
+        struct pollfd fds[3];
         int ret = 0;
 
-        if (!q || !w) {
-                LOG_ERR("Cannot reschedule since thread is not in a wait queue\n");
+        if (!q || !w || !c) {
+                LOG_ERR("No client or wait queue!\n");
                 return timeo;
         }
 
@@ -62,24 +73,41 @@ long schedule_timeout(long timeo)
                 LOG_ERR("clock_gettime failed!!\n");
                 return timeo;
         }
-
-        pthread_mutex_lock(&w->lock);
+        /*
+        FD_ZERO(&readfds);
+        FD_SET(w->pipefd[0], &readfds);
+        maxfd = MAX(maxfd, w->pipefd[0]);
+        FD_SET(c->pipefd[0], &readfds);
+        maxfd = MAX(maxfd, c->pipefd[0]);
+        FD_SET(c->fd, &readfds);
+        maxfd = MAX(maxfd, c->fd);
+        */
+        fds[0].fd = w->pipefd[0];
+        fds[0].events = POLLERR | POLLIN;
+        fds[1].fd = client_get_signalfd(c);
+        fds[1].events = POLLERR | POLLIN;
+        fds[2].fd = client_get_sockfd(c);
+        fds[2].events = POLLERR | POLLHUP;
 
         if (timeo == MAX_SCHEDULE_TIMEOUT) {
-                ret = pthread_cond_wait(&w->cond, &w->lock);
+                ret = ppoll(fds, 3, NULL, NULL);
         } else {
                 struct timespec timeout;
                 timeout.tv_sec = timeo / 1000000;
                 timeout.tv_nsec = (timeo - (timeout.tv_sec * 1000));
-
-                ret = pthread_cond_timedwait(&w->cond, &w->lock, &timeout);
+                ret = ppoll(fds, 3, &timeout, NULL);
         }
         
-        pthread_mutex_unlock(&w->lock);
-
-        if (ret == ETIMEDOUT) {
+        if (ret == -1) {
+                LOG_ERR("poll error: %s\n", strerror(errno));
+        } else if (ret == 0) {
                 timeo = 0;
-        } else {          
+        } else {
+                /*
+                  On Linux, pselect returns the time not slept in the
+                  timeout. Not sure how ppoll works. In any case, this
+                  is not portable.
+                 */
                 if (clock_gettime(CLOCK, &later) == -1) {
                         LOG_ERR("clock_gettime failed!!\n");
                         return timeo;
@@ -110,8 +138,8 @@ void pre_add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait)
         
 	pthread_once(&key_once, make_keys);
         
-        if (!pthread_getspecific(wq_key)) {
-                LOG_ERR("Could not set wait queue key\n");
+        if (pthread_getspecific(wq_key)) {
+                LOG_ERR("Wait queue key already set\n");
                 return;
         }
 
@@ -232,10 +260,33 @@ void __wake_up(wait_queue_head_t *q, unsigned int mode,
 
 int signal_pending(pthread_t thr)
 {
+        int ret = 0;
+        struct pollfd fds[2];
         struct client *c = (struct client *)client_get_current();
 
-        if (!c)
+        if (!c) {
+                LOG_ERR("bad client\n");
                 return -1;
+        }
+        
+        fds[0].fd = client_get_signalfd(c);
+        fds[0].events = POLLIN;
+        fds[1].fd = client_get_sockfd(c);
+        fds[1].events = POLLHUP;
 
-        return client_signal_pending(c);
+        ret = poll(fds, 2, 0);
+
+        if (ret == -1) {
+                LOG_ERR("select error: %s\n", strerror(errno));
+        } else if (ret == 0) {
+                
+        } else {
+                /* 
+                   Probably not necessary to reset signals here
+                   since it probably means the client should exit
+                   or the signals are reset somewhere else.
+                */
+        }
+
+        return ret > 0;
 }

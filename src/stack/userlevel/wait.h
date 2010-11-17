@@ -17,7 +17,7 @@ struct __wait_queue {
 	pthread_t private_data;
 	wait_queue_func_t func;
 	pthread_mutex_t lock;
-        pthread_cond_t cond;
+        int pipefd[2];
 	struct list_head thread_list;
 };
 
@@ -40,7 +40,7 @@ typedef struct __wait_queue_head wait_queue_head_t;
 	.private_data	= tsk,						\
 	.func		= default_wake_function,			\
         .lock           = PTHREAD_MUTEX_INITIALIZER,                    \
-	.cond		= PTHREAD_COND_INITIALIZER,		        \
+        .pipefd	        = { -1, -1 },                                   \
         .thread_list	= { &(name).thread_list, &(name).thread_list } }
 
 #define DECLARE_WAITQUEUE(name, tsk)					\

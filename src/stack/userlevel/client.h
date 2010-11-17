@@ -24,6 +24,8 @@ client_type_t client_get_type(struct client *c);
 client_state_t client_get_state(struct client *c);
 unsigned int client_get_id(struct client *c);
 pthread_t client_get_thread(struct client *c);
+int client_get_sockfd(struct client *c);
+int client_get_signalfd(struct client *c);
 void client_destroy(struct client *c);
 int client_signal_pending(struct client *c);
 int client_signal_raise(struct client *c);

@@ -2,13 +2,18 @@
 #ifndef _AF_SCAFFOLD_H
 #define _AF_SCAFFOLD_H
 
-#ifdef __KERNEL__
+#if defined(__KERNEL__)
 
 #include <linux/socket.h>
 #include <linux/mutex.h>
 #include <net/sock.h>
 #include <linux/wait.h>
 #include <linux/skbuff.h>
+
+#else
+
+int scaffold_init(void);
+void scaffold_fini(void);
 
 #endif /* __KERNEL__ */
 

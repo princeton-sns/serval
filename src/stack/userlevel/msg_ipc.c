@@ -107,6 +107,7 @@ int msg_ipc_read(int sock, struct msg_ipc **msg)
 		free(msg_tmp);
 		return -1;
 	} else if (len == 0) {
+                free(msg_tmp);
 		return 0;
 	} else if (len < MSG_IPC_HDR_LEN) {
 		LOG_ERR("Message too short\n");
@@ -151,7 +152,22 @@ int msg_ipc_read(int sock, struct msg_ipc **msg)
 
 int msg_ipc_write(int sock, struct msg_ipc *msg)
 {
-	return send(sock, msg, MSG_IPC_HDR_LEN + msg->payload_length, MSG_DONTWAIT);
+	int ret = send(sock, msg, MSG_IPC_HDR_LEN + msg->payload_length, MSG_DONTWAIT);
+
+        if (ret == -1) {
+                switch (errno) {
+                case ECONNRESET:
+                case ENOTCONN:
+                case EPIPE:
+                        /* Client probably closed */
+                        ret = 0;
+                        break;
+                case EWOULDBLOCK:
+                default:
+                        LOG_ERR("write error: %s\n", strerror(errno));
+                }
+        }
+        return ret;
 }
 
 void msg_ipc_hdr_init(struct msg_ipc *msg, msg_type_t type)

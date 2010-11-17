@@ -8,13 +8,19 @@
 #else
 #include <linux/socket.h>
 #include <linux/net.h>
+#include "wait.h"
 
 struct sock;
 struct net;
 
+struct socket_wq {
+	wait_queue_head_t	wait;
+};
+
 struct socket {
         unsigned long           flags;
         socket_state            state;
+        struct socket_wq        *wq;
         short                   type;
         struct sock             *sk;
         const struct proto_ops  *ops;

@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <signal.h>
 #include <errno.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include "client.h"
 #include "timer.h"
 #include "msg_ipc.h"
@@ -132,7 +134,7 @@ struct client *client_create(client_type_t type,
         }
 
 	c->id = id;
-	LOG_DBG("client id is %u\n", c->id);
+	LOG_DBG("client %p id is %u\n", c, c->id);
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));
 
@@ -175,19 +177,31 @@ pthread_t client_get_thread(struct client *c)
 {
 	return c->thr;
 }
+
+int client_get_sockfd(struct client *c)
+{
+        return c->fd;
+}
+
+int client_get_signalfd(struct client *c)
+{
+        return c->pipefd[0];
+}
+
 static int client_close(struct client *c)
 {
 	int ret;
 
 	ret = close(c->fd);
 	c->fd = -1;
+        sock_release(c->sock);
 
 	return ret;
 }
 
 void client_destroy(struct client *c)
 {
-	if (c->fd)
+	if (c->fd != -1)
 		client_close(c);
 
 	list_del(&c->link);
@@ -196,17 +210,20 @@ void client_destroy(struct client *c)
 
 int client_signal_pending(struct client *c)
 {
-        char r = 'r';
-        ssize_t ret;
+        int ret;
+        fd_set readfds;
+        struct timeval t = { 0, 0 };
 
-        ret = recv(c->pipefd[0], &r, 1, MSG_DONTWAIT | MSG_PEEK);
-
+        FD_ZERO(&readfds);
+        FD_SET(c->pipefd[0], &readfds);
+        
+        ret = select(c->pipefd[0] + 1, &readfds, NULL, NULL, &t);
+        
         if (ret == -1) {
-                if (errno == EWOULDBLOCK || errno == EAGAIN)
-                        return 0;
-                return -1;
+                LOG_ERR("select error: %s\n", strerror(errno));
         }
-        return 0;
+
+        return ret;
 }
 
 int client_signal_raise(struct client *c)
@@ -242,12 +259,32 @@ int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg)
 {
 	struct msg_ipc_bind_req *br = (struct msg_ipc_bind_req *)msg;
 	struct msg_ipc_bind_rsp rsp;
-	
+        struct socket *sock = c->sock;
+        struct sockaddr_sf addr;
+	int ret;
+        
 	LOG_DBG("bind request for service id %s\n", 
 		service_id_to_str(&br->srvid));	
 
 	msg_ipc_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
-	
+        
+        addr.ssf_family = AF_SCAFFOLD;
+        memcpy(&addr.ssf_sid, &br->srvid, sizeof(br->srvid));
+
+        ret = sock->ops->bind(sock, (struct sockaddr *)&addr, sizeof(addr));
+
+        if (ret < 0) {
+                if (KERN_ERR(ret) == ERESTARTSYS) {
+                        LOG_ERR("Bind was interrupted\n");
+                        rsp.error = EINTR;
+                        return msg_ipc_write(c->fd, &rsp.msghdr);
+                }
+                LOG_ERR("Bind failed: %s\n", KERN_STRERROR(ret));
+                rsp.error = KERN_ERR(ret);
+                return msg_ipc_write(c->fd, &rsp.msghdr);
+        }
+
+        /* TODO: Bind should not return here... */
 	return msg_ipc_write(c->fd, &rsp.msghdr);
 }
 
@@ -273,17 +310,37 @@ static int client_handle_msg(struct client *c)
 
 	ret = msg_handlers[msg->type](c, msg);
 
+        if (ret == -1) {
+                LOG_ERR("message handler error: %s\n", strerror(errno));
+        }
+        
 	msg_ipc_free(msg);
 
-	return ret == 0 ? 1 : ret;
+	return ret;
 }
 
 #define MAX(x, y) (x >= y ? x : y)
 
+static void signal_handler(int signal)
+{
+        switch (signal) {
+        case SIGPIPE:
+                LOG_DBG("received SIGPIPE\n");
+                break;
+        default:
+                LOG_DBG("signal %d received\n", signal);
+        }
+}
+
 static void *client_thread(void *arg)
 {
+	struct sigaction action;
 	struct client *c = (struct client *)arg;
 	int ret;
+
+	memset(&action, 0, sizeof(struct sigaction));
+        action.sa_handler = signal_handler;
+	sigaction(SIGPIPE, &action, 0);
 
 	c->state = CLIENT_STATE_RUNNING;
 

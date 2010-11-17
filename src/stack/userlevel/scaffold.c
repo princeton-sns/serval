@@ -11,6 +11,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
+#include <af_scaffold.h>
 #include "timer.h"
 #include "client.h"
 
@@ -22,7 +23,7 @@ static volatile int should_exit = 0;
 
 void signal_handler(int sig)
 {
-        printf("signal caught! exiting...\n");
+        /* printf("signal caught! exiting...\n"); */
         should_exit = 1;       
 }
 #if 0
@@ -268,6 +269,7 @@ out_close_socks:
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
+	int ret;
 
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -277,5 +279,16 @@ int main(int argc, char **argv)
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 
-	return server_run();
+	ret = scaffold_init();
+
+	if (ret == -1) {
+		LOG_ERR("Could not initialize af_scaffold\n");
+		return -1;
+	}
+	
+	ret = server_run();
+
+	scaffold_fini();
+
+	return ret;
 }
