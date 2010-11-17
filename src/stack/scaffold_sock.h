@@ -45,7 +45,7 @@ static inline int scaffold_hashfn(struct net *net, struct sock_id *sid, unsigned
 {
         unsigned int num = 0;
         memcpy(&num, sid, sizeof(num));
-	return (num + net_hash_mix(net)) & mask;
+	return num & mask;
 }
 
 extern struct scaffold_table scaffold_table;

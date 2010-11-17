@@ -1,6 +1,7 @@
 bin_PROGRAMS = scaffold
 
-scaffold_SOURCES = \
+scaffold_SOURCES = \	
+	debug.c \
 	af_scaffold.c \
 	scaffold_sock.c \
 	userlevel/sock.c \
@@ -43,6 +44,7 @@ TARGETS = scaffold.ko
 SCAFFOLD_KERNEL_DEPS = \
 	linux/scaffold_netlink.c \
 	linux/proc.c \
+	debug.c \
 	af_scaffold.c \
 	scaffold_sock.c
 

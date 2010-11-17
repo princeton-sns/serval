@@ -1,5 +1,5 @@
 top_builddir := @top_dir@
 
 obj-m := scaffold.o 
-scaffold-y := af_scaffold.o linux/scaffold_netlink.o linux/proc.o scaffold_sock.o
+scaffold-y := linux/scaffold_netlink.o linux/proc.o debug.o af_scaffold.o scaffold_sock.o
 EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) @EXTRA_DEFINES@

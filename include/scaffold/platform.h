@@ -7,14 +7,34 @@
 
 #if defined(__KERNEL__)
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/time.h>
+#include <net/sock.h>
 #define MALLOC(sz, prio) kmalloc(sz, prio)
 #define FREE(m) kfree(m)
-#else
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+        return sk->sk_sleep;
+}
+
+static inline struct net *sock_net(struct sock *sk)
+{
+        return sk->sk_net;
+}
+
+#endif
+
+#else /* User-level */
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <libio.h>
+
+#define LINUX_VERSION_CODE 132643 /* corresponds to 2.6.35 */
+#define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
 
 typedef unsigned char gfp_t;
 #define GFP_KERNEL 0

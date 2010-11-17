@@ -127,7 +127,6 @@ static void make_list_key(void)
 int timer_list_per_thread_init()
 {
 	struct timer_list_head *tlh;
-	pthread_mutexattr_t attr;
 	int ret;      
 
 	pthread_once(&key_once, make_list_key);	
@@ -152,11 +151,17 @@ int timer_list_per_thread_init()
 	INIT_LIST_HEAD(&tlh->head);
 	tlh->num_timers = 0;
 	/* Make mutex recursive */
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
-	pthread_mutex_init(&tlh->lock, &attr);
-	pthread_mutexattr_destroy(&attr);
-
+#if RECURSIVE_MUTEX
+        { 
+                pthread_mutexattr_t attr;
+                pthread_mutexattr_init(&attr);
+                pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+                pthread_mutex_init(&tlh->lock, &attr);
+                pthread_mutexattr_destroy(&attr);
+        }
+#else
+        pthread_mutex_init(&tlh->lock, NULL);
+#endif
 	return 1;
 }
 

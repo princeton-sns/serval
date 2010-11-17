@@ -5,13 +5,14 @@
 #if defined(__KERNEL__)
 #include <net/sock.h>
 #else
+#include <scaffold/platform.h>
+#include <scaffold/atomic.h>
+#include <scaffold/lock.h>
+#include <scaffold/list.h>
 #include <asm/types.h>
 #include <sys/socket.h>
 #include <linux/netlink.h>
 #include <stdlib.h>
-#include <scaffold/atomic.h>
-#include <scaffold/lock.h>
-#include <scaffold/list.h>
 #include <pthread.h>
 #include <errno.h>
 #include <unistd.h>

@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <net/sock.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -49,7 +50,16 @@ int __init scaffold_netlink_init(void)
 
 void __exit scaffold_netlink_fini(void)
 {
-	netlink_kernel_release(nl_sk);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+	struct sock *sk = nl_sk;
+
+	if (sk) {
+                nl_sk = NULL;
+                sock_release(sk->sk_socket);
+	}
+#else
+        netlink_kernel_release(nl_sk);
+#endif
 }
 
 MODULE_ALIAS_NET_PF_PROTO(PF_NETLINK, NETLINK_SCAFFOLD);

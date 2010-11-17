@@ -4,7 +4,6 @@
 
 #if defined(__KERNEL__)
 #include <linux/net.h>
-#include <net/netns/hash.h>
 #else
 #include <linux/socket.h>
 #include <linux/net.h>
@@ -95,11 +94,6 @@ struct net {
 };
 
 extern struct net init_net;
-
-static inline unsigned net_hash_mix(struct net *net)
-{
-	return 0;
-}
 
 #endif /* __KERNEL__ */
 

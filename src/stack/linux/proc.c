@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <linux/version.h>
 #include <linux/net.h>
 #include <linux/module.h>

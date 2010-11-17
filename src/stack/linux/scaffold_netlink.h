@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _SCAFFOLD_NETLINK_H
 #define _SCAFFOLD_NETLINK_H
 

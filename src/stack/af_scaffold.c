@@ -1,5 +1,4 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-
 #if defined(__KERNEL__)
 #include <linux/errno.h>
 #include <linux/types.h>
@@ -57,12 +56,13 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif /* __KERNEL__ */
 
 /* Common includes */
-#include <scaffold_sock.h>
-#include <scaffold_udp_sock.h>
-#include <scaffold_tcp_sock.h>
+#include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/atomic.h>
 #include <netinet/scaffold.h>
+#include <scaffold_sock.h>
+#include <scaffold_udp_sock.h>
+#include <scaffold_tcp_sock.h>
 
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
@@ -1038,7 +1038,13 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 /**
    Create a new Scaffold socket.
  */
-static int scaffold_create(struct net *net, struct socket *sock, int protocol, int kern)
+
+
+static int scaffold_create(struct net *net, struct socket *sock, int protocol
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+                           , int kern
+#endif
+)
 {
         struct sock *sk;
         int ret = 0;

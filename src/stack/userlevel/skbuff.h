@@ -7,9 +7,12 @@
 #define FREE_SKB(skb) kfree_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz, prio)
 #else
+#include <scaffold/platform.h>
 #include <scaffold/atomic.h>
+#include <stdint.h>
 
 struct sock;
+struct sk_buff;
 typedef unsigned int sk_buff_data_t;
 
 #define FREE_SKB(skb) free_skb(skb)
