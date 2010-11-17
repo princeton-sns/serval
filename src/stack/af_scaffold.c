@@ -1231,7 +1231,12 @@ int __init scaffold_init(void)
         }
         
         */
+        err = scaffold_sock_init();
 
+        if (err < 0) {
+                  LOG_CRIT("Cannot initialize scaffold sockets\n");
+                  goto fail_sock;
+        }
 #if defined(__KERNEL__)
 	err = register_netdevice_notifier(&netdev_notifier);
 
@@ -1306,7 +1311,9 @@ fail_netlink:
 fail_netdev_notifier:
 #else
 fail_packet:
-#endif
+#endif 
+        scaffold_sock_fini();
+fail_sock:
         goto out;      
 }
 
@@ -1328,6 +1335,7 @@ void __exit scaffold_fini(void)
 #endif
      	sock_unregister(PF_SCAFFOLD);
 	proto_unregister(&scaffold_udp_proto);
+        scaffold_sock_fini();
 
         LOG_INF("Unloaded scaffold protocol module\n");
 }

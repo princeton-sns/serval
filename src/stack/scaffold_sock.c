@@ -1,5 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#if defined(__KERNEL__)
 #include <linux/ip.h>
+#else
+#include <netinet/ip.h>
+#endif
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include "scaffold_sock.h"
@@ -45,11 +49,10 @@ void __exit scaffold_table_fini(struct scaffold_table *table)
                         table->hash[i].count--;
                         release_sock(&ssk->sk);
                 }
-
                 spin_unlock_bh(&table->hash[i].lock);           
 	}
 
-        FREE(table);
+        FREE(table->hash);
 }
 
 int scaffold_table_insert(struct scaffold_table *table, struct sock *sk)
@@ -88,7 +91,7 @@ static struct sock *scaffold_table_lookup(struct scaffold_table *table,
         spin_lock_bh(&slot->lock);
         
         hlist_for_each_entry(ssk, walk, &slot->head, node) {
-                if (memcmp(sockid, &ssk->sockid, sizeof(*sockid)) == 0) {
+                if (memcmp(sockid, &ssk->sockid, sizeof(struct sock_id)) == 0) {
                         spin_unlock_bh(&slot->lock);
                         return &ssk->sk;
                 }
@@ -98,13 +101,38 @@ static struct sock *scaffold_table_lookup(struct scaffold_table *table,
         return NULL;
 }
 
+struct sock *scaffold_table_lookup_sockid(struct sock_id *sockid)
+{
+        return scaffold_table_lookup(&scaffold_table, &init_net, sockid);
+}
+
 struct sock *scaffold_table_lookup_skb(struct sk_buff *skb)
 {
-	//struct sock *sk;
-	//const struct iphdr *iph = ip_hdr(skb);
+ 	struct sock *sk = NULL;
+        /*
+	const struct iphdr *iph = ip_hdr(skb);
+        struct sock_id sockid;
+        switch (iph->protocol) {
+	case IPPROTO_TCP:
+        {
+                struct tcphdr *tcp = tcp_hdr(skb);
+                memcpy(&sockid, &tcp->dest, sizeof(sockid));
+                sk = scaffold_table_lookup(&scaffold_table, &init_net, &sockid);
+                break;
+        }
+	case IPPROTO_UDP:
+        {
+                struct udphdr *udp = udp_hdr(skb);
+                memcpy(&sockid, &udp->dest, sizeof(sockid));
+                sk = scaffold_table_lookup(&scaffold_table, &init_net, &sockid);
+                break;
+        }
+        default:
+                break;
+        }
+        */
 
-
-        return NULL;
+        return sk;
 }
 
 EXPORT_SYMBOL(scaffold_table_lookup_skb);

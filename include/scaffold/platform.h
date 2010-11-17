@@ -27,6 +27,8 @@ static inline struct net *sock_net(struct sock *sk)
 #endif
 
 #else /* User-level */
+#include <arpa/inet.h>
+#include <netinet/in.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>

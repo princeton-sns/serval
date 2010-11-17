@@ -23,6 +23,8 @@ struct scaffold_sock {
         struct service_id       local_sid;
         struct service_id       peer_sid;
         unsigned long           tot_bytes_sent;
+        unsigned long           tot_pkts_recv;
+        unsigned long           tot_pkts_sent;
         struct hlist_node       node;
 };
 
@@ -57,5 +59,12 @@ static inline struct scaffold_hslot *scaffold_hashslot(struct scaffold_table *ta
 {
 	return &table->hash[scaffold_hashfn(net, sid, table->mask)];
 }
+
+struct sock *scaffold_table_lookup_sockid(struct sock_id *);
+struct sock *scaffold_table_lookup_skb(struct sk_buff *);
+
+
+int __init scaffold_sock_init(void);
+void __exit scaffold_sock_fini(void);
 
 #endif /* _SCAFFOLD_SOCK_H */

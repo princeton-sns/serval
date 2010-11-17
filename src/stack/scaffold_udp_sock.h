@@ -6,8 +6,8 @@
 
 /* The AF_SCAFFOLD socket */
 struct scaffold_udp_sock {
-	/* NOTE: scaffol_sk has to be the first member */
-	struct scaffold_sock scaffold_sk;
+	/* NOTE: scaffold_sock has to be the first member */
+	struct scaffold_sock ssk;
 };
 
 static inline struct scaffold_udp_sock *scaffold_usk(const struct sock *sk)

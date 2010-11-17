@@ -482,7 +482,7 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 		free_skb(skb);
 }
 
-#include <linux/ip.h>
+#include <netinet/ip.h>
 
 static inline struct iphdr *ip_hdr(const struct sk_buff *skb)
 {
@@ -498,11 +498,17 @@ int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int offset, struct iovec *to,
                             int size);
 
-#include <linux/udp.h>
+#include <netinet/udp.h>
 
 static inline struct udphdr *udp_hdr(const struct sk_buff *skb)
 {
 	return (struct udphdr *)skb_transport_header(skb);
+}
+#include <netinet/tcp.h>
+
+static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
+{
+	return (struct tcphdr *)skb_transport_header(skb);
 }
 
 #endif /* __KERNEL__ */

@@ -6,9 +6,13 @@
 #include <asm/byteorder.h>
 
 #if defined(__KERNEL__)
+#include <linux/kernel.h>
 #include <linux/socket.h>
+#include <linux/string.h>
 #else
 #include <stdint.h>
+#include <string.h>
+#include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #endif

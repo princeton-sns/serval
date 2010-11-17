@@ -9,4 +9,6 @@ scaffold-y := \
 	   debug.o \
 	   af_scaffold.o \
 	   scaffold_sock.o \
+	   scaffold_udp.o \
+	   scaffold_tcp.o \
 	   input.o

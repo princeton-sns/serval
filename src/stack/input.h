@@ -2,11 +2,20 @@
 #ifndef _INPUT_H_
 #define _INPUT_H_
 
+#if defined(__KERNEL__)
+#include <linux/ip.h>
+#else
+#include <netinet/ip.h>
+#endif
+
 enum {
+	INPUT_NO_SOCK = -2,
 	INPUT_ERROR = -1,
 	INPUT_OK,
 	INPUT_KEEP,
 };
+
+#define IS_INPUT_ERROR(x) (x < 0)
 
 int scaffold_input(struct sk_buff *skb);
 

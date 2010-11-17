@@ -4,6 +4,8 @@ scaffold_SOURCES = \
 	debug.c \
 	af_scaffold.c \
 	scaffold_sock.c \
+	scaffold_udp.c \
+	scaffold_tcp.c \
 	input.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
@@ -60,8 +62,10 @@ SCAFFOLD_KERNEL_DEPS = \
 	$(STACK_DIR)/linux/proc.c \
 	debug.c \
 	input.c \
-	af_scaffold.c \
-	scaffold_sock.c
+	scaffold_sock.c \
+	scaffold_udp.c \
+	scaffold_tcp.c \
+	af_scaffold.c
 
 all: scaffold.ko
 
