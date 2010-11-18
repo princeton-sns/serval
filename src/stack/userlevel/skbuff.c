@@ -41,6 +41,26 @@ void free_skb(struct sk_buff *skb)
 	__free_skb(skb);
 }
 
+int skb_alloc_and_set_netdevice(struct sk_buff *skb, int ifindex, const char *name)
+{
+	struct net_device *dev;
+	
+	dev = (struct net_device *)malloc(sizeof(struct net_device));
+
+	if (!dev)
+		return -ENOMEM;
+	
+	dev->ifindex = ifindex;
+	strcpy(dev->name, name);
+
+	if (skb->dev)
+		free(skb->dev);
+	
+	skb->dev = dev;
+
+	return 0;
+}
+
 struct sk_buff *alloc_skb(unsigned int size)
 {
 	unsigned char *data;

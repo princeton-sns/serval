@@ -6,9 +6,12 @@ obj-m := scaffold.o
 scaffold-y := \
 	   linux/scaffold_netlink.o \
 	   linux/proc.o \
+	   linux/packet.o \
 	   debug.o \
+	   platform.o \
 	   af_scaffold.o \
+	   input.o \
+	   scaffold_ipv4.o \
 	   scaffold_sock.o \
 	   scaffold_udp.o \
-	   scaffold_tcp.o \
-	   input.o
+	   scaffold_tcp.o

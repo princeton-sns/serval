@@ -2,16 +2,14 @@
 #ifndef _PLATFORM_H
 #define _PLATFORM_H
 
-#include "thread.h"
-#include "lock.h"
-
 #if defined(__KERNEL__)
 #include <linux/kernel.h>
 #include <linux/version.h>
-#include <linux/time.h>
 #include <net/sock.h>
 #define MALLOC(sz, prio) kmalloc(sz, prio)
 #define FREE(m) kfree(m)
+
+typedef uint32_t socklen_t;
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
@@ -24,6 +22,8 @@ static inline struct net *sock_net(struct sock *sk)
         return sk->sk_net;
 }
 
+const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
+
 #endif
 
 #else /* User-level */
@@ -32,7 +32,6 @@ static inline struct net *sock_net(struct sock *sk)
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <time.h>
 #include <libio.h>
 
 #define LINUX_VERSION_CODE 132643 /* corresponds to 2.6.35 */
@@ -70,22 +69,9 @@ typedef unsigned char gfp_t;
 
 #endif /* __KERNEL__ */
 
-static inline const char *get_strtime(void)
-{
-    static char buf[512];
-#if defined(__KERNEL__)
-    struct timeval now;
-
-    do_gettimeofday(&now);
-    sprintf(buf, "%ld.%03ld", now.tv_sec, now.tv_usec / 1000);
-#else
-    time_t now = time(0);
-    struct tm p;
-    localtime_r(&now, &p);
-    strftime(buf, 512, "%b %e %T", &p);
-#endif
-    return buf;
-}
+const char *mac_ntop(const void *src, char *dst, socklen_t size);
+int mac_pton(const char *src, void *dst);
+const char *get_strtime(void);
 
 #include "debug.h"
 

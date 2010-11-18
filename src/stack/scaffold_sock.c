@@ -47,7 +47,7 @@ void __exit scaffold_table_fini(struct scaffold_table *table)
                         
                         hlist_del(&ssk->node);
                         table->hash[i].count--;
-                        release_sock(&ssk->sk);
+                        sock_put(&ssk->sk);
                 }
                 spin_unlock_bh(&table->hash[i].lock);           
 	}
@@ -68,12 +68,11 @@ int scaffold_table_insert(struct scaffold_table *table, struct sock *sk)
         spin_lock_bh(&slot->lock);
         slot->count++;
         hlist_add_head(&ssk->node, &slot->head);
+        sock_hold(sk);
         spin_unlock_bh(&slot->lock);     
         
         return 0;
 }
-
-EXPORT_SYMBOL(scaffold_table_insert);
 
 static struct sock *scaffold_table_lookup(struct scaffold_table *table,
                                           struct net *net,
@@ -81,6 +80,7 @@ static struct sock *scaffold_table_lookup(struct scaffold_table *table,
 {
         struct scaffold_hslot *slot;
         struct hlist_node *walk;
+        struct sock *sk = NULL;
         struct scaffold_sock *ssk;
 
         slot = scaffold_hashslot(table, net, sockid);
@@ -92,13 +92,15 @@ static struct sock *scaffold_table_lookup(struct scaffold_table *table,
         
         hlist_for_each_entry(ssk, walk, &slot->head, node) {
                 if (memcmp(sockid, &ssk->sockid, sizeof(struct sock_id)) == 0) {
-                        spin_unlock_bh(&slot->lock);
-                        return &ssk->sk;
+                        sk = &ssk->sk;
+                        sock_hold(sk);
+                        break;
                 }
-        } 
-        spin_unlock_bh(&slot->lock);     
+        }
+
+        spin_unlock_bh(&slot->lock);
         
-        return NULL;
+        return sk;
 }
 
 struct sock *scaffold_table_lookup_sockid(struct sock_id *sockid)
@@ -134,8 +136,6 @@ struct sock *scaffold_table_lookup_skb(struct sk_buff *skb)
 
         return sk;
 }
-
-EXPORT_SYMBOL(scaffold_table_lookup_skb);
 
 int __init scaffold_sock_init(void)
 {

@@ -4,13 +4,14 @@
 #include <net/ethernet.h> /* the L2 protocols */
 #include <netinet/ether.h>
 #include <net/if_packet.h>
+#include <net/if.h>
 #include <scaffold/debug.h>
 #include <string.h>
 #include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
 #include <poll.h>
-#include <arpa/inet.h>
+#include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include <input.h>
 
@@ -53,14 +54,12 @@ void *packet_thread(void *arg)
                                 LOG_DBG("Packet thread should exit\n");
                         }
                         if (fds[0].revents) {
-#define RCVLEN 2000
+#define RCVLEN 2000 /* Should be more than enough for normal MTUs */
                                 struct sk_buff *skb;
                                 struct sockaddr_ll lladdr;
                                 socklen_t addrlen = sizeof(lladdr);
                                 unsigned char buf[RCVLEN];
-                                char srcstr[18], dststr[18];
-                                struct ether_header *ethh = 
-                                        (struct ether_header *)buf;
+                                char ifname[IFNAMSIZ];
 
                                 ret = recvfrom(psock, buf, RCVLEN, 0,
                                                (struct sockaddr *)&lladdr, 
@@ -77,30 +76,15 @@ void *packet_thread(void *arg)
                                 
                                 switch (lladdr.sll_pkttype) {
                                 case PACKET_HOST:
-                                        /*
+                                        break;
                                 case PACKET_BROADCAST:
                                 case PACKET_MULTICAST:
-                                        */
-                                        break;
                                 case PACKET_OUTGOING:
                                 case PACKET_OTHERHOST:
                                 case PACKET_LOOPBACK:
                                 default:
-                                        continue;                          
+                                        continue;                
                                 }
-                                
-                                /* 
-                                   Must copy src and dst strings here since ether_ntoa
-                                   uses a static char buffer and therefore cannot 
-                                   be used twice on the same line.
-                                */
-                                strcpy(srcstr, 
-                                       ether_ntoa((struct ether_addr *)ethh->ether_shost));
-                                strcpy(dststr, 
-                                       ether_ntoa((struct ether_addr *)ethh->ether_dhost));
-                                
-                                LOG_DBG("Received raw packet if=%d [%s %s]\n", 
-                                        lladdr.sll_ifindex, srcstr, dststr);
                                 
                                 skb = alloc_skb(ret);
                                 
@@ -109,19 +93,32 @@ void *packet_thread(void *arg)
                                 
                                 memcpy(skb->data, buf, ret);
 
+                                if_indextoname(lladdr.sll_ifindex, ifname);
+
+                                ret = skb_alloc_and_set_netdevice(skb, 
+                                                                  lladdr.sll_ifindex, 
+                                                                  ifname);
+                                
+                                if (ret < 0) {
+                                        LOG_ERR("Could not allocate net device\n");
+                                        free_skb(skb);
+                                        continue;
+                                }
+                                
+                                skb->dev->ifindex = lladdr.sll_ifindex;
                                 skb_set_mac_header(skb, 0);
-                                skb_set_network_header(skb, sizeof(*ethh));
-                                skb_pull(skb, sizeof(*ethh));
 
                                 ret = scaffold_input(skb);
 
                                 switch (ret) {
                                 case INPUT_KEEP:
                                         break;
-                                case INPUT_ERROR:
-                                        LOG_ERR("input handler returned error\n");
                                 case INPUT_OK:
+                                case INPUT_ERROR:
                                 default:
+                                        if (IS_INPUT_ERROR(ret)) {
+                                                LOG_ERR("input error\n");
+                                        }
                                         free_skb(skb);
                                         break;
                                 }

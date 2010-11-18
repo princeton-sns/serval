@@ -46,9 +46,7 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif
 
 #else /* USERLEVEL */
-
-extern int packet_init(void);
-extern void packet_fini(void);
+/* User-level declarations */
 
 #endif /* __KERNEL__ */
 
@@ -64,6 +62,9 @@ extern void packet_fini(void);
 #include <scaffold_sock.h>
 #include <scaffold_udp_sock.h>
 #include <scaffold_tcp_sock.h>
+
+extern int __init packet_init(void);
+extern void __exit packet_fini(void);
 
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
@@ -1108,23 +1109,6 @@ out:
 	}
         return ret;
 }
-/*
-static int scaffold_eth_rcv(struct sk_buff *skb, struct net_device *dev,
-                            struct packet_type *pt, struct net_device *orig_dev)
-{        
-        return sfnet_scaffold_rcv(skb);
-}
-
-static int scaffold_ip_rcv(struct sk_buff *skb)
-{
-        return sfnet_scaffold_rcv(skb);
-}
-
-static void scaffold_ip_err(struct sk_buff *skb, u32 info)
-{
-        FREE_SKB(skb);
-}
-*/
 
 static struct net_proto_family scaffold_family_ops = {
 	.family = PF_SCAFFOLD,
@@ -1134,21 +1118,6 @@ static struct net_proto_family scaffold_family_ops = {
 
 EXPORT_SYMBOL(scaffold_getname);
 
-/* Scaffold packet type for Scaffold over Ethernet */
-/*
-static struct packet_type scaffold_packet_type = {
-        .type = __constant_htons(ETH_P_SCAFFOLD),
-        .func = scaffold_eth_rcv,
-};
-*/
-/* Scaffold protocol type for Scaffold over IP */
-/*
-static struct net_protocol scaffold_protocol = {
-	.handler =	scaffold_ip_rcv,
-	.err_handler =	scaffold_ip_err,
-	.no_policy =	1,
-};
-*/
 #if defined(__KERNEL__)
 static int scaffold_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
@@ -1183,60 +1152,12 @@ static struct notifier_block netdev_notifier = {
 };
 #endif /* __KERNEL__ */
 
-/*
-static int scaffold_inetaddr_event(struct notifier_block *this,
-				  unsigned long event, void *ptr)
-{
-	struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
-	struct in_device *indev;
-
-	if (!ifa)
-		return NOTIFY_DONE;
-
-	indev = ifa->ifa_dev;
-
-	if (!indev)
-		return NOTIFY_DONE;
-
-	switch (event) {
-	case NETDEV_UP:
-		LOG_DBG("inetdev UP\n");
-		break;
-	case NETDEV_DOWN:
-		LOG_DBG("inetdev DOWN\n");
-                break;
-	default:
-		break;
-	};
-	return NOTIFY_DONE;
-}
-*/
-
-/* Notifier for inetaddr addition/deletion events.  */
-/*
-static struct notifier_block inetaddr_notifier = {
-	.notifier_call = scaffold_inetaddr_event,
-};
-*/
-
 int __init scaffold_init(void)
 {
         int err = 0;
 
         LOG_DBG("Loaded scaffold protocol module\n");
-        /*
-        if (inet_add_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD) < 0) {
-                LOG_CRIT("%s: Cannot register Scaffold IP protocol\n", __func__);
-                goto out_scaffold_protocol_failure;
-        }
-        
-        */
-        err = scaffold_sock_init();
-
-        if (err < 0) {
-                  LOG_CRIT("Cannot initialize scaffold sockets\n");
-                  goto fail_sock;
-        }
+       
 #if defined(__KERNEL__)
 	err = register_netdevice_notifier(&netdev_notifier);
 
@@ -1250,14 +1171,20 @@ int __init scaffold_init(void)
                 LOG_CRIT("Cannot create netlink socket\n");
                 goto fail_netlink;
         }
-#else
+#endif
+        err = scaffold_sock_init();
+
+        if (err < 0) {
+                  LOG_CRIT("Cannot initialize scaffold sockets\n");
+                  goto fail_sock;
+        }
+      
         err = packet_init();
 
         if (err != 0) {
 		LOG_CRIT("Cannot init packet socket!\n");
 		goto fail_packet;
 	}
-#endif
 
         err = proto_register(&scaffold_udp_proto, 1);
 
@@ -1272,16 +1199,7 @@ int __init scaffold_init(void)
                 LOG_CRIT("Cannot register socket family\n");
                 goto fail_sock_register;
         }
-        /*   
-	err = register_inetaddr_notifier(&inetaddr_notifier);
         
-        if (err < 0) {
-                LOG_CRIT("%s: Cannot register inetaddr notifier\n", __func__);
-                goto out_scaffold_inetaddr_notifier_failure;
-        }
-        */
-        /* dev_add_pack(&scaffold_packet_type); */
-
 /*
         if (rto != RTO_INITIAL_DISABLED)
                 sfnet_set_param(PARAM_RTO, &rto);
@@ -1297,46 +1215,34 @@ int __init scaffold_init(void)
 #endif
 out:
         return err;
-        /*
-          inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD);
-          out_scaffold_protocol_failure:
-        */
+
 	sock_unregister(PF_SCAFFOLD);
 fail_sock_register:
 	proto_unregister(&scaffold_udp_proto);     
 fail_proto:
+        packet_fini();
+fail_packet:        
+        scaffold_sock_fini();
+fail_sock:
 #if defined(__KERNEL__)
+        scaffold_netlink_fini();
 fail_netlink:
         unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
-#else
-fail_packet:
 #endif 
-        scaffold_sock_fini();
-fail_sock:
         goto out;      
 }
 
 void __exit scaffold_fini(void)
 {
-       
-        // Tell SFNet to cleanup and send a leave message
-//        sfnet_handle_cleanup();
-        
-        /* dev_remove_pack(&scaffold_packet_type); */
-	/* unregister_inetaddr_notifier(&inetaddr_notifier); */
-
-	/* unregister_netdevice_notifier(&netdev_notifier); */
-        /* inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD); */
-#if defined(__KERNEL__)
-        scaffold_netlink_fini();
-#else
-        packet_fini();
-#endif
      	sock_unregister(PF_SCAFFOLD);
 	proto_unregister(&scaffold_udp_proto);
+        packet_fini();
         scaffold_sock_fini();
-
+#if defined(__KERNEL__)
+        scaffold_netlink_fini();
+        unregister_netdevice_notifier(&netdev_notifier);
+#endif
         LOG_INF("Unloaded scaffold protocol module\n");
 }
 

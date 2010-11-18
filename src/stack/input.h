@@ -9,13 +9,14 @@
 #endif
 
 enum {
+	INPUT_NO_PROT = -3,
 	INPUT_NO_SOCK = -2,
 	INPUT_ERROR = -1,
 	INPUT_OK,
 	INPUT_KEEP,
 };
 
-#define IS_INPUT_ERROR(x) (x < 0)
+#define IS_INPUT_ERROR(val) (val < 0)
 
 int scaffold_input(struct sk_buff *skb);
 

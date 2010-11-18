@@ -4,37 +4,34 @@
 #include <scaffold_sock.h>
 #include <input.h>
 
-extern int scaffold_tcp_rcv(struct sk_buff *);
-extern int scaffold_udp_rcv(struct sk_buff *);
+extern int scaffold_ipv4_rcv(struct sk_buff *skb);
 
 int scaffold_input(struct sk_buff *skb)
 {
-	struct iphdr *iph = ip_hdr(skb);
-	unsigned int hdr_len = iph->ihl << 2;
-	int ret = INPUT_OK;
-#if !defined(__KERNEL__)
-	char srcstr[18];
+	char srcstr[18], dststr[18];
+	struct ethhdr *ethh = eth_hdr(skb);
+	uint16_t prot = ntohs(ethh->h_proto);
+        int ret;
+
+	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
+	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
 	
-	LOG_DBG("received scaffold packet from %s hdr_len=%u prot=%u\n",
-		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
-		hdr_len, iph->protocol);
+	LOG_DBG("Received raw packet if=%d [%s %s 0x%04x]\n", 
+		skb->dev->ifindex, srcstr, dststr, prot);
+	        
+        /* Set network header offset */
+        skb_set_network_header(skb, sizeof(*ethh));
+        
+        /* Set head to network part of packet */
+        skb_pull(skb, sizeof(*ethh));
+        
+        switch (prot) {
+        case ETH_P_IP:
+                ret = scaffold_ipv4_rcv(skb);
+                break;
+        default:
+                ret = INPUT_NO_PROT;                
+        }
 
-#endif	
-	skb_set_transport_header(skb, hdr_len);
-
-	switch (iph->protocol) {
-	case IPPROTO_ICMP:
-		LOG_DBG("icmp packet\n");
-		break;
-	case IPPROTO_UDP:
-                ret = scaffold_udp_rcv(skb);
-		break;
-	case IPPROTO_TCP:
-                ret = scaffold_tcp_rcv(skb);
-		break;
-	default:
-		LOG_DBG("packet type=%u\n", iph->protocol);
-	}
-
-	return ret;
+        return ret;
 }

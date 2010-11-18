@@ -2,11 +2,13 @@ bin_PROGRAMS = scaffold
 
 scaffold_SOURCES = \
 	debug.c \
+	platform.c \
+	input.c \
 	af_scaffold.c \
 	scaffold_sock.c \
+	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
-	input.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
@@ -58,10 +60,13 @@ SCAFFOLD_KERNEL_DEPS = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
-	$(STACK_DIR)/linux/scaffold_netlink.c \
-	$(STACK_DIR)/linux/proc.c \
+	linux/scaffold_netlink.c \
+	linux/packet.c \
+	linux/proc.c \
 	debug.c \
+	platform.c \
 	input.c \
+	scaffold_ipv4.c \
 	scaffold_sock.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \

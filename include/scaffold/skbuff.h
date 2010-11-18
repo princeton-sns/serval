@@ -9,6 +9,7 @@
 #else
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
+#include <scaffold/lock.h>
 #include <stdint.h>
 #include <net/if.h>
 
@@ -68,6 +69,16 @@ struct sk_buff {
 void __free_skb(struct sk_buff *skb);
 void free_skb(struct sk_buff *);
 struct sk_buff *alloc_skb(unsigned int size);
+
+/* 
+   This function is used to fake a netdevice in user space.
+   Memory is allocated for a netdevice and it is initialized
+   with the passed information.
+
+   The memory is automatically freed when another netdevice
+   is set, or the skb is freed.
+ */
+int skb_alloc_and_set_netdevice(struct sk_buff *skb, int ifindex, const char *name);
 
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
@@ -480,6 +491,13 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 	struct sk_buff *skb;
 	while ((skb = __skb_dequeue(list)) != NULL)
 		free_skb(skb);
+}
+
+#include <linux/if_ether.h>
+
+static inline struct ethhdr *eth_hdr(const struct sk_buff *skb)
+{
+        return (struct ethhdr *)skb_mac_header(skb);
 }
 
 #include <netinet/ip.h>
