@@ -12,8 +12,12 @@ enum {
 	INPUT_NO_PROT = -3,
 	INPUT_NO_SOCK = -2,
 	INPUT_ERROR = -1,
-	INPUT_OK,
-	INPUT_KEEP,
+	INPUT_OK, /* Processing OK, but free packet */
+	INPUT_KEEP, /* Keep the packet, do not free */
+	INPUT_DELIVER, /* Let the packet go through to other stack,
+                        * e.g., to normal IP */
+	INPUT_DROP, /* Drop packet, do not let it go through to other
+                     * stack, e.g., IP */
 };
 
 #define IS_INPUT_ERROR(val) (val < 0)

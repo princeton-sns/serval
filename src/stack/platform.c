@@ -46,7 +46,12 @@ const char *get_strtime(void)
 
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
 {
-        return NULL;
+        if (size < 16 || af != AF_INET)
+                return NULL;
+        
+        sprintf(dst, "xxx.xxx.xxx.xxx");
+        
+        return dst;
 }
 
 #endif /* __KERNEL__ */

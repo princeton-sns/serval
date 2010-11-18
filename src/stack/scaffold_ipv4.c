@@ -12,19 +12,27 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned int hdr_len = iph->ihl << 2;
 	int ret = INPUT_OK;
-#if !defined(__KERNEL__)
 	char srcstr[18];
        
-	LOG_DBG("received scaffold packet from %s hdr_len=%u prot=%u\n",
+	LOG_DBG("received IPv4 packet from %s hdr_len=%u prot=%u\n",
 		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
 		hdr_len, iph->protocol);
-#endif
 
-	skb_set_transport_header(skb, hdr_len);
+        /* Check if this is not a SCAFFOLD packet */
+        if (1 /* !is_scaffold_packet */)
+                return INPUT_DELIVER;
+
+        if (!pskb_may_pull(skb, hdr_len))
+                goto inhdr_error;
+        
+        skb_pull(skb, hdr_len);
+
+	skb_reset_transport_header(skb);
 
 	switch (iph->protocol) {
 	case IPPROTO_ICMP:
 		LOG_DBG("icmp packet\n");
+                ret = INPUT_DELIVER;
 		break;
 	case IPPROTO_UDP:
                 ret = scaffold_udp_rcv(skb);
@@ -37,4 +45,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	}
 
 	return ret;
+inhdr_error:
+        return INPUT_DROP;
+
 }

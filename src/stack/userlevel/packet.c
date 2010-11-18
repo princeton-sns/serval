@@ -106,7 +106,15 @@ void *packet_thread(void *arg)
                                 }
                                 
                                 skb->dev->ifindex = lladdr.sll_ifindex;
-                                skb_set_mac_header(skb, 0);
+                                
+                                skb_reset_mac_header(skb);
+                                skb->pkt_type = lladdr.sll_pkttype;
+
+                                /* Set head to network part of packet */
+                                skb_pull(skb, ETH_HLEN);
+                                
+                                /* Set network header offset */
+                                skb_reset_network_header(skb);
 
                                 ret = scaffold_input(skb);
 

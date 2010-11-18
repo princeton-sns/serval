@@ -19,18 +19,12 @@ int scaffold_input(struct sk_buff *skb)
 	LOG_DBG("Received raw packet if=%d [%s %s 0x%04x]\n", 
 		skb->dev->ifindex, srcstr, dststr, prot);
 	        
-        /* Set network header offset */
-        skb_set_network_header(skb, sizeof(*ethh));
-        
-        /* Set head to network part of packet */
-        skb_pull(skb, sizeof(*ethh));
-        
         switch (prot) {
         case ETH_P_IP:
                 ret = scaffold_ipv4_rcv(skb);
                 break;
         default:
-                ret = INPUT_NO_PROT;                
+                ret = INPUT_NO_PROT;
         }
 
         return ret;
