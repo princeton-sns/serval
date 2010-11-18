@@ -22,12 +22,12 @@ scaffold_SOURCES = \
 SCAFFOLD_INCLUDE_DIR=$(top_builddir)/include
 STACK_DIR=$(top_builddir)/src/stack
 
-noinst_HEADERS = \
+SCAFFOLD_HDR = \
 	af_scaffold.h \
-	scaffold_sock.h \
 	input.h \
-	userlevel/msg_ipc.h \
-	userlevel/client.h \
+	scaffold_sock.h \
+	scaffold_udp_sock.h \
+	scaffold_tcp_sock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
@@ -36,9 +36,15 @@ noinst_HEADERS = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/timer.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/wait.h
+
+noinst_HEADERS = \
+	$(SCAFFOLD_HDR) \
+	userlevel/msg_ipc.h \
+	userlevel/client.h
 
 #scaffold_CFLAGS = $(CFLAGS)
 scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
@@ -55,11 +61,10 @@ KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
 TARGETS = scaffold.ko
 
-SCAFFOLD_KERNEL_DEPS = \
-	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
+SCAFFOLD_KERNEL_HDR = \
+	linux/scaffold_netlink.h
+
+SCAFFOLD_KERNEL_SRC = \
 	linux/scaffold_netlink.c \
 	linux/packet.c \
 	linux/proc.c \
@@ -72,9 +77,17 @@ SCAFFOLD_KERNEL_DEPS = \
 	scaffold_tcp.c \
 	af_scaffold.c
 
+SCAFFOLD_KERNEL_DEP = \
+	$(SCAFFOLD_HDR) \
+	$(SCAFFOLD_KERNEL_HDR)
+
+EXTRA_DIST = \
+	$(SCAFFOLD_KERNEL_HDR) \
+	$(SCAFFOLD_KERNEL_SRC)
+
 all: scaffold.ko
 
-scaffold.ko: $(SCAFFOLD_KERNEL_DEPS)
+scaffold.ko: $(SCAFFOLD_KERNEL_DEP)
 	$(MAKE) -C /lib/modules/$(KERNEL_VER)/build M=$(PWD) modules
 
 clean-local:
