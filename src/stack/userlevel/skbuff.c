@@ -18,6 +18,9 @@ static void skb_release_data(struct sk_buff *skb)
 		
 		free(skb->head);
 	}
+	/* Free our fake device */
+	if (skb->dev)
+		free(skb->dev);
 }
 
 /* Free everything but the sk_buff shell. */

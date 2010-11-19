@@ -29,6 +29,7 @@ static inline struct net *sock_net(struct sock *sk)
 #else /* User-level */
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <sys/uio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,6 +67,9 @@ typedef unsigned char gfp_t;
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
+
+int memcpy_toiovec(struct iovec *iov, unsigned char *kdata, int len);
+int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
 
 #endif /* __KERNEL__ */
 

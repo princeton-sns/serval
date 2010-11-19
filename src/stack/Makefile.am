@@ -28,6 +28,7 @@ SCAFFOLD_HDR = \
 	scaffold_sock.h \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
+	scaffold_ipv4.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \

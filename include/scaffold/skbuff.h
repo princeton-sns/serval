@@ -56,6 +56,8 @@ struct sk_buff {
 	sk_buff_data_t		transport_header;
 	sk_buff_data_t		network_header;
 	sk_buff_data_t		mac_header;
+	uint16_t		protocol; /* In network byte order */
+	void			(*destructor)(struct sk_buff *skb);
 	/* These elements must be at the end, see alloc_skb() for details.  */
 	sk_buff_data_t		tail;
 	sk_buff_data_t		end;
@@ -119,6 +121,14 @@ static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 }
 
 void skb_trim(struct sk_buff *skb, unsigned int len);
+
+static inline void skb_orphan(struct sk_buff *skb)
+{
+	if (skb->destructor)
+		skb->destructor(skb);
+	skb->destructor = NULL;
+	skb->sk		= NULL;
+}
 
 unsigned char *skb_put(struct sk_buff *skb, unsigned int len);
 static inline unsigned char *__skb_put(struct sk_buff *skb, unsigned int len)

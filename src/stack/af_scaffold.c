@@ -66,7 +66,12 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
 
+extern struct proto scaffold_udp_proto;
+extern struct proto scaffold_tcp_proto;
+
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
+static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
+
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
                                       gfp_t priority, struct proto *prot);
 
@@ -108,9 +113,55 @@ int scaffold_wait_state(struct sock *sk, int state, unsigned long timeo)
 	return err;
 }
 
+static int __scaffold_assign_sockid(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+       
+        /* 
+           TODO: 
+           - Check for ID wraparound and conflicts 
+           - Make sure code does not assume sockid is a short
+        */
+        ssk->sockid.sid_id = htons(atomic_inc_return(&scaffold_sock_id));
+        return 0;
+}
+
+/*
+  Automatically assigns a random service id.
+*/
+static int scaffold_autobind(struct sock *sk)
+{
+        struct scaffold_sock *ssk;
+         /*
+          Assign a random service id until the socket is assigned one
+          with bind (if ever).
+
+          TODO: check for conflicts.
+        */
+        lock_sock(sk);
+        ssk = scaffold_sk(sk);
+#if defined(__KERNEL__)
+        get_random_bytes(&ssk->local_sid, sizeof(struct service_id));
+#else
+        {
+                int i;
+                unsigned char *byte = (unsigned char *)&ssk->local_sid;
+
+                for (i = 0; i  < sizeof(struct service_id); i++) {
+                        byte[i] = random() & 0xff;
+                }
+        }
+#endif
+        scaffold_sock_set_state(sk, SF_UNBOUND);
+        release_sock(sk);
+
+        return 0;
+}
+
 int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 {
         struct sock *sk = sock->sk;
+        struct scaffold_sock *ssk = scaffold_sk(sk);
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
         int ret = 0, cond = 1;
         
@@ -119,26 +170,34 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         else if (addr_len % sizeof(struct sockaddr_sf) != 0)
                 return -EINVAL;
         
+        /* Call the protocol's own bind, if it exists */
+	if (sk->sk_prot->bind)
+		return sk->sk_prot->bind(sk, addr, addr_len);
+
         lock_sock(sk);
 
         LOG_DBG("handling bind\n");
 
-//        ret = sfnet_handle_bind_socket(sk, &sfaddr->ssf_sid, &cond);
-
+        if (scaffold_sock_flag(ssk, SCAFFOLD_FLAG_HOST_CTRL_MODE)) {
+                ret = 1;
+                scaffold_sock_set_state(sk, SF_BOUND);
+        } else {
+//        ret = send_controller_msg();
+        }
         if (ret < 0) {
-                LOG_ERR("af_scaffold: bind failed\n");
+                LOG_ERR("bind failed\n");
                 release_sock(sk);
                 return ret;
         }
 
-        memcpy(&scaffold_sk(sk)->local_sid, &sfaddr->ssf_sid, sizeof(struct service_id));
-
+        memcpy(&scaffold_sk(sk)->local_sid, &sfaddr->ssf_sid, 
+               sizeof(struct service_id));
         /* 
            Return value of 1 indicates we are in controller mode -->
            do not wait for a reply 
         */
         if (ret == 1) {
-                LOG_DBG("af_scaffold: bind in controller mode\n");
+                LOG_DBG("socket in controller mode\n");
                 release_sock(sk);
                 ret = 0;
         } else if (ret == 0) {
@@ -147,22 +206,22 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = wait_event_interruptible(*sk_sleep(sk), cond != 1);
 
                 if (ret != 0) {
-                        LOG_ERR("af_scaffold: bind interrupted\n");
+                        LOG_ERR("bind interrupted\n");
                 } else {
                         ret = cond;
-                        LOG_ERR("af_scaffold: bind returned %d\n", ret);
+                        LOG_DBG("bind returned %d\n", ret);
                 }
         } else {
                 release_sock(sk);
         }
-
         return ret;
 }
+
 
 static int scaffold_listen(struct socket *sock, int backlog)
 {
 	struct sock *sk = sock->sk;
-        int retval = EINVAL;
+        int err = -EINVAL;
         
         if (sock->type != SOCK_DGRAM && sock->type != SOCK_STREAM)
 		return -EOPNOTSUPP;		
@@ -178,7 +237,104 @@ static int scaffold_listen(struct socket *sock, int backlog)
 
         release_sock(sk);
 
-        return -retval;
+        return err;
+}
+
+struct sock *scaffold_accept_dequeue(struct sock *parent, 
+                                     struct socket *newsock)
+{
+	struct sock *sk = NULL;
+
+        /* Parent sock is already locked... */
+        while (1) {
+                //struct socket_id sockid;
+
+                if (0 /*sfnet_accept_dequeue(parent, &sockid) != 1 */)
+                        break;
+                
+                switch (newsock->type) {
+                case SOCK_DGRAM:
+                        //newsock->ops = &scaffold_dgram_ops;
+                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
+                                               GFP_KERNEL, 
+                                               &scaffold_udp_proto);
+                        break;
+                case SOCK_STREAM: 
+                        //newsock->ops = &scaffold_stream_ops;
+                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
+                                               GFP_KERNEL, 
+                                               &scaffold_tcp_proto);
+                        break;
+                case SOCK_SEQPACKET:	
+                case SOCK_RAW:
+                default:
+                        return NULL;
+                }
+                
+                if (!sk)
+                        break;
+
+                // Inherit the service id from the parent socket
+                memcpy(&scaffold_sk(sk)->local_sid, 
+                       &scaffold_sk(parent)->local_sid, 
+                       sizeof(struct sockaddr_sf));
+                
+                scaffold_sk(sk)->tot_bytes_sent = 0;
+
+                lock_sock(sk);
+
+                if (0 /* sfnet_assign_sock(sk, sockid) != 0 */) {
+                        release_sock(sk);
+                        sk_free(sk);
+                        sk = NULL;
+                        break;
+                }
+
+                if (sk->sk_state == SF_CLOSED) {
+			release_sock(sk);
+			continue;
+		}
+                /*
+                  FIXME: It seems as, if sometimes, a socket in
+                  Scaffold has already gone from BOUND to some other
+                  state before the application has had a chance to
+                  accept it. In that case, should we simply delete the
+                  socket, or let the application deal with the
+                  non-BOUND state once accepted?
+
+                  I think the safest thing to do is to let the
+                  application deal with it, because
+                  sfnet_assign_socket() has already associated the
+                  C-sock with a Scaffold data type. If we delete the
+                  C-socket here, the Scaffold C++ version of the
+                  socket will have a bad handle.
+
+                  If we want to delete the socket here, we must first
+                  assure that sfnet_assign_sock() does not associate
+                  the C-sock with the C++ SFSock, and then make it return
+                  an error so that we know the assignment was not made.
+
+                  For now, accept the socket no matter what state it
+                  is in.
+                 */
+		if (1 /*sk->sk_state == SF_BOUND || !newsock */) {
+
+			if (newsock)
+				sock_graft(sk, newsock);
+                        
+                        atomic_inc(&scaffold_nr_socks);
+
+			release_sock(sk);
+
+			return sk;
+		} 
+                /* Should not happen. */
+                release_sock(sk);
+                sk_free(sk);
+                sk = NULL;
+        }
+
+	return NULL;
 }
 
 static int scaffold_accept(struct socket *sock, struct socket *newsock, 
@@ -328,377 +484,113 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
                 
         return ret;
 }
-
-static int scaffold_sendmsg(struct kiocb *kiocb, struct socket *sock,
-                            struct msghdr *msg, size_t len)
+static int scaffold_sendmsg(struct kiocb *iocb, struct socket *sock, 
+                            struct msghdr *msg, size_t size)
 {
 	struct sock *sk = sock->sk;
-        int ret = -ENOMEM;
-        struct service_id dst_sid;
-        /* Check if we are calling send() or sendto(), i.e., whether
-           we are given the destination service id or not. */
-        if (msg->msg_name) {
-                struct sockaddr_sf *sfaddr = msg->msg_name;
-                
-                if (sfaddr->ssf_family != AF_SCAFFOLD)
-                        return -EAFNOSUPPORT;
-                
-                memcpy(&dst_sid, &sfaddr->ssf_sid, sizeof(struct service_id)); 
-        } else {
-                memcpy(&dst_sid, &scaffold_sk(sk)->peer_sid, sizeof(struct service_id));
-        }
-        
-        //LOG_DBG("sendmsg() to serviceId=%u\n", ntohs(dst_oid.s_oid));
-               
-        lock_sock(sk);
-        
-        if (sk->sk_state == SF_RECONNECT) {
-                release_sock(sk);
-                
-                LOG_DBG("af_scaffold: in RECONNECT. Waiting...\n");
 
-                ret = wait_event_interruptible(*sk_sleep(sk), sk->sk_state != SF_RECONNECT);
-                
-                /* Check if we were interrupted */
-                if (ret != 0) {
-                        LOG_DBG("Interrupted while waiting in RECONNECT\n");
-                        return ret;
-                }
+	/* We may need to bind the socket. */
+	if (sk->sk_state == SF_NEW && scaffold_autobind(sk) < 0)
+		return -EAGAIN;
 
-                lock_sock(sk);
-                
-                if (sk->sk_state != SF_BOUND)  {
-                        release_sock(sk);
-                        return -ENOTCONN;
-                }
-        }
-
-        //ret = sfnet_handle_send_socket(sk, &dst_oid, msg->msg_iov, len, msg->msg_flags & MSG_DONTWAIT);
-
-        if (ret == 0) {
-                if (msg->msg_flags & MSG_DONTWAIT) {
-                        //LOG_DBG("send(): MSG_DONTWAIT set, returning -EWOULDBLOCK\n");
-                        ret = -EWOULDBLOCK;
-                } else {
-                        release_sock(sk);
-
-                        ret = wait_event_interruptible(*sk_sleep(sk), (atomic_read(&sk->sk_wmem_alloc) << 1) < sk->sk_sndbuf);
-                        
-                        if (ret != 0) {
-                                LOG_DBG("wait for write memory interrupted\n");
-                                return ret;
-                        }
-
-                        lock_sock(sk);
-
-                        ret = len;
-                }
-        } else if (ret < 0) {
-                LOG_DBG("%s send_socket returned error %d\n", 
-                        __FUNCTION__, ret);
-        }
-
-        if (ret > 0) {
-                scaffold_sk(sk)->tot_bytes_sent += len;
-        }
-        release_sock(sk);
-
-        return ret;
+	return sk->sk_prot->sendmsg(iocb, sk, msg, size);
 }
 
-static int scaffold_dgram_recvmsg(struct kiocb *iocb, struct socket *sock,
-                               struct msghdr *msg, size_t len, int flags)
+static int scaffold_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
+                            size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
-	struct scaffold_sock *ss = scaffold_sk(sk);
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
-        int retval = -ENOMEM;
-	long timeo;
-        
-        lock_sock(sk);
-        
-        if (sk->sk_state != SF_UNBOUND && 
-            sk->sk_state != SF_BOUND && 
-            sk->sk_state != SF_CLOSED) {
-                /* SF_CLOSED is a valid state here because recvmsg
-                 * should return 0 and not an error */
-		retval = -ENOTCONN;
-		goto out;
-	}
+	int addr_len = 0;
+	int err;
 
-        if (msg->msg_namelen < sizeof(struct sockaddr_sf)) {
-                retval = -EINVAL;
-                LOG_DBG("address length is incorrect\n");
-                goto out;
-        }
+	err = sk->sk_prot->recvmsg(iocb, sk, msg, size, flags & MSG_DONTWAIT,
+				   flags & ~MSG_DONTWAIT, &addr_len);
+	if (err >= 0)
+		msg->msg_namelen = addr_len;
 
-	timeo = sock_rcvtimeo(sk, flags & MSG_DONTWAIT);
-
-	do {
-		struct sk_buff *skb = skb_peek(&sk->sk_receive_queue);
-
-		if (skb)
-			goto found_ok_skb;
-	
-		if (sk->sk_state >= SF_CLOSED) {
-                        /*
-			if (!sock_flag(sk, SOCK_DONE)) {
-				retval = -ENOTCONN;
-				break;
-			}
-                        */
-                        retval = 0;
-			break;
-		}
-                
-		if (!timeo) {
-			retval = -EAGAIN;
-			break;
-		}
-
-		if (signal_pending(current)) {
-			retval = sock_intr_errno(timeo);
-			break;
-		}
-                //LOG_DBG("waiting for data\n");
-
-		sk_wait_data(sk, &timeo);
-		continue;
-	found_ok_skb:
-		if (len >= skb->len) {
-			retval = skb->len;
-                        len = skb->len;
-                } else if (len < skb->len) {
-			msg->msg_flags |= MSG_TRUNC;
-                        retval = len;
-                }
-                
-                /* Copy service id */
-                if (sfaddr) {
-                        size_t addrlen = msg->msg_namelen;
-                        unsigned short from = udp_hdr(skb)->source;
-
-                        sfaddr->ssf_family = AF_SCAFFOLD;
-                        msg->msg_namelen = sizeof(struct sockaddr_sf);
-                        memcpy(&sfaddr->ssf_sid, &from, sizeof(struct service_id));
-
-                        /* Copy also our local service id to the
-                         * address buffer if size admits */
-                        if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)(msg->msg_name + sizeof(struct sockaddr_sf));
-                                sfaddr->ssf_family = AF_SCAFFOLD;
-
-                                memcpy(&sfaddr->ssf_sid, &ss->local_sid, 
-                                       sizeof(struct service_id));
-                        }
-                }
-                
-                //LOG_DBG("dequeing skb with length %u len=%zu retval=%d\n", skb->len, len, retval);
-
-		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
-			/* Exception. Bailout! */
-			retval = -EFAULT;
-                        LOG_DBG("could not copy data, len=%zu\n", len);
-			break;
-		}
-		if (!(flags & MSG_PEEK))
-			sk_eat_skb(sk, skb, 0);
-		break;
-	} while (1);
-out:
-        release_sock(sk);
-        
-        return retval;
+	return err;
 }
 
-static int scaffold_sock_is_valid_conn_state(int state)
-{
-        return (state == SF_BOUND ||
-                state == TCP_FINWAIT1 ||
-                state == TCP_FINWAIT2 ||
-                state == TCP_SIMCLOSE ||
-                state == TCP_LASTACK ||
-                state == TCP_CLOSEWAIT);
-}
-
-static int scaffold_stream_recvmsg(struct kiocb *iocb, struct socket *sock,
-                                   struct msghdr *msg, size_t len, int flags)
-{
-	struct sock *sk = sock->sk;
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
-        int retval = -ENOMEM;
-	long timeo;
-        static size_t tot_bytes_read = 0;
-
-        lock_sock(sk);
-       
-        if (msg->msg_namelen < sizeof(struct sockaddr_sf)) {
-                retval = -EINVAL;
-                LOG_DBG("address length is incorrect\n");
-                goto out;
-        }
-
-	timeo = sock_rcvtimeo(sk, flags & MSG_DONTWAIT);
-        
-	do {
-                int datalen = 0;
-
-                if (!scaffold_sock_is_valid_conn_state(sk->sk_state)) {
-                        if (sk->sk_state == SF_RECONNECT) {
-                                LOG_DBG("af_scaffold: in RECONNECT. Waiting...\n");
-                                
-                                if (msg->msg_flags & MSG_DONTWAIT) {
-                                        //LOG_DBG("send(): MSG_DONTWAIT set, returning -EWOULDBLOCK\n");
-                                        release_sock(sk);
-                                        return -EWOULDBLOCK;
-                                }            
-                                
-                                release_sock(sk);
-
-                                retval = wait_event_interruptible(*sk_sleep(sk), atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf);
-
-                                /* Check if we were interrupted */
-                                if (retval != 0) {
-                                        LOG_DBG("Interrupted while waiting in RECONNECT\n");
-                                        return retval;
-                                } 
-
-                                lock_sock(sk);
-
-                                if (sk->sk_state != SF_BOUND)  {
-                                        retval = -ENOTCONN;
-                                        break;
-                                }
-                        } else {
-                                retval = -ENOTCONN;
-                                break;
-                        }
-                }
-
-//                datalen = sfnet_tcp_bufcnt(sk, 1, 1);
-               
-                if (datalen == -1) {
-                        retval = -EINVAL;
-                        break;
-                }
-
-                if (datalen == 0 && sock_flag(sk, SOCK_DONE)) {
-                        /* SOCK_DONE means FIN received, and should be
-                         * in buffer. We can then safely assume that
-                         * reading 0 from buffer indicates there is no
-                         * more data in the stream. */ 
-                        LOG_DBG("%s: SOCK_DONE set, tot_bytes_read=%zu\n", 
-                                __FUNCTION__, tot_bytes_read);
-                        retval = 0;
-                        break;
-                }
-
-		if (datalen > 0)
-			goto found_data;
-	              
-		if (!timeo) {
-			retval = -EAGAIN;
-			break;
-		}
-
-		if (signal_pending(current)) {
-			retval = sock_intr_errno(timeo);
-			break;
-		}
-                //printk("waiting for data\n");
-
-		sk_wait_data(sk, &timeo);
-		continue;
-	found_data:
-		if (len > datalen) {
-                        len = datalen;
-                }
-                
-                /* Copy service ids */
-                if (sfaddr) {
-                        size_t addrlen = msg->msg_namelen;
-                        
-                        sfaddr->ssf_family = AF_SCAFFOLD;
-                        msg->msg_namelen = sizeof(struct sockaddr_sf);
-                        memcpy(&sfaddr->ssf_sid, &scaffold_sk(sk)->peer_sid, sizeof(struct service_id));
-
-                        /* Copy also our local service id to the
-                         * address buffer if size admits */
-                        if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)(msg->msg_name + sizeof(struct sockaddr_sf));
-                                sfaddr->ssf_family = AF_SCAFFOLD;
-
-                                memcpy(&sfaddr->ssf_sid, &scaffold_sk(sk)->local_sid, 
-                                       sizeof(struct service_id));
-                        }
-                }
-
-//                retval = sfnet_handle_recv_socket(sk, msg->msg_iov, len, flags);
-
-                if (retval < 0) {
-                        /* Exception. Bailout! */
-                        LOG_DBG("could not copy data, len=%zu\n", len);
-			break;
-		} else if (retval == 0) {
-                        LOG_DBG("%s: retval is 0 after recv_socket\n", __FUNCTION__);
-                }
-                tot_bytes_read += len;
-		break;
-	} while (1);
-out:
-        release_sock(sk);
-
-        return retval;
-}
-
-static int scaffold_shutdown(struct socket *sock, int mode)
+static int scaffold_shutdown(struct socket *sock, int how)
 {
 	struct sock *sk = sock->sk;
 	int err = 0;
 
-	if (!sk) 
-                return 0;
+	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
+		       1->2 bit 2 snds.
+		       2->3 */
+	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
+		return -EINVAL;
 
 	lock_sock(sk);
 
-	if (!sk->sk_shutdown) {
-		sk->sk_shutdown = SHUTDOWN_MASK;
-//                sfnet_handle_release_socket(sk);
-
-		if (sock_flag(sk, SOCK_LINGER) && sk->sk_lingertime)
-			err = scaffold_wait_state(sk, SF_CLOSED, sk->sk_lingertime);
+	if (sock->state == SS_CONNECTING) { 
+                /*
+		if ((1 << sk->sk_state) & 
+		    (TCPF_SYN_SENT | TCPF_SYN_RECV | TCPF_CLOSE))
+			sock->state = SS_DISCONNECTING;
+		else
+                */
+                sock->state = SS_CONNECTED;
 	}
 
+	switch (sk->sk_state) {
+	case SF_CLOSED:
+		err = -ENOTCONN;
+		/* Hack to wake up other listeners, who can poll for
+		   POLLHUP, even on eg. unconnected UDP sockets -- RR */
+	default:
+		sk->sk_shutdown |= how;
+		if (sk->sk_prot->shutdown)
+			sk->sk_prot->shutdown(sk, how);
+		break;
+
+	/* Remaining two branches are temporary solution for missing
+	 * close() in multithreaded environment. It is _not_ a good idea,
+	 * but we have no choice until close() is repaired at VFS level.
+	 */
+	case SF_LISTEN:
+		if (!(how & RCV_SHUTDOWN))
+			break;
+		/* Fall through */
+	case SF_REQUEST:
+		err = sk->sk_prot->disconnect(sk, O_NONBLOCK);
+		sock->state = err ? SS_DISCONNECTING : SS_UNCONNECTED;
+		break;
+	}
+
+	/* Wake up anyone sleeping in poll. */
+	sk->sk_state_change(sk);
 	release_sock(sk);
 
-        return 0;
+        return err;
 }
 
 int scaffold_release(struct socket *sock)
 {
         int err = 0;
         struct sock *sk = sock->sk;
-    	struct sk_buff *skb;
 
-        /* Apparently the socket can be NULL, for example, if close()
-         * is called on an invalid file descriptor. */
-	if (!sk)
-		return 0;
-        
-        scaffold_shutdown(sock, 2);
+	if (sk) {
+                long timeout;
+                
+                scaffold_shutdown(sock, 2);
 
-	sock_orphan(sk);
+                sock_orphan(sk);
+                
+                LOG_DBG("SCAFFOLD socket %p released, refcnt=%d, tot_bytes_sent=%lu\n", 
+                        sk, atomic_read(&sk->sk_refcnt) - 1, 
+                        scaffold_sk(sk)->tot_bytes_sent);
+                
+		timeout = 0;
 
-        // This is done in destruct too?
-        while ((skb = skb_dequeue(&sk->sk_receive_queue)) != NULL) {
-                FREE_SKB(skb);
-	}
+		if (sock_flag(sk, SOCK_LINGER) && 0
+                    /*!(current->flags & PF_EXITING) */)
+			timeout = sk->sk_lingertime;
+		sock->sk = NULL;
+                sk->sk_prot->close(sk, timeout);
+        }
 
-        LOG_DBG("SCAFFOLD socket %p released, refcount=%d, tot_bytes_sent=%lu\n", 
-               sk, atomic_read(&sk->sk_refcnt) - 1, scaffold_sk(sk)->tot_bytes_sent);
-        
-	sock_put(sk);
-    
         return err;
 }
 
@@ -776,32 +668,6 @@ static int scaffold_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 }
 #endif
 
-static int scaffold_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
-{
-	//struct scaffold_sock *scaff = scaffold_sk(sk);
-	int rc;
-
-        LOG_DBG("%s: received data\n", __FUNCTION__);
-
-        // Queue skbs on socket for reading via recv() or recvmsg()
-        if ((rc = sock_queue_rcv_skb(sk,skb)) < 0) {
-		/* Note that an ENOMEM error is charged twice */
-		if (rc == -ENOMEM) {
-			// increase stats
-                }
-		goto drop;
-	}
-        LOG_DBG("%s: skb queued\n", __FUNCTION__);
- 
-        return 0;
-drop:
-        LOG_DBG("%s: skb queue error!\n", __FUNCTION__);
-
-        FREE_SKB(skb);
-
-        return -1;
-}
-
 /* 
    Below are mappings of generic datagram operations. These functions
    should typically override, or call, protocol specific functions
@@ -819,7 +685,7 @@ drop:
    UDP and TCP, in the Linux source code.
 
  */
-static const struct proto_ops scaffold_dgram_ops = {
+static const struct proto_ops scaffold_ops = {
 	.family =	PF_SCAFFOLD,
 	.owner =	THIS_MODULE,
 	.release =	scaffold_release,
@@ -830,7 +696,7 @@ static const struct proto_ops scaffold_dgram_ops = {
 	.listen =	scaffold_listen,
 	.shutdown =	scaffold_shutdown,
 	.sendmsg =	scaffold_sendmsg,
-	.recvmsg =	scaffold_dgram_recvmsg,
+	.recvmsg =	scaffold_recvmsg,
 #if defined(__KERNEL__)
 	.setsockopt =	sock_no_setsockopt,
 	.getsockopt =	sock_no_getsockopt,
@@ -841,175 +707,33 @@ static const struct proto_ops scaffold_dgram_ops = {
 	.sendpage =	sock_no_sendpage,
 #endif
 };
-
-/* 
-   These are generic stream operations, may be overriden by 
-   struct proto functions 
-*/
-static const struct proto_ops scaffold_stream_ops = {
-	.family =	PF_SCAFFOLD,
-	.owner =	THIS_MODULE,
-	.release =	scaffold_release,
-	.bind =		scaffold_bind,
-	.connect =	scaffold_connect,
-	.accept =	scaffold_accept,
-	.getname =	scaffold_getname,
-	.listen =	scaffold_listen,
-	.shutdown =	scaffold_shutdown,
-	.sendmsg =	scaffold_sendmsg,
-	.recvmsg =	scaffold_stream_recvmsg,
-#if defined(__KERNEL__)
-	.setsockopt =	sock_no_setsockopt,
-	.getsockopt =	sock_no_getsockopt,
-	.socketpair =	sock_no_socketpair,
-	.poll =	        scaffold_poll,
-	.ioctl =	scaffold_ioctl,
-	.mmap =		sock_no_mmap,
-	.sendpage =	sock_no_sendpage,
-#endif
-};
-
-/* 
-   Specific protocol operations. They override generic 
-   datagram and stream operations above.
-*/
-static struct proto scaffold_udp_proto = {
-	.name			= "SCAFFOLD_UDP",
-	.owner			= THIS_MODULE,
-	.obj_size		= sizeof(struct scaffold_udp_sock),
-	.backlog_rcv            = scaffold_queue_rcv_skb,
-};
-
-static struct proto scaffold_tcp_proto = {
-	.name			= "SCAFFOLD_TCP",
-	.owner			= THIS_MODULE,
-	.obj_size		= sizeof(struct scaffold_tcp_sock),
-	.backlog_rcv            = scaffold_queue_rcv_skb,
-};
-
-
-struct sock *scaffold_accept_dequeue(struct sock *parent, 
-                                     struct socket *newsock)
-{
-	struct sock *sk = NULL;
-
-        /* Parent sock is already locked... */
-        while (1) {
-                //struct socket_id sockid;
-
-                if (0 /*sfnet_accept_dequeue(parent, &sockid) != 1 */)
-                        break;
-                
-                switch (newsock->type) {
-                case SOCK_DGRAM:
-                        //newsock->ops = &scaffold_dgram_ops;
-                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
-                                               GFP_KERNEL, 
-                                               &scaffold_udp_proto);
-                        break;
-                case SOCK_STREAM: 
-                        //newsock->ops = &scaffold_stream_ops;
-                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
-                                               GFP_KERNEL, 
-                                               &scaffold_tcp_proto);
-                        break;
-                case SOCK_SEQPACKET:	
-                case SOCK_RAW:
-                default:
-                        return NULL;
-                }
-                
-                if (!sk)
-                        break;
-
-                // Inherit the service id from the parent socket
-                memcpy(&scaffold_sk(sk)->local_sid, 
-                       &scaffold_sk(parent)->local_sid, 
-                       sizeof(struct sockaddr_sf));
-                
-                scaffold_sk(sk)->tot_bytes_sent = 0;
-
-                lock_sock(sk);
-
-                if (0 /* sfnet_assign_sock(sk, sockid) != 0 */) {
-                        release_sock(sk);
-                        sk_free(sk);
-                        sk = NULL;
-                        break;
-                }
-
-                if (sk->sk_state == SF_CLOSED) {
-			release_sock(sk);
-			continue;
-		}
-                /*
-                  FIXME: It seems as, if sometimes, a socket in
-                  Scaffold has already gone from BOUND to some other
-                  state before the application has had a chance to
-                  accept it. In that case, should we simply delete the
-                  socket, or let the application deal with the
-                  non-BOUND state once accepted?
-
-                  I think the safest thing to do is to let the
-                  application deal with it, because
-                  sfnet_assign_socket() has already associated the
-                  C-sock with a Scaffold data type. If we delete the
-                  C-socket here, the Scaffold C++ version of the
-                  socket will have a bad handle.
-
-                  If we want to delete the socket here, we must first
-                  assure that sfnet_assign_sock() does not associate
-                  the C-sock with the C++ SFSock, and then make it return
-                  an error so that we know the assignment was not made.
-
-                  For now, accept the socket no matter what state it
-                  is in.
-                 */
-		if (1 /*sk->sk_state == SF_BOUND || !newsock */) {
-
-			if (newsock)
-				sock_graft(sk, newsock);
-                        
-                        atomic_inc(&scaffold_nr_socks);
-
-			release_sock(sk);
-
-#if defined(__KERNEL__)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
-                        local_bh_disable();
-                        sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
-                        local_bh_enable();
-#endif
-#endif
-			return sk;
-		} 
-                /* Should not happen. */
-                release_sock(sk);
-                sk_free(sk);
-                sk = NULL;
-        }
-
-	return NULL;
-}
 
 static void scaffold_sock_destruct(struct sock *sk)
 {
-	skb_queue_purge(&sk->sk_receive_queue);
+        __skb_queue_purge(&sk->sk_receive_queue);
+	/* __skb_queue_purge(&sk->sk_error_queue); */
+
+	if (sk->sk_type == SOCK_STREAM && sk->sk_state != TCP_CLOSE) {
+		LOG_ERR("Attempt to release Scaffold TCP socket in state %d %p\n",
+                        sk->sk_state, sk);
+		return;
+	}
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
 		LOG_DBG("Attempt to release alive scaffold socket: %p\n", sk);
 		return;
 	}
 
+	if (atomic_read(&sk->sk_rmem_alloc)) {
+                LOG_WARN("sk_rmem_alloc is not zero\n");
+        }
+
+	if (atomic_read(&sk->sk_wmem_alloc)) {
+                LOG_WARN("sk_wmem_alloc is not zero\n");
+        }
+
 	atomic_dec(&scaffold_nr_socks);
 
-#if defined(__KERNEL__)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
-	local_bh_disable();
-	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
-	local_bh_enable();
-#endif
-#endif
 	LOG_DBG("SCAFFOLD socket %p destroyed, %d are still alive.\n", 
                sk, atomic_read(&scaffold_nr_socks));
 }
@@ -1029,8 +753,17 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
         sk->sk_family = PF_SCAFFOLD;
 	sk->sk_protocol	= PF_SCAFFOLD;
 	sk->sk_destruct	= scaffold_sock_destruct;
-        //scaffold_sk(sk)->sfsock = NULL;
+        sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
+        /* TODO: do not use host controller mode by default */
+        scaffold_sock_set_flag(scaffold_sk(sk), SCAFFOLD_FLAG_HOST_CTRL_MODE);
+
+        if (__scaffold_assign_sockid(sk) < 0) {
+                LOG_DBG("could not assign sock id\n");
+                sock_put(sk);
+                return NULL;
+        }
+                
         LOG_DBG("SCAFFOLD socket %p created, %d are alive.\n", 
                sk, atomic_read(&scaffold_nr_socks) + 1);
 
@@ -1040,8 +773,6 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 /**
    Create a new Scaffold socket.
  */
-
-
 static int scaffold_create(struct net *net, struct socket *sock, int protocol
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
                            , int kern
@@ -1062,14 +793,14 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 	switch (sock->type) {
                 case SOCK_DGRAM:
                         proto = SF_PROTO_UDP;
-                        sock->ops = &scaffold_dgram_ops;
+                        sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
                                                &scaffold_udp_proto);
                         break;
                 case SOCK_STREAM: 
                         proto = SF_PROTO_TCP;
-                        sock->ops = &scaffold_stream_ops;
+                        sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
                                                &scaffold_tcp_proto);
@@ -1085,28 +816,19 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 		goto out;
         }
 
-        atomic_inc(&scaffold_nr_socks);
-
-        //scaffold_insert_socket(scaffold_sockets_unbound, sk);
-//        ret = sfnet_handle_new_socket(sk, proto);
-
-        if (ret < 0) {
-                sk_free(sk);
-                sk = NULL;
-        }
-out:
-        if (!sk) {
-                atomic_dec(&scaffold_nr_socks);
-                ret = -ENOMEM;
-        } else {
-#if defined(__KERNEL__)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29)
-		local_bh_disable();
-		sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
-		local_bh_enable();
-#endif
-#endif
+        /* Add to protocol hash chains. */
+        sk->sk_prot->hash(sk);
+       
+        if (sk->sk_prot->init) {
+                /* Call protocol specific init */
+                ret = sk->sk_prot->init(sk);
+                
+		if (ret < 0)
+			sk_common_release(sk);
 	}
+
+        atomic_inc(&scaffold_nr_socks);
+out:
         return ret;
 }
 

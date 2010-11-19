@@ -124,6 +124,71 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 	return sk;
 }
 
+static void __sk_free(struct sock *sk)
+{
+	if (sk->sk_destruct)
+		sk->sk_destruct(sk);
+
+        free(sk);
+}
+
+void sk_free(struct sock *sk)
+
+{        
+        /*
+	 * We substract one from sk_wmem_alloc and can know if
+	 * some packets are still in some tx queue.
+	 * If not null, sock_wfree() will call __sk_free(sk) later
+	 */
+	if (atomic_dec_and_test(&sk->sk_wmem_alloc))
+		__sk_free(sk);
+}
+
+void sock_wfree(struct sk_buff *skb)
+{
+	struct sock *sk = skb->sk;
+	unsigned int len = skb->truesize;
+
+	if (!sock_flag(sk, SOCK_USE_WRITE_QUEUE)) {
+		/*
+		 * Keep a reference on sk_wmem_alloc, this will be released
+		 * after sk_write_space() call
+		 */
+		atomic_sub(len - 1, &sk->sk_wmem_alloc);
+		sk->sk_write_space(sk);
+		len = 1;
+	}
+	/*
+	 * if sk_wmem_alloc reaches 0, we must finish what sk_free()
+	 * could not do because of in-flight packets
+	 */
+	if (atomic_sub_and_test(len, &sk->sk_wmem_alloc))
+		__sk_free(sk);
+}
+
+/*
+ * Read buffer destructor automatically called from kfree_skb.
+ */
+void sock_rfree(struct sk_buff *skb)
+{
+	struct sock *sk = skb->sk;
+
+	atomic_sub(skb->truesize, &sk->sk_rmem_alloc);
+	/* sk_mem_uncharge(skb->sk, skb->truesize); */
+}
+
+void sk_common_release(struct sock *sk)
+{
+	if (sk->sk_prot->destroy)
+		sk->sk_prot->destroy(sk);
+
+	sk->sk_prot->unhash(sk);
+
+	sock_orphan(sk);
+
+	sock_put(sk);
+}
+
 int proto_register(struct proto *prot, int ignore)
 {
 	write_lock(&proto_list_lock);

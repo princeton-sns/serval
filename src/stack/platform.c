@@ -3,7 +3,9 @@
 #if defined(__KERNEL__)
 #include <linux/time.h>
 #else
+#include <string.h>
 #include <time.h>
+#include <errno.h>
 #endif
 
 const char *mac_ntop(const void *src, char *dst, socklen_t size)
@@ -56,5 +58,25 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
         
         return dst;
 }
+#else
 
+int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
+{
+
+        if (!memcpy(iov->iov_base, from, len)) 
+                return -EFAULT;
+
+        iov->iov_len = len;
+
+        return 0;
+}
+
+int memcpy_fromiovec(unsigned char *to, struct iovec *iov, int len)
+{
+        
+        if (!memcpy(to, iov->iov_base, iov->iov_len))
+                return -EFAULT;
+
+        return 0;
+}
 #endif /* __KERNEL__ */

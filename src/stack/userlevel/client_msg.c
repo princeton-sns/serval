@@ -115,13 +115,13 @@ int client_msg_read(int sock, struct client_msg **msg)
 		return -1;
 	}
 	
-	LOG_DBG("Message %s payload_length=%u\n", 
+	LOG_DBG("%s payload_length=%u\n", 
 		client_msg_to_typestr(msg_tmp), msg_tmp->payload_length);
-
+        
 	len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
 
 	if (len != client_msg_lengths[msg_tmp->type]) {
-		LOG_ERR("Message %s does not match message type length (%zd/%u)\n", 
+		LOG_ERR("%s does not match message type length (%zd/%u)\n", 
 			client_msg_to_typestr(msg_tmp), len, client_msg_lengths[msg_tmp->type]);
 		free(msg_tmp);
 		return -1;

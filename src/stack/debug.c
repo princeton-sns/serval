@@ -4,6 +4,7 @@
 static const char *log_level_str[] = {
 	"INF",
 	"DBG",
+        "WARN",
 	"ERR",
         "CRIT"
 };
@@ -29,6 +30,7 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 			s = stdout;
 			break;
 		case LOG_LEVEL_ERR:
+		case LOG_LEVEL_WARN:
 		case LOG_LEVEL_CRIT:
 			s = stderr;
 			break;

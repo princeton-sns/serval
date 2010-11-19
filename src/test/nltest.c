@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <stdlib.h>
 #include <stdio.h>
 #include <asm/types.h>

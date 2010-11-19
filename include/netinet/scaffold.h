@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <bits/endian.h>
 #endif
 
 #define AF_SCAFFOLD 27
@@ -29,7 +30,7 @@
 /* IP Protocol number */
 #define IPPROTO_SCAFFOLD 43
 
-enum scaffold_state { 
+enum scaffold_sock_state { 
         SF_NEW = 0, 
         SF_REGISTER,
         SF_UNBOUND,
@@ -45,14 +46,16 @@ enum scaffold_state {
         SF_RECONNECT,
         SF_RRESPOND,
         SF_GARBAGE,
-        
-        // TCP only
+        /* TCP only */
         TCP_FINWAIT1,
         TCP_FINWAIT2,
         TCP_CLOSEWAIT,
         TCP_LASTACK,
         TCP_SIMCLOSE,
 };
+
+#define SCAFFOLD_SOCK_STATE_MIN (0)
+#define SCAFFOLD_SOCK_STATE_MAX (TCP_SIMCLOSE)
 
 struct service_id {
         union { 
@@ -72,14 +75,36 @@ static inline const char *service_id_to_str(struct service_id *srvid)
         return str;
 }
 
-struct sock_id {
-        uint16_t sid_id;
-};
-
 struct sockaddr_sf {
         sa_family_t ssf_family;
         struct service_id ssf_sid;
 };
+
+struct sock_id {
+        uint16_t sid_id;
+};
+
+struct host_addr {
+        uint8_t h_addr;
+};
+
+struct as_addr {
+        uint8_t a_addr;
+};
+/*
+struct flow_id {
+        union {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+        unsigned int ihl:4;
+        unsigned int version:4;
+#elif __BYTE_ORDER == __BIG_ENDIAN
+        struct as_addr a_addr;
+#else
+# error	"Please fix <bits/endian.h>"
+#endif
+        }
+}
+*/
 /*
 typedef struct {
     uint16_t s_ssid;

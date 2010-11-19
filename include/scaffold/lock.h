@@ -41,6 +41,9 @@ typedef pthread_mutex_t rwlock_t;
 #define write_unlock(x) pthread_mutex_unlock(x)
 #define read_unlock(x) pthread_mutex_unlock(x)
 
+#define local_bh_disable()
+#define local_bh_enable()
+
 #endif /* __KERNEL__ */
 
 #endif /* _LOCK_H */

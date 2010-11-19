@@ -33,7 +33,6 @@ struct sock {
 	unsigned short          sk_family;
         struct hlist_node	sk_node;
 	atomic_t		sk_refcnt;
-	//int			skc_tx_queue_mapping;
         unsigned int		sk_shutdown  : 2,
 				sk_no_check  : 2,
 				sk_userlocks : 4,
@@ -214,18 +213,36 @@ static inline int sock_intr_errno(long timeo)
 	return timeo == MAX_SCHEDULE_TIMEOUT ? -ERESTARTSYS : -EINTR;
 }
 
+void sock_wfree(struct sk_buff *skb);
+void sock_rfree(struct sk_buff *skb);
+
+static inline void skb_set_owner_w(struct sk_buff *skb, struct sock *sk)
+{
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = sock_wfree;
+	/*
+	 * We used to take a refcount on sk, but following operation
+	 * is enough to guarantee sk_free() wont free this sock until
+	 * all in-flight packets are completed
+	 */
+	atomic_add(skb->truesize, &sk->sk_wmem_alloc);
+}
+
+static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
+{
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = sock_rfree;
+	atomic_add(skb->truesize, &sk->sk_rmem_alloc);
+	/* sk_mem_charge(sk, skb->truesize); */
+}
 
 void sock_init_data(struct socket *sock, struct sock *sk);
 
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
-
-static inline void sk_free(struct sock *sk)
-{        
-        if (sk->sk_destruct)
-                sk->sk_destruct(sk);
-        free(sk);
-}
+void sk_free(struct sock *sk);
 
 static inline void sock_hold(struct sock *sk)
 {
@@ -285,6 +302,7 @@ static inline void sock_graft(struct sock *sk, struct socket *parent)
 	write_unlock(&sk->sk_callback_lock);
 }
 
+void sk_common_release(struct sock *sk);
 
 #endif /* __KERNEL__ */
 
