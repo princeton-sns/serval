@@ -6,3 +6,5 @@ stags:
 
 clean-local:
 	rm -f *~
+	rm -f include/netinet/*~
+	rm -f include/scaffold/*~

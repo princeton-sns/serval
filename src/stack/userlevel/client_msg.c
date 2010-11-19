@@ -5,9 +5,9 @@
 #include <string.h>
 #include <errno.h>
 #include <scaffold/debug.h>
-#include <userlevel/msg_ipc.h>
+#include <userlevel/client_msg.h>
 
-static const char *msg_ipc_str[] = {
+static const char *client_msg_str[] = {
 	"MSG_UNKNOWN",
 	"MSG_BIND_REQ", 
 	"MSG_BIND_RSP",
@@ -35,72 +35,72 @@ static const char *msg_ipc_str[] = {
 	NULL
 };
 
-static unsigned int msg_ipc_lengths[] = {
-	MSG_IPC_HDR_LEN,
-	MSG_IPC_BIND_REQ_LEN,
-	MSG_IPC_BIND_RSP_LEN,
-	MSG_IPC_CONNECT_REQ_LEN,
-	MSG_IPC_CONNECT_RSP_LEN,
-	MSG_IPC_LISTEN_REQ_LEN,
-	MSG_IPC_LISTEN_RSP_LEN,
-	MSG_IPC_ACCEPT_REQ_LEN,
-	MSG_IPC_ACCEPT_RSP_LEN,
-	MSG_IPC_ACCEPT2_REQ_LEN,
-	MSG_IPC_ACCEPT2_RSP_LEN,
-	MSG_IPC_SEND_REQ_LEN,
-	MSG_IPC_SEND_RSP_LEN,
-	MSG_IPC_RECV_REQ_LEN,
-	MSG_IPC_RECV_RSP_LEN,
-	MSG_IPC_MIG_REQ_LEN,
-	MSG_IPC_MIG_RSP_LEN,
-	MSG_IPC_RECONN_REQ_LEN,
-	MSG_IPC_RECONN_RSP_LEN,
-	MSG_IPC_CLOSE_REQ_LEN,
-	MSG_IPC_CLOSE_RSP_LEN,
-	MSG_IPC_RECVMSG_LEN,
-	MSG_IPC_CLEAR_DATA_LEN,
-	MSG_IPC_HAVE_DATA_LEN
+static unsigned int client_msg_lengths[] = {
+	CLIENT_MSG_HDR_LEN,
+	CLIENT_MSG_BIND_REQ_LEN,
+	CLIENT_MSG_BIND_RSP_LEN,
+	CLIENT_MSG_CONNECT_REQ_LEN,
+	CLIENT_MSG_CONNECT_RSP_LEN,
+	CLIENT_MSG_LISTEN_REQ_LEN,
+	CLIENT_MSG_LISTEN_RSP_LEN,
+	CLIENT_MSG_ACCEPT_REQ_LEN,
+	CLIENT_MSG_ACCEPT_RSP_LEN,
+	CLIENT_MSG_ACCEPT2_REQ_LEN,
+	CLIENT_MSG_ACCEPT2_RSP_LEN,
+	CLIENT_MSG_SEND_REQ_LEN,
+	CLIENT_MSG_SEND_RSP_LEN,
+	CLIENT_MSG_RECV_REQ_LEN,
+	CLIENT_MSG_RECV_RSP_LEN,
+	CLIENT_MSG_MIG_REQ_LEN,
+	CLIENT_MSG_MIG_RSP_LEN,
+	CLIENT_MSG_RECONN_REQ_LEN,
+	CLIENT_MSG_RECONN_RSP_LEN,
+	CLIENT_MSG_CLOSE_REQ_LEN,
+	CLIENT_MSG_CLOSE_RSP_LEN,
+	CLIENT_MSG_RECVMSG_LEN,
+	CLIENT_MSG_CLEAR_DATA_LEN,
+	CLIENT_MSG_HAVE_DATA_LEN
 };
 
-const char* msg_ipc_type_to_str(msg_type_t type)
+const char* client_msg_type_to_str(client_msg_type_t type)
 {
-	return msg_ipc_str[type];
+	return client_msg_str[type];
 }
 
-const char *msg_ipc_to_typestr(struct msg_ipc *msg)
+const char *client_msg_to_typestr(struct client_msg *msg)
 {
-	if (msg->type < 0 || msg->type >= MAX_MSG_TYPE)
-		return msg_ipc_str[MSG_UNKNOWN];
+	if (msg->type < 0 || msg->type >= MAX_CLIENT_MSG_TYPE)
+		return client_msg_str[MSG_UNKNOWN];
 
-	return msg_ipc_str[msg->type];
+	return client_msg_str[msg->type];
 }
 
-int msg_ipc_print(struct msg_ipc *msg, char *buf, int size)
+int client_msg_print(struct client_msg *msg, char *buf, int size)
 {
 	if (!msg || !buf)
 		return -1;
 
 	return snprintf(buf, size, "type=%s payload_length=%u\n",
-			msg_ipc_to_typestr(msg), msg->payload_length);
+			client_msg_to_typestr(msg), msg->payload_length);
 }
 
-void msg_ipc_free(struct msg_ipc *msg)
+void client_msg_free(struct client_msg *msg)
 {
 	if (msg)
 		free(msg);
 }
 
-int msg_ipc_read(int sock, struct msg_ipc **msg)
+int client_msg_read(int sock, struct client_msg **msg)
 {
-	struct msg_ipc *msg_tmp;
+	struct client_msg *msg_tmp;
 	ssize_t len;
 	
-	msg_tmp = (struct msg_ipc *)malloc(MSG_IPC_HDR_LEN);
+	msg_tmp = (struct client_msg *)malloc(CLIENT_MSG_HDR_LEN);
 
 	if (!msg_tmp)
 		return -1;
 
-	len = recv(sock, msg_tmp, MSG_IPC_HDR_LEN, 0);
+	len = recv(sock, msg_tmp, CLIENT_MSG_HDR_LEN, 0);
 
 	if (len == -1) {
 		LOG_ERR("Message read error : %s\n", strerror(errno));
@@ -109,25 +109,25 @@ int msg_ipc_read(int sock, struct msg_ipc **msg)
 	} else if (len == 0) {
                 free(msg_tmp);
 		return 0;
-	} else if (len < MSG_IPC_HDR_LEN) {
+	} else if (len < CLIENT_MSG_HDR_LEN) {
 		LOG_ERR("Message too short\n");
 		free(msg_tmp);
 		return -1;
 	}
 	
 	LOG_DBG("Message %s payload_length=%u\n", 
-		msg_ipc_to_typestr(msg_tmp), msg_tmp->payload_length);
+		client_msg_to_typestr(msg_tmp), msg_tmp->payload_length);
 
-	len = msg_tmp->payload_length + MSG_IPC_HDR_LEN;
+	len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
 
-	if (len != msg_ipc_lengths[msg_tmp->type]) {
+	if (len != client_msg_lengths[msg_tmp->type]) {
 		LOG_ERR("Message %s does not match message type length (%zd/%u)\n", 
-			msg_ipc_to_typestr(msg_tmp), len, msg_ipc_lengths[msg_tmp->type]);
+			client_msg_to_typestr(msg_tmp), len, client_msg_lengths[msg_tmp->type]);
 		free(msg_tmp);
 		return -1;
 	}
 	/* Read payload */
-	*msg = (struct msg_ipc *)realloc(msg_tmp, MSG_IPC_HDR_LEN + msg_tmp->payload_length);
+	*msg = (struct client_msg *)realloc(msg_tmp, CLIENT_MSG_HDR_LEN + msg_tmp->payload_length);
 
 	if (!*msg) {
 		free(msg_tmp);
@@ -147,12 +147,12 @@ int msg_ipc_read(int sock, struct msg_ipc **msg)
 		return -1;
 	}
 	
-	return MSG_IPC_HDR_LEN + (*msg)->payload_length;
+	return CLIENT_MSG_HDR_LEN + (*msg)->payload_length;
 }
 
-int msg_ipc_write(int sock, struct msg_ipc *msg)
+int client_msg_write(int sock, struct client_msg *msg)
 {
-	int ret = send(sock, msg, MSG_IPC_HDR_LEN + msg->payload_length, MSG_DONTWAIT);
+	int ret = send(sock, msg, CLIENT_MSG_HDR_LEN + msg->payload_length, MSG_DONTWAIT);
 
         if (ret == -1) {
                 switch (errno) {
@@ -170,10 +170,10 @@ int msg_ipc_write(int sock, struct msg_ipc *msg)
         return ret;
 }
 
-void msg_ipc_hdr_init(struct msg_ipc *msg, msg_type_t type)
+void client_msg_hdr_init(struct client_msg *msg, client_msg_type_t type)
 {
-	msg->version = MSG_IPC_VERSION;
+	msg->version = CLIENT_MSG_VERSION;
 	msg->type = type;
-	msg->payload_length = msg_ipc_lengths[msg->type] - MSG_IPC_HDR_LEN;
+	msg->payload_length = client_msg_lengths[msg->type] - CLIENT_MSG_HDR_LEN;
 	memset(msg->payload, 0, msg->payload_length);
 }

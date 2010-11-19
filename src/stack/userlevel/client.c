@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <userlevel/client.h>
-#include <userlevel/msg_ipc.h>
+#include <userlevel/client_msg.h>
 
 struct client {
 	client_type_t type;
@@ -39,18 +39,18 @@ static void make_client_key(void)
 	pthread_key_create(&client_key, NULL);
 }
 
-typedef int (*msg_handler_t)(struct client *, struct msg_ipc *);
+typedef int (*msg_handler_t)(struct client *, struct client_msg *);
 
-static int dummy_msg_handler(struct client *c, struct msg_ipc *msg)
+static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 {
 	LOG_DBG("Client %u handling message type %s\n", 
-		c->id, msg_ipc_to_typestr(msg));
+		c->id, client_msg_to_typestr(msg));
 
 	return 0;
 }
 
-static int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg);
-static int client_handle_connect_req_msg(struct client *c, struct msg_ipc *msg);
+static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
@@ -255,10 +255,10 @@ int client_signal_lower(struct client *c)
 	return sz == -1 ? -1 : ret;
 }
 
-int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg)
+int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct msg_ipc_bind_req *br = (struct msg_ipc_bind_req *)msg;
-	struct msg_ipc_bind_rsp rsp;
+	struct client_msg_bind_req *br = (struct client_msg_bind_req *)msg;
+	struct client_msg_bind_rsp rsp;
         struct socket *sock = c->sock;
         struct sockaddr_sf addr;
 	int ret;
@@ -266,7 +266,7 @@ int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg)
 	LOG_DBG("bind request for service id %s\n", 
 		service_id_to_str(&br->srvid));	
 
-	msg_ipc_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
+	client_msg_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
         
         addr.ssf_family = AF_SCAFFOLD;
         memcpy(&addr.ssf_sid, &br->srvid, sizeof(br->srvid));
@@ -277,20 +277,20 @@ int client_handle_bind_req_msg(struct client *c, struct msg_ipc *msg)
                 if (KERN_ERR(ret) == ERESTARTSYS) {
                         LOG_ERR("Bind was interrupted\n");
                         rsp.error = EINTR;
-                        return msg_ipc_write(c->fd, &rsp.msghdr);
+                        return client_msg_write(c->fd, &rsp.msghdr);
                 }
                 LOG_ERR("Bind failed: %s\n", KERN_STRERROR(ret));
                 rsp.error = KERN_ERR(ret);
-                return msg_ipc_write(c->fd, &rsp.msghdr);
+                return client_msg_write(c->fd, &rsp.msghdr);
         }
 
         /* TODO: Bind should not return here... */
-	return msg_ipc_write(c->fd, &rsp.msghdr);
+	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
-int client_handle_connect_req_msg(struct client *c, struct msg_ipc *msg)
+int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct msg_ipc_connect_req *cr = (struct msg_ipc_connect_req *)msg;
+	struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
 	
 	LOG_DBG("connect request for service id %s\n", 
 		service_id_to_str(&cr->srvid));	
@@ -300,10 +300,10 @@ int client_handle_connect_req_msg(struct client *c, struct msg_ipc *msg)
 
 static int client_handle_msg(struct client *c)
 {
-	struct msg_ipc *msg;
+	struct client_msg *msg;
 	int ret;
 	
-	ret = msg_ipc_read(c->fd, &msg);
+	ret = client_msg_read(c->fd, &msg);
 
 	if (ret < 1)
 		return ret;
@@ -314,7 +314,7 @@ static int client_handle_msg(struct client *c)
                 LOG_ERR("message handler error: %s\n", strerror(errno));
         }
         
-	msg_ipc_free(msg);
+	client_msg_free(msg);
 
 	return ret;
 }

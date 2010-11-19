@@ -14,7 +14,7 @@ scaffold_SOURCES = \
 	userlevel/skbuff.c \
 	userlevel/timer.c \
 	userlevel/wait.c \
-	userlevel/msg_ipc.c \
+	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/packet.c \
 	userlevel/scaffold.c
@@ -43,17 +43,11 @@ SCAFFOLD_HDR = \
 
 noinst_HEADERS = \
 	$(SCAFFOLD_HDR) \
-	userlevel/msg_ipc.h \
+	userlevel/client_msg.h \
 	userlevel/client.h
 
-#scaffold_CFLAGS = $(CFLAGS)
 scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
 scaffold_LDFLAGS =-lpthread -lrt
-
-#lib_LTLIBRARIES = libstack.la
-#libstack_la_SOURCES = scaffold_sock.c
-#libstack_la_CXXFLAGS =-I$(top_builddir)/include
-#libstack_la_LDFLAGS =
 
 if KERNEL
 # scaffold module
@@ -79,7 +73,8 @@ SCAFFOLD_KERNEL_SRC = \
 
 SCAFFOLD_KERNEL_DEP = \
 	$(SCAFFOLD_HDR) \
-	$(SCAFFOLD_KERNEL_HDR)
+	$(SCAFFOLD_KERNEL_HDR) \
+	$(SCAFFOLD_KERNEL_SRC)
 
 EXTRA_DIST = \
 	$(SCAFFOLD_KERNEL_HDR) \

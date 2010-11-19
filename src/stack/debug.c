@@ -16,7 +16,8 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 	
 #if defined(__KERNEL__)
 	pr_info("[%s {%d} %3s]%s: ", 
-		get_strtime(), task_pid_nr(current), log_level_str[level], func);
+		get_strtime(), task_pid_nr(current), 
+                log_level_str[level], func);
 	vprintk(format, ap);
 #else
 	{

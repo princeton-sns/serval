@@ -46,10 +46,13 @@ const char *get_strtime(void)
 
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
 {
+        unsigned char *ip = (unsigned char *)src;
+
         if (size < 16 || af != AF_INET)
                 return NULL;
         
-        sprintf(dst, "xxx.xxx.xxx.xxx");
+        sprintf(dst, "%u.%u.%u.%u", 
+                ip[0], ip[1], ip[2], ip[3]);
         
         return dst;
 }
