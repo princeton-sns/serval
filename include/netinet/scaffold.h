@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <bits/endian.h>
+//#include <bits/endian.h>
 #endif
 
 #define AF_SCAFFOLD 27

@@ -8,7 +8,7 @@
 #include <errno.h>
 #endif
 
-const char *mac_ntop(const void *src, char *dst, socklen_t size)
+const char *mac_ntop(const void *src, char *dst, size_t size)
 {	
 	const char *mac = (const char *)src;
 
@@ -79,4 +79,37 @@ int memcpy_fromiovec(unsigned char *to, struct iovec *iov, int len)
 
         return 0;
 }
+
+
+#if !defined(HAVE_PPOLL)
+#include <poll.h>
+#include <signal.h>
+
+int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *set)
+{
+        int to = 0;
+        sigset_t oldset;
+        int ret;
+
+        if (!timeout) {
+                to = -1;
+        } else if (timeout->tv_sec == 0 && timeout->tv_nsec == 0)  {
+                to = 0;
+        } else {
+                to = timeout->tv_sec * 1000 + (timeout->tv_nsec / 1000000);
+        }
+
+        if (set) {
+                /* TODO: make these operations atomic. */
+                sigprocmask(SIG_SETMASK, set, &oldset);
+                ret = poll(fds, nfds, to);
+                sigprocmask(SIG_SETMASK, &oldset, NULL);
+        } else {
+                ret = poll(fds, nfds, to);
+        }
+        return ret;
+}
+
+#endif /* OS_ANDROID */
+
 #endif /* __KERNEL__ */

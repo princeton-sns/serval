@@ -45,12 +45,12 @@ struct scaffold_hslot {
 
 struct scaffold_table {
 	struct scaffold_hslot *hash;
-	int mask;
+	unsigned int mask;
 };
 
 static inline unsigned int scaffold_hashfn(struct net *net, 
                                            void *key,
-                                           socklen_t keylen,
+                                           size_t keylen,
                                            unsigned int mask)
 {
         unsigned int num = 0;
@@ -63,7 +63,7 @@ extern struct scaffold_table scaffold_table;
 static inline struct scaffold_hslot *scaffold_hashslot(struct scaffold_table *table,
 						       struct net *net, 
                                                        void *key,
-                                                       socklen_t keylen)
+                                                       size_t keylen)
 {
 	return &table->hash[scaffold_hashfn(net, key, keylen, table->mask)];
 }

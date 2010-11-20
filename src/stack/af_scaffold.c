@@ -144,7 +144,7 @@ static int scaffold_autobind(struct sock *sk)
         get_random_bytes(&ssk->local_sid, sizeof(struct service_id));
 #else
         {
-                int i;
+                unsigned int i;
                 unsigned char *byte = (unsigned char *)&ssk->local_sid;
 
                 for (i = 0; i  < sizeof(struct service_id); i++) {
@@ -165,7 +165,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
         int ret = 0, cond = 1;
         
-        if (addr_len < sizeof(struct sockaddr_sf))
+        if ((unsigned int)addr_len < sizeof(struct sockaddr_sf))
                 return -EINVAL;
         else if (addr_len % sizeof(struct sockaddr_sf) != 0)
                 return -EINVAL;
@@ -713,7 +713,7 @@ static void scaffold_sock_destruct(struct sock *sk)
         __skb_queue_purge(&sk->sk_receive_queue);
 	/* __skb_queue_purge(&sk->sk_error_queue); */
 
-	if (sk->sk_type == SOCK_STREAM && sk->sk_state != TCP_CLOSE) {
+	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SF_CLOSED) {
 		LOG_ERR("Attempt to release Scaffold TCP socket in state %d %p\n",
                         sk->sk_state, sk);
 		return;

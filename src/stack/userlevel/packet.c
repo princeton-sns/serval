@@ -1,7 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <sys/socket.h>
 #include <netpacket/packet.h>
+#if !defined(OS_ANDROID)
 #include <net/ethernet.h> /* the L2 protocols */
+#endif
 #include <netinet/ether.h>
 #include <net/if_packet.h>
 #include <net/if.h>

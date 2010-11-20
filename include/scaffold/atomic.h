@@ -12,6 +12,28 @@ typedef struct {
 
 #define ATOMIC_INIT(i)	{ (i) }
 
+#if defined(OS_ANDROID)
+/*
+  TODO: Fix atomic operations for Android.
+*/
+
+static inline int atomic_read(atomic_t *v)
+{
+	return v->value;
+}
+
+static inline int atomic_add_return(int i, atomic_t *v)
+{
+	return ++v->value;
+}
+
+static inline int atomic_sub_return(int i, atomic_t *v)
+{
+	return --v->value;
+}
+
+#else
+
 static inline int atomic_read(atomic_t *v)
 {
 	return __sync_add_and_fetch(&v->value, 0);
@@ -26,6 +48,8 @@ static inline int atomic_sub_return(int i, atomic_t *v)
 {
 	return __sync_sub_and_fetch(&v->value, i);
 }
+
+#endif /* OS_ANDROID */
 
 static inline int atomic_add_negative(int i, atomic_t *v)
 {

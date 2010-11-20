@@ -140,7 +140,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 
 	if (msg->msg_name) {
 		struct sockaddr_sf * addr = (struct sockaddr_sf *)msg->msg_name;
-		if (msg->msg_namelen < sizeof(*addr))
+		if ((unsigned)msg->msg_namelen < sizeof(*addr))
 			return -EINVAL;
 		if (addr->ssf_family != AF_SCAFFOLD) {
 			if (addr->ssf_family != AF_UNSPEC)
@@ -207,7 +207,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 		goto out;
 	}
 
-        if (msg->msg_namelen < sizeof(struct sockaddr_sf)) {
+        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sf)) {
                 retval = -EINVAL;
                 LOG_DBG("address length is incorrect\n");
                 goto out;
@@ -266,7 +266,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
                         /* Copy also our local service id to the
                          * address buffer if size admits */
                         if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)(msg->msg_name + sizeof(struct sockaddr_sf));
+                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
                                 sfaddr->ssf_family = AF_SCAFFOLD;
 
                                 memcpy(&sfaddr->ssf_sid, &ss->local_sid, 

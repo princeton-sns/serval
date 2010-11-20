@@ -84,7 +84,7 @@ void __exit scaffold_table_fini(struct scaffold_table *table)
 
 static struct sock *scaffold_sock_lookup(struct scaffold_table *table,
                                          struct net *net, void *key, 
-                                         socklen_t keylen)
+                                         size_t keylen)
 {
         struct scaffold_hslot *slot;
         struct hlist_node *walk;

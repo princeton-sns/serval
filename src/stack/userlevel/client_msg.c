@@ -69,7 +69,7 @@ const char* client_msg_type_to_str(client_msg_type_t type)
 
 const char *client_msg_to_typestr(struct client_msg *msg)
 {
-	if (msg->type < 0 || msg->type >= MAX_CLIENT_MSG_TYPE)
+	if (msg->type >= MAX_CLIENT_MSG_TYPE)
 		return client_msg_str[MSG_UNKNOWN];
 
 	return client_msg_str[msg->type];
@@ -94,7 +94,8 @@ int client_msg_read(int sock, struct client_msg **msg)
 {
 	struct client_msg *msg_tmp;
 	ssize_t len;
-	
+	unsigned int msg_len = 0;
+
 	msg_tmp = (struct client_msg *)malloc(CLIENT_MSG_HDR_LEN);
 
 	if (!msg_tmp)
@@ -109,7 +110,7 @@ int client_msg_read(int sock, struct client_msg **msg)
 	} else if (len == 0) {
                 free(msg_tmp);
 		return 0;
-	} else if (len < CLIENT_MSG_HDR_LEN) {
+	} else if (len < (ssize_t)CLIENT_MSG_HDR_LEN) {
 		LOG_ERR("Message too short\n");
 		free(msg_tmp);
 		return -1;
@@ -118,11 +119,11 @@ int client_msg_read(int sock, struct client_msg **msg)
 	LOG_DBG("%s payload_length=%u\n", 
 		client_msg_to_typestr(msg_tmp), msg_tmp->payload_length);
         
-	len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
+	msg_len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
 
-	if (len != client_msg_lengths[msg_tmp->type]) {
+	if (msg_len != client_msg_lengths[msg_tmp->type]) {
 		LOG_ERR("%s does not match message type length (%zd/%u)\n", 
-			client_msg_to_typestr(msg_tmp), len, client_msg_lengths[msg_tmp->type]);
+			client_msg_to_typestr(msg_tmp), msg_len, client_msg_lengths[msg_tmp->type]);
 		free(msg_tmp);
 		return -1;
 	}

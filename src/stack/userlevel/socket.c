@@ -14,7 +14,9 @@
 /* Setting NPROTO to AF_MAX is overkill here, since we effectively
  * only register Scaffold protocols. Anyhow, the net_families is just
  * an array of pointers, so the waste is not such a big deal. */
+#ifndef NPROTO
 #define NPROTO AF_MAX 
+#endif
 
 static DEFINE_SPINLOCK(net_family_lock);
 static const struct net_proto_family *net_families[NPROTO] = { 0 };

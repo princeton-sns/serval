@@ -369,8 +369,7 @@ static void *client_thread(void *arg)
 
 		nfds = MAX(c->fd, c->pipefd[0]) + 1;
 
-		/* ret = pselect(nfds, &readfds, NULL, NULL, to, &c->sigset); */
-		ret = pselect(nfds, &readfds, NULL, NULL, NULL, NULL);
+		ret = select(nfds, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {
 			if (errno == EINTR) {

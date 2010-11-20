@@ -91,8 +91,14 @@ void garbage_collect_clients(unsigned long data)
 }
 
 #define NUM_SERVER_SOCKS 2
+
+#if defined(OS_ANDROID)
+#define UDP_SERVER_PATH "/cache/scaffold-udp.sock"
+#define TCP_SERVER_PATH "/cache/scaffold-tcp.sock"
+#else
 #define UDP_SERVER_PATH "/tmp/scaffold-udp.sock"
 #define TCP_SERVER_PATH "/tmp/scaffold-tcp.sock"
+#endif 
 
 static const char *server_sock_path[] = {
 	UDP_SERVER_PATH,
@@ -212,10 +218,26 @@ static int server_run(void)
 		} else {
 			to = &timeout;
 		}
-		
+#if defined(HAVE_PSELECT)
 		ret = pselect(maxfd + 1, &readfds, 
-			      NULL, NULL, to, &orig_sigset);
-                
+			      NULL, NULL, to, &orig_sigset);		
+#else
+		{
+			struct timeval *tv = NULL;
+			sigset_t old_set;
+			
+			sigprocmask(SIG_SETMASK, &orig_sigset, &old_set);
+			
+			if (should_exit) {
+				sigprocmask(SIG_SETMASK, &old_set, NULL);
+				break;
+			}
+				
+			ret = select(maxfd + 1, &readfds, NULL, NULL, tv);
+
+			sigprocmask(SIG_SETMASK, &old_set, NULL);
+		}
+#endif
 		if (ret == -1) {
 			if (errno == EINTR) {
 				LOG_INF("select interrupted\n");
@@ -279,9 +301,11 @@ static int server_run(void)
 
 		if (pthread_join(client_get_thread(c), NULL) != 0) {
 			if (errno == EINVAL) {
-				LOG_DBG("Client %u probably detached\n", client_get_id(c));
+				LOG_DBG("Client %u probably detached\n", 
+					client_get_id(c));
 			} else {
-				LOG_ERR("Client %u could not be joined\n", client_get_id(c));
+				LOG_ERR("Client %u could not be joined\n", 
+					client_get_id(c));
 			}
 		}
 		client_destroy(c);

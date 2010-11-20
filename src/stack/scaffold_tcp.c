@@ -182,7 +182,8 @@ static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
         return ret;
 }
 
-static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
+static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, 
+                                struct msghdr *msg,
                                 size_t len, int nonblock, int flags, int *addr_len)
 {
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
@@ -192,7 +193,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 
         lock_sock(sk);
        
-        if (msg->msg_namelen < sizeof(struct sockaddr_sf)) {
+        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sf)) {
                 retval = -EINVAL;
                 LOG_DBG("address length is incorrect\n");
                 goto out;
@@ -201,7 +202,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 	timeo = sock_rcvtimeo(sk, nonblock);
         
 	do {
-                int datalen = 0;
+                ssize_t datalen = 0;
 
                 if (!scaffold_sock_is_valid_conn_state(sk->sk_state)) {
                         if (sk->sk_state == SF_RECONNECT) {
@@ -270,7 +271,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 		sk_wait_data(sk, &timeo);
 		continue;
 	found_data:
-		if (len > datalen) {
+		if (len > (size_t)datalen) {
                         len = datalen;
                 }
                 
@@ -285,7 +286,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
                         /* Copy also our local service id to the
                          * address buffer if size admits */
                         if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)(msg->msg_name + sizeof(struct sockaddr_sf));
+                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
                                 sfaddr->ssf_family = AF_SCAFFOLD;
 
                                 memcpy(&sfaddr->ssf_sid, &scaffold_sk(sk)->local_sid, 
