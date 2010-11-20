@@ -223,9 +223,16 @@ static int server_run(void)
 			      NULL, NULL, to, &orig_sigset);		
 #else
 		{
-			struct timeval *tv = NULL;
+			/* Emulate pselect behavior */
+			struct timeval tv, *t = NULL;
 			sigset_t old_set;
-			
+
+			if (to) {
+				tv.tv_sec = to->tv_sec;
+				tv.tv_usec = to->tv_nsec / 1000;
+				t = &tv;
+			}
+
 			sigprocmask(SIG_SETMASK, &orig_sigset, &old_set);
 			
 			if (should_exit) {
@@ -233,7 +240,7 @@ static int server_run(void)
 				break;
 			}
 				
-			ret = select(maxfd + 1, &readfds, NULL, NULL, tv);
+			ret = select(maxfd + 1, &readfds, NULL, NULL, t);
 
 			sigprocmask(SIG_SETMASK, &old_set, NULL);
 		}
