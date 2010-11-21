@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
+#include <scaffold/netdevice.h>
 #include <linux/skbuff.h>
 #include <net/ip.h>
 #include <input.h>
@@ -10,6 +11,11 @@
 #if defined(USE_NETFILTER)
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
+
+int packet_xmit(struct sk_buff *skb)
+{
+        return dev_queue_xmit(skb);
+}
 
 static unsigned int scaffold_packet_rcv(unsigned int hooknum,
                                         struct sk_buff *skb,

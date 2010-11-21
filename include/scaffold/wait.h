@@ -2,7 +2,9 @@
 #ifndef _WAIT_H_
 #define _WAIT_H_
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <linux/wait.h>
 #else
 #include <scaffold/list.h>
@@ -185,6 +187,6 @@ do {									\
 	__ret;								\
 })
 
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 #endif /* _WAIT_H_ */

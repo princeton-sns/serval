@@ -2,25 +2,24 @@
 #ifndef _SKBUFF_H_
 #define _SKBUFF_H_
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <linux/skbuff.h>
 #define FREE_SKB(skb) kfree_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz, prio)
-#else
+#endif
+
+#if defined(OS_USER)
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
 #include <stdint.h>
-#include <net/if.h>
 
+struct net_device;
 struct sock;
 struct sk_buff;
 typedef unsigned int sk_buff_data_t;
-
-struct net_device {
-        int ifindex;
-        char name[IFNAMSIZ];
-};
 
 #define FREE_SKB(skb) free_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz)
@@ -53,6 +52,10 @@ struct sk_buff {
 	uint16_t		mac_len,
 				hdr_len;
         unsigned char           cloned:1, pkt_type:3;
+        union {
+		uint32_t	mark; /* Used for packet type in Scaffold */
+		uint32_t	dropcount;
+	};
 	sk_buff_data_t		transport_header;
 	sk_buff_data_t		network_header;
 	sk_buff_data_t		mac_header;
@@ -70,16 +73,6 @@ struct sk_buff {
 void __free_skb(struct sk_buff *skb);
 void free_skb(struct sk_buff *);
 struct sk_buff *alloc_skb(unsigned int size);
-
-/* 
-   This function is used to fake a netdevice in user space.
-   Memory is allocated for a netdevice and it is initialized
-   with the passed information.
-
-   The memory is automatically freed when another netdevice
-   is set, or the skb is freed.
- */
-int skb_alloc_and_set_netdevice(struct sk_buff *skb, int ifindex, const char *name);
 
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
@@ -537,6 +530,19 @@ static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 	return (struct tcphdr *)skb_transport_header(skb);
 }
 
-#endif /* __KERNEL__ */
+#endif /* OS_USER */
+
+#include <netinet/scaffold.h>
+
+static inline enum scaffold_packet_type skb_scaffold_packet_type(struct sk_buff *skb)
+{
+        return (enum scaffold_packet_type)skb->mark;
+}
+
+static inline void skb_set_scaffold_packet_type(struct sk_buff *skb, 
+                                                enum scaffold_packet_type type)
+{
+        skb->mark = type;
+}
 
 #endif /* _SKBUFF_H_ */

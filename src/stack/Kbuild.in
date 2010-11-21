@@ -7,10 +7,12 @@ scaffold-y := \
 	   linux/scaffold_netlink.o \
 	   linux/proc.o \
 	   linux/packet.o \
+	   linux/module.o \
 	   debug.o \
 	   platform.o \
 	   af_scaffold.o \
 	   input.o \
+	   output.o \
 	   scaffold_ipv4.o \
 	   scaffold_sock.o \
 	   scaffold_udp.o \

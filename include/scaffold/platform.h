@@ -2,7 +2,33 @@
 #ifndef _PLATFORM_H
 #define _PLATFORM_H
 
+/* Detect platform */
+#if defined(__unix__)
+#define OS_UNIX 1
+#if !defined(__KERNEL__)
+#define OS_USER 1
+#endif
+#endif
+
+#if defined(__linux__)
 #define OS_LINUX 1
+#if defined(__KERNEL__)
+#define OS_KERNEL 1
+#define OS_LINUX_KERNEL 1
+#else
+#define OS_USER 1
+#endif
+#endif /* OS_LINUX */
+
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
+#define OS_BSD 1
+#define OS_USER 1
+#endif
+
+#if defined(__APPLE__)
+#define OS_MACOSX 1
+#define OS_USER 1
+#endif
 
 /* TODO: Detect these in configure */
 #define HAVE_LIBIO 1
@@ -10,12 +36,14 @@
 #define HAVE_PSELECT 1
 
 #if defined(OS_ANDROID)
+#undef OS_KERNEL
 #undef HAVE_LIBIO
 #undef HAVE_PPOLL
 #undef HAVE_PSELECT
+#define HAVE_OFFSETOF 1
 #endif
 
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <net/sock.h>
@@ -38,15 +66,21 @@ static inline struct net *sock_net(struct sock *sk)
 }
 
 #endif /* LINUX_VERSION_CODE */
+#endif /* OS_LINUX_KERNEL */
 
-#else /* User-level */
+#if defined(OS_USER)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/uio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
-#if defined(HAVE_LIBIO)
+#if defined(OS_LINUX)
+#include <endian.h>
+#elif defined(OS_BSD)
+#include <sys/endian.h>
+#endif
+#if HAVE_LIBIO
 #include <libio.h>
 #endif
 
@@ -67,7 +101,7 @@ typedef unsigned char gfp_t;
 
 #define panic(name) { int *foo = NULL; *foo = 1; } /* Cause a sefault */
 
-#if !defined(OS_ANDROID)
+#if !HAVE_OFFSETOF
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
 #endif
 
@@ -97,7 +131,7 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_ANDROID */
 
-#endif /* __KERNEL__ */
+#endif /* OS_USER */
 
 const char *mac_ntop(const void *src, char *dst, size_t size);
 int mac_pton(const char *src, void *dst);

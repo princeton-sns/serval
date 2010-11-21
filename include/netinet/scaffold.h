@@ -15,7 +15,11 @@
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-//#include <bits/endian.h>
+#if defined(__linux__)
+#include <endian.h>
+#elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
+#include <sys/endian.h>
+#endif
 #endif
 
 #define AF_SCAFFOLD 27
@@ -91,20 +95,34 @@ struct host_addr {
 struct as_addr {
         uint8_t a_addr;
 };
-/*
+
 struct flow_id {
         union {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-        unsigned int ihl:4;
-        unsigned int version:4;
-#elif __BYTE_ORDER == __BIG_ENDIAN
-        struct as_addr a_addr;
-#else
-# error	"Please fix <bits/endian.h>"
-#endif
-        }
-}
-*/
+                struct {
+                        struct as_addr as;
+                        struct host_addr host;
+                        struct sock_id sock;
+                } __fl;
+#define fl_as __fl.as
+#define fl_host __fl.host
+#define fl_sock __fl.sock
+                struct in_addr fl_addr;
+        };
+};
+
+enum scaffold_packet_type { 
+        PKT_TYPE_DATA = 0, 
+        PKT_TYPE_SYN, 
+        PKT_TYPE_SYNACK, 
+        PKT_TYPE_ACK, 
+        PKT_TYPE_RESET, 
+        PKT_TYPE_CLOSE,
+        PKT_TYPE_MIG,
+        PKT_TYPE_RSYN, 
+        PKT_TYPE_MIGDATA, 
+        PKT_TYPE_RSYNACK
+};
+
 /*
 typedef struct {
     uint16_t s_ssid;

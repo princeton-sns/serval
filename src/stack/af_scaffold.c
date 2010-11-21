@@ -1,57 +1,23 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+#if defined(OS_LINUX_KERNEL)
 #include <linux/errno.h>
 #include <linux/types.h>
 #include <linux/socket.h>
 #include <linux/sockios.h>
-#include <linux/module.h>
 #include <linux/init.h>
-#include <linux/netdevice.h>
-#include <linux/inetdevice.h>
 #include <linux/version.h>
 #include <linux/poll.h>
 #include <linux/file.h>
-#include <linux/kthread.h>
 #include <linux/string.h>
-#include <linux/udp.h>
-#include <linux/proc_fs.h>
 #include <net/protocol.h>
-#include <linux/scaffold_netlink.h>
 
-#define FREE_SKB(skb) kfree_skb(skb)
-
-MODULE_AUTHOR("Erik Nordstroem");
-MODULE_DESCRIPTION("Scaffold socket API for Linux");
-MODULE_LICENSE("GPL");
-MODULE_VERSION("0.1");
-
-#define RTO_INITIAL_DISABLED 0 // Use whatever value is set by default
-static uint rto = RTO_INITIAL_DISABLED;
-static int rto_dynamic = 0;
-static uint tx_burst = 0;
-
-module_param(rto, uint, 0);
-MODULE_PARM_DESC(rto, "Set initial RTO value (micro seconds).");
-
-module_param(rto_dynamic, int, 0);
-MODULE_PARM_DESC(rto_dynamic, "Enable dynamic RTO using Van Jacobson's algorithm.");
-
-module_param(tx_burst, uint, 0);
-MODULE_PARM_DESC(tx_burst, "Maximum packets the transmit task sends in one burst (0 = use default value).");
-
-#if defined(ENABLE_DEBUG)
-static uint debug = 0;
-module_param(debug, uint, 0);
-MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
-#endif
-
-#else /* USERLEVEL */
+#elif defined(OS_USER)
 /* User-level declarations */
 
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 /* Common includes */
-#include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/atomic.h>
 #include <scaffold/wait.h>
@@ -140,7 +106,7 @@ static int scaffold_autobind(struct sock *sk)
         */
         lock_sock(sk);
         ssk = scaffold_sk(sk);
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
         get_random_bytes(&ssk->local_sid, sizeof(struct service_id));
 #else
         {
@@ -594,7 +560,7 @@ int scaffold_release(struct socket *sock)
         return err;
 }
 
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 static unsigned int scaffold_poll(struct file *file, struct socket *sock, 
                                   poll_table *wait)
 {
@@ -697,7 +663,7 @@ static const struct proto_ops scaffold_ops = {
 	.shutdown =	scaffold_shutdown,
 	.sendmsg =	scaffold_sendmsg,
 	.recvmsg =	scaffold_recvmsg,
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 	.setsockopt =	sock_no_setsockopt,
 	.getsockopt =	sock_no_getsockopt,
 	.socketpair =	sock_no_socketpair,
@@ -838,62 +804,10 @@ static struct net_proto_family scaffold_family_ops = {
 	.owner	= THIS_MODULE,
 };
 
-EXPORT_SYMBOL(scaffold_getname);
-
-#if defined(__KERNEL__)
-static int scaffold_netdev_event(struct notifier_block *this,
-                                 unsigned long event, void *ptr)
-{
-	struct net_device *dev = (struct net_device *)ptr;
-
-        if (dev->nd_net != &init_net)
-                return NOTIFY_DONE;
-        
-	switch (event) {
-	case NETDEV_UP:
-		LOG_DBG("Netdev UP %s\n", dev->name);
-//                sfnet_handle_link_event(dev->name, 1);
-		break;
-	case NETDEV_GOING_DOWN:
-		LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
-                //              sfnet_handle_link_event(dev->name, 0);
-                break;
-	case NETDEV_DOWN:
-                LOG_DBG("Netdev DOWN\n");
-		//LOG_DBG("Netdev DOWN %s\n", dev->name);
-                break;
-	default:
-		break;
-	};
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block netdev_notifier = {
-      notifier_call:scaffold_netdev_event,
-};
-#endif /* __KERNEL__ */
-
 int __init scaffold_init(void)
 {
         int err = 0;
 
-        LOG_DBG("Loaded scaffold protocol module\n");
-       
-#if defined(__KERNEL__)
-	err = register_netdevice_notifier(&netdev_notifier);
-
-	if (err < 0) {
-                LOG_CRIT("Cannot register netdevice notifier\n");
-                goto fail_netdev_notifier;
-        }
-        err = scaffold_netlink_init();
-        
-	if (err < 0) {
-                LOG_CRIT("Cannot create netlink socket\n");
-                goto fail_netlink;
-        }
-#endif
         err = scaffold_sock_init();
 
         if (err < 0) {
@@ -921,20 +835,6 @@ int __init scaffold_init(void)
                 LOG_CRIT("Cannot register socket family\n");
                 goto fail_sock_register;
         }
-        
-/*
-        if (rto != RTO_INITIAL_DISABLED)
-                sfnet_set_param(PARAM_RTO, &rto);
-
-        sfnet_set_param(PARAM_RTO_DYNAMIC, &rto_dynamic);
-*/
-        /*
-        if (tx_burst != 0)
-                sfnet_set_param(PARAM_TX_BURST, &tx_burst);
-        */
-#if defined(ENABLE_DEBUG)
-//        sfnet_set_param(PARAM_DEBUG, &debug);
-#endif
 out:
         return err;
 
@@ -946,12 +846,6 @@ fail_proto:
 fail_packet:        
         scaffold_sock_fini();
 fail_sock:
-#if defined(__KERNEL__)
-        scaffold_netlink_fini();
-fail_netlink:
-        unregister_netdevice_notifier(&netdev_notifier);
-fail_netdev_notifier:
-#endif 
         goto out;      
 }
 
@@ -961,16 +855,4 @@ void __exit scaffold_fini(void)
 	proto_unregister(&scaffold_udp_proto);
         packet_fini();
         scaffold_sock_fini();
-#if defined(__KERNEL__)
-        scaffold_netlink_fini();
-        unregister_netdevice_notifier(&netdev_notifier);
-#endif
-        LOG_INF("Unloaded scaffold protocol module\n");
 }
-
-#if defined(__KERNEL__)
-module_init(scaffold_init)
-module_exit(scaffold_fini)
-
-MODULE_ALIAS_NETPROTO(PF_SCAFFOLD);
-#endif

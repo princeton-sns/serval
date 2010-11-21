@@ -2,11 +2,11 @@
 #ifndef _INPUT_H_
 #define _INPUT_H_
 
-#if defined(__KERNEL__)
-#include <linux/ip.h>
-#else
+#if defined(OS_USER)
 #include <netinet/ip.h>
-#endif
+#elif defined(OS_LINUX_KERNEL)
+#include <linux/ip.h>
+#endif 
 
 enum {
 	INPUT_NO_PROT = -3,

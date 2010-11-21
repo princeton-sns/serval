@@ -101,7 +101,7 @@ AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
   *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
 esac],[kernel=yes])
 
-AM_CONDITIONAL([KERNEL], [test x$kernel = xyes])
+AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes])
 
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,

@@ -2,12 +2,12 @@
 #ifndef __DEBUG_H_
 #define __DEBUG_H_
 
-#include "platform.h"
+#include <scaffold/platform.h>
 
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #include <linux/kernel.h>
 #include <linux/sched.h>
-#else
+#elif defined(OS_USER)
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -20,7 +20,7 @@
  * error codes) into userlevel ones. */
 #define KERN_ERR(err) (-(err))
 #define KERN_STRERROR(err) (strerror(KERN_ERR(err)))
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 typedef enum {
 	LOG_LEVEL_INF = 0,

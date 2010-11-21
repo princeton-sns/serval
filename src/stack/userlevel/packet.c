@@ -15,12 +15,36 @@
 #include <poll.h>
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
+#include <scaffold/netdevice.h>
 #include <input.h>
 
 static int psock = -1;
 static int pipefd[2] = { -1, -1 };
 static int should_exit = 0;
 static pthread_t pthr;
+/* Fake a netdevice for now */
+static struct net_device *dev = NULL;
+
+int packet_xmit(struct sk_buff *skb)
+{
+        int err = 0;
+        struct sockaddr_ll lladdr;
+
+        memset(&lladdr, 0, sizeof(lladdr));
+        lladdr.sll_family = AF_PACKET;
+        lladdr.sll_protocol = skb->protocol;
+        lladdr.sll_pkttype = PACKET_OTHERHOST;
+
+        err = sendto(psock, skb->data, skb->len, 0, 
+                     (struct sockaddr *)&lladdr, sizeof(lladdr));
+
+        if (err == -1) {
+                LOG_ERR("sendto error: %s\n", strerror(errno));
+                free_skb(skb);
+        }
+
+        return err;
+}
 
 int packet_signal(void)
 {
@@ -97,20 +121,17 @@ void *packet_thread(void *arg)
 
                                 if_indextoname(lladdr.sll_ifindex, ifname);
 
-                                ret = skb_alloc_and_set_netdevice(skb, 
-                                                                  lladdr.sll_ifindex, 
-                                                                  ifname);
-                                
                                 if (ret < 0) {
                                         LOG_ERR("Could not allocate net device\n");
                                         free_skb(skb);
                                         continue;
                                 }
                                 
-                                skb->dev->ifindex = lladdr.sll_ifindex;
-                                
+                                dev->ifindex = lladdr.sll_ifindex;
+                                skb->dev = dev;
                                 skb_reset_mac_header(skb);
                                 skb->pkt_type = lladdr.sll_pkttype;
+                                skb->protocol = lladdr.sll_protocol;
 
                                 /* Set head to network part of packet */
                                 skb_pull(skb, ETH_HLEN);
@@ -140,6 +161,11 @@ void *packet_thread(void *arg)
 
 int packet_init(void)
 {
+        dev = alloc_netdev(0, "eth1", ether_setup);
+
+        if (!dev)
+                return -ENOMEM;
+
 	psock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP));
 
         if (psock == -1) {
@@ -151,6 +177,7 @@ int packet_init(void)
                 LOG_ERR("could not create pipe\n");
                 close(psock);
                 psock = -1;
+                free_netdev(dev);
                 return -1;
         }
 
@@ -162,6 +189,8 @@ int packet_init(void)
                 pipefd[0] = -1;
                 close(pipefd[1]);
                 pipefd[1] = -1;
+                free_netdev(dev);
+                return -1;
         }
         return 0;
 }
@@ -188,4 +217,6 @@ void packet_fini(void)
 
         if (pipefd[1] != -1)
                 close(pipefd[1]);
+
+        free_netdev(dev);
 }

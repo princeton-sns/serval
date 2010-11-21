@@ -4,11 +4,13 @@ scaffold_SOURCES = \
 	debug.c \
 	platform.c \
 	input.c \
+	output.c \
 	af_scaffold.c \
 	scaffold_sock.c \
 	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
+	userlevel/dev.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
@@ -25,6 +27,7 @@ STACK_DIR=$(top_builddir)/src/stack
 SCAFFOLD_HDR = \
 	af_scaffold.h \
 	input.h \
+	output.h \
 	scaffold_sock.h \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
@@ -37,6 +40,7 @@ SCAFFOLD_HDR = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/netdevice.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/timer.h \
@@ -50,7 +54,6 @@ noinst_HEADERS = \
 scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
 scaffold_LDFLAGS =-lpthread -lrt
 
-if KERNEL
 # scaffold module
 KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
@@ -63,9 +66,11 @@ SCAFFOLD_KERNEL_SRC = \
 	linux/scaffold_netlink.c \
 	linux/packet.c \
 	linux/proc.c \
+	linux/module.c \
 	debug.c \
 	platform.c \
 	input.c \
+	output.c \
 	scaffold_ipv4.c \
 	scaffold_sock.c \
 	scaffold_udp.c \
@@ -78,9 +83,11 @@ SCAFFOLD_KERNEL_DEP = \
 	$(SCAFFOLD_KERNEL_SRC)
 
 EXTRA_DIST = \
+	Android.mk \
 	$(SCAFFOLD_KERNEL_HDR) \
 	$(SCAFFOLD_KERNEL_SRC)
 
+if LINUX_KERNEL
 all: scaffold.ko
 
 scaffold.ko: $(SCAFFOLD_KERNEL_DEP)
@@ -92,3 +99,4 @@ clean-local:
 	rm -f linux/*~
 	rm -f userlevel/*~
 endif # KERNEL
+

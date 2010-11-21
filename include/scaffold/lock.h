@@ -2,9 +2,13 @@
 #ifndef _LOCK_H
 #define _LOCK_H
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <linux/spinlock.h>
-#else
+#endif /* OS_LINUX_KERNEL */
+
+#if defined(OS_USER)
 #include <pthread.h>
 
 typedef pthread_mutex_t spinlock_t;
@@ -44,6 +48,6 @@ typedef pthread_mutex_t rwlock_t;
 #define local_bh_disable()
 #define local_bh_enable()
 
-#endif /* __KERNEL__ */
+#endif /* OS_USER */
 
 #endif /* _LOCK_H */

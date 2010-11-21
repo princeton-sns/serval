@@ -1,0 +1,39 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#include <scaffold/platform.h>
+#include <scaffold/skbuff.h>
+#include <scaffold/netdevice.h>
+#include <scaffold_sock.h>
+#include <output.h>
+
+extern int packet_xmit(struct sk_buff *skb);
+
+int scaffold_output(struct sk_buff *skb)
+{
+	char srcstr[18], dststr[18];
+	unsigned char broadcast[ETH_ALEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+	struct ethhdr *ethh;
+	int err;
+
+        skb_push(skb, ETH_HLEN);
+	skb_reset_mac_header(skb);
+
+	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
+			      broadcast, NULL, skb->len);
+	if (err < 0) {
+		LOG_ERR("hard_header failed\n");
+		return err;
+	}
+	ethh = eth_hdr(skb);
+	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
+	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
+
+	LOG_DBG("sending packet if=%d [%s %s 0x%04x]\n", 
+		skb->dev->ifindex, srcstr, dststr, ntohs(skb->protocol));
+	       
+	/* packet_xmit consumes the packet no matter the outcome */
+	if (packet_xmit(skb) < 0) {
+		LOG_ERR("packet_xmit failed\n");
+	}
+
+        return 0;
+}

@@ -2,10 +2,13 @@
 #ifndef _ATOMIC_H_
 #define _ATOMIC_H_
 
-#if defined(__KERNEL__)
-#include <linux/kernel.h>
-#else
+#include <scaffold/platform.h>
 
+#if defined(OS_LINUX_KERNEL)
+#include <linux/kernel.h>
+#endif /* OS_LINUX_KERNEL */
+
+#if defined(OS_USER)
 typedef struct {
 	int value;
 } atomic_t;
@@ -100,6 +103,6 @@ static inline void atomic_dec(atomic_t *v)
  */
 #define atomic_set(v, i) (((v)->value) = (i))
 
-#endif
+#endif /* OS_USER */
 
 #endif /* _ATOMIC_H_ */

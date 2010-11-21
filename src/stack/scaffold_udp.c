@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
+#include <scaffold/netdevice.h>
 #include <scaffold/skbuff.h>
 #include <scaffold_udp_sock.h>
 #include <scaffold_sock.h>
@@ -94,27 +95,27 @@ static void udp_checksum(uint16_t total_len,
 }
 
 #define EXTRA_HDR (20)
-#define UDP_MAX_HDR (14 + 20 + EXTRA_HDR) // payload + LL + IP + extra
-#define LL_RESERVE (14 + EXTRA_HDR)
+#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR) // payload + LL + IP + extra
 
 static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)        
 {
         int err;
-        unsigned short len = scaffold_udp_sk(sk)->len;
-        unsigned short tot_len = len + 20 + 14;
+        unsigned short tot_len;
         struct udphdr *uh;
 
         /* Push back to make space for transport header */
         skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 	skb_set_owner_w(skb, sk);
-
+        
+        tot_len = skb->len + 20 + 14;
+        
         /* Build UDP header */
 	uh = udp_hdr(skb);
         uh->source = htons(scaffold_sk(sk)->local_sid.s_sid16);
         uh->dest = htons(scaffold_sk(sk)->peer_sid.s_sid16);
-        uh->len = htons(len);
-        udp_checksum(tot_len, uh, 0xFFFFFFFF);
+        uh->len = htons(skb->len);
+        udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_addr.s_addr);
 
         err = scaffold_ipv4_xmit_skb(sk, skb);
 
@@ -131,7 +132,9 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
         int err;
         struct sk_buff *skb;
         int ulen = len;
-        
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+        struct net_device *fake_dev;
+
 	if (len > 0xFFFF)
 		return -EMSGSIZE;
 
@@ -139,13 +142,14 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 		return -EOPNOTSUPP;
 
 	if (msg->msg_name) {
-		struct sockaddr_sf * addr = (struct sockaddr_sf *)msg->msg_name;
+		struct sockaddr_sf *addr = (struct sockaddr_sf *)msg->msg_name;
 		if ((unsigned)msg->msg_namelen < sizeof(*addr))
 			return -EINVAL;
 		if (addr->ssf_family != AF_SCAFFOLD) {
 			if (addr->ssf_family != AF_UNSPEC)
 				return -EAFNOSUPPORT;
 		}
+                memcpy(&ssk->peer_sid, &addr->ssf_sid, sizeof(struct service_id));
         } else {
                    if (sk->sk_state != SF_BOUND) {
                            return -EDESTADDRREQ;
@@ -161,7 +165,14 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
         
         skb_reserve(skb, UDP_MAX_HDR);
 
-        scaffold_udp_sk(sk)->len = ulen;
+        fake_dev = alloc_netdev(0, "fake", ether_setup);
+
+        if (!fake_dev) {
+                FREE_SKB(skb);
+                return -ENOMEM;
+        }
+
+        skb->dev = fake_dev;
 
         /* 
            TODO: 
@@ -175,8 +186,10 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
         if (err < 0) {
                 LOG_ERR("could not copy user data to skb\n");
                 FREE_SKB(skb);
-                return -ENOMEM;
+                goto out;
         }
+
+        skb_set_scaffold_packet_type(skb, PKT_TYPE_DATA);
 
         err = scaffold_udp_transmit_skb(sk, skb);
 
@@ -184,6 +197,8 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
                 LOG_ERR("udp xmit failed\n");
                 FREE_SKB(skb);
         }
+out:
+        free_netdev(fake_dev);
         
         return err;
 }

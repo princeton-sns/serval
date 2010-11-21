@@ -4,6 +4,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/lock.h>
 #include <scaffold/skbuff.h>
+#include <scaffold/netdevice.h>
 
 static void skb_release_head_state(struct sk_buff *skb)
 {
@@ -18,9 +19,6 @@ static void skb_release_data(struct sk_buff *skb)
 		
 		free(skb->head);
 	}
-	/* Free our fake device */
-	if (skb->dev)
-		free(skb->dev);
 }
 
 /* Free everything but the sk_buff shell. */
@@ -42,26 +40,6 @@ void free_skb(struct sk_buff *skb)
 		return;
 
 	__free_skb(skb);
-}
-
-int skb_alloc_and_set_netdevice(struct sk_buff *skb, int ifindex, const char *name)
-{
-	struct net_device *dev;
-	
-	dev = (struct net_device *)malloc(sizeof(struct net_device));
-
-	if (!dev)
-		return -ENOMEM;
-	
-	dev->ifindex = ifindex;
-	strcpy(dev->name, name);
-
-	if (skb->dev)
-		free(skb->dev);
-	
-	skb->dev = dev;
-
-	return 0;
 }
 
 struct sk_buff *alloc_skb(unsigned int size)

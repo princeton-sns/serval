@@ -8,7 +8,6 @@
 struct scaffold_udp_sock {
 	/* NOTE: scaffold_sock has to be the first member */
 	struct scaffold_sock ssk;
-        unsigned short len; /* data length of skb to be transmitted */
 };
 
 static inline struct scaffold_udp_sock *scaffold_udp_sk(const struct sock *sk)

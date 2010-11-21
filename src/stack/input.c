@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
+#include <scaffold/netdevice.h>
 #include <scaffold_sock.h>
 #include <input.h>
 
@@ -16,7 +17,7 @@ int scaffold_input(struct sk_buff *skb)
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
 	
-	LOG_DBG("Received raw packet if=%d [%s %s 0x%04x]\n", 
+	LOG_DBG("raw packet if=%d [%s %s 0x%04x]\n", 
 		skb->dev->ifindex, srcstr, dststr, prot);
 	        
         switch (prot) {

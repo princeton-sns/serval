@@ -2,7 +2,9 @@
 #ifndef _NET_H_
 #define _NET_H_
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <linux/net.h>
 #else
 #include <linux/socket.h>
@@ -90,11 +92,11 @@ void sock_release(struct socket *sock);
    use a dummy net here for compatibility with the kernel API.
  */
 struct net {
-	int dummy;
+	char dummy;
 };
 
 extern struct net init_net;
 
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 #endif /* _NET_H_ */

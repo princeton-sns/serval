@@ -2,16 +2,17 @@
 #ifndef _SOCK_H_
 #define _SOCK_H_
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <net/sock.h>
-#else
+#elif defined(OS_USER)
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
 #include <scaffold/list.h>
 #include <asm/types.h>
 #include <sys/socket.h>
-#include <linux/netlink.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <errno.h>
@@ -304,6 +305,6 @@ static inline void sock_graft(struct sock *sk, struct socket *parent)
 
 void sk_common_release(struct sock *sk);
 
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 #endif /* _SOCK_H_ */

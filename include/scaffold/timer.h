@@ -2,9 +2,11 @@
 #ifndef _TIMER_H_
 #define _TIMER_H_
 
-#if defined(__KERNEL__)
+#include <scaffold/platform.h>
+
+#if defined(OS_LINUX_KERNEL)
 #include <linux/timer.h>
-#else
+#elif defined(OS_USER)
 #include <scaffold/list.h>
 #include <time.h>
 
@@ -91,6 +93,6 @@ int mod_timer_pinned(struct timer_list *timer, unsigned long expires);
 #define timespec_le(t1, t2) (!timespec_gt(t1, t2))
 #define timespec_eq(t1, t2) ((t1)->tv_sec == (t2)->tv_sec && (t1)->tv_nsec == (t2)->tv_nsec)
 
-#endif /* __KERNEL__ */
+#endif /* OS_LINUX_KERNEL */
 
 #endif /* _TIMER_H_ */
