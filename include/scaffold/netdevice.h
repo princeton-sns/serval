@@ -50,25 +50,27 @@ static inline int dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 				  const void *daddr, const void *saddr,
 				  unsigned len)
 {
-	struct ethhdr *ethh = (struct ethhdr *)skb_mac_header(skb);
+	struct ethhdr *ethh = (struct ethhdr *)skb_push(skb, ETH_HLEN);
 
-	if (!daddr)
-		return -1;
+	ethh->h_proto = htons(type);
 
 	if (!dev) {
 		if (!skb->dev)
-			return -1;
+			return -ETH_HLEN;
 		dev = skb->dev;
 	}
 
 	if (!saddr)
 		saddr = dev->dev_addr;
+       
+	memcpy(ethh->h_source, saddr, ETH_ALEN);
 
-	memcpy(ethh->h_dest, daddr, dev->hard_header_len);
-	memcpy(ethh->h_source, saddr, dev->hard_header_len);
-	ethh->h_proto = htons(type);
+        if (daddr) {
+                memcpy(ethh->h_dest, daddr, ETH_ALEN);
+                return ETH_HLEN;
+        }
 
-	return 0;
+	return -ETH_HLEN;
 }
 
 void ether_setup(struct net_device *dev);

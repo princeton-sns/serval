@@ -10,19 +10,18 @@ extern int packet_xmit(struct sk_buff *skb);
 int scaffold_output(struct sk_buff *skb)
 {
 	char srcstr[18], dststr[18];
-	unsigned char broadcast[ETH_ALEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+	unsigned char mac[ETH_ALEN] = { 0x0a, 0x00, 0x27, 0x00, 0x00, 0x00 };
 	struct ethhdr *ethh;
 	int err;
 
-        skb_push(skb, ETH_HLEN);
-	skb_reset_mac_header(skb);
-
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
-			      broadcast, NULL, skb->len);
+			      mac, NULL, skb->len);
 	if (err < 0) {
 		LOG_ERR("hard_header failed\n");
 		return err;
 	}
+
+        skb_reset_mac_header(skb);
 	ethh = eth_hdr(skb);
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));

@@ -84,10 +84,16 @@ void *packet_thread(void *arg)
                                 struct sk_buff *skb;
                                 struct sockaddr_ll lladdr;
                                 socklen_t addrlen = sizeof(lladdr);
-                                unsigned char buf[RCVLEN];
                                 char ifname[IFNAMSIZ];
 
-                                ret = recvfrom(psock, buf, RCVLEN, 0,
+                                skb = alloc_skb(RCVLEN);
+                                
+                                if (!skb) {
+                                        LOG_ERR("could not allocate skb\n");
+                                        break;
+                                }
+
+                                ret = recvfrom(psock, skb->data, RCVLEN, 0,
                                                (struct sockaddr *)&lladdr, 
                                                &addrlen);
 
@@ -112,13 +118,6 @@ void *packet_thread(void *arg)
                                         continue;                
                                 }
                                 
-                                skb = alloc_skb(ret);
-                                
-                                if (!skb)
-                                        continue;
-                                
-                                memcpy(skb->data, buf, ret);
-
                                 if_indextoname(lladdr.sll_ifindex, ifname);
 
                                 if (ret < 0) {
@@ -129,15 +128,10 @@ void *packet_thread(void *arg)
                                 
                                 dev->ifindex = lladdr.sll_ifindex;
                                 skb->dev = dev;
+                                skb->dev->hard_header_len = lladdr.sll_halen;
                                 skb_reset_mac_header(skb);
                                 skb->pkt_type = lladdr.sll_pkttype;
                                 skb->protocol = lladdr.sll_protocol;
-
-                                /* Set head to network part of packet */
-                                skb_pull(skb, ETH_HLEN);
-                                
-                                /* Set network header offset */
-                                skb_reset_network_header(skb);
 
                                 ret = scaffold_input(skb);
 

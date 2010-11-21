@@ -88,27 +88,30 @@ inhdr_error:
 
 int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 {
-        struct iphdr *iph = ip_hdr(skb);
+        struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
         struct scaffold_sock *ssk = scaffold_sk(sk);
 
-        skb_push(skb, iph_len);
+        iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
-
-        /* Add IP header */
+      
+        /* Build IP header */
         memset(iph, 0, iph_len);
+        iph->version = 4; 
         iph->ihl = iph_len >> 2;
         iph->tos = skb_scaffold_packet_type(skb);
         iph->tot_len = htons(skb->len);
         iph->id = 0;
         iph->frag_off = 0;
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
-        iph->protocol = SF_PROTO_UDP;
+        iph->protocol = sk->sk_protocol;
         memcpy(&iph->saddr, &ssk->src_flow, sizeof(struct in_addr));
         memcpy(&iph->saddr, &ssk->dst_flow, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
 
 	skb->protocol = htons(ETH_P_IP);
+
+        LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", skb->len, iph_len, iph->ihl);
 
         /* Transmit */
         return scaffold_output(skb);

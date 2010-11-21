@@ -39,7 +39,8 @@ static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
 
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
-                                      gfp_t priority, struct proto *prot);
+                                      gfp_t priority, int protocol, 
+                                      struct proto *prot);
 
 static struct sock *scaffold_accept_dequeue(struct sock *parent, 
                                             struct socket *newsock);
@@ -223,12 +224,14 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                         //newsock->ops = &scaffold_dgram_ops;
                         sk = scaffold_sk_alloc(parent->sk_net, newsock, 
                                                GFP_KERNEL, 
+                                               parent->sk_protocol,
                                                &scaffold_udp_proto);
                         break;
                 case SOCK_STREAM: 
                         //newsock->ops = &scaffold_stream_ops;
                         sk = scaffold_sk_alloc(parent->sk_net, newsock, 
-                                               GFP_KERNEL, 
+                                               GFP_KERNEL,
+                                               parent->sk_protocol,
                                                &scaffold_tcp_proto);
                         break;
                 case SOCK_SEQPACKET:	
@@ -704,8 +707,8 @@ static void scaffold_sock_destruct(struct sock *sk)
                sk, atomic_read(&scaffold_nr_socks));
 }
 
-struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t priority, 
-                               struct proto *prot)
+struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t priority,
+                               int protocol, struct proto *prot)
 {
         struct sock *sk;
 
@@ -717,7 +720,7 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 	sock_init_data(sock, sk);
         
         sk->sk_family = PF_SCAFFOLD;
-	sk->sk_protocol	= PF_SCAFFOLD;
+	sk->sk_protocol	= protocol;
 	sk->sk_destruct	= scaffold_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
@@ -745,9 +748,8 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 #endif
 )
 {
-        struct sock *sk;
+        struct sock *sk = NULL;
         int ret = 0;
-        uint16_t proto;
         
         LOG_DBG("Creating SCAFFOLD socket\n");
 
@@ -758,17 +760,21 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
         
 	switch (sock->type) {
                 case SOCK_DGRAM:
-                        proto = SF_PROTO_UDP;
+                        if (!protocol) 
+                                protocol = SF_PROTO_UDP;
                         sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
+                                               protocol,
                                                &scaffold_udp_proto);
                         break;
                 case SOCK_STREAM: 
-                        proto = SF_PROTO_TCP;
+                        if (!protocol)
+                                protocol = SF_PROTO_TCP;
                         sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
+                                               protocol,
                                                &scaffold_tcp_proto);
                         break;
                 case SOCK_SEQPACKET:	
@@ -784,7 +790,7 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
-       
+        
         if (sk->sk_prot->init) {
                 /* Call protocol specific init */
                 ret = sk->sk_prot->init(sk);

@@ -35,7 +35,10 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
         default:
                 goto accept;
         }
-        
+
+        /* scaffold_input assumes receive happens on mac layer */
+        skb_push(skb, skb->dev->hard_header_len);
+
 	ret = scaffold_input(skb);
         
 	switch (ret) {
@@ -53,7 +56,7 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
                 }
         }
 accept:
-        LOG_DBG("Returning NF_ACCEPT\n");
+        /* LOG_DBG("Returning NF_ACCEPT\n"); */
         return NF_ACCEPT;
 drop:   
         LOG_DBG("Returning NF_DROP\n");
