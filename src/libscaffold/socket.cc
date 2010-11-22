@@ -853,7 +853,8 @@ SFSockLib::check_state_for_send(const Cli &cli, sf_err_t &err) const
 int
 SFSockLib::check_state_for_sendto(const Cli &cli, sf_err_t &err) const
 {
-  if (cli.state() != State::BOUND &&   // allow sendto on connected sockets
+  if (cli.state() != State::NEW &&
+      cli.state() != State::BOUND &&   // allow sendto on connected sockets
       cli.state() != State::UNBOUND) {
     err = ESOCKNOTBOUND;
     lerr("check_state_for_sendto: failed, state is %s", 

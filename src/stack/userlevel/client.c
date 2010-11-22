@@ -5,6 +5,8 @@
 #include <scaffold_sock.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/select.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/un.h>
@@ -50,21 +52,26 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 }
 
 static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_bind_rsp_msg(struct client *c, struct client_msg *msg);
 static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_connect_rsp_msg(struct client *c, struct client_msg *msg);
+static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_send_rsp_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	client_handle_bind_req_msg,
-	dummy_msg_handler,
+	client_handle_bind_rsp_msg,
 	client_handle_connect_req_msg,
+	client_handle_connect_rsp_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler,
+	client_handle_send_req_msg,
+	client_handle_send_rsp_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
@@ -211,16 +218,16 @@ void client_destroy(struct client *c)
 int client_signal_pending(struct client *c)
 {
         int ret;
-        fd_set readfds;
-        struct timeval t = { 0, 0 };
+        struct pollfd fds;
 
-        FD_ZERO(&readfds);
-        FD_SET(c->pipefd[0], &readfds);
-        
-        ret = select(c->pipefd[0] + 1, &readfds, NULL, NULL, &t);
+        fds.fd = c->pipefd[0];
+        fds.events = POLLIN | POLLHUP;
+        fds.revents = 0;
+
+        ret = poll(&fds, 1, 0);
         
         if (ret == -1) {
-                LOG_ERR("select error: %s\n", strerror(errno));
+                LOG_ERR("poll error: %s\n", strerror(errno));
         }
 
         return ret;
@@ -260,18 +267,19 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 	struct client_msg_bind_req *br = (struct client_msg_bind_req *)msg;
 	struct client_msg_bind_rsp rsp;
         struct socket *sock = c->sock;
-        struct sockaddr_sf addr;
+        struct sockaddr_sf saddr;
 	int ret;
         
 	LOG_DBG("bind request for service id %s\n", 
 		service_id_to_str(&br->srvid));	
 
 	client_msg_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
-        
-        addr.sf_family = AF_SCAFFOLD;
-        memcpy(&addr.sf_srvid, &br->srvid, sizeof(br->srvid));
 
-        ret = sock->ops->bind(sock, (struct sockaddr *)&addr, sizeof(addr));
+        memset(&saddr, 0, sizeof(saddr));
+        saddr.sf_family = AF_SCAFFOLD;
+        memcpy(&saddr.sf_srvid, &br->srvid, sizeof(br->srvid));
+
+        ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
         if (ret < 0) {
                 if (KERN_ERR(ret) == ERESTARTSYS) {
@@ -288,6 +296,12 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
+int client_handle_bind_rsp_msg(struct client *c, struct client_msg *msg)
+{
+        LOG_DBG("\n");
+        return 0;
+}
+
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
@@ -296,6 +310,51 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 		service_id_to_str(&cr->srvid));	
 
 	return 0;
+}
+
+int client_handle_connect_rsp_msg(struct client *c, struct client_msg *msg)
+{
+        LOG_DBG("\n");
+        return 0;
+}
+
+int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
+{
+	struct client_msg_send_req *sr = (struct client_msg_send_req *)msg;
+        struct socket *sock = c->sock;
+        struct msghdr mh;
+        struct iovec iov;
+        struct sockaddr_sf saddr;
+        int ret;
+
+        memset(&saddr, 0, sizeof(saddr));
+        saddr.sf_family = AF_SCAFFOLD;
+        memcpy(&saddr.sf_srvid, &sr->srvid, sizeof(sr->srvid));
+
+        memset(&mh, 0, sizeof(mh));
+        mh.msg_name = &saddr;
+        mh.msg_namelen = sizeof(saddr);
+        mh.msg_iov = &iov;
+        mh.msg_iovlen = 1;
+        
+        iov.iov_base = sr->data;
+        iov.iov_len = sr->data_len;
+
+	LOG_DBG("data_len=%u\n", sr->data_len);
+        
+        ret = sock->ops->sendmsg(NULL, sock, &mh, sr->data_len);
+        
+        if (ret < 0) {
+                LOG_ERR("sendmsg returned error %s\n", KERN_STRERROR(ret));
+        }
+
+	return ret;
+}
+
+int client_handle_send_rsp_msg(struct client *c, struct client_msg *msg)
+{
+        LOG_DBG("\n");
+        return 0;
 }
 
 static int client_handle_msg(struct client *c)

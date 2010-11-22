@@ -23,7 +23,7 @@ static int scaffold_udp_init_sock(struct sock *sk)
 #if defined(OS_LINUX_KERNEL)
         usk->fake_dev = dev_get_by_name(&init_net, "eth1");      
 #else
-        usk->fake_dev = alloc_netdev(0, "fake", ether_setup);  
+        usk->fake_dev = alloc_netdev(0, "eth1", ether_setup);
 #endif
         if (!usk->fake_dev) {
                 LOG_ERR("could not set fake device\n");

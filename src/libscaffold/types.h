@@ -1,9 +1,13 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _TYPES_H_
 #define _TYPES_H_
 
 #include <sys/types.h>
 #include <netinet/scaffold.h>
 
+/* These typedefs are for backwards compatibility with old defines in
+ * libscaffold. The need for these should ideally go away in the
+ * future. */
 typedef struct sock_id sf_sock_t;
 typedef struct service_id sf_oid_t;
 typedef struct host_addr sf_host_t;
@@ -12,7 +16,7 @@ typedef struct host_addr sf_host_t;
 #define sf_oid sf_srvid
 
 typedef struct {
-    uint8_t v;
+	uint8_t v;
 } sf_proto_t;
 
 #define SF_OK                  0

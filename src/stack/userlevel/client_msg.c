@@ -121,14 +121,17 @@ int client_msg_read(int sock, struct client_msg **msg)
         
 	msg_len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
 
-	if (msg_len != client_msg_lengths[msg_tmp->type]) {
-		LOG_ERR("%s does not match message type length (%zd/%u)\n", 
-			client_msg_to_typestr(msg_tmp), msg_len, client_msg_lengths[msg_tmp->type]);
+	if (msg_len < client_msg_lengths[msg_tmp->type]) {
+		LOG_ERR("%s bad length (got:%zd expected:>%u)\n", 
+			client_msg_to_typestr(msg_tmp), msg_len, 
+                        client_msg_lengths[msg_tmp->type]);
 		free(msg_tmp);
 		return -1;
 	}
 	/* Read payload */
-	*msg = (struct client_msg *)realloc(msg_tmp, CLIENT_MSG_HDR_LEN + msg_tmp->payload_length);
+	*msg = (struct client_msg *)realloc(msg_tmp, 
+                                            CLIENT_MSG_HDR_LEN + 
+                                            msg_tmp->payload_length);
 
 	if (!*msg) {
 		free(msg_tmp);
@@ -153,7 +156,8 @@ int client_msg_read(int sock, struct client_msg **msg)
 
 int client_msg_write(int sock, struct client_msg *msg)
 {
-	int ret = send(sock, msg, CLIENT_MSG_HDR_LEN + msg->payload_length, MSG_DONTWAIT);
+	int ret = send(sock, msg, CLIENT_MSG_HDR_LEN + 
+                       msg->payload_length, MSG_DONTWAIT);
 
         if (ret == -1) {
                 switch (errno) {

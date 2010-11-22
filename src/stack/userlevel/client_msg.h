@@ -132,6 +132,11 @@ struct client_msg_accept2_rsp {
 /* Send messages */
 struct client_msg_send_req {
 	struct client_msg msghdr;
+        bool_t non_blocking;
+        struct service_id srvid;
+        uint16_t data_len;
+        int flags;
+        unsigned char data[0];
 } __attribute__((packed));
 
 #define CLIENT_MSG_SEND_REQ_LEN (sizeof(struct client_msg_send_req))

@@ -17,6 +17,7 @@ src/scafd/scafd
 src/stack/Kbuild
 src/stack/scaffold
 src/test/send_udp_packet
+src/test/send_udp_packetn
 src/test/nltest
 stamp-h1
 #

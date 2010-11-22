@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _LIBSCAFFOLD_H_
 #define _LIBSCAFFOLD_H_
 
@@ -15,7 +16,7 @@
 #define SF_WANT_FAILOVER 0x01
 #define SF_HAVE_FAILOVER 0x02
 
-#if defined(SCAFFOLD_NATIVE_API)
+#if defined(SCAFFOLD_NATIVE)
 
 #define socket_sf socket
 #define bind_sf bind
@@ -29,6 +30,9 @@
 #define recvfrom_sf recvfrom
 #define strerror_sf_r strerror_r
 #define strerror_sf strerror
+
+#include <sys/ioctl.h>
+#define SIOCSFMIGRATE _IO(0,1)
 
 static inline int migrate_sf(int socket) 
 {
@@ -145,7 +149,7 @@ extern "C"
 const char *
 srvid_to_str(struct service_id srvid);
 
-#endif /* SCAFFOLD_NATIVE_API */
+#endif /* SCAFFOLD_NATIVE */
 
 
 #endif /* _LIBSCAFFOLD_H_ */

@@ -32,8 +32,9 @@ int packet_xmit(struct sk_buff *skb)
 
         memset(&lladdr, 0, sizeof(lladdr));
         lladdr.sll_family = AF_PACKET;
+        lladdr.sll_ifindex = skb->dev->ifindex;
         lladdr.sll_protocol = skb->protocol;
-        lladdr.sll_pkttype = PACKET_OTHERHOST;
+        lladdr.sll_pkttype = PACKET_OUTGOING;
 
         err = sendto(psock, skb->data, skb->len, 0, 
                      (struct sockaddr *)&lladdr, sizeof(lladdr));
