@@ -123,10 +123,10 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         tot_len = skb->len + 20 + 14;
         
         /* Build UDP header */
-        uh->source = htons(scaffold_sk(sk)->local_sid.s_sid16);
-        uh->dest = htons(scaffold_sk(sk)->peer_sid.s_sid16);
+        uh->source = htons(scaffold_sk(sk)->local_srvid.s_sid16);
+        uh->dest = htons(scaffold_sk(sk)->peer_srvid.s_sid16);
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_addr.s_addr);
+        udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_ip.s_addr);
 
         err = scaffold_ipv4_xmit_skb(sk, skb);
         
@@ -164,12 +164,12 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 
 		if ((unsigned)msg->msg_namelen < sizeof(*addr))
 			return -EINVAL;
-		if (addr->ssf_family != AF_SCAFFOLD) {
-			if (addr->ssf_family != AF_UNSPEC)
+		if (addr->sf_family != AF_SCAFFOLD) {
+			if (addr->sf_family != AF_UNSPEC)
 				return -EAFNOSUPPORT;
 		}
                 lock_sock(sk);
-                memcpy(&ssk->peer_sid, &addr->ssf_sid, sizeof(struct service_id));
+                memcpy(&ssk->peer_srvid, &addr->sf_srvid, sizeof(struct service_id));
                 release_sock(sk);
         } else {
                    if (sk->sk_state != SF_BOUND) {
@@ -291,17 +291,17 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msgh
                         size_t addrlen = msg->msg_namelen;
                         unsigned short from = udp_hdr(skb)->source;
 
-                        sfaddr->ssf_family = AF_SCAFFOLD;
+                        sfaddr->sf_family = AF_SCAFFOLD;
                         *addr_len = sizeof(struct sockaddr_sf);
-                        memcpy(&sfaddr->ssf_sid, &from, sizeof(struct service_id));
+                        memcpy(&sfaddr->sf_srvid, &from, sizeof(struct service_id));
 
                         /* Copy also our local service id to the
                          * address buffer if size admits */
                         if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
                                 sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
-                                sfaddr->ssf_family = AF_SCAFFOLD;
+                                sfaddr->sf_family = AF_SCAFFOLD;
 
-                                memcpy(&sfaddr->ssf_sid, &ss->local_sid, 
+                                memcpy(&sfaddr->sf_srvid, &ss->local_srvid, 
                                        sizeof(struct service_id));
                         }
                 }

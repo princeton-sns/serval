@@ -268,8 +268,8 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
 	client_msg_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
         
-        addr.ssf_family = AF_SCAFFOLD;
-        memcpy(&addr.ssf_sid, &br->srvid, sizeof(br->srvid));
+        addr.sf_family = AF_SCAFFOLD;
+        memcpy(&addr.sf_srvid, &br->srvid, sizeof(br->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&addr, sizeof(addr));
 

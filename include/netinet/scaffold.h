@@ -63,13 +63,13 @@ enum scaffold_sock_state {
 
 struct service_id {
         union { 
-                uint8_t	u_sid8[2];
-                uint16_t u_sid16;
+                uint8_t	u_id8[2];
+                uint16_t u_id16;
                 /* uint32_t u_sid32[]; */
-        } sid_u;
-#define s_sid sid_u.u_sid8
-#define s_sid16 sid_u.u_sid16
-#define s_sid32 sid_u.u_sid32
+        } u_id;
+#define s_sid u_id.u_id8
+#define s_sid16 u_id.u_id16
+#define s_sid32 u_id.u_id32
 };
 
 static inline const char *service_id_to_str(struct service_id *srvid)
@@ -80,20 +80,21 @@ static inline const char *service_id_to_str(struct service_id *srvid)
 }
 
 struct sockaddr_sf {
-        sa_family_t ssf_family;
-        struct service_id ssf_sid;
+        sa_family_t sf_family;
+        uint16_t sf_flags;
+        struct service_id sf_srvid;
 };
 
 struct sock_id {
-        uint16_t sid_id;
+        uint16_t s_id;
 };
 
 struct host_addr {
-        uint8_t h_addr;
+        uint8_t s_addr;
 };
 
 struct as_addr {
-        uint8_t a_addr;
+        uint8_t s_addr;
 };
 
 struct flow_id {
@@ -102,11 +103,11 @@ struct flow_id {
                         struct as_addr as;
                         struct host_addr host;
                         struct sock_id sock;
-                } __fl;
-#define fl_as __fl.as
-#define fl_host __fl.host
-#define fl_sock __fl.sock
-                struct in_addr fl_addr;
+                } fl_s;
+#define fl_as fl_s.as
+#define fl_host fl_s.host
+#define fl_sock fl_s.sock
+                struct in_addr fl_ip;
         };
 };
 
@@ -123,41 +124,4 @@ enum scaffold_packet_type {
         PKT_TYPE_RSYNACK
 };
 
-/*
-typedef struct {
-    uint16_t s_ssid;
-} sf_ssid_t;
-
-typedef struct { 
-     uint8_t v; 
-} sf_host_t;
-
-typedef struct { 
-     uint16_t v; 
-} sf_sock_t;
-
-struct flow_id {
-        uint16_t ssid;
-        uint32_t hostid;
-        uint32_t sockid;
-};
-
-struct scaffold_hdr {
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8	ihl:4,
-		version:4;
-#elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	version:4,
-  		ihl:4;
-#else
-#error	"Please fix <asm/byteorder.h>"
-#endif
-        struct object_id soid;
-        struct object_id doid;
-        struct flow_id sflow;
-        struct flow_id dflow;
-        
-}
-*/
-  
 #endif /* _SCAFFOLD_H */

@@ -32,4 +32,6 @@ Makefile
 *.symvers
 .tmp_versions/
 *.order
-
+*.lo
+*.la
+*.libs

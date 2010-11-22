@@ -89,7 +89,7 @@ static int __scaffold_assign_sockid(struct sock *sk)
            - Check for ID wraparound and conflicts 
            - Make sure code does not assume sockid is a short
         */
-        ssk->sockid.sid_id = htons(atomic_inc_return(&scaffold_sock_id));
+        ssk->sockid.s_id = htons(atomic_inc_return(&scaffold_sock_id));
         return 0;
 }
 
@@ -108,11 +108,11 @@ static int scaffold_autobind(struct sock *sk)
         lock_sock(sk);
         ssk = scaffold_sk(sk);
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(&ssk->local_sid, sizeof(struct service_id));
+        get_random_bytes(&ssk->local_srvid, sizeof(struct service_id));
 #else
         {
                 unsigned int i;
-                unsigned char *byte = (unsigned char *)&ssk->local_sid;
+                unsigned char *byte = (unsigned char *)&ssk->local_srvid;
 
                 for (i = 0; i  < sizeof(struct service_id); i++) {
                         byte[i] = random() & 0xff;
@@ -157,7 +157,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 return ret;
         }
 
-        memcpy(&scaffold_sk(sk)->local_sid, &sfaddr->ssf_sid, 
+        memcpy(&scaffold_sk(sk)->local_srvid, &sfaddr->sf_srvid, 
                sizeof(struct service_id));
         /* 
            Return value of 1 indicates we are in controller mode -->
@@ -244,8 +244,8 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                         break;
 
                 // Inherit the service id from the parent socket
-                memcpy(&scaffold_sk(sk)->local_sid, 
-                       &scaffold_sk(parent)->local_sid, 
+                memcpy(&scaffold_sk(sk)->local_srvid, 
+                       &scaffold_sk(parent)->local_srvid, 
                        sizeof(struct sockaddr_sf));
                 
                 scaffold_sk(sk)->tot_bytes_sent = 0;
@@ -370,13 +370,13 @@ int scaffold_getname(struct socket *sock, struct sockaddr *addr,
         struct sockaddr_sf *sa = (struct sockaddr_sf *)addr;
         struct sock *sk = sock->sk;
 
-	sa->ssf_family  = AF_SCAFFOLD;
+	sa->sf_family  = AF_SCAFFOLD;
 
 	if (peer)
-		memcpy(&sa->ssf_sid, &scaffold_sk(sk)->peer_sid, 
+		memcpy(&sa->sf_srvid, &scaffold_sk(sk)->peer_srvid, 
                        sizeof(struct sockaddr_sf));
 	else
-		memcpy(&sa->ssf_sid, &scaffold_sk(sk)->local_sid, 
+		memcpy(&sa->sf_srvid, &scaffold_sk(sk)->local_srvid, 
                        sizeof(struct sockaddr_sf));
 
 	*addr_len = sizeof(struct sockaddr_sf);
@@ -414,7 +414,8 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         }
 
         /* Set the peer address */
-        memcpy(&scaffold_sk(sk)->peer_sid, &sfaddr->ssf_sid, sizeof(struct service_id));
+        memcpy(&scaffold_sk(sk)->peer_srvid, &sfaddr->sf_srvid, 
+               sizeof(struct service_id));
 
         if (0 /* sfnet_handle_connect_socket(sk, &sfaddr->sf_oid, 
                  sfaddr->sf_flags, &connect_ret) != 0 */) {

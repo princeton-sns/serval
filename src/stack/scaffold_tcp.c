@@ -116,12 +116,12 @@ static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
         if (msg->msg_name) {
                 struct sockaddr_sf *sfaddr = msg->msg_name;
                 
-                if (sfaddr->ssf_family != AF_SCAFFOLD)
+                if (sfaddr->sf_family != AF_SCAFFOLD)
                         return -EAFNOSUPPORT;
                 
-                memcpy(&dst_sid, &sfaddr->ssf_sid, sizeof(struct service_id)); 
+                memcpy(&dst_sid, &sfaddr->sf_srvid, sizeof(struct service_id)); 
         } else {
-                memcpy(&dst_sid, &scaffold_sk(sk)->peer_sid, sizeof(struct service_id));
+                memcpy(&dst_sid, &scaffold_sk(sk)->peer_srvid, sizeof(struct service_id));
         }
         
         //LOG_DBG("sendmsg() to serviceId=%u\n", ntohs(dst_oid.s_oid));
@@ -279,17 +279,20 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 if (sfaddr) {
                         size_t addrlen = msg->msg_namelen;
                         
-                        sfaddr->ssf_family = AF_SCAFFOLD;
+                        sfaddr->sf_family = AF_SCAFFOLD;
                         msg->msg_namelen = sizeof(struct sockaddr_sf);
-                        memcpy(&sfaddr->ssf_sid, &scaffold_sk(sk)->peer_sid, sizeof(struct service_id));
+                        memcpy(&sfaddr->sf_srvid, 
+                               &scaffold_sk(sk)->peer_srvid, 
+                               sizeof(struct service_id));
 
                         /* Copy also our local service id to the
                          * address buffer if size admits */
                         if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
                                 sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
-                                sfaddr->ssf_family = AF_SCAFFOLD;
+                                sfaddr->sf_family = AF_SCAFFOLD;
 
-                                memcpy(&sfaddr->ssf_sid, &scaffold_sk(sk)->local_sid, 
+                                memcpy(&sfaddr->sf_srvid, 
+                                       &scaffold_sk(sk)->local_srvid, 
                                        sizeof(struct service_id));
                         }
                 }

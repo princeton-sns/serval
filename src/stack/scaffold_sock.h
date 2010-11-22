@@ -26,8 +26,8 @@ struct scaffold_sock {
         unsigned char           flags;
         void                    *hash_key;
         struct sock_id          sockid;
-        struct service_id       local_sid;
-        struct service_id       peer_sid;
+        struct service_id       local_srvid;
+        struct service_id       peer_srvid;
         struct flow_id          src_flow;
         struct flow_id          dst_flow;
         unsigned long           tot_bytes_sent;

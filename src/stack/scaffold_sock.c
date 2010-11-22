@@ -165,7 +165,7 @@ static inline unsigned int scaffold_ehash(struct sock *sk)
 static inline unsigned int scaffold_lhash(struct sock *sk)
 {
         return scaffold_hashfn(sock_net(sk), 
-                               &scaffold_sk(sk)->local_sid, 
+                               &scaffold_sk(sk)->local_srvid, 
                                sizeof(struct service_id),
                                listen_table.mask);
 }
@@ -204,7 +204,7 @@ static void __scaffold_sock_hash(struct sock *sk)
         LOG_DBG("hashing socket\n");
 
         if (sk->sk_state == SF_LISTEN) {
-                scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_sid;
+                scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_srvid;
                 __scaffold_table_hash(&listen_table, sk);
 
         } else { 
@@ -232,7 +232,7 @@ void scaffold_sock_unhash(struct sock *sk)
         /* grab correct lock */
         if (sk->sk_state == SF_LISTEN) {
                 lock = &scaffold_hashslot(&listen_table, net, 
-                                          &scaffold_sk(sk)->local_sid, 
+                                          &scaffold_sk(sk)->local_srvid, 
                                           sizeof(struct service_id))->lock;
         } else {
                 lock = &scaffold_hashslot(&established_table,
