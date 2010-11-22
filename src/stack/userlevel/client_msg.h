@@ -32,8 +32,9 @@ typedef enum client_msg_type {
 	MSG_HAVE_DATA
 } client_msg_type_t;
 
-#define MAX_CLIENT_MSG_TYPE (MSG_HAVE_DATA + 1)
+extern unsigned int client_msg_lengths[];
 
+#define MAX_CLIENT_MSG_TYPE (MSG_HAVE_DATA + 1)
 #define CLIENT_MSG_VERSION 1
 
 typedef unsigned char bool_t;
@@ -45,7 +46,21 @@ struct client_msg {
 	unsigned char payload[0];
 };
 
+/* Generic response message */
+struct client_msg_rsp {
+        struct client_msg msghdr;
+        uint8_t error;
+};
+
 #define CLIENT_MSG_HDR_LEN (sizeof(struct client_msg))
+
+#define DEFINE_CLIENT_RESPONSE(name, type) struct client_msg_rsp rsp = \
+        { { CLIENT_MSG_VERSION, \
+            type, \
+            client_msg_lengths[type] - CLIENT_MSG_HDR_LEN }, \
+          0 }
+
+/* Specific messages: */
 
 /* Bind messages */
 struct client_msg_bind_req {

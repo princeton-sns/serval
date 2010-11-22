@@ -35,7 +35,7 @@ static const char *client_msg_str[] = {
 	NULL
 };
 
-static unsigned int client_msg_lengths[] = {
+unsigned int client_msg_lengths[] = {
 	CLIENT_MSG_HDR_LEN,
 	CLIENT_MSG_BIND_REQ_LEN,
 	CLIENT_MSG_BIND_RSP_LEN,

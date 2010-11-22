@@ -263,29 +263,7 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
 			release_sock(sk);
 			continue;
 		}
-                /*
-                  FIXME: It seems as, if sometimes, a socket in
-                  Scaffold has already gone from BOUND to some other
-                  state before the application has had a chance to
-                  accept it. In that case, should we simply delete the
-                  socket, or let the application deal with the
-                  non-BOUND state once accepted?
-
-                  I think the safest thing to do is to let the
-                  application deal with it, because
-                  sfnet_assign_socket() has already associated the
-                  C-sock with a Scaffold data type. If we delete the
-                  C-socket here, the Scaffold C++ version of the
-                  socket will have a bad handle.
-
-                  If we want to delete the socket here, we must first
-                  assure that sfnet_assign_sock() does not associate
-                  the C-sock with the C++ SFSock, and then make it return
-                  an error so that we know the assignment was not made.
-
-                  For now, accept the socket no matter what state it
-                  is in.
-                 */
+               
 		if (1 /*sk->sk_state == SF_BOUND || !newsock */) {
 
 			if (newsock)

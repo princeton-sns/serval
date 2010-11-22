@@ -52,18 +52,15 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 }
 
 static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_bind_rsp_msg(struct client *c, struct client_msg *msg);
 static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_connect_rsp_msg(struct client *c, struct client_msg *msg);
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_send_rsp_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	client_handle_bind_req_msg,
-	client_handle_bind_rsp_msg,
+	dummy_msg_handler,
 	client_handle_connect_req_msg,
-	client_handle_connect_rsp_msg,
+	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
@@ -71,7 +68,7 @@ msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	dummy_msg_handler,
 	client_handle_send_req_msg,
-	client_handle_send_rsp_msg,
+	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
@@ -264,20 +261,18 @@ int client_signal_lower(struct client *c)
 
 int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct client_msg_bind_req *br = (struct client_msg_bind_req *)msg;
-	struct client_msg_bind_rsp rsp;
+	struct client_msg_bind_req *req = (struct client_msg_bind_req *)msg;
+        DEFINE_CLIENT_RESPONSE(rsp, MSG_BIND_RSP);
         struct socket *sock = c->sock;
         struct sockaddr_sf saddr;
 	int ret;
         
 	LOG_DBG("bind request for service id %s\n", 
-		service_id_to_str(&br->srvid));	
-
-	client_msg_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
+		service_id_to_str(&req->srvid));	
 
         memset(&saddr, 0, sizeof(saddr));
         saddr.sf_family = AF_SCAFFOLD;
-        memcpy(&saddr.sf_srvid, &br->srvid, sizeof(br->srvid));
+        memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -289,17 +284,10 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
                 }
                 LOG_ERR("Bind failed: %s\n", KERN_STRERROR(ret));
                 rsp.error = KERN_ERR(ret);
-                return client_msg_write(c->fd, &rsp.msghdr);
         }
 
         /* TODO: Bind should not return here... */
 	return client_msg_write(c->fd, &rsp.msghdr);
-}
-
-int client_handle_bind_rsp_msg(struct client *c, struct client_msg *msg)
-{
-        LOG_DBG("\n");
-        return 0;
 }
 
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
@@ -312,15 +300,10 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 	return 0;
 }
 
-int client_handle_connect_rsp_msg(struct client *c, struct client_msg *msg)
-{
-        LOG_DBG("\n");
-        return 0;
-}
-
 int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct client_msg_send_req *sr = (struct client_msg_send_req *)msg;
+	struct client_msg_send_req *req = (struct client_msg_send_req *)msg;
+        DEFINE_CLIENT_RESPONSE(rsp, MSG_SEND_RSP);
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
@@ -329,7 +312,7 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
 
         memset(&saddr, 0, sizeof(saddr));
         saddr.sf_family = AF_SCAFFOLD;
-        memcpy(&saddr.sf_srvid, &sr->srvid, sizeof(sr->srvid));
+        memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         memset(&mh, 0, sizeof(mh));
         mh.msg_name = &saddr;
@@ -337,24 +320,19 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         mh.msg_iov = &iov;
         mh.msg_iovlen = 1;
         
-        iov.iov_base = sr->data;
-        iov.iov_len = sr->data_len;
+        iov.iov_base = req->data;
+        iov.iov_len = req->data_len;
 
-	LOG_DBG("data_len=%u\n", sr->data_len);
+	LOG_DBG("data_len=%u\n", req->data_len);
         
-        ret = sock->ops->sendmsg(NULL, sock, &mh, sr->data_len);
+        ret = sock->ops->sendmsg(NULL, sock, &mh, req->data_len);
         
         if (ret < 0) {
+                rsp.error = KERN_ERR(ret);
                 LOG_ERR("sendmsg returned error %s\n", KERN_STRERROR(ret));
         }
-
-	return ret;
-}
-
-int client_handle_send_rsp_msg(struct client *c, struct client_msg *msg)
-{
-        LOG_DBG("\n");
-        return 0;
+        
+	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
 static int client_handle_msg(struct client *c)
