@@ -9,12 +9,14 @@
 #include <linux/kernel.h>
 #include <linux/socket.h>
 #include <linux/string.h>
+#include <linux/in.h>
 #else
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #if defined(__linux__)
 #include <endian.h>
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)

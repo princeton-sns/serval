@@ -12,6 +12,10 @@
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+#define NF_INET_PRE_ROUTING NF_IP_PRE_ROUTING
+#endif
+
 int packet_xmit(struct sk_buff *skb)
 {
         return dev_queue_xmit(skb);

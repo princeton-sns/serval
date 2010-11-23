@@ -32,11 +32,18 @@ static int scaffold_tcp_init_sock(struct sock *sk)
         return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+static int scaffold_tcp_destroy_sock(struct sock *sk)
+#else
 static void scaffold_tcp_destroy_sock(struct sock *sk)
+#endif
 {
         struct scaffold_tcp_sock *tsk = scaffold_tcp_sk(sk);
    
 	__skb_queue_purge(&tsk->out_of_order_queue);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+        return 0;
+#endif
 }
 
 static void scaffold_tcp_close(struct sock *sk, long timeout)

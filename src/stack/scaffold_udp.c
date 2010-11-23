@@ -33,13 +33,21 @@ static int scaffold_udp_init_sock(struct sock *sk)
         return 0;
 }
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+static int scaffold_udp_destroy_sock(struct sock *sk)
+#else
 static void scaffold_udp_destroy_sock(struct sock *sk)
+#endif
 {
         struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
         LOG_DBG("\n");
 
         if (usk->fake_dev)
                 dev_put(usk->fake_dev);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+        return 0;
+#endif
 }
 
 static void scaffold_udp_close(struct sock *sk, long timeout)
