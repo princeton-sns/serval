@@ -1,1 +1,1 @@
-SUBDIRS = stack libscaffold scafd test
+SUBDIRS = stack libscaffold libstack scafd test

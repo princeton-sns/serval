@@ -132,6 +132,7 @@ AC_CONFIG_FILES([Makefile
 	src/stack/Makefile
 	src/stack/Kbuild
 	src/libscaffold/Makefile
+	src/libstack/Makefile
 	src/scafd/Makefile
 	src/test/Makefile
 	])

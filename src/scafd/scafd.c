@@ -14,8 +14,10 @@
 #include <linux/if_ether.h>
 #include <errno.h>
 #include <signal.h>
+#include <libstack/stack.h>
 
-#define SF_DBG(format, ...) printf(format, ## __VA_ARGS__)
+#define LOG_DBG(format, ...) printf("%s: "format, __func__, ## __VA_ARGS__)
+#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR"format, __func__, ## __VA_ARGS__)
 
 struct if_info {
 	int msg_type;
@@ -73,7 +75,7 @@ static int nl_init_handle(struct netlink_handle *nlh)
 	nlh->fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
 	if (!nlh->fd) {
-		SF_DBG("Could not create netlink socket");
+		LOG_DBG("Could not create netlink socket");
 		return -2;
 	}
 	addrlen = sizeof(nlh->local);
@@ -82,14 +84,14 @@ static int nl_init_handle(struct netlink_handle *nlh)
 
 	if (ret == -1) {
 		close(nlh->fd);
-		SF_DBG("Bind for RT netlink socket failed");
+		LOG_DBG("Bind for RT netlink socket failed");
 		return -3;
 	}
 	ret = getsockname(nlh->fd, (struct sockaddr *) &nlh->local, &addrlen);
 
 	if (ret < 0) {
 		close(nlh->fd);
-		SF_DBG("Getsockname failed ");
+		LOG_DBG("Getsockname failed ");
 		return -4;
 	}
 
@@ -98,9 +100,6 @@ static int nl_init_handle(struct netlink_handle *nlh)
 
 static int nl_close_handle(struct netlink_handle *nlh)
 {
-	if (!nlh)
-		return -1;
-
 	return close(nlh->fd);
 }
 
@@ -126,7 +125,7 @@ static int nl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
 	res = sendmsg(nlh->fd, &msg, 0);
 
 	if (res < 0) {
-		SF_DBG("error: %s\n", strerror(errno));
+		LOG_DBG("error: %s\n", strerror(errno));
 		return -1;
 	}
 	return 0;
@@ -239,11 +238,11 @@ static int read_netlink(struct netlink_handle *nlh)
 	len = recvfrom(nlh->fd, buf, BUFLEN, 0, (struct sockaddr *) &nlh->peer, &addrlen);
 
 	if (len == EAGAIN) {
-		SF_DBG("Netlink recv would block\n");
+		LOG_DBG("Netlink recv would block\n");
 		return 0;
 	}
 	if (len < 0) {
-		SF_DBG("len negative\n");
+		LOG_DBG("len negative\n");
 		return len;
 	}
 	for (nlm = (struct nlmsghdr *) buf; NLMSG_OK(nlm, (unsigned int) len); nlm = NLMSG_NEXT(nlm, len)) {
@@ -258,9 +257,9 @@ static int read_netlink(struct netlink_handle *nlh)
 		case NLMSG_ERROR:
 			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
 			if (nlmerr->error == 0) {
-				SF_DBG("NLMSG_ACK");
+				LOG_DBG("NLMSG_ACK");
 			} else {
-				SF_DBG("NLMSG_ERROR, error=%d type=%d\n", nlmerr->error, nlmerr->msg.nlmsg_type);
+				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", nlmerr->error, nlmerr->msg.nlmsg_type);
 			}
 			break;
 		case RTM_NEWLINK:
@@ -282,31 +281,31 @@ static int read_netlink(struct netlink_handle *nlh)
                                         break;
                         }
 			
-                        SF_DBG("Interface newlink %s %s %s\n", 
+                        LOG_DBG("Interface newlink %s %s %s\n", 
                                ifinfo.ifname, eth_to_str(ifinfo.mac), 
                                ifinfo.isUp ? "up" : "down");
 			break;
 		case RTM_DELLINK:
                         ret = nl_parse_link_info(nlm, &ifinfo);
 		
-			SF_DBG("Interface dellink %s %s\n", ifinfo.ifname, eth_to_str(ifinfo.mac));
+			LOG_DBG("Interface dellink %s %s\n", ifinfo.ifname, eth_to_str(ifinfo.mac));
                         break;
 		case RTM_DELADDR:
 			ret = nl_parse_addr_info(nlm, &ifinfo);
-			SF_DBG("Interface deladdr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
+			LOG_DBG("Interface deladdr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
 			// Delete interface here?
 		
 			break;
 		case RTM_NEWADDR:
 			ret = nl_parse_addr_info(nlm, &ifinfo);
-			SF_DBG("Interface newaddr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
+			LOG_DBG("Interface newaddr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
 			// Update ip address here?
 			break;
 		case NLMSG_DONE:
-			//SF_DBG("NLMSG_DONE\n");
+			//LOG_DBG("NLMSG_DONE\n");
 			break;
 		default:
-			SF_DBG("Unknown netlink message\n");
+			LOG_DBG("Unknown netlink message\n");
 			break;
 		}
 	}
@@ -341,8 +340,7 @@ static void signal_handler(int sig)
         ssize_t ret;
         char q = 'q';
 
-        printf("Writing to pipe\n");
-
+	should_exit = 1;
         ret = write(p[1], &q, 1);
 }
 
@@ -358,21 +356,32 @@ int main(int argc, char **argv)
 	sigact.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sigact, NULL);
 	sigaction(SIGHUP, &sigact, NULL);
+	sigaction(SIGPIPE, &sigact, NULL);
 
 	ret = nl_init_handle(&nlh);
 
 	if (ret < 0) {
-		SF_DBG("Could not open netlink socket\n");
+		LOG_ERR("Could not open netlink socket\n");
                 return EXIT_FAILURE;
 	}
 
         ret = pipe(p);
 
         if (ret == -1) {
-		SF_DBG("Could not open pipe\n");
+		LOG_ERR("Could not open pipe\n");
                 nl_close_handle(&nlh);
                 return EXIT_FAILURE;
         }
+
+	ret = libstack_init();
+
+	if (ret == -1) {
+		LOG_ERR("Could not init libstack\n");
+                nl_close_handle(&nlh);
+		close(p[0]);
+		close(p[1]);
+		return EXIT_FAILURE;
+	}
 
 	netlink_getlink(&nlh);
 
@@ -389,10 +398,13 @@ int main(int argc, char **argv)
                 ret = select(nlh.fd + 1, &readfds, NULL, NULL, NULL);
 
                 if (ret == 0) {
-                        SF_DBG("Timeout...\n");
+                        LOG_DBG("Timeout...\n");
                 } else if (ret == -1) {
-                        SF_DBG("Error...\n");
-                        should_exit = 1;
+			if (errno == EINTR) {
+				should_exit = 1;
+			} else {
+				LOG_ERR("select error: %s\n", strerror(errno));
+			}
                 } else {
                         if (FD_ISSET(nlh.fd, &readfds)) {
                                 read_netlink(&nlh);
@@ -403,10 +415,12 @@ int main(int argc, char **argv)
                         }
                 }        
         }
+	LOG_DBG("scafd exits\n");
 
+	libstack_fini();
         nl_close_handle(&nlh);
         close(p[0]);
         close(p[1]);
-
+	
         return EXIT_SUCCESS;
 }

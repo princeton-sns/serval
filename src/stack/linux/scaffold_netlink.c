@@ -35,6 +35,25 @@ static void scaffold_netlink_recv_skb(struct sk_buff *skb)
                 netlink_ack(skb, nlh, 0);
 }
 
+int scaffold_netlink_send(int type, void *data, unsigned int len, int mask)
+{
+        struct sk_buff *skb;
+        struct nlmsghdr *nlh;
+
+        skb = alloc_skb(NLMSG_LENGTH(len), mask);
+
+        if (!skb)
+                return -ENOMEM;
+
+        nlh = (struct nlmsghdr *)skb_put(skb, NLMSG_LENGTH(len));
+        nlh->nlmsg_type = type;
+        nlh->nlmsg_len = NLMSG_LENGTH(len);
+        
+        memcpy(NLMSG_DATA(nlh), data, len);
+
+        return netlink_broadcast(nl_sk, skb, 0, 1, mask);
+}
+
 int __init scaffold_netlink_init(void)
 {
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_SCAFFOLD, 1, 

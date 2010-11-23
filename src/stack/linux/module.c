@@ -5,6 +5,7 @@
 #include <linux/net.h>
 #include <af_scaffold.h>
 #include <scaffold/debug.h>
+#include <libstack/msg.h>
 #include "scaffold_netlink.h"
 
 MODULE_AUTHOR("Erik Nordstroem");
@@ -42,11 +43,21 @@ static int scaffold_netdev_event(struct notifier_block *this,
         
 	switch (event) {
 	case NETDEV_UP:
+        {
+                struct stack_msg m;
+                m.data = 3;
 		LOG_DBG("Netdev UP %s\n", dev->name);
+                scaffold_netlink_send(MSG_TYPE_JOIN, &m, sizeof(m), GFP_ATOMIC);
 		break;
+        }
 	case NETDEV_GOING_DOWN:
-		LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
-                break;
+        {
+                struct stack_msg m;
+                m.data = 3;
+                LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
+                scaffold_netlink_send(MSG_TYPE_LEAVE, &m, sizeof(m), GFP_ATOMIC);
+		break;
+        }
 	case NETDEV_DOWN:
                 LOG_DBG("Netdev DOWN\n");
                 break;

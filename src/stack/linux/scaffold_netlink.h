@@ -4,9 +4,8 @@
 
 #define NETLINK_SCAFFOLD 17
 
-#if defined(__KERNEL__)
 int scaffold_netlink_init(void);
 void scaffold_netlink_fini(void);
-#endif
+int scaffold_netlink_send(int type, void *data, unsigned int len, int mask);
 
 #endif /* _SCAFFOLD_NETLINK_H */

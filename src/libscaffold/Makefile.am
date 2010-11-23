@@ -23,7 +23,7 @@ libscaffold_la_SOURCES = \
 
 libscaffold_la_CXXFLAGS =-I$(top_srcdir)/include
 
-libscaffold_includedir=$(includedir)/scaffold
+libscaffold_includedir=$(includedir)/netinet
 libscaffold_include_HEADERS = \
 	$(top_srcdir)/include/netinet/scaffold.h
 
