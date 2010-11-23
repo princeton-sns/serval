@@ -16,14 +16,18 @@
 #include <netinet/udp.h>
 #endif
 
+/* For testing only. Should be removed */
+extern const char *fixed_dev_name;
+#define FIXED_DEV_NAME fixed_dev_name
+
 static int scaffold_udp_init_sock(struct sock *sk)
 {
         struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
         LOG_DBG("\n");
 #if defined(OS_LINUX_KERNEL)
-        usk->fake_dev = dev_get_by_name(&init_net, "eth1");      
+        usk->fake_dev = dev_get_by_name(&init_net, FIXED_DEV_NAME);      
 #else
-        usk->fake_dev = alloc_netdev(0, "eth1", ether_setup);
+        usk->fake_dev = alloc_netdev(0, FIXED_DEV_NAME, ether_setup);
 #endif
         if (!usk->fake_dev) {
                 LOG_ERR("could not set fake device\n");

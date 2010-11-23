@@ -13,7 +13,8 @@ MODULE_DESCRIPTION("Scaffold socket API for Linux");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
-#define RTO_INITIAL_DISABLED 0 // Use whatever value is set by default
+/*
+#define RTO_INITIAL_DISABLED 0 
 static uint rto = RTO_INITIAL_DISABLED;
 static int rto_dynamic = 0;
 static uint tx_burst = 0;
@@ -32,6 +33,12 @@ static uint debug = 0;
 module_param(debug, uint, 0);
 MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif
+*/
+
+const char *fixed_dev_name = "eth1";
+static char *ifname = NULL;
+module_param(ifname, charp, 0);
+MODULE_PARM_DESC(ifname, "Interface to use.");
 
 static int scaffold_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
@@ -81,9 +88,24 @@ static struct notifier_block netdev_notifier = {
 int scaffold_module_init(void)
 {
 	int err = 0;
+        struct net_device *dev;
 
         LOG_DBG("Loaded scaffold protocol module\n");
-       
+        
+        if (ifname) 
+                fixed_dev_name = ifname;
+
+        dev = dev_get_by_name(&init_net, fixed_dev_name);
+        
+        if (!dev) {
+                LOG_ERR("no device %s\n", fixed_dev_name);
+                return -EINVAL;
+        } 
+
+        dev_put(dev);
+
+        LOG_DBG("Using interface %s\n", fixed_dev_name);
+
         err = ctrl_init();
         
 	if (err < 0) {

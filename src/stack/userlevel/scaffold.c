@@ -11,6 +11,7 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <libgen.h>
+#include <net/if.h>
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
@@ -338,6 +339,8 @@ out_close_socks:
 	return ret;
 }
 
+const char *fixed_dev_name = "eth1";
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -356,7 +359,31 @@ int main(int argc, char **argv)
         sigaction(SIGTERM, &action, 0);
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
+	
+	argc--;
+	argv++;
 
+	while (argc) {
+		if (strcmp(argv[0], "-i") == 0 ||
+		    strcmp(argv[0], "--interface") == 0) {
+			fixed_dev_name = argv[1];
+			argv++;
+			argc--;
+				
+		}
+		argc--;
+		argv++;
+	}
+	
+	LOG_DBG("using fixed interface %s\n",
+		fixed_dev_name);
+	
+	if (if_nametoindex(fixed_dev_name) == 0) {
+		LOG_ERR("no interface %s\n", fixed_dev_name);
+		LOG_ERR("set interface with -i <iface>\n");
+		return -1;
+	}
+		
 	ret = scaffold_init();
 
 	if (ret == -1) {
