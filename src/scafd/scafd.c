@@ -15,9 +15,11 @@
 #include <errno.h>
 #include <signal.h>
 #include <libstack/stack.h>
+#include <libscaffold/scaffold.h>
+#include <netinet/scaffold.h>
 
 #define LOG_DBG(format, ...) printf("%s: "format, __func__, ## __VA_ARGS__)
-#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR"format, __func__, ## __VA_ARGS__)
+#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR "format, __func__, ## __VA_ARGS__)
 
 struct if_info {
 	int msg_type;
@@ -37,6 +39,9 @@ struct netlink_handle {
         struct sockaddr_nl local;
         struct sockaddr_nl peer;
 };
+
+static int ctrlsock = -1; /* socket to communicate with controller */
+static int native = 0; /* Whether the socket is native or libscaffold */
 
 static char *eth_to_str(unsigned char *addr)
 {
@@ -235,7 +240,8 @@ static int read_netlink(struct netlink_handle *nlh)
 
 	memset(buf, 0, BUFLEN);
 
-	len = recvfrom(nlh->fd, buf, BUFLEN, 0, (struct sockaddr *) &nlh->peer, &addrlen);
+	len = recvfrom(nlh->fd, buf, BUFLEN, 0, 
+		       (struct sockaddr *) &nlh->peer, &addrlen);
 
 	if (len == EAGAIN) {
 		LOG_DBG("Netlink recv would block\n");
@@ -245,7 +251,9 @@ static int read_netlink(struct netlink_handle *nlh)
 		LOG_DBG("len negative\n");
 		return len;
 	}
-	for (nlm = (struct nlmsghdr *) buf; NLMSG_OK(nlm, (unsigned int) len); nlm = NLMSG_NEXT(nlm, len)) {
+	for (nlm = (struct nlmsghdr *) buf; 
+	     NLMSG_OK(nlm, (unsigned int) len); 
+	     nlm = NLMSG_NEXT(nlm, len)) {
 		struct nlmsgerr *nlmerr = NULL;
 		int ret = 0;
 
@@ -259,12 +267,16 @@ static int read_netlink(struct netlink_handle *nlh)
 			if (nlmerr->error == 0) {
 				LOG_DBG("NLMSG_ACK");
 			} else {
-				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", nlmerr->error, nlmerr->msg.nlmsg_type);
+				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", 
+					nlmerr->error, nlmerr->msg.nlmsg_type);
 			}
 			break;
 		case RTM_NEWLINK:
+		{ 
+			//struct ctrlmsg cm = { CTRLMSG_TYPE_JOIN, sizeof(cm) };
+			
 			ret = nl_parse_link_info(nlm, &ifinfo);
-
+			
 			/* TODO: Should find a good way to sort out unwanted interfaces. */
 			if (ifinfo.isUp) {
 				
@@ -284,7 +296,10 @@ static int read_netlink(struct netlink_handle *nlh)
                         LOG_DBG("Interface newlink %s %s %s\n", 
                                ifinfo.ifname, eth_to_str(ifinfo.mac), 
                                ifinfo.isUp ? "up" : "down");
+			
+			/* ctrlmsg_send(&cm); */
 			break;
+		}
 		case RTM_DELLINK:
                         ret = nl_parse_link_info(nlm, &ifinfo);
 		
@@ -344,6 +359,43 @@ static void signal_handler(int sig)
         ret = write(p[1], &q, 1);
 }
 
+static void doregister(struct service_id *srvid)
+{
+	int ret;
+	struct sockaddr_sf ctrlid;
+	unsigned long data = 232366;
+
+	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
+
+	memset(&ctrlid, 0, sizeof(ctrlid));
+	ctrlid.sf_family = AF_SCAFFOLD;
+	ctrlid.sf_srvid.s_sid16 = htons(666);
+
+	if (native)
+		ret = sendto(ctrlsock, &data, sizeof(data), 0, 
+			     (struct sockaddr *)&ctrlid, sizeof(ctrlid));
+	else 
+		ret = sendto_sf(ctrlsock, &data, sizeof(data), 0, 
+				(struct sockaddr *)&ctrlid, sizeof(ctrlid));
+	
+	if (ret == -1) {
+		LOG_ERR("sendto failed: %s\n",
+			strerror_sf(errno));
+	}
+}
+
+struct libstack_callbacks callbacks = {
+	.doregister = doregister,
+};
+
+int close_ctrlsock(int sock)
+{
+	if (native)
+		return close(ctrlsock);
+	
+	return close_sf(ctrlsock);
+}
+
 int main(int argc, char **argv)
 {
 	struct sigaction sigact;
@@ -358,10 +410,33 @@ int main(int argc, char **argv)
 	sigaction(SIGHUP, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
 
+	/* Try first a native socket */
+	ctrlsock = socket(AF_SCAFFOLD, SOCK_DGRAM, 0);
+
+	if (ctrlsock == -1) {
+		if (errno == EAFNOSUPPORT) {
+			/* Try libscaffold */
+			ctrlsock = socket_sf(AF_SCAFFOLD, SOCK_DGRAM, 0);
+			
+			if (ctrlsock == -1) {
+				LOG_ERR("cannot open controller socket: %s\n",
+					strerror_sf(errno));
+				return -1;
+			}
+		} else {
+			LOG_ERR("cannot open controller socket: %s\n",
+				strerror(errno));
+			return -1;
+		}
+	} else {
+		native = 1;
+	}
+
 	ret = nl_init_handle(&nlh);
 
 	if (ret < 0) {
 		LOG_ERR("Could not open netlink socket\n");
+		close(ctrlsock);
                 return EXIT_FAILURE;
 	}
 
@@ -370,6 +445,7 @@ int main(int argc, char **argv)
         if (ret == -1) {
 		LOG_ERR("Could not open pipe\n");
                 nl_close_handle(&nlh);
+		close_ctrlsock(ctrlsock);
                 return EXIT_FAILURE;
         }
 
@@ -380,8 +456,11 @@ int main(int argc, char **argv)
                 nl_close_handle(&nlh);
 		close(p[0]);
 		close(p[1]);
+		close_ctrlsock(ctrlsock);
 		return EXIT_FAILURE;
 	}
+	
+	libstack_register_callbacks(&callbacks);
 
 	netlink_getlink(&nlh);
 
@@ -417,10 +496,12 @@ int main(int argc, char **argv)
         }
 	LOG_DBG("scafd exits\n");
 
+	libstack_unregister_callbacks(&callbacks);
 	libstack_fini();
         nl_close_handle(&nlh);
         close(p[0]);
-        close(p[1]);
+        close(p[1]);		
+	close_ctrlsock(ctrlsock);
 	
         return EXIT_SUCCESS;
 }

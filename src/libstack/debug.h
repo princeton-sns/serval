@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 #define LOG_DBG(fmt, ...) fprintf(stdout, "%s: "fmt, __func__, ##__VA_ARGS__)
-#define LOG_ERR(fmt, ...) fprintf(stderr, "%s: ERROR"fmt, __func__, ##__VA_ARGS__)
+#define LOG_ERR(fmt, ...) fprintf(stderr, "%s: ERROR "fmt, __func__, ##__VA_ARGS__)
 #else
 #define LOG_DBG(fmt, ...)
 #define LOG_ERR(fmt, ...)

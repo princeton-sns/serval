@@ -4,7 +4,7 @@ EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) @EXTRA_DEFINES@
 
 obj-m := scaffold.o 
 scaffold-y := \
-	   linux/scaffold_netlink.o \
+	   linux/ctrl.o \
 	   linux/proc.o \
 	   linux/packet.o \
 	   linux/module.o \

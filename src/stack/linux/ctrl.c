@@ -4,15 +4,16 @@
 #include <linux/netdevice.h>
 #include <linux/netlink.h>
 #include <linux/skbuff.h>
-
-#include "scaffold_netlink.h"
+#include <libstack/ctrlmsg.h>
 #include <scaffold/debug.h>
+#include <ctrl.h>
 
 static struct sock *nl_sk = NULL;
+static int peer_pid = -1;
 
-static void scaffold_netlink_recv_skb(struct sk_buff *skb)
+static void ctrl_recv_skb(struct sk_buff *skb)
 {
-	int pid, flags, nlmsglen, skblen;
+	int flags, nlmsglen, skblen;
 	struct nlmsghdr *nlh;
 
         skblen = skb->len;
@@ -26,7 +27,7 @@ static void scaffold_netlink_recv_skb(struct sk_buff *skb)
         if (nlmsglen < sizeof(*nlh) || skblen < nlmsglen)
                 return;
 
-        pid = nlh->nlmsg_pid;
+        peer_pid = nlh->nlmsg_pid;
         flags = nlh->nlmsg_flags;
 
 	LOG_DBG("received skb\n");
@@ -35,39 +36,45 @@ static void scaffold_netlink_recv_skb(struct sk_buff *skb)
                 netlink_ack(skb, nlh, 0);
 }
 
-int scaffold_netlink_send(int type, void *data, unsigned int len, int mask)
+int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 {
         struct sk_buff *skb;
         struct nlmsghdr *nlh;
 
-        skb = alloc_skb(NLMSG_LENGTH(len), mask);
+        skb = alloc_skb(NLMSG_LENGTH(msg->len), mask);
 
         if (!skb)
                 return -ENOMEM;
 
-        nlh = (struct nlmsghdr *)skb_put(skb, NLMSG_LENGTH(len));
-        nlh->nlmsg_type = type;
-        nlh->nlmsg_len = NLMSG_LENGTH(len);
+        NETLINK_CB(skb).dst_group = 1;
+        nlh = (struct nlmsghdr *)skb_put(skb, NLMSG_LENGTH(msg->len));
+        nlh->nlmsg_type = NLMSG_SCAFFOLD;
+        nlh->nlmsg_len = NLMSG_LENGTH(msg->len);
         
-        memcpy(NLMSG_DATA(nlh), data, len);
+        memcpy(NLMSG_DATA(nlh), msg, msg->len);
+
+        LOG_DBG("broadcast netlink msg type=%d\n", msg->type);
 
         return netlink_broadcast(nl_sk, skb, 0, 1, mask);
 }
 
-int __init scaffold_netlink_init(void)
+int __init ctrl_init(void)
 {
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_SCAFFOLD, 1, 
-				      scaffold_netlink_recv_skb, NULL, THIS_MODULE);
+				      ctrl_recv_skb, NULL, THIS_MODULE);
 
 	if (!nl_sk)
 		return -ENOMEM;
 
 	LOG_DBG("created netlink socket\n");
 
+        /* Allow non-root daemons to receive notifications */
+	netlink_set_nonroot(NETLINK_SCAFFOLD, NL_NONROOT_RECV);
+
 	return 0;
 }
 
-void __exit scaffold_netlink_fini(void)
+void __exit ctrl_fini(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	struct sock *sk = nl_sk;

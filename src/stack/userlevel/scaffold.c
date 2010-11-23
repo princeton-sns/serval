@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <stdlib.h>
 #include <sys/types.h>  
 #include <sys/socket.h>
@@ -16,6 +17,7 @@
 #include <scaffold/timer.h>
 #include <af_scaffold.h>
 #include <userlevel/client.h>
+#include <ctrl.h>
 
 LIST_HEAD(client_list);
 static unsigned int num_clients = 0;
@@ -207,6 +209,9 @@ static int server_run(void)
 			maxfd = MAX(maxfd, server_sock[i]);
 		}
 
+		FD_SET(ctrl_getfd(), &readfds);
+		maxfd = MAX(maxfd, ctrl_getfd());
+
 		ret = timer_list_get_next_timeout(&timeout);
 
 		if (ret == -1) {
@@ -258,13 +263,21 @@ static int server_run(void)
 			continue;
 		}
 		
-		LOG_INF("client event\n");
+		if (FD_ISSET(ctrl_getfd(), &readfds)) {
+			ret = ctrl_recvmsg();
+
+			if (ret == -1) {
+				LOG_ERR("ctrlmsg recv error\n");
+			}
+		}
 		
 		for (i = 0; i < NUM_SERVER_SOCKS; i++) {
 			if (FD_ISSET(server_sock[i], &readfds)) {
 				int client_sock;
 				socklen_t addrlen = 0;
 				struct client *c;
+
+				LOG_INF("client event\n");
 				
 				client_sock = accept(server_sock[i], 
 						     (struct sockaddr *)&sa, &addrlen);
@@ -351,8 +364,17 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
+	ret = ctrl_init();
+	
+	if (ret == -1) {
+		LOG_ERR("Could not initialize ctrl socket\n");
+		scaffold_fini();
+		return -1;
+	}
+	
 	ret = server_run();
 
+	ctrl_fini();
 	scaffold_fini();
 
 	return ret;

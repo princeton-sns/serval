@@ -19,6 +19,7 @@ scaffold_SOURCES = \
 	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/packet.c \
+	userlevel/ctrl.c \
 	userlevel/scaffold.c
 
 SCAFFOLD_INCLUDE_DIR=$(top_builddir)/include
@@ -26,12 +27,14 @@ STACK_DIR=$(top_builddir)/src/stack
 
 SCAFFOLD_HDR = \
 	af_scaffold.h \
+	ctrl.h \
 	input.h \
 	output.h \
 	scaffold_sock.h \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
 	scaffold_ipv4.h \
+	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
@@ -59,11 +62,10 @@ KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
 TARGETS = scaffold.ko
 
-SCAFFOLD_KERNEL_HDR = \
-	linux/scaffold_netlink.h
+SCAFFOLD_KERNEL_HDR =
 
 SCAFFOLD_KERNEL_SRC = \
-	linux/scaffold_netlink.c \
+	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
 	linux/module.c \
@@ -78,6 +80,7 @@ SCAFFOLD_KERNEL_SRC = \
 	af_scaffold.c
 
 SCAFFOLD_KERNEL_DEP = \
+	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SCAFFOLD_HDR) \
 	$(SCAFFOLD_KERNEL_HDR) \
 	$(SCAFFOLD_KERNEL_SRC)

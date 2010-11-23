@@ -123,8 +123,8 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         tot_len = skb->len + 20 + 14;
         
         /* Build UDP header */
-        uh->source = htons(scaffold_sk(sk)->local_srvid.s_sid16);
-        uh->dest = htons(scaffold_sk(sk)->peer_srvid.s_sid16);
+        uh->source = scaffold_sk(sk)->local_srvid.s_sid16;
+        uh->dest = scaffold_sk(sk)->peer_srvid.s_sid16;
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_ip.s_addr);
 

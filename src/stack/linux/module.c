@@ -5,8 +5,8 @@
 #include <linux/net.h>
 #include <af_scaffold.h>
 #include <scaffold/debug.h>
-#include <libstack/msg.h>
-#include "scaffold_netlink.h"
+#include <libstack/ctrlmsg.h>
+#include <ctrl.h>
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Scaffold socket API for Linux");
@@ -44,18 +44,24 @@ static int scaffold_netdev_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
-                struct stack_msg m;
-                m.data = 3;
+                /*
+                struct ctrlmsg m;
+                m.type = CTRLMSG_TYPE_JOIN;
+                m.len = sizeof(m);
+                ctrl_sendmsg(&m, GFP_ATOMIC);
+                */
 		LOG_DBG("Netdev UP %s\n", dev->name);
-                scaffold_netlink_send(MSG_TYPE_JOIN, &m, sizeof(m), GFP_ATOMIC);
 		break;
         }
 	case NETDEV_GOING_DOWN:
         {
-                struct stack_msg m;
-                m.data = 3;
+                /*
+                struct ctrlmsg m;
+                m.type = CTRLMSG_TYPE_LEAVE;
+                m.len = sizeof(m);
+                ctrl_sendmsg(&m, GFP_ATOMIC);
+                */
                 LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
-                scaffold_netlink_send(MSG_TYPE_LEAVE, &m, sizeof(m), GFP_ATOMIC);
 		break;
         }
 	case NETDEV_DOWN:
@@ -78,17 +84,11 @@ int scaffold_module_init(void)
 
         LOG_DBG("Loaded scaffold protocol module\n");
        
-	err = register_netdevice_notifier(&netdev_notifier);
-
-	if (err < 0) {
-                LOG_CRIT("Cannot register netdevice notifier\n");
-                goto fail_netdev_notifier;
-        }
-        err = scaffold_netlink_init();
+        err = ctrl_init();
         
 	if (err < 0) {
-                LOG_CRIT("Cannot create netlink socket\n");
-                goto fail_netlink;
+                LOG_CRIT("Cannot create netlink control socket\n");
+                goto fail_ctrl;
         }
 
 	err = scaffold_init();
@@ -97,22 +97,28 @@ int scaffold_module_init(void)
 		 LOG_CRIT("Cannot create netlink socket\n");
 		 goto fail_scaffold;
 	}
+
+	err = register_netdevice_notifier(&netdev_notifier);
+
+	if (err < 0) {
+                LOG_CRIT("Cannot register netdevice notifier\n");
+                goto fail_netdev_notifier;
+        }
 out:
 	return err;
-fail_scaffold:
-        scaffold_netlink_fini();
-fail_netlink:
-        unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
+        scaffold_fini();
+fail_scaffold:
+        ctrl_fini();
+fail_ctrl:
 	goto out;
 }
 
 void __exit scaffold_module_fini(void)
 {
-	scaffold_fini();
-        scaffold_netlink_fini();
         unregister_netdevice_notifier(&netdev_notifier);
-
+	scaffold_fini();
+        ctrl_fini();
         LOG_INF("Unloaded scaffold protocol module\n");
 }
 

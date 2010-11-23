@@ -18,6 +18,8 @@ src/stack/Kbuild
 src/stack/scaffold
 src/test/send_udp_packet
 src/test/send_udp_packetn
+src/test/bindtest
+src/test/bindtestn
 src/test/nltest
 stamp-h1
 #

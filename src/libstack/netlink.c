@@ -7,14 +7,12 @@
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <pthread.h>
-#include <poll.h>
-#include <libstack/msg.h>
+#include <libstack/ctrlmsg.h>
 #include "init.h"
 #include "debug.h"
 #include "event.h"
 
-#define NETLINK_SCAFFOLD 17
+int ctrlmsg_handle(struct ctrlmsg *cm);
 
 struct netlink_handle {
 	struct event_handler *eh;
@@ -27,30 +25,44 @@ static int netlink_handle_init(struct event_handler *eh)
 {
 	struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
 	int ret;
+        
+        LOG_DBG("initializing SCAFFOLD netlink control\n");
 
 	memset(nlh, 0, sizeof(*nlh));
 	nlh->peer.nl_family = AF_NETLINK;
 	nlh->peer.nl_pid = getpid();
-	nlh->peer.nl_groups = 0;
+	nlh->peer.nl_groups = 1;
 
 	nlh->sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_SCAFFOLD);
 
 	if (nlh->sock == -1) {
-		LOG_ERR("Could not open Scaffold netlink socket\n");
-		return -1;
+                if (errno == EPROTONOSUPPORT) {
+                        /* This probably means we are not running the
+			 * kernel space version of the Scaffold stack,
+			 * therefore unregister this handler and exit
+			 * without error. */
+                        LOG_DBG("netlink not supported, disabling\n");
+                        event_unregister_handler(eh);
+                        return 0;
+                }
+		LOG_ERR("netlink control failure: %s\n",
+                        strerror(errno));
+		goto error;
 	}
 	
 	ret = bind(nlh->sock, (struct sockaddr*)&nlh->peer, 
 		   sizeof(nlh->peer));
 	
 	if (ret == -1) {
-		LOG_ERR("Could not bind netlink socket\n");
+		LOG_ERR("Could not bind netlink control socket\n");
 		goto error;
 	}
 out:
 	return ret;
 error:
 	close(nlh->sock);
+        nlh->sock = -1;
+        event_unregister_handler(eh);
 	goto out;
 }
 
@@ -65,7 +77,7 @@ static int netlink_handle_event(struct event_handler *eh)
 {
 	struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
 
-	int len, num_msgs = 0;
+	int ret, num_msgs = 0;
 	socklen_t addrlen;
 	struct nlmsghdr *nlm;
 #define BUFLEN 2000
@@ -75,21 +87,22 @@ static int netlink_handle_event(struct event_handler *eh)
 
 	memset(buf, 0, BUFLEN);
 
-	len = recvfrom(nlh->sock, buf, BUFLEN, MSG_DONTWAIT, 
+	ret = recvfrom(nlh->sock, buf, BUFLEN, MSG_DONTWAIT, 
 		       (struct sockaddr *) &nlh->peer, &addrlen);
 
-	if (len == EAGAIN) {
-		LOG_DBG("Netlink recv would block\n");
-		return 0;
-	}
-	if (len < 0) {
-		LOG_DBG("len negative\n");
-		return len;
+	if (ret == -1) {
+                if (errno == EAGAIN) {
+                        LOG_DBG("Netlink recv would block\n");
+                        return 0;
+                }
+
+		LOG_ERR("recv error: %s\n", strerror(errno));
+		return ret;
 	}
 
 	for (nlm = (struct nlmsghdr *) buf; 
-	     NLMSG_OK(nlm, (unsigned int) len); 
-	     nlm = NLMSG_NEXT(nlm, len)) {
+	     NLMSG_OK(nlm, (unsigned int) ret); 
+	     nlm = NLMSG_NEXT(nlm, ret)) {
 		struct nlmsgerr *nlmerr = NULL;
 		//int ret = 0;
 
@@ -97,7 +110,7 @@ static int netlink_handle_event(struct event_handler *eh)
 
 		switch (nlm->nlmsg_type) {
 		case NLMSG_ERROR:
-			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
+			nlmerr = (struct nlmsgerr *)NLMSG_DATA(nlm);
 			if (nlmerr->error == 0) {
 				LOG_DBG("NLMSG_ACK");
 			} else {
@@ -108,24 +121,17 @@ static int netlink_handle_event(struct event_handler *eh)
 		case NLMSG_DONE:
 			//LOG_DBG("NLMSG_DONE\n");
 			break;
-		case MSG_TYPE_JOIN:
-			LOG_DBG("join message\n");
-			break;
-		case MSG_TYPE_LEAVE:
-			LOG_DBG("leave message\n");
-			break;
-		case MSG_TYPE_REGISTER:
-			LOG_DBG("register message\n");
-			break;
-		case MSG_TYPE_UNREGISTER:
-			LOG_DBG("unregister message\n");
+		case NLMSG_SCAFFOLD:
+                        LOG_DBG("scaffold control msg\n");
+			ret = ctrlmsg_handle((struct ctrlmsg *)NLMSG_DATA(nlm));
+                        
 			break;
 		default:
 			LOG_DBG("Unknown netlink message\n");
 			break;
 		}
 	}
-	return num_msgs;
+	return ret;
 }
 
 static int netlink_getfd(struct event_handler *eh)

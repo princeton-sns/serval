@@ -28,6 +28,7 @@
 #include <scaffold_sock.h>
 #include <scaffold_udp_sock.h>
 #include <scaffold_tcp_sock.h>
+#include <ctrl.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -149,7 +150,11 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = 1;
                 scaffold_sock_set_state(sk, SF_BOUND);
         } else {
-//        ret = send_controller_msg();
+                struct ctrlmsg_register cm;
+                cm.msgh.type = CTRLMSG_TYPE_REGISTER;
+                cm.msgh.len = sizeof(cm);
+                memcpy(&cm.srvid, &sfaddr->sf_srvid, sizeof(sfaddr->sf_srvid));
+                ret = ctrl_sendmsg(&cm.msgh, GFP_KERNEL);
         }
         if (ret < 0) {
                 LOG_ERR("bind failed\n");
@@ -158,7 +163,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         }
 
         memcpy(&scaffold_sk(sk)->local_srvid, &sfaddr->sf_srvid, 
-               sizeof(struct service_id));
+               sizeof(sfaddr->sf_srvid));
         /* 
            Return value of 1 indicates we are in controller mode -->
            do not wait for a reply 
@@ -170,11 +175,20 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         } else if (ret == 0) {
                 release_sock(sk);
                 /* Sleep and wait for response or timeout */
-                ret = wait_event_interruptible(*sk_sleep(sk), cond != 1);
+                ret = wait_event_interruptible_timeout(*sk_sleep(sk), 
+                                                       cond != 1, 
+                                                       msecs_to_jiffies(5000));
 
-                if (ret != 0) {
-                        LOG_ERR("bind interrupted\n");
-                } else {
+                if (ret < 0) {
+                        if (ret == -ERESTARTSYS) {
+                                LOG_ERR("bind interrupted\n");
+                        } else {
+                                LOG_ERR("wait failed\n");
+                        }
+                } else if (ret == 0) {
+                        LOG_DBG("bind timeout\n");
+                        ret = -ETIMEDOUT;
+                } else  {
                         ret = cond;
                         LOG_DBG("bind returned %d\n", ret);
                 }
@@ -410,7 +424,8 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         } else {
                 /* Go to sleep, wait for timeout or successful connection */
                 release_sock(sk);
-                ret = wait_event_interruptible(*sk_sleep(sk), connect_ret != 1);
+                ret = wait_event_interruptible(*sk_sleep(sk), 
+                                                       connect_ret != 1);
                 lock_sock(sk);
 
                 /* Check if we were interrupted */
@@ -704,7 +719,7 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
         /* TODO: do not use host controller mode by default */
-        scaffold_sock_set_flag(scaffold_sk(sk), SCAFFOLD_FLAG_HOST_CTRL_MODE);
+        //scaffold_sock_set_flag(scaffold_sk(sk), SCAFFOLD_FLAG_HOST_CTRL_MODE);
 
         if (__scaffold_assign_sockid(sk) < 0) {
                 LOG_DBG("could not assign sock id\n");

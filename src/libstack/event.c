@@ -63,6 +63,8 @@ void *eventloop_thread(void *arg)
 			LOG_DBG("exit signal\n");
 			break;
 		}
+                
+                LOG_DBG("a socket is readable\n");
 
 		for (i = 0; i < h->num_handlers; i++) {
 			if (fds[i+1].revents & POLLIN) {
@@ -103,21 +105,44 @@ void event_unregister_handler(struct event_handler *eh)
 {
 	int i, found = 0;
 
-	for (i = 0; i < ehandle.num_handlers; i++) {
+	for (i = 0; i < MAX_HANDLERS; i++) {
 		if (found) {
-			ehandle.handlers[i-1] = ehandle.handlers[i];
+                        if (i > ehandle.num_handlers)
+                                ehandle.handlers[i-1] = NULL;
+                        else
+                                ehandle.handlers[i-1] = ehandle.handlers[i];
 		} else if (ehandle.handlers[i] == eh) {
 			/* Call the handler's cleanup function */
 			ehandle.handlers[i]->cleanup(ehandle.handlers[i]);
 			found = 1;
+                        ehandle.num_handlers--;
 		}
 	}
-	ehandle.num_handlers--;
 }
 
 int eventloop_init(void)
 {
-	int ret = 0;
+	int i, ret = 0;
+        unsigned int num = ehandle.num_handlers;
+
+        /* Initialize handlers */
+        /* TODO: call handler cleanup if init fails. But only for
+         * those handlers that have run init */
+        for (i = 0; i < num; i++) {
+                LOG_DBG("Initializing '%s' control\n", ehandle.handlers[i]->name);
+                ret = ehandle.handlers[i]->init(ehandle.handlers[i]);
+                if (ret < 0) {
+                        LOG_ERR("handler '%s' init failed\n",
+                                ehandle.handlers[i]->name);
+                }
+        }
+
+        if (ehandle.num_handlers == 0) {
+                /* No handlers successfully initialized, so
+                   there is no need to run really */
+                LOG_DBG("No registered control handlers\n");
+                return -1;
+        }
 
 	ret = pipe(ehandle.pipefd);
 
