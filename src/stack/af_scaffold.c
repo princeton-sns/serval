@@ -14,7 +14,7 @@
 
 #elif defined(OS_USER)
 /* User-level declarations */
-
+#include <errno.h>
 #endif /* OS_LINUX_KERNEL */
 
 /* Common includes */

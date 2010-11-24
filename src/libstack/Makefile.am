@@ -2,10 +2,13 @@ lib_LTLIBRARIES = libstack.la
 
 libstack_la_SOURCES = \
 	ctrlmsg.c \
-	netlink.c \
 	unix.c \
 	event.c
 
+if OS_LINUX
+libstack_la_SOURCES += \
+	netlink.c
+endif
 
 libstack_includedir=$(includedir)/libstack
 libstack_include_HEADERS = \

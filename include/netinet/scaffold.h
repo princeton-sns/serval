@@ -2,10 +2,7 @@
 #ifndef _SCAFFOLD_H
 #define _SCAFFOLD_H
 
-#include <linux/types.h>
-#include <asm/byteorder.h>
-
-#if defined(__KERNEL__)
+#if defined(__linux__) && defined(__KERNEL__)
 #include <linux/kernel.h>
 #include <linux/socket.h>
 #include <linux/string.h>
@@ -18,9 +15,11 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #if defined(__linux__)
+#include <asm/byteorder.h>
+#include <linux/types.h>
 #include <endian.h>
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
-#include <sys/endian.h>
+#include <machine/endian.h>
 #endif
 #endif
 

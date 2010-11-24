@@ -11,10 +11,16 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
 #include <net/udp.h>
-#else
+#endif
+
+#if defined(OS_USER)
 #include <netinet/ip.h>
+#if defined(OS_BSD)
+#include <scaffold/platform_tcpip.h>
+#else
 #include <netinet/udp.h>
 #endif
+#endif /* OS_USER */
 
 /* For testing only. Should be removed */
 extern const char *fixed_dev_name;

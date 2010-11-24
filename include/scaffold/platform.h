@@ -31,16 +31,24 @@
 #endif
 
 /* TODO: Detect these in configure */
+#if defined(OS_LINUX)
 #define HAVE_LIBIO 1
 #define HAVE_PPOLL 1
 #define HAVE_PSELECT 1
+#endif
 
 #if defined(OS_ANDROID)
 #undef OS_KERNEL
-#undef HAVE_LIBIO
-#undef HAVE_PPOLL
-#undef HAVE_PSELECT
 #define HAVE_OFFSETOF 1
+#endif
+
+#if defined(OS_BSD)
+#include <net/ethernet.h>
+#define ETH_HLEN ETHER_HDR_LEN
+#define ETH_ALEN ETHER_ADDR_LEN
+#define ETH_P_IP ETHERTYPE_IP 
+#define EBADFD EBADF
+#include "platform_tcpip.h"
 #endif
 
 #if defined(OS_LINUX_KERNEL)
@@ -77,8 +85,8 @@ static inline struct net *sock_net(struct sock *sk)
 #include <stdio.h>
 #if defined(OS_LINUX)
 #include <endian.h>
-#elif defined(OS_BSD)
-#include <sys/endian.h>
+#elif defined(OS_MACOSX)
+#include <machine/endian.h>
 #endif
 #if HAVE_LIBIO
 #include <libio.h>

@@ -11,7 +11,6 @@
 #include <sys/select.h>
 #include <errno.h>
 #include <libgen.h>
-#include <net/if.h>
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
@@ -340,6 +339,8 @@ out_close_socks:
 }
 
 const char *fixed_dev_name = "eth1";
+
+#include <net/if.h>
 
 int main(int argc, char **argv)
 {        

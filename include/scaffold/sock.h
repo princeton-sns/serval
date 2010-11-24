@@ -11,7 +11,7 @@
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
 #include <scaffold/list.h>
-#include <asm/types.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <pthread.h>

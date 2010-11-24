@@ -1,1 +1,5 @@
-SUBDIRS = stack libstack libscaffold scafd test
+SUBDIRS = stack libstack libscaffold
+
+if OS_LINUX
+SUBDIRS += scafd test
+endif

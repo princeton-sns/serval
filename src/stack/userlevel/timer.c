@@ -85,7 +85,7 @@ int timer_list_get_next_timeout(struct timespec *timeout)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
 	struct timer_list *timer;
-	struct timespec now;
+	struct timespec now = { 0, 0 };
 
 	if (!tlh)
 		return -1;
@@ -96,12 +96,15 @@ int timer_list_get_next_timeout(struct timespec *timeout)
 	}
 
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
-
+#if defined(OS_LINUX)
 	if (clock_gettime(CLOCK, &now) == -1) {
 		LOG_DBG("clock_gettime failed: %s\n", strerror(errno));
 		timer_list_unlock(tlh);
 		return -1;
 	}
+#else
+#warning "Must implement clock_gettime()!"
+#endif
 	memcpy(timeout, &timer->expires_abs, sizeof(*timeout));
 	timespec_sub(timeout, &now);
 	timer_list_unlock(tlh);
@@ -217,12 +220,15 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 	if (timer_pending(timer))
 		list_del(&timer->entry);
 
+#if defined(OS_LINUX)
 	if (clock_gettime(CLOCK, &timer->expires_abs) == -1) {
 		LOG_DBG("clock_gettime failed: %s\n", strerror(errno));
 		timer_list_unlock(tlh);
 		return -1;
 	}
-	
+#else
+#warning "Must implement clock_gettime()!"
+#endif	
 
 	/* Set timeout, both relative and absolute. */
 	usecs.tv_sec = expires / 1000000;

@@ -1,10 +1,9 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <stdlib.h>
 #include <stdio.h>
-#include <asm/types.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <poll.h>
@@ -35,7 +34,8 @@ void *eventloop_thread(void *arg)
 
 	while (1) {
 		struct pollfd fds[MAX_HANDLERS + 1];
-		int ret, i;
+                unsigned int i;
+		int ret;
 
 		fds[0].fd = h->pipefd[0];
 		fds[0].events = POLLHUP | POLLIN;
@@ -103,7 +103,7 @@ void event_register_handler(struct event_handler *eh)
 
 void event_unregister_handler(struct event_handler *eh)
 {
-	int i, found = 0;
+	unsigned int i, found = 0;
 
 	for (i = 0; i < MAX_HANDLERS; i++) {
 		if (found) {
@@ -122,8 +122,8 @@ void event_unregister_handler(struct event_handler *eh)
 
 int eventloop_init(void)
 {
-	int i, ret = 0;
-        unsigned int num = ehandle.num_handlers;
+	int ret = 0;
+        unsigned int i = 0, num = ehandle.num_handlers;
 
         /* Initialize handlers */
         /* TODO: call handler cleanup if init fails. But only for

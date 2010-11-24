@@ -7,13 +7,19 @@
 #include <scaffold_tcp_sock.h>
 #include <input.h>
 
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
 #include <net/tcp.h>
-#else
+#endif
+
+#if defined(OS_USER)
 #include <netinet/ip.h>
+#if defined(OS_BSD)
+#include <scaffold/platform_tcpip.h>
+#else
 #include <netinet/tcp.h>
 #endif
+#endif /* OS_USER */
 
 static int scaffold_sock_is_valid_conn_state(int state)
 {

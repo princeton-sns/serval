@@ -7,8 +7,22 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/net.h>
 #else
-#include <linux/socket.h>
+#include <sys/socket.h>
+
+#if defined(OS_LINUX)
 #include <linux/net.h>
+#else
+/* Grabbed from linux/net.h */
+typedef enum {
+        SS_FREE = 0,
+        SS_UNCONNECTED,
+        SS_CONNECTING,
+        SS_CONNECTED,
+        SS_DISCONNECTING
+} socket_state;
+
+#endif /* OS_LINUX */
+
 #include "wait.h"
 
 struct sock;

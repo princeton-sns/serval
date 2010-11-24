@@ -36,6 +36,7 @@ SCAFFOLD_HDR = \
 	scaffold_ipv4.h \
 	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
@@ -55,7 +56,11 @@ noinst_HEADERS = \
 	userlevel/client.h
 
 scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
-scaffold_LDFLAGS =-lpthread -lrt
+scaffold_LDFLAGS =-lpthread 
+
+if OS_LINUX
+scaffold_LDFLAGS +=-lrt
+endif
 
 # scaffold module
 KERNEL_VER=`uname -r`

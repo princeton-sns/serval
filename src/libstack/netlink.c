@@ -6,6 +6,7 @@
 #include <linux/netlink.h>
 #include <string.h>
 #include <sys/types.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <libstack/ctrlmsg.h>
 #include "init.h"

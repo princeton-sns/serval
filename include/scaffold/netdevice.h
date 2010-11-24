@@ -14,7 +14,20 @@
 #include <scaffold/lock.h>
 #include <scaffold/list.h>
 #include <net/if.h>
+#if defined(OS_ANDROID)
+#define ETH_HLEN 14
+#else
 #include <net/ethernet.h>
+#endif
+#if defined(OS_BSD)
+
+struct ethhdr {
+        u_char  h_dest[ETHER_ADDR_LEN];
+        u_char  h_source[ETHER_ADDR_LEN];
+        u_short h_proto;
+};
+
+#endif
 
 struct sk_buff;
 

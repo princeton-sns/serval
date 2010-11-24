@@ -494,14 +494,14 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 		free_skb(skb);
 }
 
-#include <linux/if_ether.h>
+struct ethhdr;
 
 static inline struct ethhdr *eth_hdr(const struct sk_buff *skb)
 {
         return (struct ethhdr *)skb_mac_header(skb);
 }
 
-#include <netinet/ip.h>
+struct iphdr;
 
 static inline struct iphdr *ip_hdr(const struct sk_buff *skb)
 {
@@ -517,13 +517,14 @@ int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int offset, struct iovec *to,
                             int size);
 
-#include <netinet/udp.h>
+struct udphdr;
 
 static inline struct udphdr *udp_hdr(const struct sk_buff *skb)
 {
 	return (struct udphdr *)skb_transport_header(skb);
 }
-#include <netinet/tcp.h>
+
+struct tcphdr;
 
 static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 {
