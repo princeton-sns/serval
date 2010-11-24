@@ -1,0 +1,25 @@
+LOCAL_PATH := $(my-dir)
+include $(CLEAR_VARS)
+
+LOCAL_SRC_FILES := \
+	ctrlmsg.c \
+	netlink.c \
+	unix.c \
+	event.c
+
+LOCAL_C_INCLUDES += \
+	$(LOCAL_PATH)/../../include
+
+LOCAL_SHARED_LIBRARIES := libdl
+
+EXTRA_DEFINES=-DOS_ANDROID -DENABLE_DEBUG
+LOCAL_CFLAGS :=-O2 -g $(EXTRA_DEFINES)
+LOCAL_CPPFLAGS +=$(EXTRA_DEFINES)
+
+LOCAL_PRELINK_MODULE := false
+
+LOCAL_LDLIBS :=-lpthread
+
+LOCAL_MODULE := libstack
+
+include $(BUILD_SHARED_LIBRARY)
