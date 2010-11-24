@@ -295,7 +295,7 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 	///struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
 	
 	LOG_DBG("connect request for service id %s\n", 
-		service_id_to_str(( (struct client_msg_connect_req *)&cr)->srvid));
+		service_id_to_str(&((struct client_msg_connect_req *)msg)->srvid));
 
 	return 0;
 }
