@@ -29,7 +29,7 @@ int ctrlmsg_handle(struct ctrlmsg *cm)
 
 int ctrlmsg_send(struct ctrlmsg *cm)
 {
-        
+        return 0;
 }
 
 int libstack_register_callbacks(struct libstack_callbacks *calls)

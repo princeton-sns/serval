@@ -40,6 +40,10 @@
 #if defined(OS_ANDROID)
 #undef OS_KERNEL
 #define HAVE_OFFSETOF 1
+#undef HAVE_LIBIO
+#undef HAVE_PPOLL
+#undef HAVE_PSELECT
+#include <linux/if_ether.h>
 #endif
 
 #if defined(OS_BSD)
