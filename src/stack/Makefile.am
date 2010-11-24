@@ -54,6 +54,10 @@ noinst_HEADERS = \
 	userlevel/client_msg.h \
 	userlevel/client.h
 
+scaffold_includedir=$(includedir)/netinet
+scaffold_include_HEADERS = \
+	$(top_srcdir)/include/netinet/scaffold.h
+
 scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
 scaffold_LDFLAGS =-lpthread -lrt
 
