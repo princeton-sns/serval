@@ -81,8 +81,8 @@ msg_handler_t msg_handlers[] = {
 	
 static void dummy_timer_callback(unsigned long data)
 {
-	struct client *c = (struct client *)data;
-	LOG_DBG("Timer callback for client %u\n", c->id);
+	LOG_DBG("Timer callback for client %u\n", 
+                ((struct client *)data)->id);
 }
 
 struct client *client_get_current(void)
@@ -292,10 +292,10 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
+	///struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
 	
 	LOG_DBG("connect request for service id %s\n", 
-		service_id_to_str(&cr->srvid));	
+		service_id_to_str(( (struct client_msg_connect_req *)&cr)->srvid));
 
 	return 0;
 }

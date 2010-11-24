@@ -293,4 +293,5 @@ void __exit scaffold_sock_fini(void)
 {
         scaffold_table_fini(&listen_table);
         scaffold_table_fini(&established_table);
+        if (sock_state_str[0]) {} /* To avoid compiler warning */
 }
