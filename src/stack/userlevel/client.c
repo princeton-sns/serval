@@ -196,17 +196,21 @@ static int client_close(struct client *c)
 {
 	int ret;
 
-	ret = close(c->fd);
-	c->fd = -1;
-        sock_release(c->sock);
+        if (c->fd != -1) {
+                ret = close(c->fd);
+                c->fd = -1;
+        }
 
+        if (c->sock) {
+                sock_release(c->sock);
+                c->sock = NULL;
+        }
 	return ret;
 }
 
 void client_destroy(struct client *c)
 {
-	if (c->fd != -1)
-		client_close(c);
+        client_close(c);
 
 	list_del(&c->link);
 	free(c);
