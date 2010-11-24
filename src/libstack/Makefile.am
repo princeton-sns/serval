@@ -18,6 +18,7 @@ libstack_include_HEADERS = \
 noinst_HEADERS = \
 	$(top_srcdir)/include/libstack/ctrlmsg.h \
 	debug.h \
+	init.h \
 	event.h
 
 libstack_la_CPPFLAGS =-I$(top_srcdir)/include

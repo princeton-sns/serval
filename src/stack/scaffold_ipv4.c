@@ -47,12 +47,12 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned int hdr_len = iph->ihl << 2;
 	int ret = INPUT_OK;
+#if defined(ENABLE_DEBUG)
 	char srcstr[18];
-       
 	LOG_DBG("received IPv4 packet from %s hdr_len=%u prot=%u\n",
 		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
 		hdr_len, iph->protocol);
-
+#endif
         /* Check if this is not a SCAFFOLD packet */
         if (1 /* !is_scaffold_packet */)
                 return INPUT_DELIVER;

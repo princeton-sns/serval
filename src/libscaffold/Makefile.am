@@ -23,13 +23,14 @@ libscaffold_la_SOURCES = \
 
 libscaffold_la_CXXFLAGS =-I$(top_srcdir)/include
 
-libscaffold_includedir=$(includedir)/netinet
+libscaffold_includedir=$(includedir)/libscaffold
 libscaffold_include_HEADERS = \
-	$(top_srcdir)/include/netinet/scaffold.h
+	$(top_srcdir)/include/libscaffold/scaffold.h
 
 noinst_HEADERS = \
+	types.h \
 	cli.hh \
-	socket.hh
+	socket.hh \
 	message.hh \
 	accept.hh \
 	bind.hh \

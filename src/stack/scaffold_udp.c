@@ -160,8 +160,8 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
-static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
-                                size_t len)
+static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, 
+                                struct msghdr *msg, size_t len)
 {
         int err;
         struct sk_buff *skb;
@@ -175,7 +175,6 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 		return -EOPNOTSUPP;
 
         LOG_DBG("sending message\n");
-        
 
 	if (msg->msg_name) {
 		struct sockaddr_sf *addr = (struct sockaddr_sf *)msg->msg_name;

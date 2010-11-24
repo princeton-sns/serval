@@ -44,9 +44,10 @@ int packet_xmit(struct sk_buff *skb)
 
         if (err == -1) {
                 LOG_ERR("sendto error: %s\n", strerror(errno));
-                free_skb(skb);
         }
 #endif
+        free_skb(skb);
+
         return err;
 }
 
