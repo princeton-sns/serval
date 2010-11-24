@@ -27,6 +27,11 @@ int ctrlmsg_handle(struct ctrlmsg *cm)
 }
 
 
+int ctrlmsg_send(struct ctrlmsg *cm)
+{
+        
+}
+
 int libstack_register_callbacks(struct libstack_callbacks *calls)
 {
 	if (callbacks)

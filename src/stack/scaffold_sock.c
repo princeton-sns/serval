@@ -1,14 +1,14 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#if defined(__KERNEL__)
-#include <linux/ip.h>
-#else
-#include <netinet/ip.h>
-#endif
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/list.h>
 #include <netinet/scaffold.h>
 #include "scaffold_sock.h"
+#if defined(OS_LINUX_KERNEL)
+#include <linux/ip.h>
+#else
+#include <netinet/ip.h>
+#endif
 
 struct scaffold_table established_table;
 struct scaffold_table listen_table;
@@ -185,7 +185,7 @@ static void __scaffold_table_hash(struct scaffold_table *table, struct sock *sk)
         spin_lock(&slot->lock);
         slot->count++;
         hlist_add_head(&sk->sk_node, &slot->head);
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
 	sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 #else
@@ -244,7 +244,7 @@ void scaffold_sock_unhash(struct sock *sk)
 
         if (!hlist_unhashed(&sk->sk_node)) {
                 hlist_del_init(&sk->sk_node);
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
 #else

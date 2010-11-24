@@ -5,6 +5,11 @@
 #include <scaffold_ipv4.h>
 #include <input.h>
 #include <output.h>
+#if defined(OS_LINUX_KERNEL)
+#include <linux/if_ether.h>
+#else
+#include <netinet/if_ether.h>
+#endif
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);

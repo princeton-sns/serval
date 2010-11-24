@@ -104,7 +104,7 @@ static inline int client_type_to_prot_type(client_type_t type)
   Create client.
 
   We use a pipe to signal to clients when to exit. A pipe is useful,
-  because we can "sleep" on it in a select().
+  because we can "sleep" on it in a select()/poll().
 
  */
 struct client *client_create(client_type_t type, 
@@ -194,7 +194,7 @@ int client_get_signalfd(struct client *c)
 
 static int client_close(struct client *c)
 {
-	int ret;
+	int ret = 0;
 
         if (c->fd != -1) {
                 ret = close(c->fd);
@@ -211,7 +211,6 @@ static int client_close(struct client *c)
 void client_destroy(struct client *c)
 {
         client_close(c);
-
 	list_del(&c->link);
 	free(c);
 }
