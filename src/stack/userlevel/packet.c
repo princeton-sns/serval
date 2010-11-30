@@ -13,12 +13,10 @@
 #include <scaffold/skbuff.h>
 #include <scaffold/netdevice.h>
 #include <input.h>
-#if defined(OS_LINUX)
 #include <netpacket/packet.h>
 #include <netinet/ether.h>
 #include <net/if_packet.h>
 #include <net/if.h>
-#endif
 
 static int psock = -1;
 static int pipefd[2] = { -1, -1 };
@@ -30,7 +28,6 @@ static struct net_device *dev = NULL;
 int packet_xmit(struct sk_buff *skb)
 {
         int err = 0;
-#if defined(OS_LINUX)
         struct sockaddr_ll lladdr;
 
         memset(&lladdr, 0, sizeof(lladdr));
@@ -45,7 +42,7 @@ int packet_xmit(struct sk_buff *skb)
         if (err == -1) {
                 LOG_ERR("sendto error: %s\n", strerror(errno));
         }
-#endif
+
         free_skb(skb);
 
         return err;
@@ -87,7 +84,6 @@ void *packet_thread(void *arg)
                         if (fds[0].revents) {
 #define RCVLEN 2000 /* Should be more than enough for normal MTUs */
                                 struct sk_buff *skb;
-#if defined(OS_LINUX)
                                 struct sockaddr_ll lladdr;
                                 socklen_t addrlen = sizeof(lladdr);
                                 char ifname[IFNAMSIZ];
@@ -98,6 +94,7 @@ void *packet_thread(void *arg)
                                         LOG_ERR("could not allocate skb\n");
                                         break;
                                 }
+                                
                                 ret = recvfrom(psock, skb->data, RCVLEN, 0,
                                                (struct sockaddr *)&lladdr, 
                                                &addrlen);
@@ -122,27 +119,14 @@ void *packet_thread(void *arg)
                                 default:
                                         continue;                
                                 }
-                                
-                                if_indextoname(lladdr.sll_ifindex, ifname);
-
-                                if (ret < 0) {
-                                        LOG_ERR("Could not allocate net device\n");
-                                        free_skb(skb);
-                                        continue;
-                                }
-                                
-                                dev->ifindex = lladdr.sll_ifindex;
+                                                                
                                 skb->dev = dev;
-                                skb->dev->hard_header_len = lladdr.sll_halen;
                                 skb_reset_mac_header(skb);
                                 skb->pkt_type = lladdr.sll_pkttype;
                                 skb->protocol = lladdr.sll_protocol;
 
                                 ret = scaffold_input(skb);
-#else
-                                skb = NULL;
-                                ret = INPUT_ERROR;
-#endif /* OS_LINUX */
+
                                 switch (ret) {
                                 case INPUT_KEEP:
                                         break;
@@ -167,11 +151,9 @@ int packet_init(void)
 
         if (!dev)
                 return -ENOMEM;
-#if defined(OS_LINUX)
+
 	psock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_IP));
-#else
-        psock = -1;
-#endif
+
         if (psock == -1) {
                 LOG_ERR("packet socket: %s\n", strerror(errno));
                 return -1;

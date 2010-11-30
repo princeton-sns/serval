@@ -18,9 +18,18 @@ scaffold_SOURCES = \
 	userlevel/wait.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \
-	userlevel/packet.c \
 	userlevel/ctrl.c \
 	userlevel/scaffold.c
+
+if OS_LINUX
+scaffold_SOURCES += \
+	userlevel/packet.c
+endif
+
+if OS_BSD
+scaffold_SOURCES += \
+	userlevel/packet_bpf.c
+endif
 
 SCAFFOLD_INCLUDE_DIR=$(top_builddir)/include
 STACK_DIR=$(top_builddir)/src/stack

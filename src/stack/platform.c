@@ -16,7 +16,12 @@ const char *mac_ntop(const void *src, char *dst, size_t size)
 		return NULL;
 
 	sprintf(dst, "%02x:%02x:%02x:%02x:%02x:%02x",
-		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		mac[0] & 0xff, 
+                mac[1] & 0xff, 
+                mac[2] & 0xff, 
+                mac[3] & 0xff, 
+                mac[4] & 0xff, 
+                mac[5] & 0xff);
 
 	return mac;
 }

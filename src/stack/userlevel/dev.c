@@ -9,6 +9,7 @@
 #include <string.h>
 #if defined(OS_BSD)
 #include <net/if_dl.h>
+#include <ifaddrs.h>
 #endif
 #if !defined(OS_ANDROID)
 #include <net/ethernet.h>
@@ -20,13 +21,56 @@ void ether_setup(struct net_device *dev)
 	dev->addr_len = ETH_ALEN;
 }
 
+#if defined(OS_BSD)
+static int get_macaddr(const char *devname, unsigned char mac[6])
+{
+        int ret = 0;
+        struct ifaddrs *ifa = NULL, *tmp;
+        
+        ret = getifaddrs(&ifa);
+
+        if (ret == -1) {
+                LOG_ERR("could not get interface list\n");
+                return ret;
+        }
+
+        tmp = ifa;
+
+        while (ifa) {
+                if (strcmp(ifa->ifa_name, devname) == 0) {
+#if defined(OS_BSD)
+                        struct sockaddr_dl *ifaddr = 
+                                (struct sockaddr_dl *)ifa->ifa_addr;
+
+                        if (ifaddr->sdl_family != AF_LINK) {
+                                ifa = ifa->ifa_next;
+                                continue;
+                        }
+                        
+                        memcpy(mac, LLADDR(ifaddr), ETH_ALEN);
+#else
+                        memcpy(mac, ifa->ifa_addr->sa_data, ETH_ALEN);
+#endif
+                        ret = 1;
+                        break;
+                }
+                
+                ifa = ifa->ifa_next;
+        }
+        
+        freeifaddrs(tmp);
+                
+        return ret;
+}
+
+#endif
+
 struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 				void (*setup)(struct net_device *))
 {
 	struct net_device *dev;
 	struct ifreq ifr;
         int sock;
-        int family = AF_INET;
 
 	dev = (struct net_device *)malloc(sizeof(struct net_device));
 	
@@ -44,20 +88,26 @@ struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 
 #if defined(OS_BSD)
 #define SIOCGIFHWADDR SIOCGIFADDR
-        family = AF_LINK;
 #endif
-        sock = socket(family, SOCK_DGRAM, 0);
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
         
-        if (sock > 0) {
+        if (sock != -1) {
                 if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
                         LOG_ERR("could not get hw address of interface '%s'\n",
                                 name);
                 } else {
 #if defined(OS_BSD)
-                        struct sockaddr_dl *ifaddr = 
-                                (struct sockaddr_dl *)&ifr.ifr_addr;
-                        
-                        memcpy(dev->perm_addr, LLADDR(ifaddr), ETH_ALEN);
+                        if (get_macaddr(name, dev->perm_addr) == 1) {
+                                LOG_DBG("mac: %02x:%02x:%02x:%02x:%02x:%02x\n",
+                                        dev->perm_addr[0],
+                                        dev->perm_addr[1],
+                                        dev->perm_addr[2],
+                                        dev->perm_addr[3],
+                                        dev->perm_addr[4],
+                                        dev->perm_addr[5]);
+                        } else {
+                                LOG_ERR("No hw address of interface %s\n", name);
+                        }
 #elif defined(OS_LINUX)
                         memcpy(dev->perm_addr, ifr.ifr_hwaddr.sa_data, ETH_ALEN);
 #endif
