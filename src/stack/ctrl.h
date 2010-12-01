@@ -4,6 +4,8 @@
 
 #include <libstack/ctrlmsg.h>
 
+typedef int (*ctrlmsg_handler_t)(struct ctrlmsg *);
+
 int ctrl_init(void);
 void ctrl_fini(void);
 int ctrl_sendmsg(struct ctrlmsg *, int);

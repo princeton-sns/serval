@@ -433,6 +433,7 @@ static void *client_thread(void *arg)
 			/* Error */
 			LOG_ERR("client %u select error...\n",
 				c->id);
+                        c->should_exit = 1;
 			break;
 		} else if (ret == 0) {
 			/* Timeout */

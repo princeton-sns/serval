@@ -5,6 +5,7 @@ scaffold_SOURCES = \
 	platform.c \
 	input.c \
 	output.c \
+	ctrl_handler.c \
 	af_scaffold.c \
 	scaffold_sock.c \
 	scaffold_ipv4.c \

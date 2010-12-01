@@ -13,6 +13,7 @@ scaffold-y := \
 	   af_scaffold.o \
 	   input.o \
 	   output.o \
+	   ctrl_handler.o \
 	   scaffold_ipv4.o \
 	   scaffold_sock.o \
 	   scaffold_udp.o \

@@ -59,6 +59,10 @@ static int netlink_handle_init(struct event_handler *eh)
 		LOG_ERR("Could not bind netlink control socket\n");
 		goto error;
 	}
+
+        /* Set peer address to indicate kernel as target */
+        nlh->peer.nl_pid = 0;
+        nlh->peer.nl_groups = 0;
 out:
 	return ret;
 error:
@@ -145,9 +149,19 @@ static int netlink_getfd(struct event_handler *eh)
 static int netlink_send(struct event_handler *eh, const void *data, size_t datalen)
 {
         struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
-        struct iovec iov = { (void *)data, datalen };
-        struct msghdr mh = { NULL, 0, &iov, 1, NULL, 0, 0 };
-        
+        struct nlmsghdr nh = { 0 };
+	struct iovec iov[2] = { { (void *)&nh, sizeof(nh) }, 
+                                { (void *)data, datalen } };
+        struct msghdr mh = { &nlh->peer, sizeof(nlh->peer), iov, 2, NULL, 0, 0 };
+        static int sequence_number = 0;
+
+        memset(&nh, 0, sizeof(nh));
+	nh.nlmsg_pid = 0;
+	nh.nlmsg_seq = ++sequence_number;
+        nh.nlmsg_len = NLMSG_LENGTH(datalen);
+	/* Request an ack from kernel by setting NLM_F_ACK. */
+	/* nh.nlmsg_flags |= NLM_F_ACK; */
+
         return sendmsg(nlh->sock, &mh, 0);
 }
 

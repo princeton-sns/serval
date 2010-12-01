@@ -11,10 +11,13 @@
 static struct sock *nl_sk = NULL;
 static int peer_pid = -1;
 
+extern ctrlmsg_handler_t handlers[];
+
 static void ctrl_recv_skb(struct sk_buff *skb)
 {
-	int flags, nlmsglen, skblen;
+	int flags, nlmsglen, skblen, ret = 0;
 	struct nlmsghdr *nlh;
+        struct ctrlmsg *cm;
 
         skblen = skb->len;
 
@@ -34,6 +37,21 @@ static void ctrl_recv_skb(struct sk_buff *skb)
 
 	if (flags & NLM_F_ACK)
                 netlink_ack(skb, nlh, 0);
+
+        cm = (struct ctrlmsg *)NLMSG_DATA(nlh);
+        
+        if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
+                LOG_ERR("No handler for message type %u\n",
+                        cm->type);
+                ret = -1;
+        } else {
+                ret = handlers[cm->type](cm);
+                
+                if (ret == -1) {
+                        LOG_ERR("handler failure for message type %u\n",
+                                cm->type);
+                }
+        }
 }
 
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
