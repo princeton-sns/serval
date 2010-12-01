@@ -273,8 +273,6 @@ static int read_netlink(struct netlink_handle *nlh)
 			break;
 		case RTM_NEWLINK:
 		{ 
-			//struct ctrlmsg cm = { CTRLMSG_TYPE_JOIN, sizeof(cm) };
-			
 			ret = nl_parse_link_info(nlm, &ifinfo);
 			
 			/* TODO: Should find a good way to sort out unwanted interfaces. */

@@ -236,8 +236,6 @@ void *eventloop_thread(void *arg)
                         }
 		}
                 
-                LOG_DBG("a socket is readable\n");
-
 		for (i = 0; i < h->num_handlers; i++) {
 			if (fds[i+1].revents & POLLIN) {
 				/* file descriptor readable */

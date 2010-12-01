@@ -440,9 +440,9 @@ static void *client_thread(void *arg)
 		} else {
 			if (FD_ISSET(c->pipefd[0], &readfds)) {
 				/* Signal received, probably exit */
-				client_signal_lower(c);
 				LOG_DBG("Client %u exit signal\n", c->id);
-				continue;
+                                c->should_exit = 1;
+                                continue;
 			}
 			if (FD_ISSET(c->fd, &readfds)) {
 				/* Socket readable */
