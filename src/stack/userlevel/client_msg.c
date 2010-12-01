@@ -128,29 +128,35 @@ int client_msg_read(int sock, struct client_msg **msg)
 		free(msg_tmp);
 		return -1;
 	}
-	/* Read payload */
-	*msg = (struct client_msg *)realloc(msg_tmp, 
-                                            CLIENT_MSG_HDR_LEN + 
-                                            msg_tmp->payload_length);
 
-	if (!*msg) {
-		free(msg_tmp);
-		LOG_ERR("Could not allocate memory for payload\n");
-		return -1;
-	}
-
-	len = recv(sock, (*msg)->payload, (*msg)->payload_length, 0);
-
-	if (len == -1) {
-		LOG_ERR("Message payload read error : %s\n", strerror(errno));
-		free(*msg);
-		return -1;
-	} else if (len < (*msg)->payload_length) {
-		LOG_ERR("Message paylaod too short\n");
-		free(*msg);
-		return -1;
-	}
-	
+        if (msg_tmp->payload_length == 0) {
+                /* We are done */
+                *msg = msg_tmp;
+        } else {
+                /* Read payload */
+                *msg = (struct client_msg *)realloc(msg_tmp, 
+                                                    CLIENT_MSG_HDR_LEN + 
+                                                    msg_tmp->payload_length);
+                
+                if (!*msg) {
+                        free(msg_tmp);
+                        LOG_ERR("Could not allocate memory for payload\n");
+                        return -1;
+                }
+                
+                len = recv(sock, (*msg)->payload, (*msg)->payload_length, 0);
+                
+                if (len == -1) {
+                        LOG_ERR("Message payload read error : %s\n", 
+                                strerror(errno));
+                        free(*msg);
+                        return -1;
+                } else if (len < (*msg)->payload_length) {
+                        LOG_ERR("Message paylaod too short\n");
+                        free(*msg);
+                        return -1;
+                }
+        }
 	return CLIENT_MSG_HDR_LEN + (*msg)->payload_length;
 }
 

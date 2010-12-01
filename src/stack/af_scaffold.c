@@ -151,10 +151,10 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 scaffold_sock_set_state(sk, SF_BOUND);
         } else {
                 struct ctrlmsg_register cm;
-                cm.msgh.type = CTRLMSG_TYPE_REGISTER;
-                cm.msgh.len = sizeof(cm);
+                cm.cmh.type = CTRLMSG_TYPE_REGISTER;
+                cm.cmh.len = sizeof(cm);
                 memcpy(&cm.srvid, &sfaddr->sf_srvid, sizeof(sfaddr->sf_srvid));
-                ret = ctrl_sendmsg(&cm.msgh, GFP_KERNEL);
+                ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
         }
         if (ret < 0) {
                 LOG_ERR("bind failed\n");

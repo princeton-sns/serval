@@ -145,6 +145,15 @@ static int unix_getfd(struct event_handler *eh)
 	return uh->sock;
 }
 
+static int unix_send(struct event_handler *eh, const void *data, size_t datalen)
+{
+        struct unix_handle *uh = (struct unix_handle *)eh->private;
+        struct iovec iov = { (void *)data, datalen };
+        struct msghdr mh = { &uh->peer, sizeof(uh->peer), &iov, 1, NULL, 0, 0 };
+        
+        return sendmsg(uh->sock, &mh, 0);
+}
+
 static struct unix_handle uh;
 
 static struct event_handler eh = {
@@ -153,6 +162,7 @@ static struct event_handler eh = {
 	.cleanup = unix_handle_destroy,
 	.getfd = unix_getfd,
 	.handle_event = unix_handle_event,
+        .send = unix_send,
 	.private = (void *)&uh
 };
 

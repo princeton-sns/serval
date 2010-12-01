@@ -297,7 +297,8 @@ static int read_netlink(struct netlink_handle *nlh)
                                ifinfo.ifname, eth_to_str(ifinfo.mac), 
                                ifinfo.isUp ? "up" : "down");
 			
-			/* ctrlmsg_send(&cm); */
+			libstack_configure_interface(ifinfo.ifname, 
+						     ifinfo.isUp ? IFFLAG_UP : 0);
 			break;
 		}
 		case RTM_DELLINK:
@@ -500,8 +501,10 @@ int main(int argc, char **argv)
 	libstack_fini();
         nl_close_handle(&nlh);
         close(p[0]);
-        close(p[1]);		
+        close(p[1]);
+	LOG_DBG("closing control sock\n");
 	close_ctrlsock(ctrlsock);
-	
+	LOG_DBG("done\n");
+
         return EXIT_SUCCESS;
 }

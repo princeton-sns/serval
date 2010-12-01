@@ -2,6 +2,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/list.h>
+#include <scaffold/debug.h>
 #include <netinet/scaffold.h>
 #include "scaffold_sock.h"
 #if defined(OS_LINUX_KERNEL)

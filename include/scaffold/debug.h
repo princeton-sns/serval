@@ -10,7 +10,6 @@
 #elif defined(OS_USER)
 #include <stdio.h>
 #include <stdarg.h>
-#include <assert.h>
 #include <errno.h> 
 #include <sys/types.h>
 #include <unistd.h>
@@ -40,10 +39,6 @@ void logme(log_level_t level, const char *func, const char *format, ...);
 #define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
 
-#ifndef BUG_ON
-#define BUG_ON(x) assert(!x)
-#endif 
-
 #else
 
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
@@ -51,10 +46,6 @@ void logme(log_level_t level, const char *func, const char *format, ...);
 #define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
 #define LOG_DBG(fmt, ...)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
-
-#ifndef BUG_ON
-#define BUG_ON(x) 
-#endif 
 
 #endif /* ENABLE_DEBUG */
 

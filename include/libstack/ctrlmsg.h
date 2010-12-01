@@ -2,12 +2,16 @@
 #define _LIBSTACK_CTRLMSG_H
 
 #include <netinet/scaffold.h>
+#if !defined(__KERNEL__)
+#include <net/if.h>
+#endif
 
 enum ctrlmsg_type {
 	CTRLMSG_TYPE_JOIN = 0,
 	CTRLMSG_TYPE_LEAVE,
 	CTRLMSG_TYPE_REGISTER,
 	CTRLMSG_TYPE_UNREGISTER,
+	CTRLMSG_TYPE_IFACE_CONF,
 };
 
 struct ctrlmsg {
@@ -17,8 +21,16 @@ struct ctrlmsg {
 };
 
 struct ctrlmsg_register {
-	struct ctrlmsg msgh;
+	struct ctrlmsg cmh;
 	struct service_id srvid;
+};
+
+#define IFFLAG_UP 0x1
+
+struct ctrlmsg_iface_conf {
+	struct ctrlmsg cmh;
+	char ifname[IFNAMSIZ];
+	unsigned short flags;
 };
 
 #if defined(__linux__)

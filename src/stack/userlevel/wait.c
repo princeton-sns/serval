@@ -2,11 +2,13 @@
 #define _GNU_SOURCE /* For ppoll to be defined */
 #include <scaffold/wait.h>
 #include <scaffold/timer.h>
+#include <scaffold/debug.h>
 #include <userlevel/client.h>
 
 #include <pthread.h>
 #include <sys/select.h>
 #include <poll.h>
+#include <unistd.h>
 
 static pthread_key_t wq_key;
 static pthread_key_t w_key;

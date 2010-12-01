@@ -3,6 +3,7 @@
 #include <scaffold/skbuff.h>
 #include <scaffold/netdevice.h>
 #include <scaffold_sock.h>
+#include <scaffold/debug.h>
 #include <input.h>
 
 extern int scaffold_ipv4_rcv(struct sk_buff *skb);

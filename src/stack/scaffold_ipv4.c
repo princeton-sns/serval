@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
+#include <scaffold/debug.h>
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
 #include <input.h>

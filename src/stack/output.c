@@ -2,6 +2,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/netdevice.h>
+#include <scaffold/debug.h>
 #include <scaffold_sock.h>
 #include <output.h>
 

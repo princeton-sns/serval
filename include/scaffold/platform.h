@@ -143,12 +143,21 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_ANDROID */
 
+#if defined(ENABLE_DEBUG)
+#include <assert.h>
+#ifndef BUG_ON
+#define BUG_ON(x) assert(!x)
+#endif 
+#else
+#ifndef BUG_ON
+#define BUG_ON(x) 
+#endif 
+#endif /* ENABLE_DEBUG */
+
 #endif /* OS_USER */
 
 const char *mac_ntop(const void *src, char *dst, size_t size);
 int mac_pton(const char *src, void *dst);
 const char *get_strtime(void);
-
-#include "debug.h"
 
 #endif /* _PLATFORM_H */

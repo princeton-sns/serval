@@ -74,6 +74,7 @@ void *packet_thread(void *arg)
 
                 if (ret == -1) {
                         LOG_ERR("poll error: %s\n", strerror(errno));
+                        should_exit = 1;
                 } else if (ret == 0) {
                         /* No timeout set, should not happen */
                 } else {
@@ -86,7 +87,6 @@ void *packet_thread(void *arg)
                                 struct sk_buff *skb;
                                 struct sockaddr_ll lladdr;
                                 socklen_t addrlen = sizeof(lladdr);
-                                char ifname[IFNAMSIZ];
 
                                 skb = alloc_skb(RCVLEN);
                                 

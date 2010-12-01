@@ -54,6 +54,7 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
@@ -73,6 +74,9 @@ msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
+	dummy_msg_handler,
+	dummy_msg_handler,
+	client_handle_close_req_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
@@ -253,7 +257,7 @@ int client_signal_lower(struct client *c)
 	char r = 'r';
 
 	do {
-		sz = read(c->pipefd[1], &r, 1);
+		sz = read(c->pipefd[0], &r, 1);
 
 		if (sz == 1)
 			ret = 1;
@@ -336,6 +340,15 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         }
         
 	return client_msg_write(c->fd, &rsp.msghdr);
+}
+
+int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
+{        
+        DEFINE_CLIENT_RESPONSE(rsp, MSG_CLOSE_RSP);
+
+        LOG_DBG("Sending close response\n");
+
+        return client_msg_write(c->fd, &rsp.msghdr);
 }
 
 static int client_handle_msg(struct client *c)

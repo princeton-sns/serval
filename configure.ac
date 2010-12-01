@@ -202,6 +202,6 @@ echo
 #echo "Build user level.........................$userlevel"
 echo "Build Linux kernel module.................$kernel"
 #echo "Build unit tests.........................$unittest"
-echo "Enable debug output......................$debug"
+echo "Enable debug output.......................$debug"
 #echo "Enable GPROF.............................$enable_gprof"
 echo

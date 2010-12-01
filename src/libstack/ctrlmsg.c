@@ -3,7 +3,7 @@
 #include <libstack/callback.h>
 #include "debug.h"
 
-static struct libstack_callbacks *callbacks = NULL;
+extern struct libstack_callbacks *callbacks;
 
 int ctrlmsg_handle(struct ctrlmsg *cm)
 {
@@ -30,20 +30,4 @@ int ctrlmsg_handle(struct ctrlmsg *cm)
 int ctrlmsg_send(struct ctrlmsg *cm)
 {
         return 0;
-}
-
-int libstack_register_callbacks(struct libstack_callbacks *calls)
-{
-	if (callbacks)
-		return -1;
-
-	callbacks = calls;
-	
-	return 0;
-}
-
-void libstack_unregister_callbacks(struct libstack_callbacks *calls)
-{
-	if (callbacks == calls)
-		callbacks = NULL;
 }

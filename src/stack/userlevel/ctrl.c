@@ -12,15 +12,40 @@ struct sockaddr_un unaddr;
 #define RCV_BUFSIZE 100
 static unsigned char buf[RCV_BUFSIZE];
 
+typedef int (*ctrlmsg_handler_t)(struct ctrlmsg *);
+
+static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
+{
+	LOG_DBG("control message type %u\n", cm->type);
+        return 0;
+}
+
+static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
+{
+        struct ctrlmsg_iface_conf *ifcm = (struct ctrlmsg_iface_conf *)cm;
+
+        LOG_DBG("iface %s\n", ifcm->ifname);
+
+        return 0;
+}
+
+static ctrlmsg_handler_t handlers[] = {
+        dummy_ctrlmsg_handler,
+        dummy_ctrlmsg_handler,
+        dummy_ctrlmsg_handler,
+        dummy_ctrlmsg_handler,
+        ctrl_handle_iface_conf_msg,
+};
+
 int ctrl_recvmsg(void)
 {
-	struct msghdr *mh = (struct msghdr *)buf;
+        struct iovec iov = { buf, RCV_BUFSIZE };
+	struct msghdr mh = { NULL, 0, &iov, 1, NULL, 0, 0 };
 	struct ctrlmsg *msg;
 	ssize_t nbytes;
+        int ret = 0;
 
-	memset(mh, 0, sizeof(*mh));
-
-	nbytes = recvmsg(ctrl_sock, mh, MSG_DONTWAIT);
+	nbytes = recvmsg(ctrl_sock, &mh, MSG_DONTWAIT);
 
 	if (nbytes == -1) {
 		switch (errno) {
@@ -33,16 +58,26 @@ int ctrl_recvmsg(void)
 		return -1;
 	}
 
-	if (mh->msg_iovlen == 0) {
+	if (mh.msg_iovlen == 0) {
 		LOG_ERR("control message missing\n");
 		return -1;
 	} 
 
-	msg = (struct ctrlmsg *)mh->msg_iov[0].iov_base;
-
-	LOG_DBG("control message type %u\n", msg->type);
-
-	return 0;
+	msg = (struct ctrlmsg *)mh.msg_iov[0].iov_base;
+        
+        if (msg->type >= sizeof(handlers) / sizeof(ctrlmsg_handler_t)) {
+                LOG_ERR("No handler for message type %u\n",
+                        msg->type);
+                ret = -1;
+        } else {
+                ret = handlers[msg->type](msg);
+                
+                if (ret == -1) {
+                        LOG_ERR("handler failure for message type %u\n",
+                                msg->type);
+                }
+        }
+	return ret;
 }
 
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)

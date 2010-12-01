@@ -1,6 +1,7 @@
 lib_LTLIBRARIES = libstack.la
 
 libstack_la_SOURCES = \
+	libstack.c \
 	ctrlmsg.c \
 	unix.c \
 	event.c

@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <string.h>
 #include <sys/uio.h>
 #include <scaffold/debug.h>
@@ -87,6 +88,7 @@ nodata:
 	free(skb);
 	return NULL;
 }
+
 /**
  *	skb_dequeue - remove from the head of the queue
  *	@list: list to dequeue from
@@ -95,7 +97,6 @@ nodata:
  *	may be used safely with other locking list functions. The head item is
  *	returned or %NULL if the list is empty.
  */
-
 struct sk_buff *skb_dequeue(struct sk_buff_head *list)
 {
 	struct sk_buff *result;
