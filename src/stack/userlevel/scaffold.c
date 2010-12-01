@@ -19,7 +19,7 @@
 #include <userlevel/client.h>
 #include <ctrl.h>
 
-LIST_HEAD(client_list);
+struct list_head client_list;
 static unsigned int num_clients = 0;
 static volatile int should_exit = 0;
 
@@ -361,6 +361,8 @@ int main(int argc, char **argv)
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 	
+        INIT_LIST_HEAD(&client_list);
+
 	argc--;
 	argv++;
 
