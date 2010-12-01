@@ -1,1 +1,38 @@
-i was here
+Scaffold hoststack
+==================
+
+To compile:
+
+First time you check out, prepare the build system:
+
+# ./autogen.sh
+
+To configure the build system:
+
+# ./configure [ --enable-debug | --disable-kernel ]
+
+To build:
+
+# make
+
+Directory structure
+-------------------
+include/		headers that are shared between components under src/.
+
+src/			source code.
+
+src/stack		stack code.
+
+src/stack/linux		stack code specific for the linux kernel.
+
+src/stack/userlevel	stack code specific for user level.
+
+src/libstack		library that makes it easy to interact with the stack 
+			from user space independent of stack version.
+
+src/scafd		user space control daemon for the stack (uses libstack).
+
+src/test		test programs for the stack.
+
+src/libscaffold		socket API abstraction for client applications interacting 
+			with  user level version of the stack.
