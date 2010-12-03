@@ -18,8 +18,8 @@ int scaffold_input(struct sk_buff *skb)
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
 	
-	LOG_DBG("raw packet if=%d [%s %s 0x%04x]\n", 
-		skb->dev->ifindex, srcstr, dststr, prot);
+	LOG_DBG("raw packet if=%s [%s %s 0x%04x]\n", 
+		skb->dev->name, srcstr, dststr, prot);
         
         /* Set head to network part of packet */
         skb_pull(skb, skb->dev->hard_header_len);

@@ -13,6 +13,7 @@
 #include <ifaddrs.h>
 #include <pthread.h>
 #include <poll.h>
+#include <string.h>
 #if defined(OS_BSD)
 #include <net/if_dl.h>
 #endif
@@ -37,7 +38,8 @@ static void *dev_thread(void *arg);
 
 static inline struct hlist_head *dev_name_hash(struct net *net, const char *name)
 {
-	unsigned hash = full_name_hash(name, strnlen(name, IFNAMSIZ));
+	unsigned hash = full_name_hash(name, 
+                                       (strlen(name) > IFNAMSIZ) ? IFNAMSIZ : strlen(name));
 	return &dev_name_head[hash_32(hash, NETDEV_HASHBITS)];
 }
 
@@ -321,6 +323,15 @@ int netdev_populate_table(int sizeof_priv,
               
                 if (ifaddr->sdl_family != AF_LINK)
                         continue;
+
+                if (strncmp(ifa->ifa_name, "lo", 2) == 0)
+                        continue;
+                if (strncmp(ifa->ifa_name, "gif", 3) == 0)
+                        continue;
+                if (strncmp(ifa->ifa_name, "stf", 3) == 0)
+                        continue;
+                if (strncmp(ifa->ifa_name, "fw", 2) == 0)
+                        continue;
 #elif defined(OS_LINUX)
                 /* Filter on all devices that support AF_PACKET, these
                    are the only ones we can use anyway. */
@@ -334,7 +345,7 @@ int netdev_populate_table(int sizeof_priv,
                 dev = alloc_netdev(sizeof_priv, ifa->ifa_name, setup);
                 
                 if (!dev)
-                        return -1;
+                        continue;
 
                 /* Figure out the mac address */
 #if defined(OS_BSD)

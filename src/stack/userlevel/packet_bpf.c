@@ -11,6 +11,8 @@
 #include <input.h>
 #include <net/bpf.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
+#include "packet.h"
 
 struct bpf_priv {
         char device[12];
@@ -29,7 +31,6 @@ static struct bpf_insn insns[] = {
 };
 
 #define NUM_DEVICES 4
-#define get_priv(dev) ((struct packet_linux_priv *)dev_get_priv(dev))
 
 static int packet_bpf_init(struct net_device *dev)
 {
@@ -37,6 +38,7 @@ static int packet_bpf_init(struct net_device *dev)
         struct bpf_program bpfp = 
                 { sizeof(insns) / sizeof(struct bpf_insn), insns };
         unsigned int i;
+        int ret;
 
         /* Try to find a free bpf device */
         for (i = 0; i < NUM_DEVICES; i++) {
@@ -49,7 +51,7 @@ static int packet_bpf_init(struct net_device *dev)
                 } else {
                         struct ifreq ifr;
                         memset(&ifr, 0, sizeof(ifr));
-                        strcpy(ifr.ifr_name, priv->devname);
+                        strcpy(ifr.ifr_name, dev->name);
                         
                         ret = ioctl(dev->fd, BIOCSETIF, &ifr);
                         
@@ -116,7 +118,7 @@ fail_ioctl:
 	goto out;
 }
 
-static int packet_bpf_destroy(struct net_device *dev)
+static void packet_bpf_destroy(struct net_device *dev)
 {
         struct bpf_priv *priv = get_priv(dev);
 
@@ -134,7 +136,8 @@ static int packet_bpf_recv(struct net_device *dev)
         struct sk_buff *skb;
         unsigned char *ep;
         struct bpf_hdr *bh = (struct bpf_hdr *)priv->buf;
-        
+        int ret;
+
         /* Unfortunately, bpf mandates that we read buflen bytes data
            each time, which may include several packets. Therefore, we
            must first read into our allocated buffer and then allocate
@@ -146,10 +149,10 @@ static int packet_bpf_recv(struct net_device *dev)
         if (ret == -1) {
                 LOG_ERR("read header: %s\n", 
                         strerror(errno));
-                continue;
+                return -1;
         } else if (ret < sizeof(*bh)) {
                 LOG_ERR("read too small\n");
-                goto out_error;
+                return -1;
         }
         
         ep = priv->buf + ret;
@@ -160,7 +163,7 @@ static int packet_bpf_recv(struct net_device *dev)
                 
                 if (!skb) {
                         LOG_ERR("could not allocate skb\n");
-                        goto out_error;
+                        return -1;
                 }
                 
                 /* Copy frame */
@@ -190,7 +193,7 @@ static int packet_bpf_recv(struct net_device *dev)
                 bh = (struct bpf_hdr *)((char *)bh + 
                                         BPF_WORDALIGN(bh->bh_hdrlen + bh->bh_caplen));
         }
-        return skb;
+        return 0;
 }
 
 static int packet_bpf_xmit(struct sk_buff *skb)
@@ -212,7 +215,7 @@ static struct packet_ops pack_ops = {
 	.init = packet_bpf_init,
 	.destroy = packet_bpf_destroy,
 	.recv = packet_bpf_recv,
-	.xmit = packet_bpfx_xmit
+	.xmit = packet_bpf_xmit
 };
 
 static void dev_setup(struct net_device *dev)
