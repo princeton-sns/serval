@@ -14,22 +14,25 @@
  * machines where multiplications are slow.
  */
 
-#include <asm/types.h>
+#include <sys/types.h>
 
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
 #define GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001UL
 
-#if BITS_PER_LONG == 32
+#if __BITS_PER_LONG == 32
 #define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_32
 #define hash_long(val, bits) hash_32(val, bits)
-#elif BITS_PER_LONG == 64
+#elif __BITS_PER_LONG == 64
 #define hash_long(val, bits) hash_64(val, bits)
 #define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_64
 #else
 #error Wordsize not 32 or 64
 #endif
+
+typedef uint64_t u64;
+typedef uint32_t u32;
 
 static inline u64 hash_64(u64 val, unsigned int bits)
 {
@@ -67,4 +70,35 @@ static inline unsigned long hash_ptr(void *ptr, unsigned int bits)
 {
 	return hash_long((unsigned long)ptr, bits);
 }
+
+/* Name hashing routines. Initial hash value */
+/* Hash courtesy of the R5 hash in reiserfs modulo sign bits */
+#define init_name_hash()		0
+
+/* partial hash update function. Assume roughly 4 bits per character */
+static inline unsigned long
+partial_name_hash(unsigned long c, unsigned long prevhash)
+{
+	return (prevhash + (c << 4) + (c >> 4)) * 11;
+}
+
+/*
+ * Finally: cut down the number of bits to a int value (and try to avoid
+ * losing bits)
+ */
+static inline unsigned long end_name_hash(unsigned long hash)
+{
+	return (unsigned int) hash;
+}
+
+/* Compute the hash for a name string. */
+static inline unsigned int
+full_name_hash(const char *name, unsigned int len)
+{
+	unsigned long hash = init_name_hash();
+	while (len--)
+		hash = partial_name_hash(*name++, hash);
+	return end_name_hash(hash);
+}
+
 #endif /* _LINUX_HASH_H */

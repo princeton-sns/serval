@@ -14,6 +14,7 @@
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
+#include <scaffold/netdevice.h>
 #include <scaffold/timer.h>
 #include <af_scaffold.h>
 #include <userlevel/client.h>
@@ -391,6 +392,7 @@ int main(int argc, char **argv)
 
 	if (ret == -1) {
 		LOG_ERR("Could not initialize af_scaffold\n");
+                netdev_fini();
 		return -1;
 	}
 	
@@ -398,6 +400,7 @@ int main(int argc, char **argv)
 	
 	if (ret == -1) {
 		LOG_ERR("Could not initialize ctrl socket\n");
+                netdev_fini();
 		scaffold_fini();
 		return -1;
 	}

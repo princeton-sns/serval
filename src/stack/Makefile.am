@@ -24,7 +24,7 @@ scaffold_SOURCES = \
 
 if OS_LINUX
 scaffold_SOURCES += \
-	userlevel/packet.c
+	userlevel/packet_linux.c
 endif
 
 if OS_BSD
@@ -62,6 +62,7 @@ SCAFFOLD_HDR = \
 
 noinst_HEADERS = \
 	$(SCAFFOLD_HDR) \
+	userlevel/packet.h \
 	userlevel/client_msg.h \
 	userlevel/client.h
 

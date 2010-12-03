@@ -1,129 +1,121 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/netdevice.h>
 #include <scaffold/debug.h>
+#include <scaffold/list.h>
+#include <scaffold/hash.h>
+#include <scaffold/net.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ifaddrs.h>
+#include <pthread.h>
+#include <poll.h>
 #if defined(OS_BSD)
 #include <net/if_dl.h>
-#include <ifaddrs.h>
 #endif
 #if !defined(OS_ANDROID)
 #include <net/ethernet.h>
 #endif
+#include "packet.h"
+#include <input.h>
+
+#define NETDEV_HASHBITS    8
+#define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
+
+DEFINE_RWLOCK(dev_base_lock);
+
+struct net init_net = { 1 };
+
+struct list_head dev_base_head;
+struct hlist_head *dev_name_head;
+struct hlist_head *dev_index_head;
+
+static void *dev_thread(void *arg);
+
+static inline struct hlist_head *dev_name_hash(struct net *net, const char *name)
+{
+	unsigned hash = full_name_hash(name, strnlen(name, IFNAMSIZ));
+	return &dev_name_head[hash_32(hash, NETDEV_HASHBITS)];
+}
+
+static inline struct hlist_head *dev_index_hash(struct net *net, int ifindex)
+{
+	return &dev_index_head[ifindex & (NETDEV_HASHENTRIES - 1)];
+}
+
+static struct hlist_head *netdev_create_hash(void)
+{
+	int i;
+	struct hlist_head *hash;
+
+	hash = malloc(sizeof(*hash) * NETDEV_HASHENTRIES);
+
+	if (hash != NULL)
+		for (i = 0; i < NETDEV_HASHENTRIES; i++)
+			INIT_HLIST_HEAD(&hash[i]);
+
+	return hash;
+}
 
 void ether_setup(struct net_device *dev)
 {	
 	dev->hard_header_len = ETH_HLEN;
 	dev->addr_len = ETH_ALEN;
+	memset(dev->broadcast, 0xFF, ETH_ALEN);
 }
-
-#if defined(OS_BSD)
-static int get_macaddr(const char *devname, unsigned char mac[6])
-{
-        int ret = 0;
-        struct ifaddrs *ifa = NULL, *tmp;
-        
-        ret = getifaddrs(&ifa);
-
-        if (ret == -1) {
-                LOG_ERR("could not get interface list\n");
-                return ret;
-        }
-
-        tmp = ifa;
-
-        while (ifa) {
-                if (strcmp(ifa->ifa_name, devname) == 0) {
-#if defined(OS_BSD)
-                        struct sockaddr_dl *ifaddr = 
-                                (struct sockaddr_dl *)ifa->ifa_addr;
-
-                        if (ifaddr->sdl_family != AF_LINK) {
-                                ifa = ifa->ifa_next;
-                                continue;
-                        }
-                        
-                        memcpy(mac, LLADDR(ifaddr), ETH_ALEN);
-#else
-                        memcpy(mac, ifa->ifa_addr->sa_data, ETH_ALEN);
-#endif
-                        ret = 1;
-                        break;
-                }
-                
-                ifa = ifa->ifa_next;
-        }
-        
-        freeifaddrs(tmp);
-                
-        return ret;
-}
-
-#endif
 
 struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 				void (*setup)(struct net_device *))
 {
 	struct net_device *dev;
-	struct ifreq ifr;
-        int sock;
 
-	dev = (struct net_device *)malloc(sizeof(struct net_device));
+	dev = (struct net_device *)malloc(sizeof(struct net_device) + sizeof_priv);
 	
 	if (!dev)
 		return NULL;
 	
-	memset(dev, 0, sizeof(struct net_device));
+	memset(dev, 0, sizeof(struct net_device) + sizeof_priv);
+
+        if (pipe(dev->pipefd) == -1) {
+                LOG_ERR("pipe failure: %s\n", strerror(errno));
+                free(dev);
+                dev->pipefd[0] = -1;
+                dev->pipefd[1] = -1;
+                return NULL;
+        }
 	strcpy(dev->name, name);
         dev->ifindex = if_nametoindex(name);
 	atomic_set(&dev->refcnt, 1);
 	dev->dev_addr = dev->perm_addr;
-
-        memset(&ifr, 0, sizeof(struct ifreq));
-        strncpy(ifr.ifr_name, name, IFNAMSIZ - 1);
-
-#if defined(OS_BSD)
-#define SIOCGIFHWADDR SIOCGIFADDR
-#endif
-        sock = socket(AF_INET, SOCK_DGRAM, 0);
         
-        if (sock != -1) {
-                if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
-                        LOG_ERR("could not get hw address of interface '%s'\n",
+        setup(dev);
+
+        /* Call the packet handlers init function if it exists */
+        if (dev->pack_ops && dev->pack_ops->init) {
+                if (dev->pack_ops->init(dev) == -1) {
+                        LOG_ERR("packet ops init failed for device %s\n",
                                 name);
-                } else {
-#if defined(OS_BSD)
-                        if (get_macaddr(name, dev->perm_addr) == 1) {
-                                LOG_DBG("mac: %02x:%02x:%02x:%02x:%02x:%02x\n",
-                                        dev->perm_addr[0],
-                                        dev->perm_addr[1],
-                                        dev->perm_addr[2],
-                                        dev->perm_addr[3],
-                                        dev->perm_addr[4],
-                                        dev->perm_addr[5]);
-                        } else {
-                                LOG_ERR("No hw address of interface %s\n", name);
-                        }
-#elif defined(OS_LINUX)
-                        memcpy(dev->perm_addr, ifr.ifr_hwaddr.sa_data, ETH_ALEN);
-#endif
+                        free_netdev(dev);
+                        dev = NULL;
                 }
-                close(sock);
-        } else {
-                LOG_ERR("could not open ioctl socket\n", strerror(errno));
         }
-       
-	setup(dev);
 
 	return dev;
 }
 
 void __free_netdev(struct net_device *dev)
 {
+        if (dev->pipefd[0] != -1) {
+                close(dev->pipefd[0]);
+                dev->pipefd[0] = -1;
+        }
+        if (dev->pipefd[1] != -1) {
+                close(dev->pipefd[1]);
+                dev->pipefd[1] = -1;
+        }
 	free(dev);
 }
 
@@ -131,4 +123,370 @@ void free_netdev(struct net_device *dev)
 {
 	if (atomic_dec_and_test(&dev->refcnt))
 		__free_netdev(dev);
+}
+
+
+/**
+ *	__dev_get_by_name	- find a device by its name
+ *	@net: the applicable net namespace
+ *	@name: name to find
+ *
+ *	Find an interface by name. Must be called under RTNL semaphore
+ *	or @dev_base_lock. If the name is found a pointer to the device
+ *	is returned. If the name is not found then %NULL is returned. The
+ *	reference counters are not incremented so the caller must be
+ *	careful with locks.
+ */
+
+struct net_device *__dev_get_by_name(struct net *net, const char *name)
+{
+	struct hlist_node *p;
+	struct net_device *dev;
+	struct hlist_head *head = dev_name_hash(net, name);
+
+	hlist_for_each_entry(dev, p, head, name_hlist)
+		if (!strncmp(dev->name, name, IFNAMSIZ))
+			return dev;
+
+	return NULL;
+}
+
+/**
+ *	dev_get_by_name		- find a device by its name
+ *	@net: the applicable net namespace
+ *	@name: name to find
+ *
+ *	Find an interface by name. This can be called from any
+ *	context and does its own locking. The returned handle has
+ *	the usage count incremented and the caller must use dev_put() to
+ *	release it when it is no longer needed. %NULL is returned if no
+ *	matching device is found.
+ */
+
+struct net_device *dev_get_by_name(struct net *net, const char *name)
+{
+	struct net_device *dev;
+
+        read_lock(&dev_base_lock);
+	dev = __dev_get_by_name(net, name);
+	if (dev)
+		dev_hold(dev);
+        read_unlock(&dev_base_lock);
+	return dev;
+}
+
+/**
+ *	__dev_get_by_index - find a device by its ifindex
+ *	@net: the applicable net namespace
+ *	@ifindex: index of device
+ *
+ *	Search for an interface by index. Returns %NULL if the device
+ *	is not found or a pointer to the device. The device has not
+ *	had its reference counter increased so the caller must be careful
+ *	about locking. The caller must hold either the RTNL semaphore
+ *	or @dev_base_lock.
+ */
+struct net_device *__dev_get_by_index(struct net *net, int ifindex)
+{
+	struct hlist_node *p;
+	struct net_device *dev;
+	struct hlist_head *head = dev_index_hash(net, ifindex);
+
+	hlist_for_each_entry(dev, p, head, index_hlist)
+		if (dev->ifindex == ifindex)
+			return dev;
+
+	return NULL;
+}
+
+/**
+ *	dev_get_by_index - find a device by its ifindex
+ *	@net: the applicable net namespace
+ *	@ifindex: index of device
+ *
+ *	Search for an interface by index. Returns NULL if the device
+ *	is not found or a pointer to the device. The device returned has
+ *	had a reference added and the pointer is safe until the user calls
+ *	dev_put to indicate they have finished with it.
+ */
+struct net_device *dev_get_by_index(struct net *net, int ifindex)
+{
+	struct net_device *dev;
+
+        read_lock(&dev_base_lock);
+	dev = __dev_get_by_index(net, ifindex);
+	if (dev)
+		dev_hold(dev);
+        read_unlock(&dev_base_lock);
+	return dev;
+}
+
+static int list_netdevice(struct net_device *dev)
+{
+	write_lock(&dev_base_lock);
+	list_add_tail(&dev->dev_list, &dev_base_head);
+	hlist_add_head(&dev->name_hlist, dev_name_hash(&init_net, dev->name));
+	hlist_add_head(&dev->index_hlist,
+                       dev_index_hash(&init_net, dev->ifindex));
+	write_unlock(&dev_base_lock);
+	return 0;
+}
+
+static void unlist_netdevice(struct net_device *dev)
+{
+	/* Unlink dev from the device chain */
+	write_lock(&dev_base_lock);
+	list_del(&dev->dev_list);
+	hlist_del(&dev->name_hlist);
+	hlist_del(&dev->index_hlist);
+	write_unlock(&dev_base_lock);
+}
+
+int register_netdev(struct net_device *dev)
+{
+        LOG_DBG("registering %s [%02x:%02x:%02x:%02x:%02x:%02x]\n",
+                dev->name,
+                dev->perm_addr[0],
+                dev->perm_addr[1],
+                dev->perm_addr[2],
+                dev->perm_addr[3],
+                dev->perm_addr[4],
+                dev->perm_addr[5]);
+        
+        list_netdevice(dev);
+
+        return 0;
+}
+
+void unregister_netdev(struct net_device *dev)
+{
+        LOG_DBG("unregistering %s\n", dev->name);
+        unlist_netdevice(dev);
+}
+
+#if defined(OS_LINUX)
+static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
+{
+	struct ifreq ifr;
+        int sock;
+        
+        sock = socket(AF_INET, SOCK_DGRAM, 0);
+        
+        if (sock == -1) {
+                LOG_ERR("Could not open sock: %s\n", strerror(errno));
+                return -1;
+        }
+        memset(&ifr, 0, sizeof(ifr));
+        strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
+
+        if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
+                LOG_ERR("could not get hw address of interface '%s'\n",
+                        ifname);
+        } else {
+                memcpy(mac, ifr.ifr_hwaddr.sa_data, ETH_ALEN);
+        }
+
+        close(sock);
+
+        return 0;
+}
+#endif /* OS_LINUX */
+
+/*
+  Populate the device table at startup using getifaddrs. This is
+  portable, but not dynamic (i.e., we cannot monitor interfaces that
+  are removed).
+  
+  A better choice on Linux would be netlink, although this is not
+  portable.
+ */
+int netdev_populate_table(int sizeof_priv, 
+                          void (*setup)(struct net_device *))
+{
+        int ret = 0;
+        struct ifaddrs *ifa = NULL, *tmp;
+        
+        ret = getifaddrs(&tmp);
+
+        if (ret == -1) {
+                LOG_ERR("could not get interface list\n");
+                return ret;
+        }
+
+        for (ifa = tmp; ifa != NULL; ifa = ifa->ifa_next) {
+                struct net_device *dev;
+#if defined(OS_BSD)
+                struct sockaddr_dl *ifaddr = 
+                        (struct sockaddr_dl *)ifa->ifa_addr;
+              
+                if (ifaddr->sdl_family != AF_LINK)
+                        continue;
+#elif defined(OS_LINUX)
+                /* Filter on all devices that support AF_PACKET, these
+                   are the only ones we can use anyway. */
+                if (ifa->ifa_addr->sa_family != AF_PACKET)
+                        continue;
+#endif
+                /* Ignore loopback device */
+                if (strncmp(ifa->ifa_name, "lo", 2) == 0)
+                        continue;
+
+                dev = alloc_netdev(sizeof_priv, ifa->ifa_name, setup);
+                
+                if (!dev)
+                        return -1;
+
+                /* Figure out the mac address */
+#if defined(OS_BSD)
+                memcpy(dev->perm_addr, LLADDR(ifaddr), ETH_ALEN);
+#elif defined(OS_LINUX)
+                if (get_macaddr(ifa->ifa_name, dev->perm_addr) == -1) {
+                        LOG_ERR("failed to get mac address for interface %s\n",
+                                ifa->ifa_name);
+                }
+#endif                
+                ret = register_netdev(dev);
+
+                if (ret < 0) {
+                        free_netdev(dev);
+                        return ret;
+                }
+
+                ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
+
+                if (ret != 0) {
+                        LOG_ERR("dev thread failure: %s\n",
+                                strerror(errno));
+                        unregister_netdev(dev);
+                        free_netdev(dev);
+                        return ret;
+                }
+        }
+        
+        freeifaddrs(tmp);
+                
+        return ret;
+}
+
+int dev_signal_exit(struct net_device *dev)
+{
+        char w = 'w';
+        return write(dev->pipefd[1], &w, 1);
+}
+
+void *dev_thread(void *arg)
+{
+        struct net_device *dev = (struct net_device *)arg;
+        int ret = 0;
+        
+        LOG_DBG("Device thread '%s' running\n", dev->name);
+
+        while (!dev->should_exit) {
+                struct pollfd fds[2];
+                
+                fds[0].fd = dev->fd;
+                fds[0].events = POLLIN | POLLHUP | POLLERR;
+                fds[0].revents = 0;
+                fds[1].fd = dev->pipefd[0];
+                fds[1].events = POLLIN | POLLERR;
+                fds[1].revents = 0;
+
+                ret = poll(fds, 2, -1);
+
+                if (ret == -1) {
+                        LOG_ERR("poll error: %s\n", strerror(errno));
+                        dev->should_exit = 1;
+                } else if (ret == 0) {
+                        /* No timeout set, should not happen */
+                } else {
+                        if (fds[1].revents) {
+                                dev->should_exit = 1;
+                                LOG_DBG("dev thread %s should exit\n", 
+                                        dev->name);
+                        }
+                        if (fds[0].revents) {
+                                ret = dev->pack_ops->recv(dev);
+
+                                if (ret == -1) {
+                                        LOG_ERR("receive error on device %s\n",
+                                                dev->name);
+                                }
+                        }
+                }
+        }
+        return NULL;
+}
+
+int dev_queue_xmit(struct sk_buff *skb)
+{
+        if (!skb->dev || 
+            !skb->dev->pack_ops || 
+            !skb->dev->pack_ops->xmit) {
+                free_skb(skb);
+                return -1;
+        }
+        /* 
+           We could implement a packet queue here if we want to do tx
+           on the thread. However, it is probably unnecessary as the
+           underlying file descriptor is thread safe.
+
+           However, queueing the packet could be a good thing if the
+           file descriptor is not immediately writable. Then we would
+           avoid blocking.
+        */        
+        return skb->dev->pack_ops->xmit(skb); 
+}
+
+int netdev_init(void)
+{
+	INIT_LIST_HEAD(&dev_base_head);
+        
+	dev_name_head = netdev_create_hash();
+
+	if (dev_name_head == NULL)
+		goto err_name;
+
+	dev_index_head = netdev_create_hash();
+	
+        if (dev_index_head == NULL)
+		goto err_idx;
+
+	return 0;
+err_idx:
+	free(dev_name_head);
+err_name:
+	return -ENOMEM;
+}
+
+void netdev_fini(void)
+{
+        while (1) {
+                struct net_device *dev;
+                int ret;
+                
+                read_lock(&dev_base_lock);
+
+                if (list_empty(&dev_base_head)) {
+                        read_unlock(&dev_base_lock);
+                        break;
+                }
+                dev = list_first_entry(&dev_base_head, struct net_device, dev_list);
+          	read_unlock(&dev_base_lock);       
+                unregister_netdev(dev);
+                
+                dev_signal_exit(dev);
+                
+                LOG_DBG("joining with device thread %s\n",
+                        dev->name);
+
+                ret = pthread_join(dev->thr, NULL);
+
+                if (ret != 0) {
+                        LOG_ERR("device thread join: %s\n",
+                                strerror(errno));
+                } else {
+                        LOG_DBG("join successful\n");
+                }
+                dev_put(dev);
+        }
 }

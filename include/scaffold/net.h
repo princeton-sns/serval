@@ -106,7 +106,7 @@ void sock_release(struct socket *sock);
    use a dummy net here for compatibility with the kernel API.
  */
 struct net {
-	char dummy;
+	unsigned int dummy;
 };
 
 extern struct net init_net;

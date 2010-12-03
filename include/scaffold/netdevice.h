@@ -12,8 +12,9 @@
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
-#include <scaffold/list.h>
+#include <scaffold/net.h>
 #include <net/if.h>
+#include <pthread.h>
 #if defined(OS_ANDROID)
 #define ETH_HLEN 14
 #else
@@ -30,6 +31,7 @@ struct ethhdr {
 #endif
 
 struct sk_buff;
+struct packet_ops;
 
 #ifdef MAX_ADDR_LEN
 #undef MAX_ADDR_LEN /* also defined in if_arp.h */
@@ -49,7 +51,20 @@ struct net_device {
 	unsigned char		broadcast[MAX_ADDR_LEN];	/* hw bcast add	*/
 	spinlock_t              lock;
 	atomic_t		refcnt;
+	/* device name hash chain */
+	struct hlist_node	name_hlist;
+	/* device index hash chain */
+	struct hlist_node	index_hlist;
 	struct list_head	dev_list;
+        
+        /* Stuff for packet thread that reads packets from the
+         * device */
+        int fd;
+        int pipefd[2];
+        int should_exit;
+        pthread_t thr;
+        struct packet_ops *pack_ops;
+        /* Here follows private data */
 };
 
 #define LL_RESERVED_SPACE(dev) ((dev)->hard_header_len)
@@ -90,6 +105,8 @@ void ether_setup(struct net_device *dev);
 struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 				void (*setup)(struct net_device *));
 void free_netdev(struct net_device *dev);
+int register_netdev(struct net_device *dev);
+void unregister_netdev(struct net_device *dev);
 
 static inline void dev_put(struct net_device *dev)
 {
@@ -100,6 +117,22 @@ static inline void dev_hold(struct net_device *dev)
 {
 	atomic_inc(&dev->refcnt);
 }
+
+struct net_device *dev_get_by_name(struct net *net, const char *name);
+struct net_device *dev_get_by_index(struct net *net, int ifindex);
+
+static inline void *dev_get_priv(struct net_device *dev)
+{
+        return (void *)((char *)dev + sizeof(*dev));
+}
+
+int netdev_populate_table(int sizeof_priv, 
+                          void (*setup)(struct net_device *));
+
+int dev_queue_xmit(struct sk_buff *skb);
+
+int netdev_init(void);
+void netdev_fini(void);
 
 #endif /* OS_USER */
 

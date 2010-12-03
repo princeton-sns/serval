@@ -31,7 +31,7 @@ int scaffold_output(struct sk_buff *skb)
 		skb->dev->ifindex, srcstr, dststr, ntohs(skb->protocol));
 	       
 	/* packet_xmit consumes the packet no matter the outcome */
-	if (packet_xmit(skb) < 0) {
+	if (dev_queue_xmit(skb) < 0) {
 		LOG_ERR("packet_xmit failed\n");
 	}
 

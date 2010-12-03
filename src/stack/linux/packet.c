@@ -16,11 +16,6 @@
 #define NF_INET_PRE_ROUTING NF_IP_PRE_ROUTING
 #endif
 
-int packet_xmit(struct sk_buff *skb)
-{
-        return dev_queue_xmit(skb);
-}
-
 static unsigned int scaffold_packet_rcv(unsigned int hooknum,
                                         struct sk_buff *skb,
                                         const struct net_device *in,

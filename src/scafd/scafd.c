@@ -233,7 +233,7 @@ static int read_netlink(struct netlink_handle *nlh)
 	socklen_t addrlen;
 	struct nlmsghdr *nlm;
 	struct if_info ifinfo;
-#define BUFLEN 2000
+#define BUFLEN 200
 	char buf[BUFLEN];
 
 	addrlen = sizeof(struct sockaddr_nl);
@@ -243,14 +243,14 @@ static int read_netlink(struct netlink_handle *nlh)
 	len = recvfrom(nlh->fd, buf, BUFLEN, 0, 
 		       (struct sockaddr *) &nlh->peer, &addrlen);
 
-	if (len == EAGAIN) {
-		LOG_DBG("Netlink recv would block\n");
-		return 0;
+	if (len == -1) {
+		if (errno == EAGAIN) {
+			LOG_DBG("Netlink recv would block\n");
+			return 0;
+		}
+		return -1;
 	}
-	if (len < 0) {
-		LOG_DBG("len negative\n");
-		return len;
-	}
+
 	for (nlm = (struct nlmsghdr *) buf; 
 	     NLMSG_OK(nlm, (unsigned int) len); 
 	     nlm = NLMSG_NEXT(nlm, len)) {
@@ -273,6 +273,8 @@ static int read_netlink(struct netlink_handle *nlh)
 			break;
 		case RTM_NEWLINK:
 		{ 
+			struct host_addr haddr = { 6 };
+			struct as_addr aaddr = { 2 };
 			ret = nl_parse_link_info(nlm, &ifinfo);
 			
 			/* TODO: Should find a good way to sort out unwanted interfaces. */
@@ -295,7 +297,7 @@ static int read_netlink(struct netlink_handle *nlh)
                                ifinfo.ifname, eth_to_str(ifinfo.mac), 
                                ifinfo.isUp ? "up" : "down");
 			
-			libstack_configure_interface(ifinfo.ifname, 
+			libstack_configure_interface(ifinfo.ifname, &aaddr, &haddr,
 						     ifinfo.isUp ? IFFLAG_UP : 0);
 			break;
 		}

@@ -31,6 +31,8 @@ struct ctrlmsg_register {
 struct ctrlmsg_iface_conf {
 	struct ctrlmsg cmh;
 	char ifname[IFNAMSIZ];
+	struct as_addr asaddr;
+	struct host_addr haddr;
 	unsigned short flags;
 };
 

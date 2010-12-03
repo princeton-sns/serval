@@ -6,8 +6,6 @@
 #include <scaffold/wait.h>
 #include <pthread.h>
 
-struct net init_net;
-
 #define RCV_BUF_DEFAULT 1000
 #define SND_BUF_DEFAULT 1000
 
