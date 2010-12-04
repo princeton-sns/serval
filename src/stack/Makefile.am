@@ -3,6 +3,7 @@ bin_PROGRAMS = scaffold
 scaffold_SOURCES = \
 	debug.c \
 	platform.c \
+	bst.c \
 	input.c \
 	output.c \
 	ctrl_handler.c \
@@ -38,6 +39,7 @@ STACK_DIR=$(top_builddir)/src/stack
 SCAFFOLD_HDR = \
 	af_scaffold.h \
 	ctrl.h \
+	bst.h \
 	input.h \
 	output.h \
 	scaffold_sock.h \
@@ -91,6 +93,7 @@ SCAFFOLD_KERNEL_SRC = \
 	linux/module.c \
 	debug.c \
 	platform.c \
+	bst.c \
 	input.c \
 	output.c \
 	scaffold_ipv4.c \

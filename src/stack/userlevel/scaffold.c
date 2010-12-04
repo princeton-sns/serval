@@ -31,34 +31,6 @@ void signal_handler(int sig)
         /* printf("signal caught! exiting...\n"); */
         should_exit = 1;       
 }
-#if 0
-static int fd_make_async(int fd)
-{
-    int flags;
-    
-    if ((flags = fcntl(fd, F_GETFL, 0)) < 0) {
-	    LOG_ERR("F_GETFL error on fd %d (%s)", fd,
-		    strerror(errno));
-        return -1;
-    }
-    
-    flags |= O_NONBLOCK;
-
-    if (fcntl(fd, F_SETFL, flags) < 0) {
-	    LOG_ERR("F_SETFL error on fd %d (%s)", fd,
-		    strerror(errno));
-        return -1;
-    }
-    // close on exec
-    if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
-	    LOG_ERR("F_SETFD error on fd %d (%s)", fd,
-		    strerror(errno));
-        return -1;
-    }
-
-    return 0;
-}
-#endif
 
 static void garbage_collect_clients(unsigned long data);
 static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 10000000, 0);
@@ -134,12 +106,6 @@ static int server_run(void)
 				server_sock_path[i], strerror(errno));
 			return -1;
 		}
-		/* 
-		ret = fd_make_async(server_sock[i]);
-		
-		if (ret == -1)
-			goto out_close_socks;
-		*/
 
 		memset(&sa, 0, sizeof(sa));
 		sa.sun_family = AF_UNIX;
