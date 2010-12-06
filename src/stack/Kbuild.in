@@ -12,6 +12,7 @@ scaffold-y := \
 	   platform.o \
 	   af_scaffold.o \
 	   bst.o \
+	   service.o \
 	   input.o \
 	   output.o \
 	   ctrl_handler.o \

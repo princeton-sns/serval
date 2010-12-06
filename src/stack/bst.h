@@ -4,11 +4,40 @@
 
 struct bst_node;
 
-void bst_root_init(struct bst_node *root);
-int bst_add_prefix(struct bst_node *root, void *prefix, unsigned int prefix_bits);
-void bst_destroy(struct bst_node *root);
-void bst_node_remove(struct bst_node *node);
-struct bst_node *bst_find_longest_prefix_node(struct bst_node *n, 
-					      void *prefix,
-					      unsigned int prefix_bits);
+struct bst {
+        struct bst_node *root;
+        unsigned int entries;
+};
+
+#define BST_INITIALIZER { NULL, 0 }
+ 
+struct bst_node_ops {
+        int (*init)(struct bst_node *);
+        void (*destroy)(struct bst_node *);
+        int (*print)(struct bst_node *, char *buf, int buflen);
+};
+
+extern struct bst_node_ops default_bst_node_ops;
+
+int bst_init(struct bst *tree);
+void bst_destroy(struct bst *tree);
+struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
+                                   void *private, void *prefix, 
+                                   unsigned int prefix_bits);
+void bst_remove_node(struct bst *tree, struct bst_node *n);
+void bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits);
+void bst_node_remove(struct bst_node *n);
+
+struct bst_node *bst_find_longest_prefix(struct bst *tree, 
+                                         void *prefix,
+                                         unsigned int prefix_bits);
+int bst_print(struct bst *tree, char *buf, int buflen);
+void *bst_node_get_private(struct bst_node *n);
+unsigned int bst_node_get_prefix_size(struct bst_node *n);
+int bst_subtree_func(struct bst_node *n, 
+                     int (*func)(struct bst_node *, void *arg), 
+                     void *arg);
+
+#define bst_node_private(n, type) ((type *)bst_node_get_private((n)))
+
 #endif /* _BST_H_ */

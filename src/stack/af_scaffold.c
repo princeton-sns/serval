@@ -32,6 +32,8 @@
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
+extern int __init service_init(void);
+extern void __exit service_fini(void);
 
 extern struct proto scaffold_udp_proto;
 extern struct proto scaffold_tcp_proto;
@@ -808,6 +810,13 @@ int __init scaffold_init(void)
 {
         int err = 0;
 
+        err = service_init();
+
+        if (err < 0) {
+                LOG_CRIT("Cannot initialize service table\n");
+                goto fail_service;
+        }
+
         err = scaffold_sock_init();
 
         if (err < 0) {
@@ -846,6 +855,8 @@ fail_proto:
 fail_packet:        
         scaffold_sock_fini();
 fail_sock:
+        service_fini();
+fail_service:
         goto out;      
 }
 
@@ -855,4 +866,5 @@ void __exit scaffold_fini(void)
 	proto_unregister(&scaffold_udp_proto);
         packet_fini();
         scaffold_sock_fini();
+        service_fini();
 }

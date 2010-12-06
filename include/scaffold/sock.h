@@ -273,7 +273,7 @@ static inline void sock_set_flag(struct sock *sk, enum sock_flags flag)
 
 static inline void sock_reset_flag(struct sock *sk, enum sock_flags flag)
 {
-        sk->sk_flags &= (flag ^ -1UL);
+        sk->sk_flags &= ((0x1 << flag) ^ -1UL);
 }
 
 static inline int sock_flag(struct sock *sk, enum sock_flags flag)

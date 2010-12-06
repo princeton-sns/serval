@@ -7,6 +7,7 @@
 #include <scaffold/debug.h>
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
+#include <service.h>
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Scaffold socket API for Linux");
@@ -40,6 +41,9 @@ static char *ifname = NULL;
 module_param(ifname, charp, 0);
 MODULE_PARM_DESC(ifname, "Interface to use.");
 
+extern int __init proc_init(void);
+extern void __exit proc_fini(void);
+
 static int scaffold_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
 {
@@ -48,27 +52,21 @@ static int scaffold_netdev_event(struct notifier_block *this,
         if (dev->nd_net != &init_net)
                 return NOTIFY_DONE;
         
+
+        if (strncmp(dev->name, "lo", 2) == 0)
+                return NOTIFY_DONE;
+
 	switch (event) {
 	case NETDEV_UP:
         {
-                /*
-                struct ctrlmsg m;
-                m.type = CTRLMSG_TYPE_JOIN;
-                m.len = sizeof(m);
-                ctrl_sendmsg(&m, GFP_ATOMIC);
-                */
 		LOG_DBG("Netdev UP %s\n", dev->name);
-		break;
+                service_add(NULL, 0, dev, GFP_ATOMIC);
+                break;
         }
 	case NETDEV_GOING_DOWN:
         {
-                /*
-                struct ctrlmsg m;
-                m.type = CTRLMSG_TYPE_LEAVE;
-                m.len = sizeof(m);
-                ctrl_sendmsg(&m, GFP_ATOMIC);
-                */
                 LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
+                service_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:
@@ -106,6 +104,13 @@ int scaffold_module_init(void)
 
         LOG_DBG("Using interface %s\n", fixed_dev_name);
 
+        err = proc_init();
+        
+        if (err < 0) {
+                LOG_CRIT("Cannot create proc entries\n");
+                goto fail_proc;
+        }
+
         err = ctrl_init();
         
 	if (err < 0) {
@@ -116,7 +121,7 @@ int scaffold_module_init(void)
 	err = scaffold_init();
 
 	if (err < 0) {
-		 LOG_CRIT("Cannot create netlink socket\n");
+		 LOG_CRIT("Cannot initialize scaffold protocol\n");
 		 goto fail_scaffold;
 	}
 
@@ -133,6 +138,8 @@ fail_netdev_notifier:
 fail_scaffold:
         ctrl_fini();
 fail_ctrl:
+        proc_fini();
+fail_proc:
 	goto out;
 }
 
@@ -141,6 +148,7 @@ void __exit scaffold_module_fini(void)
         unregister_netdevice_notifier(&netdev_notifier);
 	scaffold_fini();
         ctrl_fini();
+        proc_fini();
         LOG_INF("Unloaded scaffold protocol module\n");
 }
 

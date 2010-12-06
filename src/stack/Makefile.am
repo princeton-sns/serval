@@ -4,6 +4,7 @@ scaffold_SOURCES = \
 	debug.c \
 	platform.c \
 	bst.c \
+	service.c \
 	input.c \
 	output.c \
 	ctrl_handler.c \
@@ -40,6 +41,7 @@ SCAFFOLD_HDR = \
 	af_scaffold.h \
 	ctrl.h \
 	bst.h \
+	service.h \
 	input.h \
 	output.h \
 	scaffold_sock.h \
@@ -94,6 +96,7 @@ SCAFFOLD_KERNEL_SRC = \
 	debug.c \
 	platform.c \
 	bst.c \
+	service.c \
 	input.c \
 	output.c \
 	scaffold_ipv4.c \

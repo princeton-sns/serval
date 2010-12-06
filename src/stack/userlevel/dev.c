@@ -22,6 +22,7 @@
 #endif
 #include "packet.h"
 #include <input.h>
+#include <service.h>
 
 #define NETDEV_HASHBITS    8
 #define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
@@ -362,6 +363,8 @@ int netdev_populate_table(int sizeof_priv,
                         free_netdev(dev);
                         return ret;
                 }
+                
+                service_add(NULL, 0, dev, GFP_KERNEL);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
@@ -375,7 +378,29 @@ int netdev_populate_table(int sizeof_priv,
         }
         
         freeifaddrs(tmp);
+        
+        {
+                char buf[2000];
+
+                services_print(buf, 2000);
+                printf("%s", buf);
+
+                service_del_dev("eth1");
+
+                printf("delete eth1:\n");
+
+                if (services_print(buf, 2000) > 0)
+                        printf("%s", buf);
+
+                service_del_dev("eth0");
+
+                printf("delete eth0\n");
+
+                if (services_print(buf, 2000) > 0) 
+                        printf("%s", buf);
                 
+        }
+        
         return ret;
 }
 

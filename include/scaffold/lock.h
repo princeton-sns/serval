@@ -6,6 +6,10 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/spinlock.h>
+
+#define spin_lock_destroy(x)
+#define rwlock_destroy(x)
+
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
@@ -22,6 +26,7 @@ typedef pthread_mutex_t spinlock_t;
 	pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE); \
 	pthread_mutex_init(&mutex, &attr);                         \
 	pthread_mutexattr_destroy(&attr); }
+#define spin_lock_destroy(x) pthread_mutex_destroy(x)
 #define spin_lock(x) pthread_mutex_lock(x)
 #define spin_trylock(x) pthread_mutex_trylock(x)
 #define spin_unlock(x) pthread_mutex_unlock(x)
@@ -38,12 +43,19 @@ typedef pthread_mutex_t rwlock_t;
 #define DEFINE_RWLOCK(x) rwlock_t x = PTHREAD_MUTEX_INITIALIZER
 
 #define rwlock_init(x) pthread_mutex_init(x, NULL)
+#define rwlock_destroy(x) pthread_mutex_destroy(x)
 #define write_lock(x) pthread_mutex_lock(x)
 #define read_lock(x) pthread_mutex_lock(x)
+#define write_lock_bh(x) pthread_mutex_lock(x)
+#define read_lock_bh(x) pthread_mutex_lock(x)
 #define write_trylock(x) pthread_mutex_trylock(x)
 #define read_trylock(x) pthread_mutex_trylock(x)
+#define write_trylock_bh(x) pthread_mutex_trylock(x)
+#define read_trylock_bh(x) pthread_mutex_trylock(x)
 #define write_unlock(x) pthread_mutex_unlock(x)
 #define read_unlock(x) pthread_mutex_unlock(x)
+#define write_unlock_bh(x) pthread_mutex_unlock(x)
+#define read_unlock_bh(x) pthread_mutex_unlock(x)
 
 #define local_bh_disable()
 #define local_bh_enable()
