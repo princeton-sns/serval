@@ -326,7 +326,7 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 int netdev_populate_table(int sizeof_priv, 
                           void (*setup)(struct net_device *))
 {
-        int fd, n, len = 0, ret = 0;
+        int fd, len = 0, ret = 0;
         struct ifconf ifc;
 	struct ifreq *ifr = NULL;
         char buff[8192];
@@ -350,13 +350,11 @@ int netdev_populate_table(int sizeof_priv,
 		return -1;
 	} 
 
-	ifr = ifc.ifc_req;  
-	n = ifc.ifc_len / sizeof(struct ifreq);
+	ifr = ifc.ifc_req;
 
-        LOG_DBG("ifr %d\n", n);
-
-	/* Loop through interfaces, looking for given IP address */
-	for (; ifc.ifc_len != 0; ifr = (struct ifreq *)((char *) ifr + len), 
+	/* Loop through interfaces */
+	for (;ifc.ifc_len; 
+             ifr = (struct ifreq *)((char*)ifr+len), 
                      ifc.ifc_len -= len) {
                 struct net_device *dev;
                 const char *name = ifr->ifr_name;
@@ -367,9 +365,8 @@ int netdev_populate_table(int sizeof_priv,
                 len = (sizeof(ifr->ifr_name) + MAX(sizeof(struct sockaddr),
                                                    ifr->ifr_addr.sa_len));
                 
-                if (ifaddr->sdl_family != AF_LINK) {
+                if (ifaddr->sdl_family != AF_LINK)
                         continue;
-                }
 
                 if (strncmp(name, "lo", 2) == 0)
                         continue;
@@ -395,19 +392,14 @@ int netdev_populate_table(int sizeof_priv,
                 if (!dev)
                         continue;
 
-                LOG_DBG("new interface %s\n", name);
-                
                 /* Figure out the mac address */
 #if defined(OS_BSD)
                 memcpy(dev->perm_addr, LLADDR(ifaddr), ETH_ALEN);
 #elif defined(OS_LINUX)
-                /*
                 if (get_macaddr(name, dev->perm_addr) == -1) {
-                        LOG_ERR("failed to get mac address for interface %s\n",
+                        LOG_ERR("%s failed to get mac address\n",
                                 name);
                 }
-                */
-                memcpy(dev->perm_addr, ifr->ifr_hwaddr.sa_data, ETH_ALEN);
 #endif          
                 /* Mark as up */
                 if (ifr->ifr_flags & IFF_UP)
