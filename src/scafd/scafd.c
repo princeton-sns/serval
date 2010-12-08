@@ -8,10 +8,6 @@
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <string.h>
-#include <asm/types.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
-#include <linux/if_ether.h>
 #include <errno.h>
 #include <signal.h>
 #include <libstack/stack.h>
@@ -19,7 +15,9 @@
 #include <netinet/scaffold.h>
 #include <scaffold/platform.h>
 #include "debug.h"
+#if defined(OS_LINUX)
 #include "rtnl.h"
+#endif
 
 static int ctrlsock = -1; /* socket to communicate with controller */
 static int native = 0; /* Whether the socket is native or libscaffold */
