@@ -238,14 +238,14 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                 switch (newsock->type) {
                 case SOCK_DGRAM:
                         //newsock->ops = &scaffold_dgram_ops;
-                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
+                        sk = scaffold_sk_alloc(sock_net(parent), newsock, 
                                                GFP_KERNEL, 
                                                parent->sk_protocol,
                                                &scaffold_udp_proto);
                         break;
                 case SOCK_STREAM: 
                         //newsock->ops = &scaffold_stream_ops;
-                        sk = scaffold_sk_alloc(parent->sk_net, newsock, 
+                        sk = scaffold_sk_alloc(sock_net(parent), newsock, 
                                                GFP_KERNEL,
                                                parent->sk_protocol,
                                                &scaffold_tcp_proto);

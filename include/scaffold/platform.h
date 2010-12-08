@@ -66,18 +66,6 @@ typedef uint32_t socklen_t;
 
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
-static inline wait_queue_head_t *sk_sleep(struct sock *sk)
-{
-        return sk->sk_sleep;
-}
-
-static inline struct net *sock_net(struct sock *sk)
-{
-        return sk->sk_net;
-}
-
-#endif /* LINUX_VERSION_CODE */
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)

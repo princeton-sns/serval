@@ -1,6 +1,6 @@
 top_builddir := @top_dir@
 
-EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) @EXTRA_DEFINES@
+EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) -D__linux__ @EXTRA_DEFINES@
 
 obj-m := scaffold.o 
 scaffold-y := \

@@ -120,14 +120,14 @@ EXTRA_DIST = \
 
 if LINUX_KERNEL
 all: scaffold.ko
+endif
 
 scaffold.ko: $(SCAFFOLD_KERNEL_DEP)
-	$(MAKE) -C /lib/modules/$(KERNEL_VER)/build M=$(PWD) modules
+	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean-local:
-	$(MAKE) -C /lib/modules/$(KERNEL_VER)/build M=$(PWD) clean
+	$(MAKE) -C $(KDIR) M=$(PWD) clean
 	rm -f *~
 	rm -f linux/*~
 	rm -f userlevel/*~
-endif # KERNEL
 

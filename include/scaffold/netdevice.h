@@ -6,6 +6,14 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/netdevice.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
+{
+	skb->dev = dev;
+}
+#endif
+
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)

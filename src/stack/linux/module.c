@@ -44,7 +44,7 @@ static int scaffold_netdev_event(struct notifier_block *this,
 {
 	struct net_device *dev = (struct net_device *)ptr;
 
-        if (dev->nd_net != &init_net)
+        if (dev_net(dev) != &init_net)
                 return NOTIFY_DONE;
         
 

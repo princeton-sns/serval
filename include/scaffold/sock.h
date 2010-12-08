@@ -6,6 +6,21 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/sock.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+static inline wait_queue_head_t *sk_sleep(struct sock *sk)
+{
+        return sk->sk_sleep;
+}
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
+static inline struct net *sock_net(struct sock *sk)
+{
+        return sk->sk_net;
+}
+
+#endif
+
 #endif
 #if defined(OS_USER)
 #include <scaffold/platform.h>
