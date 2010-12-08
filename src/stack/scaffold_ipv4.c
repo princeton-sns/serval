@@ -4,6 +4,7 @@
 #include <scaffold/debug.h>
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
+#include <scaffold/netdevice.h>
 #include <input.h>
 #include <output.h>
 #if defined(OS_LINUX_KERNEL)
@@ -11,6 +12,7 @@
 #else
 #include <netinet/if_ether.h>
 #endif
+#include "service.h"
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
@@ -97,6 +99,7 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
         struct scaffold_sock *ssk = scaffold_sk(sk);
+        int err = 0;
 
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
@@ -117,9 +120,64 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 
 	skb->protocol = htons(ETH_P_IP);
 
-        LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", skb->len, iph_len, iph->ihl);
+        LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
+                skb->len, iph_len, iph->ihl);
 
-        /* Transmit */
-        return scaffold_output(skb);
+        /* Figure out which device to send to */
+        if (iph->daddr == 0) {
+                struct service_id *srvid = skb_dst_service_id(skb);
+                struct service_entry *se;
+                struct net_device *dev;
+
+                /* Unresolved packet, use service id */
+                se = service_find(srvid);
+
+                if (!se) {
+                           LOG_ERR("service lookup failed\n");
+                           FREE_SKB(skb);
+                           return -EADDRNOTAVAIL;
+                }
+
+                service_entry_dev_iterate_begin(se);
+
+                dev = service_entry_dev_next(se);
+
+                while (dev) {
+                        struct sk_buff *cskb;
+                        struct net_device *next_dev;
+
+                        next_dev = service_entry_dev_next(se);
+
+                        if (next_dev == NULL) {
+                                cskb = skb;
+                        } else {
+                                cskb = skb_clone(skb, GFP_KERNEL);
+                        }
+                        
+                        cskb->dev = dev;
+
+                        err = scaffold_output(cskb);
+                        
+                        if (err < 0) {
+                                LOG_ERR("udp xmit failed\n");
+                                FREE_SKB(cskb);
+                                break;
+                        }
+                        dev = next_dev;
+                }
+
+                service_entry_dev_iterate_end(se);
+                service_entry_put(se);
+        } else {
+                /* Lookup route. NOT implemented */
+                LOG_ERR("ip route lookup not implemented\n");
+                FREE_SKB(skb);
+                return 0;
+
+                /* Transmit */
+                err = scaffold_output(skb);
+        }
+
+        return err;
 }
 

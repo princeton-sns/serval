@@ -6,7 +6,8 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/sock.h>
-#elif defined(OS_USER)
+#endif
+#if defined(OS_USER)
 #include <scaffold/platform.h>
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
@@ -305,6 +306,6 @@ static inline void sock_graft(struct sock *sk, struct socket *parent)
 
 void sk_common_release(struct sock *sk);
 
-#endif /* OS_LINUX_KERNEL */
+#endif /* OS_USER */
 
 #endif /* _SOCK_H_ */

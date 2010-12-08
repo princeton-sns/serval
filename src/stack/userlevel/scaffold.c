@@ -305,10 +305,6 @@ out_close_socks:
 	return ret;
 }
 
-const char *fixed_dev_name = "eth1";
-
-#include <net/if.h>
-
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -332,8 +328,9 @@ int main(int argc, char **argv)
 
 	argc--;
 	argv++;
-
+        
 	while (argc) {
+                /*
 		if (strcmp(argv[0], "-i") == 0 ||
 		    strcmp(argv[0], "--interface") == 0) {
 			fixed_dev_name = argv[1];
@@ -341,19 +338,11 @@ int main(int argc, char **argv)
 			argc--;
 				
 		}
+                */
 		argc--;
 		argv++;
 	}
 	
-	LOG_DBG("using fixed interface %s\n",
-		fixed_dev_name);
-	
-	if (if_nametoindex(fixed_dev_name) == 0) {
-		LOG_ERR("no interface %s\n", fixed_dev_name);
-		LOG_ERR("set interface with -i <iface>\n");
-		return -1;
-	}
-		
 	ret = scaffold_init();
 
 	if (ret == -1) {

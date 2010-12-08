@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -5,7 +6,6 @@
 #include <sys/ioctl.h> 
 #include <sys/select.h>
 #include <sys/types.h>
-#include <net/if.h>
 #include <arpa/inet.h>
 #include <string.h>
 #include <asm/types.h>
@@ -17,339 +17,16 @@
 #include <libstack/stack.h>
 #include <libscaffold/scaffold.h>
 #include <netinet/scaffold.h>
-
-#define LOG_DBG(format, ...) printf("%s: "format, __func__, ## __VA_ARGS__)
-#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR "format, __func__, ## __VA_ARGS__)
-
-struct if_info {
-	int msg_type;
-	int ifindex;
-	int isUp;
-	int isWireless;
-	char ifname[256];
-	unsigned char mac[ETH_ALEN];
-	struct in_addr ip;
-	struct in_addr broadcast;
-	struct sockaddr_in ipaddr;
-};
-
-struct netlink_handle {
-        int fd;
-        int seq;
-        struct sockaddr_nl local;
-        struct sockaddr_nl peer;
-};
+#include <scaffold/platform.h>
+#include "debug.h"
+#include "rtnl.h"
 
 static int ctrlsock = -1; /* socket to communicate with controller */
 static int native = 0; /* Whether the socket is native or libscaffold */
 
-static char *eth_to_str(unsigned char *addr)
-{
-	static char buf[30];
-
-	sprintf(buf, "%02x:%02x:%02x:%02x:%02x:%02x",
-		(unsigned char)addr[0], (unsigned char)addr[1],
-		(unsigned char)addr[2], (unsigned char)addr[3],
-		(unsigned char)addr[4], (unsigned char)addr[5]);
-
-	return buf;
-}
-
-#define netlink_getlink(nl) netlink_request(nl, RTM_GETLINK)
-#define netlink_getneigh(nl) netlink_request(nl, RTM_GETNEIGH)
-#define netlink_getaddr(nl) netlink_request(nl, RTM_GETADDR | RTM_GETLINK)
-
-static int netlink_request(struct netlink_handle *nlh, int type);
-//static int read_netlink(struct netlink_handle *nlh, struct if_info *ifinfo);
-
-static int nl_init_handle(struct netlink_handle *nlh)
-{
-	int ret;
-	socklen_t addrlen;
-
-	if (!nlh)
-		return -1;
-
-	memset(nlh, 0, sizeof(struct netlink_handle));
-	nlh->seq = 0;
-	nlh->local.nl_family = PF_NETLINK;
-	nlh->local.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
-	nlh->local.nl_pid = getpid();
-	nlh->peer.nl_family = PF_NETLINK;
-
-	nlh->fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
-
-	if (!nlh->fd) {
-		LOG_DBG("Could not create netlink socket");
-		return -2;
-	}
-	addrlen = sizeof(nlh->local);
-
-	ret = bind(nlh->fd, (struct sockaddr *) &nlh->local, addrlen);
-
-	if (ret == -1) {
-		close(nlh->fd);
-		LOG_DBG("Bind for RT netlink socket failed");
-		return -3;
-	}
-	ret = getsockname(nlh->fd, (struct sockaddr *) &nlh->local, &addrlen);
-
-	if (ret < 0) {
-		close(nlh->fd);
-		LOG_DBG("Getsockname failed ");
-		return -4;
-	}
-
-	return 0;
-}
-
-static int nl_close_handle(struct netlink_handle *nlh)
-{
-	return close(nlh->fd);
-}
-
-static int nl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
-{
-	int res;
-	struct iovec iov = {
-		(void *) n, n->nlmsg_len
-	};
-	struct msghdr msg = {
-		(void *) &nlh->peer, 
-                sizeof(nlh->peer), 
-                &iov, 1, NULL, 0, 0
-	};
-
-	n->nlmsg_seq = ++nlh->seq;
-	n->nlmsg_pid = nlh->local.nl_pid;
-
-	/* Request an acknowledgement by setting NLM_F_ACK */
-	n->nlmsg_flags |= NLM_F_ACK;
-
-	/* Send message to netlink interface. */
-	res = sendmsg(nlh->fd, &msg, 0);
-
-	if (res < 0) {
-		LOG_DBG("error: %s\n", strerror(errno));
-		return -1;
-	}
-	return 0;
-}
-
-static int nl_parse_link_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
-{
-	struct rtattr *rta = NULL;
-	struct ifinfomsg *ifimsg = (struct ifinfomsg *) NLMSG_DATA(nlm);
-	int attrlen = nlm->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifinfomsg));
-	int n = 0;
-
-	if (!ifimsg || !ifinfo)
-		return -1;
-
-	ifinfo->isWireless = 0;
-	ifinfo->ifindex = ifimsg->ifi_index;
-	ifinfo->isUp = ifimsg->ifi_flags & IFF_UP ? 1 : 0;
-
-	for (rta = IFLA_RTA(ifimsg); RTA_OK(rta, attrlen); rta = RTA_NEXT(rta, attrlen)) {
-		if (rta->rta_type == IFLA_ADDRESS) {
-			if (ifimsg->ifi_family == AF_UNSPEC) {
-				if (RTA_PAYLOAD(rta) == ETH_ALEN) {
-					memcpy(ifinfo->mac, (char *) RTA_DATA(rta), ETH_ALEN);
-					n++;
-				}
-			}
-		} else if (rta->rta_type == IFLA_IFNAME) {
-			strcpy(ifinfo->ifname, (char *) RTA_DATA(rta));
-			n++;
-		} else if (rta->rta_type == IFLA_WIRELESS) {
-			// wireless stuff
-			ifinfo->isWireless = 1;
-		}
-	}
-	return n;
-}
-static int nl_parse_addr_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
-{
-	struct rtattr *rta = NULL;
-	struct ifaddrmsg *ifamsg = (struct ifaddrmsg *) NLMSG_DATA(nlm);
-	int attrlen = nlm->nlmsg_len - NLMSG_LENGTH(sizeof(struct ifaddrmsg));
-	int n = 0;
-
-	if (!ifamsg || !ifinfo)
-		return -1;
-
-	ifinfo->ifindex = ifamsg->ifa_index;
-	for (rta = IFA_RTA(ifamsg); RTA_OK(rta, attrlen); rta = RTA_NEXT(rta, attrlen)) {
-		if (rta->rta_type == IFA_ADDRESS) {
-			memcpy(&ifinfo->ipaddr.sin_addr, RTA_DATA(rta), RTA_PAYLOAD(rta));
-			ifinfo->ipaddr.sin_family = ifamsg->ifa_family;
-		} else if (rta->rta_type == IFA_LOCAL) {
-			if (RTA_PAYLOAD(rta) == ETH_ALEN) {
-			}
-		} else if (rta->rta_type == IFA_LABEL) {
-			strcpy(ifinfo->ifname, (char *) RTA_DATA(rta));
-		}
-	}
-
-	return n;
-}
-
-static int get_ipconf(struct if_info *ifinfo)
-{
-	struct ifreq ifr;
-	struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
-	int sock;
-
-	if (!ifinfo)
-		return -1;
-	
-	sock = socket(PF_INET, SOCK_STREAM, 0);
-
-	memset(&ifr, 0, sizeof(ifr));
-
-	ifr.ifr_ifindex = ifinfo->ifindex;
-	strcpy(ifr.ifr_name, ifinfo->ifname);
-
-	if (ioctl(sock, SIOCGIFADDR, &ifr) < 0) {
-		close(sock);
-		return -1;
-	}
-	memcpy(&ifinfo->ip, &sin->sin_addr, sizeof(struct in_addr));
-
-	if (ioctl(sock, SIOCGIFBRDADDR, &ifr) < 0) {
-		close(sock);
-		return -1;
-	}
-	memcpy(&ifinfo->broadcast, &sin->sin_addr, sizeof(struct in_addr));
-
-	close(sock);
-
-	return 0;
-}
-
-static int read_netlink(struct netlink_handle *nlh)
-{
-	int len, num_msgs = 0;
-	socklen_t addrlen;
-	struct nlmsghdr *nlm;
-	struct if_info ifinfo;
-#define BUFLEN 200
-	char buf[BUFLEN];
-
-	addrlen = sizeof(struct sockaddr_nl);
-
-	memset(buf, 0, BUFLEN);
-
-	len = recvfrom(nlh->fd, buf, BUFLEN, 0, 
-		       (struct sockaddr *) &nlh->peer, &addrlen);
-
-	if (len == -1) {
-		if (errno == EAGAIN) {
-			LOG_DBG("Netlink recv would block\n");
-			return 0;
-		}
-		return -1;
-	}
-
-	for (nlm = (struct nlmsghdr *) buf; 
-	     NLMSG_OK(nlm, (unsigned int) len); 
-	     nlm = NLMSG_NEXT(nlm, len)) {
-		struct nlmsgerr *nlmerr = NULL;
-		int ret = 0;
-
-		memset(&ifinfo, 0, sizeof(struct if_info));
-
-		num_msgs++;
-
-		switch (nlm->nlmsg_type) {
-		case NLMSG_ERROR:
-			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
-			if (nlmerr->error == 0) {
-				LOG_DBG("NLMSG_ACK");
-			} else {
-				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", 
-					nlmerr->error, nlmerr->msg.nlmsg_type);
-			}
-			break;
-		case RTM_NEWLINK:
-		{ 
-			struct host_addr haddr = { 6 };
-			struct as_addr aaddr = { 2 };
-			ret = nl_parse_link_info(nlm, &ifinfo);
-			
-			/* TODO: Should find a good way to sort out unwanted interfaces. */
-			if (ifinfo.isUp) {
-				
-				if (get_ipconf(&ifinfo) < 0) {
-					break;
-				}
-
-				if (ifinfo.mac[0] == 0 &&
-                                    ifinfo.mac[1] == 0 &&
-                                    ifinfo.mac[2] == 0 &&
-                                    ifinfo.mac[3] == 0 &&
-                                    ifinfo.mac[4] == 0 &&
-                                    ifinfo.mac[5] == 0)
-                                        break;
-                        }
-			
-                        LOG_DBG("Interface newlink %s %s %s\n", 
-                               ifinfo.ifname, eth_to_str(ifinfo.mac), 
-                               ifinfo.isUp ? "up" : "down");
-			
-			libstack_configure_interface(ifinfo.ifname, &aaddr, &haddr,
-						     ifinfo.isUp ? IFFLAG_UP : 0);
-			break;
-		}
-		case RTM_DELLINK:
-                        ret = nl_parse_link_info(nlm, &ifinfo);
-		
-			LOG_DBG("Interface dellink %s %s\n", ifinfo.ifname, eth_to_str(ifinfo.mac));
-                        break;
-		case RTM_DELADDR:
-			ret = nl_parse_addr_info(nlm, &ifinfo);
-			LOG_DBG("Interface deladdr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
-			// Delete interface here?
-		
-			break;
-		case RTM_NEWADDR:
-			ret = nl_parse_addr_info(nlm, &ifinfo);
-			LOG_DBG("Interface newaddr %s %s\n", ifinfo.ifname, inet_ntoa(ifinfo.ipaddr.sin_addr));
-			// Update ip address here?
-			break;
-		case NLMSG_DONE:
-			//LOG_DBG("NLMSG_DONE\n");
-			break;
-		default:
-			LOG_DBG("Unknown netlink message\n");
-			break;
-		}
-	}
-	return num_msgs;
-}
-
-static int netlink_request(struct netlink_handle *nlh, int type)
-{
-	struct {
-		struct nlmsghdr nh;
-		struct rtgenmsg rtg;
-	} req;
-
-	if (!nlh)
-		return -1;
-
-	memset(&req, 0, sizeof(req));
-	req.nh.nlmsg_len = NLMSG_LENGTH(sizeof(req));
-	req.nh.nlmsg_flags = NLM_F_ROOT | NLM_F_MATCH | NLM_F_REQUEST;
-	req.nh.nlmsg_type = type;
-	req.rtg.rtgen_family = AF_INET;
-
-	// Request interface information
-	return nl_send(nlh, &req.nh);
-}
-
 static int should_exit = 0;
 static int p[2] = { -1, -1 };
+struct sockaddr_sf ctrlid;
 
 static void signal_handler(int sig)
 {
@@ -360,34 +37,86 @@ static void signal_handler(int sig)
         ret = write(p[1], &q, 1);
 }
 
-static void doregister(struct service_id *srvid)
+static ssize_t scafd_sendto(int sock, void *data, size_t len, int flags, 
+                            struct sockaddr *addr, socklen_t addrlen)
 {
-	int ret;
-	struct sockaddr_sf ctrlid;
-	unsigned long data = 232366;
-
-	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
-
-	memset(&ctrlid, 0, sizeof(ctrlid));
-	ctrlid.sf_family = AF_SCAFFOLD;
-	ctrlid.sf_srvid.s_sid16 = htons(666);
+	ssize_t ret;
 
 	if (native)
-		ret = sendto(ctrlsock, &data, sizeof(data), 0, 
-			     (struct sockaddr *)&ctrlid, sizeof(ctrlid));
+		ret = sendto(sock, data, len, flags, 
+			     addr, addrlen);
 	else 
-		ret = sendto_sf(ctrlsock, &data, sizeof(data), 0, 
-				(struct sockaddr *)&ctrlid, sizeof(ctrlid));
+		ret = sendto_sf(sock, data, len, flags, 
+				addr, addrlen);
 	
 	if (ret == -1) {
 		LOG_ERR("sendto failed: %s\n",
 			strerror_sf(errno));
 	}
+
+	return ret;
+}
+
+static ssize_t scafd_recvfrom(int sock, void *buf, size_t len, int flags, 
+                              struct sockaddr *addr, socklen_t *addrlen)
+{
+	ssize_t ret;
+
+	if (native)
+		ret = recvfrom(sock, buf, len, flags, 
+                               addr, addrlen);
+	else 
+		ret = recvfrom_sf(sock, buf, len, flags, 
+                                  addr, addrlen);
+	
+	if (ret == -1) {
+		LOG_ERR("recvfrom failed: %s\n",
+			strerror_sf(errno));
+	}
+
+	return ret;
+}
+
+int scafd_send_join(const char *ifname)
+{
+	LOG_DBG("Join for interface %s\n", ifname);
+
+	return scafd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
+			    (struct sockaddr *)&ctrlid, sizeof(ctrlid));
+}
+
+static void scafd_register_service(struct service_id *srvid)
+{
+	int ret;
+	unsigned long data = 232366;
+        
+	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
+
+	ret = scafd_sendto(ctrlsock, &data, sizeof(data), 0, 
+			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 
 struct libstack_callbacks callbacks = {
-	.doregister = doregister,
+	.srvregister = scafd_register_service,
 };
+
+int ctrlsock_read(int sock)
+{
+        unsigned char buf[2000];
+        struct sockaddr_sf addr;
+        socklen_t addrlen = 0;
+        int ret;
+
+        ret = scafd_recvfrom(sock, buf, 2000, 0, 
+                             (struct sockaddr *)&addr, &addrlen);
+
+        if (ret > 0) {
+                printf("received message from service id %s\n",
+                       service_id_to_str(&addr.sf_srvid));
+        }
+
+        return ret;
+}
 
 int close_ctrlsock(int sock)
 {
@@ -400,9 +129,11 @@ int close_ctrlsock(int sock)
 int main(int argc, char **argv)
 {
 	struct sigaction sigact;
+#if defined(OS_LINUX)
         struct netlink_handle nlh;
-	int ret;
+#endif
         fd_set readfds;
+	int ret = EXIT_SUCCESS;
 
 	memset(&sigact, 0, sizeof(struct sigaction));
 
@@ -410,6 +141,11 @@ int main(int argc, char **argv)
 	sigaction(SIGINT, &sigact, NULL);
 	sigaction(SIGHUP, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
+
+	/* Set controller service id */
+	memset(&ctrlid, 0, sizeof(ctrlid));
+	ctrlid.sf_family = AF_SCAFFOLD;
+	ctrlid.sf_srvid.s_sid16 = htons(666);
 
 	/* Try first a native socket */
 	ctrlsock = socket(AF_SCAFFOLD, SOCK_DGRAM, 0);
@@ -432,50 +168,56 @@ int main(int argc, char **argv)
 	} else {
 		native = 1;
 	}
-
-	ret = nl_init_handle(&nlh);
-
-	if (ret < 0) {
-		LOG_ERR("Could not open netlink socket\n");
-		close(ctrlsock);
-                return EXIT_FAILURE;
-	}
-
-        ret = pipe(p);
+	
+	ret = pipe(p);
 
         if (ret == -1) {
 		LOG_ERR("Could not open pipe\n");
-                nl_close_handle(&nlh);
-		close_ctrlsock(ctrlsock);
-                return EXIT_FAILURE;
+		goto fail_pipe;
         }
 
 	ret = libstack_init();
 
 	if (ret == -1) {
 		LOG_ERR("Could not init libstack\n");
-                nl_close_handle(&nlh);
-		close(p[0]);
-		close(p[1]);
-		close_ctrlsock(ctrlsock);
-		return EXIT_FAILURE;
+		goto fail_libstack;
 	}
 	
 	libstack_register_callbacks(&callbacks);
 
-	netlink_getlink(&nlh);
+#if defined(OS_LINUX)
+	ret = nl_init_handle(&nlh);
+
+	if (ret < 0) {
+		LOG_ERR("Could not open netlink socket\n");
+                goto fail_netlink;
+	}
+
+	ret = netlink_getlink(&nlh);
+
+        if (ret < 0) {
+                LOG_ERR("Could not netlink request: %s\n",
+                        strerror(errno));
+                goto fail_netlink;
+        }
+#endif
+#define MAX(x,y) (x > y ? x : y)
 
         while (!should_exit) {
-                int ndfs = 0;
+                int nfds = 0;
 
                 FD_ZERO(&readfds);
-
+#if defined(OS_LINUX)
                 FD_SET(nlh.fd, &readfds);
-                FD_SET(p[0], &readfds);
-                
-                ndfs = nlh.fd > p[0] ? nlh.fd : p[0];
-                
-                ret = select(nlh.fd + 1, &readfds, NULL, NULL, NULL);
+		nfds = MAX(nlh.fd, nfds);
+#endif
+                FD_SET(p[0], &readfds);               
+                nfds = MAX(p[0], nfds);
+                /*
+                FD_SET(ctrlsock, &readfds);               
+                nfds = MAX(ctrlsock, nfds);
+                */
+                ret = select(nfds + 1, &readfds, NULL, NULL, NULL);
 
                 if (ret == 0) {
                         LOG_DBG("Timeout...\n");
@@ -483,15 +225,23 @@ int main(int argc, char **argv)
 			if (errno == EINTR) {
 				should_exit = 1;
 			} else {
-				LOG_ERR("select error: %s\n", strerror(errno));
+				LOG_ERR("select error: %s\n", 
+					strerror(errno));
 			}
                 } else {
+#if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
+                                LOG_DBG("netlink readable\n");
                                 read_netlink(&nlh);
                         }
+#endif
                         if (FD_ISSET(p[0], &readfds)) {
-                                printf("Reading from pipe\n");
+                                LOG_DBG("pipe readable\n");
                                 should_exit = 1;
+                        }
+                        if (FD_ISSET(ctrlsock, &readfds)) {
+                                LOG_DBG("ctrl sock readable\n");
+                                ctrlsock_read(ctrlsock);
                         }
                 }        
         }
@@ -499,12 +249,27 @@ int main(int argc, char **argv)
 
 	libstack_unregister_callbacks(&callbacks);
 	libstack_fini();
+#if defined(OS_LINUX)
         nl_close_handle(&nlh);
+#endif
         close(p[0]);
         close(p[1]);
 	LOG_DBG("closing control sock\n");
 	close_ctrlsock(ctrlsock);
 	LOG_DBG("done\n");
 
-        return EXIT_SUCCESS;
+out:
+        return ret;
+#if defined(OS_LINUX)
+	nl_close_handle(&nlh);
+fail_netlink:
+#endif
+	libstack_unregister_callbacks(&callbacks);
+fail_libstack:
+	close(p[0]);
+	close(p[1]);
+fail_pipe:
+	close_ctrlsock(ctrlsock);
+	ret = EXIT_FAILURE;
+	goto out;
 }

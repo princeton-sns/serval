@@ -15,6 +15,9 @@ int scaffold_output(struct sk_buff *skb)
 	struct ethhdr *ethh;
 	int err;
 
+        if (!skb->dev)
+                return -ENODEV;
+
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
 			      mac, NULL, skb->len);
 	if (err < 0) {

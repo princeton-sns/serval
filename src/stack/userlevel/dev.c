@@ -347,7 +347,7 @@ int netdev_populate_table(int sizeof_priv,
                 
                 if (!dev)
                         continue;
-
+                
                 /* Figure out the mac address */
 #if defined(OS_BSD)
                 memcpy(dev->perm_addr, LLADDR(ifaddr), ETH_ALEN);
@@ -356,7 +356,10 @@ int netdev_populate_table(int sizeof_priv,
                         LOG_ERR("failed to get mac address for interface %s\n",
                                 ifa->ifa_name);
                 }
-#endif                
+#endif          
+                /* Mark as up */
+                dev->flags |= IFF_UP;
+
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
@@ -378,28 +381,6 @@ int netdev_populate_table(int sizeof_priv,
         }
         
         freeifaddrs(tmp);
-        
-        {
-                char buf[2000];
-
-                services_print(buf, 2000);
-                printf("%s", buf);
-
-                service_del_dev("eth1");
-
-                printf("delete eth1:\n");
-
-                if (services_print(buf, 2000) > 0)
-                        printf("%s", buf);
-
-                service_del_dev("eth0");
-
-                printf("delete eth0\n");
-
-                if (services_print(buf, 2000) > 0) 
-                        printf("%s", buf);
-                
-        }
         
         return ret;
 }

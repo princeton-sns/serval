@@ -49,6 +49,7 @@ struct net_device {
 	unsigned char		perm_addr[MAX_ADDR_LEN]; /* permanent hw address */
 	unsigned char		addr_len;	/* hardware address length	*/
 	unsigned char		broadcast[MAX_ADDR_LEN];	/* hw bcast add	*/
+	unsigned int		flags;	/* interface flags (a la BSD)	*/
 	spinlock_t              lock;
 	atomic_t		refcnt;
 	/* device name hash chain */

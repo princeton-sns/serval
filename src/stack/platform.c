@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
+#include <scaffold/debug.h>
 #if defined(__KERNEL__)
 #include <linux/time.h>
 #else
@@ -67,7 +68,6 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
 
 int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
 {
-
         if (!memcpy(iov->iov_base, from, len)) 
                 return -EFAULT;
 
@@ -78,7 +78,6 @@ int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
 
 int memcpy_fromiovec(unsigned char *to, struct iovec *iov, int len)
 {
-        
         if (!memcpy(to, iov->iov_base, iov->iov_len))
                 return -EFAULT;
 

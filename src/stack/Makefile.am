@@ -13,6 +13,7 @@ scaffold_SOURCES = \
 	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
+	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
@@ -58,6 +59,7 @@ SCAFFOLD_HDR = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/dst.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/netdevice.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \

@@ -30,6 +30,7 @@
 struct net_device;
 struct sock;
 struct sk_buff;
+struct dst_entry;
 typedef unsigned int sk_buff_data_t;
 
 #define FREE_SKB(skb) free_skb(skb)
@@ -58,11 +59,29 @@ struct sk_buff {
         
 	struct sock		*sk;
 	struct net_device	*dev;
+	/*
+	 * This is the control buffer. It is free to use for every
+	 * layer. Please put your private variables there. If you
+	 * want to keep them across layers you have to do a skb_clone()
+	 * first. This is owned by whoever has the skb queued ATM.
+	 */
+        char			cb[48];
+
 	unsigned int		len,
 				data_len;
+	unsigned long		_skb_refdst;
 	uint16_t		mac_len,
 				hdr_len;
-        unsigned char           cloned:1, pkt_type:3;
+	union {
+		uint32_t	csum;
+		struct {
+			uint16_t	csum_start;
+			uint16_t	csum_offset;
+		};
+	};
+        uint32_t                priority;
+
+        unsigned char           cloned:1, ip_summed:2, nohdr:1, pkt_type:3;
         union {
 		uint32_t	mark; /* Used for packet type in Scaffold */
 		uint32_t	dropcount;
@@ -80,10 +99,6 @@ struct sk_buff {
 	unsigned int		truesize;
 	atomic_t		users;
 };
-
-void __free_skb(struct sk_buff *skb);
-void free_skb(struct sk_buff *);
-struct sk_buff *alloc_skb(unsigned int size);
 
 static inline int skb_is_nonlinear(const struct sk_buff *skb)
 {
@@ -114,6 +129,140 @@ static inline void skb_set_tail_pointer(struct sk_buff *skb, const int offset)
 	skb_reset_tail_pointer(skb);
 	skb->tail += offset;
 }
+
+/* We divide dataref into two halves.  The higher 16 bits hold references
+ * to the payload part of skb->data.  The lower 16 bits hold references to
+ * the entire skb->data.  A clone of a headerless skb holds the length of
+ * the header in skb->hdr_len.
+ *
+ * All users must obey the rule that the skb->data reference count must be
+ * greater than or equal to the payload reference count.
+ *
+ * Holding a reference to the payload part means that the user does not
+ * care about modifications to the header part of skb->data.
+ */
+#define SKB_DATAREF_SHIFT 16
+#define SKB_DATAREF_MASK ((1 << SKB_DATAREF_SHIFT) - 1)
+
+extern struct sk_buff *skb_clone(struct sk_buff *skb,
+				 gfp_t priority);
+
+/**
+ *	skb_cloned - is the buffer a clone
+ *	@skb: buffer to check
+ *
+ *	Returns true if the buffer was generated with skb_clone() and is
+ *	one of multiple shared copies of the buffer. Cloned buffers are
+ *	shared data so must not be written to under normal circumstances.
+ */
+static inline int skb_cloned(const struct sk_buff *skb)
+{
+	return skb->cloned &&
+	       (atomic_read(&skb_shinfo(skb)->dataref) & SKB_DATAREF_MASK) != 1;
+}
+
+/**
+ *	skb_header_cloned - is the header a clone
+ *	@skb: buffer to check
+ *
+ *	Returns true if modifying the header part of the buffer requires
+ *	the data to be copied.
+ */
+static inline int skb_header_cloned(const struct sk_buff *skb)
+{
+	int dataref;
+
+	if (!skb->cloned)
+		return 0;
+
+	dataref = atomic_read(&skb_shinfo(skb)->dataref);
+	dataref = (dataref & SKB_DATAREF_MASK) - (dataref >> SKB_DATAREF_SHIFT);
+	return dataref != 1;
+}
+
+/**
+ *	skb_header_release - release reference to header
+ *	@skb: buffer to operate on
+ *
+ *	Drop a reference to the header part of the buffer.  This is done
+ *	by acquiring a payload reference.  You must not read from the header
+ *	part of skb->data after this.
+ */
+static inline void skb_header_release(struct sk_buff *skb)
+{
+	BUG_ON(skb->nohdr);
+	skb->nohdr = 1;
+	atomic_add(1 << SKB_DATAREF_SHIFT, &skb_shinfo(skb)->dataref);
+}
+
+/**
+ *	skb_shared - is the buffer shared
+ *	@skb: buffer to check
+ *
+ *	Returns true if more than one person has a reference to this
+ *	buffer.
+ */
+static inline int skb_shared(const struct sk_buff *skb)
+{
+	return atomic_read(&skb->users) != 1;
+}
+
+/*
+ * skb might have a dst pointer attached, refcounted or not.
+ * _skb_refdst low order bit is set if refcount was _not_ taken
+ */
+#define SKB_DST_NOREF	1UL
+#define SKB_DST_PTRMASK	~(SKB_DST_NOREF)
+
+/**
+ * skb_dst - returns skb dst_entry
+ * @skb: buffer
+ *
+ * Returns skb dst_entry, regardless of reference taken or not.
+ */
+static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
+{
+	return (struct dst_entry *)(skb->_skb_refdst & SKB_DST_PTRMASK);
+}
+
+/**
+ * skb_dst_set - sets skb dst
+ * @skb: buffer
+ * @dst: dst entry
+ *
+ * Sets skb dst, assuming a reference was taken on dst and should
+ * be released by skb_dst_drop()
+ */
+static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
+{
+	skb->_skb_refdst = (unsigned long)dst;
+}
+
+/**
+ * skb_dst_set_noref - sets skb dst, without a reference
+ * @skb: buffer
+ * @dst: dst entry
+ *
+ * Sets skb dst, assuming a reference was not taken on dst
+ * skb_dst_drop() should not dst_release() this dst
+ */
+static inline void skb_dst_set_noref(struct sk_buff *skb, struct dst_entry *dst)
+{
+	skb->_skb_refdst = (unsigned long)dst | SKB_DST_NOREF;
+}
+
+/**
+ * skb_dst_is_noref - Test if skb dst isnt refcounted
+ * @skb: buffer
+ */
+static inline int skb_dst_is_noref(const struct sk_buff *skb)
+{
+	return (skb->_skb_refdst & SKB_DST_NOREF) && skb_dst(skb);
+}
+
+void __free_skb(struct sk_buff *skb);
+void free_skb(struct sk_buff *);
+struct sk_buff *alloc_skb(unsigned int size);
 
 static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 {
@@ -555,6 +704,17 @@ static inline void skb_set_scaffold_packet_type(struct sk_buff *skb,
                                                 enum scaffold_packet_type type)
 {
         skb->mark = type;
+}
+
+static inline struct service_id *skb_dst_service_id(struct sk_buff *skb)
+{
+        return (struct service_id *)skb->cb;
+}
+
+static inline void skb_set_dst_service_id(struct sk_buff *skb, 
+                                          struct service_id *srvid)
+{
+        memcpy(skb->cb, srvid, sizeof(*srvid));
 }
 
 #endif /* _SKBUFF_H_ */

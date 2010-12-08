@@ -6,6 +6,7 @@
 #include <scaffold/lock.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/netdevice.h>
+#include <scaffold/dst.h>
 
 static void skb_release_head_state(struct sk_buff *skb)
 {
@@ -18,12 +19,12 @@ static void skb_release_head_state(struct sk_buff *skb)
 static void skb_release_data(struct sk_buff *skb)
 {
 	if (!skb->cloned ||
-	    !atomic_sub_return(/*skb->nohdr ? (1 << SKB_DATAREF_SHIFT) + 1 : */1,
+	    !atomic_sub_return(skb->nohdr ? (1 << SKB_DATAREF_SHIFT) + 1 : 1,
 			       &skb_shinfo(skb)->dataref)) {
-		
 		free(skb->head);
 	}
 }
+
 
 /* Free everything but the sk_buff shell. */
 static void skb_release_all(struct sk_buff *skb)
@@ -87,6 +88,87 @@ struct sk_buff *alloc_skb(unsigned int size)
 nodata:
 	free(skb);
 	return NULL;
+}
+
+static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+{
+	new->dev		= old->dev;
+	new->transport_header	= old->transport_header;
+	new->network_header	= old->network_header;
+	new->mac_header		= old->mac_header;
+	skb_dst_copy(new, old);
+	/* new->rxhash		= old->rxhash; */
+
+	memcpy(new->cb, old->cb, sizeof(old->cb));
+	new->csum		= old->csum;
+	new->pkt_type		= old->pkt_type;
+	new->ip_summed		= old->ip_summed;
+	/* skb_copy_queue_mapping(new, old); */
+	new->priority		= old->priority;
+	new->protocol		= old->protocol;
+	new->mark		= old->mark;
+}
+
+/*
+ * You should not add any new code to this function.  Add it to
+ * __copy_skb_header above instead.
+ */
+static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
+{
+#define C(x) n->x = skb->x
+
+	n->next = n->prev = NULL;
+	n->sk = NULL;
+	__copy_skb_header(n, skb);
+
+	C(len);
+	C(data_len);
+	C(mac_len);
+	n->hdr_len = skb->nohdr ? skb_headroom(skb) : skb->hdr_len;
+	n->cloned = 1;
+	n->nohdr = 0;
+	n->destructor = NULL;
+	C(tail);
+	C(end);
+	C(head);
+	C(data);
+	C(truesize);
+	atomic_set(&n->users, 1);
+
+	atomic_inc(&(skb_shinfo(skb)->dataref));
+	skb->cloned = 1;
+
+	return n;
+#undef C
+}
+
+
+struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
+{
+	struct sk_buff *n;
+
+        n = (struct sk_buff *)malloc(sizeof(*n));
+
+        if (!n)
+                return NULL;
+        /*
+	n = skb + 1;
+	if (skb->fclone == SKB_FCLONE_ORIG &&
+	    n->fclone == SKB_FCLONE_UNAVAILABLE) {
+		atomic_t *fclone_ref = (atomic_t *) (n + 1);
+		n->fclone = SKB_FCLONE_CLONE;
+		atomic_inc(fclone_ref);
+	} else {
+		n = kmem_cache_alloc(skbuff_head_cache, gfp_mask);
+		if (!n)
+			return NULL;
+
+		kmemcheck_annotate_bitfield(n, flags1);
+		kmemcheck_annotate_bitfield(n, flags2);
+		n->fclone = SKB_FCLONE_UNAVAILABLE;
+	}
+        */
+	return __skb_clone(n, skb);
 }
 
 /**

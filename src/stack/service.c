@@ -11,6 +11,7 @@
 #include <errno.h>
 #endif
 
+#include "service.h"
 #include "bst.h"
 
 #define get_service(n) bst_node_private(n, struct service_entry)
@@ -23,16 +24,9 @@ struct service_table {
         rwlock_t lock;
 };
 
-struct device_entry {
+struct dev_entry {
         struct net_device *dev;
         struct list_head lh;
-};
-
-struct service_entry {
-        struct bst_node *node;
-        struct list_head dev_list;
-        rwlock_t devlock;
-        atomic_t refcnt;
 };
 
 static int service_entry_init(struct bst_node *n);
@@ -40,11 +34,11 @@ static void service_entry_destroy(struct bst_node *n);
 
 static struct service_table srvtable;
 
-static struct device_entry *device_entry_create(struct net_device *dev, gfp_t alloc)
+static struct dev_entry *dev_entry_create(struct net_device *dev, gfp_t alloc)
 {
-        struct device_entry *de;
+        struct dev_entry *de;
 
-        de = (struct device_entry *)MALLOC(sizeof(*de), alloc);
+        de = (struct dev_entry *)MALLOC(sizeof(*de), alloc);
 
         if (!de)
                 return NULL;
@@ -58,7 +52,7 @@ static struct device_entry *device_entry_create(struct net_device *dev, gfp_t al
         return de;
 }
 
-static void device_entry_free(struct device_entry *de)
+static void dev_entry_free(struct dev_entry *de)
 {
         dev_put(de->dev);
         FREE(de);
@@ -68,9 +62,9 @@ static int __service_entry_add_dev(struct service_entry *se,
                                    struct net_device *dev, 
                                    gfp_t alloc)
 {
-        struct device_entry *de;
+        struct dev_entry *de;
 
-        de = device_entry_create(dev, alloc);
+        de = dev_entry_create(dev, alloc);
 
         if (!de)
                 return -ENOMEM;
@@ -93,11 +87,12 @@ int service_entry_add_dev(struct service_entry *se,
         return ret;
 }
 
+
 /*
-static void __service_entry_remove_device_entry(struct service_entry *se, 
-                                                struct device_entry *de)
+static void __service_entry_remove_dev_entry(struct service_entry *se, 
+                                                struct dev_entry *de)
 {
-        struct device_entry *de;
+        struct dev_entry *de;
         
         write_lock(&se->devlock);
         list_del(&de->lh);
@@ -113,7 +108,7 @@ static void __service_entry_remove_device_entry(struct service_entry *se,
 struct net_device *service_entry_get_dev(struct service_entry *se, 
                                          const char *ifname)
 {
-        struct device_entry *de;
+        struct dev_entry *de;
         struct net_device *dev = NULL;
 
         read_lock(&se->devlock);
@@ -134,12 +129,12 @@ struct net_device *service_entry_get_dev(struct service_entry *se,
 int __service_entry_remove_dev(struct service_entry *se, 
                                const char *ifname)
 {
-        struct device_entry *de;
+        struct dev_entry *de;
 
         list_for_each_entry(de, &se->dev_list, lh) {
                 if (strcmp(de->dev->name, ifname) == 0) {
                         list_del(&de->lh);
-                        device_entry_free(de);
+                        dev_entry_free(de);
                         return 1;
                 } 
         }
@@ -169,6 +164,7 @@ static struct service_entry *service_entry_create(gfp_t alloc)
         INIT_LIST_HEAD(&se->dev_list);
         rwlock_init(&se->devlock);
         atomic_set(&se->refcnt, 1);
+        se->dev_pos = NULL;
 
         return se;
 }
@@ -186,14 +182,14 @@ void __service_entry_free(struct service_entry *se)
          */
 
         while (1) {
-                struct device_entry *de;
+                struct dev_entry *de;
                 
                 if (list_empty(&se->dev_list))
                         break;
                 
-                de = list_first_entry(&se->dev_list, struct device_entry, lh);
+                de = list_first_entry(&se->dev_list, struct dev_entry, lh);
                 list_del(&de->lh);
-                device_entry_free(de);
+                dev_entry_free(de);
         }
 
         rwlock_destroy(&se->devlock);
@@ -222,10 +218,38 @@ void service_entry_destroy(struct bst_node *n)
         service_entry_put(get_service(n));
 }
 
+void service_entry_dev_iterate_begin(struct service_entry *se)
+{
+        read_lock_bh(&se->devlock);
+        se->dev_pos = &se->dev_list;
+}
+
+void service_entry_dev_iterate_end(struct service_entry *se)
+{
+        se->dev_pos = NULL;
+        read_unlock_bh(&se->devlock);
+}
+
+/* 
+   Calling this function must be preceeded by a call to
+   service_entry_dev_iterate_begin() and followed by
+   service_entry_dev_iterate_end(). 
+*/
+struct net_device *service_entry_dev_next(struct service_entry *se)
+{
+        se->dev_pos = se->dev_pos->next;
+
+        if (se->dev_pos == &se->dev_list)
+                return NULL;
+
+        return container_of(se->dev_pos, struct dev_entry, lh)->dev;
+}
+
+
 int service_entry_print(struct bst_node *n, char *buf, int buflen)
 {
         struct service_entry *se = get_service(n);
-        struct device_entry *de;
+        struct dev_entry *de;
         int len = 0;
 
         read_lock_bh(&se->devlock);
@@ -255,6 +279,34 @@ int services_print(char *buf, int buflen)
 {
         LOG_DBG("service table entries=%u\n", srvtable.tree.entries);
         return service_table_print(&srvtable, buf, buflen);
+}
+
+static struct service_entry *service_table_find(struct service_table *tbl, 
+                                                struct service_id *srvid)
+{
+        struct service_entry *se = NULL;
+        struct bst_node *n;
+
+        if (!srvid)
+                return NULL;
+
+        read_lock_bh(&tbl->lock);
+        
+        n = bst_find_longest_prefix(&tbl->tree, srvid, sizeof(*srvid) * 8);
+
+        if (n) {
+                se = get_service(n);
+                service_entry_hold(se);
+        }
+
+        read_unlock_bh(&tbl->lock);
+
+        return se;
+}
+
+struct service_entry *service_find(struct service_id *srvid)
+{
+        return service_table_find(&srvtable, srvid);
 }
 
 int service_table_add(struct service_table *tbl, struct service_id *srvid, 
@@ -348,7 +400,8 @@ static int service_table_del_dev(struct service_table *tbl, const char *devname)
 
         write_lock_bh(&tbl->lock);
         if (tbl->tree.root)
-                ret = bst_subtree_func(tbl->tree.root, del_dev_func, (void *)devname);
+                ret = bst_subtree_func(tbl->tree.root, del_dev_func, 
+                                       (void *)devname);
         write_unlock_bh(&tbl->lock);
 
         return ret;

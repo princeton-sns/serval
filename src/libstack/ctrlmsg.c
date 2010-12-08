@@ -16,7 +16,7 @@ int ctrlmsg_handle(struct ctrlmsg *cm)
 
 	switch (cm->type) {
 	case CTRLMSG_TYPE_REGISTER:
-		callbacks->doregister((struct service_id *)cm->payload);
+		callbacks->srvregister((struct service_id *)cm->payload);
 		break;
 	default:
 		LOG_ERR("no handler for msg type %u\n",

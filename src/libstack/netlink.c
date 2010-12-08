@@ -152,7 +152,8 @@ static int netlink_send(struct event_handler *eh, const void *data, size_t datal
         struct nlmsghdr nh = { 0 };
 	struct iovec iov[2] = { { (void *)&nh, sizeof(nh) }, 
                                 { (void *)data, datalen } };
-        struct msghdr mh = { &nlh->peer, sizeof(nlh->peer), iov, 2, NULL, 0, 0 };
+        struct msghdr mh = { &nlh->peer, sizeof(nlh->peer), 
+                             iov, 2, NULL, 0, 0 };
         static int sequence_number = 0;
 
         memset(&nh, 0, sizeof(nh));

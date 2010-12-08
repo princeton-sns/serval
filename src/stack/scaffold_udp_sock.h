@@ -9,7 +9,6 @@
 struct scaffold_udp_sock {
 	/* NOTE: scaffold_sock has to be the first member */
 	struct scaffold_sock ssk;
-        struct net_device *fake_dev; /* For testing only */
 };
 
 static inline struct scaffold_udp_sock *scaffold_udp_sk(const struct sock *sk)

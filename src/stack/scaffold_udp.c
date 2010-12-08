@@ -3,6 +3,7 @@
 #include <scaffold/debug.h>
 #include <scaffold/netdevice.h>
 #include <scaffold/skbuff.h>
+#include <netinet/scaffold.h>
 #include <scaffold_udp_sock.h>
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
@@ -22,23 +23,10 @@
 #endif
 #endif /* OS_USER */
 
-/* For testing only. Should be removed */
-extern const char *fixed_dev_name;
-#define FIXED_DEV_NAME fixed_dev_name
-
 static int scaffold_udp_init_sock(struct sock *sk)
 {
-        struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
+        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
         LOG_DBG("\n");
-#if defined(OS_LINUX_KERNEL)
-        usk->fake_dev = dev_get_by_name(&init_net, FIXED_DEV_NAME);      
-#else
-        usk->fake_dev = alloc_netdev(0, FIXED_DEV_NAME, ether_setup);
-#endif
-        if (!usk->fake_dev) {
-                LOG_ERR("could not set fake device\n");
-                return -ENOMEM;
-        }
 
         return 0;
 }
@@ -49,12 +37,7 @@ static int scaffold_udp_destroy_sock(struct sock *sk)
 static void scaffold_udp_destroy_sock(struct sock *sk)
 #endif
 {
-        struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
-        LOG_DBG("\n");
-
-        if (usk->fake_dev)
-                dev_put(usk->fake_dev);
-
+        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
         return 0;
 #endif
@@ -127,7 +110,7 @@ static void udp_checksum(uint16_t total_len,
 #define EXTRA_HDR (20)
 #define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR) // payload + LL + IP + extra
 
-static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)        
+static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
 {
         int err;
         unsigned short tot_len;
@@ -146,13 +129,13 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_ip.s_addr);
 
-        err = scaffold_ipv4_xmit_skb(sk, skb);
-        
         LOG_DBG("udp pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len));
 
+        err = scaffold_ipv4_xmit_skb(sk, skb);
+        
         if (err < 0) {
                 LOG_ERR("udp xmit failed\n");
         }
@@ -166,18 +149,20 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         int err;
         struct sk_buff *skb;
         int ulen = len;
-        struct scaffold_sock *ssk = scaffold_sk(sk);
+        struct service_id *srvid = NULL;
+        //struct scaffold_sock *ssk = scaffold_sk(sk);
 
 	if (len > 0xFFFF)
 		return -EMSGSIZE;
 
-	if (msg->msg_flags & MSG_OOB) /* Mirror BSD error message compatibility */
+	if (msg->msg_flags & MSG_OOB) 
 		return -EOPNOTSUPP;
 
         LOG_DBG("sending message\n");
 
 	if (msg->msg_name) {
-		struct sockaddr_sf *addr = (struct sockaddr_sf *)msg->msg_name;
+		struct sockaddr_sf *addr = 
+                        (struct sockaddr_sf *)msg->msg_name;
 
 		if ((unsigned)msg->msg_namelen < sizeof(*addr))
 			return -EINVAL;
@@ -185,9 +170,8 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 			if (addr->sf_family != AF_UNSPEC)
 				return -EAFNOSUPPORT;
 		}
-                lock_sock(sk);
-                memcpy(&ssk->peer_srvid, &addr->sf_srvid, sizeof(struct service_id));
-                release_sock(sk);
+                
+                srvid = &addr->sf_srvid;
         } else {
                    if (sk->sk_state != SF_BOUND) {
                            return -EDESTADDRREQ;
@@ -202,9 +186,9 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 return -ENOMEM;
         
         skb_reserve(skb, UDP_MAX_HDR);
-
-        skb->dev = scaffold_udp_sk(sk)->fake_dev;
-
+        
+        if (srvid)
+                skb_set_dst_service_id(skb, srvid);
         /* 
            TODO: 
            
@@ -224,9 +208,9 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         skb_set_scaffold_packet_type(skb, PKT_TYPE_DATA);
 
         lock_sock(sk);
-
+                
         err = scaffold_udp_transmit_skb(sk, skb);
-
+        
         if (err < 0) {
                 LOG_ERR("udp xmit failed\n");
                 FREE_SKB(skb);
@@ -237,8 +221,10 @@ out:
         return err;
 }
 
-static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
-                                size_t len, int nonblock, int flags, int *addr_len)
+static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk, 
+                                struct msghdr *msg,
+                                size_t len, int nonblock, int flags, 
+                                int *addr_len)
 {
 	struct scaffold_sock *ss = scaffold_sk(sk);
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
