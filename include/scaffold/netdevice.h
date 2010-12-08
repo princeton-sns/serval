@@ -34,11 +34,10 @@ struct ethhdr {
 struct sk_buff;
 struct packet_ops;
 
-#ifdef MAX_ADDR_LEN
-#undef MAX_ADDR_LEN /* also defined in if_arp.h */
-#endif
 
+#ifndef MAX_ADDR_LEN
 #define MAX_ADDR_LEN ETH_HLEN
+#endif
 #define LL_MAX_HEADER 32
 #define MAX_HEADER LL_MAX_HEADER
 

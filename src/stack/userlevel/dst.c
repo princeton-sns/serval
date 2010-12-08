@@ -16,11 +16,12 @@ int dst_discard(struct sk_buff *skb)
 void *dst_alloc(struct dst_ops *ops)
 {
 	struct dst_entry *dst;
-
+        /*
 	if (ops->gc && atomic_read(&ops->entries) > ops->gc_thresh) {
 		if (ops->gc(ops))
 			return NULL;
 	}
+        */
         dst = malloc(sizeof(struct dst_entry));
 	//dst = kmem_cache_zalloc(ops->kmem_cachep, GFP_ATOMIC);
 	if (!dst)

@@ -11,7 +11,6 @@
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
-#include <ifaddrs.h>
 #include <pthread.h>
 #include <poll.h>
 #include <string.h>
@@ -312,75 +311,113 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 #endif /* OS_LINUX */
 
 /*
-  Populate the device table at startup using getifaddrs. This is
-  portable, but not dynamic (i.e., we cannot monitor interfaces that
-  are removed).
+  Populate the device table at startup using SIOCGIFCONF ioctl. This
+  is kind of portable, but not dynamic (i.e., we cannot monitor interfaces
+  that are removed).
   
+  We are not using getifaddrs, since that is not available on Android.
+
   A better choice on Linux would be netlink, although this is not
   portable.
  */
+
+#define	MAX(a,b) ((a) > (b) ? (a) : (b))
+
 int netdev_populate_table(int sizeof_priv, 
                           void (*setup)(struct net_device *))
 {
-        int ret = 0;
-        struct ifaddrs *ifa = NULL, *tmp;
-        
-        ret = getifaddrs(&tmp);
+        int fd, n, len = 0, ret = 0;
+        struct ifconf ifc;
+	struct ifreq *ifr = NULL;
+        char buff[8192];
 
         if (ret == -1) {
                 LOG_ERR("could not get interface list\n");
                 return ret;
         }
 
-        for (ifa = tmp; ifa != NULL; ifa = ifa->ifa_next) {
+        fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+        if (fd == -1) {
+		return -1;
+	}
+  
+	ifc.ifc_len = sizeof(buff);
+	ifc.ifc_buf = buff;
+
+	if (ioctl(fd, SIOCGIFCONF, &ifc) != 0) {
+		close(fd);
+		return -1;
+	} 
+
+	ifr = ifc.ifc_req;  
+	n = ifc.ifc_len / sizeof(struct ifreq);
+
+        LOG_DBG("ifr %d\n", n);
+
+	/* Loop through interfaces, looking for given IP address */
+	for (; ifc.ifc_len != 0; ifr = (struct ifreq *)((char *) ifr + len), 
+                     ifc.ifc_len -= len) {
                 struct net_device *dev;
+                const char *name = ifr->ifr_name;
 #if defined(OS_BSD)
                 struct sockaddr_dl *ifaddr = 
-                        (struct sockaddr_dl *)ifa->ifa_addr;
+                        (struct sockaddr_dl *)&ifr->ifr_addr;
               
-                if (ifaddr->sdl_family != AF_LINK)
+                len = (sizeof(ifr->ifr_name) + MAX(sizeof(struct sockaddr),
+                                                   ifr->ifr_addr.sa_len));
+                
+                if (ifaddr->sdl_family != AF_LINK) {
                         continue;
+                }
 
-                if (strncmp(ifa->ifa_name, "lo", 2) == 0)
+                if (strncmp(name, "lo", 2) == 0)
                         continue;
-                if (strncmp(ifa->ifa_name, "gif", 3) == 0)
+                if (strncmp(name, "gif", 3) == 0)
                         continue;
-                if (strncmp(ifa->ifa_name, "stf", 3) == 0)
+                if (strncmp(name, "stf", 3) == 0)
                         continue;
-                if (strncmp(ifa->ifa_name, "fw", 2) == 0)
+                if (strncmp(name, "fw", 2) == 0)
                         continue;
 #elif defined(OS_LINUX)
-                /* Filter on all devices that support AF_PACKET, these
-                   are the only ones we can use anyway. */
-                if (ifa->ifa_addr->sa_family != AF_PACKET)
-                        continue;
+                len = sizeof(struct ifreq);
 #endif
+		if (ioctl(fd, SIOCGIFFLAGS, ifr) == -1) {
+                        goto out;
+                }
+                
                 /* Ignore loopback device */
-                if (strncmp(ifa->ifa_name, "lo", 2) == 0)
+                if (strncmp(name, "lo", 2) == 0)
                         continue;
 
-                dev = alloc_netdev(sizeof_priv, ifa->ifa_name, setup);
+                dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
                 if (!dev)
                         continue;
+
+                LOG_DBG("new interface %s\n", name);
                 
                 /* Figure out the mac address */
 #if defined(OS_BSD)
                 memcpy(dev->perm_addr, LLADDR(ifaddr), ETH_ALEN);
 #elif defined(OS_LINUX)
-                if (get_macaddr(ifa->ifa_name, dev->perm_addr) == -1) {
+                /*
+                if (get_macaddr(name, dev->perm_addr) == -1) {
                         LOG_ERR("failed to get mac address for interface %s\n",
-                                ifa->ifa_name);
+                                name);
                 }
+                */
+                memcpy(dev->perm_addr, ifr->ifr_hwaddr.sa_data, ETH_ALEN);
 #endif          
                 /* Mark as up */
-                dev->flags |= IFF_UP;
+                if (ifr->ifr_flags & IFF_UP)
+                        dev->flags |= IFF_UP;
 
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
                         free_netdev(dev);
-                        return ret;
+                        goto out;
                 }
                 
                 service_add(NULL, 0, dev, GFP_KERNEL);
@@ -392,12 +429,12 @@ int netdev_populate_table(int sizeof_priv,
                                 strerror(errno));
                         unregister_netdev(dev);
                         free_netdev(dev);
-                        return ret;
+                        goto out;
                 }
         }
-        
-        freeifaddrs(tmp);
-        
+out:
+        close(fd);
+
         return ret;
 }
 

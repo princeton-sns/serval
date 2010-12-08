@@ -121,7 +121,7 @@ static int eventloop_dequeue_msg_xmit(struct event_handle *h)
 
         while (1) {  
                 struct msgelm *me;
-                int i;
+                unsigned int i;
 
                 pthread_mutex_lock(&h->mutex);
                 

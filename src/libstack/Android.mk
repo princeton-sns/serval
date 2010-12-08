@@ -2,6 +2,7 @@ LOCAL_PATH := $(my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
+	libstack.c \
 	ctrlmsg.c \
 	netlink.c \
 	unix.c \

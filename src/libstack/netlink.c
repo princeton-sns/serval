@@ -149,7 +149,7 @@ static int netlink_getfd(struct event_handler *eh)
 static int netlink_send(struct event_handler *eh, const void *data, size_t datalen)
 {
         struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
-        struct nlmsghdr nh = { 0 };
+        struct nlmsghdr nh;
 	struct iovec iov[2] = { { (void *)&nh, sizeof(nh) }, 
                                 { (void *)data, datalen } };
         struct msghdr mh = { &nlh->peer, sizeof(nlh->peer), 

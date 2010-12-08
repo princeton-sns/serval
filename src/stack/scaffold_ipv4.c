@@ -9,7 +9,7 @@
 #include <output.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
-#else
+#elif !defined(OS_ANDROID)
 #include <netinet/if_ether.h>
 #endif
 #include "service.h"

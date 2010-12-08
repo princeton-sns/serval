@@ -5,11 +5,14 @@ include $(CLEAR_VARS)
 # Scafd
 #
 LOCAL_SRC_FILES := \
+	rtnl.c \
 	scafd.c
 
 SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
 
-SCAFD_HDR =
+SCAFD_HDR = \
+	rtnl.h \
+	debug.h
 
 LOCAL_C_INCLUDES += \
 	$(SCAFFOLD_INCLUDE_DIR)

@@ -7,6 +7,8 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	debug.c \
 	platform.c \
+        bst.c \
+        service.c \
 	input.c \
 	output.c \
 	ctrl_handler.c \
@@ -15,6 +17,7 @@ LOCAL_SRC_FILES := \
 	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
+	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
@@ -23,7 +26,7 @@ LOCAL_SRC_FILES := \
 	userlevel/wait.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \
-	userlevel/packet.c \
+	userlevel/packet_linux.c \
 	userlevel/ctrl.c \
 	userlevel/scaffold.c
 
@@ -32,16 +35,20 @@ SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
 SCAFFOLD_HDR = \
 	af_scaffold.h \
 	ctrl.h \
+	bst.h \
+        service.h \
 	input.h \
 	output.h \
 	scaffold_sock.h \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
 	scaffold_ipv4.h \
+	userlevel/packet.h \
 	userlevel/client_msg.h \
 	userlevel/client.h \
 	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
@@ -49,6 +56,7 @@ SCAFFOLD_HDR = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
+        $(SCAFFOLD_INCLUDE_DIR)/scaffold/dst.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/netdevice.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \
