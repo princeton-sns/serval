@@ -1,5 +1,8 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/debug.h>
+#if defined(OS_USER)
+#include <pthread.h>
+#endif
 
 static const char *log_level_str[] = {
 	"INF",
@@ -8,10 +11,6 @@ static const char *log_level_str[] = {
 	"ERR",
         "CRIT"
 };
-
-#if defined(OS_USER)
-#include <pthread.h>
-#endif
 
 void logme(log_level_t level, const char *func, const char *format, ...)
 {
