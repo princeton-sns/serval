@@ -1,11 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #include <linux/time.h>
-#else
+#endif
+#if defined(OS_USER)
 #include <string.h>
-#include <time.h>
+#include <sys/time.h>
 #include <errno.h>
 #endif
 
@@ -34,22 +35,21 @@ int mac_pton(const char *src, void *dst)
 
 const char *get_strtime(void)
 {
-    static char buf[512];
-#if defined(__KERNEL__)
+    static char buf[30];
     struct timeval now;
-
+#if defined(OS_LINUX_KERNEL)
     do_gettimeofday(&now);
-    sprintf(buf, "%ld.%03ld", now.tv_sec, now.tv_usec / 1000);
-#else
-    time_t now = time(0);
-    struct tm p;
-    localtime_r(&now, &p);
-    strftime(buf, 512, "%b %e %T", &p);
 #endif
+#if defined(OS_USER)
+    gettimeofday(&now, NULL);
+#endif
+
+    snprintf(buf, 30, "%ld.%03ld", now.tv_sec, now.tv_usec / 1000);
+
     return buf;
 }
 
-#if defined(__KERNEL__)
+#if defined(OS_LINUX_KERNEL)
 #include <linux/inet.h>
 
 const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
@@ -64,7 +64,9 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
         
         return dst;
 }
-#else
+#endif
+
+#if defined(OS_USER)
 
 int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
 {
@@ -116,4 +118,4 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_ANDROID */
 
-#endif /* __KERNEL__ */
+#endif /* OS_USER */

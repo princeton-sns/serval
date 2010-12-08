@@ -9,18 +9,23 @@ static const char *log_level_str[] = {
         "CRIT"
 };
 
+#if defined(OS_USER)
+#include <pthread.h>
+#endif
+
 void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
 
 	va_start(ap, format);
 	
-#if defined(__KERNEL__)
-	pr_info("[%s {%d} %3s]%s: ", 
+#if defined(OS_LINUX_KERNEL)
+	pr_info("%s{%d}[%3s]%s: ", 
 		get_strtime(), task_pid_nr(current), 
                 log_level_str[level], func);
 	vprintk(format, ap);
-#else
+#endif
+#if defined(OS_USER)
 	{
 		FILE *s = stdout;
 
@@ -35,8 +40,9 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 			s = stderr;
 			break;
 		}
-		fprintf(s, "[%s {%d} %3s]%s: ", 
-			get_strtime(), getpid(), log_level_str[level], func);
+		fprintf(s, "%s{%010ld}[%3s]%s: ", 
+			get_strtime(), (long)pthread_self(), 
+                        log_level_str[level], func);
 		vfprintf(s, format, ap);
 		fflush(s);
 	}

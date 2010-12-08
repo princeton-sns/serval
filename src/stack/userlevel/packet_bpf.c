@@ -204,6 +204,9 @@ static int packet_bpf_xmit(struct sk_buff *skb)
 
         if (err == -1) {
                 LOG_ERR("write error: %s\n", strerror(errno));
+                err = NET_XMIT_DROP;
+        } else {
+                err = NET_XMIT_SUCCESS;
         }
 
         free_skb(skb);

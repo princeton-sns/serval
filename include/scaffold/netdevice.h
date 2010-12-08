@@ -13,6 +13,7 @@
 #include <scaffold/atomic.h>
 #include <scaffold/lock.h>
 #include <scaffold/net.h>
+#include <scaffold/skbuff.h>
 #include <net/if.h>
 #include <pthread.h>
 #if defined(OS_ANDROID)
@@ -41,14 +42,25 @@ struct packet_ops;
 #define LL_MAX_HEADER 32
 #define MAX_HEADER LL_MAX_HEADER
 
+#define NET_XMIT_SUCCESS	0x00
+#define NET_XMIT_DROP		0x01	/* skb dropped			*/
+#define NET_XMIT_CN		0x02	/* congestion notification	*/
+#define NET_XMIT_POLICED	0x03	/* skb is shot by police	*/
+#define NET_XMIT_MASK		0x0f	/* qdisc flags in net/sch_generic.h */
+
+struct netdev_queue {
+	struct net_device	*dev;
+	struct sk_buff_head	q;
+};
+
 struct net_device {        
 	int                     ifindex;
         char                    name[IFNAMSIZ];
-	unsigned short		hard_header_len;	/* hardware hdr length	*/
+	unsigned short		hard_header_len; /* hardware hdr length	*/
 	unsigned char		*dev_addr;
 	unsigned char		perm_addr[MAX_ADDR_LEN]; /* permanent hw address */
-	unsigned char		addr_len;	/* hardware address length	*/
-	unsigned char		broadcast[MAX_ADDR_LEN];	/* hw bcast add	*/
+	unsigned char		addr_len;  /* hardware address length	*/
+	unsigned char		broadcast[MAX_ADDR_LEN]; /* hw bcast add	*/
 	unsigned int		flags;	/* interface flags (a la BSD)	*/
 	spinlock_t              lock;
 	atomic_t		refcnt;
@@ -57,7 +69,8 @@ struct net_device {
 	/* device index hash chain */
 	struct hlist_node	index_hlist;
 	struct list_head	dev_list;
-        
+        struct netdev_queue     tx_queue;
+        unsigned long           tx_queue_len; /* Max len allowed */
         /* Stuff for packet thread that reads packets from the
          * device */
         int fd;
@@ -73,6 +86,11 @@ struct net_device {
 #define LL_ALLOCATED_SPACE(dev) ((dev)->hard_header_len)
 
 #include <scaffold/skbuff.h>
+
+static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
+{
+	skb->dev = dev;
+}
 
 static inline int dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 				  unsigned short type,

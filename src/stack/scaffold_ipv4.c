@@ -154,7 +154,7 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
                                 cskb = skb_clone(skb, GFP_KERNEL);
                         }
                         
-                        cskb->dev = dev;
+                        skb_set_dev(cskb, dev);
 
                         err = scaffold_output(cskb);
                         

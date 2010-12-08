@@ -4,6 +4,7 @@
 #include <scaffold/list.h>
 #include <scaffold/hash.h>
 #include <scaffold/net.h>
+#include <scaffold/skbuff.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -37,10 +38,12 @@ struct hlist_head *dev_index_head;
 
 static void *dev_thread(void *arg);
 
-static inline struct hlist_head *dev_name_hash(struct net *net, const char *name)
+static inline struct hlist_head *dev_name_hash(struct net *net, 
+                                               const char *name)
 {
 	unsigned hash = full_name_hash(name, 
-                                       (strlen(name) > IFNAMSIZ) ? IFNAMSIZ : strlen(name));
+                                       (strlen(name) > IFNAMSIZ) ? 
+                                       IFNAMSIZ : strlen(name));
 	return &dev_name_head[hash_32(hash, NETDEV_HASHBITS)];
 }
 
@@ -70,12 +73,22 @@ void ether_setup(struct net_device *dev)
 	memset(dev->broadcast, 0xFF, ETH_ALEN);
 }
 
+static void netdev_init_one_queue(struct net_device *dev,
+				  struct netdev_queue *queue,
+				  void *_unused)
+{
+        memset(queue, 0, sizeof(*queue));
+	queue->dev = dev;
+        skb_queue_head_init(&queue->q);
+}
+
 struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 				void (*setup)(struct net_device *))
 {
 	struct net_device *dev;
 
-	dev = (struct net_device *)malloc(sizeof(struct net_device) + sizeof_priv);
+	dev = (struct net_device *)malloc(sizeof(struct net_device) + 
+                                          sizeof_priv);
 	
 	if (!dev)
 		return NULL;
@@ -93,7 +106,10 @@ struct net_device *alloc_netdev(int sizeof_priv, const char *name,
         dev->ifindex = if_nametoindex(name);
 	atomic_set(&dev->refcnt, 1);
 	dev->dev_addr = dev->perm_addr;
+        dev->tx_queue_len = 1000;
         
+        netdev_init_one_queue(dev, &dev->tx_queue, NULL);
+
         setup(dev);
 
         /* Call the packet handlers init function if it exists */
@@ -385,10 +401,63 @@ int netdev_populate_table(int sizeof_priv,
         return ret;
 }
 
-int dev_signal_exit(struct net_device *dev)
+enum signal {
+        SIGNAL_EXIT,
+        SIGNAL_TXQUEUE,
+        SIGNAL_ERROR,
+        SIGNAL_UNKNOWN
+};
+
+int dev_signal(struct net_device *dev, enum signal type)
 {
-        char w = 'w';
-        return write(dev->pipefd[1], &w, 1);
+        unsigned char s = type & 0xff;
+        struct pollfd fds;
+        int ret;
+
+        fds.fd = dev->pipefd[0];
+        fds.events = POLLIN;
+        
+        ret = poll(&fds, 1, 0);
+
+        /* Only write a new signal in case there is no signal
+         * pending. */
+        if (ret == 1)
+                return 0;
+
+        return write(dev->pipefd[1], &s, 1);
+}
+
+enum signal dev_read_signal(struct net_device *dev)
+{
+        unsigned char s;
+
+        if (read(dev->pipefd[0], &s, 1) == -1)
+                return SIGNAL_ERROR;
+
+        if (s >= SIGNAL_UNKNOWN)
+                return SIGNAL_UNKNOWN;
+
+        return (enum signal)s;
+}
+
+int dev_xmit(struct net_device *dev)
+{
+        int n = 0;
+        
+        while (1) {
+                struct sk_buff *skb = skb_dequeue(&dev->tx_queue.q);
+        
+                if (!skb)
+                        break;
+
+                if (skb->dev->pack_ops->xmit(skb) < 0) {
+                        LOG_ERR("tx failed\n");
+                }
+        }
+
+        /* LOG_DBG("sent %d packets\n", n); */
+        
+        return n;
 }
 
 void *dev_thread(void *arg)
@@ -416,10 +485,23 @@ void *dev_thread(void *arg)
                 } else if (ret == 0) {
                         /* No timeout set, should not happen */
                 } else {
-                        if (fds[1].revents) {
-                                dev->should_exit = 1;
-                                LOG_DBG("dev thread %s should exit\n", 
-                                        dev->name);
+                        if (fds[1].revents & POLLIN) {
+                                enum signal s = dev_read_signal(dev);
+
+                                switch (s) {
+                                case SIGNAL_EXIT:
+                                        dev->should_exit = 1;
+                                        LOG_DBG("dev thread %s should exit\n", 
+                                                dev->name);
+                                        break;
+                                case SIGNAL_TXQUEUE:
+                                        dev_xmit(dev);
+                                        break;
+                                default:
+                                        LOG_ERR("bad signal %u\n", s);
+                                }
+                        } else if (fds[1].revents & POLLERR) {
+                                LOG_ERR("signal error\n");
                         }
                         if (fds[0].revents) {
                                 ret = dev->pack_ops->recv(dev);
@@ -436,22 +518,26 @@ void *dev_thread(void *arg)
 
 int dev_queue_xmit(struct sk_buff *skb)
 {
-        if (!skb->dev || 
-            !skb->dev->pack_ops || 
-            !skb->dev->pack_ops->xmit) {
+        struct net_device *dev = skb->dev;
+
+        if (!dev || 
+            !dev->pack_ops || 
+            !dev->pack_ops->xmit) {
                 free_skb(skb);
                 return -1;
         }
-        /* 
-           We could implement a packet queue here if we want to do tx
-           on the thread. However, it is probably unnecessary as the
-           underlying file descriptor is thread safe.
+        
+        if (dev->tx_queue_len == dev->tx_queue.q.qlen) {
+                free_skb(skb);
+                LOG_ERR("Max tx_queue_len reached, dropping packet\n");
+                return 0;
+        }
+        
+        skb_queue_tail(&dev->tx_queue.q, skb);
 
-           However, queueing the packet could be a good thing if the
-           file descriptor is not immediately writable. Then we would
-           avoid blocking.
-        */        
-        return skb->dev->pack_ops->xmit(skb); 
+        dev_signal(dev, SIGNAL_TXQUEUE);
+
+        return 0;
 }
 
 int netdev_init(void)
@@ -487,11 +573,12 @@ void netdev_fini(void)
                         read_unlock(&dev_base_lock);
                         break;
                 }
-                dev = list_first_entry(&dev_base_head, struct net_device, dev_list);
+                dev = list_first_entry(&dev_base_head, 
+                                       struct net_device, dev_list);
           	read_unlock(&dev_base_lock);       
                 unregister_netdev(dev);
                 
-                dev_signal_exit(dev);
+                dev_signal(dev, SIGNAL_EXIT);
                 
                 LOG_DBG("joining with device thread %s\n",
                         dev->name);
