@@ -706,15 +706,52 @@ static inline void skb_set_scaffold_packet_type(struct sk_buff *skb,
         skb->mark = type;
 }
 
+struct service_entry;
+
+/* 
+   WARNING:
+   
+   We must be careful that this struct does not overflow the 48 bytes
+   that the skb struct gives us in the cb field.
+
+*/
+struct scaffold_cb {
+        struct service_id srvid;
+        struct service_entry *se;
+        unsigned char dst_hard_addr[];
+};
+
 static inline struct service_id *skb_dst_service_id(struct sk_buff *skb)
 {
-        return (struct service_id *)skb->cb;
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        return &scb->srvid;
 }
 
 static inline void skb_set_dst_service_id(struct sk_buff *skb, 
                                           struct service_id *srvid)
 {
-        memcpy(skb->cb, srvid, sizeof(*srvid));
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        memcpy(&scb->srvid, srvid, sizeof(*srvid));
 }
+
+static inline void skb_set_service(struct sk_buff *skb, 
+                                   struct service_entry *se)
+{
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        scb->se = se;
+}
+
+static inline struct service_entry *skb_service(struct sk_buff *skb)
+{
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        return scb->se;
+}
+
+static inline unsigned char *skb_hard_dst(struct sk_buff *skb)
+{
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        return scb->dst_hard_addr;
+}
+
 
 #endif /* _SKBUFF_H_ */

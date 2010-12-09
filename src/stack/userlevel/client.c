@@ -293,7 +293,6 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
                 rsp.error = KERN_ERR(ret);
         }
 
-        /* TODO: Bind should not return here... */
 	return client_msg_write(c->fd, &rsp.msghdr);
 }
 

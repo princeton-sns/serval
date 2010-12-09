@@ -11,15 +11,44 @@
 #elif !defined(OS_ANDROID)
 #include <netinet/if_ether.h>
 #endif
+#if defined(OS_USER)
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+#endif
 #include "service.h"
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
 
-/* This function is currently bypassed */
 int scaffold_srv_rcv(struct sk_buff *skb)
 {
-	return -1;
+	struct service_id srvid;
+	struct udphdr *udph = udp_hdr(skb);
+	unsigned char protocol = ip_hdr(skb)->protocol;
+	int err = 0;
+
+	memcpy(&srvid, &udph->source, sizeof(srvid));
+ 
+	/* Cache this service FIXME: should not assume ETH_ALEN here. */
+	err = service_add(&srvid, sizeof(srvid), skb->dev, 
+			  skb_hard_dst(skb), ETH_ALEN, GFP_ATOMIC);
+
+	if (err < 0) {
+		LOG_ERR("could not cache service for incoming packet\n");
+	}
+
+	switch (protocol) {
+	case IPPROTO_UDP:
+                err = scaffold_tcp_rcv(skb);
+                break;
+	case IPPROTO_TCP:
+                err = scaffold_tcp_rcv(skb);
+                break;
+        default:
+		LOG_DBG("unsupported protocol=%u\n", protocol);
+		FREE_SKB(skb);
+	}
+	return err;
 }
 
 int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
@@ -28,7 +57,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 	struct service_entry *se;
 	struct net_device *dev;
 	int err = 0;
-	
+
 	if (sk->sk_state == SF_BOUND) {
 		err = scaffold_ipv4_xmit_skb(sk, skb);
                 
@@ -38,6 +67,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		}
 		return err;
 	}
+
 	/* Unresolved packet, use service id */
 	se = service_find(srvid);
 	
@@ -46,7 +76,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
-	
+
 	service_entry_dev_iterate_begin(se);
 	
 	dev = service_entry_dev_next(se);
@@ -55,6 +85,9 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		struct sk_buff *cskb;
 		struct net_device *next_dev;
 		
+		/* Remember the hardware destination */
+		service_entry_dev_dst(se, skb_hard_dst(skb), 6);
+
 		next_dev = service_entry_dev_next(se);
 		
 		/* 
@@ -71,9 +104,8 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		if (next_dev == NULL) {
 			cskb = skb;
 		} else {
-			cskb = skb_clone(skb, 
-					 current ? GFP_KERNEL : 
-					 GFP_ATOMIC);
+			cskb = skb_clone(skb, current ? 
+					 GFP_KERNEL : GFP_ATOMIC);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
@@ -81,9 +113,10 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 				break;
 			}
 		}
-                
-		skb_set_dev(cskb, dev);
 		
+		/* Set the output device */
+		skb_set_dev(cskb, dev);
+
 		err = scaffold_ipv4_xmit_skb(sk, cskb);
                 
 		if (err < 0) {
@@ -96,7 +129,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 	
 	service_entry_dev_iterate_end(se);
 	service_entry_put(se);
-	
+
 	return err;
 }
 

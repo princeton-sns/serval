@@ -122,6 +122,8 @@ typedef unsigned char gfp_t;
 int memcpy_toiovec(struct iovec *iov, unsigned char *kdata, int len);
 int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
 
+#define cpu_to_be16(n) htons(n)
+
 #if !defined(HAVE_PPOLL)
 #include <poll.h>
 #include <sys/select.h>

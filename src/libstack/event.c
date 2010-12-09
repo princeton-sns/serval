@@ -130,7 +130,8 @@ static int eventloop_dequeue_msg_xmit(struct event_handle *h)
                         break;
                 }
                 
-                me = (struct msgelm *)list_first_entry(&h->msgq, struct msgelm, l);
+                me = (struct msgelm *)list_first_entry(&h->msgq, 
+                                                       struct msgelm, l);
                 list_del(&me->l);
                 
                 pthread_mutex_unlock(&h->mutex);

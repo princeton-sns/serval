@@ -15,6 +15,10 @@
 struct service_entry;
 struct sk_buff;
 
+struct kmem_cache {
+        unsigned long size;
+};
+
 struct dst_ops {
 	unsigned short		family;
 	uint16_t		protocol;
@@ -30,7 +34,7 @@ struct dst_ops {
 	int			(*local_out)(struct sk_buff *skb);
 
 	atomic_t		entries;
-	//struct kmem_cache	*kmem_cachep;
+	struct kmem_cache	*kmem_cachep;
 };
 
 struct dst_entry {

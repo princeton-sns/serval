@@ -5,6 +5,7 @@
 #include <scaffold/debug.h>
 #include <scaffold/list.h>
 #include <scaffold/lock.h>
+#include <scaffold/dst.h>
 #include <netinet/scaffold.h>
 #if defined(OS_USER)
 #include <stdlib.h>
@@ -34,6 +35,18 @@ struct dev_entry {
 static int service_entry_init(struct bst_node *n);
 static void service_entry_destroy(struct bst_node *n);
 
+/*
+static void dst_entry_destroy(struct dst_entry *dst)
+{
+        service_entry_put((struct service_entry *)dst);
+}
+
+static struct dst_ops service_dst_ops = {
+	.family =		AF_SCAFFOLD,
+	.protocol =		cpu_to_be16(ETH_P_IP),
+        .destroy =              dst_entry_destroy
+};
+*/
 static struct service_table srvtable;
 
 static struct dev_entry *dev_entry_create(struct net_device *dev, 
@@ -262,10 +275,10 @@ int service_entry_dev_dst(struct service_entry *se, unsigned char *dst,
                           int dstlen)
 {
         struct dev_entry *de;
-        
+
         if (!se->dev_pos)
                 return -1;
-
+        
         de = container_of(se->dev_pos, struct dev_entry, lh);
 
         if (!dst || dstlen < de->dstlen)
@@ -486,10 +499,27 @@ void service_table_init(struct service_table *tbl)
         tbl->srv_ops.print = service_entry_print;
         rwlock_init(&tbl->lock);
 }
-
+/*
+#if defined(OS_USER)
+struct kmem_cache kmem_cachep = {
+        .size = sizeof(struct service_entry)
+};
+#endif
+*/
 int __init service_init(void)
 {
+/*
+#if defined(OS_LINUX_KERNEL)
+        service_dst_ops.kmem_cachep =
+		kmem_cache_create("service_dst_cache", 
+                                  sizeof(struct service_entry), 0,
+				  SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+#else        
+        service_dst_ops.kmem_cachep = &kmem_cachep;
+#endif
+*/
         service_table_init(&srvtable);
+
         return 0;
 }
 

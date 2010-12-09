@@ -14,14 +14,14 @@ struct netlink_handle {
         struct sockaddr_nl peer;
 };
 
-int nl_init_handle(struct netlink_handle *nlh);
-int nl_close_handle(struct netlink_handle *nlh);
-int nl_get_fd(struct netlink_handle *nlh);
+int rtnl_init(struct netlink_handle *nlh);
+int rtnl_close(struct netlink_handle *nlh);
+int rtnl_get_fd(struct netlink_handle *nlh);
 
-#define netlink_getlink(nl) netlink_request(nl, RTM_GETLINK)
-#define netlink_getneigh(nl) netlink_request(nl, RTM_GETNEIGH)
-#define netlink_getaddr(nl) netlink_request(nl, RTM_GETADDR | RTM_GETLINK)
-int netlink_request(struct netlink_handle *nlh, int type);
-int read_netlink(struct netlink_handle *nlh);
+#define rtnl_getlink(nl) rtnl_request(nl, RTM_GETLINK)
+#define rtnl_getneigh(nl) rtnl_request(nl, RTM_GETNEIGH)
+#define rtnl_getaddr(nl) rtnl_request(nl, RTM_GETADDR | RTM_GETLINK)
+int rtnl_request(struct netlink_handle *nlh, int type);
+int rtnl_read(struct netlink_handle *nlh);
 
 #endif /* _RTNL_H_ */

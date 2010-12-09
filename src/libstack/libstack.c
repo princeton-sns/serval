@@ -5,7 +5,7 @@
 #include <string.h>
 #include "debug.h"
 
-struct libstack_callbacks *callbacks = NULL;
+extern struct libstack_callbacks *callbacks;
 extern int eventloop_init(void);
 extern void eventloop_fini(void);
 
@@ -54,9 +54,11 @@ int libstack_set_service(struct service_id *srvid, const char *ifname)
 
 int libstack_register_callbacks(struct libstack_callbacks *calls)
 {
-	if (callbacks)
-		return -1;
-
+	if (callbacks) {
+                LOG_ERR("Failed: callbacks already set\n");
+                return -1;
+        }
+        LOG_DBG("registered callbacks\n");
 	callbacks = calls;
 	
 	return 0;

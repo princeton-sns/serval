@@ -91,7 +91,7 @@ long schedule_timeout(long timeo)
         } else {
                 struct timespec timeout;
                 timeout.tv_sec = timeo / 1000000;
-                timeout.tv_nsec = (timeo - (timeout.tv_sec * 1000));
+                timeout.tv_nsec = (timeo - (timeout.tv_sec * 1000000)) * 1000;
                 ret = ppoll(fds, 3, &timeout, NULL);
         }
         

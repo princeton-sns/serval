@@ -104,7 +104,8 @@ int scaffold_tcp_rcv(struct sk_buff *skb)
 	struct sock *sk;
         struct tcphdr *tcph = tcp_hdr(skb);
         struct sock_id *sockid = (struct sock_id *)&tcph->dest;
-
+        int err = 0;
+        
         LOG_DBG("tcp packet seq=%lu ack=%lu\n",  
                 ntohl(tcph->seq),
                 ntohl(tcph->ack_seq));
@@ -113,10 +114,10 @@ int scaffold_tcp_rcv(struct sk_buff *skb)
         
         if (!sk) {
                 LOG_ERR("No matching scaffold sock\n");
-                return INPUT_NO_SOCK;
+                FREE_SKB(skb);
         }
 
-        return INPUT_OK;
+        return err;
 }
 
 static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,

@@ -178,20 +178,24 @@ static int packet_bpf_recv(struct net_device *dev)
                 ret = scaffold_input(skb);
                 
                 switch (ret) {
-                case INPUT_KEEP:
-                        break;
                 case INPUT_OK:
+                        break;
+                case INPUT_NO_PROT:
+                case INPUT_DROP:
+                        free_skb(skb);
+                        break;
                 case INPUT_ERROR:
                 default:
+                        /* Packet should be freed by upper layers */
                         if (IS_INPUT_ERROR(ret)) {
                                 LOG_ERR("input error\n");
                         }
-                        free_skb(skb);
                         break;
                 }
                 /* Move to next packet */
                 bh = (struct bpf_hdr *)((char *)bh + 
-                                        BPF_WORDALIGN(bh->bh_hdrlen + bh->bh_caplen));
+                                        BPF_WORDALIGN(bh->bh_hdrlen + 
+                                                      bh->bh_caplen));
         }
         return 0;
 }

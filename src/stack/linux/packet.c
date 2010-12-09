@@ -41,18 +41,19 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
 	ret = scaffold_input(skb);
         
 	switch (ret) {
-        case INPUT_KEEP:
-                goto keep;
         case INPUT_DROP:
-        case INPUT_OK:
                 goto drop;
+        case INPUT_OK:
+                goto keep;
         case INPUT_DELIVER:
-                break;
+                goto accept;
         case INPUT_ERROR:
         default:
+                /* Packet should be freed by upper layers */
                 if (IS_INPUT_ERROR(ret)) {
                         LOG_ERR("input error\n");
                 }
+                goto keep;
         }
 accept:
         /* LOG_DBG("Returning NF_ACCEPT\n"); */

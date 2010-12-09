@@ -22,10 +22,11 @@ void *dst_alloc(struct dst_ops *ops)
 			return NULL;
 	}
         */
-        dst = malloc(sizeof(struct dst_entry));
-	//dst = kmem_cache_zalloc(ops->kmem_cachep, GFP_ATOMIC);
+        dst = malloc(ops->kmem_cachep->size);
+        
 	if (!dst)
 		return NULL;
+
 	atomic_set(&dst->__refcnt, 0);
 	dst->ops = ops;
 	//dst->lastuse = jiffies
@@ -77,8 +78,6 @@ struct dst_entry *dst_destroy(struct dst_entry *dst)
 		dev_put(dst->dev);
 
         free(dst);
-	//kmem_cache_free(dst->ops->kmem_cachep, dst);
-
 #if 0
 	dst = child;
 	if (dst) {

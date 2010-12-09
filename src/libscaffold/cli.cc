@@ -39,7 +39,7 @@ Cli::Cli(const Cli &c)
 {
   _cli.sun_family = c._cli.sun_family;
   // sun_path is never anonymous; we always bind
-  memcpy(_cli.sun_path, c._cli.sun_path, strlen(c._cli.sun_path));
+  strcpy(_cli.sun_path, c._cli.sun_path);
   _proto.v = SF_PROTO_UDP;
 }
 

@@ -75,6 +75,7 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 		LOG_ERR("sendmsg failure: %s\n", strerror(errno));
 	} else {
 		LOG_DBG("sent %d bytes\n", ret);
+                ret = 0;
 	}
 
 	return ret;

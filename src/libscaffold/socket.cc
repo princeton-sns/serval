@@ -90,8 +90,8 @@ SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)
     }
   }
   int fd;
-  sf_proto_t p;
-  p.v = proto;
+  sf_proto_t p = { proto };
+
   if (create_cli(p, fd, err) < 0) {
     fprintf(stderr, "Could not create client\n");
     return SCAFFOLD_SOCKET_ERROR;

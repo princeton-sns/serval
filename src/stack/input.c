@@ -27,12 +27,14 @@ int scaffold_input(struct sk_buff *skb)
         /* Set network header offset */
         skb_reset_network_header(skb);
         
+        memcpy(skb_hard_dst(skb), ethh->h_source, ETH_ALEN);
+
         switch (prot) {
         case ETH_P_IP:
                 ret = scaffold_ipv4_rcv(skb);
                 break;
         default:
-                ret = INPUT_NO_PROT;
+                ret = INPUT_NO_PROT;                
         }
 
         return ret;

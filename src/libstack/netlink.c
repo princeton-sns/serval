@@ -14,7 +14,7 @@
 #include "debug.h"
 #include "event.h"
 
-int ctrlmsg_handle(struct ctrlmsg *cm);
+int ctrlmsg_handle(struct ctrlmsg *cm, unsigned int);
 
 struct netlink_handle {
 	struct event_handler *eh;
@@ -128,9 +128,8 @@ static int netlink_handle_event(struct event_handler *eh)
 			//LOG_DBG("NLMSG_DONE\n");
 			break;
 		case NLMSG_SCAFFOLD:
-                        LOG_DBG("scaffold control msg\n");
-			ret = ctrlmsg_handle((struct ctrlmsg *)NLMSG_DATA(nlm));
-                        
+			ret = ctrlmsg_handle((struct ctrlmsg *)NLMSG_DATA(nlm),
+                                             ret - NLMSG_LENGTH(0));
 			break;
 		default:
 			LOG_DBG("Unknown netlink message\n");

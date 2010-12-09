@@ -135,9 +135,9 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
         int ret = 0, cond = 1;
         
-        if ((unsigned int)addr_len < sizeof(struct sockaddr_sf))
+        if ((unsigned int)addr_len < sizeof(*sfaddr))
                 return -EINVAL;
-        else if (addr_len % sizeof(struct sockaddr_sf) != 0)
+        else if (addr_len % sizeof(*sfaddr) != 0)
                 return -EINVAL;
         
         /* Call the protocol's own bind, if it exists */

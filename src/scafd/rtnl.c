@@ -29,11 +29,6 @@ struct if_info {
 	struct sockaddr_in ipaddr;
 };
 
-int nl_get_fd(struct netlink_handle *nlh)
-{
-	return nlh->fd;
-}
-
 static char *eth_to_str(unsigned char *addr)
 {
 	static char buf[30];
@@ -46,7 +41,12 @@ static char *eth_to_str(unsigned char *addr)
 	return buf;
 }
 
-int nl_init_handle(struct netlink_handle *nlh)
+int rtnl_get_fd(struct netlink_handle *nlh)
+{
+	return nlh->fd;
+}
+
+int rtnl_init(struct netlink_handle *nlh)
 {
 	int ret;
 	socklen_t addrlen;
@@ -90,12 +90,12 @@ int nl_init_handle(struct netlink_handle *nlh)
 	return 0;
 }
 
-int nl_close_handle(struct netlink_handle *nlh)
+int rtnl_close(struct netlink_handle *nlh)
 {
 	return close(nlh->fd);
 }
 
-static int nl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
+static int rtnl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
 {
 	int res;
 	struct iovec iov = {
@@ -123,7 +123,7 @@ static int nl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
 	return 0;
 }
 
-static int nl_parse_link_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
+static int rtnl_parse_link_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
 {
 	struct rtattr *rta = NULL;
 	struct ifinfomsg *ifimsg = (struct ifinfomsg *) NLMSG_DATA(nlm);
@@ -157,7 +157,7 @@ static int nl_parse_link_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
 	}
 	return n;
 }
-static int nl_parse_addr_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
+static int rtnl_parse_addr_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
 {
 	struct rtattr *rta = NULL;
 	struct ifaddrmsg *ifamsg = (struct ifaddrmsg *) NLMSG_DATA(nlm);
@@ -218,7 +218,7 @@ static int get_ipconf(struct if_info *ifinfo)
 	return 0;
 }
 
-int read_netlink(struct netlink_handle *nlh)
+int rtnl_read(struct netlink_handle *nlh)
 {
 	int len, num_msgs = 0;
 	socklen_t addrlen;
@@ -267,7 +267,7 @@ int read_netlink(struct netlink_handle *nlh)
 		{ 
 			//struct host_addr haddr = { 6 };
 			//struct as_addr aaddr = { 2 };
-			ret = nl_parse_link_info(nlm, &ifinfo);
+			ret = rtnl_parse_link_info(nlm, &ifinfo);
 			
                         LOG_DBG("Interface newlink %s %s %s\n", 
                                ifinfo.ifname, eth_to_str(ifinfo.mac), 
@@ -294,13 +294,13 @@ int read_netlink(struct netlink_handle *nlh)
 			break;
 		}
 		case RTM_DELLINK:
-                        ret = nl_parse_link_info(nlm, &ifinfo);
+                        ret = rtnl_parse_link_info(nlm, &ifinfo);
 		
 			LOG_DBG("Interface dellink %s %s\n", 
 				ifinfo.ifname, eth_to_str(ifinfo.mac));
                         break;
 		case RTM_DELADDR:
-			ret = nl_parse_addr_info(nlm, &ifinfo);
+			ret = rtnl_parse_addr_info(nlm, &ifinfo);
 			LOG_DBG("Interface deladdr %s %s\n", 
 				ifinfo.ifname, 
                                 inet_ntoa(ifinfo.ipaddr.sin_addr));
@@ -308,7 +308,7 @@ int read_netlink(struct netlink_handle *nlh)
 		
 			break;
 		case RTM_NEWADDR:
-			ret = nl_parse_addr_info(nlm, &ifinfo);
+			ret = rtnl_parse_addr_info(nlm, &ifinfo);
 			LOG_DBG("Interface newaddr %s %s\n", 
 				ifinfo.ifname, 
                                 inet_ntoa(ifinfo.ipaddr.sin_addr));
@@ -327,7 +327,7 @@ int read_netlink(struct netlink_handle *nlh)
 	return num_msgs;
 }
 
-int netlink_request(struct netlink_handle *nlh, int type)
+int rtnl_request(struct netlink_handle *nlh, int type)
 {
 	struct {
 		struct nlmsghdr nh;
@@ -344,5 +344,5 @@ int netlink_request(struct netlink_handle *nlh, int type)
 	req.rtg.rtgen_family = AF_INET;
 
 	// Request interface information
-	return nl_send(nlh, &req.nh);
+	return rtnl_send(nlh, &req.nh);
 }

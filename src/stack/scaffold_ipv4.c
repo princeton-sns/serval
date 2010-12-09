@@ -13,9 +13,9 @@
 #include <netinet/if_ether.h>
 #endif
 
-extern int scaffold_tcp_rcv(struct sk_buff *);
-extern int scaffold_udp_rcv(struct sk_buff *);
 extern int scaffold_srv_rcv(struct sk_buff *);
+
+#define SCAFFOLD_TTL_DEFAULT 250
 
 /* Taken from Click */
 uint16_t in_cksum(const void *data, size_t len)
@@ -50,61 +50,12 @@ uint16_t in_cksum(const void *data, size_t len)
     return answer;
 }
 
-int scaffold_ipv4_rcv(struct sk_buff *skb)
-{
-	struct iphdr *iph = ip_hdr(skb);
-	unsigned int hdr_len = iph->ihl << 2;
-	int ret = INPUT_OK;
-#if defined(ENABLE_DEBUG)
-	char srcstr[18];
-	LOG_DBG("received IPv4 packet from %s hdr_len=%u prot=%u\n",
-		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
-		hdr_len, iph->protocol);
-#endif
-        /* Check if this is not a SCAFFOLD packet */
-        if (1 /* !is_scaffold_packet */)
-                return INPUT_DELIVER;
-
-        if (!pskb_may_pull(skb, hdr_len))
-                goto inhdr_error;
-        
-        skb_pull(skb, hdr_len);
-
-	skb_reset_transport_header(skb);
-
-	switch (iph->protocol) {
-	case IPPROTO_ICMP:
-		LOG_DBG("icmp packet\n");
-                ret = INPUT_DELIVER;
-		break;
-	case IPPROTO_UDP:
-                ret = scaffold_udp_rcv(skb);
-		break;
-	case IPPROTO_TCP:
-                ret = scaffold_tcp_rcv(skb);
-		break;
-                /*
-        case IPPROTO_SCAFFOLD:
-                ret = scaffold_srv_rcv(skb);
-                break
-                */
-	default:
-		LOG_DBG("packet type=%u\n", iph->protocol);
-	}
-
-	return ret;
-inhdr_error:
-        return INPUT_DROP;
-}
-
-#define SCAFFOLD_TTL_DEFAULT 250
-
-int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
+int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
+                              struct ipcm_cookie *ipcm)
 {
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
         struct scaffold_sock *ssk = scaffold_sk(sk);
-        int err = 0;
 
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
@@ -120,10 +71,84 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
         iph->protocol = sk->sk_protocol;
         memcpy(&iph->saddr, &ssk->src_flow, sizeof(struct in_addr));
-        memcpy(&iph->saddr, &ssk->dst_flow, sizeof(struct in_addr));
+        memcpy(&iph->daddr, &ipcm->addr, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
 
 	skb->protocol = htons(ETH_P_IP);
+
+        return 0;
+}
+
+int scaffold_ipv4_rcv(struct sk_buff *skb)
+{
+	struct iphdr *iph = ip_hdr(skb);
+	unsigned int hdr_len = iph->ihl << 2;
+	int ret = 0;
+#if defined(ENABLE_DEBUG)
+	char srcstr[18];
+	LOG_DBG("%s %s hdr_len=%u prot=%u\n",
+                skb->dev->name,
+		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
+		hdr_len, iph->protocol);
+#endif
+        /* Check if this is a SCAFFOLD packet */
+        if (!iph->tos)
+                return INPUT_DELIVER;
+
+        /* 
+
+           This is a bit of a hack for now. There is no SCAFFOLD
+           header/protocol number to demux on, so just call the
+           "SCAFFOLD layer" to let it deal with demuxing the packet.
+        */
+	switch (iph->protocol) {
+	case IPPROTO_UDP:
+	case IPPROTO_TCP:
+        case IPPROTO_SCAFFOLD:
+                break;
+	case IPPROTO_ICMP:
+		LOG_DBG("icmp packet\n");
+        default:
+		LOG_DBG("packet type=%u\n", iph->protocol);
+                ret = INPUT_DELIVER;
+                goto out;
+	}
+
+        if (!pskb_may_pull(skb, hdr_len))
+                goto inhdr_error;
+        
+        skb_pull(skb, hdr_len);                
+        skb_reset_transport_header(skb);
+    
+        ret = scaffold_srv_rcv(skb);
+out:
+	return ret;
+inhdr_error:
+        FREE_SKB(skb);
+        return ret;
+}
+
+int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
+{
+        struct iphdr *iph;
+        unsigned int iph_len;
+	struct ipcm_cookie ipcm;
+        int err = 0;
+
+	memset(&ipcm, 0, sizeof(ipcm));
+
+        ipcm.addr = 0;
+
+        err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
+        
+        if (err < 0) {
+                LOG_ERR("hdr failed\n");
+                FREE_SKB(skb);
+                return err;
+        }
+
+        iph = ip_hdr(skb);
+        iph_len = iph->ihl << 2;
 
         LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
                 skb->len, iph_len, iph->ihl);

@@ -14,7 +14,7 @@
 #include "debug.h"
 #include "event.h"
 
-int ctrlmsg_handle(struct ctrlmsg *cm);
+int ctrlmsg_handle(struct ctrlmsg *cm, unsigned int len);
 
 #define BUFLEN 100
 
@@ -134,9 +134,7 @@ static int unix_handle_event(struct event_handler *eh)
 
 	cm = (struct ctrlmsg *)uh->buf;
 
-	LOG_DBG("control message type=%u\n", cm->type);
-
-	return ctrlmsg_handle(cm);
+	return ctrlmsg_handle(cm, ret);
 }
 
 static int unix_getfd(struct event_handler *eh)

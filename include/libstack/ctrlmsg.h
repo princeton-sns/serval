@@ -21,12 +21,17 @@ struct ctrlmsg {
 	unsigned char type;
 	unsigned int len; /* Length, including header and payload */
 	unsigned char payload[0];
-};
+} __attribute__((packed));
+
+#define CTRLMSG_SIZE (sizeof(struct ctrlmsg))
 
 struct ctrlmsg_register {
 	struct ctrlmsg cmh;
 	struct service_id srvid;
 };
+
+#define CTRLMSG_REGISTER_SIZE (sizeof(struct ctrlmsg_register))
+#define CTRLMSG_UNREGISTER_SIZE (sizeof(struct ctrlmsg_register))
 
 #define IFFLAG_UP 0x1
 
@@ -38,6 +43,8 @@ struct ctrlmsg_iface_conf {
 	unsigned short flags;
 };
 
+#define CTRLMSG_IFACE_CONF_SIZE (sizeof(struct ctrlmsg_iface_conf))
+
 enum {
 	CTRL_MODE_NET = 0,
 	CTRL_MODE_HOST = 1
@@ -48,11 +55,15 @@ struct ctrlmsg_control_mode {
 	unsigned char mode;
 };
 
+#define CTRLMSG_CONTROL_MODE_SIZE (sizeof(struct ctrlmsg_control_mode))
+
 struct ctrlmsg_service {
 	struct ctrlmsg cmh;
 	struct service_id srvid;
 	char ifname[IFNAMSIZ];
 };
+
+#define CTRLMSG_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
 
 #if defined(__linux__)
 #include <linux/netlink.h>

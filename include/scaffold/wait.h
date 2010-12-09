@@ -125,7 +125,7 @@ void add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait);
 void add_wait_queue_exclusive(wait_queue_head_t *q, wait_queue_t *wait);
 void remove_wait_queue(wait_queue_head_t *q, wait_queue_t *wait);
 
-#define msecs_to_jiffies(ms) ms
+#define msecs_to_jiffies(ms) (ms * 1000)
 
 #define wait_event_timeout(wq, condition, timeout)			\
 ({									\

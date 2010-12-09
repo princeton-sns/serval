@@ -101,15 +101,18 @@ static int packet_linux_recv(struct net_device *dev)
 	ret = scaffold_input(skb);
 	
 	switch (ret) {
-	case INPUT_KEEP:
-		break;
 	case INPUT_OK:
+                break;
+        case INPUT_NO_PROT:
+        case INPUT_DROP:
+                free_skb(skb);
+                break;
 	case INPUT_ERROR:
 	default:
+                /* Packet should be freed by upper layers */
 		if (IS_INPUT_ERROR(ret)) {
 			LOG_ERR("input error\n");
 		}
-		free_skb(skb);
 		break;
 	}
 

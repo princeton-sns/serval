@@ -124,13 +124,16 @@ static void scafd_register_service(struct service_id *srvid)
 	int ret;
 	unsigned long data = 232366;
         
+        if (!srvid)
+                return;
+
 	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
 
 	ret = scafd_sendto(ctrlsock, &data, sizeof(data), 0, 
 			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 
-struct libstack_callbacks callbacks = {
+static struct libstack_callbacks callbacks = {
 	.srvregister = scafd_register_service,
 };
 
@@ -220,14 +223,14 @@ int main(int argc, char **argv)
 	libstack_register_callbacks(&callbacks);
 
 #if defined(OS_LINUX)
-	ret = nl_init_handle(&nlh);
+	ret = rtnl_init(&nlh);
 
 	if (ret < 0) {
 		LOG_ERR("Could not open netlink socket\n");
                 goto fail_netlink;
 	}
 
-	ret = netlink_getlink(&nlh);
+	ret = rtnl_getlink(&nlh);
 
         if (ret < 0) {
                 LOG_ERR("Could not netlink request: %s\n",
@@ -272,7 +275,7 @@ int main(int argc, char **argv)
 #if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
                                 LOG_DBG("netlink readable\n");
-                                read_netlink(&nlh);
+                                rtnl_read(&nlh);
                         }
 #endif
                         if (FD_ISSET(p[0], &readfds)) {
@@ -290,7 +293,7 @@ int main(int argc, char **argv)
 	libstack_unregister_callbacks(&callbacks);
 	libstack_fini();
 #if defined(OS_LINUX)
-        nl_close_handle(&nlh);
+        rtnl_close(&nlh);
 #endif
         close(p[0]);
         close(p[1]);
@@ -302,7 +305,7 @@ int main(int argc, char **argv)
 out:
         return ret;
 #if defined(OS_LINUX)
-	nl_close_handle(&nlh);
+	rtnl_close(&nlh);
 fail_netlink:
 #endif
 	libstack_unregister_callbacks(&callbacks);

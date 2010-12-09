@@ -113,15 +113,15 @@ struct flow_id {
 };
 
 enum scaffold_packet_type { 
-        PKT_TYPE_DATA = 0, 
-        PKT_TYPE_SYN, 
-        PKT_TYPE_SYNACK, 
-        PKT_TYPE_ACK, 
-        PKT_TYPE_RESET, 
+        PKT_TYPE_DATA = 1,
+        PKT_TYPE_SYN,
+        PKT_TYPE_SYNACK,
+        PKT_TYPE_ACK,
+        PKT_TYPE_RESET,
         PKT_TYPE_CLOSE,
         PKT_TYPE_MIG,
-        PKT_TYPE_RSYN, 
-        PKT_TYPE_MIGDATA, 
+        PKT_TYPE_RSYN,
+        PKT_TYPE_MIGDATA,
         PKT_TYPE_RSYNACK
 };
 

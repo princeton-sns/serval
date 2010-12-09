@@ -57,7 +57,7 @@ struct client_msg_rsp {
 #define DEFINE_CLIENT_RESPONSE(name, type) struct client_msg_rsp rsp = \
         { { CLIENT_MSG_VERSION, \
             type, \
-            client_msg_lengths[type] - CLIENT_MSG_HDR_LEN }, \
+            client_msg_lengths[type] - CLIENT_MSG_HDR_LEN },     \
           0 }
 
 /* Specific messages: */

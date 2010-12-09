@@ -79,17 +79,18 @@ int scaffold_udp_rcv(struct sk_buff *skb)
 	struct sock *sk;
         struct udphdr *udph = udp_hdr(skb);
         struct sock_id *sockid = (struct sock_id *)&udph->dest;
-
+        int err = 0;
+        
         LOG_DBG("udp packet len=%u\n", ntohs(udph->len));
         
         sk = scaffold_sock_lookup_sockid(sockid);
 
         if (!sk) {
                 LOG_ERR("No matching scaffold sock\n");
-                return INPUT_NO_SOCK;
+                FREE_SKB(skb);
         }
 
-        return INPUT_OK;
+        return err;
 }
 
 /* from fastudpsrc */
