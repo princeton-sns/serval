@@ -44,9 +44,7 @@ int service_del_dev(const char *devname);
 struct service_entry *service_find(struct service_id *srvid);
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
-
 int services_print(char *buf, int buflen);
-
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 #define _skb_refdst _skb_dst

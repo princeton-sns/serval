@@ -278,22 +278,30 @@ int service_entry_dev_dst(struct service_entry *se, unsigned char *dst,
 
 int service_entry_print(struct bst_node *n, char *buf, int buflen)
 {
+#define PREFIX_BUFLEN (sizeof(struct service_id)*2+4)
+        char prefix[PREFIX_BUFLEN];
         struct service_entry *se = get_service(n);
         struct dev_entry *de;
         char macstr[18];
         int len = 0;
 
         read_lock_bh(&se->devlock);
+
+        bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
         
+        len += snprintf(buf + len, buflen - len, "%-20s %-6u ",
+                        prefix, bst_node_prefix_bits(n));
+
         list_for_each_entry(de, &se->dev_list, lh) {
-                len += snprintf(buf + len, 
-                                buflen - len, "%s %s", 
+                len += snprintf(buf + len, buflen - len, "[%-5s %s] ",
                                 de->dev->name,
                                 mac_ntop(de->dst, macstr, 18));
         }
 
         /* remove last whitespace */
         len--;
+        len += snprintf(buf + len, buflen - len, "\n");
+
         read_unlock_bh(&se->devlock);
 
         return len;
@@ -303,8 +311,12 @@ static int service_table_print(struct service_table *tbl, char *buf, int buflen)
 {
         int ret;
 
+        /* print header */
+        ret = snprintf(buf, buflen, "%-20s %-6s [iface dst]\n", 
+                       "prefix", "bits");
+
         read_lock_bh(&tbl->lock);
-        ret = bst_print(&tbl->tree, buf, buflen);
+        ret += bst_print(&tbl->tree, buf + ret, buflen - ret);
         read_unlock_bh(&tbl->lock);
         return ret;
 }
@@ -440,6 +452,7 @@ static int service_table_del_dev(struct service_table *tbl, const char *devname)
         int ret = 0;
 
         write_lock_bh(&tbl->lock);
+
         if (tbl->tree.root)
                 ret = bst_subtree_func(tbl->tree.root, del_dev_func, 
                                        (void *)devname);

@@ -25,7 +25,7 @@ const char *mac_ntop(const void *src, char *dst, size_t size)
                 mac[4] & 0xff, 
                 mac[5] & 0xff);
 
-	return mac;
+	return dst;
 }
 
 int mac_pton(const char *src, void *dst)
