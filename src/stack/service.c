@@ -24,9 +24,11 @@ struct service_table {
         rwlock_t lock;
 };
 
-struct dev_entry {
-        struct net_device *dev;
+struct dev_entry {        
         struct list_head lh;
+        struct net_device *dev;
+        int dstlen;
+        unsigned char dst[]; /* Must be last */
 };
 
 static int service_entry_init(struct bst_node *n);
@@ -34,19 +36,24 @@ static void service_entry_destroy(struct bst_node *n);
 
 static struct service_table srvtable;
 
-static struct dev_entry *dev_entry_create(struct net_device *dev, gfp_t alloc)
+static struct dev_entry *dev_entry_create(struct net_device *dev, 
+                                          unsigned char *dst,
+                                          int dstlen,
+                                          gfp_t alloc)
 {
         struct dev_entry *de;
 
-        de = (struct dev_entry *)MALLOC(sizeof(*de), alloc);
+        de = (struct dev_entry *)MALLOC(sizeof(*de) + dstlen, alloc);
 
         if (!de)
                 return NULL;
 
-        memset(de, 0, sizeof(*de));
+        memset(de, 0, sizeof(*de) + dstlen);
 
         de->dev = dev;
         dev_hold(dev);
+        de->dstlen = dstlen;
+        memcpy(de->dst, dst, dstlen);
         INIT_LIST_HEAD(&de->lh);
         
         return de;
@@ -60,11 +67,13 @@ static void dev_entry_free(struct dev_entry *de)
 
 static int __service_entry_add_dev(struct service_entry *se, 
                                    struct net_device *dev, 
+                                   unsigned char *dst,
+                                   int dstlen,
                                    gfp_t alloc)
 {
         struct dev_entry *de;
 
-        de = dev_entry_create(dev, alloc);
+        de = dev_entry_create(dev, dst, dstlen, alloc);
 
         if (!de)
                 return -ENOMEM;
@@ -75,13 +84,15 @@ static int __service_entry_add_dev(struct service_entry *se,
 }
 
 int service_entry_add_dev(struct service_entry *se, 
-                          struct net_device *dev, 
+                          struct net_device *dev,
+                          unsigned char *dst,
+                          int dstlen,
                           gfp_t alloc)
 {
         int ret;
         
         write_lock(&se->devlock);
-        ret = __service_entry_add_dev(se, dev, alloc);
+        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
         write_unlock(&se->devlock);
 
         return ret;
@@ -245,17 +256,40 @@ struct net_device *service_entry_dev_next(struct service_entry *se)
         return container_of(se->dev_pos, struct dev_entry, lh)->dev;
 }
 
+/* Returns the device default destination during iteration of device
+ * list */
+int service_entry_dev_dst(struct service_entry *se, unsigned char *dst, 
+                          int dstlen)
+{
+        struct dev_entry *de;
+        
+        if (!se->dev_pos)
+                return -1;
+
+        de = container_of(se->dev_pos, struct dev_entry, lh);
+
+        if (!dst || dstlen < de->dstlen)
+                return de->dstlen;
+
+        memcpy(dst, de->dst, de->dstlen);
+
+        return 0;
+}
 
 int service_entry_print(struct bst_node *n, char *buf, int buflen)
 {
         struct service_entry *se = get_service(n);
         struct dev_entry *de;
+        char macstr[18];
         int len = 0;
 
         read_lock_bh(&se->devlock);
         
         list_for_each_entry(de, &se->dev_list, lh) {
-                len += snprintf(buf + len, buflen - len, "%s ", de->dev->name);
+                len += snprintf(buf + len, 
+                                buflen - len, "%s %s", 
+                                de->dev->name,
+                                mac_ntop(de->dst, macstr, 18));
         }
 
         /* remove last whitespace */
@@ -310,7 +344,8 @@ struct service_entry *service_find(struct service_id *srvid)
 }
 
 int service_table_add(struct service_table *tbl, struct service_id *srvid, 
-                      unsigned int prefix_size, struct net_device *dev, 
+                      unsigned int prefix_size, struct net_device *dev,
+                      unsigned char *dst, int dstlen,
                       gfp_t alloc)
 {
         struct service_entry *se;
@@ -323,7 +358,11 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
         n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_size);
 
         if (n) {
-                ret = __service_entry_add_dev(get_service(n), dev, alloc);
+                ret = __service_entry_add_dev(get_service(n), 
+                                              dev,
+                                              dst,
+                                              dstlen,
+                                              alloc);
                 read_unlock_bh(&tbl->lock);
                 return ret;
         }
@@ -335,14 +374,14 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
         if (!se)
                 return -ENOMEM;
 
-        ret = __service_entry_add_dev(se, dev, alloc);
+        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
 
         if (ret < 0) {
                 service_entry_free(se);
         } else {
                 write_lock_bh(&tbl->lock);
                 se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
-                                             se, srvid, prefix_size);
+                                             se, srvid, prefix_size, alloc);
                 write_unlock_bh(&tbl->lock);
                 
                 if (!se->node) {
@@ -355,9 +394,11 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
 }
 
 int service_add(struct service_id *srvid, unsigned int prefix_size, 
-                struct net_device *dev, gfp_t alloc)
+                struct net_device *dev, unsigned char *dst, 
+                int dstlen, gfp_t alloc)
 {
-        return service_table_add(&srvtable, srvid, prefix_size, dev, alloc);
+        return service_table_add(&srvtable, srvid, prefix_size, 
+                                 dev, dst, dstlen, alloc);
 }
 
 void service_table_del(struct service_table *tbl, struct service_id *srvid, 

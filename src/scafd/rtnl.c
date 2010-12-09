@@ -99,10 +99,10 @@ static int nl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
 {
 	int res;
 	struct iovec iov = {
-		(void *) n, n->nlmsg_len
+		(void *)n, n->nlmsg_len
 	};
 	struct msghdr msg = {
-		(void *) &nlh->peer, 
+		(void *)&nlh->peer, 
                 sizeof(nlh->peer), 
                 &iov, 1, NULL, 0, 0
 	};
@@ -291,11 +291,6 @@ int read_netlink(struct netlink_handle *nlh)
                         }
 						
 			scafd_send_join(ifinfo.ifname);
-
-			/* 
-			   libstack_configure_interface(ifinfo.ifname, &aaddr, &haddr,
-						     ifinfo.isUp ? IFFLAG_UP : 0);
-			*/
 			break;
 		}
 		case RTM_DELLINK:

@@ -55,7 +55,8 @@ static int scaffold_netdev_event(struct notifier_block *this,
 	case NETDEV_UP:
         {
 		LOG_DBG("Netdev UP %s\n", dev->name);
-                service_add(NULL, 0, dev, GFP_ATOMIC);
+                service_add(NULL, 0, dev, dev->broadcast, 
+                            dev->addr_len, GFP_ATOMIC);
                 break;
         }
 	case NETDEV_GOING_DOWN:

@@ -18,6 +18,7 @@
 #if defined(OS_LINUX)
 #include "rtnl.h"
 #endif
+#include "timer.h"
 
 static int ctrlsock = -1; /* socket to communicate with controller */
 static int native = 0; /* Whether the socket is native or libscaffold */
@@ -26,11 +27,12 @@ static int should_exit = 0;
 static int p[2] = { -1, -1 };
 struct sockaddr_sf ctrlid;
 
+static int join_timeout(struct timer *t);
+
 static void signal_handler(int sig)
 {
         ssize_t ret;
         char q = 'q';
-
 	should_exit = 1;
         ret = write(p[1], &q, 1);
 }
@@ -75,9 +77,43 @@ static ssize_t scafd_recvfrom(int sock, void *buf, size_t len, int flags,
 	return ret;
 }
 
+int join_timeout(struct timer *t)
+{
+        LOG_DBG("Join timed out for interface %s\n",
+                (char *)t->data);
+
+        timer_destroy(t);
+
+        return libstack_set_control_mode(CTRL_MODE_HOST);
+}
+
+void join_timer_destroy(struct timer *t)
+{        
+        free(t->data);
+        timer_free(t);
+}
+
 int scafd_send_join(const char *ifname)
 {
+        struct timer *t;
+        
 	LOG_DBG("Join for interface %s\n", ifname);
+
+        t = timer_new_callback(join_timeout, NULL);
+        
+        if (!t)
+                return -1;
+
+        t->data = malloc(strlen(ifname) + 1);
+        
+        if (!t->data) {
+                timer_free(t);
+                return -1;
+        }
+        strcpy(t->data, ifname);
+        t->destruct = join_timer_destroy;
+
+        timer_schedule_secs(t, 5);
 
 	return scafd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
 			    (struct sockaddr *)&ctrlid, sizeof(ctrlid));
@@ -203,6 +239,7 @@ int main(int argc, char **argv)
 
         while (!should_exit) {
                 int nfds = 0;
+                struct timeval timeout, *t = NULL;
 
                 FD_ZERO(&readfds);
 #if defined(OS_LINUX)
@@ -215,10 +252,15 @@ int main(int argc, char **argv)
                 FD_SET(ctrlsock, &readfds);               
                 nfds = MAX(ctrlsock, nfds);
                 */
-                ret = select(nfds + 1, &readfds, NULL, NULL, NULL);
+                
+                if (timer_next_timeout_timeval(&timeout))
+                        t = &timeout;
+
+                ret = select(nfds + 1, &readfds, NULL, NULL, t);
 
                 if (ret == 0) {
-                        LOG_DBG("Timeout...\n");
+                        LOG_DBG("timer timeout!\n");
+                        ret = timer_handle_timeout();
                 } else if (ret == -1) {
 			if (errno == EINTR) {
 				should_exit = 1;
@@ -254,6 +296,7 @@ int main(int argc, char **argv)
         close(p[1]);
 	LOG_DBG("closing control sock\n");
 	close_ctrlsock(ctrlsock);
+        timer_list_destroy();
 	LOG_DBG("done\n");
 
 out:

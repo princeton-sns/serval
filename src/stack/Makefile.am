@@ -10,6 +10,7 @@ scaffold_SOURCES = \
 	ctrl_handler.c \
 	af_scaffold.c \
 	scaffold_sock.c \
+	scaffold_srv.c \
 	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
@@ -49,6 +50,7 @@ SCAFFOLD_HDR = \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
 	scaffold_ipv4.h \
+	scaffold_srv.h \
 	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
@@ -101,8 +103,9 @@ SCAFFOLD_KERNEL_SRC = \
 	service.c \
 	input.c \
 	output.c \
-	scaffold_ipv4.c \
 	scaffold_sock.c \
+	scaffold_srv.c \
+	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
 	af_scaffold.c

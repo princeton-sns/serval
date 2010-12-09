@@ -12,6 +12,8 @@ enum ctrlmsg_type {
 	CTRLMSG_TYPE_REGISTER,
 	CTRLMSG_TYPE_UNREGISTER,
 	CTRLMSG_TYPE_IFACE_CONF,
+	CTRLMSG_TYPE_SET_CONTROL_MODE,
+	CTRLMSG_TYPE_SET_SERVICE,
 	CTRLMSG_TYPE_UNKNOWN,
 };
 
@@ -34,6 +36,22 @@ struct ctrlmsg_iface_conf {
 	struct as_addr asaddr;
 	struct host_addr haddr;
 	unsigned short flags;
+};
+
+enum {
+	CTRL_MODE_NET = 0,
+	CTRL_MODE_HOST = 1
+};
+
+struct ctrlmsg_control_mode {
+	struct ctrlmsg cmh;
+	unsigned char mode;
+};
+
+struct ctrlmsg_service {
+	struct ctrlmsg cmh;
+	struct service_id srvid;
+	char ifname[IFNAMSIZ];
 };
 
 #if defined(__linux__)

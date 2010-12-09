@@ -16,7 +16,8 @@ scaffold-y := \
 	   input.o \
 	   output.o \
 	   ctrl_handler.o \
-	   scaffold_ipv4.o \
 	   scaffold_sock.o \
+	   scaffold_srv.o \
+	   scaffold_ipv4.o \
 	   scaffold_udp.o \
 	   scaffold_tcp.o

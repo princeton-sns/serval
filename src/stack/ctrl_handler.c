@@ -28,11 +28,27 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
                 ifcm->asaddr.s_addr,
                 ifcm->haddr.s_addr);
 
-        /* Configure as and host addr */
+        /* TODO: Configure as and host addr */
 
         dev_put(dev);
         
         return ret;
+}
+
+static int ctrl_handle_set_control_mode_msg(struct ctrlmsg *cm)
+{
+        //struct ctrlmsg_control_mode *ccm = (struct ctrlmsg_control_mode *)cm;
+
+        LOG_DBG("\n");
+ 
+        return 0;
+}
+
+static int ctrl_handle_set_service_msg(struct ctrlmsg *cm)
+{
+        LOG_DBG("\n");
+         
+        return 0;
 }
 
 ctrlmsg_handler_t handlers[] = {
@@ -41,4 +57,6 @@ ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         ctrl_handle_iface_conf_msg,
+        ctrl_handle_set_control_mode_msg,
+        ctrl_handle_set_service_msg
 };

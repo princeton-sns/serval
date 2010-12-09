@@ -411,8 +411,8 @@ int netdev_populate_table(int sizeof_priv,
                         free_netdev(dev);
                         goto out;
                 }
-                
-                service_add(NULL, 0, dev, GFP_KERNEL);
+
+                service_add(NULL, 0, dev, dev->broadcast, dev->addr_len, 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 

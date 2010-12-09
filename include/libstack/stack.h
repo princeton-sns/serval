@@ -11,6 +11,8 @@ int libstack_configure_interface(const char *ifname,
                                  const struct host_addr *haddr,
 				 unsigned short flags);
 
+int libstack_set_control_mode(int mode);
+int libstack_set_service(struct service_id *srvid, const char *ifname);
 int libstack_init(void);
 void libstack_fini(void);
 

@@ -302,7 +302,8 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
                                      struct bst_node_ops *ops,
                                      void *private,
 				     void *prefix, 
-				     unsigned int prefix_bits)
+				     unsigned int prefix_bits,
+                                     gfp_t alloc)
 {
 	struct bst_node *n;
 	unsigned long prefix_sz = PREFIX_SIZE(parent->prefix_bits + 1);
@@ -310,9 +311,7 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
 	unsigned char endmask = 0;
 	unsigned int i;
 
-        /* Perhaps we should use GFP_ATOMIC here... can we guarantee
-         * that this is always called from user context? */
-	n = (struct bst_node *)MALLOC(sz, GFP_KERNEL);
+	n = (struct bst_node *)MALLOC(sz, alloc);
 	
 	if (!n)
 		return NULL;
@@ -350,7 +349,8 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
 	}
     
 	if (parent->prefix_bits + 1 != prefix_bits)
-		return bst_node_new(n, ops, private, prefix, prefix_bits);
+		return bst_node_new(n, ops, private, prefix, 
+                                    prefix_bits, alloc);
 			 
 	return n;
 }
@@ -358,7 +358,8 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
 struct bst_node *bst_node_insert_prefix(struct bst_node *root, 
                                         struct bst_node_ops *ops, 
                                         void *private, void *prefix, 
-                                        unsigned int prefix_bits)
+                                        unsigned int prefix_bits,
+                                        gfp_t alloc)
 {
 	struct bst_node *n;
         
@@ -372,7 +373,7 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 	       bst_node_flag(n, BST_FLAG_ACTIVE));
 	*/
 	if (n->prefix_bits < prefix_bits) {
-		n = bst_node_new(n, ops, private, prefix, prefix_bits);
+		n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
 		
 		if (!n)
 			return NULL;
@@ -388,13 +389,14 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 
 struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops, 
                                    void *private, void *prefix, 
-                                   unsigned int prefix_bits)
+                                   unsigned int prefix_bits,
+                                   gfp_t alloc)
 {
         struct bst_node *n;
 
         if (tree->entries == 0) {
                 tree->root = (struct bst_node *)MALLOC(sizeof(struct bst_node), 
-                                                       GFP_KERNEL);
+                                                       alloc);
                 
                 if (!tree->root)
                         return NULL;
@@ -407,7 +409,8 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
                 tree->root->tree = tree;
         }
 
-        n = bst_node_insert_prefix(tree->root, ops, private, prefix, prefix_bits);
+        n = bst_node_insert_prefix(tree->root, ops, private, 
+                                   prefix, prefix_bits, alloc);
 
         if (n) {
                 tree->entries++;
@@ -488,19 +491,19 @@ int main(int argc, char **argv)
 	bst_init(&root);
 
 	inet_aton("192.168.1.0", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, 0);
 	
 	inet_aton("192.168.1.253", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, 0);
 
 	inet_aton("192.168.2.0", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, 0);
 
 	inet_aton("192.168.2.250", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, 0);
 
 
-	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, 0);
 
 	bst_print(&root, buf, BUFLEN);
         
@@ -510,7 +513,7 @@ int main(int argc, char **argv)
 
 	inet_aton("192.168.1.0", &addr);
 
-        bst_remove_prefix(&root, &addr, 24);
+        bst_remove_prefix(&root, &addr, 24, 0);
 
 	bst_print(&root, buf, BUFLEN);
 

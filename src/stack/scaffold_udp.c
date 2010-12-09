@@ -7,6 +7,7 @@
 #include <scaffold_udp_sock.h>
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
+#include <scaffold_srv.h>
 #include <input.h>
 
 #if defined(OS_LINUX_KERNEL)
@@ -134,10 +135,10 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
                 ntohs(uh->dest),
                 ntohs(uh->len));
 
-        err = scaffold_ipv4_xmit_skb(sk, skb);
+        err = scaffold_srv_xmit_skb(sk, skb);
         
         if (err < 0) {
-                LOG_ERR("udp xmit failed\n");
+                LOG_ERR("xmit failed\n");
         }
 
         return err;
