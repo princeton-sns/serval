@@ -707,17 +707,6 @@ static inline struct tcphdr *tcp_hdr(const struct sk_buff *skb)
 
 #include <netinet/scaffold.h>
 
-static inline enum scaffold_packet_type skb_scaffold_packet_type(struct sk_buff *skb)
-{
-        return (enum scaffold_packet_type)skb->mark;
-}
-
-static inline void skb_set_scaffold_packet_type(struct sk_buff *skb, 
-                                                enum scaffold_packet_type type)
-{
-        skb->mark = type;
-}
-
 struct service_entry;
 
 /* 
@@ -728,10 +717,24 @@ struct service_entry;
 
 */
 struct scaffold_cb {
+        enum scaffold_packet_type pkttype;
         struct service_id srvid;
         struct service_entry *se;
         unsigned char dst_hard_addr[];
 };
+
+static inline enum scaffold_packet_type skb_scaffold_packet_type(struct sk_buff *skb)
+{
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        return scb->pkttype;
+}
+
+static inline void skb_set_scaffold_packet_type(struct sk_buff *skb, 
+                                                enum scaffold_packet_type type)
+{
+        struct scaffold_cb *scb = (struct scaffold_cb *)skb->cb;
+        scb->pkttype = type;
+}
 
 static inline struct service_id *skb_dst_service_id(struct sk_buff *skb)
 {

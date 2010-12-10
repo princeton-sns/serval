@@ -10,15 +10,16 @@ extern int scaffold_ipv4_rcv(struct sk_buff *skb);
 
 int scaffold_input(struct sk_buff *skb)
 {
-	char srcstr[18], dststr[18];
 	struct ethhdr *ethh = eth_hdr(skb);
 	uint16_t prot = ntohs(ethh->h_proto);
         int ret;
-
+        /*
+	char srcstr[18], dststr[18];
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
         LOG_DBG("%s [%s %s 0x%04x]\n", 
                         skb->dev->name, srcstr, dststr, prot);
+        */
 
         /* Ignore our own packets, e.g., broadcasts or multicasts. */
         if (memcmp(skb->dev->perm_addr, 
