@@ -46,12 +46,13 @@ void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
 int services_print(char *buf, int buflen);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
-#define _skb_refdst _skb_dst
-#endif
-
 static inline struct service_entry *skb_service_entry(struct sk_buff *skb)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+#define _skb_refdst dst
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
+#define _skb_refdst _skb_dst
+#endif
         if (skb->_skb_refdst == 0)
                 return NULL;
         return (struct service_entry *)skb->_skb_refdst;        
@@ -59,7 +60,13 @@ static inline struct service_entry *skb_service_entry(struct sk_buff *skb)
 
 static inline void skb_set_service_entry(struct sk_buff *skb, struct service_entry *se)
 {
-        skb->_skb_refdst = (unsigned long)se;        
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
+        skb->dst = (struct dst_entry *)se;
+#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
+        skb->_skb_dst = (unsigned long)se;
+#else
+        skb->_skb_refdst = (unsigned long)se;
+#endif
 }
 
 #endif /* _SERVICE_H_ */

@@ -8,7 +8,19 @@
 #include <linux/skbuff.h>
 #define FREE_SKB(skb) kfree_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz, prio)
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+static inline struct net *dev_net(const struct net_device *dev)
+{
+#ifdef CONFIG_NET_NS
+        return dev->nd_net;
+#else
+        return &init_net;
 #endif
+}
+#endif
+
+#endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
 #include <scaffold/platform.h>
