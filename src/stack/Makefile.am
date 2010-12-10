@@ -129,7 +129,9 @@ scaffold.ko: $(SCAFFOLD_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean-local:
+if LINUX_KERNEL
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
+endif
 	rm -f *~
 	rm -f linux/*~
 	rm -f userlevel/*~

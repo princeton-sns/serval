@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/platform.h>
+#include <scaffold/platform_tcpip.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/debug.h>
 #include <scaffold_sock.h>
@@ -10,10 +11,6 @@
 #include <linux/if_ether.h>
 #elif !defined(OS_ANDROID)
 #include <netinet/if_ether.h>
-#endif
-#if defined(OS_USER)
-#include <netinet/ip.h>
-#include <netinet/udp.h>
 #endif
 #include "service.h"
 

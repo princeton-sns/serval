@@ -44,7 +44,8 @@ const char *get_strtime(void)
     gettimeofday(&now, NULL);
 #endif
 
-    snprintf(buf, 30, "%ld.%03ld", now.tv_sec, now.tv_usec / 1000);
+    snprintf(buf, 30, "%ld.%03ld", 
+             (long)now.tv_sec, (long)(now.tv_usec / 1000));
 
     return buf;
 }

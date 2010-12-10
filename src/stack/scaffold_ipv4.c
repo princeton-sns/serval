@@ -84,13 +84,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	struct iphdr *iph = ip_hdr(skb);
 	unsigned int hdr_len = iph->ihl << 2;
 	int ret = 0;
-#if defined(ENABLE_DEBUG)
-	char srcstr[18];
-	LOG_DBG("%s %s hdr_len=%u prot=%u\n",
-                skb->dev->name,
-		inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
-		hdr_len, iph->protocol);
-#endif
+
         /* Check if this is a SCAFFOLD packet */
         if (!iph->tos)
                 return INPUT_DELIVER;
@@ -109,11 +103,19 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	case IPPROTO_ICMP:
 		LOG_DBG("icmp packet\n");
         default:
-		LOG_DBG("packet type=%u\n", iph->protocol);
                 ret = INPUT_DELIVER;
                 goto out;
 	}
 
+#if defined(ENABLE_DEBUG)
+        {
+                char srcstr[18];
+                LOG_DBG("%s %s hdr_len=%u prot=%u\n",
+                        skb->dev->name,
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
+                        hdr_len, iph->protocol);
+        }
+#endif
         if (!pskb_may_pull(skb, hdr_len))
                 goto inhdr_error;
         

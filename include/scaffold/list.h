@@ -29,6 +29,11 @@ struct list_head {
 
 #define LIST_HEAD_INIT(name) { &(name), &(name) }
 
+/* Fix LIST_HEAD conflict in Mac OS X headers */
+#if defined(_SYS_QUEUE_H_)
+#undef LIST_HEAD
+#endif
+
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 
