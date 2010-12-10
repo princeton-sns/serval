@@ -4,6 +4,8 @@ include $(CLEAR_VARS)
 subdirs := $(addprefix $(LOCAL_PATH)/,$(addsuffix /Android.mk, \
 		src/stack \
 		src/libstack \
+		src/libscaffold \
+		src/scafd \
         ))
 
 include $(subdirs)

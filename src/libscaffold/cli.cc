@@ -18,9 +18,19 @@
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER
 // DEALINGS IN THE WORK.
 
+#include <scaffold/platform.h>
 #include "cli.hh"
 
 uint32_t Cli::_UNIX_ID = 0;
+
+#if defined(OS_ANDROID)
+# define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path))
+#define UNIXCLI_STR "/cache/unixcli_%d_%d.str"
+#else
+#define UNIXCLI_STR "/tmp/unixcli_%d_%d.str"
+#endif
+
+char Cli::strbuf[STRBUFLEN] = { 0 };
 
 Cli::Cli(int fd)
   : _unix_id(_UNIX_ID), _fd(fd), _rcv_lowat(0), _snd_lowat(0),
@@ -52,7 +62,7 @@ int
 Cli::bind(sf_err_t &err)
 {
   _cli.sun_family = AF_LOCAL;
-  sprintf(_cli.sun_path, "/tmp/unixcli_%d_%d.str", getpid(), _unix_id);
+  sprintf(_cli.sun_path, UNIXCLI_STR, getpid(), _unix_id);
   incr_unix_id();
   
   if (_fd < 0) {
@@ -299,19 +309,19 @@ Cli::has_unread_data(int atleast, bool &v, sf_err_t &err) const
   return 0;
 }
 
-string
-Cli::s() const
+const char *
+Cli::s(char *buf, size_t buflen) const
 {
-  stringstream sa;
-  sa << "[cli: ";
-  sa << "unix_id: " << _unix_id << ", ";
-  sa << "fd: " << _fd << ",";
-  sa << "rcv_lowat: " << _rcv_lowat << ",";
-  sa << "snd_lowat: " << _snd_lowat << ",";
-  sa << "state: " << State::state_s(_state) << ",";
-  sa << "err: " << strerror_sf(_err.v) << ",";
-  sa << "connecting: " << (_connect_in_progress ? "t" : "f") << ", ";
-  sa << "]";
-  return sa.str();
+  int len = 0;
+
+  len += snprintf(buf + len, buflen - len, "[cli: unix_id=%d ", _unix_id);
+  len += snprintf(buf + len, buflen - len, "fd=%d ", _fd);
+  len += snprintf(buf + len, buflen - len, "rcv_lowat=%d ", _rcv_lowat);
+  len += snprintf(buf + len, buflen - len, "snd_lowat=%d ", _snd_lowat);
+  len += snprintf(buf + len, buflen - len, "state=%s ", State::state_s(_state));
+  len += snprintf(buf + len, buflen - len, "err=%s ", strerror_sf(_err.v));
+  len += snprintf(buf + len, buflen - len, "connecting=%s]", 
+                  _connect_in_progress ? "true" : "false");
+  return buf;
 }
 

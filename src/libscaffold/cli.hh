@@ -20,11 +20,10 @@
 #include "log.hh"
 
 #include <libscaffold/scaffold.h>
-
-#include <sstream>
-using namespace std;
+#include <scaffold/list.h>
 
 class Cli {
+  friend class SFSockLib;
 public:
   Cli(int fd = -1);
   Cli(const Cli &);
@@ -61,12 +60,12 @@ public:
 
   int get_bufsize(bool rcv, int &len, sf_err_t &err);
   int set_bufsize(bool rcv, int len, sf_err_t &err);
-
-  string s() const;
+#define STRBUFLEN 100
+  static char strbuf[STRBUFLEN];
+  const char *s(char *buf = strbuf, size_t buflen = STRBUFLEN) const;
   
   static void incr_unix_id() { _UNIX_ID++; }
   static const unsigned int MAX_BUF_SZ = 65536;
-  
 private:
   sf_proto_t _proto;
   int _unix_id;
@@ -80,6 +79,7 @@ private:
   int _flags;
   struct sockaddr_un _cli;      // local socket
   static uint32_t _UNIX_ID;
+  struct list_head lh;
 };
 
 #endif

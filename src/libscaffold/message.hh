@@ -26,9 +26,10 @@ class Message {
                    CLEAR_DATA, HAVE_DATA
     } Type;
     Message()
-            : _version(version), _type(UNKNOWN), _pld_len_v(0) { }
+        : _version(version), _type(UNKNOWN), _pld_len_v(0) { }
     Message(Type type)
-            : _version(version), _type(type), _pld_len_v(0) { }
+        : _version(version), _type(type), _pld_len_v(0) { }
+    virtual ~Message() {}
 
     unsigned char type() const             { return _type; }
     uint16_t hdr_len() const;

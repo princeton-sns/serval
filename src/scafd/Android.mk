@@ -4,23 +4,25 @@ include $(CLEAR_VARS)
 #
 # Scafd
 #
+LOCAL_HDR_FILES := \
+	debug.h \
+	rtnl.h \
+	timer.h
+
 LOCAL_SRC_FILES := \
 	rtnl.c \
+	timer.c \
 	scafd.c
 
 SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
-
-SCAFD_HDR = \
-	rtnl.h \
-	debug.h
 
 LOCAL_C_INCLUDES += \
 	$(SCAFFOLD_INCLUDE_DIR)
 
 # We need to compile our own version of libxml2, because the static
 # library provided in Android does not have the configured options we need.
-LOCAL_LDLIBS :=-lrt -lstack
-LOCAL_SHARED_LIBRARIES +=libdl libstack
+LOCAL_LDLIBS :=-lrt -lstack -lscaffold -lpthread
+LOCAL_SHARED_LIBRARIES +=libdl libstack libscaffold
 
 EXTRA_DEFINES:=-DOS_ANDROID -DENABLE_DEBUG
 LOCAL_CFLAGS:=-O2 -g $(EXTRA_DEFINES)

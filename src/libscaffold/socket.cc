@@ -104,12 +104,17 @@ SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)
 Cli &
 SFSockLib::get_cli(int soc, sf_err_t &err)
 {
-  map<int, Cli>::iterator i = _map.find(soc);
-  if (i == _map.end()) {
-    err = EBADF;
-    return null_cli;
+  struct list_head *pos;
+
+  list_for_each(pos, &_cli_list) {
+    Cli *c = (Cli *)pos;
+    if (c->fd() == soc)
+      return *c;
   }
-  return i->second;
+
+  err = EBADF;
+  return null_cli;
+
 }
 
 int
@@ -120,7 +125,7 @@ SFSockLib::basic_checks(int soc, const struct sockaddr *addr,
   //
   // todo: test if scafd is reachable
   //
-  if (addr_len < sizeof(struct sockaddr_sf) || !addr) {
+  if (addr_len < (socklen_t)sizeof(struct sockaddr_sf) || !addr) {
     err =  EINVAL;
     lerr("bad address length");
     return SCAFFOLD_SOCKET_ERROR;
@@ -367,7 +372,7 @@ SFSockLib::getsockopt_sf(int soc, int level, int option_name,
   switch (option_name) {
   case SO_ERROR: { // Conn is non-blocking, and prev attempt not completed
     if (!cli.is_connecting()) { // no async errors to report
-      info("cli %s is not connecting", cli.s().c_str());
+      info("cli %s is not connecting", cli.s());
       *option = 0;
       return 0;
     }
@@ -377,12 +382,12 @@ SFSockLib::getsockopt_sf(int soc, int level, int option_name,
     bool v = false;
     if (cli.has_unread_data(atleast, v, err) < 0) {
       if (err.v == EWOULDBLOCK || err.v == EAGAIN) {
-        lerr("cli %s returned EWOULDBLOCK", cli.s().c_str());
+        lerr("cli %s returned EWOULDBLOCK", cli.s());
         *option = EWOULDBLOCK;
         //*option = EINPROGRESS;
         return 0;
       } else {
-        lerr("cli %s has no unread data", cli.s().c_str());
+        lerr("cli %s has no unread data", cli.s());
         return SCAFFOLD_SOCKET_ERROR;
       }
     }
@@ -423,7 +428,7 @@ SFSockLib::query_scafd_soerror(Cli &cli, sf_err_t &err)
   
   if (cresp.err().v) {
     err = cresp.err();
-    info("getsockopt_sf: ERR cli [%s] : %s", cli.s().c_str(),
+    info("getsockopt_sf: ERR cli [%s] : %s", cli.s(),
          strerror_sf(err.v));
     return SCAFFOLD_SOCKET_ERROR;
   }
@@ -431,7 +436,7 @@ SFSockLib::query_scafd_soerror(Cli &cli, sf_err_t &err)
   //    return SCAFFOLD_SOCKET_ERROR;
   cli.set_state(State::BOUND);
   cli.set_connect_in_progress(false);
-  info("getsockopt_sf: OK cli [%s]", cli.s().c_str());
+  info("getsockopt_sf: OK cli [%s]", cli.s());
   return 0;
 }
 
@@ -552,7 +557,7 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
     return ::accept(soc, addr, addr_len);
   }
 
-  if (*addr_len < sizeof(struct sockaddr_sf) || !addr) {
+  if (*addr_len < (socklen_t)sizeof(struct sockaddr_sf) || !addr) {
     err =  EINVAL;
     return SCAFFOLD_SOCKET_ERROR;
   } else if (*addr_len % sizeof(struct sockaddr_sf) != 0) {
@@ -605,7 +610,7 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
   sf_addr->sf_family = AF_SCAFFOLD;
   sf_addr->sf_oid.s_oid = aresp.remote_obj_id().s_oid;
 
-  if (*addr_len >= (2 * sizeof(struct sockaddr_sf))) {
+  if (*addr_len >= (socklen_t)(2 * sizeof(struct sockaddr_sf))) {
     // also give back the remote object id
     struct sockaddr_sf *sf_addr2 =  (struct sockaddr_sf *)&addr[1];
     sf_addr2->sf_family = AF_SCAFFOLD;   
@@ -636,7 +641,7 @@ SFSockLib::query_scafd_accept2(bool nb,
     err = aresp2.err();
     return SCAFFOLD_SOCKET_ERROR;
   }
-  info("accepted new soc = %s", cli.s().c_str());
+  info("accepted new soc = %s", cli.s());
   return 0;
 }
 
@@ -679,8 +684,9 @@ SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
       new_cli.set_bufsize(false, SEND_BUFSIZE_LEN, err) < 0)
     return SCAFFOLD_SOCKET_ERROR;
 
-  _map[new_cli.fd()] = new_cli;
-  info("create_cli: %s", new_cli.s().c_str());
+  list_add_tail(&new_cli.lh, &_cli_list);
+
+  info("create_cli: %s", new_cli.s());
   return 0;
 }
 
@@ -694,12 +700,13 @@ SFSockLib::delete_cli(Cli &cli, sf_err_t &err)
       return SCAFFOLD_SOCKET_ERROR;
     }
   
-  map<int, Cli>::iterator i = _map.find(cli.fd());
-  if (i == _map.end()) {
+  if (get_cli(cli.fd(), err).is_null()) {
     err = ESFINTERNAL;
     return SCAFFOLD_SOCKET_ERROR;
   }
-  _map.erase(i);
+
+  list_del(&cli.lh);
+
   return 0;
 }
 
@@ -909,7 +916,7 @@ SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
         err = srsp.err();
         return SCAFFOLD_SOCKET_ERROR;
       }
-      info("sent %d bytes through soc %s", length, cli.s().c_str());
+      info("sent %d bytes through soc %s", length, cli.s());
     } else
       lerr("got invalid message, expected SEND_RSP got %s", 
            m.type_cstr());
@@ -1012,7 +1019,7 @@ SFSockLib::recvfrom_sf(int soc, void *buffer, size_t length, int flags,
   sf_addr->sf_family = AF_SCAFFOLD;
   sf_addr->sf_oid.s_oid = src_obj_id.s_oid;
 
-  if (*addr_len >= 2 * sizeof(struct sockaddr_sf)) {
+  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sf)) {
     struct sockaddr_sf *sf_addr2 = (struct sockaddr_sf *)&src_addr[1];
     sf_addr2->sf_family = AF_SCAFFOLD;
     sf_addr2->sf_oid.s_oid = htons(SCAFFOLD_NULL_OID);
@@ -1167,7 +1174,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
     src_obj_id = rresp.src_obj_id();
   } else {
     info("recv: expected to read data, found EOF on soc %s", 
-         cli.s().c_str());
+         cli.s());
     len = 0;
     return 0;
   }

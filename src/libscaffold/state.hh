@@ -222,9 +222,10 @@ _strerror_sf_r(int errnum, char *buf, size_t buflen)
                      "Connected to new instance. Needs recovery.");
             break;
         default: 
-#if defined(__linux__)
-            return strerror_r(errnum, buf, buflen);
+#if defined(_GNU_SOURCE)
+            if (strerror_r(errnum, buf, buflen))
 #else
+
             if (strerror_r(errnum, buf, buflen) == -1)
                 return NULL;
             return buf;

@@ -3,6 +3,7 @@
 #define SCAFFOLD_SOCKET_HH
 
 #include <libscaffold/scaffold.h>
+#include <scaffold/list.h>
 
 #include "message.hh"
 #include "bind.hh"
@@ -15,10 +16,6 @@
 #include "cli.hh"
 #include "select.hh"
 #include "migrate.hh"
-
-#include <map>
-#include <sstream>
-using namespace std;
 
 #define SCAFFOLD_SOCKET_ERROR -2
 
@@ -115,7 +112,7 @@ private:
   
   struct sockaddr_un _tcp_srv;
   struct sockaddr_un _udp_srv;
-  map<int, Cli> _map;
+  struct list_head _cli_list;
   static uint32_t _scafd_id;
 };
 
