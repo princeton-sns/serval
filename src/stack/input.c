@@ -28,7 +28,8 @@ int scaffold_input(struct sk_buff *skb)
 
         switch (prot) {
         case ETH_P_IP:
-                /* LOG_DBG("%s [%s %s 0x%04x]\n", 
+                /*
+                LOG_DBG("%s [%s %s 0x%04x]\n", 
                         skb->dev->name, srcstr, dststr, prot);
                 */
                 ret = scaffold_ipv4_rcv(skb);

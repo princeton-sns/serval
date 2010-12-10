@@ -194,20 +194,23 @@ int main(int argc, char **argv)
 	ctrlsock = socket(AF_SCAFFOLD, SOCK_DGRAM, 0);
 
 	if (ctrlsock == -1) {
-		if (errno == EAFNOSUPPORT) {
+                switch (errno) {
+		case EAFNOSUPPORT:
+                case EPROTONOSUPPORT:
 			/* Try libscaffold */
 			ctrlsock = socket_sf(AF_SCAFFOLD, SOCK_DGRAM, 0);
 			
 			if (ctrlsock == -1) {
-				LOG_ERR("cannot open controller socket: %s\n",
+				LOG_ERR("controller socket: %s\n",
 					strerror_sf(errno));
 				return -1;
 			}
-		} else {
-			LOG_ERR("cannot open controller socket: %s\n",
+                        break;
+                default:
+			LOG_ERR("controller socket (native): %s\n",
 				strerror(errno));
-			return -1;
-		}
+                        return -1;
+                }
 	} else {
 		native = 1;
 	}

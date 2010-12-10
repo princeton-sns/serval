@@ -532,11 +532,6 @@ void *dev_thread(void *arg)
                         }
                         if (fds[0].revents) {
                                 ret = dev->pack_ops->recv(dev);
-
-                                if (ret == -1) {
-                                        LOG_ERR("receive error on device %s\n",
-                                                dev->name);
-                                }
                         }
                 }
         }
