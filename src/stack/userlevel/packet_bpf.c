@@ -180,16 +180,16 @@ static int packet_bpf_recv(struct net_device *dev)
                 switch (ret) {
                 case INPUT_OK:
                         break;
-                case INPUT_NO_PROT:
-                case INPUT_DROP:
-                        free_skb(skb);
-                        break;
                 case INPUT_ERROR:
-                default:
                         /* Packet should be freed by upper layers */
                         if (IS_INPUT_ERROR(ret)) {
                                 LOG_ERR("input error\n");
                         }
+                        break;
+                case INPUT_NO_PROT:
+                case INPUT_DROP:
+                default:
+                        free_skb(skb);
                         break;
                 }
                 /* Move to next packet */

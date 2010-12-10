@@ -130,7 +130,7 @@ static int server_run(void)
 		ret = listen(server_sock[i], 10);
 
 		if (ret == -1) {
-			LOG_ERR("listen failed for AF_UNIX socket %s : %s\n",
+                        LOG_ERR("listen failed for AF_UNIX socket %s : %s\n",
 				server_sock_path[i], strerror(errno));
 			goto out_close_socks;
 		}
@@ -305,6 +305,8 @@ out_close_socks:
 	return ret;
 }
 
+extern void dev_list_add(const char *name);
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -330,15 +332,12 @@ int main(int argc, char **argv)
 	argv++;
         
 	while (argc) {
-                /*
-		if (strcmp(argv[0], "-i") == 0 ||
+                if (strcmp(argv[0], "-i") == 0 ||
 		    strcmp(argv[0], "--interface") == 0) {
-			fixed_dev_name = argv[1];
+			dev_list_add(argv[1]);
 			argv++;
 			argc--;
-				
 		}
-                */
 		argc--;
 		argv++;
 	}

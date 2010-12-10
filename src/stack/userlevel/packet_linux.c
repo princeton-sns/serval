@@ -16,7 +16,6 @@
 
 static int packet_linux_init(struct net_device *dev)
 {
-	//struct packet_linux_priv *priv = get_priv(dev);	
         struct sockaddr_ll lladdr;
 	int ret;
 
@@ -53,7 +52,7 @@ static void packet_linux_destroy(struct net_device *dev)
 
 static int packet_linux_recv(struct net_device *dev)
 {
-	struct sk_buff *skb;
+	struct sk_buff *skb = NULL;
 	struct sockaddr_ll lladdr;
 	socklen_t addrlen = sizeof(lladdr);
 	int ret;
@@ -82,9 +81,9 @@ static int packet_linux_recv(struct net_device *dev)
         
 	switch (lladdr.sll_pkttype) {
 	case PACKET_HOST:
-		break;
 	case PACKET_BROADCAST:
 	case PACKET_MULTICAST:
+		break;
 	case PACKET_OUTGOING:
 	case PACKET_OTHERHOST:
 	case PACKET_LOOPBACK:
@@ -103,17 +102,17 @@ static int packet_linux_recv(struct net_device *dev)
 	switch (ret) {
 	case INPUT_OK:
                 break;
-        case INPUT_NO_PROT:
-        case INPUT_DROP:
-                free_skb(skb);
-                break;
 	case INPUT_ERROR:
-	default:
                 /* Packet should be freed by upper layers */
 		if (IS_INPUT_ERROR(ret)) {
 			LOG_ERR("input error\n");
 		}
 		break;
+        case INPUT_NO_PROT:
+        case INPUT_DROP:
+        case INPUT_DELIVER:
+        default:
+                free_skb(skb);
 	}
 
 	return 0;

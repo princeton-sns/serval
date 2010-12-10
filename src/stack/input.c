@@ -17,6 +17,14 @@ int scaffold_input(struct sk_buff *skb)
 
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
+        LOG_DBG("%s [%s %s 0x%04x]\n", 
+                        skb->dev->name, srcstr, dststr, prot);
+
+        /* Ignore our own packets, e.g., broadcasts or multicasts. */
+        if (memcmp(skb->dev->perm_addr, 
+                   ethh->h_source, 
+                   skb->dev->hard_header_len) == 0) 
+                return 0;
 	
         /* Set head to network part of packet */
         skb_pull(skb, skb->dev->hard_header_len);
@@ -28,14 +36,10 @@ int scaffold_input(struct sk_buff *skb)
 
         switch (prot) {
         case ETH_P_IP:
-                /*
-                LOG_DBG("%s [%s %s 0x%04x]\n", 
-                        skb->dev->name, srcstr, dststr, prot);
-                */
                 ret = scaffold_ipv4_rcv(skb);
                 break;
         default:
-                ret = INPUT_NO_PROT;                
+                ret = INPUT_NO_PROT;
         }
 
         return ret;

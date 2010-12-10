@@ -58,6 +58,8 @@ struct sk_buff *alloc_skb(unsigned int size)
 	if (!skb)
 		return NULL;
 
+        memset(skb, 0, sizeof(*skb));
+
 	data = (unsigned char *)malloc(size + sizeof(struct skb_shared_info));
 
 	if (!data)

@@ -88,6 +88,8 @@ int scaffold_udp_rcv(struct sk_buff *skb)
         if (!sk) {
                 LOG_ERR("No matching scaffold sock\n");
                 FREE_SKB(skb);
+        } else {
+                FREE_SKB(skb);
         }
 
         return err;

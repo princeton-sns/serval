@@ -97,6 +97,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         */
 	switch (iph->protocol) {
 	case IPPROTO_UDP:
+                LOG_DBG("udp\n");
 	case IPPROTO_TCP:
         case IPPROTO_SCAFFOLD:
                 break;

@@ -26,11 +26,11 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
 
         switch (skb->pkt_type) {
         case PACKET_HOST:
+        case PACKET_BROADCAST:
+        case PACKET_MULTICAST:
                 break;
         case PACKET_OTHERHOST:
         case PACKET_OUTGOING:
-        case PACKET_BROADCAST:
-        case PACKET_MULTICAST:
         default:
                 goto accept;
         }

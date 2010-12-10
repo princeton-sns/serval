@@ -34,8 +34,52 @@ struct net init_net = { 1 };
 struct list_head dev_base_head;
 struct hlist_head *dev_name_head;
 struct hlist_head *dev_index_head;
-
 static void *dev_thread(void *arg);
+
+/* A (white) list of interfaces to use. If empty, use all detected */
+static LIST_HEAD(dev_list);
+struct dev_entry {
+        struct list_head lh;
+        char name[IFNAMSIZ];
+};
+
+void dev_list_add(const char *name)
+{
+        struct dev_entry *de = malloc(sizeof(struct dev_entry));
+
+        if (!de)
+                return;
+        
+        INIT_LIST_HEAD(&de->lh);
+        strcpy(de->name, name);
+        list_add_tail(&de->lh, &dev_list);
+}
+
+void dev_list_destroy(void)
+{
+        while (1) {
+                struct dev_entry *de;
+                
+                if (list_empty(&dev_list))
+                        break;
+
+                de = list_first_entry(&dev_list, struct dev_entry, lh);
+                list_del(&de->lh);
+                free(de);
+        }
+}
+
+const char *dev_list_find(const char *name)
+{
+        struct dev_entry *de;
+
+        list_for_each_entry(de, &dev_list, lh) {
+                if (strcmp(name, de->name) == 0)
+                        return de->name;
+        }
+
+        return NULL;
+}
 
 static inline struct hlist_head *dev_name_hash(struct net *net, 
                                                const char *name)
@@ -377,7 +421,13 @@ int netdev_populate_table(int sizeof_priv,
 #elif defined(OS_LINUX)
                 len = sizeof(struct ifreq);
 #endif
-		if (ioctl(fd, SIOCGIFFLAGS, ifr) == -1) {
+                /* If there are white listed interfaces, ignore all
+                   interfaces not in the list */
+                if (!list_empty(&dev_list) && 
+                    !dev_list_find(ifr->ifr_name))
+                        continue;
+                        
+                if (ioctl(fd, SIOCGIFFLAGS, ifr) == -1) {
                         goto out;
                 }
                 
@@ -615,4 +665,6 @@ void netdev_fini(void)
                 }
                 dev_put(dev);
         }
+        
+        dev_list_destroy();
 }
