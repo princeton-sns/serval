@@ -7,7 +7,7 @@
 #if defined(OS_LINUX_KERNEL)
 #include <net/sock.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
         return sk->sk_sleep;
