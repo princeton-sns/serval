@@ -223,7 +223,7 @@ _strerror_sf_r(int errnum, char *buf, size_t buflen)
             break;
         default: 
 #if defined(_GNU_SOURCE)
-            if (strerror_r(errnum, buf, buflen))
+            return strerror_r(errnum, buf, buflen);
 #else
 
             if (strerror_r(errnum, buf, buflen) == -1)
