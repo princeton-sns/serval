@@ -64,7 +64,7 @@ Logger::initialize(const char *name)
         if (_log_fname)
             free(_log_fname);
 
-        _log_fname = (char *)malloc(strlen(name) + 1);
+        _log_fname = new char[strlen(name) + 1];
 
         if (!_log_fname)
             return -1;
@@ -74,7 +74,7 @@ Logger::initialize(const char *name)
         if (_dirname)
             free(_dirname);
 
-        _dirname =  (char *)malloc(strlen(PREFIX) + strlen(DIRNAME_STR) + 1);
+        _dirname = new char[strlen(PREFIX) + strlen(DIRNAME_STR) + 1];
 
         if (!_dirname)
             return -1;
@@ -93,10 +93,10 @@ void Logger::static_uninitialize()
     _initialized = false;
 
     if (_dirname)
-        free(_dirname);
+        delete [] _dirname;
 
     if (_log_fname)
-        free(_log_fname);
+        delete [] _log_fname;
 }
 
 int

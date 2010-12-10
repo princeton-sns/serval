@@ -22,7 +22,7 @@
 #include <libscaffold/scaffold.h>
 #include "socket.hh"
 
-SFSockLib sock;
+static SFSockLib sock;
 
 int 
 socket_sf(int domain, int type, int protocol)

@@ -67,7 +67,7 @@ public:
 private:
   Cli & get_cli(int soc, sf_err_t &err);
   int create_cli(sf_proto_t proto, int &soc, sf_err_t &err);
-  int delete_cli(Cli &cli, sf_err_t &err);
+  int delete_cli(Cli *cli, sf_err_t &err);
   
   bool is_valid(const struct sockaddr_sf &addr, 
 		bool is_valid) const;

@@ -34,12 +34,12 @@ char Cli::strbuf[STRBUFLEN] = { 0 };
 
 Cli::Cli(int fd)
   : _unix_id(_UNIX_ID), _fd(fd), _rcv_lowat(0), _snd_lowat(0),
-    _state(State::NEW), _err(0), _connect_in_progress(false), _flags(0)
+    _state(State::CLOSED), _err(0), _connect_in_progress(false), _flags(0)
 {
   _err = 0;
   bzero(&_cli, sizeof(_cli));
   _proto.v = SCAFFOLD_PROTO_UDP;
-
+  lerr("cli construct");
   INIT_LIST_HEAD(&lh);
 }
 
@@ -58,7 +58,6 @@ Cli::Cli(const Cli &c)
 
 Cli::~Cli()
 {
-  list_del(&lh);
   unlink(_cli.sun_path);
 }
 

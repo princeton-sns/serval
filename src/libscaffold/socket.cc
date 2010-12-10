@@ -40,6 +40,7 @@ uint32_t SFSockLib::_scafd_id = 0;
 SFSockLib::SFSockLib(int scafd_id)
 {
   char logname[30];
+  memset(logname, 0, 30);
   snprintf(logname, 29, "libscaffold-%u.log", getpid());
   Logger::initialize(logname);
   Logger::set_debug_level(Logger::DEBUG);
@@ -70,7 +71,16 @@ SFSockLib::SFSockLib(int scafd_id)
 }
 
 SFSockLib::~SFSockLib()
-{ 
+{
+  while (1) {
+    if (list_empty(&_cli_list))
+      break;
+
+    Cli *c = (Cli *)_cli_list.next;
+    sf_err_t err;
+
+    delete_cli(c, err);
+  }
 }
 
 int
@@ -116,12 +126,22 @@ SFSockLib::get_cli(int soc, sf_err_t &err)
 {
   struct list_head *pos;
 
-  list_for_each(pos, &_cli_list) {
-    Cli *c = (Cli *)pos;
-    if (c->fd() == soc)
-      return *c;
+  debug("get cli soc=%d", soc);
+
+  if (list_empty(&_cli_list)) {
+    debug("cli list is empty");
   }
 
+  list_for_each(pos, &_cli_list) {
+    Cli *c = (Cli *)pos;
+    debug("cli %s", c->s());
+    if (c->fd() == soc) {
+      debug("found");
+      return *c;
+    }
+  }
+
+  debug("not found");
   err = EBADF;
   return null_cli;
 
@@ -184,7 +204,7 @@ SFSockLib::bind_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
 int
 SFSockLib::check_state_for_bind(const Cli &cli, sf_err_t &err) const
 {
-  if (cli.state() != State::NEW) {
+  if (cli.state() != State::CLOSED) {
     lerr("check_state_for_bind: failed state %s", 
          State::state_s(cli.state()));
     err = EADDRINUSE;
@@ -259,8 +279,8 @@ SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
     return SCAFFOLD_SOCKET_ERROR;
   }
   
-  if (cli.state() != State::UNBOUND && cli.state() != State::NEW) {
-    // NEW is a valid state in case a client app does not want to
+  if (cli.state() != State::UNBOUND && cli.state() != State::CLOSED) {
+    // CLOSED is a valid state in case a client app does not want to
     // register its object id with the object router
     err = ESFINTERNAL;
     info("error %s", strerror_sf(err.v));
@@ -605,7 +625,7 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
   // blocking by default
   if (query_scafd_accept2(nb, new_cli, aresp, err) < 0) {
     cli.restore_flags();
-    delete_cli(new_cli, err);
+    delete_cli(&new_cli, err);
     return SCAFFOLD_SOCKET_ERROR;
   }
   new_cli.set_state(State::BOUND);
@@ -665,10 +685,14 @@ SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
     err = errno;
     return SCAFFOLD_SOCKET_ERROR;
   }
-  Cli new_cli;
-  new_cli.set_fd(new_soc);
-  new_cli.set_proto(proto.v);
-  if (new_cli.bind(err) < 0)
+  Cli *new_cli = new Cli();
+
+  if (!new_cli)
+    return -1;
+
+  new_cli->set_fd(new_soc);
+  new_cli->set_proto(proto.v);
+  if (new_cli->bind(err) < 0)
     return SCAFFOLD_SOCKET_ERROR;
   
   // create a new soc for this accepted connection
@@ -690,32 +714,34 @@ SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
     return SCAFFOLD_SOCKET_ERROR;
   }
   
-  if (new_cli.set_bufsize(true, RCV_BUFSIZE_LEN, err) < 0 ||
-      new_cli.set_bufsize(false, SEND_BUFSIZE_LEN, err) < 0)
+  if (new_cli->set_bufsize(true, RCV_BUFSIZE_LEN, err) < 0 ||
+      new_cli->set_bufsize(false, SEND_BUFSIZE_LEN, err) < 0)
     return SCAFFOLD_SOCKET_ERROR;
 
-  list_add_tail(&new_cli.lh, &_cli_list);
+  list_add_tail(&new_cli->lh, &_cli_list);
 
-  info("create_cli: %s", new_cli.s());
+  info("create_cli: %s", new_cli->s());
+
   return 0;
 }
 
 int
-SFSockLib::delete_cli(Cli &cli, sf_err_t &err)
+SFSockLib::delete_cli(Cli *cli, sf_err_t &err)
 {
-  if (cli.fd() >= 0)
-    if (close(cli.fd()) < 0) {
-      lerr("error closing fd %d", cli.fd());
+  if (cli->fd() >= 0)
+    if (close(cli->fd()) < 0) {
+      lerr("error closing fd %d", cli->fd());
       err = ESFINTERNAL;
       return SCAFFOLD_SOCKET_ERROR;
     }
   
-  if (get_cli(cli.fd(), err).is_null()) {
+  if (get_cli(cli->fd(), err).is_null()) {
     err = ESFINTERNAL;
     return SCAFFOLD_SOCKET_ERROR;
   }
-
-  list_del(&cli.lh);
+  
+  list_del(&cli->lh);
+  delete cli;
 
   return 0;
 }
@@ -813,6 +839,9 @@ SFSockLib::sendto_sf(int soc, const void *buffer, size_t length, int flags,
                      sf_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
+
+  info("cli %s", cli.is_null() ? "null" : cli.s());
+
   if (cli.is_null() ||
       basic_checks(soc, dst_addr, addr_len, false, err) < 0)
     return ::sendto(soc, buffer, length, flags, dst_addr, addr_len);
@@ -870,7 +899,7 @@ SFSockLib::check_state_for_send(const Cli &cli, sf_err_t &err) const
 int
 SFSockLib::check_state_for_sendto(const Cli &cli, sf_err_t &err) const
 {
-  if (cli.state() != State::NEW &&
+  if (cli.state() != State::CLOSED &&
       cli.state() != State::BOUND &&   // allow sendto on connected sockets
       cli.state() != State::UNBOUND) {
     err = ESOCKNOTBOUND;
@@ -1215,7 +1244,7 @@ SFSockLib::close_sf(int soc, sf_err_t &err)
   //
   // Socket -> CLOSED or TIMEDWAIT
   //
-  delete_cli(cli, err);
+  delete_cli(&cli, err);
   return 0;
 }
 
@@ -1317,7 +1346,7 @@ SFSockLib::migrate_sf(int soc, sf_err_t &err)
   // within Scafd socket state transitions to 
   // one of the SFSock::is_user_closed_state(s), 
   // it's OK to delete the app end of the socket
-  delete_cli(cli, err);
+  delete_cli(&cli, err);
   return 0;
 }
 

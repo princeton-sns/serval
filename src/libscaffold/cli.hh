@@ -23,6 +23,7 @@
 #include <scaffold/list.h>
 
 class Cli {
+  struct list_head lh; // Must be first member
   friend class SFSockLib;
 public:
   Cli(int fd = -1);
@@ -79,7 +80,6 @@ private:
   int _flags;
   struct sockaddr_un _cli;      // local socket
   static uint32_t _UNIX_ID;
-  struct list_head lh;
 };
 
 #endif

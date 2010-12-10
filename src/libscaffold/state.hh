@@ -16,22 +16,19 @@ class State {
     // states similar to DCCP rfc4340
     static const unsigned int MAX_STATES = 20;
     enum Type {
-        NEW = 0,
+        CLOSED = 1,
         REGISTER,
         UNBOUND,
         REQUEST,
-        LISTEN,
         RESPOND,
         BOUND,
         CLOSING,  // bound dgram only
         TIMEWAIT, // bound dgram only
-        CLOSED,
         UNREGISTER,
         FAILOVER_WAIT,
         RECONNECT,
         RRESPOND,
-        GARBAGE,
-        
+        LISTEN,
         // TCP only
         TCP_FINWAIT1,
         TCP_FINWAIT2,
