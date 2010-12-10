@@ -759,7 +759,7 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
         
 	switch (sock->type) {
                 case SOCK_DGRAM:
-                        if (!protocol) 
+                        if (!protocol)
                                 protocol = SCAFFOLD_PROTO_UDP;
                         sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 

@@ -91,7 +91,8 @@ static int packet_linux_recv(struct net_device *dev)
 		free_skb(skb);
 		return -1;              
 	}
-        
+
+        skb_put(skb, ret);
 	skb->dev = dev;
 	skb_reset_mac_header(skb);
 	skb->pkt_type = lladdr.sll_pkttype;

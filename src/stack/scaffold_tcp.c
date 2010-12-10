@@ -86,7 +86,7 @@ static int scaffold_tcp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 		goto drop;
 	}
         LOG_DBG("skb queued\n");
- 
+        FREE_SKB(skb);
         return 0;
 drop:
         LOG_DBG("skb queue error!\n");

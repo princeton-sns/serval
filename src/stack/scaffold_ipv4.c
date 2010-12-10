@@ -79,6 +79,18 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         return 0;
 }
 
+static const char *ipv4_hdr_dump(unsigned char *hdr, char *buf, int buflen)
+{
+        int i = 0, len = 0;
+        
+        while (i < 20) {
+                len += snprintf(buf + len, buflen - len, 
+                                "%02x%02x ", hdr[i], hdr[i+1]);
+                i += 2;
+        }
+        return buf;
+}
+
 int scaffold_ipv4_rcv(struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
@@ -88,7 +100,6 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         /* Check if this is a SCAFFOLD packet */
         if (!iph->tos)
                 return INPUT_DELIVER;
-
         /* 
 
            This is a bit of a hack for now. There is no SCAFFOLD
@@ -120,7 +131,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         if (!pskb_may_pull(skb, hdr_len))
                 goto inhdr_error;
         
-        skb_pull(skb, hdr_len);                
+        pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
     
         ret = scaffold_srv_rcv(skb);

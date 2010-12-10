@@ -36,7 +36,7 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 
 	switch (protocol) {
 	case IPPROTO_UDP:
-                err = scaffold_tcp_rcv(skb);
+                err = scaffold_udp_rcv(skb);
                 break;
 	case IPPROTO_TCP:
                 err = scaffold_tcp_rcv(skb);

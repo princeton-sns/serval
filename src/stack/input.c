@@ -17,22 +17,23 @@ int scaffold_input(struct sk_buff *skb)
 	char srcstr[18], dststr[18];
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));
 	mac_ntop(ethh->h_dest, dststr, sizeof(dststr));
+        
         LOG_DBG("%s [%s %s 0x%04x]\n", 
                         skb->dev->name, srcstr, dststr, prot);
         */
-
         /* Ignore our own packets, e.g., broadcasts or multicasts. */
         if (memcmp(skb->dev->perm_addr, 
                    ethh->h_source, 
                    skb->dev->hard_header_len) == 0) 
                 return 0;
-	
+
         /* Set head to network part of packet */
-        skb_pull(skb, skb->dev->hard_header_len);
+        if (!pskb_pull(skb, skb->dev->hard_header_len))
+                return 0;
         
         /* Set network header offset */
         skb_reset_network_header(skb);
-        
+
         memcpy(skb_hard_dst(skb), ethh->h_source, ETH_ALEN);
 
         switch (prot) {

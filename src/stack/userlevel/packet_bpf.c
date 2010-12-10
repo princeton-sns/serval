@@ -158,8 +158,9 @@ static int packet_bpf_recv(struct net_device *dev)
         ep = priv->buf + ret;
         
         while ((unsigned char *)bh < ep) {
-                
-                skb = alloc_skb(bh->bh_caplen);
+                unsigned long data_len = bh->bh_caplen + 20;
+
+                skb = alloc_skb(data_len);
                 
                 if (!skb) {
                         LOG_ERR("could not allocate skb\n");
@@ -170,6 +171,7 @@ static int packet_bpf_recv(struct net_device *dev)
                 memcpy(skb->data, (char *)bh + bh->bh_hdrlen, 
                        bh->bh_caplen);
                 
+                skb_put(skb, bh->bh_caplen);
                 skb->dev = dev;
                 skb_reset_mac_header(skb);
                 skb->pkt_type = PACKET_HOST;

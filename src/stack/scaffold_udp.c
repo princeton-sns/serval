@@ -124,6 +124,7 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 	skb_set_owner_w(skb, sk);
+        skb_set_scaffold_packet_type(skb, PKT_TYPE_DATA);
         
         tot_len = skb->len + 20 + 14;
         
@@ -206,8 +207,6 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 FREE_SKB(skb);
                 goto out;
         }
-
-        skb_set_scaffold_packet_type(skb, PKT_TYPE_DATA);
 
         lock_sock(sk);
                 

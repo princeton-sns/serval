@@ -32,8 +32,8 @@ DEFINE_RWLOCK(dev_base_lock);
 struct net init_net = { 1 };
 
 struct list_head dev_base_head;
-struct hlist_head *dev_name_head;
-struct hlist_head *dev_index_head;
+struct hlist_head *dev_name_head = NULL;
+struct hlist_head *dev_index_head = NULL;
 static void *dev_thread(void *arg);
 
 /* A (white) list of interfaces to use. If empty, use all detected */
@@ -629,6 +629,7 @@ int netdev_init(void)
 	return 0;
 err_idx:
 	free(dev_name_head);
+        dev_name_head = NULL;
 err_name:
 	return -ENOMEM;
 }
@@ -667,6 +668,14 @@ void netdev_fini(void)
         }
         
         dev_list_destroy();
-        free(dev_name_head);
-        free(dev_index_head);
+
+        if (dev_name_head) {
+                free(dev_name_head);
+                dev_name_head = NULL;
+        }
+
+        if (dev_index_head) {
+                free(dev_index_head);
+                dev_index_head = NULL;
+        }
 }
