@@ -368,8 +368,6 @@ int netdev_populate_table(int sizeof_priv,
                 if (ifaddr->sdl_family != AF_LINK)
                         continue;
 
-                if (strncmp(name, "lo", 2) == 0)
-                        continue;
                 if (strncmp(name, "gif", 3) == 0)
                         continue;
                 if (strncmp(name, "stf", 3) == 0)

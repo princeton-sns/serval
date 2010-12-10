@@ -14,6 +14,7 @@ LOCAL_SRC_FILES := \
 	ctrl_handler.c \
 	af_scaffold.c \
 	scaffold_sock.c \
+	scaffold_srv.c \
 	scaffold_ipv4.c \
 	scaffold_udp.c \
 	scaffold_tcp.c \
@@ -42,6 +43,7 @@ SCAFFOLD_HDR = \
 	scaffold_sock.h \
 	scaffold_udp_sock.h \
 	scaffold_tcp_sock.h \
+	scaffold_srv.h \
 	scaffold_ipv4.h \
 	userlevel/packet.h \
 	userlevel/client_msg.h \
