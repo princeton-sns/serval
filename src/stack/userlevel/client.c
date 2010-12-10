@@ -269,7 +269,7 @@ int client_signal_lower(struct client *c)
 int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_bind_req *req = (struct client_msg_bind_req *)msg;
-        DEFINE_CLIENT_RESPONSE(rsp, MSG_BIND_RSP);
+        struct client_msg_bind_rsp rsp;
         struct socket *sock = c->sock;
         struct sockaddr_sf saddr;
 	int ret;
@@ -283,6 +283,9 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
+        client_msg_hdr_init(&rsp.msghdr, MSG_BIND_RSP);
+        memcpy(&rsp.srvid, &req->srvid, sizeof(req->srvid));
+        
         if (ret < 0) {
                 if (KERN_ERR(ret) == ERESTARTSYS) {
                         LOG_ERR("Bind was interrupted\n");

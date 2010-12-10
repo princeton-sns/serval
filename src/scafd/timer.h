@@ -8,6 +8,7 @@
 
 struct timer {
         struct list_head lh;
+        struct timeval timeout;
         unsigned long expires; /* Micro seconds */
         int (*callback)(struct timer *t);
         void (*destruct)(struct timer *t);

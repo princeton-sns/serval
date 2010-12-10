@@ -126,25 +126,15 @@ SFSockLib::get_cli(int soc, sf_err_t &err)
 {
   struct list_head *pos;
 
-  debug("get cli soc=%d", soc);
-
-  if (list_empty(&_cli_list)) {
-    debug("cli list is empty");
-  }
-
   list_for_each(pos, &_cli_list) {
     Cli *c = (Cli *)pos;
-    debug("cli %s", c->s());
     if (c->fd() == soc) {
-      debug("found");
       return *c;
     }
   }
 
-  debug("not found");
   err = EBADF;
   return null_cli;
-
 }
 
 int
@@ -178,7 +168,6 @@ int
 SFSockLib::bind_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
                    sf_err_t &err)
 {
-  info("bind_sf: soc = %d", soc);
   Cli &cli = get_cli(soc, err);
   if (cli.is_null() ||
       basic_checks(soc, addr, addr_len, true, err) < 0)
