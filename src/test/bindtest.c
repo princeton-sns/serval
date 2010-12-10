@@ -35,7 +35,10 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
-	ret = send_sf(sock, &data, sizeof(data), 0);
+	addr.sf_srvid.s_sid16 = htons(8);
+
+	ret = sendto_sf(sock, &data, sizeof(data), 0, 
+                        (struct sockaddr *)&addr, sizeof(addr));
 
 	if (ret == -1) {
 		fprintf(stderr, "sendto: %s\n", strerror_sf(errno));

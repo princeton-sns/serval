@@ -7,10 +7,34 @@
 #include <scaffold/lock.h>
 #include <scaffold/sock.h>
 #include <scaffold/net.h>
-
-#if !defined(__KERNEL__)
+#if defined(OS_USER)
 #include <string.h>
 #endif
+
+enum scaffold_sock_state {
+        SCAFFOLD_CLOSED = 1, 
+        SCAFFOLD_REGISTER,
+        SCAFFOLD_UNBOUND,
+        SCAFFOLD_REQUEST,
+        SCAFFOLD_RESPOND,
+        SCAFFOLD_BOUND,
+        SCAFFOLD_CLOSING,
+        SCAFFOLD_TIMEWAIT,
+        SCAFFOLD_UNREGISTER,
+        SCAFFOLD_MIGRATE,
+        SCAFFOLD_RECONNECT,
+        SCAFFOLD_RRESPOND,
+        SCAFFOLD_LISTEN,
+        /* TCP only */
+        TCP_FINWAIT1,
+        TCP_FINWAIT2,
+        TCP_CLOSEWAIT,
+        TCP_LASTACK,
+        TCP_SIMCLOSE,
+};
+
+#define SCAFFOLD_SOCK_STATE_MIN (1)
+#define SCAFFOLD_SOCK_STATE_MAX (TCP_SIMCLOSE)
 
 enum scaffold_sock_flags {
         SCAFFOLD_FLAG_HOST_CTRL_MODE = 0,
@@ -20,7 +44,7 @@ enum scaffold_sock_flags {
 struct scaffold_sock {
 	/* NOTE: sk has to be the first member */
 	struct sock		sk;
-#if !defined(__KERNEL__)
+#if defined(OS_USER)
         struct client           *client;
 #endif
         unsigned char           flags;

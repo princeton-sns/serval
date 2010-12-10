@@ -12,7 +12,6 @@ enum ctrlmsg_type {
 	CTRLMSG_TYPE_REGISTER,
 	CTRLMSG_TYPE_UNREGISTER,
 	CTRLMSG_TYPE_IFACE_CONF,
-	CTRLMSG_TYPE_SET_CONTROL_MODE,
 	CTRLMSG_TYPE_SET_SERVICE,
 	CTRLMSG_TYPE_UNKNOWN,
 };
@@ -34,6 +33,7 @@ struct ctrlmsg_register {
 #define CTRLMSG_UNREGISTER_SIZE (sizeof(struct ctrlmsg_register))
 
 #define IFFLAG_UP 0x1
+#define IFFLAG_HOST_CTRL_MODE 0x2
 
 struct ctrlmsg_iface_conf {
 	struct ctrlmsg cmh;
@@ -49,13 +49,6 @@ enum {
 	CTRL_MODE_NET = 0,
 	CTRL_MODE_HOST = 1
 };
-
-struct ctrlmsg_control_mode {
-	struct ctrlmsg cmh;
-	unsigned char mode;
-};
-
-#define CTRLMSG_CONTROL_MODE_SIZE (sizeof(struct ctrlmsg_control_mode))
 
 struct ctrlmsg_service {
 	struct ctrlmsg cmh;

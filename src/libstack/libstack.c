@@ -20,23 +20,13 @@ int libstack_configure_interface(const char *ifname,
 	cm.cmh.type = CTRLMSG_TYPE_IFACE_CONF;
 	cm.cmh.len = sizeof(cm);
 	strncpy(cm.ifname, ifname, IFNAMSIZ - 1);
-        memcpy(&cm.asaddr, asaddr, sizeof(*asaddr));
-        memcpy(&cm.haddr, haddr, sizeof(*haddr));
+        if (asaddr)
+                memcpy(&cm.asaddr, asaddr, sizeof(*asaddr));
+        if (haddr)
+                memcpy(&cm.haddr, haddr, sizeof(*haddr));
 	cm.flags = flags;
 
 	return event_sendmsg(&cm, cm.cmh.len);
-}
-
-int libstack_set_control_mode(int mode)
-{
-        struct ctrlmsg_control_mode cm;
-
-        memset(&cm, 0, sizeof(cm));
-        cm.cmh.type = CTRLMSG_TYPE_SET_CONTROL_MODE;
-        cm.cmh.len = sizeof(cm);
-        cm.mode = mode & 0xff;
-
-        return event_sendmsg(&cm, cm.cmh.len);
 }
 
 int libstack_set_service(struct service_id *srvid, const char *ifname)

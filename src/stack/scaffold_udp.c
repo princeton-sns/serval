@@ -104,7 +104,7 @@ static void udp_checksum(uint16_t total_len,
         csum = ~in_cksum((unsigned char *)uh, len) & 0xFFFF;
         csum += src & 0xffff;
         csum += (src >> 16) & 0xffff;
-        csum += htons(SF_PROTO_UDP) + htons(len);
+        csum += htons(SCAFFOLD_PROTO_UDP) + htons(len);
         csum = (csum & 0xFFFF) + (csum >> 16);
         uh->check = ~csum & 0xFFFF;
 }
@@ -127,7 +127,7 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         
         /* Build UDP header */
         uh->source = scaffold_sk(sk)->local_srvid.s_sid16;
-        uh->dest = scaffold_sk(sk)->peer_srvid.s_sid16;
+        uh->dest = skb_dst_service_id(skb)->s_sid16;
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_ip.s_addr);
 
@@ -162,7 +162,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         LOG_DBG("sending message\n");
 
-	if (msg->msg_name) {
+	if (msg->msg_name && sk->sk_state == SCAFFOLD_UNBOUND) {
 		struct sockaddr_sf *addr = 
                         (struct sockaddr_sf *)msg->msg_name;
 
@@ -174,10 +174,8 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		}
                 
                 srvid = &addr->sf_srvid;
-        } else {
-                   if (sk->sk_state != SF_BOUND) {
-                           return -EDESTADDRREQ;
-                   }
+        } else if (sk->sk_state != SCAFFOLD_BOUND) {
+                return -EDESTADDRREQ;
         }
 
         ulen += sizeof(struct udphdr);
@@ -235,10 +233,10 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
         
         lock_sock(sk);
         
-        if (sk->sk_state != SF_UNBOUND && 
-            sk->sk_state != SF_BOUND && 
-            sk->sk_state != SF_CLOSED) {
-                /* SF_CLOSED is a valid state here because recvmsg
+        if (sk->sk_state != SCAFFOLD_UNBOUND && 
+            sk->sk_state != SCAFFOLD_BOUND && 
+            sk->sk_state != SCAFFOLD_CLOSED) {
+                /* SCAFFOLD_CLOSED is a valid state here because recvmsg
                  * should return 0 and not an error */
 		retval = -ENOTCONN;
 		goto out;
@@ -258,7 +256,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		if (skb)
 			goto found_ok_skb;
 	
-		if (sk->sk_state >= SF_CLOSED) {
+		if (sk->sk_state >= SCAFFOLD_CLOSED) {
                         /*
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;

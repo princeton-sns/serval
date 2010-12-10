@@ -4,6 +4,8 @@
 #include <libstack/ctrlmsg.h>
 #include "ctrl.h"
 
+extern int host_ctrl_mode;
+
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
 	LOG_DBG("control message type %u\n", cm->type);
@@ -30,18 +32,19 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
 
         /* TODO: Configure as and host addr */
 
+        /* TODO: Currently host control mode is on a per interface
+         * basis, but we have a global control flag. We need a better
+         * way to figure out the stack's control mode. */
+        if (ifcm->flags & IFFLAG_HOST_CTRL_MODE) {
+                LOG_DBG("setting host control mode\n");
+                host_ctrl_mode = 1;
+        } else {
+                host_ctrl_mode = 0;
+        }
+
         dev_put(dev);
         
         return ret;
-}
-
-static int ctrl_handle_set_control_mode_msg(struct ctrlmsg *cm)
-{
-        //struct ctrlmsg_control_mode *ccm = (struct ctrlmsg_control_mode *)cm;
-
-        LOG_DBG("\n");
- 
-        return 0;
 }
 
 static int ctrl_handle_set_service_msg(struct ctrlmsg *cm)
@@ -57,6 +60,5 @@ ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         ctrl_handle_iface_conf_msg,
-        ctrl_handle_set_control_mode_msg,
         ctrl_handle_set_service_msg
 };

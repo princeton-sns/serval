@@ -79,10 +79,10 @@ SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)
   if (!proto) {
     switch (type) {
     case SOCK_DGRAM:
-      proto = SF_PROTO_UDP;
+      proto = SCAFFOLD_PROTO_UDP;
       break;
     case SOCK_STREAM:
-      proto = SF_PROTO_TCP;
+      proto = SCAFFOLD_PROTO_TCP;
       break;
     default:
       lerr("Unsupported socket type\n");
@@ -659,10 +659,10 @@ SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
   // create a new soc for this accepted connection
   struct sockaddr_un *srv = NULL;
   switch (proto.v) {
-  case SF_PROTO_UDP:
+  case SCAFFOLD_PROTO_UDP:
     srv = &_udp_srv;
     break;
-  case SF_PROTO_TCP:
+  case SCAFFOLD_PROTO_TCP:
     srv = &_tcp_srv;
     break;
   default:
@@ -874,7 +874,7 @@ SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
   sreq.print("send:app:tx");
     
   bool got_havedata_msg = false;
-  if (cli.proto().v == SF_PROTO_TCP) {
+  if (cli.proto().v == SCAFFOLD_PROTO_TCP) {
 
     Message m;
     if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0)
@@ -1031,7 +1031,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 {
   info("query_scafd_recv");
   bool got_havedata_msg = false;
-  if (cli.proto().v == SF_PROTO_TCP) {
+  if (cli.proto().v == SCAFFOLD_PROTO_TCP) {
     if (nb) {  // NON-BLOCKING
       // first check for null HaveData message
       // this is used to activate select
@@ -1111,7 +1111,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
     return SCAFFOLD_SOCKET_ERROR;
   }
 
-  if (cli.proto().v == SF_PROTO_TCP && m.type() == Message::HAVE_DATA) {
+  if (cli.proto().v == SCAFFOLD_PROTO_TCP && m.type() == Message::HAVE_DATA) {
     info("Got HaveData before RecvRsp; discarding");
     HaveData hdata;
     hdata.read_pld_from_stream_soc(cli.fd(), err);
@@ -1131,7 +1131,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
   // We read RecvRsp header; now send a ClearData message if TCP NON-BLOCKING
   // OR, if we received a HaveData in blocking mode to wake up 
   // a select(), to clear the notification
-  if (cli.proto().v == SF_PROTO_TCP && (nb || got_havedata_msg)) {
+  if (cli.proto().v == SCAFFOLD_PROTO_TCP && (nb || got_havedata_msg)) {
     ClearData cdata;
     if (cdata.write_to_stream_soc(cli.fd(), err) < 0) {
       lerr("Error writing ClearData to stream");

@@ -10,7 +10,6 @@ static unsigned int ctrlmsg_sizes[] = {
         CTRLMSG_SIZE,
         CTRLMSG_REGISTER_SIZE,
         CTRLMSG_IFACE_CONF_SIZE,
-        CTRLMSG_CONTROL_MODE_SIZE,
         CTRLMSG_SERVICE_SIZE,
         CTRLMSG_UNREGISTER_SIZE
 };

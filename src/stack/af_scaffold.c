@@ -40,6 +40,7 @@ extern struct proto scaffold_tcp_proto;
 
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
+int host_ctrl_mode = 0;
 
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
                                       gfp_t priority, int protocol, 
@@ -122,7 +123,7 @@ static int scaffold_autobind(struct sock *sk)
                 }
         }
 #endif
-        scaffold_sock_set_state(sk, SF_UNBOUND);
+        scaffold_sock_set_state(sk, SCAFFOLD_UNBOUND);
         release_sock(sk);
 
         return 0;
@@ -131,7 +132,7 @@ static int scaffold_autobind(struct sock *sk)
 int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 {
         struct sock *sk = sock->sk;
-        struct scaffold_sock *ssk = scaffold_sk(sk);
+        //struct scaffold_sock *ssk = scaffold_sk(sk);
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
         int ret = 0, cond = 1;
         
@@ -148,9 +149,9 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         LOG_DBG("handling bind\n");
 
-        if (scaffold_sock_flag(ssk, SCAFFOLD_FLAG_HOST_CTRL_MODE)) {
+        if (host_ctrl_mode) {
                 ret = 1;
-                scaffold_sock_set_state(sk, SF_BOUND);
+                scaffold_sock_set_state(sk, SCAFFOLD_UNBOUND);
         } else {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
@@ -171,7 +172,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
            do not wait for a reply 
         */
         if (ret == 1) {
-                LOG_DBG("socket in controller mode\n");
+                LOG_DBG("in controller mode\n");
                 release_sock(sk);
                 ret = 0;
         } else if (ret == 0) {
@@ -200,7 +201,6 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         return ret;
 }
 
-
 static int scaffold_listen(struct socket *sock, int backlog)
 {
 	struct sock *sk = sock->sk;
@@ -213,7 +213,7 @@ static int scaffold_listen(struct socket *sock, int backlog)
 
         LOG_DBG("listening on socket\n");
 
-	if (sk->sk_state == SF_UNBOUND) {
+	if (sk->sk_state == SCAFFOLD_UNBOUND) {
                 sk->sk_max_ack_backlog = backlog;               
 //                retval = sfnet_handle_listen_socket(sk, backlog);
 	}
@@ -275,12 +275,12 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                         break;
                 }
 
-                if (sk->sk_state == SF_CLOSED) {
+                if (sk->sk_state == SCAFFOLD_CLOSED) {
 			release_sock(sk);
 			continue;
 		}
                
-		if (1 /*sk->sk_state == SF_BOUND || !newsock */) {
+		if (1 /*sk->sk_state == SCAFFOLD_BOUND || !newsock */) {
 
 			if (newsock)
 				sock_graft(sk, newsock);
@@ -310,7 +310,7 @@ static int scaffold_accept(struct socket *sock, struct socket *newsock,
 
 	lock_sock(sk);
 
-	if (sk->sk_state != SF_LISTEN) {
+	if (sk->sk_state != SCAFFOLD_LISTEN) {
 		err = -EBADFD;
 		goto done;
 	}
@@ -333,7 +333,7 @@ static int scaffold_accept(struct socket *sock, struct socket *newsock,
 		timeo = schedule_timeout(timeo);
 		lock_sock(sk);
 
-                if (sk->sk_state != SF_LISTEN) {
+                if (sk->sk_state != SCAFFOLD_LISTEN) {
                         err = -EBADFD;
                         break;
                 }
@@ -391,18 +391,18 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         
         lock_sock(sk);
         
-        if (sk->sk_state == SF_BOUND) {
+        if (sk->sk_state == SCAFFOLD_BOUND) {
                 release_sock(sk);
                 return -EISCONN;
         }
 
-        if (sk->sk_state >= SF_REQUEST) {
+        if (sk->sk_state >= SCAFFOLD_REQUEST) {
                 release_sock(sk);
                 return -EINPROGRESS;
         }
         
-        if (sk->sk_state != SF_UNBOUND && 
-            sk->sk_state != SF_NEW) {
+        if (sk->sk_state != SCAFFOLD_UNBOUND && 
+            sk->sk_state != SCAFFOLD_CLOSED) {
                 release_sock(sk);
                 return -EINVAL;
         }
@@ -455,13 +455,14 @@ static int scaffold_sendmsg(struct kiocb *iocb, struct socket *sock,
 	struct sock *sk = sock->sk;
 
 	/* We may need to bind the socket. */
-	if (sk->sk_state == SF_NEW && scaffold_autobind(sk) < 0)
+	if (sk->sk_state == SCAFFOLD_CLOSED && scaffold_autobind(sk) < 0)
 		return -EAGAIN;
 
 	return sk->sk_prot->sendmsg(iocb, sk, msg, size);
 }
 
-static int scaffold_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
+static int scaffold_recvmsg(struct kiocb *iocb, struct socket *sock, 
+                            struct msghdr *msg,
                             size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
@@ -500,7 +501,7 @@ static int scaffold_shutdown(struct socket *sock, int how)
 	}
 
 	switch (sk->sk_state) {
-	case SF_CLOSED:
+	case SCAFFOLD_CLOSED:
 		err = -ENOTCONN;
 		/* Hack to wake up other listeners, who can poll for
 		   POLLHUP, even on eg. unconnected UDP sockets -- RR */
@@ -514,11 +515,11 @@ static int scaffold_shutdown(struct socket *sock, int how)
 	 * close() in multithreaded environment. It is _not_ a good idea,
 	 * but we have no choice until close() is repaired at VFS level.
 	 */
-	case SF_LISTEN:
+	case SCAFFOLD_LISTEN:
 		if (!(how & RCV_SHUTDOWN))
 			break;
 		/* Fall through */
-	case SF_REQUEST:
+	case SCAFFOLD_REQUEST:
 		err = sk->sk_prot->disconnect(sk, O_NONBLOCK);
 		sock->state = err ? SS_DISCONNECTING : SS_UNCONNECTED;
 		break;
@@ -568,7 +569,7 @@ static unsigned int scaffold_poll(struct file *file, struct socket *sock,
 	poll_wait(file, sk_sleep(sk), wait);
 	mask = 0;
 
-        if (sk->sk_state == SF_LISTEN) {
+        if (sk->sk_state == SCAFFOLD_LISTEN) {
                 //return !sfnet_accept_queue_empty(sk) ? (POLLIN | POLLRDNORM) : 0;
 
                 return 0;
@@ -596,7 +597,7 @@ static unsigned int scaffold_poll(struct file *file, struct socket *sock,
 
 	/* Connection-based need to check for termination and startup */
 	if ((sk->sk_type == SOCK_STREAM || sk->sk_type == SOCK_DGRAM) && 
-            sk->sk_state == SF_CLOSED)
+            sk->sk_state == SCAFFOLD_CLOSED)
 		mask |= POLLHUP;
 
 	if (sock_writeable(sk))
@@ -615,7 +616,7 @@ static int scaffold_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 	switch (cmd) {
 /*
 		case SIOCSFMIGRATE:
-                        if (sk->sk_state != SF_BOUND) {
+                        if (sk->sk_state != SCAFFOLD_BOUND) {
                                 ret = -EINVAL;
                                 break;
                         }
@@ -678,7 +679,7 @@ static void scaffold_sock_destruct(struct sock *sk)
         __skb_queue_purge(&sk->sk_receive_queue);
 	/* __skb_queue_purge(&sk->sk_error_queue); */
 
-	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SF_CLOSED) {
+	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SCAFFOLD_CLOSED) {
 		LOG_ERR("Attempt to release Scaffold TCP socket in state %d %p\n",
                         sk->sk_state, sk);
 		return;
@@ -714,7 +715,7 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 		return NULL;
 
 	sock_init_data(sock, sk);
-        
+        sk->sk_state = SCAFFOLD_CLOSED;
         sk->sk_family = PF_SCAFFOLD;
 	sk->sk_protocol	= protocol;
 	sk->sk_destruct	= scaffold_sock_destruct;
@@ -749,7 +750,9 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
         
         LOG_DBG("Creating SCAFFOLD socket\n");
 
-        if (protocol && (protocol != SF_PROTO_UDP && protocol != SF_PROTO_TCP))
+        if (protocol && 
+            (protocol != SCAFFOLD_PROTO_UDP && 
+             protocol != SCAFFOLD_PROTO_TCP))
 		return -EPROTONOSUPPORT;
         
 	sock->state = SS_UNCONNECTED;
@@ -757,7 +760,7 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 	switch (sock->type) {
                 case SOCK_DGRAM:
                         if (!protocol) 
-                                protocol = SF_PROTO_UDP;
+                                protocol = SCAFFOLD_PROTO_UDP;
                         sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
@@ -766,7 +769,7 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
                         break;
                 case SOCK_STREAM: 
                         if (!protocol)
-                                protocol = SF_PROTO_TCP;
+                                protocol = SCAFFOLD_PROTO_TCP;
                         sock->ops = &scaffold_ops;
                         sk = scaffold_sk_alloc(net, sock, 
                                                GFP_KERNEL, 

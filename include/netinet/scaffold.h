@@ -26,41 +26,14 @@
 #define AF_SCAFFOLD 27
 #define PF_SCAFFOLD AF_SCAFFOLD   /* include/linux/socket.h */
 
-#define SF_PROTO_TCP 6
-#define SF_PROTO_UDP 17
+#define SCAFFOLD_PROTO_TCP 6
+#define SCAFFOLD_PROTO_UDP 17
 
 /* Ethernet protocol number */
 #define ETH_P_SCAFFOLD 0x0809
 
 /* IP Protocol number */
 #define IPPROTO_SCAFFOLD 43
-
-enum scaffold_sock_state { 
-        SF_NEW = 0, 
-        SF_REGISTER,
-        SF_UNBOUND,
-        SF_REQUEST,
-        SF_LISTEN,
-        SF_RESPOND,
-        SF_BOUND,
-        SF_CLOSING,
-        SF_TIMEWAIT,
-        SF_CLOSED,
-        SF_UNREGISTER,
-        SF_MIGRATE,
-        SF_RECONNECT,
-        SF_RRESPOND,
-        SF_GARBAGE,
-        /* TCP only */
-        TCP_FINWAIT1,
-        TCP_FINWAIT2,
-        TCP_CLOSEWAIT,
-        TCP_LASTACK,
-        TCP_SIMCLOSE,
-};
-
-#define SCAFFOLD_SOCK_STATE_MIN (0)
-#define SCAFFOLD_SOCK_STATE_MAX (TCP_SIMCLOSE)
 
 struct service_id {
         union { 

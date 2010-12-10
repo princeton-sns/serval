@@ -23,7 +23,7 @@
 
 static int scaffold_sock_is_valid_conn_state(int state)
 {
-        return (state == SF_BOUND ||
+        return (state == SCAFFOLD_BOUND ||
                 state == TCP_FINWAIT1 ||
                 state == TCP_FINWAIT2 ||
                 state == TCP_SIMCLOSE ||
@@ -142,12 +142,12 @@ static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
                
         lock_sock(sk);
         
-        if (sk->sk_state == SF_RECONNECT) {
+        if (sk->sk_state == SCAFFOLD_RECONNECT) {
                 release_sock(sk);
                 
                 LOG_DBG("af_scaffold: in RECONNECT. Waiting...\n");
 
-                ret = wait_event_interruptible(*sk_sleep(sk), sk->sk_state != SF_RECONNECT);
+                ret = wait_event_interruptible(*sk_sleep(sk), sk->sk_state != SCAFFOLD_RECONNECT);
                 
                 /* Check if we were interrupted */
                 if (ret != 0) {
@@ -157,7 +157,7 @@ static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 
                 lock_sock(sk);
                 
-                if (sk->sk_state != SF_BOUND)  {
+                if (sk->sk_state != SCAFFOLD_BOUND)  {
                         release_sock(sk);
                         return -ENOTCONN;
                 }
@@ -219,8 +219,8 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 ssize_t datalen = 0;
 
                 if (!scaffold_sock_is_valid_conn_state(sk->sk_state)) {
-                        if (sk->sk_state == SF_RECONNECT) {
-                                LOG_DBG("af_scaffold: in RECONNECT. Waiting...\n");
+                        if (sk->sk_state == SCAFFOLD_RECONNECT) {
+                                LOG_DBG("RECONNECT. Waiting\n");
                                 
                                 if (msg->msg_flags & MSG_DONTWAIT) {
                                         //LOG_DBG("send(): MSG_DONTWAIT set, returning -EWOULDBLOCK\n");
@@ -240,7 +240,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
                                 lock_sock(sk);
 
-                                if (sk->sk_state != SF_BOUND)  {
+                                if (sk->sk_state != SCAFFOLD_BOUND)  {
                                         retval = -ENOTCONN;
                                         break;
                                 }
@@ -318,7 +318,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         LOG_DBG("could not copy data, len=%zu\n", len);
 			break;
 		} else if (retval == 0) {
-                        LOG_DBG("%s: retval is 0 after recv_socket\n", __FUNCTION__);
+                        LOG_DBG("retval is 0 after recv_socket\n");
                 }
                 tot_bytes_read += len;
 		break;

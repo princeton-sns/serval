@@ -79,12 +79,18 @@ static ssize_t scafd_recvfrom(int sock, void *buf, size_t len, int flags,
 
 int join_timeout(struct timer *t)
 {
-        LOG_DBG("Join timed out for interface %s\n",
+        int ret;
+        
+        LOG_DBG("Join timeout for %s. Setting host control mode\n",
                 (char *)t->data);
+
+        ret = libstack_configure_interface((char *)t->data, 
+                                           NULL, NULL, 
+                                           IFFLAG_HOST_CTRL_MODE);
 
         timer_destroy(t);
 
-        return libstack_set_control_mode(CTRL_MODE_HOST);
+        return ret;
 }
 
 void join_timer_destroy(struct timer *t)

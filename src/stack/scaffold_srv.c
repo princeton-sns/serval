@@ -58,7 +58,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 	struct net_device *dev;
 	int err = 0;
 
-	if (sk->sk_state == SF_BOUND) {
+	if (sk->sk_state == SCAFFOLD_BOUND) {
 		err = scaffold_ipv4_xmit_skb(sk, skb);
                 
 		if (err < 0) {

@@ -15,21 +15,20 @@ struct scaffold_table established_table;
 struct scaffold_table listen_table;
 
 static const char *sock_state_str[] = {
-        "SF_NEW", 
-        "SF_REGISTER",
-        "SF_UNBOUND",
-        "SF_REQUEST",
-        "SF_LISTEN",
-        "SF_RESPOND",
-        "SF_BOUND",
-        "SF_CLOSING",
-        "SF_TIMEWAIT",
-        "SF_CLOSED",
-        "SF_UNREGISTER",
-        "SF_MIGRATE",
-        "SF_RECONNECT",
-        "SF_RRESPOND",
-        "SF_GARBAGE",
+        "UNDEFINED",
+        "SCAFFOLD_CLOSED",
+        "SCAFFOLD_REGISTER",
+        "SCAFFOLD_UNBOUND",
+        "SCAFFOLD_REQUEST",
+        "SCAFFOLD_RESPOND",
+        "SCAFFOLD_BOUND",
+        "SCAFFOLD_CLOSING",
+        "SCAFFOLD_TIMEWAIT",
+        "SCAFFOLD_UNREGISTER",
+        "SCAFFOLD_MIGRATE",
+        "SCAFFOLD_RECONNECT",
+        "SCAFFOLD_RRESPOND",
+        "SCAFFOLD_LISTEN",
         /* TCP only */
         "TCP_FINWAIT1",
         "TCP_FINWAIT2",
@@ -204,7 +203,7 @@ static void __scaffold_sock_hash(struct sock *sk)
         
         LOG_DBG("hashing socket\n");
 
-        if (sk->sk_state == SF_LISTEN) {
+        if (sk->sk_state == SCAFFOLD_LISTEN) {
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_srvid;
                 __scaffold_table_hash(&listen_table, sk);
 
@@ -216,7 +215,7 @@ static void __scaffold_sock_hash(struct sock *sk)
 
 void scaffold_sock_hash(struct sock *sk)
 {
-        if (sk->sk_state != SF_CLOSED) {
+        if (sk->sk_state != SCAFFOLD_CLOSED) {
 		local_bh_disable();
 		__scaffold_sock_hash(sk);
 		local_bh_enable();
@@ -231,7 +230,7 @@ void scaffold_sock_unhash(struct sock *sk)
         LOG_DBG("unhashing socket\n");
 
         /* grab correct lock */
-        if (sk->sk_state == SF_LISTEN) {
+        if (sk->sk_state == SCAFFOLD_LISTEN) {
                 lock = &scaffold_hashslot(&listen_table, net, 
                                           &scaffold_sk(sk)->local_srvid, 
                                           sizeof(struct service_id))->lock;
