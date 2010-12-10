@@ -667,4 +667,6 @@ void netdev_fini(void)
         }
         
         dev_list_destroy();
+        free(dev_name_head);
+        free(dev_index_head);
 }
