@@ -90,10 +90,10 @@ static int unix_handle_init(struct event_handler *eh)
 out:
 	return ret;
 error_connect:
-	unlink(SCAFFOLD_SCAFD_CTRL_PATH);
 error_bind:
 	close(uh->sock);
 	uh->sock = -1;
+	unlink(SCAFFOLD_SCAFD_CTRL_PATH);
 error_sock:
 	event_unregister_handler(eh);
 	goto out;
@@ -102,10 +102,11 @@ error_sock:
 static void unix_handle_destroy(struct event_handler *eh)
 {
 	struct unix_handle *uh = (struct unix_handle *)eh->private;
+        LOG_DBG("closing sock\n");
 	if (uh->sock != -1) {
 		close(uh->sock);
-		unlink(SCAFFOLD_SCAFD_CTRL_PATH);
 	}
+        unlink(SCAFFOLD_SCAFD_CTRL_PATH);
 }
 
 static int unix_handle_event(struct event_handler *eh)
@@ -164,14 +165,17 @@ static struct event_handler eh = {
 	.private = (void *)&uh
 };
 
-__onload
-void unix_init(void)
-{
-	event_register_handler(&eh);
-}
-
 __onexit
 void unix_fini(void)
 {
 	event_unregister_handler(&eh);
+}
+
+__onload
+void unix_init(void)
+{
+#if defined(__BIONIC__)
+        atexit(unix_fini);
+#endif
+	event_register_handler(&eh);
 }

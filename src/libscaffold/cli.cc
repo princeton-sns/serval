@@ -25,7 +25,7 @@ uint32_t Cli::_UNIX_ID = 0;
 
 #if defined(OS_ANDROID)
 # define SUN_LEN(ptr) ((size_t) (((struct sockaddr_un *) 0)->sun_path))
-#define UNIXCLI_STR "/cache/unixcli_%d_%d.str"
+#define UNIXCLI_STR "/data/local/tmp/unixcli_%d_%d.str"
 #else
 #define UNIXCLI_STR "/tmp/unixcli_%d_%d.str"
 #endif
@@ -39,6 +39,8 @@ Cli::Cli(int fd)
   _err = 0;
   bzero(&_cli, sizeof(_cli));
   _proto.v = SCAFFOLD_PROTO_UDP;
+
+  INIT_LIST_HEAD(&lh);
 }
 
 Cli::Cli(const Cli &c)
@@ -51,10 +53,12 @@ Cli::Cli(const Cli &c)
   // sun_path is never anonymous; we always bind
   strcpy(_cli.sun_path, c._cli.sun_path);
   _proto.v = SCAFFOLD_PROTO_UDP;
+  INIT_LIST_HEAD(&lh);
 }
 
 Cli::~Cli()
 {
+  list_del(&lh);
   unlink(_cli.sun_path);
 }
 

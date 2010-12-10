@@ -19,7 +19,7 @@
 // DEALINGS IN THE WORK.
 
 #include "log.hh"
-
+#include <scaffold/platform.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/file.h>
@@ -34,8 +34,13 @@
 char *Logger::_dirname = NULL;
 char *Logger::_log_fname = NULL;
 
-#define DIRNAME_STR "log/"
-const char *Logger::PREFIX = "/tmp/"; // todo: autoconf
+#define DIRNAME_STR "log"
+#if defined(OS_ANDROID)
+const char *Logger::PREFIX = "/data/local/tmp"; // todo: autoconf
+#else
+const char *Logger::PREFIX = "/tmp"; // todo: autoconf
+#endif
+
 FILE *Logger::_logfd = 0;
 bool Logger::_initialized = false;
 Logger::Level Logger::_debug_level = (Level)(_MAX - 1);
@@ -74,8 +79,7 @@ Logger::initialize(const char *name)
         if (!_dirname)
             return -1;
 
-        strcpy(_dirname, PREFIX);
-        strcpy(_dirname + strlen(PREFIX), DIRNAME_STR);
+        sprintf(_dirname, "%s/%s", PREFIX, DIRNAME_STR);
 
         setup_logfd();
 
@@ -158,7 +162,25 @@ Logger::get_level_str(Level level)
 void
 Logger::setup_logfd()
 {
+#define BUFLEN 256
+    char buf[BUFLEN];
     setup_log_dir();
+
+    if (_logfd) {
+        fclose(_logfd);
+        _logfd = NULL;
+    }
+
+    memset(buf, 0, BUFLEN);
+
+    snprintf(buf, BUFLEN - 1, "%s/%s", dirname(), log_fname());
+    
+    _logfd = fopen(buf, "w");
+    
+    if (!_logfd) {
+        fprintf(stderr, "Could not open log fd at %s, directing to /dev/null\n", buf);
+        _logfd = fopen("/dev/null", "w");
+    } 
 }
 
 int

@@ -66,11 +66,11 @@ struct ctrlmsg_service {
 
 
 #if defined(OS_ANDROID)
-#define SCAFFOLD_STACK_CTRL_PATH "/cache/scaffold-stack-ctrl.sock"
-#define SCAFFOLD_SCAFD_CTRL_PATH "/cache/scaffold-scafd-ctrl.sock"
+#define SCAFFOLD_STACK_CTRL_PATH "/data/local/tmp/scaffold-stack-ctrl.sock"
+#define SCAFFOLD_SCAFD_CTRL_PATH "/data/local/tmp/scaffold-libstack-ctrl.sock"
 #else
 #define SCAFFOLD_STACK_CTRL_PATH "/tmp/scaffold-stack-ctrl.sock"
-#define SCAFFOLD_SCAFD_CTRL_PATH "/tmp/scaffold-scafd-ctrl.sock"
+#define SCAFFOLD_SCAFD_CTRL_PATH "/tmp/scaffold-libstack-ctrl.sock"
 #endif
 
 #endif /* LIBSTACK_CTRLMSG_H */

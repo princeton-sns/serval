@@ -19,10 +19,17 @@
 // DEALINGS IN THE WORK.
 
 #include "socket.hh"
+#include <scaffold/platform.h>
 
+#if defined(OS_ANDROID)
+const char *SFSockLib::DEFAULT_SF_CFG = "/data/local/tmp/scaffold.conf";
+const char *SFSockLib::SCAFD_TCP_PATH = "/data/local/tmp/scaffold-tcp.sock";
+const char *SFSockLib::SCAFD_UDP_PATH = "/data/local/tmp/scaffold-udp.sock";
+#else
 const char *SFSockLib::DEFAULT_SF_CFG = "/etc/scaffold.conf";
 const char *SFSockLib::SCAFD_TCP_PATH = "/tmp/scaffold-tcp.sock";
 const char *SFSockLib::SCAFD_UDP_PATH = "/tmp/scaffold-udp.sock";
+#endif
 Cli SFSockLib::null_cli;
 uint32_t SFSockLib::_scafd_id = 0;
 
@@ -58,10 +65,13 @@ SFSockLib::SFSockLib(int scafd_id)
   bzero(&_tcp_srv, sizeof(_tcp_srv));
   _tcp_srv.sun_family = AF_LOCAL;
   sprintf(_tcp_srv.sun_path, SCAFD_TCP_PATH, _scafd_id);
+
+  INIT_LIST_HEAD(&_cli_list);
 }
 
 SFSockLib::~SFSockLib()
-{ }
+{ 
+}
 
 int
 SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)

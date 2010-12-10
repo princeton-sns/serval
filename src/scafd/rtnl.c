@@ -250,9 +250,10 @@ int rtnl_read(struct netlink_handle *nlh)
 
 		num_msgs++;
 
-                LOG_DBG("Netlink message type %u\n", 
+                /*
+                  LOG_DBG("Netlink message type %u\n", 
                         nlm->nlmsg_type);
-
+                */
 		switch (nlm->nlmsg_type) {
 		case NLMSG_ERROR:
 			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
@@ -276,10 +277,8 @@ int rtnl_read(struct netlink_handle *nlh)
 			/* TODO: Should find a good way to sort out
 			 * unwanted interfaces. */
 			if (ifinfo.isUp) {
-				
-				if (get_ipconf(&ifinfo) < 0) {
+				if (get_ipconf(&ifinfo) < 0)
 					break;
-				}
 
 				if (ifinfo.mac[0] == 0 &&
                                     ifinfo.mac[1] == 0 &&
@@ -288,9 +287,9 @@ int rtnl_read(struct netlink_handle *nlh)
                                     ifinfo.mac[4] == 0 &&
                                     ifinfo.mac[5] == 0)
                                         break;
-                        }
 						
-			scafd_send_join(ifinfo.ifname);
+                                scafd_send_join(ifinfo.ifname);
+                        }
 			break;
 		}
 		case RTM_DELLINK:

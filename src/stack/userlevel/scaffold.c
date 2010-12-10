@@ -68,8 +68,8 @@ void garbage_collect_clients(unsigned long data)
 #define NUM_SERVER_SOCKS 2
 
 #if defined(OS_ANDROID)
-#define UDP_SERVER_PATH "/cache/scaffold-udp.sock"
-#define TCP_SERVER_PATH "/cache/scaffold-tcp.sock"
+#define UDP_SERVER_PATH "/data/local/tmp/scaffold-udp.sock"
+#define TCP_SERVER_PATH "/data/local/tmp/scaffold-tcp.sock"
 #else
 #define UDP_SERVER_PATH "/tmp/scaffold-udp.sock"
 #define TCP_SERVER_PATH "/tmp/scaffold-tcp.sock"
