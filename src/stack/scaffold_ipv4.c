@@ -79,7 +79,7 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         return 0;
 }
 
-static const char *ipv4_hdr_dump(unsigned char *hdr, char *buf, int buflen)
+const char *ipv4_hdr_dump(unsigned char *hdr, char *buf, int buflen)
 {
         int i = 0, len = 0;
         
@@ -108,7 +108,6 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         */
 	switch (iph->protocol) {
 	case IPPROTO_UDP:
-                LOG_DBG("udp\n");
 	case IPPROTO_TCP:
         case IPPROTO_SCAFFOLD:
                 break;

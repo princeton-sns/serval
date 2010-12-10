@@ -37,7 +37,7 @@ struct hlist_head *dev_index_head = NULL;
 static void *dev_thread(void *arg);
 
 /* A (white) list of interfaces to use. If empty, use all detected */
-static LIST_HEAD(dev_list);
+static struct list_head dev_list = { &dev_list , &dev_list };
 struct dev_entry {
         struct list_head lh;
         char name[IFNAMSIZ];
