@@ -201,23 +201,56 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         return ret;
 }
 
+static int scaffold_listen_start(struct sock *sk, int backlog)
+{
+        //struct scaffold_sock *ssk = scaffold_sk(sk);
+
+        /* TODO: create accept queue */
+        scaffold_sock_set_state(sk, SCAFFOLD_LISTEN);
+        
+        sk->sk_prot->hash(sk);
+
+        return 0;
+}
+
+static int scaffold_listen_stop(struct sock *sk)
+{
+        //sk->sk_prot->unhash(sk);
+        
+        /* Destroy accept queue and its sockets (send appropriate
+           packets to other ends) */
+
+        return 0;
+}
+
 static int scaffold_listen(struct socket *sock, int backlog)
 {
 	struct sock *sk = sock->sk;
-        int err = -EINVAL;
-        
-        if (sock->type != SOCK_DGRAM && sock->type != SOCK_STREAM)
-		return -EOPNOTSUPP;		
-	
+        int err = 0;
+
         lock_sock(sk);
+        
+        if (sock->type != SOCK_DGRAM && sock->type != SOCK_STREAM) {
+                err = -EOPNOTSUPP;
+                goto out;
+        }
 
-        LOG_DBG("listening on socket\n");
+        if (sock->state != SS_UNCONNECTED) {
+                err = -EINVAL;
+                goto out;
+        }
+        
+	if (sk->sk_state != SCAFFOLD_UNBOUND) {
+                err = -EDESTADDRREQ;
+                goto out;
+        }
 
-	if (sk->sk_state == SCAFFOLD_UNBOUND) {
-                sk->sk_max_ack_backlog = backlog;               
-//                retval = sfnet_handle_listen_socket(sk, backlog);
-	}
+        err = scaffold_listen_start(sk, backlog);
 
+        if (err == 0) {
+                sk->sk_max_ack_backlog = backlog;
+        }
+ out:
         release_sock(sk);
 
         return err;
@@ -554,7 +587,19 @@ int scaffold_release(struct socket *sock)
                     /*!(current->flags & PF_EXITING) */)
 			timeout = sk->sk_lingertime;
 		sock->sk = NULL;
+                
+                lock_sock(sk);
+
+                if (sk->sk_state == SCAFFOLD_LISTEN) {
+                        /* Should unregister. */
+                        scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
+                        scaffold_listen_stop(sk);
+                }
+                
+                /* cannot lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
+
+                release_sock(sk);
         }
 
         return err;
