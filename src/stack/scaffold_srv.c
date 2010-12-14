@@ -17,6 +17,18 @@
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
 
+static int handle_syn(struct sk_buff *skb, struct service_id *srvid)
+{
+        struct sock *sk;
+
+        sk = scaffold_sock_lookup_serviceid(srvid);
+
+        if (!sk)
+                return -1;
+
+        return 0;
+}
+
 int scaffold_srv_rcv(struct sk_buff *skb)
 {
 	struct service_id srvid;
@@ -35,29 +47,30 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 		LOG_ERR("could not cache service for incoming packet\n");
 	}
 
-        /* Handle connection requests */
-
         switch (pkt_type) {
         case PKT_TYPE_SYN:
+                err = handle_syn(skb, &srvid);
                 break;
         case PKT_TYPE_SYNACK:
                 /* Connection completed */
                 break;
         case PKT_TYPE_DATA:
-                break;
-        }
-
-	switch (protocol) {
-	case IPPROTO_UDP:
-                err = scaffold_udp_rcv(skb);
-                break;
-	case IPPROTO_TCP:
-                err = scaffold_tcp_rcv(skb);
+                switch (protocol) {
+                case IPPROTO_UDP:
+                        err = scaffold_udp_rcv(skb);
+                        break;
+                case IPPROTO_TCP:
+                        err = scaffold_tcp_rcv(skb);
+                        break;
+                default:
+                        LOG_ERR("unsupported protocol=%u\n", protocol);
+                        FREE_SKB(skb);
+                }
                 break;
         default:
-		LOG_DBG("unsupported protocol=%u\n", protocol);
-		FREE_SKB(skb);
-	}
+                LOG_ERR("unknown packet type %u\n", pkt_type);
+                FREE_SKB(skb);
+        }
 	return err;
 }
 

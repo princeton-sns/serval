@@ -248,6 +248,7 @@ static int client_close(struct client *c)
 void client_destroy(struct client *c)
 {
         client_close(c);
+        pthread_mutex_destroy(&c->lock);
 	free(c);
 }
 

@@ -55,8 +55,6 @@ static void scaffold_tcp_destroy_sock(struct sock *sk)
 static void scaffold_tcp_close(struct sock *sk, long timeout)
 {
         //struct scaffold_tcp_sock *tsk = scaffold_tcp_sk(sk);
-        
-        sk_common_release(sk);
 }
 
 static int scaffold_tcp_disconnect(struct sock *sk, int flags)

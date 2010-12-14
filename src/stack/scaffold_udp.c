@@ -48,7 +48,6 @@ static void scaffold_udp_close(struct sock *sk, long timeout)
 {
         //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
         LOG_DBG("\n");
-        sk_common_release(sk);
 }
 
 static int scaffold_udp_disconnect(struct sock *sk, int flags)

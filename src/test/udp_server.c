@@ -55,14 +55,16 @@ void server(void)
         listen_sf(sock, backlog);
 
         do {
-                socklen_t l = sizeof(cliaddr);        
+                socklen_t l = sizeof(cliaddr);
+                printf("calling accept\n");
                 int fd = accept_sf(sock, (struct sockaddr *)&cliaddr, &l);
                 if (fd < 0) {
                         fprintf(stderr, "error accepting new conn %s", strerror_sf(errno));
                         exit(EXIT_FAILURE);
                 }
-                fprintf(stdout, "server: recv conn from object id %s; got fd = %d\n",
-                        service_id_to_str(&cliaddr.sf_srvid), fd);
+
+                printf("server: recv conn from object id %s; got fd = %d\n",
+                       service_id_to_str(&cliaddr.sf_srvid), fd);
         
                 int k = 0;
                 do {

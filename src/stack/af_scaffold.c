@@ -644,7 +644,8 @@ int scaffold_release(struct socket *sock)
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
 			timeout = sk->sk_lingertime;
-		sock->sk = NULL;
+		
+                sock->sk = NULL;
                 
                 lock_sock(sk);
 
@@ -659,6 +660,8 @@ int scaffold_release(struct socket *sock)
                 sk->sk_prot->close(sk, timeout);
 
                 release_sock(sk);
+
+                sk_common_release(sk);
         }
 
         return err;
