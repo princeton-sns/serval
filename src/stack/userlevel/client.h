@@ -18,6 +18,18 @@ typedef enum {
 	CLIENT_STATE_GARBAGE
 } client_state_t;
 
+
+struct client_list {
+        struct list_head head;
+        pthread_mutex_t mutex;        
+};
+
+#define CLIENT_LIST(list) struct client_list list =		\
+	{							\
+		.head = { &list.head, &list.head },		\
+		.mutex = PTHREAD_MUTEX_INITIALIZER		\
+	}
+
 struct client *client_create(client_type_t type, int sock, unsigned int id, 
 			     struct sockaddr_un *sa, sigset_t *sigset);
 client_type_t client_get_type(struct client *c);
@@ -26,16 +38,24 @@ unsigned int client_get_id(struct client *c);
 pthread_t client_get_thread(struct client *c);
 int client_get_sockfd(struct client *c);
 int client_get_signalfd(struct client *c);
-void client_destroy(struct client *c);
+void client_hold(struct client *c);
+void client_put(struct client *c);
+int client_lock(struct client *c);
+void client_unlock(struct client *c);
 int client_signal_pending(struct client *c);
 int client_signal_raise(struct client *c);
 int client_signal_exit(struct client *c);
 int client_signal_lower(struct client *c);
 int client_start(struct client *c);
-void client_list_add(struct client *c, struct list_head *head);
-struct client *client_list_first_entry(struct list_head *head);
-struct client *client_list_entry(struct list_head *lh);
-void client_list_del(struct client *c);
+struct client *client_get_by_socket(struct socket *sock, struct client_list *list);
+void client_list_init(struct client_list *list);
+void client_list_add(struct client *c, struct client_list *list);
+struct client *__client_list_first_entry(struct client_list *list);
+struct client *__client_list_entry(struct list_head *lh);
+int client_list_lock(struct client_list *list);
+void client_list_unlock(struct client_list *list);
+void __client_list_del(struct client *c);
+void client_list_del(struct client *c, struct client_list *list);
 int test_client_start(struct client *c);
 
 /**

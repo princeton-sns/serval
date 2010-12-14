@@ -19,6 +19,7 @@
 
 /* Common includes */
 #include <scaffold/debug.h>
+#include <scaffold/list.h>
 #include <scaffold/atomic.h>
 #include <scaffold/wait.h>
 #include <scaffold/sock.h>
@@ -26,6 +27,7 @@
 #include <scaffold/skbuff.h>
 #include <netinet/scaffold.h>
 #include <scaffold_sock.h>
+#include <scaffold_request_sock.h>
 #include <scaffold_udp_sock.h>
 #include <scaffold_tcp_sock.h>
 #include <ctrl.h>
@@ -124,6 +126,10 @@ static int scaffold_autobind(struct sock *sk)
         }
 #endif
         scaffold_sock_set_state(sk, SCAFFOLD_UNBOUND);
+
+        /* Add to protocol hash chains. */
+        sk->sk_prot->hash(sk);
+
         release_sock(sk);
 
         return 0;
@@ -142,9 +148,13 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 return -EINVAL;
         
         /* Call the protocol's own bind, if it exists */
-	if (sk->sk_prot->bind)
-		return sk->sk_prot->bind(sk, addr, addr_len);
+	if (sk->sk_prot->bind) {
+                ret = sk->sk_prot->bind(sk, addr, addr_len);
+                /* Add to protocol hash chains. */
+                sk->sk_prot->hash(sk);
 
+                return ret;
+        }
         lock_sock(sk);
 
         LOG_DBG("handling bind\n");
@@ -160,7 +170,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
         }
         if (ret < 0) {
-                LOG_ERR("bind failed\n");
+                LOG_ERR("bind failed, scafd not running?\n");
                 release_sock(sk);
                 return ret;
         }
@@ -173,6 +183,9 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         */
         if (ret == 1) {
                 LOG_DBG("in controller mode\n");
+                /* Add to protocol hash chains. */
+                sk->sk_prot->hash(sk);
+
                 release_sock(sk);
                 ret = 0;
         } else if (ret == 0) {
@@ -194,6 +207,13 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 } else  {
                         ret = cond;
                         LOG_DBG("bind returned %d\n", ret);
+                        
+                        lock_sock(sk);
+
+                        /* Add to protocol hash chains. */
+                        sk->sk_prot->hash(sk);
+
+                        release_sock(sk);
                 }
         } else {
                 release_sock(sk);
@@ -205,9 +225,16 @@ static int scaffold_listen_start(struct sock *sk, int backlog)
 {
         //struct scaffold_sock *ssk = scaffold_sk(sk);
 
+        /* Unhash the socket since we need to hash it into listen table */
+        sk->sk_prot->unhash(sk);
         /* TODO: create accept queue */
         scaffold_sock_set_state(sk, SCAFFOLD_LISTEN);
+        sk->sk_ack_backlog = 0;
         
+        /* Hash it on the service id. This will put the socket in
+           another hash table than the initial hashing on socket
+           id. */
+
         sk->sk_prot->hash(sk);
 
         return 0;
@@ -215,11 +242,42 @@ static int scaffold_listen_start(struct sock *sk, int backlog)
 
 static int scaffold_listen_stop(struct sock *sk)
 {
-        //sk->sk_prot->unhash(sk);
+        struct scaffold_sock *ssk = scaffold_sk(sk);
         
         /* Destroy accept queue and its sockets (send appropriate
            packets to other ends) */
+        
+        while (1) {
+                struct scaffold_request_sock *rsk;
 
+                if (list_empty(&ssk->accept_q))
+                        break;
+                
+                rsk = list_first_entry(&ssk->accept_q, struct scaffold_request_sock, lh);
+                list_del(&rsk->lh);
+
+                if (rsk->sk) {
+                        struct sock *child = rsk->sk;
+                        
+                        /* From inet_connection_sock */
+                        local_bh_disable();
+                        bh_lock_sock(child);
+                        /* WARN_ON(sock_owned_by_user(child)); */
+                        sock_hold(child);
+
+                        sk->sk_prot->disconnect(child, O_NONBLOCK);
+
+                        sock_orphan(child);
+
+                        /* percpu_counter_inc(sk->sk_prot->orphan_count); */
+
+                        bh_unlock_sock(child);
+                        local_bh_enable();
+                        sock_put(child);
+                }
+                scaffold_rsk_free(rsk);
+                sk->sk_ack_backlog--;
+        }
         return 0;
 }
 
@@ -231,16 +289,19 @@ static int scaffold_listen(struct socket *sock, int backlog)
         lock_sock(sk);
         
         if (sock->type != SOCK_DGRAM && sock->type != SOCK_STREAM) {
+                LOG_ERR("bad socket type\n");
                 err = -EOPNOTSUPP;
                 goto out;
         }
 
         if (sock->state != SS_UNCONNECTED) {
+                LOG_ERR("socket not unconnected\n");
                 err = -EINVAL;
                 goto out;
         }
         
 	if (sk->sk_state != SCAFFOLD_UNBOUND) {
+                LOG_ERR("socket not in UNBOUND state\n");
                 err = -EDESTADDRREQ;
                 goto out;
         }
@@ -260,17 +321,19 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                                      struct socket *newsock)
 {
 	struct sock *sk = NULL;
+        struct scaffold_sock *pssk = scaffold_sk(parent);
+        struct scaffold_request_sock *rsk;
 
         /* Parent sock is already locked... */
-        while (1) {
-                //struct socket_id sockid;
-
-                if (0 /*sfnet_accept_dequeue(parent, &sockid) != 1 */)
-                        break;
+        list_for_each_entry(rsk, &pssk->accept_q, lh) {
+                /* struct scaffold_sock *ssk; */
                 
+                if (rsk->state != SCAFFOLD_BOUND)
+                        continue;
+                /*
                 switch (newsock->type) {
                 case SOCK_DGRAM:
-                        //newsock->ops = &scaffold_dgram_ops;
+                //newsock->ops = &scaffold_dgram_ops;
                         sk = scaffold_sk_alloc(sock_net(parent), newsock, 
                                                GFP_KERNEL, 
                                                parent->sk_protocol,
@@ -288,46 +351,43 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                 default:
                         return NULL;
                 }
-                
-                if (!sk)
-                        break;
+                */
+                if (!rsk->sk)
+                        continue;
 
-                // Inherit the service id from the parent socket
-                memcpy(&scaffold_sk(sk)->local_srvid, 
-                       &scaffold_sk(parent)->local_srvid, 
-                       sizeof(struct sockaddr_sf));
+                sk = rsk->sk;
+
+                list_del(&rsk->lh);
                 
-                scaffold_sk(sk)->tot_bytes_sent = 0;
+
+                /* Inherit the service id from the parent socket */
+                /*
+                  ssk = scaffold_sk(sk);
+                memcpy(&ssk->local_srvid, 
+                       &pssk->local_srvid, 
+                       sizeof(pssk->local_srvid));
+                
+                memcpy(&ssk->peer_srvid, &rsk->peer_srvid, sizeof(rsk->peer_srvid));
+                memcpy(&ssk->dst_flowid, &rsk->dst_flowid, sizeof(rsk->dst_flowid));
+                ssk->tot_bytes_sent = 0;
+                */
+                scaffold_rsk_free(rsk);
 
                 lock_sock(sk);
-
-                if (0 /* sfnet_assign_sock(sk, sockid) != 0 */) {
-                        release_sock(sk);
-                        sk_free(sk);
-                        sk = NULL;
-                        break;
-                }
-
-                if (sk->sk_state == SCAFFOLD_CLOSED) {
-			release_sock(sk);
-			continue;
-		}
                
-		if (1 /*sk->sk_state == SCAFFOLD_BOUND || !newsock */) {
+                if (newsock) {
+                        sock_graft(sk, newsock);
+                        newsock->state = SS_CONNECTED;
+                }
+                                
+                atomic_inc(&scaffold_nr_socks);
 
-			if (newsock)
-				sock_graft(sk, newsock);
-                        
-                        atomic_inc(&scaffold_nr_socks);
+                /* Make available */
+                sk->sk_prot->hash(sk);
 
-			release_sock(sk);
-
-			return sk;
-		} 
-                /* Should not happen. */
                 release_sock(sk);
-                sk_free(sk);
-                sk = NULL;
+                
+                return sk;
         }
 
 	return NULL;
@@ -382,8 +442,6 @@ static int scaffold_accept(struct socket *sock, struct socket *newsock,
 
 	if (err)
 		goto done;
-
-	newsock->state = SS_CONNECTED;
         
 done:
 	release_sock(sk);
@@ -592,9 +650,10 @@ int scaffold_release(struct socket *sock)
 
                 if (sk->sk_state == SCAFFOLD_LISTEN) {
                         /* Should unregister. */
-                        scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
                         scaffold_listen_stop(sk);
                 }
+                
+                scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
                 
                 /* cannot lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
@@ -832,8 +891,8 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 		goto out;
         }
 
-        /* Add to protocol hash chains. */
-        sk->sk_prot->hash(sk);
+        /* Initialize accept queue */
+        INIT_LIST_HEAD(&scaffold_sk(sk)->accept_q);
         
         if (sk->sk_prot->init) {
                 /* Call protocol specific init */

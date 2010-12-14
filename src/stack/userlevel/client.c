@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <scaffold/debug.h>
+#include <scaffold/atomic.h>
 #include <scaffold/timer.h>
 #include <scaffold/net.h>
 #include <scaffold_sock.h>
@@ -23,6 +24,7 @@ struct client {
 	client_state_t state;
 	int fd;
         struct socket *sock;
+        struct client *parent;
 	unsigned int id;
 	int pipefd[2];
 	int should_exit;
@@ -31,10 +33,16 @@ struct client {
 	struct sockaddr_un sa;
 	struct timer_list timer;
 	struct list_head link;
+        atomic_t refcnt;
+        pthread_mutex_t lock;
 };
 
 static pthread_key_t client_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
+extern atomic_t num_clients;
+extern struct client_list client_list;
+
+void client_destroy(struct client *c);
 
 static void make_client_key(void)
 {
@@ -53,6 +61,8 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 
 static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_listen_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
 
@@ -62,11 +72,11 @@ msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	client_handle_connect_req_msg,
 	dummy_msg_handler,
+	client_handle_listen_req_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler,
+	client_handle_accept2_req_msg,
 	dummy_msg_handler,
 	client_handle_send_req_msg,
 	dummy_msg_handler,
@@ -141,7 +151,7 @@ struct client *client_create(client_type_t type,
                 return NULL;                        
         }
 
-	c->id = id;
+        c->id = id;
 	LOG_DBG("client %p id is %u\n", c, c->id);
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));
@@ -162,8 +172,31 @@ struct client *client_create(client_type_t type,
 	c->timer.data = (unsigned long)c;
 
 	INIT_LIST_HEAD(&c->link);
+        pthread_mutex_init(&c->lock, NULL);
+        atomic_set(&c->refcnt, 1);
 
 	return c;
+}
+
+void client_hold(struct client *c)
+{
+        atomic_inc(&c->refcnt);
+}
+
+void client_put(struct client *c)
+{
+        if (atomic_dec_and_test(&c->refcnt))
+                client_destroy(c);        
+}
+
+int client_lock(struct client *c)
+{
+        return pthread_mutex_lock(&c->lock);
+}
+
+void client_unlock(struct client *c)
+{
+        pthread_mutex_unlock(&c->lock);
 }
 
 client_type_t client_get_type(struct client *c)
@@ -215,7 +248,6 @@ static int client_close(struct client *c)
 void client_destroy(struct client *c)
 {
         client_close(c);
-	list_del(&c->link);
 	free(c);
 }
 
@@ -288,11 +320,11 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
         
         if (ret < 0) {
                 if (KERN_ERR(ret) == ERESTARTSYS) {
-                        LOG_ERR("Bind was interrupted\n");
+                        LOG_ERR("bind was interrupted\n");
                         rsp.error = EINTR;
                         return client_msg_write(c->fd, &rsp.msghdr);
                 }
-                LOG_ERR("Bind failed: %s\n", KERN_STRERROR(ret));
+                LOG_ERR("bind failed: %s\n", KERN_STRERROR(ret));
                 rsp.error = KERN_ERR(ret);
         }
 
@@ -301,12 +333,91 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
-	///struct client_msg_connect_req *cr = (struct client_msg_connect_req *)msg;
-	
-	LOG_DBG("connect request for service id %s\n", 
-		service_id_to_str(&((struct client_msg_connect_req *)msg)->srvid));
+	struct client_msg_connect_req *req = (struct client_msg_connect_req *)msg;
+	struct client_msg_connect_rsp rsp;
+        struct sockaddr_sf addr;
+        int err;
 
-	return 0;
+	LOG_DBG("connect request for service id %s\n", 
+		service_id_to_str(&req->srvid));
+
+        memset(&addr, 0, sizeof(addr));
+        addr.sf_family = AF_SCAFFOLD;
+        memcpy(&addr.sf_srvid, &req->srvid, sizeof(req->srvid));
+
+        err = c->sock->ops->connect(c->sock, (struct sockaddr *)&addr, 
+                                    sizeof(req->srvid), req->flags); 
+
+        client_msg_hdr_init(&rsp.msghdr, MSG_CONNECT_RSP);
+        memcpy(&rsp.srvid, &req->srvid, sizeof(req->srvid));
+
+        if (err < 0) {
+                LOG_ERR("connect failed: %s\n", KERN_STRERROR(err));
+                rsp.error = KERN_ERR(err);
+        }
+
+	return client_msg_write(c->fd, &rsp.msghdr);
+}
+
+int client_handle_listen_req_msg(struct client *c, struct client_msg *msg)
+{
+	struct client_msg_listen_req *req = (struct client_msg_listen_req *)msg;
+        struct client_msg_listen_rsp rsp;
+	int err;
+
+	LOG_DBG("listen request, backlog=%u\n", req->backlog);
+        
+        err = c->sock->ops->listen(c->sock, req->backlog); 
+
+        client_msg_hdr_init(&rsp.msghdr, MSG_LISTEN_RSP);
+
+        if (err < 0) {
+                LOG_ERR("listen failed: %s\n", KERN_STRERROR(err));
+                rsp.error = KERN_ERR(err);
+        }
+
+	return client_msg_write(c->fd, &rsp.msghdr);
+}
+
+int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
+{
+	struct client_msg_accept2_req *req = (struct client_msg_accept2_req *)msg;
+        struct client_msg_accept2_rsp rsp;
+        struct sock *psk;
+        //struct sockaddr_un addr;
+	int err, flags = 0;
+
+	LOG_DBG("accept2 request\n");
+
+        client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT2_RSP);
+
+        /* Find parent sock */
+        psk = scaffold_sock_lookup_serviceid(&req->srvid);
+
+        if (!psk) {
+                LOG_ERR("no parent sock\n");
+                rsp.error = EOPNOTSUPP;
+                goto out;
+        }
+
+        /* This is a bit ugly: we need to kill the "struct sock" that
+         * was created as a result of creating the new client, and
+         * then graft the new "struct sock" to the client socket when
+         * we pull it from the accept queue.  This is because, when
+         * clients are created, there is no way to initially know if
+         * the client's sock will be a locally created socket or one
+         * created as a result of accept().
+         */
+        sk_common_release(c->sock->sk);
+        
+        err = c->sock->ops->accept(psk->sk_socket, c->sock, flags); 
+
+        if (err < 0) {
+                LOG_ERR("accept2 failed: %s\n", KERN_STRERROR(err));
+                rsp.error = KERN_ERR(err);
+        }
+out:
+	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
 int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
@@ -493,22 +604,66 @@ int client_start(struct client *c)
 	return ret;
 }
 
-void client_list_add(struct client *c, struct list_head *head)
-{	
-	list_add_tail(&c->link, head);
+struct client *client_get_by_socket(struct socket *sock, struct client_list *list)
+{
+        struct client *c;
+
+        client_list_lock(list);
+
+        list_for_each_entry(c, &list->head, link) {
+                if (c->sock == sock) {
+                        client_list_unlock(list);
+                        client_hold(c);
+                        return c;
+                }
+        }
+
+        client_list_unlock(list);
+        
+        return NULL;
 }
 
-void client_list_del(struct client *c)
+void client_list_init(struct client_list *list)
+{
+        INIT_LIST_HEAD(&list->head);
+        pthread_mutex_init(&list->mutex, NULL);
+}
+
+void client_list_add(struct client *c, struct client_list *list)
+{	
+        client_list_lock(list);
+	list_add_tail(&c->link, &list->head);
+        client_list_unlock(list);
+}
+
+void __client_list_del(struct client *c)
 {
 	list_del(&c->link);
 }
 
-struct client *client_list_first_entry(struct list_head *head)
+void client_list_del(struct client *c, struct client_list *list)
 {
-	return list_first_entry(head, struct client, link);
+        client_list_lock(list);
+	list_del(&c->link);
+        client_list_unlock(list);
 }
 
-struct client *client_list_entry(struct list_head *lh)
+int client_list_lock(struct client_list *list)
+{
+        return pthread_mutex_lock(&list->mutex);
+}
+
+void client_list_unlock(struct client_list *list)
+{
+        pthread_mutex_unlock(&list->mutex);
+}
+
+struct client *__client_list_first_entry(struct client_list *list)
+{
+	return list_first_entry(&list->head, struct client, link);
+}
+
+struct client *__client_list_entry(struct list_head *lh)
 {
 	return list_entry(lh, struct client, link);
 }

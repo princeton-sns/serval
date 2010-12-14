@@ -83,6 +83,8 @@ struct client_msg_bind_rsp {
 struct client_msg_connect_req {
 	struct client_msg msghdr;
 	struct service_id srvid;
+        bool_t nonblock;
+        uint16_t flags;
 } __attribute__((packed));
 
 #define CLIENT_MSG_CONNECT_REQ_LEN (sizeof(struct client_msg_connect_req))
@@ -107,7 +109,6 @@ struct client_msg_listen_req {
 
 struct client_msg_listen_rsp {
 	struct client_msg msghdr;
-	struct service_id srvid;
 	uint8_t error;
 } __attribute__((packed));
 
@@ -116,16 +117,15 @@ struct client_msg_listen_rsp {
 /* Accept messages */
 struct client_msg_accept_req {
 	struct client_msg msghdr;
-	bool_t use_first;       
 	struct service_id srvid;
-	uint16_t backlog;
+        struct sock_id sockid;
+        bool_t nonblock;
 } __attribute__((packed));
 
 #define CLIENT_MSG_ACCEPT_REQ_LEN (sizeof(struct client_msg_accept_req))
 
 struct client_msg_accept_rsp {
 	struct client_msg msghdr;
-	struct service_id srvid;
 	uint8_t error;
 } __attribute__((packed));
 
@@ -134,6 +134,9 @@ struct client_msg_accept_rsp {
 /* Accept2 messages */
 struct client_msg_accept2_req {
 	struct client_msg msghdr;
+	struct service_id srvid;
+        struct sock_id sockid;
+        bool_t nonblock;
 } __attribute__((packed));
 
 #define CLIENT_MSG_ACCEPT2_REQ_LEN (sizeof(struct client_msg_accept2_req))

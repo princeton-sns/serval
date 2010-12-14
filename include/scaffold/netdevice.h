@@ -24,6 +24,7 @@ static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
 #include <scaffold/skbuff.h>
 #include <net/if.h>
 #include <pthread.h>
+#include <string.h>
 #if defined(OS_ANDROID)
 #define ETH_HLEN 14
 #else

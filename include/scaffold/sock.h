@@ -276,6 +276,12 @@ static inline void lock_sock(struct sock *sk)
 {
         spin_lock(&sk->sk_lock);
 }
+/* BH context may only use the following locking interface. */
+#define bh_lock_sock(__sk)spin_lock(&((__sk)->sk_lock))
+/* #define bh_lock_sock_nested(__sk)                \
+        spin_lock_nested(&((__sk)->sk_lock.slock), \
+        SINGLE_DEPTH_NESTING) */
+#define bh_unlock_sock(__sk)spin_unlock(&((__sk)->sk_lock))
 
 static inline void release_sock(struct sock *sk)
 {

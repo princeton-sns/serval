@@ -21,6 +21,7 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 {
 	struct service_id srvid;
 	struct udphdr *udph = udp_hdr(skb);
+        unsigned char pkt_type = ip_hdr(skb)->tos;
 	unsigned char protocol = ip_hdr(skb)->protocol;
 	int err = 0;
 
@@ -28,11 +29,23 @@ int scaffold_srv_rcv(struct sk_buff *skb)
  
 	/* Cache this service FIXME: should not assume ETH_ALEN here. */
 	err = service_add(&srvid, sizeof(srvid), skb->dev, 
-			  skb_hard_dst(skb), ETH_ALEN, GFP_ATOMIC);
+			  SCAFFOLD_SKB_CB(skb)->hard_addr, ETH_ALEN, GFP_ATOMIC);
 
 	if (err < 0) {
 		LOG_ERR("could not cache service for incoming packet\n");
 	}
+
+        /* Handle connection requests */
+
+        switch (pkt_type) {
+        case PKT_TYPE_SYN:
+                break;
+        case PKT_TYPE_SYNACK:
+                /* Connection completed */
+                break;
+        case PKT_TYPE_DATA:
+                break;
+        }
 
 	switch (protocol) {
 	case IPPROTO_UDP:
@@ -50,7 +63,6 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 
 int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 {
-	struct service_id *srvid = skb_dst_service_id(skb);
 	struct service_entry *se;
 	struct net_device *dev;
 	int err = 0;
@@ -66,7 +78,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 	}
 
 	/* Unresolved packet, use service id */
-	se = service_find(srvid);
+	se = service_find(&SCAFFOLD_SKB_CB(skb)->srvid);
 	
 	if (!se) {
 		LOG_ERR("service lookup failed\n");
@@ -83,7 +95,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		struct net_device *next_dev;
 		
 		/* Remember the hardware destination */
-		service_entry_dev_dst(se, skb_hard_dst(skb), 6);
+		service_entry_dev_dst(se, SCAFFOLD_SKB_CB(skb)->hard_addr, 6);
 
 		next_dev = service_entry_dev_next(se);
 		

@@ -13,6 +13,7 @@
 #include <libgen.h>
 #include <scaffold/platform.h>
 #include <scaffold/debug.h>
+#include <scaffold/atomic.h>
 #include <scaffold/list.h>
 #include <scaffold/netdevice.h>
 #include <scaffold/timer.h>
@@ -20,8 +21,8 @@
 #include <userlevel/client.h>
 #include <ctrl.h>
 
-struct list_head client_list;
-static unsigned int num_clients = 0;
+struct client_list client_list;
+atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
 
 #define MAX(x, y) (x >= y ? x : y)
@@ -40,8 +41,10 @@ void garbage_collect_clients(unsigned long data)
 	int num = 0;
 	struct list_head *pos, *tmp;
 
-	list_for_each_safe(pos, tmp, &client_list) {
-		struct client *c = client_list_entry(pos);
+        client_list_lock(&client_list);
+
+	list_for_each_safe(pos, tmp, &client_list.head) {
+		struct client *c = __client_list_entry(pos);
 		
 		if (client_get_state(c) == CLIENT_STATE_GARBAGE) {
 			LOG_INF("Garbage collecting client %u\n", client_get_id(c));
@@ -55,12 +58,13 @@ void garbage_collect_clients(unsigned long data)
 						client_get_id(c));
 				}
 			}
-			/* Destroying the client also removes it from
-			 * the client list */
-			client_destroy(c);
+                        __client_list_del(c);
+			client_put(c);
 			num++;
 		}
 	}
+        client_list_unlock(&client_list);
+
 	/* Schedule us again */
 	add_timer(&garbage_timer);
 }
@@ -143,7 +147,8 @@ static int server_run(void)
 			struct client *c;
 			
 			c = client_create(CLIENT_TYPE_UDP, -1, 
-					  num_clients++, &sa, &orig_sigset);
+					  atomic_inc_return(num_clients), 
+                                          &sa, &orig_sigset);
 			
 			if (!c)
 				break;
@@ -259,7 +264,8 @@ static int server_run(void)
 				 * more explicit for the
 				 * client type than the
 				 * 'i' variable */
-				c = client_create(i, client_sock, num_clients++, 
+				c = client_create(i, client_sock, 
+                                                  atomic_inc_return(&num_clients), 
 						  &sa, &orig_sigset);
 				
 				if (!c) {
@@ -273,15 +279,18 @@ static int server_run(void)
 					
 					if (ret == -1) {
 						LOG_ERR("Could not start client\n");
-						client_destroy(c);
+                                                __client_list_del(c);
+						client_put(c);
 					}
 				}
 			}
 		}
 	}
 	
-	while (!list_empty(&client_list)) {
-		struct client *c = client_list_first_entry(&client_list);
+        client_list_lock(&client_list);
+
+	while (!list_empty(&client_list.head)) {
+		struct client *c = __client_list_first_entry(&client_list);
 
 		LOG_INF("Joining with client %u\n", client_get_id(c));
 		client_signal_exit(c);
@@ -295,8 +304,11 @@ static int server_run(void)
 					client_get_id(c));
 			}
 		}
-		client_destroy(c);
+                __client_list_del(c);
+		client_put(c);
 	}
+        client_list_unlock(&client_list);
+
 out_close_socks:
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
 		close(server_sock[i]);
@@ -326,7 +338,7 @@ int main(int argc, char **argv)
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 	
-        INIT_LIST_HEAD(&client_list);
+        client_list_init(&client_list);
 
 	argc--;
 	argv++;

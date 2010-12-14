@@ -4,6 +4,7 @@
 #include <scaffold/netdevice.h>
 #include <scaffold_sock.h>
 #include <scaffold/debug.h>
+#include <scaffold_srv.h>
 #include <input.h>
 
 extern int scaffold_ipv4_rcv(struct sk_buff *skb);
@@ -34,7 +35,7 @@ int scaffold_input(struct sk_buff *skb)
         /* Set network header offset */
         skb_reset_network_header(skb);
 
-        memcpy(skb_hard_dst(skb), ethh->h_source, ETH_ALEN);
+        memcpy(SCAFFOLD_SKB_CB(skb)->hard_addr, ethh->h_source, ETH_ALEN);
 
         switch (prot) {
         case ETH_P_IP:

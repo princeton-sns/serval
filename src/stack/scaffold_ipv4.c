@@ -5,6 +5,7 @@
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
 #include <scaffold/netdevice.h>
+#include <scaffold_srv.h>
 #include <input.h>
 #include <output.h>
 #if defined(OS_LINUX_KERNEL)
@@ -64,13 +65,13 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         memset(iph, 0, iph_len);
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
-        iph->tos = skb_scaffold_packet_type(skb);
+        iph->tos = SCAFFOLD_SKB_CB(skb)->pkttype;
         iph->tot_len = htons(skb->len);
         iph->id = 0;
         iph->frag_off = 0;
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
         iph->protocol = sk->sk_protocol;
-        memcpy(&iph->saddr, &ssk->src_flow, sizeof(struct in_addr));
+        memcpy(&iph->saddr, &ssk->src_flowid, sizeof(struct in_addr));
         memcpy(&iph->daddr, &ipcm->addr, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
 

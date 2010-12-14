@@ -97,15 +97,16 @@ int scaffold_udp_rcv(struct sk_buff *skb)
 
 /* from fastudpsrc */
 static void udp_checksum(uint16_t total_len,
-                         struct udphdr *uh, uint32_t src) 
+                         struct udphdr *uh, void *data) 
 {
+        uint32_t src = *(uint32_t *)data;
         unsigned short len = total_len - 14 - sizeof(struct iphdr);
         unsigned csum = 0; 
         uh->check = 0;
         /* FIXME: Do not assume IP header lacks options */
         csum = ~in_cksum((unsigned char *)uh, len) & 0xFFFF;
-        csum += src & 0xffff;
-        csum += (src >> 16) & 0xffff;
+        csum += src & 0xFFFF;
+        csum += (src >> 16) & 0xFFFF;
         csum += htons(SCAFFOLD_PROTO_UDP) + htons(len);
         csum = (csum & 0xFFFF) + (csum >> 16);
         uh->check = ~csum & 0xFFFF;
@@ -124,15 +125,15 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 	skb_set_owner_w(skb, sk);
-        skb_set_scaffold_packet_type(skb, PKT_TYPE_DATA);
+        SCAFFOLD_SKB_CB(skb)->pkttype = PKT_TYPE_DATA;
         
         tot_len = skb->len + 20 + 14;
         
         /* Build UDP header */
         uh->source = scaffold_sk(sk)->local_srvid.s_sid16;
-        uh->dest = skb_dst_service_id(skb)->s_sid16;
+        memcpy(&uh->dest, &SCAFFOLD_SKB_CB(skb)->srvid, sizeof(uh->dest));
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, scaffold_sk(sk)->src_flow.fl_ip.s_addr);
+        udp_checksum(tot_len, uh, &scaffold_sk(sk)->src_flowid);
 
         LOG_DBG("udp pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
@@ -190,8 +191,9 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         
         skb_reserve(skb, UDP_MAX_HDR);
         
-        if (srvid)
-                skb_set_dst_service_id(skb, srvid);
+        if (srvid) {
+                memcpy(&SCAFFOLD_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
+        }
         /* 
            TODO: 
            

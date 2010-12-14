@@ -16,7 +16,7 @@
 #else
 #error "OS not supported!"
 #endif
-
+#include "client.h"
 
 /* Setting NPROTO to AF_MAX is overkill here, since we effectively
  * only register Scaffold protocols. Anyhow, the net_families is just

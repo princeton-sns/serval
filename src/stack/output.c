@@ -5,6 +5,7 @@
 #include <scaffold/debug.h>
 #include <scaffold_sock.h>
 #include <netinet/scaffold.h>
+#include <scaffold_srv.h>
 #include <output.h>
 #include <service.h>
 
@@ -22,7 +23,7 @@ int scaffold_output(struct sk_buff *skb)
                 return -ENODEV;
         
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
-			      skb_hard_dst(skb), NULL, skb->len);
+			      SCAFFOLD_SKB_CB(skb)->hard_addr, NULL, skb->len);
 	if (err < 0) {
 		LOG_ERR("hard_header failed\n");
 		return err;

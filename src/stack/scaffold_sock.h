@@ -52,8 +52,9 @@ struct scaffold_sock {
         struct sock_id          sockid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        struct flow_id          src_flow;
-        struct flow_id          dst_flow;
+        struct flow_id          src_flowid;
+        struct flow_id          dst_flowid;
+        struct list_head        accept_q;
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
