@@ -125,7 +125,7 @@ static int scaffold_autobind(struct sock *sk)
                 }
         }
 #endif
-        scaffold_sock_set_state(sk, SCAFFOLD_UNBOUND);
+        scaffold_sock_set_state(sk, SCAFFOLD_BOUND);
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
@@ -161,7 +161,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         if (host_ctrl_mode) {
                 ret = 1;
-                scaffold_sock_set_state(sk, SCAFFOLD_UNBOUND);
+                scaffold_sock_set_state(sk, SCAFFOLD_BOUND);
         } else {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
@@ -244,16 +244,30 @@ static int scaffold_listen_stop(struct sock *sk)
 {
         struct scaffold_sock *ssk = scaffold_sk(sk);
         
-        /* Destroy accept queue and its sockets (send appropriate
-           packets to other ends) */
-        
+        /* Destroy queue of sockets that haven't completed three-way
+         * handshake */
+        while (1) {
+                struct scaffold_request_sock *rsk;
+                
+                if (list_empty(&ssk->syn_queue))
+                        break;
+                
+                rsk = list_first_entry(&ssk->syn_queue, 
+                                       struct scaffold_request_sock, lh);
+                list_del(&rsk->lh);
+                scaffold_rsk_free(rsk);
+                sk->sk_ack_backlog--;
+        }
+        /* Destroy accept queue of sockets that completed three-way
+           handshake (and send appropriate packets to other ends) */
         while (1) {
                 struct scaffold_request_sock *rsk;
 
-                if (list_empty(&ssk->accept_q))
+                if (list_empty(&ssk->accept_queue))
                         break;
                 
-                rsk = list_first_entry(&ssk->accept_q, struct scaffold_request_sock, lh);
+                rsk = list_first_entry(&ssk->accept_queue, 
+                                       struct scaffold_request_sock, lh);
                 list_del(&rsk->lh);
 
                 if (rsk->sk) {
@@ -278,6 +292,7 @@ static int scaffold_listen_stop(struct sock *sk)
                 scaffold_rsk_free(rsk);
                 sk->sk_ack_backlog--;
         }
+     
         return 0;
 }
 
@@ -300,7 +315,7 @@ static int scaffold_listen(struct socket *sock, int backlog)
                 goto out;
         }
         
-	if (sk->sk_state != SCAFFOLD_UNBOUND) {
+	if (sk->sk_state != SCAFFOLD_BOUND) {
                 LOG_ERR("socket not in UNBOUND state\n");
                 err = -EDESTADDRREQ;
                 goto out;
@@ -325,11 +340,9 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
         struct scaffold_request_sock *rsk;
 
         /* Parent sock is already locked... */
-        list_for_each_entry(rsk, &pssk->accept_q, lh) {
+        list_for_each_entry(rsk, &pssk->accept_queue, lh) {
                 /* struct scaffold_sock *ssk; */
                 
-                if (rsk->state != SCAFFOLD_BOUND)
-                        continue;
                 /*
                 switch (newsock->type) {
                 case SOCK_DGRAM:
@@ -393,60 +406,71 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
 	return NULL;
 }
 
+static int scaffold_wait_for_connect(struct sock *sk, long timeo)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+	DEFINE_WAIT(wait);
+	int err;
+
+	for (;;) {
+		prepare_to_wait_exclusive(sk_sleep(sk), &wait,
+					  TASK_INTERRUPTIBLE);
+		release_sock(sk);
+		if (list_empty(&ssk->accept_queue))
+			timeo = schedule_timeout(timeo);
+		lock_sock(sk);
+		err = 0;
+		if (!list_empty(&ssk->accept_queue))
+			break;
+		err = -EINVAL;
+		if (sk->sk_state != SCAFFOLD_LISTEN)
+			break;
+		err = sock_intr_errno(timeo);
+		if (signal_pending(current))
+			break;
+		err = -EAGAIN;
+		if (!timeo)
+			break;
+	}
+	finish_wait(sk_sleep(sk), &wait);
+	return err;
+}
+
 static int scaffold_accept(struct socket *sock, struct socket *newsock, 
                            int flags)
 {
-	DECLARE_WAITQUEUE(wait, current);
 	struct sock *sk = sock->sk, *nsk;
-	long timeo;
+        struct scaffold_sock *ssk = scaffold_sk(sk);
 	int err = 0;
 
 	lock_sock(sk);
 
 	if (sk->sk_state != SCAFFOLD_LISTEN) {
 		err = -EBADFD;
-		goto done;
+		goto out;
 	}
 
-	timeo = sock_rcvtimeo(sk, flags & O_NONBLOCK);
+        if (list_empty(&ssk->accept_queue)) {
+                long timeo = sock_rcvtimeo(sk, flags & O_NONBLOCK);
+                
+		/* If this is a non blocking socket don't sleep */
+		err = -EAGAIN;
+		if (!timeo)
+			goto out;
 
-	/* Wait for an incoming connection. (wake-one). */
-	add_wait_queue_exclusive(sk_sleep(sk), &wait);
-
-	while (!(nsk = scaffold_accept_dequeue(sk, newsock))) {
-		
-                set_current_state(TASK_INTERRUPTIBLE);
-		
-                if (!timeo) {
-			err = -EAGAIN;
-			break;
-		}
-
-		release_sock(sk);
-		timeo = schedule_timeout(timeo);
-		lock_sock(sk);
-
-                if (sk->sk_state != SCAFFOLD_LISTEN) {
-                        err = -EBADFD;
-                        break;
-                }
-
-		if (signal_pending(current)) {
-			err = sock_intr_errno(timeo);
-			break;
-		}
+		err = scaffold_wait_for_connect(sk, timeo);
+                
+		if (err)
+			goto out;
 	}
-        
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(sk_sleep(sk), &wait);
+	
+        nsk = scaffold_accept_dequeue(sk, newsock);
 
-	if (err)
-		goto done;
-        
-done:
+        if (!nsk)
+                err = -EAGAIN;
+out:
 	release_sock(sk);
-
-	return err;
+        return err;
 }
 
 int scaffold_getname(struct socket *sock, struct sockaddr *addr,
@@ -474,7 +498,7 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
 {
         struct sock *sk = sock->sk;
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
-        int ret = 0, connect_ret = 1;
+        int err = 0, connect_ret = 1;
         int nonblock = flags & O_NONBLOCK;
 
         if (addr->sa_family != AF_SCAFFOLD)
@@ -482,63 +506,78 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         
         lock_sock(sk);
         
-        if (sk->sk_state == SCAFFOLD_BOUND) {
-                release_sock(sk);
-                return -EISCONN;
-        }
+        switch (sock->state) {
+	default:
+		err = -EINVAL;
+		goto out;
+	case SS_CONNECTED:
+		err = -EISCONN;
+		goto out;
+	case SS_CONNECTING:
+		err = -EALREADY;
+		break;
+	case SS_UNCONNECTED:
+		err = -EISCONN;
+                /*
+		if (sk->sk_state != SCAFFOLD_CLOSED)
+			goto out;
+                */
+                /* Set the peer address */
+                memcpy(&scaffold_sk(sk)->peer_srvid, &sfaddr->sf_srvid, 
+                       sizeof(struct service_id));
 
-        if (sk->sk_state >= SCAFFOLD_REQUEST) {
-                release_sock(sk);
-                return -EINPROGRESS;
-        }
-        
-        if (sk->sk_state != SCAFFOLD_UNBOUND && 
-            sk->sk_state != SCAFFOLD_CLOSED) {
-                release_sock(sk);
-                return -EINVAL;
-        }
+                err = sk->sk_prot->connect(sk, addr, alen);
 
-        /* Set the peer address */
-        memcpy(&scaffold_sk(sk)->peer_srvid, &sfaddr->sf_srvid, 
-               sizeof(struct service_id));
+		if (err < 0)
+			goto out;
 
-        if (0 /* sfnet_handle_connect_socket(sk, &sfaddr->sf_oid, 
-                 sfaddr->sf_flags, &connect_ret) != 0 */) {
-                release_sock(sk);
-                LOG_ERR("connect() failed, connect_ret=%d\n", connect_ret);
-                return ret;
-        }        
+		sock->state = SS_CONNECTING;
+
+		/* Just entered SS_CONNECTING state; the only
+		 * difference is that return value in non-blocking
+		 * case is EINPROGRESS, rather than EALREADY.
+		 */
+		err = -EINPROGRESS;
+		break;
+	}
 
         LOG_DBG("waiting for connect\n");
 
-        if (nonblock) {
-                if (ret == 0)
-                        ret = -EINPROGRESS;
-        } else {
+        if (!nonblock) {
                 /* Go to sleep, wait for timeout or successful connection */
                 release_sock(sk);
-                ret = wait_event_interruptible(*sk_sleep(sk), 
-                                                       connect_ret != 1);
+                err = wait_event_interruptible_timeout(*sk_sleep(sk), 
+                                                       connect_ret != 1,
+                                                       msecs_to_jiffies(5000));
                 lock_sock(sk);
 
                 /* Check if we were interrupted */
-                if (ret == 0) {
+                if (err == 0) {
                         if (connect_ret == 0) {
                                 LOG_DBG("connect returned, connect_ret=%d\n", connect_ret);
                                 
                                 if (connect_ret == 0) {
                                         sock->state = SS_CONNECTED;
+                                        err = 0;
                                 }
                         } else {
                                 LOG_ERR("connect() wait for BOUND failed, connect_ret=%d\n", connect_ret);
-                                ret = connect_ret;
+                                err = connect_ret;
                         }
                 }
         }
-
+        if (sk->sk_state != SCAFFOLD_CONNECTED)
+                goto sock_error;
+out:
         release_sock(sk);
                 
-        return ret;
+        return err;
+sock_error:
+	err = sock_error(sk) ? : -ECONNABORTED;
+	sock->state = SS_UNCONNECTED;
+	if (sk->sk_prot->disconnect(sk, flags))
+		sock->state = SS_DISCONNECTING;
+        goto out;
 }
 static int scaffold_sendmsg(struct kiocb *iocb, struct socket *sock, 
                             struct msghdr *msg, size_t size)
@@ -677,9 +716,8 @@ static unsigned int scaffold_poll(struct file *file, struct socket *sock,
 	mask = 0;
 
         if (sk->sk_state == SCAFFOLD_LISTEN) {
-                //return !sfnet_accept_queue_empty(sk) ? (POLLIN | POLLRDNORM) : 0;
-
-                return 0;
+                struct scaffold_sock *ssk = scaffold_sk(sk);
+                return list_empty(&ssk->accept_queue) ? 0 : (POLLIN | POLLRDNORM);
         }
 	/* exceptional events? */
 	if (sk->sk_err)
@@ -690,18 +728,13 @@ static unsigned int scaffold_poll(struct file *file, struct socket *sock,
 		mask |= POLLRDHUP;
 
 	/* readable? */
-        if (sk->sk_type == SOCK_STREAM) {
-/*
-                if (sfnet_tcp_bufcnt(sk, 1, 1) > 0 ||
-                    (sk->sk_shutdown & RCV_SHUTDOWN))
-                        mask |= POLLIN | POLLRDNORM;
-*/
-        } else if (sk->sk_type == SOCK_DGRAM) {
+        if (sk->sk_type == SOCK_DGRAM || 
+            sk->sk_type == SOCK_STREAM) {
                 if (!skb_queue_empty(&sk->sk_receive_queue) ||
                     (sk->sk_shutdown & RCV_SHUTDOWN))
                         mask |= POLLIN | POLLRDNORM;
         }
-
+        
 	/* Connection-based need to check for termination and startup */
 	if ((sk->sk_type == SOCK_STREAM || sk->sk_type == SOCK_DGRAM) && 
             sk->sk_state == SCAFFOLD_CLOSED)
@@ -723,7 +756,7 @@ static int scaffold_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 	switch (cmd) {
 /*
 		case SIOCSFMIGRATE:
-                        if (sk->sk_state != SCAFFOLD_BOUND) {
+                        if (sk->sk_state != SCAFFOLD_CONNECTED) {
                                 ret = -EINVAL;
                                 break;
                         }
@@ -741,23 +774,6 @@ static int scaffold_ioctl(struct socket *sock, unsigned int cmd, unsigned long a
 }
 #endif
 
-/* 
-   Below are mappings of generic datagram operations. These functions
-   should typically override, or call, protocol specific functions
-   (defined in struct proto), e.g., for UDP and TCP. This allows
-   better code reuse and the ability to override functions that
-   require protocol specific implementations.
-
-   However, currently the above functionality is not really used by
-   SCAFFOLD. This is primarily because UDP and TCP protocols in
-   SCAFFOLD are very similar (both connection oriented).
-
-   In the future, SCAFFOLD sockets should be structured more like the
-   inet family type. See, for example, the relationship between the
-   inet_sock family type and protocol specific implementations, like
-   UDP and TCP, in the Linux source code.
-
- */
 static const struct proto_ops scaffold_ops = {
 	.family =	PF_SCAFFOLD,
 	.owner =	THIS_MODULE,
@@ -787,7 +803,7 @@ static void scaffold_sock_destruct(struct sock *sk)
 	/* __skb_queue_purge(&sk->sk_error_queue); */
 
 	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SCAFFOLD_CLOSED) {
-		LOG_ERR("Attempt to release Scaffold TCP socket in state %d %p\n",
+		LOG_ERR("Bad state %d %p\n",
                         sk->sk_state, sk);
 		return;
 	}
@@ -811,8 +827,9 @@ static void scaffold_sock_destruct(struct sock *sk)
                sk, atomic_read(&scaffold_nr_socks));
 }
 
-struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t priority,
-                               int protocol, struct proto *prot)
+struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
+                               gfp_t priority, int protocol, 
+                               struct proto *prot)
 {
         struct sock *sk;
 
@@ -828,9 +845,6 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, gfp_t prior
 	sk->sk_destruct	= scaffold_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
-        /* TODO: do not use host controller mode by default */
-        //scaffold_sock_set_flag(scaffold_sk(sk), SCAFFOLD_FLAG_HOST_CTRL_MODE);
-
         if (__scaffold_assign_sockid(sk) < 0) {
                 LOG_DBG("could not assign sock id\n");
                 sock_put(sk);
@@ -895,7 +909,8 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
         }
 
         /* Initialize accept queue */
-        INIT_LIST_HEAD(&scaffold_sk(sk)->accept_q);
+        INIT_LIST_HEAD(&scaffold_sk(sk)->accept_queue);
+        INIT_LIST_HEAD(&scaffold_sk(sk)->syn_queue);
         
         if (sk->sk_prot->init) {
                 /* Call protocol specific init */

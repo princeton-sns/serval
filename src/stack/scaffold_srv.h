@@ -23,6 +23,13 @@ struct scaffold_skb_cb {
         unsigned char hard_addr[];
 };
 
-#define SCAFFOLD_SKB_CB(__skb)((struct scaffold_skb_cb *)&((__skb)->cb[0]))
+static inline struct scaffold_skb_cb *__scaffold_skb_cb(struct sk_buff *skb)
+{
+	struct scaffold_skb_cb * sscb = 
+		(struct scaffold_skb_cb *)&(skb)->cb[0];
+	return sscb;
+}
+
+#define SCAFFOLD_SKB_CB(__skb) __scaffold_skb_cb(__skb)
 
 #endif /* _SCAFFOLD_SRV_H_ */

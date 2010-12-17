@@ -24,75 +24,20 @@
 #endif
 #endif /* OS_USER */
 
-static int scaffold_udp_init_sock(struct sock *sk)
-{
-        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
-        LOG_DBG("\n");
+#define EXTRA_HDR (20)
+#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR) // payload + LL + IP + extra
 
-        return 0;
-}
+static int scaffold_udp_connection_request(struct sock *sk, 
+                                           struct sk_buff *skb);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
-static int scaffold_udp_destroy_sock(struct sock *sk)
-#else
-static void scaffold_udp_destroy_sock(struct sock *sk)
-#endif
-{
-        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
-        return 0;
-#endif
-}
+struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
+                                   struct scaffold_request_sock *req,
+                                   struct dst_entry *dst);
 
-static void scaffold_udp_close(struct sock *sk, long timeout)
-{
-        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
-        LOG_DBG("\n");
-}
-
-static int scaffold_udp_disconnect(struct sock *sk, int flags)
-{
-        LOG_DBG("\n");
-        return 0;
-}
-
-static void scaffold_udp_shutdown(struct sock *sk, int how)
-{
-        LOG_DBG("\n");
-}
-
-static int scaffold_udp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
-{
-        LOG_DBG("\n");
-
-        FREE_SKB(skb);
-
-        return -1;
-}
-
-/* 
-   Receive from network
-*/
-int scaffold_udp_rcv(struct sk_buff *skb)
-{
-	struct sock *sk;
-        struct udphdr *udph = udp_hdr(skb);
-        struct sock_id *sockid = (struct sock_id *)&udph->dest;
-        int err = 0;
-        
-        LOG_DBG("udp packet len=%u\n", ntohs(udph->len));
-        
-        sk = scaffold_sock_lookup_sockid(sockid);
-
-        if (!sk) {
-                LOG_ERR("No matching scaffold sock\n");
-                FREE_SKB(skb);
-        } else {
-                FREE_SKB(skb);
-        }
-
-        return err;
-}
+static struct scaffold_sock_af_ops scaffold_udp_af_ops = {
+        .conn_request = scaffold_udp_connection_request,
+        .syn_recv = scaffold_udp_syn_recv,
+};
 
 /* from fastudpsrc */
 static void udp_checksum(uint16_t total_len,
@@ -111,10 +56,9 @@ static void udp_checksum(uint16_t total_len,
         uh->check = ~csum & 0xFFFF;
 }
 
-#define EXTRA_HDR (20)
-#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR) // payload + LL + IP + extra
-
-static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
+static int scaffold_udp_transmit_skb(struct sock *sk, 
+                                     struct sk_buff *skb,
+                                     enum scaffold_packet_type type)
 {
         int err;
         unsigned short tot_len;
@@ -124,7 +68,7 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 	skb_set_owner_w(skb, sk);
-        SCAFFOLD_SKB_CB(skb)->pkttype = PKT_TYPE_DATA;
+        SCAFFOLD_SKB_CB(skb)->pkttype = type;
         
         tot_len = skb->len + 20 + 14;
         
@@ -148,6 +92,131 @@ static int scaffold_udp_transmit_skb(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
+static int scaffold_udp_init_sock(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+
+        ssk->af_ops = &scaffold_udp_af_ops;
+
+        LOG_DBG("\n");
+        
+        return 0;
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+static int scaffold_udp_destroy_sock(struct sock *sk)
+#else
+static void scaffold_udp_destroy_sock(struct sock *sk)
+#endif
+{
+        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+        return 0;
+#endif
+}
+
+static void scaffold_udp_close(struct sock *sk, long timeout)
+{
+        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
+        LOG_DBG("\n");
+}
+
+static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr, 
+                                int addr_len)
+{
+        struct sk_buff *skb;
+        struct service_id *srvid = &((struct sockaddr_sf *)uaddr)->sf_srvid;
+        int err;
+
+        LOG_DBG("addr_len=%d\n", addr_len);
+
+	if (addr_len < sizeof(struct sockaddr_sf))
+		return -EINVAL;
+        
+        skb = ALLOC_SKB(UDP_MAX_HDR, GFP_KERNEL);
+
+        if (!skb)
+                return -ENOMEM;
+        
+        skb_reserve(skb, UDP_MAX_HDR);
+        
+        memcpy(&SCAFFOLD_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
+         
+        err = scaffold_udp_transmit_skb(sk, skb, SCAFFOLD_PKT_SYN);
+        
+        if (err < 0) {
+                LOG_ERR("udp xmit failed\n");
+                FREE_SKB(skb);
+        }
+
+        return err;
+}
+
+static int scaffold_udp_disconnect(struct sock *sk, int flags)
+{
+        LOG_DBG("\n");
+        return 0;
+}
+
+static void scaffold_udp_shutdown(struct sock *sk, int how)
+{
+        LOG_DBG("\n");
+}
+
+static int scaffold_udp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
+{
+        LOG_DBG("\n");
+
+        FREE_SKB(skb);
+
+        return -1;
+}
+
+int scaffold_udp_connection_request(struct sock *sk, struct sk_buff *skb)
+{
+        LOG_DBG("SYN received\n");
+        FREE_SKB(skb);
+        return 0;
+}
+
+struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
+                                   struct scaffold_request_sock *req,
+                                   struct dst_entry *dst)
+{
+        return NULL;
+}
+
+/* 
+   Receive from network
+*/
+int scaffold_udp_rcv(struct sk_buff *skb)
+{
+        struct udphdr *udph = udp_hdr(skb);
+        /*
+	struct sock *sk;
+        struct iphdr *iph = ip_hdr(skb);
+        struct service_id *srvid = (struct service_id *)&udph->dest;
+        */
+        int err = 0;
+        
+        LOG_DBG("udp packet len=%u\n", ntohs(udph->len));
+        
+        /*
+        sk = scaffold_sock_lookup_sockid(sockid);
+
+        if (!sk) {
+                LOG_ERR("No matching scaffold sock\n");
+                FREE_SKB(skb);
+        } else {
+                FREE_SKB(skb);
+        }
+        */
+
+        FREE_SKB(skb);
+
+        return err;
+}
+
 static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk, 
                                 struct msghdr *msg, size_t len)
 {
@@ -165,7 +234,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         LOG_DBG("sending message\n");
 
-	if (msg->msg_name && sk->sk_state == SCAFFOLD_UNBOUND) {
+	if (msg->msg_name && sk->sk_state == SCAFFOLD_BOUND) {
 		struct sockaddr_sf *addr = 
                         (struct sockaddr_sf *)msg->msg_name;
 
@@ -177,7 +246,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		}
                 
                 srvid = &addr->sf_srvid;
-        } else if (sk->sk_state != SCAFFOLD_BOUND) {
+        } else if (sk->sk_state != SCAFFOLD_CONNECTED) {
                 return -EDESTADDRREQ;
         }
 
@@ -211,7 +280,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         lock_sock(sk);
                 
-        err = scaffold_udp_transmit_skb(sk, skb);
+        err = scaffold_udp_transmit_skb(sk, skb, SCAFFOLD_PKT_DATA);
         
         if (err < 0) {
                 LOG_ERR("udp xmit failed\n");
@@ -235,8 +304,8 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
         
         lock_sock(sk);
         
-        if (sk->sk_state != SCAFFOLD_UNBOUND && 
-            sk->sk_state != SCAFFOLD_BOUND && 
+        if (sk->sk_state != SCAFFOLD_BOUND && 
+            sk->sk_state != SCAFFOLD_CONNECTED && 
             sk->sk_state != SCAFFOLD_CLOSED) {
                 /* SCAFFOLD_CLOSED is a valid state here because recvmsg
                  * should return 0 and not an error */
@@ -334,7 +403,8 @@ struct proto scaffold_udp_proto = {
 	.owner			= THIS_MODULE,
         .init                   = scaffold_udp_init_sock,
         .destroy                = scaffold_udp_destroy_sock,        
-	.close  		= scaffold_udp_close,     
+	.close  		= scaffold_udp_close,   
+        .connect                = scaffold_udp_connect,
 	.disconnect 		= scaffold_udp_disconnect,
 	.shutdown		= scaffold_udp_shutdown,
         .sendmsg                = scaffold_udp_sendmsg,

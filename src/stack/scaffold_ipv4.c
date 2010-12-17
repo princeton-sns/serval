@@ -10,6 +10,7 @@
 #include <output.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
+#include <linux/inetdevice.h>
 #elif !defined(OS_ANDROID)
 #include <netinet/if_ether.h>
 #endif
@@ -56,7 +57,6 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 {
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
-        struct scaffold_sock *ssk = scaffold_sk(sk);
 
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
@@ -71,7 +71,18 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->frag_off = 0;
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
         iph->protocol = sk->sk_protocol;
-        memcpy(&iph->saddr, &ssk->src_flowid, sizeof(struct in_addr));
+#if defined(OS_LINUX_KERNEL)
+        if (skb->dev) {
+                struct in_device *indev = in_dev_get(skb->dev);
+                
+                in_dev_put(indev);
+        }
+#else
+        {
+                struct scaffold_sock *ssk = scaffold_sk(sk);
+                memcpy(&iph->saddr, &ssk->src_flowid, sizeof(struct in_addr));
+        }
+#endif
         memcpy(&iph->daddr, &ipcm->addr, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
 
@@ -142,10 +153,49 @@ inhdr_error:
         return ret;
 }
 
+int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
+                                     uint32_t saddr, uint32_t daddr, 
+                                     struct ip_options *opt)
+{
+	struct ipcm_cookie ipcm;
+        int err = 0;
+
+	memset(&ipcm, 0, sizeof(ipcm));
+
+        ipcm.addr = daddr;
+
+        err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
+        
+        if (err < 0) {
+                LOG_ERR("hdr failed\n");
+                FREE_SKB(skb);
+                return err;
+        }
+
+#if defined(ENABLE_DEBUG)
+        {
+                struct iphdr *iph;
+                unsigned int iph_len;
+                iph = ip_hdr(skb);
+                iph_len = iph->ihl << 2;
+                
+                LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
+                        skb->len, iph_len, iph->ihl);
+        }
+#endif
+
+        /* Transmit */
+        err = scaffold_output(skb);
+
+        if (err < 0) {
+                LOG_ERR("xmit failed\n");
+                FREE_SKB(skb);
+        }
+        return err;
+}
+
 int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 {
-        struct iphdr *iph;
-        unsigned int iph_len;
 	struct ipcm_cookie ipcm;
         int err = 0;
 
@@ -161,12 +211,17 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
                 return err;
         }
 
-        iph = ip_hdr(skb);
-        iph_len = iph->ihl << 2;
-
-        LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
-                skb->len, iph_len, iph->ihl);
-
+#if defined(ENABLE_DEBUG)
+        {
+                struct iphdr *iph;
+                unsigned int iph_len;
+                iph = ip_hdr(skb);
+                iph_len = iph->ihl << 2;
+                
+                LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
+                        skb->len, iph_len, iph->ihl);
+        }
+#endif
         /* Transmit */
         err = scaffold_output(skb);
 

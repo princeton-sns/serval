@@ -23,7 +23,7 @@
 
 static int scaffold_sock_is_valid_conn_state(int state)
 {
-        return (state == SCAFFOLD_BOUND ||
+        return (state == SCAFFOLD_CONNECTED ||
                 state == TCP_FINWAIT1 ||
                 state == TCP_FINWAIT2 ||
                 state == TCP_SIMCLOSE ||
@@ -55,6 +55,13 @@ static void scaffold_tcp_destroy_sock(struct sock *sk)
 static void scaffold_tcp_close(struct sock *sk, long timeout)
 {
         //struct scaffold_tcp_sock *tsk = scaffold_tcp_sk(sk);
+}
+
+static int scaffold_tcp_connect(struct sock *sk, struct sockaddr *uaddr, 
+                                int addr_len)
+{
+        LOG_DBG("\n");
+        return 0;
 }
 
 static int scaffold_tcp_disconnect(struct sock *sk, int flags)
@@ -155,7 +162,7 @@ static int scaffold_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msgh
 
                 lock_sock(sk);
                 
-                if (sk->sk_state != SCAFFOLD_BOUND)  {
+                if (sk->sk_state != SCAFFOLD_CONNECTED)  {
                         release_sock(sk);
                         return -ENOTCONN;
                 }
@@ -238,7 +245,7 @@ static int scaffold_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
                                 lock_sock(sk);
 
-                                if (sk->sk_state != SCAFFOLD_BOUND)  {
+                                if (sk->sk_state != SCAFFOLD_CONNECTED)  {
                                         retval = -ENOTCONN;
                                         break;
                                 }
@@ -333,6 +340,7 @@ struct proto scaffold_tcp_proto = {
         .init                   = scaffold_tcp_init_sock,
         .close                  = scaffold_tcp_close,
         .destroy                = scaffold_tcp_destroy_sock,
+	.connect		= scaffold_tcp_connect,
 	.disconnect		= scaffold_tcp_disconnect,
 	.shutdown		= scaffold_tcp_shutdown,
         .sendmsg                = scaffold_tcp_sendmsg,

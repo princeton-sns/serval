@@ -48,6 +48,7 @@ struct proto;
 
 struct sock {
 	unsigned short          sk_family;
+        gfp_t                   sk_allocation;
         struct hlist_node	sk_node;
 	atomic_t		sk_refcnt;
         unsigned int		sk_shutdown  : 2,

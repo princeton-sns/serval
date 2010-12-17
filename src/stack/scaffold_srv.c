@@ -7,6 +7,7 @@
 #include <scaffold/netdevice.h>
 #include <scaffold_srv.h>
 #include <scaffold_ipv4.h>
+#include <netinet/scaffold.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
 #elif !defined(OS_ANDROID)
@@ -17,44 +18,61 @@
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
 
-static int handle_syn(struct sk_buff *skb, struct service_id *srvid)
-{
-        struct sock *sk;
-
-        sk = scaffold_sock_lookup_serviceid(srvid);
-
-        if (!sk)
-                return -1;
-
-        return 0;
-}
-
 int scaffold_srv_rcv(struct sk_buff *skb)
 {
-	struct service_id srvid;
-	struct udphdr *udph = udp_hdr(skb);
+        struct sock *sk;
+	struct service_id *srvid_src = NULL;
+        struct service_id *srvid_dst = NULL;
         unsigned char pkt_type = ip_hdr(skb)->tos;
 	unsigned char protocol = ip_hdr(skb)->protocol;
 	int err = 0;
 
-	memcpy(&srvid, &udph->source, sizeof(srvid));
- 
+        switch (protocol) {
+        case IPPROTO_UDP:
+        {
+                struct udphdr *udph = udp_hdr(skb);
+                srvid_src = (struct service_id *)&udph->source;
+                srvid_dst = (struct service_id *)&udph->dest;
+                break;
+        }
+        case IPPROTO_TCP:
+        {
+                struct tcphdr *tcph = tcp_hdr(skb);
+                srvid_src = (struct service_id *)&tcph->source;
+                srvid_dst = (struct service_id *)&tcph->dest;
+                break;
+        }
+        default:
+                LOG_ERR("unsupported protocol=%u\n", protocol);
+                err = -1;
+                goto out_error;
+        }
+
 	/* Cache this service FIXME: should not assume ETH_ALEN here. */
-	err = service_add(&srvid, sizeof(srvid), skb->dev, 
-			  SCAFFOLD_SKB_CB(skb)->hard_addr, ETH_ALEN, GFP_ATOMIC);
+	err = service_add(srvid_src, sizeof(*srvid_src), skb->dev, 
+			  SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                          ETH_ALEN, GFP_ATOMIC);
 
 	if (err < 0) {
 		LOG_ERR("could not cache service for incoming packet\n");
 	}
 
         switch (pkt_type) {
-        case PKT_TYPE_SYN:
-                err = handle_syn(skb, &srvid);
+        case SCAFFOLD_PKT_SYN:
+                LOG_DBG("SYN received\n");
+                sk = scaffold_sock_lookup_serviceid(srvid_dst);
+
+                if (!sk) {
+                        LOG_ERR("No matching scaffold sock\n");
+                        err = -1;
+                        goto out_error;
+                }
+                err = scaffold_sk(sk)->af_ops->conn_request(sk, skb);
                 break;
-        case PKT_TYPE_SYNACK:
+        case SCAFFOLD_PKT_SYNACK:
                 /* Connection completed */
                 break;
-        case PKT_TYPE_DATA:
+        case SCAFFOLD_PKT_DATA:
                 switch (protocol) {
                 case IPPROTO_UDP:
                         err = scaffold_udp_rcv(skb);
@@ -64,7 +82,8 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                         break;
                 default:
                         LOG_ERR("unsupported protocol=%u\n", protocol);
-                        FREE_SKB(skb);
+                        err = -1;
+                        goto out_error;
                 }
                 break;
         default:
@@ -72,6 +91,38 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                 FREE_SKB(skb);
         }
 	return err;
+out_error:
+        FREE_SKB(skb);
+        return err;
+}
+
+#define EXTRA_HDR (20)
+#define SCAFFOLD_MAX_HDR (MAX_HEADER + 20 +                             \
+                          sizeof(struct scaffold_hdr) +                 \
+                          sizeof(struct scaffold_service_ext) +         \
+                          EXTRA_HDR)
+
+int scaffold_srv_connect(struct sock *sk)
+{
+        //struct scaffold_sock *ssk = scaffold_sk(sk);
+        struct scaffold_service_ext *srvext;
+        struct sk_buff *skb;
+        
+        skb = ALLOC_SKB(SCAFFOLD_MAX_HDR, sk->sk_allocation);
+        
+        if (!skb)
+                return -ENOBUFS;
+        
+	skb_set_owner_w(skb, sk);
+        skb_reserve(skb, SCAFFOLD_MAX_HDR);
+
+        srvext = (struct scaffold_service_ext *)skb_push(skb, sizeof(struct scaffold_service_ext));
+
+        SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_DATA;
+        
+        FREE_SKB(skb);
+
+        return 0;
 }
 
 int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)

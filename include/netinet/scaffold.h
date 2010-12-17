@@ -86,16 +86,65 @@ struct flow_id {
 };
 
 enum scaffold_packet_type { 
-        PKT_TYPE_DATA = 1,
-        PKT_TYPE_SYN,
-        PKT_TYPE_SYNACK,
-        PKT_TYPE_ACK,
-        PKT_TYPE_RESET,
-        PKT_TYPE_CLOSE,
-        PKT_TYPE_MIG,
-        PKT_TYPE_RSYN,
-        PKT_TYPE_MIGDATA,
-        PKT_TYPE_RSYNACK
+        SCAFFOLD_PKT_DATA = 1,
+        SCAFFOLD_PKT_SYN,
+        SCAFFOLD_PKT_SYNACK,
+        SCAFFOLD_PKT_ACK,
+        SCAFFOLD_PKT_RESET,
+        SCAFFOLD_PKT_CLOSE,
+        SCAFFOLD_PKT_MIG,
+        SCAFFOLD_PKT_RSYN,
+        SCAFFOLD_PKT_MIGDATA,
+        SCAFFOLD_PKT_RSYNACK
 };
+
+struct scaffold_hdr {
+        uint16_t length;
+        uint8_t protocol;
+        uint8_t flags;
+#define SFHDR_FIN	0x01
+#define SFHDR_SYN	0x02
+#define SFHDR_RST	0x04
+#define SFHDR_MIG	0x08
+#define SFHDR_ACK	0x10
+#define SFHDR_RSYN	0x20
+};
+
+/* Generic extension header */
+struct scaffold_hdr_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+};
+
+#define SCAFFOLD_FLOW_EXT 1
+
+struct scaffold_flow_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        struct flow_id src;
+        struct flow_id dst;
+};
+
+#define SCAFFOLD_SERVICE_EXT 2
+
+struct scaffold_service_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        struct service_id srv_src;
+        struct service_id srv_dst;
+};
+
+#define SCAFFOLD_DATA_EXT 3
+
+struct scaffold_data_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        uint32_t seqno;
+};
+
 
 #endif /* _SCAFFOLD_H */

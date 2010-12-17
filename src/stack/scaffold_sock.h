@@ -7,17 +7,19 @@
 #include <scaffold/lock.h>
 #include <scaffold/sock.h>
 #include <scaffold/net.h>
+#include <scaffold/timer.h>
 #if defined(OS_USER)
 #include <string.h>
 #endif
+#include <scaffold_request_sock.h>
 
 enum scaffold_sock_state {
         SCAFFOLD_CLOSED = 1, 
         SCAFFOLD_REGISTER,
-        SCAFFOLD_UNBOUND,
+        SCAFFOLD_BOUND,
         SCAFFOLD_REQUEST,
         SCAFFOLD_RESPOND,
-        SCAFFOLD_BOUND,
+        SCAFFOLD_CONNECTED,
         SCAFFOLD_CLOSING,
         SCAFFOLD_TIMEWAIT,
         SCAFFOLD_UNREGISTER,
@@ -40,6 +42,18 @@ enum scaffold_sock_flags {
         SCAFFOLD_FLAG_HOST_CTRL_MODE = 0,
 };
 
+struct scaffold_sock_af_ops {
+        /* These functions are taken from inet_connection_sock and are
+         * not all necessarily used at this point */
+	int	    (*queue_xmit)(struct sk_buff *skb);
+	void	    (*send_check)(struct sock *sk, struct sk_buff *skb);
+	int	    (*rebuild_header)(struct sock *sk);
+	int	    (*conn_request)(struct sock *sk, struct sk_buff *skb);
+	struct sock *(*syn_recv)(struct sock *sk, struct sk_buff *skb,
+                                 struct scaffold_request_sock *req,
+                                 struct dst_entry *dst);
+};
+
 /* The AF_SCAFFOLD socket */
 struct scaffold_sock {
 	/* NOTE: sk has to be the first member */
@@ -49,12 +63,15 @@ struct scaffold_sock {
 #endif
         unsigned char           flags;
         void                    *hash_key;
+        struct scaffold_sock_af_ops *af_ops;
+ 	struct timer_list	retransmit_timer;
         struct sock_id          sockid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
         struct flow_id          src_flowid;
         struct flow_id          dst_flowid;
-        struct list_head        accept_q;
+        struct list_head        syn_queue;
+        struct list_head        accept_queue;
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;

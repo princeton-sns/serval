@@ -264,7 +264,6 @@ int main(int argc, char **argv)
                 FD_SET(ctrlsock, &readfds);               
                 nfds = MAX(ctrlsock, nfds);
                 */
-                
                 if (timer_next_timeout_timeval(&timeout))
                         t = &timeout;
 
@@ -293,7 +292,12 @@ int main(int argc, char **argv)
                         }
                         if (FD_ISSET(ctrlsock, &readfds)) {
                                 LOG_DBG("ctrl sock readable\n");
-                                ctrlsock_read(ctrlsock);
+                                ret = ctrlsock_read(ctrlsock);
+
+                                if (ret == 0) {
+                                        LOG_DBG("ctrl sock closed by other end\n");
+                                        should_exit = 1;
+                                }
                         }
                 }        
         }

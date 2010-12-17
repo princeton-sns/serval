@@ -347,7 +347,7 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
         memcpy(&addr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         err = c->sock->ops->connect(c->sock, (struct sockaddr *)&addr, 
-                                    sizeof(req->srvid), req->flags); 
+                                    sizeof(addr), req->flags); 
 
         client_msg_hdr_init(&rsp.msghdr, MSG_CONNECT_RSP);
         memcpy(&rsp.srvid, &req->srvid, sizeof(req->srvid));
@@ -401,13 +401,13 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
                 goto out;
         }
 
-        /* This is a bit ugly: we need to kill the "struct sock" that
-         * was created as a result of creating the new client, and
-         * then graft the new "struct sock" to the client socket when
-         * we pull it from the accept queue.  This is because, when
-         * clients are created, there is no way to initially know if
-         * the client's sock will be a locally created socket or one
-         * created as a result of accept().
+        /* This is a bit ugly: we need to kill the existing "struct
+         * sock" associated with the client. This socket was created
+         * as a result of creating the new client, because at that
+         * time, there was no way to know whether the client's sock
+         * would be a connection initiating sock or a result of
+         * accept().and then graft the new "struct sock" to the client
+         * socket when we pull it from the accept queue.
          */
         sk_common_release(c->sock->sk);
         
@@ -417,6 +417,7 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
                 LOG_ERR("accept2 failed: %s\n", KERN_STRERROR(err));
                 rsp.error = KERN_ERR(err);
         }
+        sock_put(psk);
 out:
 	return client_msg_write(c->fd, &rsp.msghdr);
 }
