@@ -255,7 +255,7 @@ void service_entry_dev_iterate_end(struct service_entry *se)
 }
 
 /* 
-   Calling this function must be preceeded by a call to
+   Calls to this function must be preceeded by a call to
    service_entry_dev_iterate_begin() and followed by
    service_entry_dev_iterate_end(). 
 */
@@ -289,7 +289,7 @@ int service_entry_dev_dst(struct service_entry *se, unsigned char *dst,
         return 0;
 }
 
-int service_entry_print(struct bst_node *n, char *buf, int buflen)
+static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
 {
 #define PREFIX_BUFLEN (sizeof(struct service_id)*2+4)
         char prefix[PREFIX_BUFLEN];
@@ -318,6 +318,11 @@ int service_entry_print(struct bst_node *n, char *buf, int buflen)
         read_unlock_bh(&se->devlock);
 
         return len;
+}
+
+int service_entry_print(struct service_entry *se, char *buf, int buflen)
+{
+        return __service_entry_print(se->node, buf, buflen);
 }
 
 static int service_table_print(struct service_table *tbl, char *buf, int buflen)
@@ -496,7 +501,7 @@ void service_table_init(struct service_table *tbl)
         bst_init(&tbl->tree);
         tbl->srv_ops.init = service_entry_init;
         tbl->srv_ops.destroy = service_entry_destroy;
-        tbl->srv_ops.print = service_entry_print;
+        tbl->srv_ops.print = __service_entry_print;
         rwlock_init(&tbl->lock);
 }
 /*

@@ -44,6 +44,7 @@ int service_del_dev(const char *devname);
 struct service_entry *service_find(struct service_id *srvid);
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
+int service_entry_print(struct service_entry *se, char *buf, int buflen);
 int services_print(char *buf, int buflen);
 
 static inline struct service_entry *skb_service_entry(struct sk_buff *skb)

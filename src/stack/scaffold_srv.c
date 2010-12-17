@@ -131,7 +131,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 	struct net_device *dev;
 	int err = 0;
 
-	if (sk->sk_state == SCAFFOLD_BOUND) {
+	if (sk->sk_state == SCAFFOLD_CONNECTED) {
 		err = scaffold_ipv4_xmit_skb(sk, skb);
                 
 		if (err < 0) {
@@ -149,7 +149,10 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
-
+        
+        /* 
+           Send on all interfaces listed for this service.
+        */
 	service_entry_dev_iterate_begin(se);
 	
 	dev = service_entry_dev_next(se);
@@ -158,23 +161,14 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		struct sk_buff *cskb;
 		struct net_device *next_dev;
 		
+                LOG_DBG("tx dev=%s\n", dev->name);
+
 		/* Remember the hardware destination */
 		service_entry_dev_dst(se, SCAFFOLD_SKB_CB(skb)->hard_addr, 6);
 
 		next_dev = service_entry_dev_next(se);
 		
-		/* 
-		   Send on all interfaces listed for this service.
-		   
-		   TODO: The service entry should be resolved here,
-		   but this loop should really be at a lower layer,
-		   just before transmission. However, there is
-		   currently no way to easily pass the refcounted
-		   service entry with the skb (should be a dst_entry)
-		   and therefor the loop is currently here. 
-		*/
-
-		if (next_dev == NULL) {
+                if (next_dev == NULL) {
 			cskb = skb;
 		} else {
 			cskb = skb_clone(skb, current ? 
@@ -186,7 +180,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 				break;
 			}
 		}
-		
+                
 		/* Set the output device */
 		skb_set_dev(cskb, dev);
 

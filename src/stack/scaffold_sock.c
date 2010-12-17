@@ -17,14 +17,11 @@ struct scaffold_table listen_table;
 static const char *sock_state_str[] = {
         "UNDEFINED",
         "SCAFFOLD_CLOSED",
-        "SCAFFOLD_REGISTER",
-        "SCAFFOLD_UNBOUND",
         "SCAFFOLD_REQUEST",
         "SCAFFOLD_RESPOND",
-        "SCAFFOLD_BOUND",
+        "SCAFFOLD_CONNECTED",
         "SCAFFOLD_CLOSING",
         "SCAFFOLD_TIMEWAIT",
-        "SCAFFOLD_UNREGISTER",
         "SCAFFOLD_MIGRATE",
         "SCAFFOLD_RECONNECT",
         "SCAFFOLD_RRESPOND",
@@ -104,10 +101,11 @@ static struct sock *scaffold_sock_lookup(struct scaffold_table *table,
                 struct scaffold_sock *ssk = scaffold_sk(sk);
                 if (memcmp(key, &ssk->hash_key, keylen) == 0) {
                         sock_hold(sk);
-                        break;
+                        goto out;
                 }
         }
-
+        sk = NULL;
+ out:
         spin_unlock_bh(&slot->lock);
         
         return sk;
@@ -116,13 +114,13 @@ static struct sock *scaffold_sock_lookup(struct scaffold_table *table,
 struct sock *scaffold_sock_lookup_sockid(struct sock_id *sockid)
 {
         return scaffold_sock_lookup(&established_table, &init_net, 
-                                    sockid, sizeof(struct sock_id));
+                                    sockid, sizeof(*sockid));
 }
 
 struct sock *scaffold_sock_lookup_serviceid(struct service_id *srvid)
 {
         return scaffold_sock_lookup(&listen_table, &init_net, 
-                                    srvid, sizeof(struct service_id));
+                                    srvid, sizeof(*srvid));
 }
 
 struct sock *scaffold_sock_lookup_skb(struct sk_buff *skb)

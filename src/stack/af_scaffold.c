@@ -125,7 +125,7 @@ static int scaffold_autobind(struct sock *sk)
                 }
         }
 #endif
-        scaffold_sock_set_state(sk, SCAFFOLD_BOUND);
+        scaffold_sock_set_flag(ssk, SSK_FLAG_BOUND);
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
@@ -161,7 +161,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         if (host_ctrl_mode) {
                 ret = 1;
-                scaffold_sock_set_state(sk, SCAFFOLD_BOUND);
+                scaffold_sock_set_flag(scaffold_sk(sk), SSK_FLAG_BOUND);
         } else {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
@@ -315,8 +315,8 @@ static int scaffold_listen(struct socket *sock, int backlog)
                 goto out;
         }
         
-	if (sk->sk_state != SCAFFOLD_BOUND) {
-                LOG_ERR("socket not in UNBOUND state\n");
+	if (!scaffold_sock_flag(scaffold_sk(sk), SSK_FLAG_BOUND)) {
+                LOG_ERR("socket not BOUND\n");
                 err = -EDESTADDRREQ;
                 goto out;
         }

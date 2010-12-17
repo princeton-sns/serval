@@ -15,14 +15,11 @@
 
 enum scaffold_sock_state {
         SCAFFOLD_CLOSED = 1, 
-        SCAFFOLD_REGISTER,
-        SCAFFOLD_BOUND,
         SCAFFOLD_REQUEST,
         SCAFFOLD_RESPOND,
         SCAFFOLD_CONNECTED,
         SCAFFOLD_CLOSING,
         SCAFFOLD_TIMEWAIT,
-        SCAFFOLD_UNREGISTER,
         SCAFFOLD_MIGRATE,
         SCAFFOLD_RECONNECT,
         SCAFFOLD_RRESPOND,
@@ -39,7 +36,7 @@ enum scaffold_sock_state {
 #define SCAFFOLD_SOCK_STATE_MAX (TCP_SIMCLOSE)
 
 enum scaffold_sock_flags {
-        SCAFFOLD_FLAG_HOST_CTRL_MODE = 0,
+        SSK_FLAG_BOUND = 0,
 };
 
 struct scaffold_sock_af_ops {

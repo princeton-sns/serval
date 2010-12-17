@@ -173,12 +173,10 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         }
 
 #if defined(ENABLE_DEBUG)
-        {
-                struct iphdr *iph;
-                unsigned int iph_len;
-                iph = ip_hdr(skb);
-                iph_len = iph->ihl << 2;
-                
+        {                
+                struct iphdr *iph = ip_hdr(skb);
+                unsigned int iph_len = iph->ihl << 2;
+
                 LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
                         skb->len, iph_len, iph->ihl);
         }
@@ -213,10 +211,8 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 
 #if defined(ENABLE_DEBUG)
         {
-                struct iphdr *iph;
-                unsigned int iph_len;
-                iph = ip_hdr(skb);
-                iph_len = iph->ihl << 2;
+                struct iphdr *iph = ip_hdr(skb);
+                unsigned int iph_len = iph->ihl << 2;
                 
                 LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
                         skb->len, iph_len, iph->ihl);

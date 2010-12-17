@@ -472,6 +472,14 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
         }
+        /*
+        {
+                char buf[2000];
+                services_print(buf, 2000);
+
+                printf("%s\n", buf);
+        }
+        */
 out:
         close(fd);
 
