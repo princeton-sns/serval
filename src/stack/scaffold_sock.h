@@ -60,6 +60,7 @@ struct scaffold_sock {
 #endif
         unsigned char           flags;
         void                    *hash_key;
+        unsigned int            hash_key_len;
         struct scaffold_sock_af_ops *af_ops;
  	struct timer_list	retransmit_timer;
         struct sock_id          sockid;

@@ -99,7 +99,7 @@ static struct sock *scaffold_sock_lookup(struct scaffold_table *table,
         
         hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
                 struct scaffold_sock *ssk = scaffold_sk(sk);
-                if (memcmp(key, &ssk->hash_key, keylen) == 0) {
+                if (memcmp(key, ssk->hash_key, keylen) == 0) {
                         sock_hold(sk);
                         goto out;
                 }
@@ -174,8 +174,8 @@ static void __scaffold_table_hash(struct scaffold_table *table, struct sock *sk)
         struct scaffold_hslot *slot;
 
         sk->sk_hash = scaffold_hashfn(sock_net(sk), 
-                                      &ssk->sockid,
-                                      sizeof(struct sock_id),
+                                      ssk->hash_key,
+                                      ssk->hash_key_len,
                                       table->mask);
 
         slot = &table->hash[sk->sk_hash];
@@ -202,11 +202,15 @@ static void __scaffold_sock_hash(struct sock *sk)
         LOG_DBG("hashing socket\n");
 
         if (sk->sk_state == SCAFFOLD_LISTEN) {
+                LOG_DBG("Hashing socket based on service id %s\n",
+                        service_id_to_str(&scaffold_sk(sk)->local_srvid));
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_srvid;
+                scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->local_srvid);
                 __scaffold_table_hash(&listen_table, sk);
 
         } else { 
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->sockid;
+                scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->sockid);
                 __scaffold_table_hash(&established_table, sk);
         }
 }
