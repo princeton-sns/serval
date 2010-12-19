@@ -14,6 +14,40 @@ static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
 }
 #endif
 
+#include <linux/inetdevice.h>
+
+static inline int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr)
+{
+        struct in_device *indev = in_dev_get(dev);
+        int ret = 0;
+
+        for_primary_ifa(indev) {
+                memcpy(addr, &ifa->ifa_address, 4);
+                ret = 1;
+                break;
+        }
+        endfor_ifa(indev);
+
+        in_dev_put(indev);
+        return ret;
+}
+
+static inline int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr)
+{
+        struct in_device *indev = in_dev_get(dev);
+        int ret = 0;
+
+        for_primary_ifa(indev) {
+                memcpy(addr, &ifa->ifa_broadcast, 4);
+                ret = 1;
+                break;
+        }
+        endfor_ifa(indev);
+
+        in_dev_put(indev);
+        return 0;
+}
+
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
@@ -79,6 +113,10 @@ struct net_device {
 	struct list_head	dev_list;
         struct netdev_queue     tx_queue;
         unsigned long           tx_queue_len; /* Max len allowed */
+        struct {
+                uint32_t addr;
+                uint32_t broadcast;
+        } ipv4;
         /* Stuff for packet thread that reads packets from the
          * device */
         int fd;
@@ -160,6 +198,9 @@ int dev_queue_xmit(struct sk_buff *skb);
 
 int netdev_init(void);
 void netdev_fini(void);
+
+int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr);
+int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr);
 
 #endif /* OS_USER */
 

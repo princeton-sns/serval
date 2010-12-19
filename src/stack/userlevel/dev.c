@@ -428,13 +428,22 @@ int netdev_populate_table(int sizeof_priv,
                         continue;
                         
                 if (ioctl(fd, SIOCGIFFLAGS, ifr) == -1) {
+                        LOG_ERR("SIOCGIFFLAGS: %s\n",
+                                strerror(errno));
                         goto out;
                 }
                 
                 /* Ignore loopback device */
                 if (strncmp(name, "lo", 2) == 0)
                         continue;
-
+                /*
+                if (ioctl(fd, SIOCGIFADDR, ifr) == -1) {
+                        LOG_ERR("SIOCGIFADDR: %s\n",
+                                strerror(errno));
+                        goto out;
+                }
+                */
+               
                 dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
                 if (!dev)
@@ -453,6 +462,17 @@ int netdev_populate_table(int sizeof_priv,
                 if (ifr->ifr_flags & IFF_UP)
                         dev->flags |= IFF_UP;
 
+                /* Save ip configuration */
+                memcpy(&dev->ipv4.addr, 
+                       &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+                memcpy(&dev->ipv4.addr, 
+                       &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
+                {
+                        char buf[18];
+                        LOG_DBG("ip %s\n",
+                                inet_ntop(AF_INET, &dev->ipv4.addr, buf, 18));
+
+                }       
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
@@ -510,6 +530,18 @@ int dev_signal(struct net_device *dev, enum signal type)
                 return 0;
 
         return write(dev->pipefd[1], &s, 1);
+}
+
+int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr)
+{
+        memcpy(addr, &dev->ipv4.addr, 4);
+        return 1;
+}
+
+int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr)
+{
+        memcpy(addr, &dev->ipv4.broadcast, 4);
+        return 1;
 }
 
 enum signal dev_read_signal(struct net_device *dev)

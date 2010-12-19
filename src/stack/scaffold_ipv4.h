@@ -23,7 +23,7 @@ uint16_t in_cksum(const void *data, size_t len);
 int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb, 
 			      struct ipcm_cookie *ipcm);
 int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
-                                     uint32_t saddr, uint32_t daddr, 
+				     uint32_t daddr, 
                                      struct ip_options *opt);
 int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb);
 

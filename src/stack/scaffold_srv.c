@@ -71,6 +71,16 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                 break;
         case SCAFFOLD_PKT_SYNACK:
                 /* Connection completed */
+                LOG_DBG("SYNACK received\n");
+                /* sk = scaffold_sock_lookup_sockid();
+
+                if (!sk) {
+                        LOG_ERR("No matching scaffold sock\n");
+                        err = -1;
+                        goto out_error;
+                }
+                err = scaffold_sk(sk)->af_ops->conn_request(sk, skb);
+                */
                 break;
         case SCAFFOLD_PKT_DATA:
                 switch (protocol) {

@@ -71,18 +71,7 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->frag_off = 0;
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
         iph->protocol = sk->sk_protocol;
-#if defined(OS_LINUX_KERNEL)
-        if (skb->dev) {
-                struct in_device *indev = in_dev_get(skb->dev);
-                
-                in_dev_put(indev);
-        }
-#else
-        {
-                struct scaffold_sock *ssk = scaffold_sk(sk);
-                memcpy(&iph->saddr, &ssk->src_flowid, sizeof(struct in_addr));
-        }
-#endif
+        dev_get_ipv4_addr(skb->dev, &iph->saddr);
         memcpy(&iph->daddr, &ipcm->addr, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
 
@@ -154,8 +143,7 @@ inhdr_error:
 }
 
 int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
-                                     uint32_t saddr, uint32_t daddr, 
-                                     struct ip_options *opt)
+                                     uint32_t daddr, struct ip_options *opt)
 {
 	struct ipcm_cookie ipcm;
         int err = 0;
@@ -199,7 +187,7 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 
 	memset(&ipcm, 0, sizeof(ipcm));
 
-        ipcm.addr = 0;
+        ipcm.addr = 0xffffffff;
 
         err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
         

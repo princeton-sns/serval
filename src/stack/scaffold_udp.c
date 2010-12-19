@@ -175,8 +175,11 @@ static int scaffold_udp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 int scaffold_udp_connection_request(struct sock *sk, struct sk_buff *skb)
 {
         LOG_DBG("SYN received\n");
-        FREE_SKB(skb);
-        return 0;
+
+        SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_SYNACK;
+
+        return scaffold_ipv4_build_and_send_pkt(skb, sk, 
+                                                ip_hdr(skb)->saddr, NULL);
 }
 
 struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
