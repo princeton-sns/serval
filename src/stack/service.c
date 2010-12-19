@@ -78,39 +78,6 @@ static void dev_entry_free(struct dev_entry *de)
         FREE(de);
 }
 
-static int __service_entry_add_dev(struct service_entry *se, 
-                                   struct net_device *dev, 
-                                   unsigned char *dst,
-                                   int dstlen,
-                                   gfp_t alloc)
-{
-        struct dev_entry *de;
-
-        de = dev_entry_create(dev, dst, dstlen, alloc);
-
-        if (!de)
-                return -ENOMEM;
-
-        list_add_tail(&de->lh, &se->dev_list);
-
-        return 0;
-}
-
-int service_entry_add_dev(struct service_entry *se, 
-                          struct net_device *dev,
-                          unsigned char *dst,
-                          int dstlen,
-                          gfp_t alloc)
-{
-        int ret;
-        
-        write_lock(&se->devlock);
-        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
-        write_unlock(&se->devlock);
-
-        return ret;
-}
-
 
 /*
 static void __service_entry_remove_dev_entry(struct service_entry *se, 
@@ -124,6 +91,22 @@ static void __service_entry_remove_dev_entry(struct service_entry *se,
 }
 */
 
+static struct net_device *__service_entry_get_dev(struct service_entry *se, 
+                                                  const char *ifname)
+{
+        struct dev_entry *de;
+        struct net_device *dev = NULL;
+
+        list_for_each_entry(de, &se->dev_list, lh) {
+                if (strcmp(de->dev->name, ifname) == 0) {
+                        dev = de->dev;
+                        break;
+                } 
+        }
+
+        return dev;
+}
+
 /* 
    The returned net_device will have an increased reference count, so
    a put is necessary following a successful call to this
@@ -132,22 +115,55 @@ static void __service_entry_remove_dev_entry(struct service_entry *se,
 struct net_device *service_entry_get_dev(struct service_entry *se, 
                                          const char *ifname)
 {
-        struct dev_entry *de;
         struct net_device *dev = NULL;
 
         read_lock(&se->devlock);
+        
+        dev = __service_entry_get_dev(se, ifname);
 
-        list_for_each_entry(de, &se->dev_list, lh) {
-                if (strcmp(de->dev->name, ifname) == 0) {
-                        dev = de->dev;
-                        dev_hold(dev);
-                        break;
-                } 
-        }
+        if (dev)
+                dev_hold(dev);
 
         read_unlock(&se->devlock);
 
         return dev;
+}
+
+
+static int __service_entry_add_dev(struct service_entry *se, 
+                                   struct net_device *dev, 
+                                   unsigned char *dst,
+                                   int dstlen,
+                                   gfp_t alloc)
+{
+        struct dev_entry *de;
+
+        if (__service_entry_get_dev(se, dev->name))
+                return 0;
+
+        de = dev_entry_create(dev, dst, dstlen, alloc);
+
+        if (!de)
+                return -ENOMEM;
+
+        list_add_tail(&de->lh, &se->dev_list);
+
+        return 1;
+}
+
+int service_entry_add_dev(struct service_entry *se, 
+                          struct net_device *dev,
+                          unsigned char *dst,
+                          int dstlen,
+                          gfp_t alloc)
+{
+        int ret = 0;
+        
+        write_lock(&se->devlock);
+        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
+        write_unlock(&se->devlock);
+
+        return ret;
 }
 
 int __service_entry_remove_dev(struct service_entry *se, 
