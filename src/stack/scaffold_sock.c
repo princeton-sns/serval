@@ -38,6 +38,7 @@ static const char *sock_state_str[] = {
 int scaffold_sock_get_sockid(struct sock_id *sid)
 {
         sid->s_id = htons(atomic_inc_return(&scaffold_sock_id));
+
         return 0;
 }
 

@@ -9,6 +9,7 @@
 #if defined(OS_USER)
 #include <string.h>
 #endif
+#include "scaffold_sock.h"
 
 struct scaffold_request_sock {
         struct sock *sk;
@@ -31,6 +32,8 @@ static inline struct scaffold_request_sock *scaffold_rsk_alloc(int alloc)
                 return NULL;
 
         INIT_LIST_HEAD(&rsk->lh);
+        
+        scaffold_sock_get_sockid(&rsk->sockid);
 
         return rsk;
 }

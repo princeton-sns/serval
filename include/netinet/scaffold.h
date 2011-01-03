@@ -46,13 +46,6 @@ struct service_id {
 #define s_sid32 u_id.u_id32
 };
 
-static inline const char *service_id_to_str(struct service_id *srvid)
-{
-        static char str[20];
-        snprintf(str, 20, "%u", ntohs(srvid->s_sid16));
-        return str;
-}
-
 struct sockaddr_sf {
         sa_family_t sf_family;
         uint16_t sf_flags;
@@ -84,6 +77,20 @@ struct flow_id {
                 struct in_addr fl_ip;
         };
 };
+
+static inline const char *service_id_to_str(struct service_id *srvid)
+{
+        static char str[20];
+        snprintf(str, 20, "%u", ntohs(srvid->s_sid16));
+        return str;
+}
+
+static inline const char *sock_id_to_str(struct sock_id *sockid)
+{
+        static char str[20];
+        snprintf(str, 20, "%u", ntohs(sockid->s_id));
+        return str;
+}
 
 enum scaffold_packet_type { 
         SCAFFOLD_PKT_DATA = 1,

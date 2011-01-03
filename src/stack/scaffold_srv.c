@@ -16,7 +16,8 @@
 #if defined(OS_USER)
 #include <signal.h>
 #endif
-#include "service.h"
+#include <scaffold_request_sock.h>
+#include <service.h>
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
@@ -43,7 +44,8 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
-        
+
+        /* Call upper protocol handler */
         err = scaffold_sk(sk)->af_ops->conn_request(sk, skb);
         
         if (err < 0)
@@ -63,14 +65,12 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         /* Push back the Scaffold header again to make IP happy */
         skb_push(skb, hdr_len);
         skb_reset_transport_header(skb);
-
+        
+        /* Update info in packet */
         memcpy(&sfh->dst_sid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&scaffold_sk(sk)->peer_sockid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &scaffold_sk(sk)->local_sockid, 
-               sizeof(scaffold_sk(sk)->local_sockid));
-
-        memcpy(&scaffold_sk(sk)->peer_srvid, &srv_ext->src_srvid, 
-               sizeof(srv_ext->src_srvid));
+        memcpy(&sfh->src_sid, &rsk->sockid, sizeof(rsk->sockid));
+        memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
+                sizeof(srv_ext->src_srvid));
 
         sfh->flags |= SFH_ACK;
 
@@ -189,14 +189,17 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 
         if (hdr_len < sizeof(struct scaffold_hdr))
                 goto drop;
-
+        
+        LOG_DBG("sockid (src,dst)=(%u,%u)\n", 
+                ntohs(sfh->src_sid.s_id), ntohs(sfh->dst_sid.s_id));
+       
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id */
         if (!(sfh->flags & SFH_SYN && !(sfh->flags & SFH_ACK))) {
                 /* Ok, check if we can demux on socket id */
                 sk = scaffold_sock_lookup_sockid(&sfh->dst_sid);
         }
-
+        
         if (!sk) {
                 /* Try to demux on service id */
                 struct scaffold_service_ext *srv_ext = 
@@ -248,7 +251,7 @@ drop:
 #define SCAFFOLD_MAX_HDR (MAX_HEADER + 20 +                             \
                           sizeof(struct scaffold_hdr) +                 \
                           sizeof(struct scaffold_service_ext) +         \
-                          EXTRA_HDR)
+v                          EXTRA_HDR)
 /*
 int scaffold_srv_connect(struct sock *sk, struct sk_buff *skb)
 {
@@ -304,8 +307,9 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
         sfh->protocol = skb->protocol;
         sfh->length = htons(sizeof(struct scaffold_service_ext) + 
                             sizeof(struct scaffold_hdr));
+
         memcpy(&sfh->src_sid, &ssk->local_sockid, sizeof(ssk->local_sockid));
-        memcpy(&sfh->src_sid, &ssk->peer_sockid, sizeof(ssk->peer_sockid));
+        memcpy(&sfh->dst_sid, &ssk->peer_sockid, sizeof(ssk->peer_sockid));
 
 	if (sk->sk_state == SCAFFOLD_CONNECTED) {
 		err = scaffold_ipv4_xmit_skb(sk, skb);

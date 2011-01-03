@@ -11,7 +11,8 @@
 #if defined(OS_USER)
 #include <string.h>
 #endif
-#include <scaffold_request_sock.h>
+
+struct scaffold_request_sock;
 
 enum scaffold_sock_state {
         SCAFFOLD_CLOSED = 1, 
