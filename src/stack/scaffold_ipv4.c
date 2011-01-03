@@ -65,7 +65,7 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         memset(iph, 0, iph_len);
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
-        iph->tos = SCAFFOLD_SKB_CB(skb)->pkttype;
+        iph->tos = 0;
         iph->tot_len = htons(skb->len);
         iph->id = 0;
         iph->frag_off = 0;

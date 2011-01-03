@@ -128,8 +128,9 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                 LOG_DBG("SYN received\n");
                 err = scaffold_srv_syn_rcv(skb);
         } else if (sfh->flags & SFH_FIN) {
-
+                LOG_DBG("FIN received\n");
         } else {
+                LOG_DBG("DATA received\n");
                 /* Data packet */
                 switch (sfh->protocol) {
                 case IPPROTO_UDP:
@@ -232,7 +233,20 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
-        
+
+        /* Set appropriate flags. */
+        switch (SCAFFOLD_SKB_CB(skb)->pkttype) {
+        case SCAFFOLD_PKT_SYNACK:
+                sfh->flags |= SFH_ACK;
+        case SCAFFOLD_PKT_SYN:
+                sfh->flags |= SFH_SYN;
+                break;
+        case SCAFFOLD_PKT_ACK:
+                sfh->flags |= SFH_ACK;
+                break;
+        default:
+                break;
+        }
         skb->protocol = IPPROTO_SCAFFOLD;
         /* 
            Send on all interfaces listed for this service.
