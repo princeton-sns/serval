@@ -13,27 +13,23 @@
 #elif !defined(OS_ANDROID)
 #include <netinet/if_ether.h>
 #endif
+#if defined(OS_USER)
+#include <signal.h>
+#endif
 #include "service.h"
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
 
-static int scaffold_srv_syn_rcv(struct sk_buff *skb)
+static int scaffold_srv_syn_rcv(struct sock *sk, 
+                                struct scaffold_hdr *sfh,
+                                struct sk_buff *skb)
 {
-        struct sock *sk;
         struct scaffold_request_sock *rsk;
-        struct scaffold_hdr *sfh = 
-                (struct scaffold_hdr *)skb_transport_header(skb);        
         struct scaffold_service_ext *srv_ext = 
                 (struct scaffold_service_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
-        
-        if (hdr_len <= sizeof(struct scaffold_hdr))
-                goto drop;
-        
-        if (srv_ext->type != SCAFFOLD_SERVICE_EXT)
-                goto drop;
         
         /* Cache this service FIXME: should not assume ETH_ALEN here. */
         err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid), 
@@ -45,23 +41,13 @@ static int scaffold_srv_syn_rcv(struct sk_buff *skb)
                 LOG_ERR("could not cache service for incoming packet\n");
         }
         
-        sk = scaffold_sock_lookup_serviceid(&srv_ext->dst_srvid);
-        
-        if (!sk) {
-                LOG_ERR("No matching scaffold sock\n");
-                err = -1;
-                goto drop;
-        }
-
-        bh_lock_sock(sk);
-        
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
-                goto drop_unlock;
+                goto drop;
         
         err = scaffold_sk(sk)->af_ops->conn_request(sk, skb);
         
         if (err < 0)
-                goto drop_unlock;
+                goto drop;
 
         rsk = scaffold_rsk_alloc(GFP_ATOMIC);
 
@@ -85,69 +71,175 @@ static int scaffold_srv_syn_rcv(struct sk_buff *skb)
 
         memcpy(&scaffold_sk(sk)->peer_srvid, &srv_ext->src_srvid, 
                sizeof(srv_ext->src_srvid));
+
+        sfh->flags |= SFH_ACK;
+
         err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
                                                ip_hdr(skb)->saddr, NULL);
-        
-drop_unlock:
-        bh_unlock_sock(sk);
+
+done:        
+        return err;
 drop:
+        FREE_SKB(skb);
+        goto done;
+}
+
+static struct scaffold_request_sock *
+scaffold_srv_request_sock_handle(struct sock *sk,
+                                 struct sock_id *sid)
+{
+        return NULL;
+}
+
+static int scaffold_srv_listen_state_process(struct sock *sk,
+                                             struct scaffold_hdr *sfh,
+                                             struct sk_buff *skb)
+{
+        int err = 0;                         
+
+        if (sfh->flags & SFH_ACK) {
+                struct scaffold_request_sock *rsk;
+                LOG_DBG("ACK recv\n");
+                rsk = scaffold_srv_request_sock_handle(sk, &sfh->dst_sid);
+
+                /*
+                sk->sk_state_change(sk);
+                
+                if (sk->sk_socket)
+                        sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+                */
+                FREE_SKB(skb);
+        } else if (sfh->flags & SFH_SYN) {
+                LOG_DBG("SYN recv\n");
+                err = scaffold_srv_syn_rcv(sk, sfh, skb);
+        }
+
+        return err;
+}
+
+static int scaffold_srv_request_state_process(struct sock *sk, 
+                                              struct scaffold_hdr *sfh,
+                                              struct sk_buff *skb)
+{
+        int err = 0;
+        
+        scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
+        
+        sk->sk_state_change(sk);
+        sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+
+        sfh->flags = 0;
+        sfh->flags |= SFH_ACK;
+
+        err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
+                                               ip_hdr(skb)->saddr, NULL);
+
+        return err;
+}
+
+static int scaffold_srv_connected_state_process(struct sock *sk, 
+                                                struct scaffold_hdr *sfh,
+                                                struct sk_buff *skb)
+{
+        int err = 0;
+        
+        return err;
+}
+
+static int scaffold_srv_do_rcv(struct sock *sk, 
+                               struct scaffold_hdr *sfh, 
+                               struct sk_buff *skb)
+{
+        int err = 0;
+
+        switch (sk->sk_state) {
+        case SCAFFOLD_CONNECTED:
+                err = scaffold_srv_connected_state_process(sk, sfh, skb);
+                break;
+        case SCAFFOLD_REQUEST:
+                err = scaffold_srv_request_state_process(sk, sfh, skb);
+                break;
+        case SCAFFOLD_LISTEN:
+                err = scaffold_srv_listen_state_process(sk, sfh, skb);
+                break;
+        default:
+                goto drop;
+        }
+
+        return err;
+drop:
+        FREE_SKB(skb);
+
         return err;
 }
 
 int scaffold_srv_rcv(struct sk_buff *skb)
 {
-        //struct sock *sk = NULL;
+        struct sock *sk = NULL;
         struct scaffold_hdr *sfh = 
                 (struct scaffold_hdr *)skb_transport_header(skb);
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
 
         if (!pskb_may_pull(skb, hdr_len))
-                goto out_error;
+                goto drop;
         
         pskb_pull(skb, hdr_len);
         skb_reset_transport_header(skb);
 
         if (hdr_len < sizeof(struct scaffold_hdr))
-                goto out_error;
-        
-        if (sfh->flags & SFH_SYN && sfh->flags & SFH_ACK) {
-                /* Connection completed */
-                LOG_DBG("SYNACK received\n");
-                /* sk = scaffold_sock_lookup_sockid();
+                goto drop;
 
-                if (!sk) {
-                        LOG_ERR("No matching scaffold sock\n");
-                        err = -1;
-                        goto out_error;
-                }
-                err = scaffold_sk(sk)->af_ops->conn_request(sk, skb);
-                */
-                
-        } else if (sfh->flags & SFH_SYN) {
-                LOG_DBG("SYN received\n");
-                err = scaffold_srv_syn_rcv(skb);
-        } else if (sfh->flags & SFH_FIN) {
-                LOG_DBG("FIN received\n");
-        } else {
-                LOG_DBG("DATA received\n");
-                /* Data packet */
-                switch (sfh->protocol) {
-                case IPPROTO_UDP:
-                        err = scaffold_udp_rcv(skb);
-                        break;
-                case IPPROTO_TCP:
-                        err = scaffold_tcp_rcv(skb);
-                        break;
-                default:
-                        LOG_ERR("unsupported protocol=%u\n", sfh->protocol);
-                        err = -1;
-                        goto out_error;
-                }
+        /* If SYN and not ACK is set, we know for sure that we must
+         * demux on service id */
+        if (!(sfh->flags & SFH_SYN && !(sfh->flags & SFH_ACK))) {
+                /* Ok, check if we can demux on socket id */
+                sk = scaffold_sock_lookup_sockid(&sfh->dst_sid);
         }
 
+        if (!sk) {
+                /* Try to demux on service id */
+                struct scaffold_service_ext *srv_ext = 
+                        (struct scaffold_service_ext *)(sfh + 1);
+
+                /* Check for service extension. We require that this
+                 * extension always directly follows the main Scaffold
+                 * header */
+                if (hdr_len <= sizeof(struct scaffold_hdr))
+                        goto drop;
+                
+                if (srv_ext->type != SCAFFOLD_SERVICE_EXT)
+                        goto drop;
+                
+                sk = scaffold_sock_lookup_serviceid(&srv_ext->dst_srvid);
+                
+                if (!sk) {
+                        LOG_ERR("No matching scaffold sock\n");
+                        goto drop;
+                }
+        }
+ 
+        bh_lock_sock_nested(sk);
+
+        if (!sock_owned_by_user(sk)) {
+                err = scaffold_srv_do_rcv(sk, sfh, skb);
+        } 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+        else {
+                sk_add_backlog(sk, skb);
+        }
+#else
+        else if (unlikely(sk_add_backlog(sk, skb))) {
+                bh_unlock_sock(sk);
+                sock_put(sk);
+                goto drop;
+        }
+#endif
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
 	return err;
-out_error:
+drop:
         FREE_SKB(skb);
         return err;
 }

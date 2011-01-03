@@ -33,13 +33,13 @@
 static int scaffold_udp_connection_request(struct sock *sk, 
                                            struct sk_buff *skb);
 
-struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
-                                   struct scaffold_request_sock *req,
-                                   struct dst_entry *dst);
+struct sock *scaffold_udp_connection_response(struct sock *sk, struct sk_buff *skb,
+                                              struct scaffold_request_sock *req,
+                                              struct dst_entry *dst);
 
 static struct scaffold_sock_af_ops scaffold_udp_af_ops = {
         .conn_request = scaffold_udp_connection_request,
-        .syn_recv = scaffold_udp_syn_recv,
+        .conn_response = scaffold_udp_connection_response,
 };
 
 /* from fastudpsrc */
@@ -181,9 +181,9 @@ int scaffold_udp_connection_request(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
-struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
-                                   struct scaffold_request_sock *req,
-                                   struct dst_entry *dst)
+struct sock *scaffold_udp_connection_response(struct sock *sk, struct sk_buff *skb,
+                                              struct scaffold_request_sock *req,
+                                              struct dst_entry *dst)
 {
         return NULL;
 }

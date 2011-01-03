@@ -176,6 +176,7 @@ enum sock_flags {
 	SOCK_TIMESTAMP,
 	SOCK_ZAPPED,
 	SOCK_USE_WRITE_QUEUE, /* whether to call sk->sk_write_space in sock_wfree */
+        SOCK_FASYNC,
 };
 
 #define sock_net(s) ((s)->sk_net)
@@ -231,6 +232,21 @@ static inline void sk_eat_skb(struct sock *sk, struct sk_buff *skb, int copied_e
 	__free_skb(skb);
 }
 
+static inline void sock_set_flag(struct sock *sk, enum sock_flags flag)
+{
+        sk->sk_flags |= (0x1 << flag);
+}
+
+static inline void sock_reset_flag(struct sock *sk, enum sock_flags flag)
+{
+        sk->sk_flags &= ((0x1 << flag) ^ -1UL);
+}
+
+static inline int sock_flag(struct sock *sk, enum sock_flags flag)
+{
+	return sk->sk_flags & (0x1 << flag);
+}
+
 static inline int sock_error(struct sock *sk)
 {
         return 0;
@@ -266,6 +282,27 @@ static inline void skb_set_owner_r(struct sk_buff *skb, struct sock *sk)
 	/* sk_mem_charge(sk, skb->truesize); */
 }
 
+static inline unsigned long sock_wspace(struct sock *sk)
+{
+        int amt = 0;
+
+        if (!(sk->sk_shutdown & SEND_SHUTDOWN)) {
+                amt = sk->sk_sndbuf - atomic_read(&sk->sk_wmem_alloc);
+                if (amt < 0) 
+                        amt = 0;
+        }
+        return amt;
+}
+
+static inline void sk_wake_async(struct sock *sk, int how, int band)
+{
+        if (sock_flag(sk, SOCK_FASYNC))
+                sock_wake_async(sk->sk_socket, how, band);
+}
+
+#define SOCK_MIN_SNDBUF 2048
+#define SOCK_MIN_RCVBUF 256
+
 void sock_init_data(struct socket *sock, struct sock *sk);
 
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
@@ -290,24 +327,11 @@ void lock_sock(struct sock *sk);
 /* #define bh_lock_sock_nested(__sk)                \
         spin_lock_nested(&((__sk)->sk_lock.slock), \
         SINGLE_DEPTH_NESTING) */
+#define bh_lock_sock_nested(__sk) bh_lock_sock(__sk)
+
 #define bh_unlock_sock(__sk) spin_unlock(&((__sk)->sk_lock.slock))
 
 void release_sock(struct sock *sk);
-
-static inline void sock_set_flag(struct sock *sk, enum sock_flags flag)
-{
-        sk->sk_flags |= (0x1 << flag);
-}
-
-static inline void sock_reset_flag(struct sock *sk, enum sock_flags flag)
-{
-        sk->sk_flags &= ((0x1 << flag) ^ -1UL);
-}
-
-static inline int sock_flag(struct sock *sk, enum sock_flags flag)
-{
-	return sk->sk_flags & (0x1 << flag);
-}
 
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
@@ -360,6 +384,25 @@ static inline void __sk_add_backlog(struct sock *sk, struct sk_buff *skb)
 
         sk->sk_backlog.tail = skb;
         skb->next = NULL;
+}
+
+static inline int sk_rcvqueues_full(const struct sock *sk, 
+                                    const struct sk_buff *skb)
+{
+        unsigned int qsize = sk->sk_backlog.len + atomic_read(&sk->sk_rmem_alloc);
+
+        return qsize + skb->truesize > sk->sk_rcvbuf;
+}
+
+/* The per-socket spinlock must be held here. */
+static inline int sk_add_backlog(struct sock *sk, struct sk_buff *skb)
+{
+        if (sk_rcvqueues_full(sk, skb))
+                return -ENOBUFS;
+
+        __sk_add_backlog(sk, skb);
+        sk->sk_backlog.len += skb->truesize;
+        return 0;
 }
 
 static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)

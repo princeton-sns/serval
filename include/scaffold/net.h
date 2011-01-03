@@ -6,6 +6,17 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/net.h>
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
+/* SOCK_WAKE types are not explicitly enumerated in older kernels. */
+enum {
+        SOCK_WAKE_IO,
+        SOCK_WAKE_WAITD,
+        SOCK_WAKE_SPACE,
+        SOCK_WAKE_URG,
+};
+#endif
+
 #else
 #include <sys/socket.h>
 
@@ -94,6 +105,15 @@ struct net_proto_family {
 	int		(*create)(struct net *net, struct socket *sock,
 				  int protocol, int kern);
 };
+
+enum {
+        SOCK_WAKE_IO,
+        SOCK_WAKE_WAITD,
+        SOCK_WAKE_SPACE,
+        SOCK_WAKE_URG,
+};
+
+extern int sock_wake_async(struct socket *sk, int how, int band);
 
 int sock_register(const struct net_proto_family *fam);
 void sock_unregister(int family);
