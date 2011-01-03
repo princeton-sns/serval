@@ -11,8 +11,9 @@
 #include <netinet/ip.h>
 #endif
 
-struct scaffold_table established_table;
-struct scaffold_table listen_table;
+static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
+static struct scaffold_table established_table;
+static struct scaffold_table listen_table;
 
 static const char *sock_state_str[] = {
         "UNDEFINED",
@@ -33,6 +34,12 @@ static const char *sock_state_str[] = {
         "TCP_LASTACK",
         "TCP_SIMCLOSE"  
 };
+
+int scaffold_sock_get_sockid(struct sock_id *sid)
+{
+        sid->s_id = htons(atomic_inc_return(&scaffold_sock_id));
+        return 0;
+}
 
 int __init scaffold_table_init(struct scaffold_table *table, const char *name)
 {
@@ -155,7 +162,7 @@ struct sock *scaffold_sock_lookup_skb(struct sk_buff *skb)
 static inline unsigned int scaffold_ehash(struct sock *sk)
 {
         return scaffold_hashfn(sock_net(sk), 
-                               &scaffold_sk(sk)->sockid,
+                               &scaffold_sk(sk)->local_sockid,
                                sizeof(struct sock_id),
                                established_table.mask);
 }
@@ -209,8 +216,8 @@ static void __scaffold_sock_hash(struct sock *sk)
                 __scaffold_table_hash(&listen_table, sk);
 
         } else { 
-                scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->sockid;
-                scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->sockid);
+                scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_sockid;
+                scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->local_sockid);
                 __scaffold_table_hash(&established_table, sk);
         }
 }
@@ -238,7 +245,7 @@ void scaffold_sock_unhash(struct sock *sk)
                                           sizeof(struct service_id))->lock;
         } else {
                 lock = &scaffold_hashslot(&established_table,
-                                          net, &scaffold_sk(sk)->sockid, 
+                                          net, &scaffold_sk(sk)->local_sockid, 
                                           sizeof(struct sock_id))->lock;
         }
 

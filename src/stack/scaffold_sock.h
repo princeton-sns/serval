@@ -63,7 +63,8 @@ struct scaffold_sock {
         unsigned int            hash_key_len;
         struct scaffold_sock_af_ops *af_ops;
  	struct timer_list	retransmit_timer;
-        struct sock_id          sockid;
+        struct sock_id          local_sockid;
+        struct sock_id          peer_sockid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
         struct flow_id          src_flowid;
@@ -89,6 +90,8 @@ struct scaffold_table {
 	struct scaffold_hslot *hash;
 	unsigned int mask;
 };
+
+int scaffold_sock_get_sockid(struct sock_id *sid);
 
 static inline unsigned int scaffold_hashfn(struct net *net, 
                                            void *key,

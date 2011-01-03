@@ -25,7 +25,10 @@
 #endif /* OS_USER */
 
 #define EXTRA_HDR (20)
-#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR) // payload + LL + IP + extra
+/* payload + LL + IP + extra */
+#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR + \
+                     sizeof(struct scaffold_hdr) + \
+                     sizeof(struct scaffold_service_ext)) 
 
 static int scaffold_udp_connection_request(struct sock *sk, 
                                            struct sk_buff *skb);
@@ -77,6 +80,8 @@ static int scaffold_udp_transmit_skb(struct sock *sk,
         memcpy(&uh->dest, &SCAFFOLD_SKB_CB(skb)->srvid, sizeof(uh->dest));
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, &scaffold_sk(sk)->src_flowid);
+        
+        skb->protocol = IPPROTO_UDP;
 
         LOG_DBG("udp pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
@@ -163,23 +168,17 @@ static void scaffold_udp_shutdown(struct sock *sk, int how)
         LOG_DBG("\n");
 }
 
-static int scaffold_udp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
-{
-        LOG_DBG("\n");
-
-        FREE_SKB(skb);
-
-        return -1;
-}
-
 int scaffold_udp_connection_request(struct sock *sk, struct sk_buff *skb)
 {
+        //struct scaffold_sock *ssk = scaffold_sk(sk);
+        /* struct iphdr *iph = ip_hdr(skb);
+           struct udphdr *udph = udp_hdr(skb); */
+
+        int err = 0;
+
         LOG_DBG("SYN received\n");
 
-        SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_SYNACK;
-
-        return scaffold_ipv4_build_and_send_pkt(skb, sk, 
-                                                ip_hdr(skb)->saddr, NULL);
+        return err;
 }
 
 struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
@@ -187,6 +186,13 @@ struct sock *scaffold_udp_syn_recv(struct sock *sk, struct sk_buff *skb,
                                    struct dst_entry *dst)
 {
         return NULL;
+}
+
+static int __scaffold_udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
+{
+        FREE_SKB(skb);
+
+        return 0;
 }
 
 /* 
@@ -410,7 +416,7 @@ struct proto scaffold_udp_proto = {
 	.shutdown		= scaffold_udp_shutdown,
         .sendmsg                = scaffold_udp_sendmsg,
         .recvmsg                = scaffold_udp_recvmsg,
-	.backlog_rcv		= scaffold_udp_backlog_rcv,
+	.backlog_rcv		= __scaffold_udp_queue_rcv_skb,
         .hash                   = scaffold_sock_hash,
         .unhash                 = scaffold_sock_unhash,
 	.obj_size		= sizeof(struct scaffold_udp_sock),

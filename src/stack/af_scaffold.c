@@ -41,7 +41,6 @@ extern struct proto scaffold_udp_proto;
 extern struct proto scaffold_tcp_proto;
 
 static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
-static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
 int host_ctrl_mode = 0;
 
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
@@ -95,8 +94,7 @@ static int __scaffold_assign_sockid(struct sock *sk)
            - Check for ID wraparound and conflicts 
            - Make sure code does not assume sockid is a short
         */
-        ssk->sockid.s_id = htons(atomic_inc_return(&scaffold_sock_id));
-        return 0;
+        return scaffold_sock_get_sockid(&ssk->local_sockid);
 }
 
 /*

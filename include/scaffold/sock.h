@@ -46,6 +46,11 @@ struct proto;
 #define RCV_SHUTDOWN	1
 #define SEND_SHUTDOWN	2
 
+typedef struct {
+        pthread_mutex_t slock;
+        int owned;
+} socket_lock_t;
+
 struct sock {
 	unsigned short          sk_family;
         gfp_t                   sk_allocation;
@@ -61,7 +66,12 @@ struct sock {
         unsigned char	        sk_state;
 	int			sk_rcvbuf;
 	int			sk_tx_queue_mapping;
-        spinlock_t              sk_lock;
+        socket_lock_t           sk_lock;
+        struct {
+                struct sk_buff *head;
+                struct sk_buff *tail;
+                int len;
+        } sk_backlog;
         struct net              *sk_net;
         struct proto            *sk_prot;
 	atomic_t		sk_rmem_alloc;
@@ -273,21 +283,16 @@ static inline void sock_put(struct sock *sk)
                 sk_free(sk);
 }
 
-static inline void lock_sock(struct sock *sk)
-{
-        spin_lock(&sk->sk_lock);
-}
+void lock_sock(struct sock *sk);
+
 /* BH context may only use the following locking interface. */
-#define bh_lock_sock(__sk)spin_lock(&((__sk)->sk_lock))
+#define bh_lock_sock(__sk) spin_lock(&((__sk)->sk_lock.slock))
 /* #define bh_lock_sock_nested(__sk)                \
         spin_lock_nested(&((__sk)->sk_lock.slock), \
         SINGLE_DEPTH_NESTING) */
-#define bh_unlock_sock(__sk)spin_unlock(&((__sk)->sk_lock))
+#define bh_unlock_sock(__sk) spin_unlock(&((__sk)->sk_lock.slock))
 
-static inline void release_sock(struct sock *sk)
-{
-        spin_unlock(&sk->sk_lock);
-}
+void release_sock(struct sock *sk);
 
 static inline void sock_set_flag(struct sock *sk, enum sock_flags flag)
 {
@@ -327,6 +332,40 @@ static inline void sock_graft(struct sock *sk, struct socket *parent)
 }
 
 void sk_common_release(struct sock *sk);
+
+/* Used by processes to "lock" a socket state, so that
+ * interrupts and bottom half handlers won't change it
+ * from under us. It essentially blocks any incoming
+ * packets, so that we won't get any new data or any
+ * packets that change the state of the socket.
+ *
+ * While locked, BH processing will add new packets to
+ * the backlog queue.  This queue is processed by the
+ * owner of the socket lock right before it is released.
+ *
+ * Since ~2.3.5 it is also exclusive sleep lock serializing
+ * accesses from user process context.
+ */
+#define sock_owned_by_user(sk)((sk)->sk_lock.owned)
+
+static inline void __sk_add_backlog(struct sock *sk, struct sk_buff *skb)
+{
+        /* dont let skb dst not refcounted, we are going to leave rcu lock */
+        //skb_dst_force(skb);
+
+        if (!sk->sk_backlog.tail)
+                sk->sk_backlog.head = skb;
+        else
+                sk->sk_backlog.tail->next = skb;
+
+        sk->sk_backlog.tail = skb;
+        skb->next = NULL;
+}
+
+static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
+{
+        return sk->sk_backlog_rcv(sk, skb);
+}
 
 #endif /* OS_USER */
 

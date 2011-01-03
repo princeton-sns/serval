@@ -22,34 +22,34 @@ extern int scaffold_srv_rcv(struct sk_buff *);
 /* Taken from Click */
 uint16_t in_cksum(const void *data, size_t len)
 {
-    int nleft = len;
-    const uint16_t *w = (const uint16_t *)data;
-    uint32_t sum = 0;
-    uint16_t answer = 0;
-
-    /*
-     * Our algorithm is simple, using a 32 bit accumulator (sum), we add
-     * sequential 16 bit words to it, and at the end, fold back all the
-     * carry bits from the top 16 bits into the lower 16 bits.
-     */
-    while (nleft > 1)  {
-            sum += *w++;
-            nleft -= 2;
-    }
-    
-    /* mop up an odd byte, if necessary */
-    if (nleft == 1) {
-            *(unsigned char *)(&answer) = *(const unsigned char *)w ;
-            sum += answer;
-    }
-    
-    /* add back carry outs from top 16 bits to low 16 bits */
-    sum = (sum & 0xffff) + (sum >> 16);
-    sum += (sum >> 16);
-    /* guaranteed now that the lower 16 bits of sum are correct */
-
-    answer = ~sum;              /* truncate to 16 bits */
-    return answer;
+        int nleft = len;
+        const uint16_t *w = (const uint16_t *)data;
+        uint32_t sum = 0;
+        uint16_t answer = 0;
+        
+        /*
+         * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+         * sequential 16 bit words to it, and at the end, fold back all the
+         * carry bits from the top 16 bits into the lower 16 bits.
+         */
+        while (nleft > 1)  {
+                sum += *w++;
+                nleft -= 2;
+        }
+        
+        /* mop up an odd byte, if necessary */
+        if (nleft == 1) {
+                *(unsigned char *)(&answer) = *(const unsigned char *)w ;
+                sum += answer;
+        }
+        
+        /* add back carry outs from top 16 bits to low 16 bits */
+        sum = (sum & 0xffff) + (sum >> 16);
+        sum += (sum >> 16);
+        /* guaranteed now that the lower 16 bits of sum are correct */
+        
+        answer = ~sum;              /* truncate to 16 bits */
+        return answer;
 }
 
 int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
@@ -70,7 +70,7 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->id = 0;
         iph->frag_off = 0;
         iph->ttl = SCAFFOLD_TTL_DEFAULT;
-        iph->protocol = sk->sk_protocol;
+        iph->protocol = skb->protocol;
         dev_get_ipv4_addr(skb->dev, &iph->saddr);
         memcpy(&iph->daddr, &ipcm->addr, sizeof(struct in_addr));
         iph->check = in_cksum(iph, iph_len);
@@ -98,22 +98,13 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 	unsigned int hdr_len = iph->ihl << 2;
 	int ret = 0;
 
-        /* Check if this is a SCAFFOLD packet */
-        if (!iph->tos)
-                return INPUT_DELIVER;
-        /* 
-
-           This is a bit of a hack for now. There is no SCAFFOLD
-           header/protocol number to demux on, so just call the
-           "SCAFFOLD layer" to let it deal with demuxing the packet.
-        */
 	switch (iph->protocol) {
-	case IPPROTO_UDP:
-	case IPPROTO_TCP:
         case IPPROTO_SCAFFOLD:
                 break;
 	case IPPROTO_ICMP:
 		LOG_DBG("icmp packet\n");
+	case IPPROTO_UDP:
+	case IPPROTO_TCP:
         default:
                 ret = INPUT_DELIVER;
                 goto out;

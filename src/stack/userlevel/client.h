@@ -6,6 +6,7 @@
 
 struct client;
 struct sockaddr_un;
+struct socket;
 
 typedef enum {
 	CLIENT_TYPE_UDP = 0,

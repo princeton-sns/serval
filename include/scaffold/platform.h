@@ -60,6 +60,7 @@
 #include <linux/version.h>
 #include <net/sock.h>
 #define MALLOC(sz, prio) kmalloc(sz, prio)
+#define ZALLOC(sz, prio) kzalloc(sz, prio)
 #define FREE(m) kfree(m)
 
 typedef uint32_t socklen_t;
@@ -91,6 +92,10 @@ typedef unsigned char gfp_t;
 #define GFP_KERNEL 0
 #define GFP_ATOMIC 1
 #define MALLOC(sz, prio) malloc(sz)
+#define ZALLOC(sz, prio) ({                     \
+                        void *ptr = malloc(sz); \
+                        memset(ptr, 0, sz);     \
+                        ptr; })
 #define FREE(m) free(m)
 
 #define EXPORT_SYMBOL(x)

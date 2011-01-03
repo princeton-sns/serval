@@ -25,12 +25,11 @@ static inline struct scaffold_request_sock *scaffold_rsk_alloc(int alloc)
 {
         struct scaffold_request_sock *rsk;
 
-        rsk = MALLOC(sizeof(*rsk), alloc);
+        rsk = ZALLOC(sizeof(*rsk), alloc);
 
         if (!rsk)
                 return NULL;
 
-        memset(rsk, 0, sizeof(*rsk));
         INIT_LIST_HEAD(&rsk->lh);
 
         return rsk;

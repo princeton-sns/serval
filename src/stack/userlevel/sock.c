@@ -39,8 +39,8 @@ static int sock_def_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 
 static inline void sock_lock_init(struct sock *sk)
 {
-        LOG_DBG("Initializing sock lock\n");
-	spin_lock_init(&(sk)->sk_lock);
+	spin_lock_init(&(sk)->sk_lock.slock);
+        sk->sk_lock.owned = 0;
 }
 
 void sock_init_data(struct socket *sock, struct sock *sk)
@@ -230,4 +230,52 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)
 {
         return 0;
+}
+
+void lock_sock(struct sock *sk)
+{
+        spin_lock(&sk->sk_lock.slock);
+        sk->sk_lock.owned = 1;
+}
+
+void __release_sock(struct sock *sk)
+{
+        struct sk_buff *skb = sk->sk_backlog.head;
+
+        do {
+                sk->sk_backlog.head = sk->sk_backlog.tail = NULL;
+                bh_unlock_sock(sk);
+
+                do {
+                        struct sk_buff *next = skb->next;
+
+                        skb->next = NULL;
+                        sk_backlog_rcv(sk, skb);
+
+                        /*
+                         * We are in process context here with softirqs
+                         * disabled, use cond_resched_softirq() to preempt.
+                         * This is safe to do because we've taken the backlog
+                         * queue private:
+                         */
+                        //cond_resched_softirq();
+
+                        skb = next;
+                } while (skb != NULL);
+
+                bh_lock_sock(sk);
+        } while ((skb = sk->sk_backlog.head) != NULL);
+
+        /*
+         * Doing the zeroing here guarantee we can not loop forever
+         * while a wild producer attempts to flood us.
+         */
+        sk->sk_backlog.len = 0;
+}
+
+void release_sock(struct sock *sk)
+{
+        
+        sk->sk_lock.owned = 0;
+        spin_unlock(&sk->sk_lock.slock);
 }
