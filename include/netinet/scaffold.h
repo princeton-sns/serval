@@ -33,7 +33,7 @@
 #define ETH_P_SCAFFOLD 0x0809
 
 /* IP Protocol number */
-#define IPPROTO_SCAFFOLD 43
+#define IPPROTO_SCAFFOLD 144
 
 struct service_id {
         union { 

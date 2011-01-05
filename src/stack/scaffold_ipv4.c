@@ -52,6 +52,19 @@ uint16_t in_cksum(const void *data, size_t len)
         return answer;
 }
 
+const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
+{
+        int i = 0, len = 0;
+        const unsigned char *h = (const unsigned char *)hdr;
+
+        while (i < 20) {
+                len += snprintf(buf + len, buflen - len, 
+                                "%02x%02x ", h[i], h[i+1]);
+                i += 2;
+        }
+        return buf;
+}
+
 int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
                               struct ipcm_cookie *ipcm)
 {
@@ -77,19 +90,14 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 
 	skb->protocol = htons(ETH_P_IP);
 
-        return 0;
-}
-
-const char *ipv4_hdr_dump(unsigned char *hdr, char *buf, int buflen)
-{
-        int i = 0, len = 0;
-        
-        while (i < 20) {
-                len += snprintf(buf + len, buflen - len, 
-                                "%02x%02x ", hdr[i], hdr[i+1]);
-                i += 2;
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[256];
+                LOG_DBG("ip dump\n%s\n", ipv4_hdr_dump(iph, buf, 256));
         }
-        return buf;
+#endif
+        
+        return 0;
 }
 
 int scaffold_ipv4_rcv(struct sk_buff *skb)

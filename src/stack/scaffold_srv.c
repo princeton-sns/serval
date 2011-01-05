@@ -311,6 +311,22 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
         memcpy(&sfh->src_sid, &ssk->local_sockid, sizeof(ssk->local_sockid));
         memcpy(&sfh->dst_sid, &ssk->peer_sockid, sizeof(ssk->peer_sockid));
 
+        skb->protocol = IPPROTO_SCAFFOLD;
+
+        /* Set appropriate flags. */
+        switch (SCAFFOLD_SKB_CB(skb)->pkttype) {
+        case SCAFFOLD_PKT_SYNACK:
+                sfh->flags |= SFH_ACK;
+        case SCAFFOLD_PKT_SYN:
+                sfh->flags |= SFH_SYN;
+                break;
+        case SCAFFOLD_PKT_ACK:
+                sfh->flags |= SFH_ACK;
+                break;
+        default:
+                break;
+        }
+
 	if (sk->sk_state == SCAFFOLD_CONNECTED) {
 		err = scaffold_ipv4_xmit_skb(sk, skb);
                 
@@ -330,20 +346,6 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 		return -EADDRNOTAVAIL;
 	}
 
-        /* Set appropriate flags. */
-        switch (SCAFFOLD_SKB_CB(skb)->pkttype) {
-        case SCAFFOLD_PKT_SYNACK:
-                sfh->flags |= SFH_ACK;
-        case SCAFFOLD_PKT_SYN:
-                sfh->flags |= SFH_SYN;
-                break;
-        case SCAFFOLD_PKT_ACK:
-                sfh->flags |= SFH_ACK;
-                break;
-        default:
-                break;
-        }
-        skb->protocol = IPPROTO_SCAFFOLD;
         /* 
            Send on all interfaces listed for this service.
         */
@@ -377,7 +379,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
                 
 		/* Set the output device */
 		skb_set_dev(cskb, dev);
-
+                
 		err = scaffold_ipv4_xmit_skb(sk, cskb);
                 
 		if (err < 0) {
