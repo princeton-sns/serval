@@ -73,10 +73,10 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
                 sizeof(srv_ext->src_srvid));
 
         sfh->flags |= SFH_ACK;
+        skb->protocol = IPPROTO_SCAFFOLD;
 
         err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
                                                ip_hdr(skb)->saddr, NULL);
-
 done:        
         return err;
 drop:
@@ -130,6 +130,7 @@ static int scaffold_srv_request_state_process(struct sock *sk,
 
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;
+        skb->protocol = IPPROTO_SCAFFOLD;
 
         err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
                                                ip_hdr(skb)->saddr, NULL);
