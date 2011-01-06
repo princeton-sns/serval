@@ -85,7 +85,7 @@ static inline const char *service_id_to_str(struct service_id *srvid)
         return str;
 }
 
-static inline const char *sock_id_to_str(struct sock_id *sockid)
+static inline const char *socket_id_to_str(struct sock_id *sockid)
 {
         static char str[20];
         snprintf(str, 20, "%u", ntohs(sockid->s_id));

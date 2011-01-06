@@ -12,6 +12,25 @@
 LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
 
+/* From linux asm-generic/poll.h. Seems to be non-standardized */
+#define POLLRDNORM      0x0040
+#define POLLRDBAND      0x0080
+#ifndef POLLWRNORM
+#define POLLWRNORM      0x0100
+#endif
+#ifndef POLLWRBAND
+#define POLLWRBAND      0x0200
+#endif
+#ifndef POLLMSG
+#define POLLMSG         0x0400
+#endif
+#ifndef POLLREMOVE
+#define POLLREMOVE      0x1000
+#endif
+#ifndef POLLRDHUP
+#define POLLRDHUP       0x2000
+#endif
+
 static void sock_def_destruct(struct sock *sk)
 {
 
@@ -19,17 +38,52 @@ static void sock_def_destruct(struct sock *sk)
 
 static void sock_def_wakeup(struct sock *sk)
 {
+        struct socket_wq *wq = sk->sk_wq;
 
+        read_lock(&sk->sk_callback_lock);
+        if (wq_has_sleeper(wq))
+                wake_up_interruptible_all(&wq->wait);
+        read_unlock(&sk->sk_callback_lock);
 }
+/*
+static void sock_def_error_report(struct sock *sk)
+{
+        struct socket_wq *wq = sk->sk_wq;
 
+        read_lock(&sk->sk_callback_lock);
+        if (wq_has_sleeper(wq))
+                wake_up_interruptible_poll(&wq->wait, POLLERR);
+        sk_wake_async(sk, SOCK_WAKE_IO, POLL_ERR);
+        read_unlock(&sk->sk_callback_lock);
+}
+*/
 static void sock_def_readable(struct sock *sk, int bytes)
 {
+        struct socket_wq *wq = sk->sk_wq;
 
+        read_lock(&sk->sk_callback_lock);
+        if (wq_has_sleeper(wq))
+                wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
+                                                POLLRDNORM | POLLRDBAND);
+        sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
+        read_unlock(&sk->sk_callback_lock);
 }
 
 static void sock_def_write_space(struct sock *sk)
-{
+{        
+        struct socket_wq *wq = sk->sk_wq;
+        
+        read_lock(&sk->sk_callback_lock);
+        if ((atomic_read(&sk->sk_wmem_alloc) << 1) <= sk->sk_sndbuf) {
+                if (wq_has_sleeper(sk->sk_wq))
+                        wake_up_interruptible_sync_poll(&wq->wait, POLLOUT |
+                                                        POLLWRNORM | POLLWRBAND);
 
+                /* Should agree with poll, otherwise some programs break */
+                if (sock_writeable(sk))
+                        sk_wake_async(sk, SOCK_WAKE_SPACE, POLL_OUT);
+        }
+        read_unlock(&sk->sk_callback_lock);
 }
 
 static int sock_def_backlog_rcv(struct sock *sk, struct sk_buff *skb)
@@ -238,6 +292,8 @@ void lock_sock(struct sock *sk)
         sk->sk_lock.owned = 1;
 }
 
+/* process backlog of received packets when socket lock is
+ * released. */ 
 void __release_sock(struct sock *sk)
 {
         struct sk_buff *skb = sk->sk_backlog.head;

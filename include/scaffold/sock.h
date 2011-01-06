@@ -150,6 +150,11 @@ struct proto {
 	struct list_head	node;
 };
 
+static inline int wq_has_sleeper(struct socket_wq *wq)
+{
+        return wq && waitqueue_active(&wq->wait);
+}
+
 static inline int sock_no_getsockopt(struct socket *s, int a, 
                                      int b, char __user *c, int __user *d)
 {

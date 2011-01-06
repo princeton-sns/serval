@@ -17,22 +17,22 @@ static struct scaffold_table listen_table;
 
 static const char *sock_state_str[] = {
         "UNDEFINED",
-        "SCAFFOLD_CLOSED",
-        "SCAFFOLD_REQUEST",
-        "SCAFFOLD_RESPOND",
-        "SCAFFOLD_CONNECTED",
-        "SCAFFOLD_CLOSING",
-        "SCAFFOLD_TIMEWAIT",
-        "SCAFFOLD_MIGRATE",
-        "SCAFFOLD_RECONNECT",
-        "SCAFFOLD_RRESPOND",
-        "SCAFFOLD_LISTEN",
+        "CLOSED",
+        "REQUEST",
+        "RESPOND",
+        "CONNECTED",
+        "CLOSING",
+        "TIMEWAIT",
+        "MIGRATE",
+        "RECONNECT",
+        "RRESPOND",
+        "LISTEN",
         /* TCP only */
-        "TCP_FINWAIT1",
-        "TCP_FINWAIT2",
-        "TCP_CLOSEWAIT",
-        "TCP_LASTACK",
-        "TCP_SIMCLOSE"  
+        "FINWAIT1",
+        "FINWAIT2",
+        "CLOSEWAIT",
+        "LASTACK",
+        "SIMCLOSE"  
 };
 
 int scaffold_sock_get_sockid(struct sock_id *sid)
@@ -217,6 +217,8 @@ static void __scaffold_sock_hash(struct sock *sk)
                 __scaffold_table_hash(&listen_table, sk);
 
         } else { 
+                LOG_DBG("Hashing socket based on socket id %s\n",
+                        socket_id_to_str(&scaffold_sk(sk)->local_sockid));
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_sockid;
                 scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->local_sockid);
                 __scaffold_table_hash(&established_table, sk);
@@ -303,5 +305,6 @@ void __exit scaffold_sock_fini(void)
 {
         scaffold_table_fini(&listen_table);
         scaffold_table_fini(&established_table);
-        if (sock_state_str[0]) {} /* To avoid compiler warning */
+        if (sock_state_str[0]) {} /* Avoid compiler warning when
+                                   * compiling with debug off */
 }

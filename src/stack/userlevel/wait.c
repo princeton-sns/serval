@@ -244,7 +244,6 @@ void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 
 	list_for_each_entry_safe(curr, next, &q->thread_list, thread_list) {
 		unsigned flags = curr->flags;
-
 		if (curr->func(curr, mode, wake_flags, key) &&
 				(flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
@@ -257,6 +256,61 @@ void __wake_up(wait_queue_head_t *q, unsigned int mode,
 	pthread_mutex_lock(&q->lock);
 	__wake_up_common(q, mode, nr_exclusive, 0, key);
 	pthread_mutex_unlock(&q->lock);
+}
+
+/*
+ * Same as __wake_up but called with the spinlock in wait_queue_head_t held.
+ */
+void __wake_up_locked(wait_queue_head_t *q, unsigned int mode)
+{
+        __wake_up_common(q, mode, 1, 0, NULL);
+}
+EXPORT_SYMBOL_GPL(__wake_up_locked);
+
+void __wake_up_locked_key(wait_queue_head_t *q, unsigned int mode, void *key)
+{
+        __wake_up_common(q, mode, 1, 0, key);
+}
+
+/**
+ * __wake_up_sync_key - wake up threads blocked on a waitqueue.
+ * @q: the waitqueue
+ * @mode: which threads
+ * @nr_exclusive: how many wake-one or wake-many threads to wake up
+ * @key: opaque value to be passed to wakeup targets
+ *
+ * The sync wakeup differs that the waker knows that it will schedule
+ * away soon, so while the target thread will be woken up, it will not
+ * be migrated to another CPU - ie. the two threads are 'synchronized'
+ * with each other. This can prevent needless bouncing between CPUs.
+ *
+ * On UP it can prevent extra preemption.
+ *
+ * It may be assumed that this function implies a write memory barrier before
+ * changing the task state if and only if any tasks are woken up.
+ */
+void __wake_up_sync_key(wait_queue_head_t *q, unsigned int mode,
+                        int nr_exclusive, void *key)
+{
+        int wake_flags = 0; /* WF_SYNC; */
+
+        if (unlikely(!q))
+                return;
+
+        if (unlikely(!nr_exclusive))
+                wake_flags = 0;
+        
+        pthread_mutex_lock(&q->lock);
+        __wake_up_common(q, mode, nr_exclusive, wake_flags, key);
+        pthread_mutex_unlock(&q->lock);
+}
+
+/*
+ * __wake_up_sync - see __wake_up_sync_key()
+ */
+void __wake_up_sync(wait_queue_head_t *q, unsigned int mode, int nr_exclusive)
+{
+        __wake_up_sync_key(q, mode, nr_exclusive, NULL);
 }
 
 int signal_pending(pthread_t thr)

@@ -9,6 +9,8 @@
 #else
 #include <scaffold/list.h>
 #include <pthread.h>
+#include <signal.h>
+#include <poll.h>
 
 typedef struct __wait_queue wait_queue_t;
 typedef int (*wait_queue_func_t)(wait_queue_t *wait, unsigned mode, int flags, void *key);
@@ -76,8 +78,21 @@ void destroy_wait(wait_queue_t *w);
 void init_waitqueue_head(wait_queue_head_t *q);
 void destroy_waitqueue_head(wait_queue_head_t *q);
 
+static inline int waitqueue_active(wait_queue_head_t *q)
+{
+        return !list_empty(&q->thread_list);
+}
+
 void __add_wait_queue(wait_queue_head_t *head, wait_queue_t *new);
 void __add_wait_queue_tail(wait_queue_head_t *head, wait_queue_t *new);
+
+void __wake_up(wait_queue_head_t *q, unsigned int mode,
+               int nr_exclusive, void *key);
+void __wake_up_locked_key(wait_queue_head_t *q, unsigned int mode, void *key);
+void __wake_up_sync_key(wait_queue_head_t *q, unsigned int mode, int nr,
+                        void *key);
+void __wake_up_locked(wait_queue_head_t *q, unsigned int mode);
+void __wake_up_sync(wait_queue_head_t *q, unsigned int mode, int nr);
 
 #define wake_up(x)			__wake_up(x, TASK_NORMAL, 1, NULL)
 #define wake_up_nr(x, nr)		__wake_up(x, TASK_NORMAL, nr, NULL)
@@ -88,6 +103,15 @@ void __add_wait_queue_tail(wait_queue_head_t *head, wait_queue_t *new);
 #define wake_up_interruptible_nr(x, nr)	__wake_up(x, TASK_INTERRUPTIBLE, nr, NULL)
 #define wake_up_interruptible_all(x)	__wake_up(x, TASK_INTERRUPTIBLE, 0, NULL)
 #define wake_up_interruptible_sync(x)	__wake_up_sync((x), TASK_INTERRUPTIBLE, 1)
+
+#define wake_up_poll(x, m)\
+        __wake_up(x, TASK_NORMAL, 1, (void *) (m))
+#define wake_up_locked_poll(x, m)\
+        __wake_up_locked_key((x), TASK_NORMAL, (void *) (m))
+#define wake_up_interruptible_poll(x, m)\
+        __wake_up(x, TASK_INTERRUPTIBLE, 1, (void *) (m))
+#define wake_up_interruptible_sync_poll(x, m)\
+        __wake_up_sync_key((x), TASK_INTERRUPTIBLE, 1, (void *) (m))
 
 /*
  * Used for wake-one threads:

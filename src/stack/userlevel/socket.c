@@ -104,6 +104,7 @@ static void sock_free(struct socket *sock)
 
 int sock_wake_async(struct socket *sock, int how, int band)
 {
+        LOG_ERR("not implemented\n");
 #if 0
         struct socket_wq *wq;
 

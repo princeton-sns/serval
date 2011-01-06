@@ -88,6 +88,8 @@ static struct scaffold_request_sock *
 scaffold_srv_request_sock_handle(struct sock *sk,
                                  struct sock_id *sid)
 {
+        
+        
         return NULL;
 }
 
@@ -125,6 +127,7 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
         
+        LOG_DBG("state change\n");
         sk->sk_state_change(sk);
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 
@@ -138,12 +141,21 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         return err;
 }
 
+static int scaffold_srv_respond_state_process(struct sock *sk, 
+                                              struct scaffold_hdr *sfh,
+                                              struct sk_buff *skb)
+{
+        int err = 0;
+        FREE_SKB(skb);
+        return err;
+}
+
 static int scaffold_srv_connected_state_process(struct sock *sk, 
                                                 struct scaffold_hdr *sfh,
                                                 struct sk_buff *skb)
 {
         int err = 0;
-        
+        FREE_SKB(skb);
         return err;
 }
 
@@ -160,10 +172,14 @@ static int scaffold_srv_do_rcv(struct sock *sk,
         case SCAFFOLD_REQUEST:
                 err = scaffold_srv_request_state_process(sk, sfh, skb);
                 break;
+        case SCAFFOLD_RESPOND:
+                err = scaffold_srv_respond_state_process(sk, sfh, skb);
+                break;
         case SCAFFOLD_LISTEN:
                 err = scaffold_srv_listen_state_process(sk, sfh, skb);
                 break;
         default:
+                LOG_ERR("bad socket state %u\n", sk->sk_state);
                 goto drop;
         }
 
@@ -195,7 +211,7 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                 ntohs(sfh->src_sid.s_id), ntohs(sfh->dst_sid.s_id));
        
         /* If SYN and not ACK is set, we know for sure that we must
-         * demux on service id */
+         * demux on service id instead of socket id */
         if (!(sfh->flags & SFH_SYN && !(sfh->flags & SFH_ACK))) {
                 /* Ok, check if we can demux on socket id */
                 sk = scaffold_sock_lookup_sockid(&sfh->dst_sid);

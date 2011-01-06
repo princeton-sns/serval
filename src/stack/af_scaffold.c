@@ -496,7 +496,7 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
 {
         struct sock *sk = sock->sk;
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
-        int err = 0, connect_ret = 1;
+        int err = 0;
         int nonblock = flags & O_NONBLOCK;
 
         if (addr->sa_family != AF_SCAFFOLD)
@@ -524,6 +524,8 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
                 memcpy(&scaffold_sk(sk)->peer_srvid, &sfaddr->sf_srvid, 
                        sizeof(struct service_id));
 
+                scaffold_sock_set_state(sk, SCAFFOLD_REQUEST);
+
                 err = sk->sk_prot->connect(sk, addr, alen);
 
 		if (err < 0)
@@ -539,33 +541,28 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
 		break;
 	}
 
-        LOG_DBG("waiting for connect\n");
-
         if (!nonblock) {
                 /* Go to sleep, wait for timeout or successful connection */
                 release_sock(sk);
+
+                LOG_DBG("waiting for connect\n");
+
                 err = wait_event_interruptible_timeout(*sk_sleep(sk), 
-                                                       connect_ret != 1,
+                                                       sk->sk_state != SCAFFOLD_REQUEST,
                                                        msecs_to_jiffies(5000));
                 lock_sock(sk);
-
-                /* Check if we were interrupted */
-                if (err == 0) {
-                        if (connect_ret == 0) {
-                                LOG_DBG("connect returned, connect_ret=%d\n", connect_ret);
-                                
-                                if (connect_ret == 0) {
-                                        sock->state = SS_CONNECTED;
-                                        err = 0;
-                                }
-                        } else {
-                                LOG_ERR("connect() wait for BOUND failed, connect_ret=%d\n", connect_ret);
-                                err = connect_ret;
-                        }
-                }
+                
+                LOG_DBG("wait for connect returned=%d\n", err);
+        } else {
+                /* TODO: handle nonblocking connect */
+                err = -EINPROGRESS;
+                goto out;
         }
+        
         if (sk->sk_state != SCAFFOLD_CONNECTED)
                 goto sock_error;
+
+        sock->state = SS_CONNECTED;
 out:
         release_sock(sk);
                 
@@ -837,7 +834,6 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock,
 		return NULL;
 
 	sock_init_data(sock, sk);
-        sk->sk_state = SCAFFOLD_CLOSED;
         sk->sk_family = PF_SCAFFOLD;
 	sk->sk_protocol	= protocol;
 	sk->sk_destruct	= scaffold_sock_destruct;
