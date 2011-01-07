@@ -137,7 +137,7 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
 
         LOG_DBG("addr_len=%d\n", addr_len);
 
-	if (addr_len < sizeof(struct sockaddr_sf))
+	if ((size_t)addr_len < sizeof(struct sockaddr_sf))
 		return -EINVAL;
         
         skb = ALLOC_SKB(UDP_MAX_HDR, GFP_KERNEL);

@@ -532,13 +532,13 @@ int dev_signal(struct net_device *dev, enum signal type)
         return write(dev->pipefd[1], &s, 1);
 }
 
-int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr)
+int dev_get_ipv4_addr(struct net_device *dev, void *addr)
 {
         memcpy(addr, &dev->ipv4.addr, 4);
         return 1;
 }
 
-int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr)
+int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
 {
         memcpy(addr, &dev->ipv4.broadcast, 4);
         return 1;

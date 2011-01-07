@@ -16,7 +16,7 @@ static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
 
 #include <linux/inetdevice.h>
 
-static inline int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr)
+static inline int dev_get_ipv4_addr(struct net_device *dev, void *addr)
 {
         struct in_device *indev = in_dev_get(dev);
         int ret = 0;
@@ -32,7 +32,7 @@ static inline int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr)
         return ret;
 }
 
-static inline int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr)
+static inline int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
 {
         struct in_device *indev = in_dev_get(dev);
         int ret = 0;
@@ -199,8 +199,8 @@ int dev_queue_xmit(struct sk_buff *skb);
 int netdev_init(void);
 void netdev_fini(void);
 
-int dev_get_ipv4_addr(struct net_device *dev, uint32_t *addr);
-int dev_get_ipv4_broadcast(struct net_device *dev, uint32_t *addr);
+int dev_get_ipv4_addr(struct net_device *dev, void *addr);
+int dev_get_ipv4_broadcast(struct net_device *dev, void *addr);
 
 #endif /* OS_USER */
 
