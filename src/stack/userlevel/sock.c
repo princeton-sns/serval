@@ -101,6 +101,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 {
 	skb_queue_head_init(&sk->sk_receive_queue);
 	skb_queue_head_init(&sk->sk_write_queue);
+        skb_queue_head_init(&sk->sk_error_queue);
 
 	sk->sk_send_head	=	NULL;
 	init_timer(&sk->sk_timer);
@@ -132,7 +133,17 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	atomic_set(&sk->sk_drops, 0);
 }
 
-static struct sock *sk_prot_alloc(struct proto *prot, int family)
+/*
+ * Copy all fields from osk to nsk but nsk->sk_refcnt must not change yet,
+ * even temporarly, because of RCU lookups. sk_node should also be left as is.
+ */
+static void sock_copy(struct sock *nsk, const struct sock *osk)
+{
+        memcpy(&nsk->sk_copy_start, &osk->sk_copy_start,
+               osk->sk_prot->obj_size - offsetof(struct sock, sk_copy_start));
+}
+
+static struct sock *sk_prot_alloc(struct proto *prot, gfp_t priority, int family)
 {
 	struct sock *sk;
 
@@ -159,7 +170,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 {
 	struct sock *sk = NULL;
 
-	sk = sk_prot_alloc(prot, family);
+	sk = sk_prot_alloc(prot, priority, family);
 
 	if (sk) {
 		sk->sk_family = family;
@@ -174,6 +185,87 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 	}
 
 	return sk;
+}
+
+struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
+{
+        struct sock *newsk;
+        
+        newsk = sk_prot_alloc(sk->sk_prot, priority, sk->sk_family);
+        
+        if (newsk != NULL) {
+                
+                sock_copy(newsk, sk);
+
+                /* SANITY */
+                //get_net(sock_net(newsk));
+                sk_node_init(&newsk->sk_node);
+                sock_lock_init(newsk);
+                bh_lock_sock(newsk);
+                newsk->sk_backlog.head = newsk->sk_backlog.tail = NULL;
+                newsk->sk_backlog.len = 0;
+
+                atomic_set(&newsk->sk_rmem_alloc, 0);
+                /*
+                 * sk_wmem_alloc set to one (see sk_free() and sock_wfree())
+                 */
+                atomic_set(&newsk->sk_wmem_alloc, 1);
+                atomic_set(&newsk->sk_omem_alloc, 0);
+                skb_queue_head_init(&newsk->sk_receive_queue);
+                skb_queue_head_init(&newsk->sk_write_queue);
+                
+                //spin_lock_init(&newsk->sk_dst_lock);
+                rwlock_init(&newsk->sk_callback_lock);
+                /*
+                  lockdep_set_class_and_name(&newsk->sk_callback_lock,
+                                           af_callback_keys + newsk->sk_family,
+                                           af_family_clock_key_strings[newsk->sk_family]);
+                */
+                //newsk->sk_dst_cache= NULL;
+                newsk->sk_wmem_queued= 0;
+                //newsk->sk_forward_alloc = 0;
+                newsk->sk_send_head = NULL;
+                //newsk->sk_userlocks = sk->sk_userlocks & ~SOCK_BINDPORT_LOCK;
+
+                sock_reset_flag(newsk, SOCK_DONE);
+                skb_queue_head_init(&newsk->sk_error_queue);
+                
+                newsk->sk_err   = 0;
+                newsk->sk_priority = 0;
+                /*
+                 * Before updating sk_refcnt, we must commit prior changes to memory
+                 * (Documentation/RCU/rculist_nulls.txt for details)
+                 */
+                //smp_wmb();
+                atomic_set(&newsk->sk_refcnt, 2);
+
+                /*
+                 * Increment the counter in the same struct proto as the master
+                 * sock (sk_refcnt_debug_inc uses newsk->sk_prot->socks, that
+                 * is the same as sk->sk_prot->socks, as this field was copied
+                 * with memcpy).
+                 *
+                 * This _changes_ the previous behaviour, where
+                 * tcp_create_openreq_child always was incrementing the
+                 * equivalent to tcp_prot->socks (inet_sock_nr), so this have
+                 * to be taken into account in all callers. -acme
+                 */
+                //sk_refcnt_debug_inc(newsk);
+                sk_set_socket(newsk, NULL);
+                newsk->sk_wq = NULL;
+                
+                /*
+                if (newsk->sk_prot->sockets_allocated)
+                        percpu_counter_inc(newsk->sk_prot->sockets_allocated);
+                */
+                /*
+                if (sock_flag(newsk, SOCK_TIMESTAMP) ||
+                    sock_flag(newsk, SOCK_TIMESTAMPING_RX_SOFTWARE))
+                        net_enable_timestamp();
+                */
+        }
+//out:
+        return newsk;
 }
 
 static void __sk_free(struct sock *sk)

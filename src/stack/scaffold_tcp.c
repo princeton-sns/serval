@@ -5,6 +5,7 @@
 #include <scaffold/sock.h>
 #include <netinet/scaffold.h>
 #include <scaffold_tcp_sock.h>
+#include <scaffold_srv.h>
 #include <input.h>
 
 #if defined(OS_LINUX_KERNEL)
@@ -73,32 +74,6 @@ static void scaffold_tcp_shutdown(struct sock *sk, int how)
 {
         LOG_DBG("\n");
         
-}
-
-static int scaffold_tcp_backlog_rcv(struct sock *sk, struct sk_buff *skb)
-{
-	//struct scaffold_sock *scaff = scaffold_sk(sk);
-	int rc;
-
-        LOG_DBG("received data\n");
-
-        // Queue skbs on socket for reading via recv() or recvmsg()
-        if ((rc = sock_queue_rcv_skb(sk,skb)) < 0) {
-		/* Note that an ENOMEM error is charged twice */
-		if (rc == -ENOMEM) {
-			// increase stats
-                }
-		goto drop;
-	}
-        LOG_DBG("skb queued\n");
-        FREE_SKB(skb);
-        return 0;
-drop:
-        LOG_DBG("skb queue error!\n");
-
-        FREE_SKB(skb);
-
-        return -1;
 }
 
 /* 
@@ -345,7 +320,7 @@ struct proto scaffold_tcp_proto = {
 	.shutdown		= scaffold_tcp_shutdown,
         .sendmsg                = scaffold_tcp_sendmsg,
         .recvmsg                = scaffold_tcp_recvmsg,
-	.backlog_rcv		= scaffold_tcp_backlog_rcv,
+	.backlog_rcv		= scaffold_srv_do_rcv,
         .hash                   = scaffold_sock_hash,
         .unhash                 = scaffold_sock_unhash,
 	.obj_size		= sizeof(struct scaffold_tcp_sock),

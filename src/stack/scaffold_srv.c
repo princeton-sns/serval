@@ -22,6 +22,10 @@
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
 
+static int scaffold_srv_state_process(struct sock *sk, 
+                                      struct scaffold_hdr *sfh, 
+                                      struct sk_buff *skb);
+        
 static int scaffold_srv_syn_rcv(struct sock *sk, 
                                 struct scaffold_hdr *sfh,
                                 struct sk_buff *skb)
@@ -84,13 +88,68 @@ drop:
         goto done;
 }
 
-static struct scaffold_request_sock *
+static struct sock *
 scaffold_srv_request_sock_handle(struct sock *sk,
-                                 struct sock_id *sid)
+                                 struct scaffold_hdr *sfh,
+                                 struct sk_buff *skb)
 {
+        struct scaffold_request_sock *rsk;
+
+        list_for_each_entry(rsk, &scaffold_sk(sk)->syn_queue, lh) {
+                if (memcmp(&rsk->sockid, &sfh->dst_sid, sizeof(rsk->sockid)) == 0) {
+                        struct sock *nsk;
+
+                        /* Move request sock to accept queue */
+                        list_del(&rsk->lh);
+                        list_add_tail(&rsk->lh, &scaffold_sk(sk)->accept_queue);
+                        
+                        nsk = scaffold_sk(sk)->af_ops->conn_child_sock(sk, skb, 
+                                                                       rsk, NULL);
+                        
+                        if (!nsk)
+                                return NULL;
+                        
+                        rsk->sk = nsk;
+
+                        return nsk;
+                }
+        }
         
-        
-        return NULL;
+        return sk;
+}
+
+static int scaffold_srv_connected_state_process(struct sock *sk, 
+                                                struct scaffold_hdr *sfh,
+                                                struct sk_buff *skb)
+{
+        int err = 0;
+        FREE_SKB(skb);
+        return err;
+}
+
+static int scaffold_srv_child_process(struct sock *parent, struct sock *child,
+                                      struct scaffold_hdr *sfh,
+                                      struct sk_buff *skb)
+{
+        int ret = 0;
+        int state = child->sk_state;
+
+        if (!sock_owned_by_user(child)) {
+                ret = scaffold_srv_state_process(child, sfh, skb);
+                /* Wakeup parent, send SIGIO */
+                if (state == SCAFFOLD_RESPOND && child->sk_state != state)
+                        parent->sk_data_ready(parent, 0);
+        } else {
+                /* Alas, it is possible again, because we do lookup
+                 * in main socket hash table and lock on listening
+                 * socket does not protect us more.
+                 */
+                __sk_add_backlog(child, skb);
+        }
+
+        bh_unlock_sock(child);
+        sock_put(child);
+        return ret;
 }
 
 static int scaffold_srv_listen_state_process(struct sock *sk,
@@ -100,16 +159,17 @@ static int scaffold_srv_listen_state_process(struct sock *sk,
         int err = 0;                         
 
         if (sfh->flags & SFH_ACK) {
-                struct scaffold_request_sock *rsk;
+                /* Processing for socket that has received SYN already */
+                struct sock *nsk;
                 LOG_DBG("ACK recv\n");
-                rsk = scaffold_srv_request_sock_handle(sk, &sfh->dst_sid);
 
-                /*
-                sk->sk_state_change(sk);
+                nsk = scaffold_srv_request_sock_handle(sk, sfh, skb);
                 
-                if (sk->sk_socket)
-                        sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
-                */
+                if (nsk && nsk != sk) {
+                        
+                        LOG_DBG("create new sock\n");
+                        return scaffold_srv_child_process(sk, nsk, sfh, skb);
+                }
                 FREE_SKB(skb);
         } else if (sfh->flags & SFH_SYN) {
                 LOG_DBG("SYN recv\n");
@@ -146,20 +206,16 @@ static int scaffold_srv_respond_state_process(struct sock *sk,
                                               struct sk_buff *skb)
 {
         int err = 0;
+
+        /* TODO: check packet. */
+        scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
+
         FREE_SKB(skb);
+
         return err;
 }
 
-static int scaffold_srv_connected_state_process(struct sock *sk, 
-                                                struct scaffold_hdr *sfh,
-                                                struct sk_buff *skb)
-{
-        int err = 0;
-        FREE_SKB(skb);
-        return err;
-}
-
-static int scaffold_srv_do_rcv(struct sock *sk, 
+int scaffold_srv_state_process(struct sock *sk, 
                                struct scaffold_hdr *sfh, 
                                struct sk_buff *skb)
 {
@@ -188,6 +244,20 @@ drop:
         FREE_SKB(skb);
 
         return err;
+
+}
+
+int scaffold_srv_do_rcv(struct sock *sk, 
+                        struct sk_buff *skb)
+{
+        struct scaffold_hdr *sfh = 
+                (struct scaffold_hdr *)skb_transport_header(skb);
+        unsigned int hdr_len = ntohs(sfh->length);
+                
+        pskb_pull(skb, hdr_len);
+        skb_reset_transport_header(skb);
+                
+        return scaffold_srv_state_process(sk, sfh, skb);
 }
 
 int scaffold_srv_rcv(struct sk_buff *skb)
@@ -200,9 +270,6 @@ int scaffold_srv_rcv(struct sk_buff *skb)
 
         if (!pskb_may_pull(skb, hdr_len))
                 goto drop;
-        
-        pskb_pull(skb, hdr_len);
-        skb_reset_transport_header(skb);
 
         if (hdr_len < sizeof(struct scaffold_hdr))
                 goto drop;
@@ -242,7 +309,7 @@ int scaffold_srv_rcv(struct sk_buff *skb)
         bh_lock_sock_nested(sk);
 
         if (!sock_owned_by_user(sk)) {
-                err = scaffold_srv_do_rcv(sk, sfh, skb);
+                err = scaffold_srv_do_rcv(sk, skb);
         } 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
         else {

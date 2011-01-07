@@ -33,13 +33,14 @@
 static int scaffold_udp_connection_request(struct sock *sk, 
                                            struct sk_buff *skb);
 
-struct sock *scaffold_udp_connection_response(struct sock *sk, struct sk_buff *skb,
-                                              struct scaffold_request_sock *req,
-                                              struct dst_entry *dst);
+struct sock *scaffold_udp_connection_respond_sock(struct sock *sk, 
+                                                  struct sk_buff *skb,
+                                                  struct scaffold_request_sock *req,
+                                                  struct dst_entry *dst);
 
 static struct scaffold_sock_af_ops scaffold_udp_af_ops = {
         .conn_request = scaffold_udp_connection_request,
-        .conn_response = scaffold_udp_connection_response,
+        .conn_child_sock = scaffold_udp_connection_respond_sock,
 };
 
 /* from fastudpsrc */
@@ -181,18 +182,20 @@ int scaffold_udp_connection_request(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
-struct sock *scaffold_udp_connection_response(struct sock *sk, struct sk_buff *skb,
-                                              struct scaffold_request_sock *req,
-                                              struct dst_entry *dst)
+struct sock *scaffold_udp_connection_respond_sock(struct sock *sk, 
+                                                  struct sk_buff *skb,
+                                                  struct scaffold_request_sock *req,
+                                                  struct dst_entry *dst)
 {
-        return NULL;
-}
+        struct sock *nsk;
 
-static int __scaffold_udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
-{
-        FREE_SKB(skb);
+        nsk = sk_clone(sk, GFP_ATOMIC);
 
-        return 0;
+        if (nsk) {
+                nsk->sk_state = SCAFFOLD_RESPOND;
+        }        
+        
+        return nsk;
 }
 
 /* 
@@ -416,7 +419,7 @@ struct proto scaffold_udp_proto = {
 	.shutdown		= scaffold_udp_shutdown,
         .sendmsg                = scaffold_udp_sendmsg,
         .recvmsg                = scaffold_udp_recvmsg,
-	.backlog_rcv		= __scaffold_udp_queue_rcv_skb,
+	.backlog_rcv		= scaffold_srv_do_rcv,
         .hash                   = scaffold_sock_hash,
         .unhash                 = scaffold_sock_unhash,
 	.obj_size		= sizeof(struct scaffold_udp_sock),

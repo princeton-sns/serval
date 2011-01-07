@@ -32,4 +32,7 @@ static inline struct scaffold_skb_cb *__scaffold_skb_cb(struct sk_buff *skb)
 
 #define SCAFFOLD_SKB_CB(__skb) __scaffold_skb_cb(__skb)
 
+
+int scaffold_srv_do_rcv(struct sock *sk, struct sk_buff *skb);
+
 #endif /* _SCAFFOLD_SRV_H_ */

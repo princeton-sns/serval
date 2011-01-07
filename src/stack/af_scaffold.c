@@ -839,7 +839,11 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock,
 	sk->sk_destruct	= scaffold_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
-        if (__scaffold_assign_sockid(sk) < 0) {
+        /* Only assign socket id here in case we have a user
+         * socket. If socket is NULL, then it means this socket is a
+         * child socket from a LISTENing socket, and it will be
+         * assigned the socket id from the request sock */
+        if (sock && __scaffold_assign_sockid(sk) < 0) {
                 LOG_DBG("could not assign sock id\n");
                 sock_put(sk);
                 return NULL;

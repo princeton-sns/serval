@@ -13,7 +13,6 @@
 
 struct scaffold_request_sock {
         struct sock *sk;
-        int state;
         struct service_id peer_srvid;
         struct flow_id dst_flowid;
         struct sock_id sockid;

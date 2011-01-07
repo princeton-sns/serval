@@ -18,7 +18,9 @@ static inline struct net *sock_net(struct sock *sk)
 {
         return sk->sk_net;
 }
-
+#endif
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
+#define __sk_add_backlog sk_add_backlog
 #endif
 
 #endif
@@ -51,29 +53,49 @@ typedef struct {
         int owned;
 } socket_lock_t;
 
+struct sock_common {
+        struct hlist_node	skc_node;
+	atomic_t		skc_refcnt;
+        int     	        skc_tx_queue_mapping;
+        union  {
+                unsigned int skc_hash;
+                uint16_t skc_u16hashes[2];
+        };
+        unsigned short          skc_family;
+        unsigned char	        skc_state;
+        unsigned char	        skc_reuse;
+        int     	        skc_bound_dev_if;
+        struct proto            *skc_prot;
+        struct net              *skc_net;
+};
+
 struct sock {
-	unsigned short          sk_family;
+        struct sock_common      __sk_common;
+#define sk_node __sk_common.skc_node
+#define sk_refcnt __sk_common.skc_refcnt
+#define sk_tx_queue_mapping __sk_common.skc_tx_queue_mapping
+#define sk_copy_start __sk_common.skc_hash
+#define sk_hash __sk_common.skc_hash
+#define sk_family __sk_common.skc_family
+#define sk_state __sk_common.skc_state
+#define sk_reuse __sk_common.skc_reuse
+#define sk_bound_dev_if __sk_common.skc_bound_dev_if
+#define sk_prot __sk_common.skc_prot
+#define sk_net __sk_common.skc_net
         gfp_t                   sk_allocation;
-        struct hlist_node	sk_node;
-	atomic_t		sk_refcnt;
         unsigned int		sk_shutdown  : 2,
 				sk_no_check  : 2,
 				sk_userlocks : 4,
 				sk_protocol  : 8,
 				sk_type      : 16;
-        unsigned int	        sk_hash;
-	struct socket_wq  	*sk_wq;
-        unsigned char	        sk_state;
+        struct socket_wq  	*sk_wq;
 	int			sk_rcvbuf;
-	int			sk_tx_queue_mapping;
         socket_lock_t           sk_lock;
         struct {
                 struct sk_buff *head;
                 struct sk_buff *tail;
                 int len;
         } sk_backlog;
-        struct net              *sk_net;
-        struct proto            *sk_prot;
 	atomic_t		sk_rmem_alloc;
 	atomic_t		sk_wmem_alloc;
 	atomic_t		sk_omem_alloc;
@@ -83,21 +105,26 @@ struct sock {
 	int			sk_sndbuf;
 	struct sk_buff_head	sk_receive_queue;
 	struct sk_buff_head	sk_write_queue;
+        int			sk_wmem_queued;
 	int			sk_write_pending;
 	unsigned long 		sk_flags;
 	unsigned long	        sk_lingertime;
+        struct sk_buff_head	sk_error_queue;
 	rwlock_t		sk_callback_lock;
+        int                     sk_err,
+                                sk_err_soft;
+        uint32_t                sk_priority;
 	long			sk_rcvtimeo;
 	long			sk_sndtimeo;
 	struct timer_list	sk_timer;
 	struct socket		*sk_socket;
 	struct sk_buff		*sk_send_head;
-        
+
         void (*sk_destruct)(struct sock *sk);
 	void (*sk_state_change)(struct sock *sk);
 	void (*sk_data_ready)(struct sock *sk, int bytes);
 	void (*sk_write_space)(struct sock *sk);
-	/* void (*sk_error_report)(struct sock *sk); */
+	void (*sk_error_report)(struct sock *sk);
   	int (*sk_backlog_rcv)(struct sock *sk,
                               struct sk_buff *skb);  
 };
@@ -185,6 +212,12 @@ enum sock_flags {
 };
 
 #define sock_net(s) ((s)->sk_net)
+
+
+static inline void sk_node_init(struct hlist_node *node)
+{
+        node->pprev = NULL;
+}
 
 static inline void sk_tx_queue_set(struct sock *sk, int tx_queue)
 {
@@ -309,7 +342,7 @@ static inline void sk_wake_async(struct sock *sk, int how, int band)
 #define SOCK_MIN_RCVBUF 256
 
 void sock_init_data(struct socket *sock, struct sock *sk);
-
+struct sock *sk_clone(const struct sock *sk, const gfp_t priority);
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
 void sk_free(struct sock *sk);
