@@ -117,7 +117,8 @@ int client_msg_read(int sock, struct client_msg **msg)
 	}
 	
 	LOG_DBG("%s payload_length=%u\n", 
-		client_msg_to_typestr(msg_tmp), msg_tmp->payload_length);
+		client_msg_to_typestr(msg_tmp), 
+                msg_tmp->payload_length);
         
 	msg_len = msg_tmp->payload_length + CLIENT_MSG_HDR_LEN;
 

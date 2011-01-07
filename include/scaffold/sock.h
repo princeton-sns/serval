@@ -334,6 +334,7 @@ static inline unsigned long sock_wspace(struct sock *sk)
 
 static inline void sk_wake_async(struct sock *sk, int how, int band)
 {
+        /* Check if async notification is required on this socket. */
         if (sock_flag(sk, SOCK_FASYNC))
                 sock_wake_async(sk->sk_socket, how, band);
 }

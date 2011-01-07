@@ -40,7 +40,7 @@ extern void __exit service_fini(void);
 extern struct proto scaffold_udp_proto;
 extern struct proto scaffold_tcp_proto;
 
-static atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
+atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 int host_ctrl_mode = 0;
 
 static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
@@ -253,6 +253,8 @@ static int scaffold_listen_stop(struct sock *sk)
                 rsk = list_first_entry(&ssk->syn_queue, 
                                        struct scaffold_request_sock, lh);
                 list_del(&rsk->lh);
+                LOG_DBG("deleting SYN queued request socket\n");
+
                 scaffold_rsk_free(rsk);
                 sk->sk_ack_backlog--;
         }
@@ -280,11 +282,18 @@ static int scaffold_listen_stop(struct sock *sk)
                         sk->sk_prot->disconnect(child, O_NONBLOCK);
 
                         sock_orphan(child);
-
+                        
+                        LOG_DBG("removing socket from accept queue\n");
+                                                
+                        sk->sk_prot->unhash(child);
                         /* percpu_counter_inc(sk->sk_prot->orphan_count); */
+                        
+                        /* put for rsk->sk pointer */
+                        sock_put(child);
 
                         bh_unlock_sock(child);
                         local_bh_enable();
+                        
                         sock_put(child);
                 }
                 scaffold_rsk_free(rsk);
@@ -339,50 +348,10 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
 
         /* Parent sock is already locked... */
         list_for_each_entry(rsk, &pssk->accept_queue, lh) {
-                /* struct scaffold_sock *ssk; */
-                
-                /*
-                switch (newsock->type) {
-                case SOCK_DGRAM:
-                //newsock->ops = &scaffold_dgram_ops;
-                        sk = scaffold_sk_alloc(sock_net(parent), newsock, 
-                                               GFP_KERNEL, 
-                                               parent->sk_protocol,
-                                               &scaffold_udp_proto);
-                        break;
-                case SOCK_STREAM: 
-                        //newsock->ops = &scaffold_stream_ops;
-                        sk = scaffold_sk_alloc(sock_net(parent), newsock, 
-                                               GFP_KERNEL,
-                                               parent->sk_protocol,
-                                               &scaffold_tcp_proto);
-                        break;
-                case SOCK_SEQPACKET:	
-                case SOCK_RAW:
-                default:
-                        return NULL;
-                }
-                */
                 if (!rsk->sk)
                         continue;
 
                 sk = rsk->sk;
-
-                list_del(&rsk->lh);
-                
-
-                /* Inherit the service id from the parent socket */
-                /*
-                  ssk = scaffold_sk(sk);
-                memcpy(&ssk->local_srvid, 
-                       &pssk->local_srvid, 
-                       sizeof(pssk->local_srvid));
-                
-                memcpy(&ssk->peer_srvid, &rsk->peer_srvid, sizeof(rsk->peer_srvid));
-                memcpy(&ssk->dst_flowid, &rsk->dst_flowid, sizeof(rsk->dst_flowid));
-                ssk->tot_bytes_sent = 0;
-                */
-                scaffold_rsk_free(rsk);
 
                 lock_sock(sk);
                
@@ -391,13 +360,10 @@ struct sock *scaffold_accept_dequeue(struct sock *parent,
                         newsock->state = SS_CONNECTED;
                 }
                                 
-                atomic_inc(&scaffold_nr_socks);
-
-                /* Make available */
-                sk->sk_prot->hash(sk);
-
                 release_sock(sk);
-                
+
+                list_del(&rsk->lh);
+                scaffold_rsk_free(rsk);                
                 return sk;
         }
 
@@ -453,11 +419,14 @@ static int scaffold_accept(struct socket *sock, struct socket *newsock,
                 
 		/* If this is a non blocking socket don't sleep */
 		err = -EAGAIN;
+
 		if (!timeo)
 			goto out;
-
-		err = scaffold_wait_for_connect(sk, timeo);
                 
+                LOG_DBG("waiting for an incoming connect request\n");
+		err = scaffold_wait_for_connect(sk, timeo);
+                LOG_DBG("wait for incoming onnect returned err=%d\n", err);
+
 		if (err)
 			goto out;
 	}
@@ -668,12 +637,7 @@ int scaffold_release(struct socket *sock)
                 scaffold_shutdown(sock, 2);
 
                 sock_orphan(sk);
-                
-                LOG_DBG("SCAFFOLD socket %p released, refcnt=%d, tot_bytes_sent=%lu\n", 
-                        sk, atomic_read(&sk->sk_refcnt) - 1, 
-                        scaffold_sk(sk)->tot_bytes_sent);
-                
-		timeout = 0;
+                timeout = 0;
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
@@ -693,6 +657,10 @@ int scaffold_release(struct socket *sock)
                 /* cannot lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
 
+                LOG_DBG("SCAFFOLD socket %p released refcnt=%d tot_bytes_sent=%lu\n",
+                        sk, atomic_read(&sk->sk_refcnt) - 1, 
+                        scaffold_sk(sk)->tot_bytes_sent);
+                		
                 release_sock(sk);
 
                 sk_common_release(sk);
@@ -795,7 +763,7 @@ static const struct proto_ops scaffold_ops = {
 static void scaffold_sock_destruct(struct sock *sk)
 {
         __skb_queue_purge(&sk->sk_receive_queue);
-	/* __skb_queue_purge(&sk->sk_error_queue); */
+        __skb_queue_purge(&sk->sk_error_queue);
 
 	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SCAFFOLD_CLOSED) {
 		LOG_ERR("Bad state %d %p\n",

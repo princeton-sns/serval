@@ -6,6 +6,7 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/wait.h>
+#define UNDEFINE_WAIT(name)
 #else
 #include <scaffold/list.h>
 #include <pthread.h>
@@ -68,9 +69,10 @@ int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *
 		.private_data	= current,				\
 		.func		= function,				\
 		.thread_list	= LIST_HEAD_INIT((name).thread_list),	\
-	}
+	}; init_wait(&name)
 
 #define DEFINE_WAIT(name) DEFINE_WAIT_FUNC(name, autoremove_wake_function)
+#define UNDEFINE_WAIT(name) destroy_wait(name)
 
 void init_wait(wait_queue_t *w);
 void destroy_wait(wait_queue_t *w);
@@ -175,6 +177,7 @@ do {									\
 		break;							\
 	}								\
 	finish_wait(&wq, &__wait);					\
+        UNDEFINE_WAIT(&__wait);                                          \
 } while (0)
 
 #define wait_event_interruptible(wq, condition)				\
@@ -203,6 +206,7 @@ do {									\
 		break;							\
 	}								\
 	finish_wait(&wq, &__wait);					\
+        UNDEFINE_WAIT(&__wait);                                          \
 } while (0)
 
 #define wait_event_interruptible_timeout(wq, condition, timeout)	\

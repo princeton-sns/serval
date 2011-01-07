@@ -24,7 +24,8 @@
 //
 
 AcceptReq::AcceptReq()
-        :Message(ACCEPT_REQ)
+    :Message(ACCEPT_REQ),
+     _nb(false)
 {
     set_pld_len_v(serial_pld_len());
 }
@@ -32,7 +33,7 @@ AcceptReq::AcceptReq()
 uint16_t
 AcceptReq::serial_pld_len() const
 {
-    return 0;
+    return sizeof(_nb);
 }
 
 int
@@ -44,15 +45,17 @@ AcceptReq::check_type() const
 int
 AcceptReq::write_serial_payload(unsigned char *buf) const
 {
-    buf = NULL; // avoid compilation warning for unused variable.
-    return 0;
+    unsigned char *p = buf;
+    p += serial_write(_nb, p);
+    return p - buf;
 }
 
 int
 AcceptReq::read_serial_payload(const unsigned char *buf)
 {
-    buf = NULL; // avoid compilation warning for unused variable.
-    return 0;
+    const unsigned char *p = buf;
+    p += serial_read(&_nb, p);
+    return p - buf;
 }
 
 void

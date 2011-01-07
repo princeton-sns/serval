@@ -192,7 +192,9 @@ struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
         struct sock *newsk;
         
         newsk = sk_prot_alloc(sk->sk_prot, priority, sk->sk_family);
-        
+
+        LOG_DBG("socket clone %p\n", newsk);
+
         if (newsk != NULL) {
                 
                 sock_copy(newsk, sk);
@@ -212,6 +214,7 @@ struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
                 atomic_set(&newsk->sk_wmem_alloc, 1);
                 atomic_set(&newsk->sk_omem_alloc, 0);
                 skb_queue_head_init(&newsk->sk_receive_queue);
+                skb_queue_head_init(&newsk->sk_error_queue);
                 skb_queue_head_init(&newsk->sk_write_queue);
                 
                 //spin_lock_init(&newsk->sk_dst_lock);
@@ -228,15 +231,10 @@ struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
                 //newsk->sk_userlocks = sk->sk_userlocks & ~SOCK_BINDPORT_LOCK;
 
                 sock_reset_flag(newsk, SOCK_DONE);
-                skb_queue_head_init(&newsk->sk_error_queue);
                 
                 newsk->sk_err   = 0;
                 newsk->sk_priority = 0;
-                /*
-                 * Before updating sk_refcnt, we must commit prior changes to memory
-                 * (Documentation/RCU/rculist_nulls.txt for details)
-                 */
-                //smp_wmb();
+      
                 atomic_set(&newsk->sk_refcnt, 2);
 
                 /*
@@ -272,7 +270,7 @@ static void __sk_free(struct sock *sk)
 {
 	if (sk->sk_destruct)
 		sk->sk_destruct(sk);
-
+        
         free(sk);
 }
 
@@ -329,7 +327,6 @@ void sk_common_release(struct sock *sk)
 	sk->sk_prot->unhash(sk);
 
 	sock_orphan(sk);
-
 	sock_put(sk);
 }
 

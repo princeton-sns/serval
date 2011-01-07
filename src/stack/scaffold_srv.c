@@ -21,6 +21,7 @@
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
+extern atomic_t scaffold_nr_socks;
 
 static int scaffold_srv_state_process(struct sock *sk, 
                                       struct scaffold_hdr *sfh, 
@@ -63,6 +64,14 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
                 goto drop;
         }
         
+        /* Copy fields in request packet into request sock */
+        memcpy(&rsk->peer_sockid, &sfh->src_sid, 
+               sizeof(sfh->src_sid));
+        memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
+               sizeof(srv_ext->src_srvid));
+        memcpy(&rsk->dst_flowid, &ip_hdr(skb)->saddr,
+               sizeof(rsk->dst_flowid));
+        
         list_add(&rsk->lh, &scaffold_sk(sk)->syn_queue);
         
         SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_SYNACK;
@@ -72,10 +81,13 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         skb_reset_transport_header(skb);
         
         /* Update info in packet */
-        memcpy(&sfh->dst_sid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &rsk->local_sockid, sizeof(rsk->local_sockid));
-        memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
-                sizeof(srv_ext->src_srvid));
+        memcpy(&sfh->dst_sid, &sfh->src_sid, 
+               sizeof(sfh->src_sid));
+        memcpy(&sfh->src_sid, &rsk->local_sockid, 
+               sizeof(rsk->local_sockid));
+        memcpy(&srv_ext->dst_srvid, &rsk->peer_srvid,            
+               sizeof(rsk->peer_srvid));
+        
 
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SCAFFOLD;
@@ -100,6 +112,7 @@ scaffold_srv_request_sock_handle(struct sock *sk,
                 if (memcmp(&rsk->local_sockid, &sfh->dst_sid, 
                            sizeof(rsk->local_sockid)) == 0) {
                         struct sock *nsk;
+                        struct scaffold_sock *ssk;
 
                         /* Move request sock to accept queue */
                         list_del(&rsk->lh);
@@ -111,6 +124,18 @@ scaffold_srv_request_sock_handle(struct sock *sk,
                         if (!nsk)
                                 return NULL;
                         
+                        atomic_inc(&scaffold_nr_socks);
+                        nsk->sk_state = SCAFFOLD_RESPOND;
+                        ssk = scaffold_sk(nsk);
+                        memcpy(&ssk->local_sockid, &rsk->local_sockid, 
+                               sizeof(rsk->local_sockid));
+                        memcpy(&ssk->peer_sockid, &rsk->peer_sockid, 
+                               sizeof(rsk->peer_sockid));
+                        memcpy(&ssk->peer_srvid, &rsk->peer_srvid,
+                               sizeof(rsk->peer_srvid));
+                        memcpy(&ssk->dst_flowid, &rsk->dst_flowid,
+                               sizeof(rsk->dst_flowid));
+                         
                         rsk->sk = nsk;
 
                         /* Hash the sock to make it available */
@@ -142,8 +167,10 @@ static int scaffold_srv_child_process(struct sock *parent, struct sock *child,
         if (!sock_owned_by_user(child)) {
                 ret = scaffold_srv_state_process(child, sfh, skb);
                 /* Wakeup parent, send SIGIO */
-                if (state == SCAFFOLD_RESPOND && child->sk_state != state)
+                if (state == SCAFFOLD_RESPOND && child->sk_state != state) {
+                        LOG_DBG("waking up parent (listening) sock\n");
                         parent->sk_data_ready(parent, 0);
+                }
         } else {
                 /* Alas, it is possible again, because we do lookup
                  * in main socket hash table and lock on listening
@@ -154,6 +181,7 @@ static int scaffold_srv_child_process(struct sock *parent, struct sock *child,
 
         bh_unlock_sock(child);
         sock_put(child);
+        LOG_DBG("child refcnt=%d\n", atomic_read(&child->sk_refcnt));
         return ret;
 }
 
@@ -171,7 +199,6 @@ static int scaffold_srv_listen_state_process(struct sock *sk,
                 nsk = scaffold_srv_request_sock_handle(sk, sfh, skb);
                 
                 if (nsk && nsk != sk) {
-                        LOG_DBG("create new sock\n");
                         return scaffold_srv_child_process(sk, nsk, sfh, skb);
                 }
                 FREE_SKB(skb);
@@ -203,8 +230,6 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         /* Push back the Scaffold header again to make IP happy */
         skb_push(skb, hdr_len);
         skb_reset_transport_header(skb);
-        
-        /* Trim away the service extension */
 
         sfh->length = htons(sizeof(*sfh) + sizeof(*srv_ext));
         sfh->flags = 0;
@@ -243,7 +268,7 @@ static int scaffold_srv_respond_state_process(struct sock *sk,
 {
         int err = 0;
 
-        /* TODO: check packet. */
+        /* TODO: check packet, allow data. */
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
 
         LOG_DBG("\n");
@@ -382,35 +407,7 @@ drop:
 #define SCAFFOLD_MAX_HDR (MAX_HEADER + 20 +                             \
                           sizeof(struct scaffold_hdr) +                 \
                           sizeof(struct scaffold_service_ext) +         \
-v                          EXTRA_HDR)
-/*
-int scaffold_srv_connect(struct sock *sk, struct sk_buff *skb)
-{
-        struct scaffold_sock *ssk = scaffold_sk(sk);
-        struct scaffold_hdr *sfh;
-        struct scaffold_service_ext *srvext;
-        struct sk_buff *skb;
-        
-        skb = ALLOC_SKB(SCAFFOLD_MAX_HDR, sk->sk_allocation);
-        
-        if (!skb)
-                return -ENOBUFS;
-        
-	skb_set_owner_w(skb, sk);
-        skb_reserve(skb, SCAFFOLD_MAX_HDR);
-
-        srvext = (struct scaffold_service_ext *)skb_push(skb, sizeof(struct scaffold_service_ext));
-        
-        sfh = (struct scaffold_hdr *)skb_push(skb, sizeof(struct scaffold_hdr));
-        
-        memcpy(&sfh->dst_sid, &ssk->local_sockid, sizeof(ssk->local_sockid));
-        SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_DATA;
-        
-        FREE_SKB(skb);
-
-        return 0;
-}
-*/
+                          EXTRA_HDR)
 
 int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
 {

@@ -14,6 +14,7 @@ class AcceptReq : public Message {
     int read_serial_payload(const unsigned char *buf);
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
+    bool _nb;
 };
 
 class AcceptRsp : public Message {

@@ -193,15 +193,7 @@ struct sock *scaffold_udp_connection_respond_sock(struct sock *sk,
         nsk = sk_clone(sk, GFP_ATOMIC);
 
         if (nsk) {
-                struct scaffold_sock *ssk = scaffold_sk(nsk);
-                
-                nsk->sk_state = SCAFFOLD_RESPOND;
-                memcpy(&ssk->local_sockid, &req->local_sockid, 
-                       sizeof(req->local_sockid));
-                memcpy(&ssk->peer_sockid, &req->peer_sockid, 
-                       sizeof(req->peer_sockid));
-                memcpy(&ssk->peer_srvid, &req->peer_srvid,
-                       sizeof(req->peer_srvid));
+                /* Initialize UDP specific fields */
         }        
         
         return nsk;

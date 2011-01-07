@@ -611,6 +611,7 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
   if (new_cli.is_null())
     return SCAFFOLD_SOCKET_ERROR;
   
+  info("accept2");
   // blocking by default
   if (query_scafd_accept2(nb, new_cli, aresp, err) < 0) {
     cli.restore_flags();
@@ -647,7 +648,7 @@ SFSockLib::query_scafd_accept2(bool nb,
                                const Cli &cli, const AcceptRsp &aresp,
                                sf_err_t &err)
 {
-  AcceptReq2 areq2(aresp.remote_obj_id(), aresp.sock_id(), nb);
+  AcceptReq2 areq2(aresp.local_obj_id(), aresp.sock_id(), nb);
   if (areq2.write_to_stream_soc(cli.fd(), err) < 0)
     return SCAFFOLD_SOCKET_ERROR;
   areq2.print("accept2:app:tx");
@@ -739,6 +740,11 @@ int
 SFSockLib::query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
                                sf_err_t &err)
 {
+  AcceptReq areq;
+  if (areq.write_to_stream_soc(cli.fd(), err) < 0)
+    return SCAFFOLD_SOCKET_ERROR;
+  areq.print("accept:app:tx");
+
   if (nb) {
     int size = aresp.total_len();
     bool v;

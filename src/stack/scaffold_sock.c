@@ -207,7 +207,7 @@ static void __scaffold_sock_hash(struct sock *sk)
                 LOG_ERR("socket already hashed\n");
         }
         
-        LOG_DBG("hashing socket\n");
+        LOG_DBG("hashing socket %p\n", sk);
 
         if (sk->sk_state == SCAFFOLD_LISTEN) {
                 LOG_DBG("Hashing socket based on service id %s\n",
@@ -239,7 +239,7 @@ void scaffold_sock_unhash(struct sock *sk)
         struct net *net = sock_net(sk);
         spinlock_t *lock;
 
-        LOG_DBG("unhashing socket\n");
+        LOG_DBG("unhashing socket %p\n", sk);
 
         /* grab correct lock */
         if (sk->sk_state == SCAFFOLD_LISTEN) {

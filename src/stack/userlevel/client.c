@@ -2,6 +2,7 @@
 #include <scaffold/debug.h>
 #include <scaffold/atomic.h>
 #include <scaffold/timer.h>
+#include <scaffold/wait.h>
 #include <scaffold/net.h>
 #include <scaffold_sock.h>
 #include <sys/types.h>
@@ -62,6 +63,7 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_listen_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_accept_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
@@ -74,7 +76,7 @@ msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	client_handle_listen_req_msg,
 	dummy_msg_handler,
-	dummy_msg_handler,
+	client_handle_accept_req_msg,
 	dummy_msg_handler,
 	client_handle_accept2_req_msg,
 	dummy_msg_handler,
@@ -380,15 +382,65 @@ int client_handle_listen_req_msg(struct client *c, struct client_msg *msg)
 	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
+/* 
+   This function is called on the parent thread, i.e., the socket that
+   is listening. We wait to be woken up, i.e., we wake when there is a
+   new client socket in the accept queue.
+   
+   We respond to the application, which in turn creates a new client
+   by opening a new IPC socket. This client is hooked up with the
+   socket in the accept queue by calling accept2 below on the new
+   client thread.
+*/
+int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
+{
+	//struct client_msg_accept_req *req = (struct client_msg_accept_req *)msg;
+        struct client_msg_accept_rsp rsp;
+        struct scaffold_sock *ssk = scaffold_sk(c->sock->sk);
+        int err = 0;
+        
+        client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT_RSP);
+        
+        LOG_DBG("waiting for incoming request wqh=%p\n",
+                sk_sleep(c->sock->sk));
+        
+        err = wait_event_interruptible(*sk_sleep(c->sock->sk), 
+                                       !list_empty(&ssk->accept_queue));
+
+        LOG_DBG("wait returned %d\n", err);
+        
+        if (err < 0) {
+                rsp.error = KERN_ERR(err);
+                goto out;
+        }
+
+        /* Write the service id of the parent in the response */
+        memcpy(&rsp.local_srvid, &ssk->local_srvid, 
+               sizeof(ssk->local_srvid));
+        memcpy(&rsp.sockid, &ssk->local_sockid, 
+               sizeof(ssk->local_sockid));
+
+        LOG_DBG("parent service id=%s\n",
+                service_id_to_str(&rsp.local_srvid));
+out:
+        return client_msg_write(c->fd, &rsp.msghdr);
+}
+/* 
+   Accept2 is called on the child thread, i.e., corresponding to the
+   socket returned from accept().
+   
+   We need to hook up the client thread with the socket in the accept queue
+   of the parent.
+ */
 int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_accept2_req *req = (struct client_msg_accept2_req *)msg;
         struct client_msg_accept2_rsp rsp;
         struct sock *psk;
-        //struct sockaddr_un addr;
 	int err, flags = 0;
 
-	LOG_DBG("accept2 request\n");
+	LOG_DBG("accept2 request service id=%s\n",
+                service_id_to_str(&req->srvid));
 
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT2_RSP);
 
@@ -406,10 +458,11 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
          * as a result of creating the new client, because at that
          * time, there was no way to know whether the client's sock
          * would be a connection initiating sock or a result of
-         * accept().and then graft the new "struct sock" to the client
+         * accept(). Then we graft the new "struct sock" to the client
          * socket when we pull it from the accept queue.
          */
         sk_common_release(c->sock->sk);
+        c->sock->sk = NULL;
         
         err = c->sock->ops->accept(psk->sk_socket, c->sock, flags); 
 
@@ -575,7 +628,7 @@ static void *client_thread(void *arg)
 	}
 
 	LOG_DBG("Client %u exits\n", c->id);
-	client_close(c);	
+	client_close(c);
 	c->state = CLIENT_STATE_GARBAGE;
 
 	return NULL;

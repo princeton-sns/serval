@@ -39,8 +39,10 @@ void init_wait(wait_queue_t *w)
 void destroy_wait(wait_queue_t *w)
 {
         pthread_mutex_destroy(&w->lock);
-        close(w->pipefd[0]);
-        close(w->pipefd[1]);
+        if (w->pipefd[0] > 0)
+                close(w->pipefd[0]);
+        if (w->pipefd[1] > 0)
+                close(w->pipefd[1]);
 }
 
 int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
@@ -61,7 +63,7 @@ long schedule_timeout(long timeo)
 {        
         wait_queue_head_t *q = (wait_queue_head_t *)pthread_getspecific(wq_key);
         wait_queue_t *w = (wait_queue_t *)pthread_getspecific(w_key);
-        struct client *c = (struct client *)client_get_current();
+        struct client *c = client_get_current();
         struct timespec now = { 0, 0 }, later = { 0, 0 };
         struct pollfd fds[3];
         int ret = 0;
@@ -139,11 +141,12 @@ void pre_add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait)
         
 	pthread_once(&key_once, make_keys);
         
+        /*
         if (pthread_getspecific(wq_key)) {
                 LOG_ERR("Wait queue key already set\n");
                 return;
         }
-
+        */
 	ret = pthread_setspecific(wq_key, q);
         
 	if (ret != 0) {
@@ -299,7 +302,7 @@ void __wake_up_sync_key(wait_queue_head_t *q, unsigned int mode,
 
         if (unlikely(!nr_exclusive))
                 wake_flags = 0;
-        
+
         pthread_mutex_lock(&q->lock);
         __wake_up_common(q, mode, nr_exclusive, wake_flags, key);
         pthread_mutex_unlock(&q->lock);
@@ -326,8 +329,10 @@ int signal_pending(pthread_t thr)
         
         fds[0].fd = client_get_signalfd(c);
         fds[0].events = POLLIN;
+        fds[0].revents = 0;
         fds[1].fd = client_get_sockfd(c);
         fds[1].events = POLLHUP;
+        fds[1].revents = 0;
 
         ret = poll(fds, 2, 0);
 
@@ -341,6 +346,7 @@ int signal_pending(pthread_t thr)
                    since it probably means the client should exit
                    or the signals are reset somewhere else.
                 */
+
         }
 
         return ret > 0;
