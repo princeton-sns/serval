@@ -206,7 +206,7 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         
         /* Trim away the service extension */
 
-        sfh->length = htons(sizeof(*sfh));
+        sfh->length = htons(sizeof(*sfh) + sizeof(*srv_ext));
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SCAFFOLD;

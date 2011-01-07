@@ -121,10 +121,10 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 #if defined(ENABLE_DEBUG)
         {
                 char srcstr[18];
-                LOG_DBG("%s %s hdr_len=%u prot=%u\n",
+                LOG_DBG("%s %s hdr_len=%u tot_len=%u prot=%u\n",
                         skb->dev->name,
-                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18), 
-                        hdr_len, iph->protocol);
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        hdr_len, ntohs(iph->tot_len), iph->protocol);
         }
 #endif
         if (!pskb_may_pull(skb, hdr_len))
