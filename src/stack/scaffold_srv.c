@@ -73,7 +73,7 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         
         /* Update info in packet */
         memcpy(&sfh->dst_sid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &rsk->sockid, sizeof(rsk->sockid));
+        memcpy(&sfh->src_sid, &rsk->local_sockid, sizeof(rsk->local_sockid));
         memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
                 sizeof(srv_ext->src_srvid));
 
@@ -97,7 +97,8 @@ scaffold_srv_request_sock_handle(struct sock *sk,
         struct scaffold_request_sock *rsk;
 
         list_for_each_entry(rsk, &scaffold_sk(sk)->syn_queue, lh) {
-                if (memcmp(&rsk->sockid, &sfh->dst_sid, sizeof(rsk->sockid)) == 0) {
+                if (memcmp(&rsk->local_sockid, &sfh->dst_sid, 
+                           sizeof(rsk->local_sockid)) == 0) {
                         struct sock *nsk;
 
                         /* Move request sock to accept queue */
@@ -111,6 +112,9 @@ scaffold_srv_request_sock_handle(struct sock *sk,
                                 return NULL;
                         
                         rsk->sk = nsk;
+
+                        /* Hash the sock to make it available */
+                        nsk->sk_prot->hash(nsk);
 
                         return nsk;
                 }
@@ -183,9 +187,11 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                                               struct scaffold_hdr *sfh,
                                               struct sk_buff *skb)
 {
-        int err = 0;
+        struct scaffold_service_ext *srv_ext = 
+                (struct scaffold_service_ext *)(sfh + 1);        
         unsigned int hdr_len = ntohs(sfh->length);
-        unsigned int trim_len = hdr_len - sizeof(*sfh);
+        int err = 0;
+
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
         
         LOG_DBG("connected\n");
@@ -199,13 +205,7 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         skb_reset_transport_header(skb);
         
         /* Trim away the service extension */
-        if (trim_len > 0) {
-                err = pskb_trim(skb, trim_len);
-                if (err < 0) {
-                        LOG_ERR("could not trim skb\n");
-                        goto drop;
-                }
-        }
+
         sfh->length = htons(sizeof(*sfh));
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;
@@ -218,6 +218,12 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                sizeof(sfh->src_sid));
         memcpy(&sfh->dst_sid, &scaffold_sk(sk)->peer_sockid, 
                sizeof(sfh->dst_sid));
+
+        /* Update service extension header */
+        memcpy(&srv_ext->dst_srvid, &scaffold_sk(sk)->peer_srvid,
+               sizeof(scaffold_sk(sk)->peer_srvid));
+        memcpy(&srv_ext->src_srvid, &scaffold_sk(sk)->local_srvid,
+               sizeof(scaffold_sk(sk)->local_srvid));
 
         err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
                                                ip_hdr(skb)->saddr, NULL);
@@ -329,11 +335,15 @@ int scaffold_srv_rcv(struct sk_buff *skb)
                 /* Check for service extension. We require that this
                  * extension always directly follows the main Scaffold
                  * header */
-                if (hdr_len <= sizeof(struct scaffold_hdr))
+                if (hdr_len <= sizeof(struct scaffold_hdr)) {
+                        LOG_ERR("No service extension, too short length\n");
                         goto drop;
+                }
                 
-                if (srv_ext->type != SCAFFOLD_SERVICE_EXT)
+                if (srv_ext->type != SCAFFOLD_SERVICE_EXT) {
+                        LOG_ERR("No service extension, bad extension type\n");
                         goto drop;
+                }
                 
                 sk = scaffold_sock_lookup_serviceid(&srv_ext->dst_srvid);
                 
@@ -393,7 +403,7 @@ int scaffold_srv_connect(struct sock *sk, struct sk_buff *skb)
         
         sfh = (struct scaffold_hdr *)skb_push(skb, sizeof(struct scaffold_hdr));
         
-        memcpy(&sfh->dst_sid, &ssk->sockid, sizeof(ssk->sockid));
+        memcpy(&sfh->dst_sid, &ssk->local_sockid, sizeof(ssk->local_sockid));
         SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_DATA;
         
         FREE_SKB(skb);

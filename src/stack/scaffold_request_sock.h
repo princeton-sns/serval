@@ -14,8 +14,9 @@
 struct scaffold_request_sock {
         struct sock *sk;
         struct service_id peer_srvid;
+        struct sock_id local_sockid;
+        struct sock_id peer_sockid;
         struct flow_id dst_flowid;
-        struct sock_id sockid;
         uint32_t seqno;
         unsigned char flags;
         struct list_head lh;
@@ -32,7 +33,7 @@ static inline struct scaffold_request_sock *scaffold_rsk_alloc(int alloc)
 
         INIT_LIST_HEAD(&rsk->lh);
         
-        scaffold_sock_get_sockid(&rsk->sockid);
+        scaffold_sock_get_sockid(&rsk->local_sockid);
 
         return rsk;
 }
