@@ -456,6 +456,7 @@ int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb)
         }
 
 	if (sk->sk_state == SCAFFOLD_CONNECTED) {
+                /* TODO, need to figure out interface */
 		err = scaffold_ipv4_xmit_skb(sk, skb);
                 
 		if (err < 0) {

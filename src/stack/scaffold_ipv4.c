@@ -152,7 +152,12 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 	memset(&ipcm, 0, sizeof(ipcm));
 
         ipcm.addr = daddr;
-
+        
+        if (!skb->dev) {
+                LOG_ERR("no device set\n");
+                FREE_SKB(skb);
+                return -ENODEV;
+        }
         err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
         
         if (err < 0) {
@@ -190,6 +195,11 @@ int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
 
         ipcm.addr = 0xffffffff;
 
+        if (!skb->dev) {
+                LOG_ERR("no device set\n");
+                FREE_SKB(skb);
+                return -ENODEV;
+        }
         err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
         
         if (err < 0) {
