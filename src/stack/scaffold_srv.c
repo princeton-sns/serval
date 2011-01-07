@@ -59,7 +59,8 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
 
         if (!rsk) {
                 bh_unlock_sock(sk);
-                return -ENOMEM;
+                err = -ENOMEM;
+                goto drop;
         }
         
         list_add(&rsk->lh, &scaffold_sk(sk)->syn_queue);
@@ -166,7 +167,6 @@ static int scaffold_srv_listen_state_process(struct sock *sk,
                 nsk = scaffold_srv_request_sock_handle(sk, sfh, skb);
                 
                 if (nsk && nsk != sk) {
-                        
                         LOG_DBG("create new sock\n");
                         return scaffold_srv_child_process(sk, nsk, sfh, skb);
                 }
@@ -184,20 +184,50 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                                               struct sk_buff *skb)
 {
         int err = 0;
-        
+        unsigned int hdr_len = ntohs(sfh->length);
+        unsigned int trim_len = hdr_len - sizeof(*sfh);
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
         
-        LOG_DBG("state change\n");
+        LOG_DBG("connected\n");
+        
+        /* Let app know we are connected. */
         sk->sk_state_change(sk);
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 
+        /* Push back the Scaffold header again to make IP happy */
+        skb_push(skb, hdr_len);
+        skb_reset_transport_header(skb);
+        
+        /* Trim away the service extension */
+        if (trim_len > 0) {
+                err = pskb_trim(skb, trim_len);
+                if (err < 0) {
+                        LOG_ERR("could not trim skb\n");
+                        goto drop;
+                }
+        }
+        sfh->length = htons(sizeof(*sfh));
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SCAFFOLD;
 
+        /* Fill in socket ids */
+        memcpy(&scaffold_sk(sk)->peer_sockid, 
+               &sfh->src_sid, sizeof(sfh->src_sid));
+        memcpy(&sfh->src_sid, &scaffold_sk(sk)->local_sockid, 
+               sizeof(sfh->src_sid));
+        memcpy(&sfh->dst_sid, &scaffold_sk(sk)->peer_sockid, 
+               sizeof(sfh->dst_sid));
+
         err = scaffold_ipv4_build_and_send_pkt(skb, sk, 
                                                ip_hdr(skb)->saddr, NULL);
 
+        if (err < 0)
+                goto drop;
+                
+        return err;
+drop:
+        FREE_SKB(skb);
         return err;
 }
 
@@ -209,6 +239,8 @@ static int scaffold_srv_respond_state_process(struct sock *sk,
 
         /* TODO: check packet. */
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
+
+        LOG_DBG("\n");
 
         FREE_SKB(skb);
 
@@ -268,11 +300,16 @@ int scaffold_srv_rcv(struct sk_buff *skb)
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
 
-        if (!pskb_may_pull(skb, hdr_len))
+        if (!pskb_may_pull(skb, hdr_len)) {
+                LOG_ERR("cannot pull header (hdr_len=%u)\n",
+                        hdr_len);
                 goto drop;
+        }
 
-        if (hdr_len < sizeof(struct scaffold_hdr))
+        if (hdr_len < sizeof(struct scaffold_hdr)) {
+                LOG_ERR("header length too short\n");
                 goto drop;
+        }
         
         LOG_DBG("sockid (src,dst)=(%u,%u)\n", 
                 ntohs(sfh->src_sid.s_id), ntohs(sfh->dst_sid.s_id));

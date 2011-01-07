@@ -287,6 +287,17 @@ static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 
 void skb_trim(struct sk_buff *skb, unsigned int len);
 
+static inline int __pskb_trim(struct sk_buff *skb, unsigned int len)
+{
+        __skb_trim(skb, len);
+        return 0;
+}
+
+static inline int pskb_trim(struct sk_buff *skb, unsigned int len)
+{
+        return (len < skb->len) ? __pskb_trim(skb, len) : 0;
+}
+
 static inline void skb_orphan(struct sk_buff *skb)
 {
 	if (skb->destructor)

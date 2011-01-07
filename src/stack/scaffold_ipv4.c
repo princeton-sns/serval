@@ -137,6 +137,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 out:
 	return ret;
 inhdr_error:
+        LOG_ERR("header error\n");
         FREE_SKB(skb);
 
         return ret;
