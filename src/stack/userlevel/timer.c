@@ -7,6 +7,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <poll.h>
 
 struct timer_internal {
 	struct timespec expire_abs;
@@ -16,13 +17,15 @@ struct timer_list_head {
 	unsigned long num_timers;
 	struct list_head head;
 	pthread_mutex_t lock;
+        int signal;
 };
 
 #if !defined(PER_THREAD_TIMER_LIST)
 static struct timer_list_head timer_list = {
         .num_timers = 0,
         .head = { &timer_list.head, &timer_list.head },
-        .lock = PTHREAD_MUTEX_INITIALIZER
+        .lock = PTHREAD_MUTEX_INITIALIZER,
+        .signal = -1
 };
 #else
 static pthread_key_t timer_list_head_key;
@@ -81,7 +84,7 @@ static inline struct timer_list_head *timer_list_get_locked(void)
 	return tlh;
 }
 
-int timer_list_get_next_timeout(struct timespec *timeout)
+int timer_list_get_next_timeout(struct timespec *timeout, int signal)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
 	struct timer_list *timer;
@@ -90,15 +93,18 @@ int timer_list_get_next_timeout(struct timespec *timeout)
 	if (!tlh)
 		return -1;
 	
+        tlh->signal = signal;
+
 	if (list_empty(&tlh->head)) {
 		timer_list_unlock(tlh);
 		return 0;
 	}
 
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
+
 #if defined(OS_LINUX)
 	if (clock_gettime(CLOCK, &now) == -1) {
-		LOG_DBG("clock_gettime failed: %s\n", strerror(errno));
+		LOG_ERR("clock_gettime failed: %s\n", strerror(errno));
 		timer_list_unlock(tlh);
 		return -1;
 	}
@@ -110,6 +116,33 @@ int timer_list_get_next_timeout(struct timespec *timeout)
 	timer_list_unlock(tlh);
 
 	return 1;
+}
+
+static int timer_list_signal_pending(int signal)
+{
+        int ret;
+        struct pollfd fds;
+
+        fds.fd = signal;
+        fds.events = POLLIN | POLLHUP;
+        fds.revents = 0;
+
+        ret = poll(&fds, 1, 0);
+
+        if (ret == -1) {
+                LOG_ERR("poll error: %s\n", strerror(errno));
+        }
+
+        return ret;
+}
+
+static int timer_list_signal_add_timer(int signal)
+{
+        if (timer_list_signal_pending(signal))
+                return 0;
+
+        char w = 'w';
+	return write(signal, &w, 1);
 }
 
 int timer_list_handle_timeout(void)
@@ -132,13 +165,17 @@ int timer_list_handle_timeout(void)
 	timer_list_unlock(tlh);
 
 	/* Call timer function, passing the data */
-	timer->function(timer->data);
-
+        if (timer->function)
+                timer->function(timer->data); 
+        else {
+                LOG_WARN("timer function is NULL\n");
+        }
+        
 	return 1;
 }
 
 #if defined(PER_THREAD_TIMER_LIST)
-static void make_list_key(void)
+static void make_keys(void)
 {
 	pthread_key_create(&timer_list_head_key, timer_list_head_destructor);
 }
@@ -148,7 +185,7 @@ int timer_list_per_thread_init()
 	struct timer_list_head *tlh;
 	int ret;      
 
-	pthread_once(&key_once, make_list_key);	
+	pthread_once(&key_once, make_keys);	
 
 	/* Check if init was already done for this thread */
 	if (timer_list_get())
@@ -158,7 +195,7 @@ int timer_list_per_thread_init()
 
 	if (!tlh)
 		return -1;
-	
+
 	ret = pthread_setspecific(timer_list_head_key, tlh);
 
 	if (ret != 0) {
@@ -188,7 +225,7 @@ int timer_list_per_thread_init()
 void init_timer(struct timer_list *timer)
 {
         memset(timer, 0, sizeof(*timer));
-        INIT_LIST_HEAD(&timer->entry);
+        timer->entry.next = NULL;
 }
 
 void add_timer(struct timer_list *timer)
@@ -222,7 +259,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 
 #if defined(OS_LINUX)
 	if (clock_gettime(CLOCK, &timer->expires_abs) == -1) {
-		LOG_DBG("clock_gettime failed: %s\n", strerror(errno));
+		LOG_ERR("clock_gettime failed: %s\n", strerror(errno));
 		timer_list_unlock(tlh);
 		return -1;
 	}
@@ -238,22 +275,27 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
+                timer_list_signal_add_timer(tlh->signal);
 	} else {
 		unsigned int num = 0;
-		struct timer_list *tl = NULL;
+		struct timer_list *tl;
 		/* Find place where to insert based on absolute time */
 		list_for_each_entry(tl, &tlh->head, entry) {
-			if (timespec_lt(&timer->expires_abs, &tl->expires_abs)) {
-				list_add_tail(&timer->entry, &tl->entry);
-				goto insert_done;
-			}
+			if (timespec_lt(&timer->expires_abs, 
+                                        &tl->expires_abs))
+                                break;
 			num++;
 		}
-		/* if (tl == &tlh->head) */
-		list_add_tail(&timer->entry, &tlh->head);
+
+                list_add_tail(&timer->entry, &tl->entry);
+
+		if (timer->entry.prev == &tlh->head) {
+                        /* Inserted first in queue, so we must signal
+                         * that the timeout has changed. */
+                        timer_list_signal_add_timer(tlh->signal);
+                } 
 	}
 	
-insert_done:
 	timer_list_unlock(tlh);
 
 	return 0;

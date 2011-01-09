@@ -25,6 +25,6 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 				     uint32_t daddr, 
                                      struct ip_options *opt);
-int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb);
+int scaffold_ipv4_xmit_skb(struct sk_buff *skb);
 
 #endif /* _SCAFFOLD_IPV4_H_ */

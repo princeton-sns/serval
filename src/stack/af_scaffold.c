@@ -549,7 +549,8 @@ static int scaffold_sendmsg(struct kiocb *iocb, struct socket *sock,
 	struct sock *sk = sock->sk;
 
 	/* We may need to bind the socket. */
-	if (sk->sk_state == SCAFFOLD_CLOSED && scaffold_autobind(sk) < 0)
+	if (!scaffold_sock_flag(scaffold_sk(sk), SSK_FLAG_BOUND) && 
+            scaffold_autobind(sk) < 0)
 		return -EAGAIN;
 
 	return sk->sk_prot->sendmsg(iocb, sk, msg, size);
@@ -874,9 +875,8 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 		goto out;
         }
 
-        /* Initialize accept queue */
-        INIT_LIST_HEAD(&scaffold_sk(sk)->accept_queue);
-        INIT_LIST_HEAD(&scaffold_sk(sk)->syn_queue);
+        /* Initialize scaffold sock part of socket */
+        scaffold_sock_init(sk);
         
         if (sk->sk_prot->init) {
                 /* Call protocol specific init */
@@ -908,7 +908,7 @@ int __init scaffold_init(void)
                 goto fail_service;
         }
 
-        err = scaffold_sock_init();
+        err = scaffold_sock_tables_init();
 
         if (err < 0) {
                   LOG_CRIT("Cannot initialize scaffold sockets\n");
@@ -944,7 +944,7 @@ fail_sock_register:
 fail_proto:
         packet_fini();
 fail_packet:        
-        scaffold_sock_fini();
+        scaffold_sock_tables_fini();
 fail_sock:
         service_fini();
 fail_service:
@@ -956,6 +956,6 @@ void __exit scaffold_fini(void)
      	sock_unregister(PF_SCAFFOLD);
 	proto_unregister(&scaffold_udp_proto);
         packet_fini();
-        scaffold_sock_fini();
+        scaffold_sock_tables_fini();
         service_fini();
 }

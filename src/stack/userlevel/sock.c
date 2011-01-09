@@ -13,8 +13,12 @@ LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
 
 /* From linux asm-generic/poll.h. Seems to be non-standardized */
+#ifndef POLLRDNORM 
 #define POLLRDNORM      0x0040
+#endif
+#ifndef POLLRDBAND
 #define POLLRDBAND      0x0080
+#endif
 #ifndef POLLWRNORM
 #define POLLWRNORM      0x0100
 #endif
@@ -354,15 +358,17 @@ int sk_wait_data(struct sock *sk, long *timeo)
         return 0;
 }
 
-
-
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
                     unsigned long expires)
 {
+        if (!mod_timer(timer, expires))
+                sock_hold(sk);
 }
 
 void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 {
+        if (timer_pending(timer) && del_timer(timer))
+		__sock_put(sk);
 }
 
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)

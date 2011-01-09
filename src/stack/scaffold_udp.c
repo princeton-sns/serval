@@ -40,6 +40,7 @@ struct sock *scaffold_udp_connection_respond_sock(struct sock *sk,
                                                   struct dst_entry *dst);
 
 static struct scaffold_sock_af_ops scaffold_udp_af_ops = {
+        .queue_xmit = scaffold_ipv4_xmit_skb,
         .conn_request = scaffold_udp_connection_request,
         .conn_child_sock = scaffold_udp_connection_respond_sock,
 };
@@ -90,7 +91,7 @@ static int scaffold_udp_transmit_skb(struct sock *sk,
                 ntohs(uh->dest),
                 ntohs(uh->len));
 
-        err = scaffold_srv_xmit_skb(sk, skb);
+        err = scaffold_srv_xmit_skb(skb);
         
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
@@ -148,7 +149,9 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
         skb_reserve(skb, UDP_MAX_HDR);
         
         memcpy(&SCAFFOLD_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
-         
+        
+        /* __skb_queue_tail(&sk->sk_write_queue, skb); */
+
         err = scaffold_udp_transmit_skb(sk, skb, SCAFFOLD_PKT_SYN);
         
         if (err < 0) {
@@ -237,7 +240,6 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         struct sk_buff *skb;
         int ulen = len;
         struct service_id *srvid = NULL;
-        //struct scaffold_sock *ssk = scaffold_sk(sk);
 
 	if (len > 0xFFFF)
 		return -EMSGSIZE;
@@ -247,7 +249,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         LOG_DBG("sending message\n");
 
-	if (msg->msg_name && scaffold_sock_flag(scaffold_sk(sk), SSK_FLAG_BOUND)) {
+	if (msg->msg_name) {
 		struct sockaddr_sf *addr = 
                         (struct sockaddr_sf *)msg->msg_name;
 
@@ -271,7 +273,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 return -ENOMEM;
         
         skb_reserve(skb, UDP_MAX_HDR);
-        
+
         if (srvid) {
                 memcpy(&SCAFFOLD_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         }

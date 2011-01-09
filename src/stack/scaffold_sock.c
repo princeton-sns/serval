@@ -3,8 +3,10 @@
 #include <scaffold/skbuff.h>
 #include <scaffold/list.h>
 #include <scaffold/debug.h>
+#include <scaffold/timer.h>
 #include <netinet/scaffold.h>
-#include "scaffold_sock.h"
+#include <scaffold_sock.h>
+#include <scaffold_srv.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
 #else
@@ -286,7 +288,17 @@ int scaffold_sock_set_state(struct sock *sk, int new_state)
         return new_state;
 }
 
-int __init scaffold_sock_init(void)
+void scaffold_sock_init(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+        INIT_LIST_HEAD(&ssk->accept_queue);
+        INIT_LIST_HEAD(&ssk->syn_queue);
+        setup_timer(&ssk->retransmit_timer, 
+                    scaffold_srv_rexmit_timeout,
+                    (unsigned long)sk);
+}
+
+int __init scaffold_sock_tables_init(void)
 {
         int ret;
 
@@ -301,7 +313,7 @@ fail_table:
         return ret;
 }
 
-void __exit scaffold_sock_fini(void)
+void __exit scaffold_sock_tables_fini(void)
 {
         scaffold_table_fini(&listen_table);
         scaffold_table_fini(&established_table);

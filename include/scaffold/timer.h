@@ -40,7 +40,7 @@ struct timer_list {
 int timer_list_per_thread_init(void);
 #endif
 
-int timer_list_get_next_timeout(struct timespec *);
+int timer_list_get_next_timeout(struct timespec *, int signal);
 int timer_list_handle_timeout(void);
 
 /* Kernel compatible API */
@@ -55,6 +55,15 @@ int del_timer(struct timer_list * timer);
 int mod_timer(struct timer_list *timer, unsigned long expires);
 int mod_timer_pending(struct timer_list *timer, unsigned long expires);
 int mod_timer_pinned(struct timer_list *timer, unsigned long expires);
+
+static inline void setup_timer(struct timer_list *timer,
+                               void (*function)(unsigned long),
+                               unsigned long data)
+{
+	init_timer(timer);
+	timer->function = function;
+	timer->data = data;
+}
 
 /* convenience functions (from RTLinux) */
 #define NSECS_PER_SEC 1000000000L

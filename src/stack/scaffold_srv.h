@@ -5,7 +5,7 @@
 #include <scaffold/sock.h>
 #include <netinet/scaffold.h>
 
-int scaffold_srv_xmit_skb(struct sock *sk, struct sk_buff *skb);
+int scaffold_srv_xmit_skb(struct sk_buff *skb);
 
 struct service_entry;
 

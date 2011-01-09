@@ -9,6 +9,7 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/select.h>
+#include <poll.h>
 #include <errno.h>
 #include <libgen.h>
 #include <scaffold/platform.h>
@@ -84,11 +85,42 @@ static const char *server_sock_path[] = {
 	TCP_SERVER_PATH
 };
 
+static int timer_list_signal_lower(int signal)
+{
+	ssize_t sz;
+	int ret = 0;
+	char r = 'r';
+
+	do {
+		sz = read(signal, &r, 1);
+
+		if (sz == 1)
+			ret = 1;
+	} while (sz > 0);
+
+	return sz == -1 ? -1 : ret;
+}
+
 static int server_run(void)
 {	
 	sigset_t sigset, orig_sigset;
 	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
+        int timer_list_signal[2];
+
+        /* pipe/signal to tell us when a new timer timeout must be
+         * scheduled */
+        ret = pipe(timer_list_signal);
+
+        if (ret == -1) {
+                LOG_ERR("could not open signal pipe: %s\n",
+                        strerror(errno));
+                return -1;
+        }
+
+        /* Set non-blocking so that we can lower signal without
+         * blocking */
+        fcntl(timer_list_signal[0], F_SETFL, O_NONBLOCK);
 
 	sigemptyset(&sigset);
         sigaddset(&sigset, SIGTERM);
@@ -99,8 +131,9 @@ static int server_run(void)
          * handle them in pselect instead. */
         sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
 	
-	if (should_exit)
-		return 0;
+	if (should_exit) {
+                goto out_close_pipe;
+        }
 
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
 		server_sock[i] = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -108,7 +141,8 @@ static int server_run(void)
 		if (server_sock[i] == -1) {
 			LOG_ERR("Failure. AF_UNIX server socket %s : %s\n", 
 				server_sock_path[i], strerror(errno));
-			return -1;
+			ret = -1;
+                        goto out_close_pipe;
 		}
 
 		memset(&sa, 0, sizeof(sa));
@@ -184,7 +218,11 @@ static int server_run(void)
 		FD_SET(ctrl_getfd(), &readfds);
 		maxfd = MAX(maxfd, ctrl_getfd());
 
-		ret = timer_list_get_next_timeout(&timeout);
+		FD_SET(timer_list_signal[0], &readfds);
+		maxfd = MAX(maxfd, timer_list_signal[0]);
+
+		ret = timer_list_get_next_timeout(&timeout, 
+                                                  timer_list_signal[1]);
 
 		if (ret == -1) {
 			/* Timer list error. Exit? */
@@ -235,6 +273,9 @@ static int server_run(void)
 			continue;
 		}
 		
+                if (FD_ISSET(timer_list_signal[0], &readfds)) {
+                        timer_list_signal_lower(timer_list_signal[0]);
+                }
 		if (FD_ISSET(ctrl_getfd(), &readfds)) {
 			ret = ctrl_recvmsg();
 
@@ -314,6 +355,9 @@ out_close_socks:
 		close(server_sock[i]);
 		unlink(server_sock_path[i]);
 	}
+out_close_pipe:
+        close(timer_list_signal[0]);
+        close(timer_list_signal[1]);
 	return ret;
 }
 

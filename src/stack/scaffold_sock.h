@@ -41,8 +41,6 @@ enum scaffold_sock_flags {
 };
 
 struct scaffold_sock_af_ops {
-        /* These functions are taken from inet_connection_sock and are
-         * not all necessarily used at this point */
 	int	    (*queue_xmit)(struct sk_buff *skb);
 	void	    (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	    (*rebuild_header)(struct sock *sk);
@@ -59,10 +57,12 @@ struct scaffold_sock {
 #if defined(OS_USER)
         struct client           *client;
 #endif
+        struct net_device       *dev; /* TX device for connected flows */
         unsigned char           flags;
         void                    *hash_key;
         unsigned int            hash_key_len;
         struct scaffold_sock_af_ops *af_ops;
+        struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;
         struct sock_id          local_sockid;
         struct sock_id          peer_sockid;
@@ -141,7 +141,9 @@ static inline int scaffold_sock_flag(struct scaffold_sock *ssk,
 
 int scaffold_sock_set_state(struct sock *sk, int state);
 
-int __init scaffold_sock_init(void);
-void __exit scaffold_sock_fini(void);
+int __init scaffold_sock_tables_init(void);
+void __exit scaffold_sock_tables_fini(void);
+void scaffold_sock_init(struct sock *sk);
+void scaffold_srv_rexmit_timeout(unsigned long data);
 
 #endif /* _SCAFFOLD_SOCK_H */

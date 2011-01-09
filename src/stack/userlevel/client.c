@@ -168,6 +168,10 @@ struct client *client_create(client_type_t type,
 		return NULL;
 	}
 
+        /* Set non-blocking so that we can lower signal without
+         * blocking */
+        fcntl(c->pipefd[0], F_SETFL, O_NONBLOCK);
+
 	/* Init a timer for test purposes. */
 	c->timer.function = dummy_timer_callback;
 	c->timer.expires = (id + 1) * 1000000;

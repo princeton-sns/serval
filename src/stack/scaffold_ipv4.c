@@ -93,7 +93,7 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 #if defined(ENABLE_DEBUG)
         {
                 char buf[256];
-                LOG_DBG("ip dump\n%s\n", ipv4_hdr_dump(iph, buf, 256));
+                LOG_DBG("ip dump %s\n", ipv4_hdr_dump(iph, buf, 256));
         }
 #endif
         
@@ -186,8 +186,9 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         return err;
 }
 
-int scaffold_ipv4_xmit_skb(struct sock *sk, struct sk_buff *skb)
+int scaffold_ipv4_xmit_skb(struct sk_buff *skb)
 {
+        struct sock *sk = skb->sk;
 	struct ipcm_cookie ipcm;
         int err = 0;
 
