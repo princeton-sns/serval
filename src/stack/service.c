@@ -389,7 +389,7 @@ struct service_entry *service_find(struct service_id *srvid)
 }
 
 int service_table_add(struct service_table *tbl, struct service_id *srvid, 
-                      unsigned int prefix_size, struct net_device *dev,
+                      unsigned int prefix_bits, struct net_device *dev,
                       unsigned char *dst, int dstlen,
                       gfp_t alloc)
 {
@@ -400,9 +400,9 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
 
         read_lock_bh(&tbl->lock);
         
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_size);
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
 
-        if (n) {
+        if (n && bst_node_prefix_bits(n) >= prefix_bits) {
                 ret = __service_entry_add_dev(get_service(n), 
                                               dev,
                                               dst,
@@ -426,7 +426,7 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
         } else {
                 write_lock_bh(&tbl->lock);
                 se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
-                                             se, srvid, prefix_size, alloc);
+                                             se, srvid, prefix_bits, alloc);
                 write_unlock_bh(&tbl->lock);
                 
                 if (!se->node) {
@@ -438,25 +438,25 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
         return ret;
 }
 
-int service_add(struct service_id *srvid, unsigned int prefix_size, 
+int service_add(struct service_id *srvid, unsigned int prefix_bits, 
                 struct net_device *dev, void *dst, 
                 int dstlen, gfp_t alloc)
 {
-        return service_table_add(&srvtable, srvid, prefix_size, 
+        return service_table_add(&srvtable, srvid, prefix_bits, 
                                  dev, dst, dstlen, alloc);
 }
 
 void service_table_del(struct service_table *tbl, struct service_id *srvid, 
-                       unsigned int prefix_size)
+                       unsigned int prefix_bits)
 {
         write_lock_bh(&tbl->lock);
-        bst_remove_prefix(&tbl->tree, srvid, prefix_size);
+        bst_remove_prefix(&tbl->tree, srvid, prefix_bits);
         write_unlock_bh(&tbl->lock);
 }
 
-void service_del(struct service_id *srvid, unsigned int prefix_size)
+void service_del(struct service_id *srvid, unsigned int prefix_bits)
 {
-        return service_table_del(&srvtable, srvid, prefix_size);
+        return service_table_del(&srvtable, srvid, prefix_bits);
 }
 
 static int del_dev_func(struct bst_node *n, void *arg)

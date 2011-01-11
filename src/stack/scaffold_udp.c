@@ -39,8 +39,11 @@ struct sock *scaffold_udp_connection_respond_sock(struct sock *sk,
                                                   struct scaffold_request_sock *req,
                                                   struct dst_entry *dst);
 
+int scaffold_udp_rcv(struct sock *sk, struct sk_buff *skb);
+
 static struct scaffold_sock_af_ops scaffold_udp_af_ops = {
         .queue_xmit = scaffold_ipv4_xmit_skb,
+        .receive = scaffold_udp_rcv,
         .conn_request = scaffold_udp_connection_request,
         .conn_child_sock = scaffold_udp_connection_respond_sock,
 };
@@ -205,30 +208,17 @@ struct sock *scaffold_udp_connection_respond_sock(struct sock *sk,
 /* 
    Receive from network
 */
-int scaffold_udp_rcv(struct sk_buff *skb)
+int scaffold_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
-        /*
-	struct sock *sk;
-        struct iphdr *iph = ip_hdr(skb);
-        struct service_id *srvid = (struct service_id *)&udph->dest;
-        */
+        unsigned short datalen = ntohs(udph->len);
         int err = 0;
         
-        LOG_DBG("udp packet len=%u\n", ntohs(udph->len));
+        LOG_DBG("udp packet len=%u\n", datalen);
         
-        /*
-        sk = scaffold_sock_lookup_sockid(sockid);
-
-        if (!sk) {
-                LOG_ERR("No matching scaffold sock\n");
-                FREE_SKB(skb);
-        } else {
-                FREE_SKB(skb);
-        }
-        */
-
-        FREE_SKB(skb);
+        skb_queue_tail(&sk->sk_receive_queue, skb);
+        
+        sk->sk_data_ready(sk, datalen);
 
         return err;
 }
@@ -341,12 +331,12 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			goto found_ok_skb;
 	
 		if (sk->sk_state >= SCAFFOLD_CLOSED) {
-                        /*
+                        
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
 				break;
 			}
-                        */
+                        
                         retval = 0;
 			break;
 		}

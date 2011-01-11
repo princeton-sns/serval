@@ -143,11 +143,7 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         
         pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
-    
-        neighbor_add((struct flow_id *)&iph->daddr, sizeof(iph->daddr), 
-                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
-                     ETH_ALEN, GFP_ATOMIC);
-
+        
         ret = scaffold_srv_rcv(skb);
 out:
 	return ret;

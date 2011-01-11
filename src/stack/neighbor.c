@@ -184,9 +184,9 @@ struct neighbor_entry *neighbor_find(struct flow_id *flw)
 }
 
 int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw, 
-                      unsigned int prefix_size, struct net_device *dev,
-                      unsigned char *dst, int dstlen,
-                      gfp_t alloc)
+                       unsigned int prefix_bits, struct net_device *dev,
+                       unsigned char *dst, int dstlen,
+                       gfp_t alloc)
 {
         struct neighbor_entry *neigh;
         struct bst_node *n;
@@ -194,11 +194,13 @@ int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw,
 
         read_lock_bh(&tbl->lock);
         
-        n = bst_find_longest_prefix(&tbl->tree, flw, prefix_size);
+        n = bst_find_longest_prefix(&tbl->tree, flw, prefix_bits);
 
-        if (n)
+        if (n && bst_node_prefix_bits(n) >= prefix_bits) {
+                read_unlock_bh(&tbl->lock);
+                LOG_DBG("neighbor entry already in table\n");
                 return 0;
-
+        }
         read_unlock_bh(&tbl->lock);
         
         neigh = neighbor_entry_create(alloc, dev, dst, dstlen);
@@ -211,7 +213,7 @@ int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw,
 
         write_lock_bh(&tbl->lock);
         neigh->node = bst_insert_prefix(&tbl->tree, &tbl->neigh_ops, 
-                                        neigh, flw, prefix_size, alloc);
+                                        neigh, flw, prefix_bits, alloc);
         write_unlock_bh(&tbl->lock);
         
         if (!neigh->node) {
@@ -222,25 +224,25 @@ int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw,
         return ret;
 }
 
-int neighbor_add(struct flow_id *flw, unsigned int prefix_size, 
+int neighbor_add(struct flow_id *flw, unsigned int prefix_bits, 
                  struct net_device *dev, unsigned char *dst, 
                  int dstlen, gfp_t alloc)
 {
-        return neighbor_table_add(&neightable, flw, prefix_size, 
+        return neighbor_table_add(&neightable, flw, prefix_bits, 
                                  dev, dst, dstlen, alloc);
 }
 
 void neighbor_table_del(struct neighbor_table *tbl, struct flow_id *flw, 
-                        unsigned int prefix_size)
+                        unsigned int prefix_bits)
 {
         write_lock_bh(&tbl->lock);
-        bst_remove_prefix(&tbl->tree, flw, prefix_size);
+        bst_remove_prefix(&tbl->tree, flw, prefix_bits);
         write_unlock_bh(&tbl->lock);
 }
 
-void neighbor_del(struct flow_id *flw, unsigned int prefix_size)
+void neighbor_del(struct flow_id *flw, unsigned int prefix_bits)
 {
-        return neighbor_table_del(&neightable, flw, prefix_size);
+        return neighbor_table_del(&neightable, flw, prefix_bits);
 }
 
 static int del_dev_func(struct bst_node *n, void *arg)
@@ -249,6 +251,8 @@ static int del_dev_func(struct bst_node *n, void *arg)
         char *devname = (char *)arg;
         int ret = 0;
 
+        /* FIXME: make sure we can safely recursively delete nodes in
+         * this callback. */
         if (strcmp(neigh->dev->name, devname) == 0) {
                 bst_node_remove(n);
                 ret = 1;

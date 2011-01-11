@@ -26,10 +26,10 @@ struct net_device *neighbor_entry_get_dev(struct neighbor_entry *neigh);
 int neighbor_entry_get_dst(struct neighbor_entry *neigh, unsigned char *dst, 
                            int dstlen);
 
-int neighbor_add(struct flow_id *flw, unsigned int prefix_size,
+int neighbor_add(struct flow_id *flw, unsigned int prefix_bits,
 		struct net_device *dev, unsigned char *dst,
                 int dstlen, gfp_t alloc);
-void neighbor_del(struct flow_id *flw, unsigned int prefix_size);
+void neighbor_del(struct flow_id *flw, unsigned int prefix_bits);
 int neighbor_del_dev(const char *devname);
 struct neighbor_entry *neighbor_find(struct flow_id *flw);
 void neighbor_entry_hold(struct neighbor_entry *neigh);

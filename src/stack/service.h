@@ -36,10 +36,10 @@ struct net_device *service_entry_dev_next(struct service_entry *se);
 int service_entry_dev_dst(struct service_entry *se, void *dst, 
                           int dstlen);
 
-int service_add(struct service_id *srvid, unsigned int prefix_size,
+int service_add(struct service_id *srvid, unsigned int prefix_bits,
 		struct net_device *dev, void *dst,
                 int dstlen, gfp_t alloc);
-void service_del(struct service_id *srvid, unsigned int prefix_size);
+void service_del(struct service_id *srvid, unsigned int prefix_bits);
 int service_del_dev(const char *devname);
 struct service_entry *service_find(struct service_id *srvid);
 void service_entry_hold(struct service_entry *se);

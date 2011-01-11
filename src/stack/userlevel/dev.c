@@ -324,7 +324,8 @@ int register_netdev(struct net_device *dev)
 void unregister_netdev(struct net_device *dev)
 {
         LOG_DBG("unregistering %s\n", dev->name);
-        unlist_netdevice(dev);
+        unlist_netdevice(dev);   
+        LOG_DBG("unregistered %s\n", dev->name);
 }
 
 #if defined(OS_LINUX)
@@ -460,16 +461,25 @@ int netdev_populate_table(int sizeof_priv,
                 /* Save ip configuration */
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+                                
+                if (ioctl(fd, SIOCGIFBRDADDR, ifr) == -1) {
+                        LOG_ERR("SIOCGIFBRDADDR: %s\n",
+                                strerror(errno));
+                        free_netdev(dev);
+                        goto out;
+                }
+
                 memcpy(&dev->ipv4.broadcast, 
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
-
+#if defined(ENABLE_DEBUG)
                 {
-                        char buf[18];
-                        LOG_DBG("ip %s\n",
-                                inet_ntop(AF_INET, &dev->ipv4.addr, buf, 18));
+                        char ip[18], broad[18];
+                        LOG_DBG("ip %s - %s\n",
+                                inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
+                                inet_ntop(AF_INET, &dev->ipv4.broadcast, broad, 18));
 
                 }       
-                                
+#endif       
                 if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
                         LOG_ERR("SIOCGIFNETMASK: %s\n",
                                 strerror(errno));
@@ -505,13 +515,16 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
         }
-        
+#if defined(ENABLE_DEBUG)
         {
                 char buf[2000];
-                neighbors_print(buf, 2000);
+                services_print(buf, 2000);
+                printf("%s\n", buf);
 
+                neighbors_print(buf, 2000);
                 printf("%s\n", buf);
         }
+#endif
         
 out:
         close(fd);
@@ -538,7 +551,7 @@ int dev_signal(struct net_device *dev, enum signal type)
         }
                 
         fds.fd = dev->pipefd[0];
-        fds.events = POLLIN;
+        fds.events = POLLIN | POLLHUP | POLLERR;
         
         ret = poll(&fds, 1, 0);
 
@@ -546,7 +559,7 @@ int dev_signal(struct net_device *dev, enum signal type)
          * pending. */
         if (ret == 1)
                 return 0;
-
+        
         return write(dev->pipefd[1], &s, 1);
 }
 
@@ -565,9 +578,25 @@ int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
 enum signal dev_read_signal(struct net_device *dev)
 {
         unsigned char s;
+        struct pollfd fds;
 
-        if (read(dev->pipefd[0], &s, 1) == -1)
+        fds.fd = dev->pipefd[0];
+        fds.events = POLLIN | POLLHUP;
+        
+        if (poll(&fds, 1, 0) == -1)
                 return SIGNAL_ERROR;
+        
+        if (fds.revents & POLLHUP)
+                return SIGNAL_EXIT;
+        
+        if (fds.revents & POLLERR)
+                return SIGNAL_ERROR;
+
+        if (fds.revents & POLLIN) { 
+                if (read(dev->pipefd[0], &s, 1) == -1)
+                        return SIGNAL_ERROR;
+                return SIGNAL_EXIT;
+        }
 
         if (s >= SIGNAL_UNKNOWN)
                 return SIGNAL_UNKNOWN;
@@ -609,7 +638,7 @@ void *dev_thread(void *arg)
                 fds[0].events = POLLIN | POLLHUP | POLLERR;
                 fds[0].revents = 0;
                 fds[1].fd = dev->pipefd[0];
-                fds[1].events = POLLIN | POLLERR;
+                fds[1].events = POLLIN | POLLERR | POLLHUP;
                 fds[1].revents = 0;
 
                 ret = poll(fds, 2, -1);
@@ -620,7 +649,7 @@ void *dev_thread(void *arg)
                 } else if (ret == 0) {
                         /* No timeout set, should not happen */
                 } else {
-                        if (fds[1].revents & POLLIN) {
+                        if (fds[1].revents) {
                                 enum signal s = dev_read_signal(dev);
 
                                 switch (s) {
@@ -643,6 +672,7 @@ void *dev_thread(void *arg)
                         }
                 }
         }
+
         return NULL;
 }
 
@@ -707,8 +737,14 @@ void netdev_fini(void)
                 dev = list_first_entry(&dev_base_head, 
                                        struct net_device, dev_list);
           	read_unlock(&dev_base_lock);       
+                     
+                /*
+                  neighbor_del_dev(dev->name);
+                  service_del_dev(dev->name);
+                */
+
                 unregister_netdev(dev);
-                
+
                 dev_signal(dev, SIGNAL_EXIT);
                 
                 LOG_DBG("joining with device thread %s\n",

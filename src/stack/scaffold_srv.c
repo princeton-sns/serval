@@ -18,6 +18,7 @@
 #endif
 #include <scaffold_request_sock.h>
 #include <service.h>
+#include <neighbor.h>
 
 extern int scaffold_tcp_rcv(struct sk_buff *);
 extern int scaffold_udp_rcv(struct sk_buff *);
@@ -39,7 +40,7 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         int err = 0;
         
         /* Cache this service FIXME: should not assume ETH_ALEN here. */
-        err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid), 
+        err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid) * 8, 
                           skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
                           ETH_ALEN, GFP_ATOMIC);
         
@@ -153,8 +154,11 @@ static int scaffold_srv_connected_state_process(struct sock *sk,
                                                 struct scaffold_hdr *sfh,
                                                 struct sk_buff *skb)
 {
+        struct scaffold_sock *ssk = scaffold_sk(sk);
         int err = 0;
-        FREE_SKB(skb);
+        
+        err = ssk->af_ops->receive(sk, skb);
+
         return err;
 }
 
@@ -207,6 +211,12 @@ static int scaffold_srv_listen_state_process(struct sock *sk,
                 FREE_SKB(skb);
         } else if (sfh->flags & SFH_SYN) {
                 LOG_DBG("SYN recv\n");
+
+                /* Cache neighbor */
+                neighbor_add((struct flow_id *)&ip_hdr(skb)->daddr, 32, 
+                             skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                             ETH_ALEN, GFP_ATOMIC);
+
                 err = scaffold_srv_syn_rcv(sk, sfh, skb);
         }
 
@@ -222,7 +232,13 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                 (struct scaffold_service_ext *)(sfh + 1);        
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
-
+        
+        
+        /* Cache neighbor */
+        neighbor_add((struct flow_id *)&ip_hdr(skb)->daddr, 32, 
+                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                     ETH_ALEN, GFP_ATOMIC);
+        
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
         
         /* Let app know we are connected. */
