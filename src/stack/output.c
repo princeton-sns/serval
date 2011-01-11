@@ -34,14 +34,18 @@ int scaffold_output(struct sk_buff *skb)
         struct neighbor_entry *neigh;
 	int err;
 
-        if (!skb->dev)
-                return -ENODEV;
+        if (!skb->dev) {
+                err =  -ENODEV;
+                goto drop;
+        }
 
         neigh = neighbor_find(&SCAFFOLD_SKB_CB(skb)->dst_flowid);
 
-        if (!neigh)
-                return -EHOSTUNREACH;
-                
+        if (!neigh) {
+                LOG_ERR("No matching neighbor\n");
+                err = -EHOSTUNREACH;
+                goto drop;
+        }
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
 			      neigh->dstaddr, NULL, skb->len);
 
@@ -49,7 +53,7 @@ int scaffold_output(struct sk_buff *skb)
 
 	if (err < 0) {
 		LOG_ERR("hard_header failed\n");
-		return err;
+		goto drop;
 	}
 
         skb_reset_mac_header(skb);
@@ -69,5 +73,9 @@ int scaffold_output(struct sk_buff *skb)
 		LOG_ERR("packet_xmit failed\n");
 	}
         
-        return 0;
+out:
+        return err;
+drop:
+        FREE_SKB(skb);
+        goto out;
 }

@@ -595,7 +595,6 @@ enum signal dev_read_signal(struct net_device *dev)
         if (fds.revents & POLLIN) { 
                 if (read(dev->pipefd[0], &s, 1) == -1)
                         return SIGNAL_ERROR;
-                return SIGNAL_EXIT;
         }
 
         if (s >= SIGNAL_UNKNOWN)
