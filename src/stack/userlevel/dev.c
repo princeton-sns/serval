@@ -23,6 +23,7 @@
 #include "packet.h"
 #include <input.h>
 #include <service.h>
+#include <neighbor.h>
 
 #define NETDEV_HASHBITS    8
 #define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
@@ -402,6 +403,7 @@ int netdev_populate_table(int sizeof_priv,
                      ifc.ifc_len -= len) {
                 struct net_device *dev;
                 const char *name = ifr->ifr_name;
+                int prefix_len = 0;
 #if defined(OS_BSD)
                 struct sockaddr_dl *ifaddr = 
                         (struct sockaddr_dl *)&ifr->ifr_addr;
@@ -436,13 +438,12 @@ int netdev_populate_table(int sizeof_priv,
                 /* Ignore loopback device */
                 if (strncmp(name, "lo", 2) == 0)
                         continue;
-                /*
-                if (ioctl(fd, SIOCGIFADDR, ifr) == -1) {
-                        LOG_ERR("SIOCGIFADDR: %s\n",
+                
+                if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
+                        LOG_ERR("SIOCGIFNETMASK: %s\n",
                                 strerror(errno));
                         goto out;
                 }
-                */
                
                 dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
@@ -465,8 +466,10 @@ int netdev_populate_table(int sizeof_priv,
                 /* Save ip configuration */
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
-                memcpy(&dev->ipv4.addr, 
+                memcpy(&dev->ipv4.broadcast, 
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
+                memcpy(&dev->ipv4.netmask, 
+                       &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
                 {
                         char buf[18];
                         LOG_DBG("ip %s\n",
@@ -480,8 +483,14 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
 
-                service_add(NULL, 0, dev, dev->broadcast, dev->addr_len, 0);
-
+                while (dev->ipv4.netmask & (0x1 << prefix_len))
+                       prefix_len++;
+             
+                service_add(NULL, 0, dev, &dev->ipv4.broadcast, 4, 0);
+                neighbor_add((struct flow_id *)&dev->ipv4.broadcast, 
+                             prefix_len, 
+                             dev, dev->broadcast, dev->addr_len, 0);
+               
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
                 if (ret != 0) {
@@ -492,14 +501,14 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
         }
-        /*
+        
         {
                 char buf[2000];
-                services_print(buf, 2000);
+                neighbors_print(buf, 2000);
 
                 printf("%s\n", buf);
         }
-        */
+        
 out:
         close(fd);
 

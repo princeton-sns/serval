@@ -20,6 +20,7 @@ struct scaffold_skb_cb {
         enum scaffold_packet_type pkttype;
         struct service_id srvid;
         struct service_entry *se;
+	struct flow_id dst_flowid;
         unsigned char hard_addr[];
 };
 
@@ -34,5 +35,6 @@ static inline struct scaffold_skb_cb *__scaffold_skb_cb(struct sk_buff *skb)
 
 
 int scaffold_srv_do_rcv(struct sock *sk, struct sk_buff *skb);
+void scaffold_srv_rexmit_timeout(unsigned long data);
 
 #endif /* _SCAFFOLD_SRV_H_ */

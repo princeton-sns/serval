@@ -7,7 +7,7 @@
 #include <netinet/scaffold.h>
 #include <scaffold_srv.h>
 #include <output.h>
-#include <service.h>
+#include <neighbor.h>
 
 extern int packet_xmit(struct sk_buff *skb);
 
@@ -31,13 +31,22 @@ int scaffold_output(struct sk_buff *skb)
 {
 	char srcstr[18], dststr[18];
 	struct ethhdr *ethh;
+        struct neighbor_entry *neigh;
 	int err;
 
         if (!skb->dev)
                 return -ENODEV;
-        
+
+        neigh = neighbor_find(&SCAFFOLD_SKB_CB(skb)->dst_flowid);
+
+        if (!neigh)
+                return -EHOSTUNREACH;
+                
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
-			      SCAFFOLD_SKB_CB(skb)->hard_addr, NULL, skb->len);
+			      neigh->dstaddr, NULL, skb->len);
+
+        neighbor_entry_put(neigh);
+
 	if (err < 0) {
 		LOG_ERR("hard_header failed\n");
 		return err;

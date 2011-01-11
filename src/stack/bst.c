@@ -374,23 +374,24 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 	
 	/*
           printf("found %p %p %p %p %u %u\n", 
-	       n, n->parent,
-	       n->left, n->right,
-	       n->prefix_bits, 
-	       bst_node_flag(n, BST_FLAG_ACTIVE));
-	*/
-	if (n->prefix_bits < prefix_bits) {
-		n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
+          n, n->parent,
+          n->left, n->right,
+          n->prefix_bits, 
+          bst_node_flag(n, BST_FLAG_ACTIVE));
+        */
+        if (n->prefix_bits < prefix_bits) {
+                n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
 		
 		if (!n)
 			return NULL;
+
 	} else {
                 if (bst_node_init(n, ops, private) == -1)
                         return NULL;
         }
-
+        
         bst_node_set_flag(n, BST_FLAG_ACTIVE);
-
+      
 	return n;
 }
 

@@ -68,8 +68,8 @@ struct scaffold_sock {
         struct sock_id          peer_sockid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        struct flow_id          src_flowid;
         struct flow_id          dst_flowid;
+        struct flow_id          src_flowid;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
         unsigned long           tot_bytes_sent;
@@ -116,7 +116,6 @@ static inline struct scaffold_hslot *scaffold_hashslot(struct scaffold_table *ta
 
 struct sock *scaffold_sock_lookup_serviceid(struct service_id *);
 struct sock *scaffold_sock_lookup_sockid(struct sock_id *);
-struct sock *scaffold_sock_lookup_skb(struct sk_buff *);
 
 void scaffold_sock_hash(struct sock *sk);
 void scaffold_sock_unhash(struct sock *sk);
@@ -139,11 +138,18 @@ static inline int scaffold_sock_flag(struct scaffold_sock *ssk,
 	return ssk->flags & (0x1 << flag);
 }
 
+
+int __scaffold_assign_sockid(struct sock *sk);
+struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
+                               gfp_t priority, int protocol, 
+                               struct proto *prot);
+void scaffold_sock_init(struct sock *sk);
+void scaffold_sock_destruct(struct sock *sk);
 int scaffold_sock_set_state(struct sock *sk, int state);
+void scaffold_sock_rexmit_timeout(unsigned long data);
 
 int __init scaffold_sock_tables_init(void);
 void __exit scaffold_sock_tables_fini(void);
-void scaffold_sock_init(struct sock *sk);
-void scaffold_srv_rexmit_timeout(unsigned long data);
+
 
 #endif /* _SCAFFOLD_SOCK_H */

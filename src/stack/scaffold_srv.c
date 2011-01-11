@@ -166,6 +166,8 @@ static int scaffold_srv_child_process(struct sock *parent, struct sock *child,
         int ret = 0;
         int state = child->sk_state;
 
+        scaffold_sk(child)->dev = NULL;
+        
         if (!sock_owned_by_user(child)) {
                 ret = scaffold_srv_state_process(child, sfh, skb);
                 /* Wakeup parent, send SIGIO */
@@ -224,11 +226,15 @@ static int scaffold_srv_request_state_process(struct sock *sk,
 
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
         
-        LOG_DBG("connected\n");
-        
         /* Let app know we are connected. */
         sk->sk_state_change(sk);
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+
+        /* Save device and peer flow id */
+        ssk->dev = skb->dev;
+        dev_hold(ssk->dev);
+        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->daddr, 
+               sizeof(ssk->dst_flowid));
 
         /* Push back the Scaffold header again to make IP happy */
         skb_push(skb, hdr_len);
@@ -266,12 +272,19 @@ static int scaffold_srv_respond_state_process(struct sock *sk,
                                               struct scaffold_hdr *sfh,
                                               struct sk_buff *skb)
 {
+        struct scaffold_sock *ssk = scaffold_sk(sk);
         int err = 0;
 
         /* TODO: check packet, allow data. */
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
 
         LOG_DBG("\n");
+
+        /* Save device and peer flow id */
+        ssk->dev = skb->dev;
+        dev_hold(ssk->dev);
+        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->daddr, 
+               sizeof(ssk->dst_flowid));
 
         FREE_SKB(skb);
 
@@ -472,9 +485,10 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
         skb->protocol = IPPROTO_SCAFFOLD;
                 
 	if (sk->sk_state == SCAFFOLD_CONNECTED) {
-                /* TODO, need to figure out interface */
                 if (ssk->dev) {
                         skb_set_dev(skb, ssk->dev);
+                        memcpy(&SCAFFOLD_SKB_CB(skb)->dst_flowid,
+                               &ssk->dst_flowid, sizeof(ssk->dst_flowid));
                         err = ssk->af_ops->queue_xmit(skb);
                 } else {
                         err = -ENODEV;
@@ -512,8 +526,9 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
 		
                 LOG_DBG("tx dev=%s\n", dev->name);
 
-		/* Remember the hardware destination */
-		service_entry_dev_dst(se, SCAFFOLD_SKB_CB(skb)->hard_addr, 6);
+		/* Remember the flow destination */
+		service_entry_dev_dst(se, &SCAFFOLD_SKB_CB(skb)->dst_flowid,
+                                      sizeof(struct flow_id));
 
 		next_dev = service_entry_dev_next(se);
 		

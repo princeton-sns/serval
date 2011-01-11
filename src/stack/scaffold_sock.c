@@ -4,6 +4,7 @@
 #include <scaffold/list.h>
 #include <scaffold/debug.h>
 #include <scaffold/timer.h>
+#include <scaffold/netdevice.h>
 #include <netinet/scaffold.h>
 #include <scaffold_sock.h>
 #include <scaffold_srv.h>
@@ -13,6 +14,7 @@
 #include <netinet/ip.h>
 #endif
 
+atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 static atomic_t scaffold_sock_id = ATOMIC_INIT(1);
 static struct scaffold_table established_table;
 static struct scaffold_table listen_table;
@@ -36,13 +38,6 @@ static const char *sock_state_str[] = {
         "LASTACK",
         "SIMCLOSE"  
 };
-
-int scaffold_sock_get_sockid(struct sock_id *sid)
-{
-        sid->s_id = htons(atomic_inc_return(&scaffold_sock_id));
-
-        return 0;
-}
 
 int __init scaffold_table_init(struct scaffold_table *table, const char *name)
 {
@@ -131,35 +126,6 @@ struct sock *scaffold_sock_lookup_serviceid(struct service_id *srvid)
 {
         return scaffold_sock_lookup(&listen_table, &init_net, 
                                     srvid, sizeof(*srvid));
-}
-
-struct sock *scaffold_sock_lookup_skb(struct sk_buff *skb)
-{
- 	struct sock *sk = NULL;
-        /*
-	const struct iphdr *iph = ip_hdr(skb);
-        struct sock_id sockid;
-        switch (iph->protocol) {
-	case IPPROTO_TCP:
-        {
-                struct tcphdr *tcp = tcp_hdr(skb);
-                memcpy(&sockid, &tcp->dest, sizeof(sockid));
-                sk = scaffold_sock_lookup(&scaffold_table, &init_net, &sockid);
-                break;
-        }
-	case IPPROTO_UDP:
-        {
-                struct udphdr *udp = udp_hdr(skb);
-                memcpy(&sockid, &udp->dest, sizeof(sockid));
-                sk = scaffold_sock_lookup(&scaffold_table, &init_net, &sockid);
-                break;
-        }
-        default:
-                break;
-        }
-        */
-
-        return sk;
 }
 
 static inline unsigned int scaffold_ehash(struct sock *sk)
@@ -269,35 +235,6 @@ void scaffold_sock_unhash(struct sock *sk)
 	spin_unlock_bh(lock);
 }
 
-int scaffold_sock_set_state(struct sock *sk, int new_state)
-{
-        /* TODO: state transition checks */
-        
-        if (new_state < SCAFFOLD_SOCK_STATE_MIN ||
-            new_state > SCAFFOLD_SOCK_STATE_MAX) {
-                LOG_ERR("invalid state\n");
-                return -1;
-        }
-
-        LOG_DBG("%s -> %s\n",
-                sock_state_str[sk->sk_state],
-                sock_state_str[new_state]);
-
-        sk->sk_state = new_state;
-
-        return new_state;
-}
-
-void scaffold_sock_init(struct sock *sk)
-{
-        struct scaffold_sock *ssk = scaffold_sk(sk);
-        INIT_LIST_HEAD(&ssk->accept_queue);
-        INIT_LIST_HEAD(&ssk->syn_queue);
-        setup_timer(&ssk->retransmit_timer, 
-                    scaffold_srv_rexmit_timeout,
-                    (unsigned long)sk);
-}
-
 int __init scaffold_sock_tables_init(void)
 {
         int ret;
@@ -319,4 +256,125 @@ void __exit scaffold_sock_tables_fini(void)
         scaffold_table_fini(&established_table);
         if (sock_state_str[0]) {} /* Avoid compiler warning when
                                    * compiling with debug off */
+}
+
+int __scaffold_assign_sockid(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+       
+        /* 
+           TODO: 
+           - Check for ID wraparound and conflicts 
+           - Make sure code does not assume sockid is a short
+        */
+        return scaffold_sock_get_sockid(&ssk->local_sockid);
+}
+
+int scaffold_sock_get_sockid(struct sock_id *sid)
+{
+        sid->s_id = htons(atomic_inc_return(&scaffold_sock_id));
+
+        return 0;
+}
+
+struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
+                               gfp_t priority, int protocol, 
+                               struct proto *prot)
+{
+        struct sock *sk;
+
+        sk = sk_alloc(net, PF_SCAFFOLD, priority, prot);
+
+	if (!sk)
+		return NULL;
+
+	sock_init_data(sock, sk);
+        sk->sk_family = PF_SCAFFOLD;
+	sk->sk_protocol	= protocol;
+	sk->sk_destruct	= scaffold_sock_destruct;
+        sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
+        
+        /* Only assign socket id here in case we have a user
+         * socket. If socket is NULL, then it means this socket is a
+         * child socket from a LISTENing socket, and it will be
+         * assigned the socket id from the request sock */
+        if (sock && __scaffold_assign_sockid(sk) < 0) {
+                LOG_DBG("could not assign sock id\n");
+                sock_put(sk);
+                return NULL;
+        }
+
+        atomic_inc(&scaffold_nr_socks);
+                
+        LOG_DBG("SCAFFOLD socket %p created, %d are alive.\n", 
+               sk, atomic_read(&scaffold_nr_socks));
+
+        return sk;
+}
+
+
+void scaffold_sock_init(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+        INIT_LIST_HEAD(&ssk->accept_queue);
+        INIT_LIST_HEAD(&ssk->syn_queue);
+        setup_timer(&ssk->retransmit_timer, 
+                    scaffold_srv_rexmit_timeout,
+                    (unsigned long)sk);
+}
+
+void scaffold_sock_destruct(struct sock *sk)
+{
+        struct scaffold_sock *ssk = scaffold_sk(sk);
+
+        __skb_queue_purge(&sk->sk_receive_queue);
+        __skb_queue_purge(&sk->sk_error_queue);
+
+        if (ssk->dev) {
+                dev_put(ssk->dev);
+        }
+
+	if (sk->sk_type == SOCK_STREAM && 
+            sk->sk_state != SCAFFOLD_CLOSED) {
+		LOG_ERR("Bad state %d %p\n",
+                        sk->sk_state, sk);
+		return;
+	}
+
+	if (!sock_flag(sk, SOCK_DEAD)) {
+		LOG_DBG("Attempt to release alive scaffold socket: %p\n", sk);
+		return;
+	}
+
+	if (atomic_read(&sk->sk_rmem_alloc)) {
+                LOG_WARN("sk_rmem_alloc is not zero\n");
+        }
+
+	if (atomic_read(&sk->sk_wmem_alloc)) {
+                LOG_WARN("sk_wmem_alloc is not zero\n");
+        }
+
+	atomic_dec(&scaffold_nr_socks);
+
+	LOG_DBG("SCAFFOLD socket %p destroyed, %d are still alive.\n", 
+               sk, atomic_read(&scaffold_nr_socks));
+}
+
+int scaffold_sock_set_state(struct sock *sk, int new_state)
+{
+        /* TODO: state transition checks */
+        
+        if (new_state < SCAFFOLD_SOCK_STATE_MIN ||
+            new_state > SCAFFOLD_SOCK_STATE_MAX) {
+                LOG_ERR("invalid state\n");
+                return -1;
+        }
+
+        LOG_DBG("%s -> %s\n",
+                sock_state_str[sk->sk_state],
+                sock_state_str[new_state]);
+
+        sk->sk_state = new_state;
+
+        return new_state;
 }

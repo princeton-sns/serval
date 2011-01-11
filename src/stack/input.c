@@ -36,7 +36,7 @@ int scaffold_input(struct sk_buff *skb)
         skb_reset_network_header(skb);
 
         memcpy(SCAFFOLD_SKB_CB(skb)->hard_addr, ethh->h_source, ETH_ALEN);
-
+        
         switch (prot) {
         case ETH_P_IP:
                 ret = scaffold_ipv4_rcv(skb);

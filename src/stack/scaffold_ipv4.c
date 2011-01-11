@@ -8,6 +8,7 @@
 #include <scaffold_srv.h>
 #include <input.h>
 #include <output.h>
+#include <neighbor.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
 #include <linux/inetdevice.h>
@@ -133,6 +134,10 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
         pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
     
+        neighbor_add((struct flow_id *)&iph->daddr, sizeof(iph->daddr), 
+                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                     ETH_ALEN, GFP_ATOMIC);
+
         ret = scaffold_srv_rcv(skb);
 out:
 	return ret;
@@ -192,15 +197,16 @@ int scaffold_ipv4_xmit_skb(struct sk_buff *skb)
 	struct ipcm_cookie ipcm;
         int err = 0;
 
-	memset(&ipcm, 0, sizeof(ipcm));
-
-        ipcm.addr = 0xffffffff;
-
         if (!skb->dev) {
                 LOG_ERR("no device set\n");
                 FREE_SKB(skb);
                 return -ENODEV;
         }
+
+	memset(&ipcm, 0, sizeof(ipcm));
+        memcpy(&ipcm.addr, &SCAFFOLD_SKB_CB(skb)->dst_flowid,
+               sizeof(ipcm.addr));
+
         err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
         
         if (err < 0) {

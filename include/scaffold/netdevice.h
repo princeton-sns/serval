@@ -116,6 +116,7 @@ struct net_device {
         struct {
                 uint32_t addr;
                 uint32_t broadcast;
+                uint32_t netmask;
         } ipv4;
         /* Stuff for packet thread that reads packets from the
          * device */

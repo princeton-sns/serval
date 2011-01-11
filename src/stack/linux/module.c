@@ -1,13 +1,14 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/netdevice.h>
 #include <linux/net.h>
 #include <af_scaffold.h>
 #include <scaffold/debug.h>
+#include <scaffold/netdevice.h>
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
+#include <neighbor.h>
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Scaffold socket API for Linux");
@@ -15,20 +16,6 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
 /*
-#define RTO_INITIAL_DISABLED 0 
-static uint rto = RTO_INITIAL_DISABLED;
-static int rto_dynamic = 0;
-static uint tx_burst = 0;
-
-module_param(rto, uint, 0);
-MODULE_PARM_DESC(rto, "Set initial RTO value (micro seconds).");
-
-module_param(rto_dynamic, int, 0);
-MODULE_PARM_DESC(rto_dynamic, "Enable dynamic RTO using Van Jacobson's algorithm.");
-
-module_param(tx_burst, uint, 0);
-MODULE_PARM_DESC(tx_burst, "Maximum packets the transmit task sends in one burst (0 = use default value).");
-
 #if defined(ENABLE_DEBUG)
 static uint debug = 0;
 module_param(debug, uint, 0);
@@ -54,15 +41,19 @@ static int scaffold_netdev_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
+                struct flow_id dst;
 		LOG_DBG("Netdev UP %s\n", dev->name);
-                service_add(NULL, 0, dev, dev->broadcast, 
+                dev_get_ipv4_broadcast(dev, &dst);
+                service_add(NULL, 0, dev, &dst, 
                             dev->addr_len, GFP_ATOMIC);
+                //neighbor_add(&dst, 
                 break;
         }
 	case NETDEV_GOING_DOWN:
         {
                 LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
                 service_del_dev(dev->name);
+                neighbor_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:

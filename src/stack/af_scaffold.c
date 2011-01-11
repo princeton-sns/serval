@@ -36,16 +36,13 @@ extern int __init packet_init(void);
 extern void __exit packet_fini(void);
 extern int __init service_init(void);
 extern void __exit service_fini(void);
+extern int __init neighbor_init(void);
+extern void __exit neighbor_fini(void);
 
 extern struct proto scaffold_udp_proto;
 extern struct proto scaffold_tcp_proto;
 
-atomic_t scaffold_nr_socks = ATOMIC_INIT(0);
 int host_ctrl_mode = 0;
-
-static struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
-                                      gfp_t priority, int protocol, 
-                                      struct proto *prot);
 
 static struct sock *scaffold_accept_dequeue(struct sock *parent, 
                                             struct socket *newsock);
@@ -83,18 +80,6 @@ int scaffold_wait_state(struct sock *sk, int state, unsigned long timeo)
 	remove_wait_queue(sk_sleep(sk), &wait);
 
 	return err;
-}
-
-static int __scaffold_assign_sockid(struct sock *sk)
-{
-        struct scaffold_sock *ssk = scaffold_sk(sk);
-       
-        /* 
-           TODO: 
-           - Check for ID wraparound and conflicts 
-           - Make sure code does not assume sockid is a short
-        */
-        return scaffold_sock_get_sockid(&ssk->local_sockid);
 }
 
 /*
@@ -761,68 +746,6 @@ static const struct proto_ops scaffold_ops = {
 #endif
 };
 
-static void scaffold_sock_destruct(struct sock *sk)
-{
-        __skb_queue_purge(&sk->sk_receive_queue);
-        __skb_queue_purge(&sk->sk_error_queue);
-
-	if (sk->sk_type == SOCK_STREAM && sk->sk_state != SCAFFOLD_CLOSED) {
-		LOG_ERR("Bad state %d %p\n",
-                        sk->sk_state, sk);
-		return;
-	}
-
-	if (!sock_flag(sk, SOCK_DEAD)) {
-		LOG_DBG("Attempt to release alive scaffold socket: %p\n", sk);
-		return;
-	}
-
-	if (atomic_read(&sk->sk_rmem_alloc)) {
-                LOG_WARN("sk_rmem_alloc is not zero\n");
-        }
-
-	if (atomic_read(&sk->sk_wmem_alloc)) {
-                LOG_WARN("sk_wmem_alloc is not zero\n");
-        }
-
-	atomic_dec(&scaffold_nr_socks);
-
-	LOG_DBG("SCAFFOLD socket %p destroyed, %d are still alive.\n", 
-               sk, atomic_read(&scaffold_nr_socks));
-}
-
-struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock, 
-                               gfp_t priority, int protocol, 
-                               struct proto *prot)
-{
-        struct sock *sk;
-
-        sk = sk_alloc(net, PF_SCAFFOLD, priority, prot);
-
-	if (!sk)
-		return NULL;
-
-	sock_init_data(sock, sk);
-        sk->sk_family = PF_SCAFFOLD;
-	sk->sk_protocol	= protocol;
-	sk->sk_destruct	= scaffold_sock_destruct;
-        sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
-        
-        /* Only assign socket id here in case we have a user
-         * socket. If socket is NULL, then it means this socket is a
-         * child socket from a LISTENing socket, and it will be
-         * assigned the socket id from the request sock */
-        if (sock && __scaffold_assign_sockid(sk) < 0) {
-                LOG_DBG("could not assign sock id\n");
-                sock_put(sk);
-                return NULL;
-        }
-                
-        LOG_DBG("SCAFFOLD socket %p created, %d are alive.\n", 
-               sk, atomic_read(&scaffold_nr_socks) + 1);
-
-        return sk;
-}
 
 /**
    Create a new Scaffold socket.
@@ -885,8 +808,6 @@ static int scaffold_create(struct net *net, struct socket *sock, int protocol
 		if (ret < 0)
 			sk_common_release(sk);
 	}
-
-        atomic_inc(&scaffold_nr_socks);
 out:
         return ret;
 }
@@ -900,6 +821,13 @@ static struct net_proto_family scaffold_family_ops = {
 int __init scaffold_init(void)
 {
         int err = 0;
+
+        err = neighbor_init();
+
+        if (err < 0) {
+                LOG_CRIT("Cannot initialize neighbor table\n");
+                goto fail_neighbor;
+        }
 
         err = service_init();
 
@@ -948,6 +876,8 @@ fail_packet:
 fail_sock:
         service_fini();
 fail_service:
+        neighbor_fini();
+fail_neighbor:
         goto out;      
 }
 
@@ -958,4 +888,5 @@ void __exit scaffold_fini(void)
         packet_fini();
         scaffold_sock_tables_fini();
         service_fini();
+        neighbor_fini();
 }

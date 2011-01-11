@@ -287,8 +287,7 @@ struct net_device *service_entry_dev_next(struct service_entry *se)
 
 /* Returns the device default destination during iteration of device
  * list */
-int service_entry_dev_dst(struct service_entry *se, unsigned char *dst, 
-                          int dstlen)
+int service_entry_dev_dst(struct service_entry *se, void *dst, int dstlen)
 {
         struct dev_entry *de;
 
@@ -311,7 +310,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         char prefix[PREFIX_BUFLEN];
         struct service_entry *se = get_service(n);
         struct dev_entry *de;
-        char macstr[18];
+        char dststr[18];
         int len = 0;
 
         read_lock_bh(&se->devlock);
@@ -324,7 +323,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         list_for_each_entry(de, &se->dev_list, lh) {
                 len += snprintf(buf + len, buflen - len, "[%-5s %s] ",
                                 de->dev->name,
-                                mac_ntop(de->dst, macstr, 18));
+                                inet_ntop(AF_INET, de->dst, dststr, 18));
         }
 
         /* remove last whitespace */
@@ -440,7 +439,7 @@ int service_table_add(struct service_table *tbl, struct service_id *srvid,
 }
 
 int service_add(struct service_id *srvid, unsigned int prefix_size, 
-                struct net_device *dev, unsigned char *dst, 
+                struct net_device *dev, void *dst, 
                 int dstlen, gfp_t alloc)
 {
         return service_table_add(&srvtable, srvid, prefix_size, 
