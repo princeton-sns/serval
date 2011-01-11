@@ -49,6 +49,10 @@ int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
 			  void *key)
 {
         char w = 'w';
+        if (curr->pipefd[1] == -1) {
+                LOG_ERR("pipefd[1] == -1\n");
+                return -1;
+        }
 	return write(curr->pipefd[1], &w, 1);
 }
 

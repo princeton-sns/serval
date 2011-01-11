@@ -519,6 +519,11 @@ int dev_signal(struct net_device *dev, enum signal type)
         struct pollfd fds;
         int ret;
 
+        if (dev->pipefd[1] == -1) {
+                LOG_ERR("pipefd[1] == -1\n");
+                return -1;
+        }
+                
         fds.fd = dev->pipefd[0];
         fds.events = POLLIN;
         

@@ -17,7 +17,7 @@ struct timer_list_head {
 	unsigned long num_timers;
 	struct list_head head;
 	pthread_mutex_t lock;
-        int signal;
+        int signal[2];
 };
 
 #if !defined(PER_THREAD_TIMER_LIST)
@@ -25,7 +25,7 @@ static struct timer_list_head timer_list = {
         .num_timers = 0,
         .head = { &timer_list.head, &timer_list.head },
         .lock = PTHREAD_MUTEX_INITIALIZER,
-        .signal = -1
+        .signal = { -1, -1 },
 };
 #else
 static pthread_key_t timer_list_head_key;
@@ -84,7 +84,62 @@ static inline struct timer_list_head *timer_list_get_locked(void)
 	return tlh;
 }
 
-int timer_list_get_next_timeout(struct timespec *timeout, int signal)
+static int __timer_list_signal_pending(struct timer_list_head *tlh)
+{
+        struct pollfd fds;
+        int ret;
+
+        fds.fd = tlh->signal[0];
+        fds.events = POLLIN | POLLHUP;
+        fds.revents = 0;
+
+        ret = poll(&fds, 1, 0);
+
+        if (ret == -1) {
+                LOG_ERR("poll error: %s\n", strerror(errno));
+        } else if (ret > 0) {
+                ret = fds.revents;
+        }
+
+        return ret;
+}
+
+int timer_list_signal_pending(void)
+{
+        return  __timer_list_signal_pending(timer_list_get());
+}
+
+static int __timer_list_signal_lower(struct timer_list_head *tlh)
+{
+	ssize_t sz = 1;
+	char r = 'r';
+
+        while (sz > 0 && __timer_list_signal_pending(tlh) & POLLIN) {
+                sz = read(tlh->signal[0], &r, 1);
+	}
+
+	return sz;
+}
+
+int timer_list_signal_lower(void)
+{
+	return __timer_list_signal_lower(timer_list_get());
+}
+
+static int timer_list_signal_add_timer(struct timer_list_head *tlh)
+{
+        char w = 'w';
+        
+        if (tlh->signal[1] == -1)
+                return -1;
+
+        if (__timer_list_signal_pending(tlh))
+                return 0;
+
+	return write(tlh->signal[1], &w, 1);
+}
+
+int timer_list_get_next_timeout(struct timespec *timeout, int signal[2])
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
 	struct timer_list *timer;
@@ -93,7 +148,10 @@ int timer_list_get_next_timeout(struct timespec *timeout, int signal)
 	if (!tlh)
 		return -1;
 	
-        tlh->signal = signal;
+        memcpy(tlh->signal, signal, sizeof(int)*2);
+
+        /* Lower any pending signals */
+        __timer_list_signal_lower(tlh);
 
 	if (list_empty(&tlh->head)) {
 		timer_list_unlock(tlh);
@@ -116,33 +174,6 @@ int timer_list_get_next_timeout(struct timespec *timeout, int signal)
 	timer_list_unlock(tlh);
 
 	return 1;
-}
-
-static int timer_list_signal_pending(int signal)
-{
-        int ret;
-        struct pollfd fds;
-
-        fds.fd = signal;
-        fds.events = POLLIN | POLLHUP;
-        fds.revents = 0;
-
-        ret = poll(&fds, 1, 0);
-
-        if (ret == -1) {
-                LOG_ERR("poll error: %s\n", strerror(errno));
-        }
-
-        return ret;
-}
-
-static int timer_list_signal_add_timer(int signal)
-{
-        if (timer_list_signal_pending(signal))
-                return 0;
-
-        char w = 'w';
-	return write(signal, &w, 1);
 }
 
 int timer_list_handle_timeout(void)
@@ -275,7 +306,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
-                timer_list_signal_add_timer(tlh->signal);
+                timer_list_signal_add_timer(tlh);
 	} else {
 		unsigned int num = 0;
 		struct timer_list *tl;
@@ -292,7 +323,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 		if (timer->entry.prev == &tlh->head) {
                         /* Inserted first in queue, so we must signal
                          * that the timeout has changed. */
-                        timer_list_signal_add_timer(tlh->signal);
+                        timer_list_signal_add_timer(tlh);
                 } 
 	}
 	

@@ -85,22 +85,6 @@ static const char *server_sock_path[] = {
 	TCP_SERVER_PATH
 };
 
-static int timer_list_signal_lower(int signal)
-{
-	ssize_t sz;
-	int ret = 0;
-	char r = 'r';
-
-	do {
-		sz = read(signal, &r, 1);
-
-		if (sz == 1)
-			ret = 1;
-	} while (sz > 0);
-
-	return sz == -1 ? -1 : ret;
-}
-
 static int server_run(void)
 {	
 	sigset_t sigset, orig_sigset;
@@ -117,10 +101,6 @@ static int server_run(void)
                         strerror(errno));
                 return -1;
         }
-
-        /* Set non-blocking so that we can lower signal without
-         * blocking */
-        fcntl(timer_list_signal[0], F_SETFL, O_NONBLOCK);
 
 	sigemptyset(&sigset);
         sigaddset(&sigset, SIGTERM);
@@ -222,7 +202,7 @@ static int server_run(void)
 		maxfd = MAX(maxfd, timer_list_signal[0]);
 
 		ret = timer_list_get_next_timeout(&timeout, 
-                                                  timer_list_signal[1]);
+                                                  timer_list_signal);
 
 		if (ret == -1) {
 			/* Timer list error. Exit? */
@@ -274,7 +254,7 @@ static int server_run(void)
 		}
 		
                 if (FD_ISSET(timer_list_signal[0], &readfds)) {
-                        timer_list_signal_lower(timer_list_signal[0]);
+                        timer_list_signal_lower();
                 }
 		if (FD_ISSET(ctrl_getfd(), &readfds)) {
 			ret = ctrl_recvmsg();

@@ -40,7 +40,10 @@ struct timer_list {
 int timer_list_per_thread_init(void);
 #endif
 
-int timer_list_get_next_timeout(struct timespec *, int signal);
+int timer_list_signal_pending(void);
+int timer_list_signal_lower(void);
+
+int timer_list_get_next_timeout(struct timespec *, int signal[2]);
 int timer_list_handle_timeout(void);
 
 /* Kernel compatible API */
