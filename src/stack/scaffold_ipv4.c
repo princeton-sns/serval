@@ -93,8 +93,17 @@ int scaffold_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 
 #if defined(ENABLE_DEBUG)
         {
-                char buf[256];
-                LOG_DBG("ip dump %s\n", ipv4_hdr_dump(iph, buf, 256));
+                unsigned int iph_len = iph->ihl << 2;
+                char srcstr[18], dststr[18];
+                /* 
+                   char buf[256];
+                   LOG_DBG("ip dump %s\n", ipv4_hdr_dump(iph, buf, 256));
+                */
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
+                        skb->dev->name,
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph_len, iph->ihl);
         }
 #endif
         
@@ -121,10 +130,11 @@ int scaffold_ipv4_rcv(struct sk_buff *skb)
 
 #if defined(ENABLE_DEBUG)
         {
-                char srcstr[18];
-                LOG_DBG("%s %s hdr_len=%u tot_len=%u prot=%u\n",
+                char srcstr[18], dststr[18];
+                LOG_DBG("%s %s->%s hdr_len=%u tot_len=%u prot=%u\n",
                         skb->dev->name,
                         inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
                         hdr_len, ntohs(iph->tot_len), iph->protocol);
         }
 #endif
@@ -170,16 +180,6 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
                 FREE_SKB(skb);
                 return err;
         }
-
-#if defined(ENABLE_DEBUG)
-        {                
-                struct iphdr *iph = ip_hdr(skb);
-                unsigned int iph_len = iph->ihl << 2;
-
-                LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
-                        skb->len, iph_len, iph->ihl);
-        }
-#endif
 
         /* Transmit */
         err = scaffold_output(skb);
