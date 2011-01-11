@@ -88,7 +88,6 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         memcpy(&srv_ext->dst_srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
         
-
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SCAFFOLD;
 

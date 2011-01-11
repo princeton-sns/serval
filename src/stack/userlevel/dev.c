@@ -438,12 +438,6 @@ int netdev_populate_table(int sizeof_priv,
                 /* Ignore loopback device */
                 if (strncmp(name, "lo", 2) == 0)
                         continue;
-                
-                if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
-                        LOG_ERR("SIOCGIFNETMASK: %s\n",
-                                strerror(errno));
-                        goto out;
-                }
                
                 dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
@@ -468,14 +462,24 @@ int netdev_populate_table(int sizeof_priv,
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                 memcpy(&dev->ipv4.broadcast, 
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
-                memcpy(&dev->ipv4.netmask, 
-                       &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
+
                 {
                         char buf[18];
                         LOG_DBG("ip %s\n",
                                 inet_ntop(AF_INET, &dev->ipv4.addr, buf, 18));
 
                 }       
+                                
+                if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
+                        LOG_ERR("SIOCGIFNETMASK: %s\n",
+                                strerror(errno));
+                        free_netdev(dev);
+                        goto out;
+                }
+
+                memcpy(&dev->ipv4.netmask, 
+                       &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
+
                 ret = register_netdev(dev);
 
                 if (ret < 0) {

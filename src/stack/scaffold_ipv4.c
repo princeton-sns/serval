@@ -215,15 +215,6 @@ int scaffold_ipv4_xmit_skb(struct sk_buff *skb)
                 return err;
         }
 
-#if defined(ENABLE_DEBUG)
-        {
-                struct iphdr *iph = ip_hdr(skb);
-                unsigned int iph_len = iph->ihl << 2;
-                
-                LOG_DBG("ip packet tot_len=%u iph_len=[%u %u]\n", 
-                        skb->len, iph_len, iph->ihl);
-        }
-#endif
         /* Transmit */
         err = scaffold_output(skb);
 
