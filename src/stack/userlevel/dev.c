@@ -612,9 +612,14 @@ int dev_xmit(struct net_device *dev)
         
                 if (!skb)
                         break;
-
-                if (skb->dev->pack_ops->xmit(skb) < 0) {
-                        LOG_ERR("tx failed\n");
+                
+                if (skb->dev) {
+                        if (skb->dev->pack_ops->xmit(skb) < 0) {
+                                LOG_ERR("tx failed\n");
+                        }
+                } else {
+                        LOG_ERR("No device set in skb\n");
+                        free_skb(skb);
                 }
         }
 
@@ -694,6 +699,11 @@ int dev_queue_xmit(struct sk_buff *skb)
         
         skb_queue_tail(&dev->tx_queue.q, skb);
 
+        /* TX immediately if we are on device thread */
+        /* 
+           if (pthread_equal(dev->thr, pthread_self()))
+                dev_xmit(dev);
+                else */
         dev_signal(dev, SIGNAL_TXQUEUE);
 
         return 0;

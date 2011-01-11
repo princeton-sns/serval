@@ -6,12 +6,14 @@
 #include <scaffold_sock.h>
 #include <netinet/scaffold.h>
 #include <scaffold_srv.h>
+#include <scaffold_ipv4.h>
 #include <output.h>
 #include <neighbor.h>
+#if defined(OS_USER)
+#include <netinet/ip.h>
+#endif
 
 extern int packet_xmit(struct sk_buff *skb);
-
-#define SERVICE_ROUTER_ID 666
 
 const char *skb_dump(const void *data, int datalen, char *buf, int buflen)
 {
@@ -39,13 +41,26 @@ int scaffold_output(struct sk_buff *skb)
                 goto drop;
         }
 
-        neigh = neighbor_find(&SCAFFOLD_SKB_CB(skb)->dst_flowid);
+#if defined(ENABLE_DEBUG) && defined(OS_USER)
+        {
+                char buf[2000];
+        
+                neighbors_print(buf, 2000);
+                printf("%s\n", buf);
+        }
+#endif
+        
+        neigh = neighbor_find((struct flow_id *)&ip_hdr(skb)->daddr);
 
         if (!neigh) {
-                LOG_ERR("No matching neighbor\n");
+                char buf[15];
+                LOG_ERR("No matching neighbor for %s\n", 
+                        inet_ntop(AF_INET, &ip_hdr(skb)->daddr,
+                                  buf, 15));
                 err = -EHOSTUNREACH;
                 goto drop;
         }
+        
 	err = dev_hard_header(skb, skb->dev, ntohs(skb->protocol), 
 			      neigh->dstaddr, NULL, skb->len);
 
@@ -54,7 +69,12 @@ int scaffold_output(struct sk_buff *skb)
 	if (err < 0) {
 		LOG_ERR("hard_header failed\n");
 		goto drop;
-	}
+	} else {
+                /* dev_hard_header returns header length.
+                   Reset to no error.
+                */
+                err = 0;
+        }
 
         skb_reset_mac_header(skb);
 	ethh = eth_hdr(skb);

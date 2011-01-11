@@ -2,9 +2,9 @@
 #include <scaffold/platform.h>
 #include <scaffold/skbuff.h>
 #include <scaffold/debug.h>
+#include <scaffold/netdevice.h>
 #include <scaffold_sock.h>
 #include <scaffold_ipv4.h>
-#include <scaffold/netdevice.h>
 #include <scaffold_srv.h>
 #include <input.h>
 #include <output.h>

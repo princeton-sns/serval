@@ -48,6 +48,11 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
                 LOG_ERR("could not cache service for incoming packet\n");
         }
         
+        /* Cache neighbor */
+        neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
+                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                     ETH_ALEN, GFP_ATOMIC);
+        
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
 
@@ -60,7 +65,6 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         rsk = scaffold_rsk_alloc(GFP_ATOMIC);
 
         if (!rsk) {
-                bh_unlock_sock(sk);
                 err = -ENOMEM;
                 goto drop;
         }
@@ -211,11 +215,6 @@ static int scaffold_srv_listen_state_process(struct sock *sk,
                 FREE_SKB(skb);
         } else if (sfh->flags & SFH_SYN) {
                 LOG_DBG("SYN recv\n");
-
-                /* Cache neighbor */
-                neighbor_add((struct flow_id *)&ip_hdr(skb)->daddr, 32, 
-                             skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
-                             ETH_ALEN, GFP_ATOMIC);
 
                 err = scaffold_srv_syn_rcv(sk, sfh, skb);
         }

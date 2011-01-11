@@ -11,7 +11,7 @@
 static void skb_release_head_state(struct sk_buff *skb)
 {
 	/* Release state associated with head */
-	if (skb->destructor) {
+        if (skb->destructor) {
 		skb->destructor(skb);
 	}
 }
