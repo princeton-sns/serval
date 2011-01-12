@@ -515,6 +515,7 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
         }
+/*
 #if defined(ENABLE_DEBUG)
         {
                 char buf[2000];
@@ -525,7 +526,7 @@ int netdev_populate_table(int sizeof_priv,
                 printf("%s\n", buf);
         }
 #endif
-        
+*/      
 out:
         close(fd);
 

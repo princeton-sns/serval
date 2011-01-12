@@ -343,7 +343,7 @@ int scaffold_srv_do_rcv(struct sock *sk,
         struct scaffold_hdr *sfh = 
                 (struct scaffold_hdr *)skb_transport_header(skb);
         unsigned int hdr_len = ntohs(sfh->length);
-                
+                 
         pskb_pull(skb, hdr_len);
         skb_reset_transport_header(skb);
                 

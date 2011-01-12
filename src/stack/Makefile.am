@@ -57,6 +57,7 @@ SCAFFOLD_HDR = \
 	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/bitops.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/hash.h \

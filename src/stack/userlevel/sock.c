@@ -3,7 +3,10 @@
 #include <scaffold/lock.h>
 #include <scaffold/timer.h>
 #include <scaffold/sock.h>
+#include <scaffold/skbuff.h>
 #include <scaffold/wait.h>
+#include <scaffold/net.h>
+#include <scaffold/bitops.h>
 #include <pthread.h>
 
 #define RCV_BUF_DEFAULT 1000
@@ -355,7 +358,15 @@ void proto_unregister(struct proto *prot)
 
 int sk_wait_data(struct sock *sk, long *timeo)
 {
-        return 0;
+        int rc;
+        DEFINE_WAIT(wait);
+
+        prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+        set_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
+        rc = sk_wait_event(sk, timeo, !skb_queue_empty(&sk->sk_receive_queue));
+        clear_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
+        finish_wait(sk_sleep(sk), &wait);
+        return rc;
 }
 
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,

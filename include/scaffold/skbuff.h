@@ -142,6 +142,92 @@ static inline void skb_set_tail_pointer(struct sk_buff *skb, const int offset)
 	skb->tail += offset;
 }
 
+/**
+ *	skb_queue_empty - check if a queue is empty
+ *	@list: queue head
+ *
+ *	Returns true if the queue is empty, false otherwise.
+ */
+static inline int skb_queue_empty(const struct sk_buff_head *list)
+{
+	return list->next == (struct sk_buff *)list;
+}
+
+/**
+ *	skb_queue_is_last - check if skb is the last entry in the queue
+ *	@list: queue head
+ *	@skb: buffer
+ *
+ *	Returns true if @skb is the last buffer on the list.
+ */
+static inline int skb_queue_is_last(const struct sk_buff_head *list,
+				     const struct sk_buff *skb)
+{
+	return (skb->next == (struct sk_buff *) list);
+}
+
+/**
+ *	skb_queue_is_first - check if skb is the first entry in the queue
+ *	@list: queue head
+ *	@skb: buffer
+ *
+ *	Returns true if @skb is the first buffer on the list.
+ */
+static inline int skb_queue_is_first(const struct sk_buff_head *list,
+				      const struct sk_buff *skb)
+{
+	return (skb->prev == (struct sk_buff *) list);
+}
+
+/**
+ *	skb_queue_next - return the next packet in the queue
+ *	@list: queue head
+ *	@skb: current buffer
+ *
+ *	Return the next packet in @list after @skb.  It is only valid to
+ *	call this if skb_queue_is_last() evaluates to false.
+ */
+static inline struct sk_buff *skb_queue_next(const struct sk_buff_head *list,
+					     const struct sk_buff *skb)
+{
+	/* This BUG_ON may seem severe, but if we just return then we
+	 * are going to dereference garbage.
+	 */
+	BUG_ON(skb_queue_is_last(list, skb));
+	return skb->next;
+}
+
+/**
+ *	skb_queue_prev - return the prev packet in the queue
+ *	@list: queue head
+ *	@skb: current buffer
+ *
+ *	Return the prev packet in @list before @skb.  It is only valid to
+ *	call this if skb_queue_is_first() evaluates to false.
+ */
+static inline struct sk_buff *skb_queue_prev(const struct sk_buff_head *list,
+					     const struct sk_buff *skb)
+{
+	/* This BUG_ON may seem severe, but if we just return then we
+	 * are going to dereference garbage.
+	 */
+	BUG_ON(skb_queue_is_first(list, skb));
+	return skb->prev;
+}
+
+/**
+ *	skb_get - reference buffer
+ *	@skb: buffer to reference
+ *
+ *	Makes another reference to a socket buffer and returns a pointer
+ *	to the buffer.
+ */
+static inline struct sk_buff *skb_get(struct sk_buff *skb)
+{
+	atomic_inc(&skb->users);
+	return skb;
+}
+
 /* We divide dataref into two halves.  The higher 16 bits hold references
  * to the payload part of skb->data.  The lower 16 bits hold references to
  * the entire skb->data.  A clone of a headerless skb holds the length of

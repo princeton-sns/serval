@@ -171,14 +171,20 @@ struct client_msg_send_rsp {
 /* Receive messages */
 struct client_msg_recv_req {
 	struct client_msg msghdr;
+        uint16_t data_len;
+        int flags;
 } __attribute__((packed));
 
 #define CLIENT_MSG_RECV_REQ_LEN (sizeof(struct client_msg_recv_req))
 
 struct client_msg_recv_rsp {
 	struct client_msg msghdr;
+        struct service_id srvid;
+        uint16_t data_len;
+        int flags;
 	uint8_t error;
-} __attribute__((packed));;
+        unsigned char data[0];
+} __attribute__((packed));
 
 #define CLIENT_MSG_RECV_RSP_LEN (sizeof(struct client_msg_recv_rsp))
 

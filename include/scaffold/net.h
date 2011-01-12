@@ -23,6 +23,7 @@ enum {
 #if defined(OS_LINUX)
 #include <linux/net.h>
 #else
+
 /* Grabbed from linux/net.h */
 typedef enum {
         SS_FREE = 0,
@@ -35,6 +36,12 @@ typedef enum {
 #endif /* OS_LINUX */
 
 #include "wait.h"
+
+#define SOCK_ASYNC_NOSPACE 0
+#define SOCK_ASYNC_WAITDATA 1
+#define SOCK_NOSPACE 2
+#define SOCK_PASSCRED 3
+#define SOCK_PASSSEC 4
 
 struct sock;
 struct net;

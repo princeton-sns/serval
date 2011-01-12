@@ -240,6 +240,18 @@ static inline void sk_set_socket(struct sock *sk, struct socket *sock)
 	sk->sk_socket = sock;
 }
 
+#define sk_wait_event(__sk, __timeo, __condition)                       \
+        ({ int __rc;                                                    \
+                release_sock(__sk);                                     \
+                __rc = __condition;                                     \
+                if (!__rc) {                                            \
+                        *(__timeo) = schedule_timeout(*(__timeo));      \
+                }                                                       \
+                lock_sock(__sk);                                        \
+                __rc = __condition;                                     \
+                __rc;                                                   \
+        })
+
 int sk_wait_data(struct sock *sk, long *timeo);
 
 static inline int sock_writeable(const struct sock *sk) 
@@ -398,6 +410,7 @@ static inline void sock_orphan(struct sock *sk)
 static inline void sock_graft(struct sock *sk, struct socket *parent)
 {
 	write_lock(&sk->sk_callback_lock);
+        sk->sk_wq = parent->wq;
 	parent->sk = sk;
 	sk_set_socket(sk, parent);
 	write_unlock(&sk->sk_callback_lock);

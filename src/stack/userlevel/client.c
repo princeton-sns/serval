@@ -66,6 +66,7 @@ static int client_handle_listen_req_msg(struct client *c, struct client_msg *msg
 static int client_handle_accept_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_recv_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
@@ -82,7 +83,7 @@ msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
 	client_handle_send_req_msg,
 	dummy_msg_handler,
-	dummy_msg_handler,
+	client_handle_recv_req_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
 	dummy_msg_handler,
@@ -512,6 +513,47 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         }
         
 	return client_msg_write(c->fd, &rsp.msghdr);
+}
+
+int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
+{
+	struct client_msg_recv_req *req = (struct client_msg_recv_req *)msg;
+        struct {
+                struct client_msg_recv_rsp rsp;
+                unsigned char data[req->data_len];
+        } r;
+        struct socket *sock = c->sock;
+        struct msghdr mh;
+        struct iovec iov;
+        struct sockaddr_sf saddr;
+        int ret;
+
+        client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
+        memset(&mh, 0, sizeof(mh));
+        mh.msg_name = &saddr;
+        mh.msg_namelen = sizeof(saddr);
+        mh.msg_iov = &iov;
+        mh.msg_iovlen = 1;
+        
+        iov.iov_base = r.data;
+        iov.iov_len = req->data_len;
+
+	LOG_DBG("data_len=%u\n", req->data_len);
+        
+        ret = sock->ops->recvmsg(NULL, sock, &mh, req->data_len, req->flags);
+        
+        if (ret < 0) {
+                r.rsp.error = KERN_ERR(ret);
+                LOG_ERR("sendmsg returned error %s\n", KERN_STRERROR(ret));
+        } else {
+                memcpy(&r.rsp.srvid, &saddr.sf_srvid, sizeof(saddr.sf_srvid));
+                r.rsp.data_len = ret;
+                LOG_DBG("read %u bytes\n", ret);
+        }
+        
+	ret = client_msg_write(c->fd, &r.rsp.msghdr);
+        
+        return ret;
 }
 
 int client_handle_close_req_msg(struct client *c, struct client_msg *msg)

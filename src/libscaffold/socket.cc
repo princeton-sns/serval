@@ -1139,13 +1139,23 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
         return SCAFFOLD_SOCKET_ERROR;
       }
     }
+    
+    // Now ready to send read request
+    info("sending recv req of len %d", len);
+    RecvReq rreq(len, flags);
+    if (rreq.write_to_stream_soc(cli.fd(), err) < 0) {
+      lerr("Error writing RecvReq to stream");
+      return SCAFFOLD_SOCKET_ERROR;
+    }
+    rreq.print("recv:app:tx");
+
   }
 
   // In 3 diff cases, we still reach here
   // TCP non-blocking, we found a HaveData message,
   //  and we sent a RecvReq, and waiting for a resp
   // TCP blocking, we sent a RecvReq, and waiting for a resp
-  // UDP blocking, we simply wait for a RecvRsp, no RecvReq necessary
+  // UDP blocking, we simply wait for a RecvRsp
   Message m;
   if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0) {
     lerr("Cannot read response message from stream");

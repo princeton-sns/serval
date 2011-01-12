@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <poll.h>
+#include <limits.h>
 
 typedef struct __wait_queue wait_queue_t;
 typedef int (*wait_queue_func_t)(wait_queue_t *wait, unsigned mode, int flags, void *key);
@@ -139,7 +140,7 @@ static inline void __remove_wait_queue(wait_queue_head_t *head,
 }
 
 #define set_current_state(x)
-#define MAX_SCHEDULE_TIMEOUT 0
+#define MAX_SCHEDULE_TIMEOUT LONG_MAX
 #define ERESTARTSYS 200
 
 int signal_pending(pthread_t thr);

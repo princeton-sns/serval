@@ -211,13 +211,13 @@ struct sock *scaffold_udp_connection_respond_sock(struct sock *sk,
 int scaffold_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
-        unsigned short datalen = ntohs(udph->len);
+        unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
         int err = 0;
         
-        LOG_DBG("udp packet len=%u\n", datalen);
         
+        pskb_pull(skb, sizeof(*udph));
+        LOG_DBG("data len=%u skb->len=%u\n", datalen, skb->len);
         skb_queue_tail(&sk->sk_receive_queue, skb);
-        
         sk->sk_data_ready(sk, datalen);
 
         return err;
@@ -330,8 +330,8 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		if (skb)
 			goto found_ok_skb;
 	
-		if (sk->sk_state >= SCAFFOLD_CLOSED) {
-                        
+		if (sk->sk_state == SCAFFOLD_CLOSED) {
+                        LOG_DBG("Not in receivable state\n");
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
 				break;
@@ -342,15 +342,18 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		}
                 
 		if (!timeo) {
+                        LOG_ERR("No timeo\n");
 			retval = -EAGAIN;
 			break;
 		}
 
 		if (signal_pending(current)) {
+                        LOG_ERR("signal is pending\n");
 			retval = sock_intr_errno(timeo);
 			break;
 		}
-                //LOG_DBG("waiting for data\n");
+                
+                LOG_DBG("waiting for data\n");
 
 		sk_wait_data(sk, &timeo);
 		continue;
@@ -369,21 +372,21 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         unsigned short from = udp_hdr(skb)->source;
 
                         sfaddr->sf_family = AF_SCAFFOLD;
-                        *addr_len = sizeof(struct sockaddr_sf);
+                        *addr_len = sizeof(*sfaddr);
                         memcpy(&sfaddr->sf_srvid, &from, sizeof(struct service_id));
 
                         /* Copy also our local service id to the
                          * address buffer if size admits */
-                        if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
+                        if (addrlen >= sizeof(*sfaddr) * 2) {
+                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(*sfaddr));
                                 sfaddr->sf_family = AF_SCAFFOLD;
-
-                                memcpy(&sfaddr->sf_srvid, &ss->local_srvid, 
-                                       sizeof(struct service_id));
+                                memcpy(&sfaddr->sf_srvid, &ss->local_srvid,
+                                       sizeof(sfaddr->sf_srvid));
                         }
                 }
                 
-                //LOG_DBG("dequeing skb with length %u len=%zu retval=%d\n", skb->len, len, retval);
+                LOG_DBG("dequeuing skb->len=%u len=%zu retval=%d\n", 
+                        skb->len, len, retval);
 
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */

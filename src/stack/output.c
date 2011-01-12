@@ -40,15 +40,6 @@ int scaffold_output(struct sk_buff *skb)
                 err =  -ENODEV;
                 goto drop;
         }
-
-#if defined(ENABLE_DEBUG) && defined(OS_USER)
-        {
-                char buf[2000];
-        
-                neighbors_print(buf, 2000);
-                printf("%s\n", buf);
-        }
-#endif
         
         neigh = neighbor_find((struct flow_id *)&ip_hdr(skb)->daddr);
 
