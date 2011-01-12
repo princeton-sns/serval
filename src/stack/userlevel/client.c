@@ -68,6 +68,8 @@ static int client_handle_accept2_req_msg(struct client *c, struct client_msg *ms
 static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_recv_req_msg(struct client *c, struct client_msg *msg);
 static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
+static int client_handle_clear_data_msg(struct client *c, struct client_msg *msg);
+static int client_handle_have_data_msg(struct client *c, struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
@@ -92,8 +94,8 @@ msg_handler_t msg_handlers[] = {
 	client_handle_close_req_msg,
 	dummy_msg_handler,
 	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler
+	client_handle_clear_data_msg,
+	client_handle_have_data_msg
 };
 	
 static void dummy_timer_callback(unsigned long data)
@@ -544,11 +546,13 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         
         if (ret < 0) {
                 r.rsp.error = KERN_ERR(ret);
-                LOG_ERR("sendmsg returned error %s\n", KERN_STRERROR(ret));
+                LOG_ERR("sendmsg error %s\n", KERN_STRERROR(ret));
         } else {
                 memcpy(&r.rsp.srvid, &saddr.sf_srvid, sizeof(saddr.sf_srvid));
                 r.rsp.data_len = ret;
-                LOG_DBG("read %u bytes\n", ret);
+                r.rsp.msghdr.payload_length += ret;
+                r.data[ret] = '\0';
+                LOG_DBG("read %d bytes, payload=%s\n", ret, (char *)r.data);
         }
         
 	ret = client_msg_write(c->fd, &r.rsp.msghdr);
@@ -559,10 +563,34 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
 int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
 {        
         DEFINE_CLIENT_RESPONSE(rsp, MSG_CLOSE_RSP);
+        int ret;
+        
+        LOG_DBG("\n");
+
+        ret = c->sock->ops->release(c->sock);
+
+        if (ret < 0) {
+                rsp.error = KERN_ERR(ret);
+                LOG_ERR("release error %s\n", KERN_STRERROR(ret));
+        } else {
+
+        }
 
         LOG_DBG("Sending close response\n");
 
         return client_msg_write(c->fd, &rsp.msghdr);
+}
+
+int client_handle_clear_data_msg(struct client *c, struct client_msg *msg)
+{
+        LOG_DBG("\n");
+        return 0;
+}
+
+int client_handle_have_data_msg(struct client *c, struct client_msg *msg)
+{
+        LOG_DBG("\n");
+        return 0;
 }
 
 static int client_handle_msg(struct client *c)

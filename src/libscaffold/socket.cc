@@ -1200,6 +1200,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
       lerr("No memory error for RecvRsp");
       return SCAFFOLD_SOCKET_ERROR;
     }
+    info("reading recv rsp");
     rresp.reset_nonserial(buffer, nonserial_len);
     if (rresp.read_pld_from_stream_soc(cli.fd(), err) < 0) {
       lerr("Error reading RecvRsp from stream");
@@ -1212,6 +1213,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
       lerr("RecvRsp has error %s", strerror_sf(err.v));
       return SCAFFOLD_SOCKET_ERROR;
     }
+    info("read recv response");
 
     if (len > rresp.nonserial_pld_len())
       len = rresp.nonserial_pld_len();
@@ -1222,6 +1224,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
     len = 0;
     return 0;
   }
+  info("returning");
   //SockIO::print("recv:app:data", (const unsigned char *)buffer, len);
   return 0;
 }

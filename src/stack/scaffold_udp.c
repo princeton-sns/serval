@@ -214,9 +214,18 @@ int scaffold_udp_rcv(struct sock *sk, struct sk_buff *skb)
         unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
         int err = 0;
         
-        
         pskb_pull(skb, sizeof(*udph));
-        LOG_DBG("data len=%u skb->len=%u\n", datalen, skb->len);
+
+        /* LOG_DBG("data len=%u skb->len=%u\n", datalen, skb->len); */
+        
+        /* Ideally, this trimming would not be necessary. However, it
+         * seems that somewhere in the receive process trailing
+         * bytes are added to the packet. Perhaps this is a result of
+         * PACKET sockets, and for efficiency the return full words or
+         * something? Anyway, we can live with this for now... */
+        if (datalen < skb->len) {
+                pskb_trim(skb, datalen);
+        }
         skb_queue_tail(&sk->sk_receive_queue, skb);
         sk->sk_data_ready(sk, datalen);
 
@@ -385,7 +394,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         }
                 }
                 
-                LOG_DBG("dequeuing skb->len=%u len=%zu retval=%d\n", 
+                LOG_DBG("deque skb->len=%u len=%zu retval=%d\n", 
                         skb->len, len, retval);
 
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
@@ -394,6 +403,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         LOG_DBG("could not copy data, len=%zu\n", len);
 			break;
 		}
+
 		if (!(flags & MSG_PEEK))
 			sk_eat_skb(sk, skb, 0);
 		break;

@@ -195,6 +195,8 @@ Message::read_pld_from_stream_soc(int soc, sf_err_t &err)
             delete [] buf;
             return 0;
         }
+        
+        info("readn returned n=%d slen=%d", n, slen);
 
         if (n < 0 || read_serial_payload(buf) < 0) {
             delete[] buf;
@@ -207,6 +209,7 @@ Message::read_pld_from_stream_soc(int soc, sf_err_t &err)
     }
 
     if (nonserial_pld_len()) {
+        info("reading %d bytes non-serial payload", nonserial_pld_len());
         assert (nonserial_buf_mutable());  // user manages nonserial buf alloc
         int n = SockIO::readn(soc, nonserial_buf_mutable(), 
                               nonserial_pld_len());

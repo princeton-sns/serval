@@ -313,11 +313,27 @@ void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head 
 	spin_unlock(&list->lock);
 }
 
-int skb_copy_datagram_iovec(const struct sk_buff *from,
+int skb_copy_datagram_iovec(const struct sk_buff *skb,
                             int offset, struct iovec *to,
-                            int size)
+                            int len)
 {
-	return 0;
+        int start = skb_headlen(skb);
+        int copy = start - offset;
+
+        if (copy > 0) {
+                if (copy > len)
+                        copy = len;
+                if (memcpy_toiovec(to, skb->data + offset, copy))
+                        goto fault;
+                if ((len -= copy) == 0)
+                        return 0;
+                offset += copy;
+        }
+
+        if (!len)
+                return 0;
+fault:
+        return -EFAULT;
 }
 
 static void skb_over_panic(struct sk_buff *skb, int sz, void *here)

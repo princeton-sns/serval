@@ -15,20 +15,6 @@
 
 extern int packet_xmit(struct sk_buff *skb);
 
-const char *skb_dump(const void *data, int datalen, char *buf, int buflen)
-{
-        int i = 0, len = 0;
-        const unsigned char *h = (const unsigned char *)data;
-        
-        while (i < datalen) {
-                unsigned char c = (i + 1 < datalen) ? h[i+1] : 0;
-                len += snprintf(buf + len, buflen - len, 
-                                "%02x%02x ", h[i], c);
-                i += 2;
-        }
-        return buf;
-}
-
 int scaffold_output(struct sk_buff *skb)
 {
 	char srcstr[18], dststr[18];
@@ -77,7 +63,7 @@ int scaffold_output(struct sk_buff *skb)
                 dststr, ntohs(skb->protocol));
         {
                 char dump[256];
-                LOG_DBG("dump: %s\n", skb_dump(skb->data, skb->len, dump, 256));
+                LOG_DBG("dump: %s\n", hexdump(skb->data, skb->len, dump, 256));
         }
 	/* packet_xmit consumes the packet no matter the outcome */
 	if (dev_queue_xmit(skb) < 0) {

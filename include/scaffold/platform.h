@@ -155,4 +155,19 @@ const char *mac_ntop(const void *src, char *dst, size_t size);
 int mac_pton(const char *src, void *dst);
 const char *get_strtime(void);
 
+static inline const char *hexdump(const void *data, int datalen, 
+                                  char *buf, int buflen)
+{
+        int i = 0, len = 0;
+        const unsigned char *h = (const unsigned char *)data;
+        
+        while (i < datalen) {
+                unsigned char c = (i + 1 < datalen) ? h[i+1] : 0;
+                len += snprintf(buf + len, buflen - len, 
+                                "%02x%02x ", h[i], c);
+                i += 2;
+        }
+        return buf;
+}
+
 #endif /* _PLATFORM_H */

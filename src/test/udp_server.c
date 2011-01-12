@@ -85,6 +85,9 @@ void server(void)
                                 break;
                         }
                         buf[n] = '\0';
+                        
+                        printf("request (%d bytes): %s\n", n, buf);
+
                         if (n > 0) {
                                 char buf2[n];
                                 int i = 0;
