@@ -82,10 +82,15 @@ void client(void) {
 		}
 		n = recv_sf(sock, rbuf, N, 0);
 		rbuf[n] = 0;
-		fprintf(stderr, "Response from server: %s\n", rbuf);
-		if (strcmp(sbuf, "quit") == 0)
-			break;
-		fprintf(stderr, "client: waiting on user input :>");
+
+                if (n == -1) {
+                        fprintf(stderr, "recv error: %s\n", strerror_sf(errno));
+                } else {
+                        fprintf(stderr, "Response from server: %s\n", rbuf);
+                        if (strcmp(sbuf, "quit") == 0)
+                                break;
+                }
+                fprintf(stderr, "client: waiting on user input :>");
 	}
 	if (close_sf(sock) < 0)
 		fprintf(stderr, "client: error closing socket %s", strerror_sf(errno));

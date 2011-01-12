@@ -511,7 +511,7 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         
         if (ret < 0) {
                 rsp.error = KERN_ERR(ret);
-                LOG_ERR("sendmsg returned error %s\n", KERN_STRERROR(ret));
+                LOG_ERR("sendmsg: %s\n", KERN_STRERROR(ret));
         }
         
 	return client_msg_write(c->fd, &rsp.msghdr);
@@ -540,13 +540,13 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         iov.iov_base = r.data;
         iov.iov_len = req->data_len;
 
-	LOG_DBG("data_len=%u\n", req->data_len);
+	LOG_DBG("data_len=%u flags=%u\n", req->data_len, req->flags);
         
         ret = sock->ops->recvmsg(NULL, sock, &mh, req->data_len, req->flags);
         
         if (ret < 0) {
                 r.rsp.error = KERN_ERR(ret);
-                LOG_ERR("sendmsg error %s\n", KERN_STRERROR(ret));
+                LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
         } else {
                 memcpy(&r.rsp.srvid, &saddr.sf_srvid, sizeof(saddr.sf_srvid));
                 r.rsp.data_len = ret;

@@ -915,17 +915,16 @@ SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
   sreq.print("send:app:tx");
     
   bool got_havedata_msg = false;
-  if (cli.proto().v == SCAFFOLD_PROTO_TCP) {
-
-    Message m;
-    if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0)
-      return SCAFFOLD_SOCKET_ERROR;
+ 
+  Message m;
+  if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0)
+    return SCAFFOLD_SOCKET_ERROR;
   
-    if (m.type() == Message::HAVE_DATA) {
-      info("Got HaveData before SendRsp; discarding");
-      HaveData hdata;
-      hdata.read_pld_from_stream_soc(cli.fd(), err);
-      hdata.print("hdata:app:rx");
+  if (m.type() == Message::HAVE_DATA) {
+    info("Got HaveData before SendRsp; discarding");
+    HaveData hdata;
+    hdata.read_pld_from_stream_soc(cli.fd(), err);
+    hdata.print("hdata:app:rx");
       got_havedata_msg = true;
       // read SendRsp
       m = Message();
@@ -936,31 +935,31 @@ SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
         err = ESFINTERNAL;
         return SCAFFOLD_SOCKET_ERROR;
       }
-    } else if (errno == EAGAIN)
-      info("no data to read; ok to send req");
-
-    if (m.type() == Message::SEND_RSP) {
-      // Only message payload to read
-      SendRsp srsp;
-      if (srsp.read_pld_from_stream_soc(cli.fd(), err) < 0)
-        return SCAFFOLD_SOCKET_ERROR;
-      
-      srsp.print("send:app:rx");
-      if (srsp.err().v) {
-        err = srsp.err();
-        return SCAFFOLD_SOCKET_ERROR;
-      }
-      info("sent %d bytes through soc %s", length, cli.s());
-    } else
-      lerr("got invalid message, expected SEND_RSP got %s", 
-           m.type_cstr());
+  } else if (errno == EAGAIN)
+    info("no data to read; ok to send req");
+  
+  if (m.type() == Message::SEND_RSP) {
+    // Only message payload to read
+    SendRsp srsp;
+    if (srsp.read_pld_from_stream_soc(cli.fd(), err) < 0)
+      return SCAFFOLD_SOCKET_ERROR;
     
-    if (got_havedata_msg) {
-      ClearData cdata;
-      if (cdata.write_to_stream_soc(cli.fd(), err) < 0)
-        return SCAFFOLD_SOCKET_ERROR;
+    srsp.print("send:app:rx");
+    if (srsp.err().v) {
+      err = srsp.err();
+      return SCAFFOLD_SOCKET_ERROR;
     }
+    info("sent %d bytes through soc %s", length, cli.s());
+  } else
+    lerr("got invalid message, expected SEND_RSP got %s", 
+         m.type_cstr());
+  
+  if (got_havedata_msg) {
+    ClearData cdata;
+    if (cdata.write_to_stream_soc(cli.fd(), err) < 0)
+      return SCAFFOLD_SOCKET_ERROR;
   }
+  
   return 0;
 }
 
