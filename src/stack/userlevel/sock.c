@@ -392,6 +392,118 @@ int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)
         return 0;
 }
 
+/*
+ * Allocate a memory block from the socket's option memory buffer.
+ */
+void *sock_kmalloc(struct sock *sk, int size, gfp_t priority)
+{
+	if (1 /*(unsigned)size <= sysctl_optmem_max &&
+                atomic_read(&sk->sk_omem_alloc) + size < sysctl_optmem_max */) {
+		void *mem;
+		/* First do the add, to avoid the race if kmalloc
+		 * might sleep.
+		 */
+		atomic_add(size, &sk->sk_omem_alloc);
+		mem = malloc(size);
+		if (mem)
+			return mem;
+		atomic_sub(size, &sk->sk_omem_alloc);
+	}
+	return NULL;
+}
+
+void sock_kfree_s(struct sock *sk, void *mem, int size)
+{
+	free(mem);
+	atomic_sub(size, &sk->sk_omem_alloc);
+}
+
+/* It is almost wait_for_tcp_memory minus release_sock/lock_sock.
+   I think, these locks should be removed for datagram sockets.
+ */
+static long sock_wait_for_wmem(struct sock *sk, long timeo)
+{
+	DEFINE_WAIT(wait);
+
+	clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+	for (;;) {
+		if (!timeo)
+			break;
+		if (signal_pending(current))
+			break;
+		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+		if (atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf)
+			break;
+		if (sk->sk_shutdown & SEND_SHUTDOWN)
+			break;
+		if (sk->sk_err)
+			break;
+		timeo = schedule_timeout(timeo);
+	}
+	finish_wait(sk_sleep(sk), &wait);
+	return timeo;
+}
+
+struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
+                                     unsigned long header_len,
+                                     unsigned long data_len,
+                                     int noblock,
+                                     int *errcode)
+{
+        struct sk_buff *skb;
+	gfp_t gfp_mask;
+	long timeo;
+	int err;
+
+	gfp_mask = sk->sk_allocation;
+
+	timeo = sock_sndtimeo(sk, noblock);
+
+	while (1) {
+		err = sock_error(sk);
+		if (err != 0)
+			goto failure;
+
+		err = -EPIPE;
+		if (sk->sk_shutdown & SEND_SHUTDOWN)
+			goto failure;
+
+		if (atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf) {
+			skb = alloc_skb(header_len);
+			if (skb) {
+				/* Full success... */
+				break;
+			}
+			err = -ENOBUFS;
+			goto failure;
+		}
+		set_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+		err = -EAGAIN;
+		if (!timeo)
+			goto failure;
+		if (signal_pending(current))
+			goto interrupted;
+		timeo = sock_wait_for_wmem(sk, timeo);
+	}
+
+	skb_set_owner_w(skb, sk);
+	return skb;
+
+interrupted:
+	err = sock_intr_errno(timeo);
+failure:
+	*errcode = err;
+	return NULL;
+}
+
+struct sk_buff *sock_alloc_send_skb(struct sock *sk, unsigned long size,
+				    int noblock, int *errcode)
+{
+	return sock_alloc_send_pskb(sk, size, 0, noblock, errcode);
+}
+
 void lock_sock(struct sock *sk)
 {
         spin_lock(&sk->sk_lock.slock);

@@ -41,14 +41,19 @@ static void ctrl_recv_skb(struct sk_buff *skb)
         cm = (struct ctrlmsg *)NLMSG_DATA(nlh);
         
         if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
-                LOG_ERR("No handler for message type %u\n",
+                LOG_ERR("Bad message type %u\n",
                         cm->type);
                 ret = -1;
         } else {
-                ret = handlers[cm->type](cm);
-                
-                if (ret == -1) {
-                        LOG_ERR("handler failure for message type %u\n",
+                if (handlers[cm->type]) {
+                        ret = handlers[cm->type](cm);
+                        
+                        if (ret == -1) {
+                                LOG_ERR("handler failure for message type %u\n",
+                                        cm->type);
+                        }
+                } else {
+                        LOG_ERR("No handler for message type %u\n",
                                 cm->type);
                 }
         }

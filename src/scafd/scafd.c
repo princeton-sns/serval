@@ -122,7 +122,7 @@ int scafd_send_join(const char *ifname)
         timer_schedule_secs(t, 5);
 
 	return scafd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
-			    (struct sockaddr *)&ctrlid, sizeof(ctrlid));
+                            (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 
 static void scafd_register_service(struct service_id *srvid)
@@ -135,7 +135,7 @@ static void scafd_register_service(struct service_id *srvid)
 
 	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
 
-	ret = scafd_sendto(ctrlsock, &data, sizeof(data), 0, 
+        ret = scafd_sendto(ctrlsock, &data, sizeof(data), 0, 
 			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 

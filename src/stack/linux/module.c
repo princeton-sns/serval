@@ -34,7 +34,6 @@ static int scaffold_netdev_event(struct notifier_block *this,
         if (dev_net(dev) != &init_net)
                 return NOTIFY_DONE;
         
-
         if (strncmp(dev->name, "lo", 2) == 0)
                 return NOTIFY_DONE;
 
@@ -53,7 +52,7 @@ static int scaffold_netdev_event(struct notifier_block *this,
         {
                 LOG_DBG("Netdev GOING_DOWN %s\n", dev->name);
                 service_del_dev(dev->name);
-                neighbor_del_dev(dev->name);
+                //neighbor_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:

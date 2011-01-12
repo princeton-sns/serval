@@ -19,9 +19,9 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 	va_start(ap, format);
 	
 #if defined(OS_LINUX_KERNEL)
-	pr_info("%s{%d}[%3s]%s: ", 
-		get_strtime(), task_pid_nr(current), 
-                log_level_str[level], func);
+	pr_alert("%s{%d}[%3s]%s: ", 
+                 get_strtime(), task_pid_nr(current), 
+                 log_level_str[level], func);
 	vprintk(format, ap);
 #endif
 #if defined(OS_USER)

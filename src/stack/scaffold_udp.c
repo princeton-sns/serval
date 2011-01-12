@@ -76,7 +76,6 @@ static int scaffold_udp_transmit_skb(struct sock *sk,
         /* Push back to make space for transport header */
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
-	skb_set_owner_w(skb, sk);
         SCAFFOLD_SKB_CB(skb)->pkttype = type;
         
         tot_len = skb->len + 20 + 14;
@@ -93,6 +92,10 @@ static int scaffold_udp_transmit_skb(struct sock *sk,
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len));
+
+        FREE_SKB(skb);
+
+        return -EHOSTUNREACH;
 
         err = scaffold_srv_xmit_skb(skb);
         
@@ -149,6 +152,7 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
         if (!skb)
                 return -ENOMEM;
         
+	skb_set_owner_w(skb, sk);
         skb_reserve(skb, UDP_MAX_HDR);
         
         memcpy(&SCAFFOLD_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
@@ -266,7 +270,8 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         ulen += sizeof(struct udphdr);
 
-        skb = ALLOC_SKB(UDP_MAX_HDR + ulen, GFP_KERNEL);
+        skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen,
+                                  (msg->msg_flags & MSG_DONTWAIT), &err);
 
         if (!skb)
                 return -ENOMEM;
@@ -283,14 +288,20 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
            that we could try to get rid of, i.e., reading the data
            from the file descriptor directly into the socket buffer
         */
+        skb_put(skb, len);
         
-        err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
+        err = skb_copy_datagram_from_iovec(skb, 0, msg->msg_iov, 0, len);
+
+        //err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
      
         if (err < 0) {
                 LOG_ERR("could not copy user data to skb\n");
                 FREE_SKB(skb);
                 goto out;
         }
+
+        FREE_SKB(skb);
+        return err;
 
         lock_sock(sk);
                 

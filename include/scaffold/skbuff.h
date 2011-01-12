@@ -763,6 +763,18 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 		free_skb(skb);
 }
 
+struct sk_buff *sock_alloc_send_skb(struct sock *sk,
+                                    unsigned long size,
+                                    int noblock,
+                                    int *errcode);
+struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
+                                     unsigned long header_len,
+                                     unsigned long data_len,
+                                     int noblock,
+                                     int *errcode);
+void *sock_kmalloc(struct sock *sk, int size, gfp_t priority);
+void sock_kfree_s(struct sock *sk, void *mem, int size);
+
 struct ethhdr;
 
 static inline struct ethhdr *eth_hdr(const struct sk_buff *skb)
@@ -785,6 +797,14 @@ static inline struct iphdr *ipip_hdr(const struct sk_buff *skb)
 int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int offset, struct iovec *to,
                             int size);
+
+
+int skb_copy_datagram_from_iovec(struct sk_buff *skb,
+                                 int offset,
+                                 const struct iovec *from,
+                                 int from_offset,
+                                 int len);
+
 
 struct udphdr;
 

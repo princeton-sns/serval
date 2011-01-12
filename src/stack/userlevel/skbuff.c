@@ -336,6 +336,33 @@ fault:
         return -EFAULT;
 }
 
+int skb_copy_datagram_from_iovec(struct sk_buff *skb,
+                                 int offset,
+                                 const struct iovec *from,
+                                 int from_offset,
+                                 int len)
+{
+        int start = skb_headlen(skb);
+	int copy = start - offset;
+
+	if (copy > 0) {
+		if (copy > len)
+			copy = len;
+		if (memcpy_fromiovecend(skb->data + offset, from, from_offset,
+					copy))
+			goto fault;
+		if ((len -= copy) == 0)
+			return 0;
+		offset += copy;
+		from_offset += copy;
+	}
+        
+        if (!len)
+                return 0;
+fault:
+        return -EFAULT;
+}
+
 static void skb_over_panic(struct sk_buff *skb, int sz, void *here)
 {
 	LOG_CRIT("skb_over_panic: text:%p len:%d put:%d head:%p "

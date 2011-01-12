@@ -101,6 +101,17 @@ typedef unsigned char gfp_t;
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 
+
+#define min_t(type, x, y) ({			\
+	type __min1 = (x);			\
+	type __min2 = (y);			\
+	__min1 < __min2 ? __min1: __min2; })
+
+#define max_t(type, x, y) ({			\
+	type __max1 = (x);			\
+	type __max2 = (y);			\
+	__max1 > __max2 ? __max1: __max2; })
+
 #define __init
 #define __exit
 
@@ -126,6 +137,8 @@ typedef unsigned char gfp_t;
 
 int memcpy_toiovec(struct iovec *iov, unsigned char *kdata, int len);
 int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
+int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
+			int offset, int len);
 
 #define cpu_to_be16(n) htons(n)
 
