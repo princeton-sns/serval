@@ -48,6 +48,22 @@ static inline int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
         return 0;
 }
 
+static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
+{
+        struct in_device *indev = in_dev_get(dev);
+        int ret = 0;
+
+        for_primary_ifa(indev) {
+                memcpy(addr, &ifa->ifa_mask, 4);
+                ret = 1;
+                break;
+        }
+        endfor_ifa(indev);
+
+        in_dev_put(indev);
+        return 0;
+}
+
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
