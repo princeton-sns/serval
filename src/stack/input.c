@@ -15,8 +15,6 @@ int scaffold_input(struct sk_buff *skb)
 	uint16_t prot = ntohs(ethh->h_proto);
         int ret;
 
-        return INPUT_DELIVER;
-
         /*
 	char srcstr[18], dststr[18];
 	mac_ntop(ethh->h_source, srcstr, sizeof(srcstr));

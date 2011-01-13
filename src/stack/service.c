@@ -295,13 +295,7 @@ int service_entry_dev_dst(struct service_entry *se, void *dst, int dstlen)
                 return -1;
         
         de = container_of(se->dev_pos, struct dev_entry, lh);
-        {
-                char buf[16];
-                LOG_DBG("de->dst=%s de->dstlen=%u dstlen=%d\n",
-                        inet_ntop(AF_INET, de->dst, buf, 16),
-                        de->dstlen, dstlen);
-        }
-
+        
         if (!dst || dstlen < de->dstlen)
                 return de->dstlen;
 

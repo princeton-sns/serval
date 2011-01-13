@@ -31,7 +31,7 @@ int scaffold_output(struct sk_buff *skb)
 
         if (!neigh) {
                 char buf[15];
-                LOG_ERR("No matching neighbor for %s\n", 
+                LOG_ERR("no matching neighbor for %s\n", 
                         inet_ntop(AF_INET, &ip_hdr(skb)->daddr,
                                   buf, 15));
                 err = -EHOSTUNREACH;
@@ -61,10 +61,12 @@ int scaffold_output(struct sk_buff *skb)
 	LOG_DBG("%s [%s %s 0x%04x]\n", 
 		skb->dev->name, srcstr, 
                 dststr, ntohs(skb->protocol));
+        /*
         {
                 char dump[256];
                 LOG_DBG("dump: %s\n", hexdump(skb->data, skb->len, dump, 256));
         }
+        */
 	/* packet_xmit consumes the packet no matter the outcome */
 	if (dev_queue_xmit(skb) < 0) {
 		LOG_ERR("packet_xmit failed\n");

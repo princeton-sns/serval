@@ -245,8 +245,6 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	if (msg->msg_flags & MSG_OOB) 
 		return -EOPNOTSUPP;
 
-        LOG_DBG("sending message\n");
-
 	if (msg->msg_name) {
 		struct sockaddr_sf *addr = 
                         (struct sockaddr_sf *)msg->msg_name;
@@ -283,11 +281,7 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
            that we could try to get rid of, i.e., reading the data
            from the file descriptor directly into the socket buffer
         */
-        /*
-        skb_put(skb, len);
         
-        err = skb_copy_datagram_from_iovec(skb, 0, msg->msg_iov, 0, len);
-        */
         err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
      
         if (err < 0) {

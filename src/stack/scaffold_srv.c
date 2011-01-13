@@ -538,9 +538,7 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
 		struct sk_buff *cskb;
 		struct net_device *next_dev;
 		
-                LOG_DBG("tx dev=%s\n", dev->name);
-
-		/* Remember the flow destination */
+                /* Remember the flow destination */
 		service_entry_dev_dst(se, &SCAFFOLD_SKB_CB(skb)->dst_flowid,
                                       sizeof(struct flow_id));
 

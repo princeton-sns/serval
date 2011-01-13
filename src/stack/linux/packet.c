@@ -28,7 +28,7 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
         case PACKET_HOST:
         case PACKET_BROADCAST:
         case PACKET_MULTICAST:
-                //break;
+                break;
         case PACKET_OTHERHOST:
         case PACKET_OUTGOING:
         default:

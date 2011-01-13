@@ -33,15 +33,13 @@ static void ctrl_recv_skb(struct sk_buff *skb)
         peer_pid = nlh->nlmsg_pid;
         flags = nlh->nlmsg_flags;
 
-	LOG_DBG("received skb\n");
-
 	if (flags & NLM_F_ACK)
                 netlink_ack(skb, nlh, 0);
 
         cm = (struct ctrlmsg *)NLMSG_DATA(nlh);
         
         if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
-                LOG_ERR("Bad message type %u\n",
+                LOG_ERR("bad message type %u\n",
                         cm->type);
                 ret = -1;
         } else {
@@ -49,11 +47,11 @@ static void ctrl_recv_skb(struct sk_buff *skb)
                         ret = handlers[cm->type](cm);
                         
                         if (ret == -1) {
-                                LOG_ERR("handler failure for message type %u\n",
+                                LOG_ERR("handler failure for msg type %u\n",
                                         cm->type);
                         }
                 } else {
-                        LOG_ERR("No handler for message type %u\n",
+                        LOG_ERR("no handler for msg  type %u\n",
                                 cm->type);
                 }
         }
@@ -76,8 +74,6 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
         
         memcpy(NLMSG_DATA(nlh), msg, msg->len);
 
-        LOG_DBG("broadcast netlink msg type=%d\n", msg->type);
-
         return netlink_broadcast(nl_sk, skb, 0, 1, mask);
 }
 
@@ -88,8 +84,6 @@ int __init ctrl_init(void)
 
 	if (!nl_sk)
 		return -ENOMEM;
-
-	LOG_DBG("created netlink socket\n");
 
         /* Allow non-root daemons to receive notifications */
 	netlink_set_nonroot(NETLINK_SCAFFOLD, NL_NONROOT_RECV);

@@ -172,21 +172,19 @@ static void __scaffold_table_hash(struct scaffold_table *table, struct sock *sk)
 static void __scaffold_sock_hash(struct sock *sk)
 {
         if (!hlist_unhashed(&sk->sk_node)) {
-                LOG_ERR("socket already hashed\n");
+                LOG_ERR("socket %p already hashed\n", sk);
         }
         
-        LOG_DBG("hashing socket %p\n", sk);
-
         if (sk->sk_state == SCAFFOLD_LISTEN) {
-                LOG_DBG("Hashing socket based on service id %s\n",
-                        service_id_to_str(&scaffold_sk(sk)->local_srvid));
+                LOG_DBG("hashing socket %p based on service id %s\n",
+                        sk, service_id_to_str(&scaffold_sk(sk)->local_srvid));
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_srvid;
                 scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->local_srvid);
                 __scaffold_table_hash(&listen_table, sk);
 
         } else { 
-                LOG_DBG("Hashing socket based on socket id %s\n",
-                        socket_id_to_str(&scaffold_sk(sk)->local_sockid));
+                LOG_DBG("hashing socket %p based on socket id %s\n",
+                        sk, socket_id_to_str(&scaffold_sk(sk)->local_sockid));
                 scaffold_sk(sk)->hash_key = &scaffold_sk(sk)->local_sockid;
                 scaffold_sk(sk)->hash_key_len = sizeof(scaffold_sk(sk)->local_sockid);
                 __scaffold_table_hash(&established_table, sk);
