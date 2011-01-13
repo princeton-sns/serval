@@ -486,10 +486,14 @@ int netdev_populate_table(int sizeof_priv,
                         free_netdev(dev);
                         goto out;
                 }
-
+#if defined(OS_LINUX)
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
-
+#else
+                LOG_WARN("CHECK that netmask is really returned here\n");
+                memcpy(&dev->ipv4.netmask, 
+                       &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+#endif
                 ret = register_netdev(dev);
 
                 if (ret < 0) {

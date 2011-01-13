@@ -8,6 +8,7 @@ LOCAL_SRC_FILES := \
 	debug.c \
 	platform.c \
         bst.c \
+	neighbor.c \
         service.c \
 	input.c \
 	output.c \
@@ -37,6 +38,7 @@ SCAFFOLD_HDR = \
 	af_scaffold.h \
 	ctrl.h \
 	bst.h \
+	neighbor.h \
         service.h \
 	input.h \
 	output.h \
@@ -53,6 +55,7 @@ SCAFFOLD_HDR = \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
+	$(SCAFFOLD_INCLUDE_DIR)/scaffold/bitops.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/hash.h \
 	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
