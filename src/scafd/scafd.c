@@ -239,7 +239,7 @@ int main(int argc, char **argv)
                 goto fail_netlink;
 	}
 
-	ret = rtnl_getlink(&nlh);
+	ret = rtnl_getaddr(&nlh);
 
         if (ret < 0) {
                 LOG_ERR("Could not netlink request: %s\n",

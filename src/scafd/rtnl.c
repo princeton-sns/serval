@@ -41,6 +41,22 @@ static char *eth_to_str(unsigned char *addr)
 	return buf;
 }
 
+static char *iface_blacklist[] = { "lo", "dummy", NULL };
+
+static int is_blacklist_iface(const char *name)
+{
+        unsigned int i = 0;
+
+        while (iface_blacklist[i]) {
+                if (strncmp(iface_blacklist[i], name, 
+                            strlen(iface_blacklist[i])) == 0) {
+                        return 1;
+                }
+                i++;
+        }
+        return 0;
+}
+
 int rtnl_get_fd(struct netlink_handle *nlh)
 {
 	return nlh->fd;
@@ -249,7 +265,6 @@ int rtnl_read(struct netlink_handle *nlh)
 		memset(&ifinfo, 0, sizeof(struct if_info));
 
 		num_msgs++;
-
                 /*
                   LOG_DBG("Netlink message type %u\n", 
                         nlm->nlmsg_type);
@@ -276,6 +291,7 @@ int rtnl_read(struct netlink_handle *nlh)
 
 			/* TODO: Should find a good way to sort out
 			 * unwanted interfaces. */
+                        /*
 			if (ifinfo.isUp) {
 				if (get_ipconf(&ifinfo) < 0)
 					break;
@@ -290,6 +306,7 @@ int rtnl_read(struct netlink_handle *nlh)
 						
                                 scafd_send_join(ifinfo.ifname);
                         }
+                        */
 			break;
 		}
 		case RTM_DELLINK:
@@ -303,18 +320,20 @@ int rtnl_read(struct netlink_handle *nlh)
 			LOG_DBG("Interface deladdr %s %s\n", 
 				ifinfo.ifname, 
                                 inet_ntoa(ifinfo.ipaddr.sin_addr));
-			// Delete interface here?
-		
 			break;
 		case RTM_NEWADDR:
 			ret = rtnl_parse_addr_info(nlm, &ifinfo);
-			LOG_DBG("Interface newaddr %s %s\n", 
-				ifinfo.ifname, 
-                                inet_ntoa(ifinfo.ipaddr.sin_addr));
-			// Update ip address here?
+                        
+                        if (!is_blacklist_iface(ifinfo.ifname)) {
+                                LOG_DBG("Interface newaddr %s %s\n", 
+                                        ifinfo.ifname, 
+                                        inet_ntoa(ifinfo.ipaddr.sin_addr));
+                                
+                                scafd_send_join(ifinfo.ifname);
+                        }
 			break;
 		case NLMSG_DONE:
-			//LOG_DBG("NLMSG_DONE\n");
+			/* LOG_DBG("NLMSG_DONE\n"); */
 			break;
 		default:
 			LOG_DBG("Unknown netlink message\n");
