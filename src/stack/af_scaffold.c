@@ -643,10 +643,15 @@ int scaffold_release(struct socket *sock)
                 /* cannot lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
 
-                LOG_DBG("SCAFFOLD socket %p released refcnt=%d tot_bytes_sent=%lu\n",
+                LOG_DBG("SCAFFOLD sock %p refcnt=%d tot_bytes_sent=%lu\n",
                         sk, atomic_read(&sk->sk_refcnt) - 1, 
                         scaffold_sk(sk)->tot_bytes_sent);
-                		
+                
+                LOG_DBG("sock rmem=%u wmem=%u omem=%u\n",
+                        atomic_read(&sk->sk_rmem_alloc),
+                        atomic_read(&sk->sk_wmem_alloc),
+                        atomic_read(&sk->sk_omem_alloc));
+
                 release_sock(sk);
 
                 sk_common_release(sk);

@@ -169,6 +169,7 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
                 FREE_SKB(skb);
                 return -ENODEV;
         }
+
         err = scaffold_ipv4_fill_in_hdr(sk, skb, &ipcm);
         
         if (err < 0) {
@@ -182,7 +183,6 @@ int scaffold_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
-                FREE_SKB(skb);
         }
         return err;
 }
@@ -216,7 +216,6 @@ int scaffold_ipv4_xmit_skb(struct sk_buff *skb)
 
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
-                FREE_SKB(skb);
         }
 
         return err;

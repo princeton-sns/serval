@@ -506,10 +506,10 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
                         err = ssk->af_ops->queue_xmit(skb);
                 } else {
                         err = -ENODEV;
+			FREE_SKB(skb);
                 }
 		if (err < 0) {
 			LOG_ERR("xmit failed\n");
-			FREE_SKB(skb);
 		}
 		return err;
 	}
@@ -526,7 +526,7 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
 		FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
-
+        
         /* 
            Send on all interfaces listed for this service.
         */
@@ -549,8 +549,9 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
                 if (next_dev == NULL) {
 			cskb = skb;
 		} else {
-                        cskb = skb_clone(skb, current ? 
-					 GFP_KERNEL : GFP_ATOMIC);
+                        /* Always be atomic here since we are holding
+                         * socket lock */
+                        cskb = skb_clone(skb, GFP_ATOMIC);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
@@ -566,8 +567,6 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
                 
 		if (err < 0) {
 			LOG_ERR("xmit failed\n");
-			FREE_SKB(cskb);
-			break;
 		}
 		dev = next_dev;
 	}

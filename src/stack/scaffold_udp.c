@@ -93,10 +93,6 @@ static int scaffold_udp_transmit_skb(struct sock *sk,
                 ntohs(uh->dest),
                 ntohs(uh->len));
 
-        FREE_SKB(skb);
-
-        return -EHOSTUNREACH;
-
         err = scaffold_srv_xmit_skb(skb);
         
         if (err < 0) {
@@ -163,7 +159,6 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
         
         if (err < 0) {
                 LOG_ERR("udp xmit failed\n");
-                FREE_SKB(skb);
         }
 
         return err;
@@ -288,11 +283,12 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
            that we could try to get rid of, i.e., reading the data
            from the file descriptor directly into the socket buffer
         */
+        /*
         skb_put(skb, len);
         
         err = skb_copy_datagram_from_iovec(skb, 0, msg->msg_iov, 0, len);
-
-        //err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
+        */
+        err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
      
         if (err < 0) {
                 LOG_ERR("could not copy user data to skb\n");
@@ -300,16 +296,12 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 goto out;
         }
 
-        FREE_SKB(skb);
-        return err;
-
         lock_sock(sk);
                 
         err = scaffold_udp_transmit_skb(sk, skb, SCAFFOLD_PKT_DATA);
         
         if (err < 0) {
-                LOG_ERR("udp xmit failed\n");
-                FREE_SKB(skb);
+                LOG_ERR("xmit failed\n");
         }
 
         release_sock(sk);

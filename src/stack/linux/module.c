@@ -5,6 +5,7 @@
 #include <af_scaffold.h>
 #include <scaffold/debug.h>
 #include <scaffold/netdevice.h>
+#include <linux/inetdevice.h>
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
@@ -41,8 +42,13 @@ static int scaffold_netdev_event(struct notifier_block *this,
 	case NETDEV_UP:
         {
                 struct flow_id dst;
-		LOG_DBG("Netdev UP %s\n", dev->name);
+                char buf[15];
                 dev_get_ipv4_broadcast(dev, &dst);
+
+		LOG_DBG("Netdev UP %s bc=%s\n", 
+                        dev->name, 
+                        inet_ntop(AF_INET, &dst, buf, 15));
+
                 service_add(NULL, 0, dev, &dst, 
                             dev->addr_len, GFP_ATOMIC);
                 //neighbor_add(&dst, 
@@ -64,9 +70,56 @@ static int scaffold_netdev_event(struct notifier_block *this,
 
 	return NOTIFY_DONE;
 }
+static int scaffold_inetaddr_event(struct notifier_block *this,
+                                   unsigned long event, void *ptr)
+{
+	struct net_device *dev = (struct net_device *)ptr;
+
+        if (dev_net(dev) != &init_net)
+                return NOTIFY_DONE;
+        
+        if (strncmp(dev->name, "lo", 2) == 0)
+                return NOTIFY_DONE;
+
+	switch (event) {
+	case NETDEV_UP:
+        {
+                struct flow_id dst;
+                char buf[15];
+                //dev_get_ipv4_broadcast(dev, &dst);
+
+		LOG_DBG("inetdev UP %s bc=%s\n", 
+                        dev->name, 
+                        inet_ntop(AF_INET, &dst, buf, 15));
+
+                //service_add(NULL, 0, dev, &dst, 
+                //           dev->addr_len, GFP_ATOMIC);
+                //neighbor_add(&dst, 
+                break;
+        }
+	case NETDEV_GOING_DOWN:
+        {
+                LOG_DBG("inetdev GOING_DOWN %s\n", dev->name);
+                //service_del_dev(dev->name);
+                //neighbor_del_dev(dev->name);
+		break;
+        }
+	case NETDEV_DOWN:
+                LOG_DBG("inetdev DOWN\n");
+                break;
+	default:
+		break;
+	};
+
+	return NOTIFY_DONE;
+}
 
 static struct notifier_block netdev_notifier = {
 	.notifier_call = scaffold_netdev_event,
+};
+
+static struct notifier_block inetaddr_notifier = {
+	.notifier_call = scaffold_inetaddr_event,
 };
 
 int scaffold_module_init(void)
@@ -102,8 +155,17 @@ int scaffold_module_init(void)
                 LOG_CRIT("Cannot register netdevice notifier\n");
                 goto fail_netdev_notifier;
         }
+
+	err = register_inetaddr_notifier(&inetaddr_notifier);
+
+	if (err < 0) {
+                LOG_CRIT("Cannot register inetaddr notifier\n");
+                goto fail_inetaddr_notifier;
+        }
 out:
 	return err;
+fail_inetaddr_notifier:
+        unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
         scaffold_fini();
 fail_scaffold:
@@ -116,6 +178,7 @@ fail_proc:
 
 void __exit scaffold_module_fini(void)
 {
+        unregister_inetaddr_notifier(&inetaddr_notifier);
         unregister_netdevice_notifier(&netdev_notifier);
 	scaffold_fini();
         ctrl_fini();
