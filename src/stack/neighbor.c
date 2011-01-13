@@ -37,7 +37,8 @@ static struct neighbor_table neightable;
 */
 struct net_device *neighbor_entry_get_dev(struct neighbor_entry *neigh)
 {
-        dev_hold(neigh->dev);
+        if (neigh->dev) 
+                dev_hold(neigh->dev);
         return neigh->dev;
 }
 
@@ -54,8 +55,11 @@ static struct neighbor_entry *neighbor_entry_create(gfp_t alloc,
                 return NULL;
 
         memset(neigh, 0, sizeof(*neigh));
-        dev_hold(dev);
-        neigh->dev = dev;
+        
+        if (dev) {
+                dev_hold(dev);
+                neigh->dev = dev;
+        }
         neigh->dstlen = dstlen;
         memcpy(neigh->dstaddr, dst, dstlen);
 
@@ -71,7 +75,8 @@ int neighbor_entry_init(struct bst_node *n)
 
 void __neighbor_entry_free(struct neighbor_entry *neigh)
 {
-        dev_put(neigh->dev);
+        if (neigh->dev)
+                dev_put(neigh->dev);
         FREE(neigh);
 }
 
@@ -118,13 +123,12 @@ static int __neighbor_entry_print(struct bst_node *n, char *buf, int buflen)
         char macstr[18];
         int len = 0;
 
-        LOG_DBG("entry\n");
         bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
         
         len += snprintf(buf + len, buflen - len, "%-15s %-6u %-18s %-5s\n",
                         prefix, bst_node_prefix_bits(n), 
                         mac_ntop(neigh->dstaddr, macstr, 18),
-                        neigh->dev->name);
+                        neigh->dev ? neigh->dev->name : "any");
         
         return len;
 }
@@ -151,7 +155,6 @@ static int neighbor_table_print(struct neighbor_table *tbl,
 
 int neighbors_print(char *buf, int buflen)
 {
-        LOG_DBG("neighbor table entries=%u\n", neightable.tree.entries);
         return neighbor_table_print(&neightable, buf, buflen);
 }
 
@@ -225,7 +228,7 @@ int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw,
 }
 
 int neighbor_add(struct flow_id *flw, unsigned int prefix_bits, 
-                 struct net_device *dev, unsigned char *dst, 
+                 struct net_device *dev, void *dst, 
                  int dstlen, gfp_t alloc)
 {
         return neighbor_table_add(&neightable, flw, prefix_bits, 
@@ -253,7 +256,7 @@ static int del_dev_func(struct bst_node *n, void *arg)
 
         /* FIXME: make sure we can safely recursively delete nodes in
          * this callback. */
-        if (strcmp(neigh->dev->name, devname) == 0) {
+        if (neigh->dev && strcmp(neigh->dev->name, devname) == 0) {
                 bst_node_remove(n);
                 ret = 1;
         }
@@ -304,8 +307,15 @@ void neighbor_table_init(struct neighbor_table *tbl)
 
 int __init neighbor_init(void)
 {
+        struct flow_id broadcast;
+        unsigned char mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+
         neighbor_table_init(&neightable);
 
+        /* Add a default broadcast entry */
+        memset(&broadcast, 0xff, sizeof(broadcast));
+        neighbor_add(&broadcast, sizeof(broadcast) * 8, NULL, 
+                     &mac, 6, GFP_ATOMIC);
         return 0;
 }
 

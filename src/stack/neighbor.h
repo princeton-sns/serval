@@ -27,7 +27,7 @@ int neighbor_entry_get_dst(struct neighbor_entry *neigh, unsigned char *dst,
                            int dstlen);
 
 int neighbor_add(struct flow_id *flw, unsigned int prefix_bits,
-		struct net_device *dev, unsigned char *dst,
+		struct net_device *dev, void *dst,
                 int dstlen, gfp_t alloc);
 void neighbor_del(struct flow_id *flw, unsigned int prefix_bits);
 int neighbor_del_dev(const char *devname);
