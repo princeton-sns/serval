@@ -103,6 +103,7 @@ void server(void)
                         }
                         k++;
                 } while (1);
+                close_sf(fd);
                 fprintf(stderr, "Server listening for NEW connections\n");
         } while (1);
         exit(EXIT_SUCCESS);
