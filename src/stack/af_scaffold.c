@@ -641,11 +641,11 @@ int scaffold_release(struct socket *sock)
                         scaffold_listen_stop(sk);
                 }
                 
-                scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
-                
                 /* should not lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
 
+                scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
+                
                 LOG_DBG("SCAFFOLD sock %p refcnt=%d tot_bytes_sent=%lu\n",
                         sk, atomic_read(&sk->sk_refcnt) - 1, 
                         scaffold_sk(sk)->tot_bytes_sent);

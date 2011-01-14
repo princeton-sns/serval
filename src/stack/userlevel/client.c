@@ -576,8 +576,6 @@ int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
 
         }
 
-        LOG_DBG("Sending close response\n");
-
         return client_msg_write(c->fd, &rsp.msghdr);
 }
 
