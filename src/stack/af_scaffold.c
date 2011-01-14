@@ -121,9 +121,9 @@ static int scaffold_autobind(struct sock *sk)
 int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 {
         struct sock *sk = sock->sk;
-        //struct scaffold_sock *ssk = scaffold_sk(sk);
+        struct scaffold_sock *ssk = scaffold_sk(sk);
         struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
-        int ret = 0, cond = 1;
+        int ret = 0;
         
         if ((unsigned int)addr_len < sizeof(*sfaddr))
                 return -EINVAL;
@@ -140,11 +140,9 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         }
         lock_sock(sk);
 
-        LOG_DBG("handling bind\n");
-
         if (host_ctrl_mode) {
                 ret = 1;
-                scaffold_sock_set_flag(scaffold_sk(sk), SSK_FLAG_BOUND);
+                scaffold_sock_set_flag(ssk, SSK_FLAG_BOUND);
         } else {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
@@ -174,9 +172,7 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         } else if (ret == 0) {
                 release_sock(sk);
                 /* Sleep and wait for response or timeout */
-                ret = wait_event_interruptible_timeout(*sk_sleep(sk), 
-                                                       cond != 1, 
-                                                       msecs_to_jiffies(5000));
+                ret = wait_event_interruptible_timeout(*sk_sleep(sk), scaffold_sock_flag(ssk, SSK_FLAG_BOUND), msecs_to_jiffies(5000));
 
                 if (ret < 0) {
                         if (ret == -ERESTARTSYS) {
@@ -188,7 +184,6 @@ int scaffold_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                         LOG_DBG("bind timeout\n");
                         ret = -ETIMEDOUT;
                 } else  {
-                        ret = cond;
                         LOG_DBG("bind returned %d\n", ret);
                         
                         lock_sock(sk);
@@ -532,13 +527,19 @@ static int scaffold_sendmsg(struct kiocb *iocb, struct socket *sock,
                             struct msghdr *msg, size_t size)
 {
 	struct sock *sk = sock->sk;
+        int err;
+
+	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
+		return -EPIPE;
 
 	/* We may need to bind the socket. */
 	if (!scaffold_sock_flag(scaffold_sk(sk), SSK_FLAG_BOUND) && 
             scaffold_autobind(sk) < 0)
 		return -EAGAIN;
 
-	return sk->sk_prot->sendmsg(iocb, sk, msg, size);
+	err = sk->sk_prot->sendmsg(iocb, sk, msg, size);
+
+        return err;
 }
 
 static int scaffold_recvmsg(struct kiocb *iocb, struct socket *sock, 
@@ -633,6 +634,8 @@ int scaffold_release(struct socket *sock)
                 
                 lock_sock(sk);
 
+                sk->sk_shutdown = SHUTDOWN_MASK;
+
                 if (sk->sk_state == SCAFFOLD_LISTEN) {
                         /* Should unregister. */
                         scaffold_listen_stop(sk);
@@ -640,7 +643,7 @@ int scaffold_release(struct socket *sock)
                 
                 scaffold_sock_set_state(sk, SCAFFOLD_CLOSED);
                 
-                /* cannot lock sock in protocol specific functions */
+                /* should not lock sock in protocol specific functions */
                 sk->sk_prot->close(sk, timeout);
 
                 LOG_DBG("SCAFFOLD sock %p refcnt=%d tot_bytes_sent=%lu\n",

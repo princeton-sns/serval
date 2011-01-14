@@ -127,8 +127,34 @@ static void scaffold_udp_destroy_sock(struct sock *sk)
 
 static void scaffold_udp_close(struct sock *sk, long timeout)
 {
-        //struct scaffold_udp_sock *usk = scaffold_udp_sk(sk);
+        struct sk_buff *skb = NULL;
+        int err = 0;
+
         LOG_DBG("\n");
+        
+        if (sk->sk_state == SCAFFOLD_CONNECTED ||
+            sk->sk_state == SCAFFOLD_REQUEST ||
+            sk->sk_state == SCAFFOLD_RESPOND) {
+                
+                /* We are under lock, so allocation must be atomic */
+                /* Socket is locked, keep trying until memory is available. */
+                for (;;) {
+                        skb = ALLOC_SKB(UDP_MAX_HDR, GFP_ATOMIC);
+                        
+                        if (skb)
+                                break;
+                        yield();
+                }
+                
+                skb_set_owner_w(skb, sk);
+                skb_reserve(skb, UDP_MAX_HDR);
+                
+                err = scaffold_udp_transmit_skb(sk, skb, SCAFFOLD_PKT_CLOSE);
+                
+                if (err < 0) {
+                        LOG_ERR("udp close xmit failed\n");
+                }
+        }
 }
 
 static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr, 
@@ -166,7 +192,9 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
 
 static int scaffold_udp_disconnect(struct sock *sk, int flags)
 {
+
         LOG_DBG("\n");
+        
         return 0;
 }
 
@@ -336,8 +364,19 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		if (skb)
 			goto found_ok_skb;
 	
+                if (sk->sk_err) {
+                        retval = sock_error(sk);
+                        break;
+                }
+
+                if (sk->sk_shutdown & RCV_SHUTDOWN) {
+                        retval = 0;
+                        break;
+                }
+
 		if (sk->sk_state == SCAFFOLD_CLOSED) {
                         LOG_DBG("Not in receivable state\n");
+
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
 				break;
@@ -348,7 +387,6 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		}
                 
 		if (!timeo) {
-                        LOG_ERR("No timeo\n");
 			retval = -EAGAIN;
 			break;
 		}
@@ -364,6 +402,11 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
+                if (SCAFFOLD_SKB_CB(skb)->pkttype == SCAFFOLD_PKT_CLOSE) {
+                        retval = 0;
+                        goto found_fin_ok;
+                }
+
 		if (len >= skb->len) {
 			retval = skb->len;
                         len = skb->len;
@@ -400,7 +443,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         LOG_DBG("could not copy data, len=%zu\n", len);
 			break;
 		}
-
+        found_fin_ok:
 		if (!(flags & MSG_PEEK))
 			sk_eat_skb(sk, skb, 0);
 		break;

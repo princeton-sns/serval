@@ -29,7 +29,7 @@ static int scaffold_sock_is_valid_conn_state(int state)
                 state == TCP_FINWAIT2 ||
                 state == TCP_SIMCLOSE ||
                 state == TCP_LASTACK ||
-                state == TCP_CLOSEWAIT);
+                state == SCAFFOLD_CLOSEWAIT);
 }
 
 static int scaffold_tcp_init_sock(struct sock *sk)

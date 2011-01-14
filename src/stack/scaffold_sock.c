@@ -31,10 +31,10 @@ static const char *sock_state_str[] = {
         "RECONNECT",
         "RRESPOND",
         "LISTEN",
+        "CLOSEWAIT",
         /* TCP only */
         "FINWAIT1",
         "FINWAIT2",
-        "CLOSEWAIT",
         "LASTACK",
         "SIMCLOSE"  
 };
@@ -314,6 +314,7 @@ struct sock *scaffold_sk_alloc(struct net *net, struct socket *sock,
 void scaffold_sock_init(struct sock *sk)
 {
         struct scaffold_sock *ssk = scaffold_sk(sk);
+        sk->sk_state = 0;
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
         setup_timer(&ssk->retransmit_timer, 

@@ -154,6 +154,29 @@ scaffold_srv_request_sock_handle(struct sock *sk,
         return sk;
 }
 
+static void scaffold_srv_fin(struct sock *sk, struct scaffold_hdr *sfh,
+                             struct sk_buff *skb)
+{
+        sk->sk_shutdown |= SEND_SHUTDOWN;
+        sock_set_flag(sk, SOCK_DONE);
+
+        LOG_DBG("received FIN\n");
+
+        switch (sk->sk_state) {
+        case SCAFFOLD_REQUEST:
+        case SCAFFOLD_RESPOND:
+        case SCAFFOLD_CONNECTED:
+                scaffold_sock_set_state(sk, SCAFFOLD_CLOSEWAIT);
+                break;
+        case SCAFFOLD_CLOSING:
+                break;
+        case SCAFFOLD_CLOSEWAIT:
+                break;
+        default:
+                break;
+        }
+}
+
 static int scaffold_srv_connected_state_process(struct sock *sk, 
                                                 struct scaffold_hdr *sfh,
                                                 struct sk_buff *skb)
@@ -161,8 +184,15 @@ static int scaffold_srv_connected_state_process(struct sock *sk,
         struct scaffold_sock *ssk = scaffold_sk(sk);
         int err = 0;
         
-        err = ssk->af_ops->receive(sk, skb);
+        if (sfh->flags & SFH_FIN) {
+                SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_CLOSE;
+                scaffold_srv_fin(sk, sfh, skb);
+        } else {
+                SCAFFOLD_SKB_CB(skb)->pkttype = SCAFFOLD_PKT_DATA;
+        }
 
+        err = ssk->af_ops->receive(sk, skb);
+        
         return err;
 }
 
@@ -484,6 +514,8 @@ int scaffold_srv_xmit_skb(struct sk_buff *skb)
         case SCAFFOLD_PKT_ACK:
                 flags |= SFH_ACK;
                 break;
+        case SCAFFOLD_PKT_CLOSE:
+                flags |= SFH_FIN;
         default:
                 break;
         }

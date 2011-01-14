@@ -108,13 +108,13 @@ enum scaffold_packet_type {
 struct scaffold_hdr {
         uint16_t length;  
         uint8_t flags;
-        uint8_t protocol;
-#define SFH_FIN	0x01
-#define SFH_SYN	0x02
-#define SFH_RST	0x04
-#define SFH_MIG	0x08
-#define SFH_ACK	0x10
+#define SFH_FIN	        0x01
+#define SFH_SYN	        0x02
+#define SFH_RST	        0x04
+#define SFH_MIG	        0x08
+#define SFH_ACK	        0x10
 #define SFH_RSYN	0x20
+        uint8_t protocol;
         struct sock_id src_sid;
         struct sock_id dst_sid;
 };

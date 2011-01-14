@@ -25,10 +25,10 @@ enum scaffold_sock_state {
         SCAFFOLD_RECONNECT,
         SCAFFOLD_RRESPOND,
         SCAFFOLD_LISTEN,
+        SCAFFOLD_CLOSEWAIT,
         /* TCP only */
         TCP_FINWAIT1,
         TCP_FINWAIT2,
-        TCP_CLOSEWAIT,
         TCP_LASTACK,
         TCP_SIMCLOSE,
 };

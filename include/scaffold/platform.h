@@ -101,6 +101,7 @@ typedef unsigned char gfp_t;
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 
+static inline void yield(void) {}
 
 #define min_t(type, x, y) ({			\
 	type __min1 = (x);			\
