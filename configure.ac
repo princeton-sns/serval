@@ -132,6 +132,75 @@ if test "$enable_gprof" = "yes" ; then
    CXXFLAGS="$CXXFLAGS -pg"
 fi
 
+dnl Check for Java
+java_bindings=no;
+have_jni=no;
+
+AC_ARG_VAR([JAVA_HOME], [Java Runtime Environment (JRE) location])
+
+dnl Allow the user to set the JAVA_HOME dir?
+AC_ARG_WITH(java-home,
+	    AS_HELP_STRING([--with-java-home=DIR],[DIR to look for Java headers]),
+	    [JAVA_HOME=$withval],)
+
+dnl Default to some qualified path guessing...
+java_dirs="/usr /usr/local /usr/lib/jvm/java-5-sun /usr/lib/jvm/java-6-sun /usr/lib/jvm/java-6-openjdk /usr/lib/jvm/java /System/Library/Frameworks/JavaVM.framework/Versions/Current /System/Library/Frameworks/JavaVM.framework /opt /mingw"
+java_inc_dirs="include include/libgcj Headers"
+
+AC_CHECK_PROG(JAVA, javac, javac)
+AC_MSG_CHECKING([for jni.h])
+
+dnl Try to locate jni.h
+for java_dir in $JAVA_HOME $java_dirs;
+do
+	for java_inc_dir in $java_inc_dirs
+	do
+		#AC_MSG_RESULT("${java_dir}/${java_inc_dir}/jni.h")	
+		if test -r "${java_dir}/${java_inc_dir}/jni.h"; 
+		then
+			have_jni=yes
+			java_bindings=yes
+			JAVA_PATH=${java_dir}
+  			break
+       		fi
+	done
+	if test x$have_jni = xyes;
+	then
+		break
+	fi
+done
+
+AC_MSG_RESULT([$have_jni])
+
+JAVA_INCLUDE="-I${JAVA_PATH}/${java_inc_dir} -I${JAVA_PATH}/${java_inc_dir}/${PLATFORM}"
+
+AC_SUBST(JAVA_INCLUDE)
+
+dnl Allow the user to force Java bindings
+AC_ARG_ENABLE([java_bindings], 
+AS_HELP_STRING([--disable-java-bindings], [Disable libhaggle Java bindings]),
+[case "${enableval}" in
+  yes) java_bindings=yes ;;
+  no)  java_bindings=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-java-bindings]) ;;
+esac],)
+
+dnl Java bindings were detected or was forced
+if test x$java_bindings = xyes; 
+then
+   	if test x$have_jni = xno; 
+	then
+   	   	AC_MSG_ERROR([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
+	else
+		if test "x$JAVA" == 'x'; 
+		then
+			AC_MSG_ERROR([Java bindings require java and javac. Check your PATH or disable with --disable-java-bindings])
+		fi
+	fi
+fi
+
+AM_CONDITIONAL([JAVA_BINDINGS], [test x$java_bindings = xyes])
+
 AC_ARG_ENABLE([native_api],
 AS_HELP_STRING([--enable-native-api],[Use native kernel sockets API for clients]),
 [case "${enableval}" in
@@ -194,6 +263,9 @@ AC_CONFIG_FILES([Makefile
 	src/libstack/Makefile
 	src/scafd/Makefile
 	src/test/Makefile
+	src/javasock/Makefile
+	src/javasock/jni/Makefile
+	src/javasock/java/edu/princeton/cs/sns/scaffold/Makefile
 	])
 
 AC_OUTPUT

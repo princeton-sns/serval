@@ -52,7 +52,7 @@ read
 pushd $SCRIPT_DIR
 
 LIB_PATH_PREFIX="system/lib"
-LIB_FILES="libstack.so libscaffold.so"
+LIB_FILES="libstack.so libscaffold.so libscaffold_javasock_jni.so"
 
 BIN_HOST_PREFIX=
 BIN_PATH_PREFIX="system/bin"

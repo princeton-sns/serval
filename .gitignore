@@ -27,6 +27,7 @@ src/test/udp_client
 src/test/udp_clientn
 src/test/udp_server
 src/test/udp_servern
+src/javasock/classes.list
 stamp-h1
 #
 Makefile.in
@@ -44,3 +45,6 @@ Makefile
 *.lo
 *.la
 *.libs
+*.class
+*.stamp
+*.jar
