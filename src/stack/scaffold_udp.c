@@ -164,7 +164,8 @@ static int scaffold_udp_connect(struct sock *sk, struct sockaddr *uaddr,
         struct service_id *srvid = &((struct sockaddr_sf *)uaddr)->sf_srvid;
         int err;
 
-        LOG_DBG("addr_len=%d\n", addr_len);
+        LOG_DBG("srvid=%s addr_len=%d\n", 
+                service_id_to_str(srvid), addr_len);
 
 	if ((size_t)addr_len < sizeof(struct sockaddr_sf))
 		return -EINVAL;

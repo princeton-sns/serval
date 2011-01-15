@@ -448,8 +448,10 @@ static int scaffold_connect(struct socket *sock, struct sockaddr *addr,
         int err = 0;
         int nonblock = flags & O_NONBLOCK;
 
-        if (addr->sa_family != AF_SCAFFOLD)
+        if (addr->sa_family != AF_SCAFFOLD) {
+                LOG_ERR("bad address family\n");
                 return -EAFNOSUPPORT;
+        }
         
         lock_sock(sk);
         

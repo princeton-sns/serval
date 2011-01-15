@@ -261,10 +261,9 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                 (struct scaffold_service_ext *)(sfh + 1);        
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
-        
-        
+                
         /* Cache neighbor */
-        neighbor_add((struct flow_id *)&ip_hdr(skb)->daddr, 32, 
+        neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
                      ETH_ALEN, GFP_ATOMIC);
         
