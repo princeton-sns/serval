@@ -106,10 +106,12 @@ public class ScaffoldDatagramSocket {
 		}
 		if (isConnected) {
 			byte[] buffer = new byte[2000];
-			if (recv(fd, buffer, 0) == -1) {
+			int len = recv(fd, buffer, 0);
+
+			if (len == -1) {
 				throw new IOException("receive failed");
 			}
-			pack.setData(buffer);
+			pack.setData(buffer, 0, len);
 		} else {
 			// sendto
 		}
