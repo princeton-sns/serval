@@ -39,10 +39,12 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
         
-        /* Cache this service FIXME: should not assume ETH_ALEN here. */
+        /* Cache this service. FIXME, need to garbage this entry at
+         * some point so that we aren't always redirected to same
+         * instance. */
+       
         err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid) * 8, 
-                          skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
-                          ETH_ALEN, GFP_ATOMIC);
+                          skb->dev, &ip_hdr(skb)->saddr, 4, GFP_ATOMIC);
         
         if (err < 0) {
                 LOG_ERR("could not cache service for incoming packet\n");
@@ -50,7 +52,7 @@ static int scaffold_srv_syn_rcv(struct sock *sk,
         
         /* Cache neighbor */
         neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
-                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                     skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
         
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
@@ -264,7 +266,7 @@ static int scaffold_srv_request_state_process(struct sock *sk,
                 
         /* Cache neighbor */
         neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
-                     skb->dev, SCAFFOLD_SKB_CB(skb)->hard_addr, 
+                     skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
         
         scaffold_sock_set_state(sk, SCAFFOLD_CONNECTED);
@@ -276,13 +278,17 @@ static int scaffold_srv_request_state_process(struct sock *sk,
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
         dev_hold(ssk->dev);
-        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->daddr, 
+        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_flowid));
 
         /* Push back the Scaffold header again to make IP happy */
-        skb_push(skb, hdr_len);
+        skb_push(skb, hdr_len);      
         skb_reset_transport_header(skb);
 
+        /* Trim away the service extension at the end */
+        //pskb_trim(skb, sizeof(*srv_ext));
+        
+        /* Update headers */
         sfh->length = htons(sizeof(*sfh) + sizeof(*srv_ext));
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;

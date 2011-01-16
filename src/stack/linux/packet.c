@@ -6,7 +6,8 @@
 #include <net/ip.h>
 #include <input.h>
 
-#define USE_NETFILTER 1
+/*#define USE_NETFILTER 0 */
+#define USE_IPPROTO 1
 
 #if defined(USE_NETFILTER)
 #include <linux/netfilter.h>
@@ -73,7 +74,9 @@ static struct nf_hook_ops ip_hook = {
         .priority = NF_IP_PRI_FIRST,
 };
 
-#else
+#endif /* USE_NETFILTER */
+
+#if defined(USE_PACKET)
 #include <linux/netdevice.h>
 
 static int scaffold_packet_rcv(struct sk_buff *skb, struct net_device *dev,
@@ -131,15 +134,35 @@ static struct packet_type scaffold_packet_type = {
         .func = scaffold_packet_rcv,
 };
 
-#endif /* USE_NETFILTER */
+#endif /* USE_PACKET */
+
+#if defined(USE_IPPROTO)
+#include <netinet/scaffold.h>
+#include <net/protocol.h>
+
+extern int scaffold_srv_rcv(struct sk_buff *);
+
+static const struct net_protocol scaffold_protocol = {
+	.handler =      scaffold_srv_rcv,
+	.no_policy =	1,
+	.netns_ok =	1,
+};
+
+#endif /* USE_IPPROTO */
 
 int __init packet_init(void)
 {
 #if defined(USE_NETFILTER)
         if (nf_register_hook(&ip_hook) < 0)
                 return -1;
-#else
+#endif
+#if defined(USE_PACKET)
 	dev_add_pack(&scaffold_packet_type);
+#endif
+#if defined(USE_IPPROTO)  
+        if (inet_add_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD) < 0) {
+                return -1;
+        }
 #endif
 	return 0;
 }
@@ -148,7 +171,11 @@ void __exit packet_fini(void)
 {
 #if defined(USE_NETFILTER)
         nf_unregister_hook(&ip_hook);
-#else
+#endif
+#if defined(USE_PACKET)
         dev_remove_pack(&scaffold_packet_type);
+#endif
+#if defined(USE_IPPROTO) 
+        inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD);
 #endif
 }
