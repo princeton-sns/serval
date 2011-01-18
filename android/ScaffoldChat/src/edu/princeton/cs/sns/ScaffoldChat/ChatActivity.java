@@ -9,13 +9,12 @@ import edu.princeton.cs.sns.scaffold.*;
 import android.app.Activity;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
-import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ListView;
 import android.widget.TextView;
 
 public class ChatActivity extends Activity {
@@ -26,8 +25,6 @@ public class ChatActivity extends Activity {
 	private Button sendButton = null;
 	private Button cancelButton = null;
 	private ScaffoldDatagramSocket sock = null;
-    private ListView mConversationView;
-    private ArrayAdapter<String> mConversationArrayAdapter;
 	
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -40,11 +37,6 @@ public class ChatActivity extends Activity {
         sendButton = (Button) findViewById(R.id.send);
         cancelButton = (Button) findViewById(R.id.cancel);
         
-        // Initialize the array adapter for the conversation thread
-        //mConversationArrayAdapter = new ArrayAdapter<String>(this, R.layout.message);
-        //mConversationView = (ListView) findViewById(R.id.chatlist);
-        //mConversationView.setAdapter(mConversationArrayAdapter);
-
         chatInput.setOnKeyListener(new View.OnKeyListener() {
 			public boolean onKey(View v, int keyCode, KeyEvent event) {
 				switch (keyCode) {
@@ -67,6 +59,7 @@ public class ChatActivity extends Activity {
             	cancelSend();
             }
         });
+        chatWindow.setMovementMethod(new ScrollingMovementMethod());
     }
     @Override
 	protected void onStart() {
@@ -100,8 +93,10 @@ public class ChatActivity extends Activity {
 		Editable ed = chatInput.getText();
 		String msg = ed.toString();
 
+		if (msg.length() == 0) {
+			return;
+		}
         this.chatWindow.append("me: " + msg + "\n");
-        //mConversationArrayAdapter.add("Me:  " + msg);
         
 		ed.clear();
 		
@@ -117,7 +112,6 @@ public class ChatActivity extends Activity {
 				String rsp = new String(pack.getData(), 0, pack.getLength());
 				Log.d("ScaffoldChat", "response length=" + pack.getLength());
 				Log.d("ScaffoldChat", rsp);
-		        //mConversationArrayAdapter.add("Other: " + rsp);
 				chatWindow.append("Other: " + rsp + "\n");
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
@@ -130,7 +124,6 @@ public class ChatActivity extends Activity {
 				//msg += " - failed!";
 			}
 		}
-
     }
     private void cancelSend() {
     	Editable ed = chatInput.getText();

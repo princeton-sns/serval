@@ -49,5 +49,7 @@
 <TextView android:id="@+id/chatwindow" 
               android:layout_width="fill_parent" 
               android:layout_height="fill_parent" 
-              android:background="@android:drawable/editbox_background" />
+              android:background="@android:drawable/editbox_background" 
+              android:isScrollContainer="true" 
+              android:scrollbars="vertical"/>
 </LinearLayout>
