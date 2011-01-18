@@ -332,7 +332,7 @@ static int scaffold_srv_respond_state_process(struct sock *sk,
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
         dev_hold(ssk->dev);
-        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->daddr, 
+        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_flowid));
 
         FREE_SKB(skb);
