@@ -12,8 +12,10 @@ import android.text.Editable;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ListView;
 import android.widget.TextView;
 
 public class ChatActivity extends Activity {
@@ -24,6 +26,8 @@ public class ChatActivity extends Activity {
 	private Button sendButton = null;
 	private Button cancelButton = null;
 	private ScaffoldDatagramSocket sock = null;
+    private ListView mConversationView;
+    private ArrayAdapter<String> mConversationArrayAdapter;
 	
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -36,6 +40,11 @@ public class ChatActivity extends Activity {
         sendButton = (Button) findViewById(R.id.send);
         cancelButton = (Button) findViewById(R.id.cancel);
         
+        // Initialize the array adapter for the conversation thread
+        //mConversationArrayAdapter = new ArrayAdapter<String>(this, R.layout.message);
+        //mConversationView = (ListView) findViewById(R.id.chatlist);
+        //mConversationView.setAdapter(mConversationArrayAdapter);
+
         chatInput.setOnKeyListener(new View.OnKeyListener() {
 			public boolean onKey(View v, int keyCode, KeyEvent event) {
 				switch (keyCode) {
@@ -50,14 +59,11 @@ public class ChatActivity extends Activity {
         });
         sendButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                // Perform action on click
-            	//parseEntry();
             	sendText();
             }
         });
         cancelButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                // Perform action on click
             	cancelSend();
             }
         });
@@ -94,8 +100,9 @@ public class ChatActivity extends Activity {
 		Editable ed = chatInput.getText();
 		String msg = ed.toString();
 
-		chatWindow.append("me: " + msg + "\n");
-
+        this.chatWindow.append("me: " + msg + "\n");
+        //mConversationArrayAdapter.add("Me:  " + msg);
+        
 		ed.clear();
 		
 		if (sock != null) {
@@ -104,8 +111,14 @@ public class ChatActivity extends Activity {
 			try {
 				DatagramPacket pack = new DatagramPacket(data, data.length);
 				sock.send(pack);
+				// FIXME: Should not do a blocking receive in this function
 				sock.receive(pack);
-				chatWindow.append("response: " + new String(pack.getData()) + "\n");
+
+				String rsp = new String(pack.getData(), 0, pack.getLength());
+				Log.d("ScaffoldChat", "response length=" + pack.getLength());
+				Log.d("ScaffoldChat", rsp);
+		        //mConversationArrayAdapter.add("Other: " + rsp);
+				chatWindow.append("Other: " + rsp + "\n");
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
