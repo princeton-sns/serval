@@ -293,11 +293,12 @@ int eventloop_init(void)
         /* TODO: call handler cleanup if init fails. But only for
          * those handlers that have run init */
         for (i = 0; i < num; i++) {
-                LOG_DBG("Initializing '%s' control\n", ehandle.handlers[i]->name);
+                LOG_DBG("Initializing '%s' control\n", 
+                        ehandle.handlers[i]->name);
                 ret = ehandle.handlers[i]->init(ehandle.handlers[i]);
+
                 if (ret < 0) {
-                        LOG_ERR("handler '%s' init failed\n",
-                                ehandle.handlers[i]->name);
+                        LOG_ERR("handler init failed\n");
                 }
         }
 

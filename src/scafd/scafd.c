@@ -7,6 +7,7 @@
 #include <sys/select.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
@@ -169,6 +170,52 @@ int close_ctrlsock(int sock)
 	return close_sf(ctrlsock);
 }
 
+static int daemonize(void)
+{
+        int i, sid;
+	FILE *f;
+
+        /* check if already a daemon */
+	if (getppid() == 1) 
+                return -1; 
+	
+	i = fork();
+
+	if (i < 0) {
+		fprintf(stderr, "Fork error...\n");
+                return -1;
+	}
+	if (i > 0) {
+		//printf("Parent done... pid=%u\n", getpid());
+                exit(EXIT_SUCCESS);
+	}
+	/* new child (daemon) continues here */
+	
+	/* Change the file mode mask */
+	umask(0);
+		
+	/* Create a new SID for the child process */
+	sid = setsid();
+	
+	if (sid < 0)
+		return -1;
+	
+	/* 
+	 Change the current working directory. This prevents the current
+	 directory from being locked; hence not being able to remove it. 
+	 */
+	if ((chdir("/")) < 0) {
+		return -1;
+	}
+	
+	/* Redirect standard files to /dev/null */
+	f = freopen("/dev/null", "r", stdin);
+	f = freopen("/dev/null", "w", stdout);
+	f = freopen("/dev/null", "w", stderr);
+
+        return 0;
+}
+
 int main(int argc, char **argv)
 {
 	struct sigaction sigact;
@@ -176,14 +223,38 @@ int main(int argc, char **argv)
         struct netlink_handle nlh;
 #endif
         fd_set readfds;
+        int daemon = 0;
 	int ret = EXIT_SUCCESS;
 
 	memset(&sigact, 0, sizeof(struct sigaction));
 
 	sigact.sa_handler = &signal_handler;
 	sigaction(SIGINT, &sigact, NULL);
+	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGHUP, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
+
+        argc--;
+	argv++;
+        
+	while (argc) {
+                if (strcmp(argv[0], "-d") == 0 ||
+                    strcmp(argv[0], "--daemon") == 0) {
+                        daemon = 1;
+		}
+		argc--;
+		argv++;
+	}	
+      
+        if (daemon) {
+                LOG_DBG("going daemon...\n");
+                ret = daemonize();
+                
+                if (ret < 0) {
+                        LOG_ERR("Could not make daemon\n");
+                        return ret;
+                } 
+        }
 
 	/* Set controller service id */
 	memset(&ctrlid, 0, sizeof(ctrlid));
@@ -295,38 +366,30 @@ int main(int argc, char **argv)
                                 ret = ctrlsock_read(ctrlsock);
 
                                 if (ret == 0) {
-                                        LOG_DBG("ctrl sock closed by other end\n");
+                                        LOG_DBG("ctrl sock closed by peer\n");
                                         should_exit = 1;
                                 }
                         }
                 }        
         }
+
 	LOG_DBG("scafd exits\n");
 
-	libstack_unregister_callbacks(&callbacks);
-	libstack_fini();
-#if defined(OS_LINUX)
-        rtnl_close(&nlh);
-#endif
-        close(p[0]);
-        close(p[1]);
-	LOG_DBG("closing control sock\n");
-	close_ctrlsock(ctrlsock);
         timer_list_destroy();
-	LOG_DBG("done\n");
 
-out:
-        return ret;
 #if defined(OS_LINUX)
 	rtnl_close(&nlh);
 fail_netlink:
 #endif
 	libstack_unregister_callbacks(&callbacks);
+        libstack_fini();
 fail_libstack:
 	close(p[0]);
 	close(p[1]);
 fail_pipe:
 	close_ctrlsock(ctrlsock);
-	ret = EXIT_FAILURE;
-	goto out;
+
+	LOG_DBG("done\n");
+
+        return ret;
 }

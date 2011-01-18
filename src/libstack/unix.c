@@ -165,17 +165,12 @@ static struct event_handler eh = {
 	.private = (void *)&uh
 };
 
-__onexit
 void unix_fini(void)
 {
 	event_unregister_handler(&eh);
 }
 
-__onload
 void unix_init(void)
 {
-#if defined(__BIONIC__)
-        atexit(unix_fini);
-#endif
 	event_register_handler(&eh);
 }

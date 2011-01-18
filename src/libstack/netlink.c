@@ -177,18 +177,13 @@ static struct event_handler eh = {
 	.private = (void *)&nlh
 };
 
-__onexit
 void netlink_fini(void)
 {
 	event_unregister_handler(&eh);
 }
 
-__onload
 void netlink_init(void)
 {
-#if defined(__BIONIC__)
-        atexit(netlink_fini);
-#endif
 	event_register_handler(&eh);
 }
 

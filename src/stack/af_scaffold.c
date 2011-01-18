@@ -832,6 +832,7 @@ int __init scaffold_init(void)
 {
         int err = 0;
 
+        
         err = neighbor_init();
 
         if (err < 0) {

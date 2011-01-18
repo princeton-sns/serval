@@ -8,6 +8,12 @@
 extern struct libstack_callbacks *callbacks;
 extern int eventloop_init(void);
 extern void eventloop_fini(void);
+extern void unix_init(void);
+extern void unix_fini(void);
+#if defined(OS_LINUX)
+extern void netlink_init(void);
+extern void netlink_fini(void);
+#endif
 
 int libstack_configure_interface(const char *ifname, 
                                  const struct as_addr *asaddr,
@@ -62,10 +68,19 @@ void libstack_unregister_callbacks(struct libstack_callbacks *calls)
 
 int libstack_init(void)
 {
+        unix_init();
+#if defined(OS_LINUX)
+        netlink_init();
+#endif
 	return eventloop_init();
 }
 
 void libstack_fini(void) 
 {
+#if defined(OS_LINUX)
+        netlink_fini();
+#endif
+        unix_fini();
+
 	eventloop_fini();
 }

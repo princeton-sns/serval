@@ -37,6 +37,52 @@ void signal_handler(int sig)
 static void garbage_collect_clients(unsigned long data);
 static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 10000000, 0);
 
+static int daemonize(void)
+{
+        int i, sid;
+	FILE *f;
+
+        /* check if already a daemon */
+	if (getppid() == 1) 
+                return -1; 
+	
+	i = fork();
+
+	if (i < 0) {
+		fprintf(stderr, "Fork error...\n");
+                return -1;
+	}
+	if (i > 0) {
+		//printf("Parent done... pid=%u\n", getpid());
+                 exit(EXIT_SUCCESS);
+	}
+	/* new child (daemon) continues here */
+	
+	/* Change the file mode mask */
+	umask(0);
+		
+	/* Create a new SID for the child process */
+	sid = setsid();
+	
+	if (sid < 0)
+		return -1;
+	
+	/* 
+	 Change the current working directory. This prevents the current
+	 directory from being locked; hence not being able to remove it. 
+	 */
+	if ((chdir("/")) < 0) {
+		return -1;
+	}
+	
+	/* Redirect standard files to /dev/null */
+	f = freopen("/dev/null", "r", stdin);
+	f = freopen("/dev/null", "w", stdout);
+	f = freopen("/dev/null", "w", stderr);
+
+        return 0;
+}
+
 void garbage_collect_clients(unsigned long data)
 {
 	int num = 0;
@@ -346,6 +392,7 @@ extern void dev_list_add(const char *name);
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
+        int daemon = 0;
 	int ret;
 	
 	if (getuid() != 0 && geteuid() != 0) {
@@ -373,11 +420,23 @@ int main(int argc, char **argv)
 			dev_list_add(argv[1]);
 			argv++;
 			argc--;
+		} else if (strcmp(argv[0], "-d") == 0 ||
+                           strcmp(argv[0], "--daemon") == 0) {
+                        daemon = 1;
 		}
 		argc--;
 		argv++;
-	}
-	
+	}	
+      
+        if (daemon) {
+                ret = daemonize();
+
+                if (ret < 0) {
+                        LOG_ERR("Could not make daemon\n");
+                        return -1;
+                } 
+        }
+
 	ret = scaffold_init();
 
 	if (ret == -1) {
