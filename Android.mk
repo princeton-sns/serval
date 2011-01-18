@@ -5,7 +5,7 @@ subdirs := $(addprefix $(LOCAL_PATH)/,$(addsuffix /Android.mk, \
 		src/stack \
 		src/libstack \
 		src/libserval \
-		src/scafd \
+		src/servd \
 		src/test \
 		src/javasock/jni \
         ))
