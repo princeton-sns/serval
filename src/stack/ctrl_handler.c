@@ -25,12 +25,8 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
                 return -1;
         }
 
-        LOG_DBG("iface %s as=%u host=%u\n", 
-                ifcm->ifname,
-                ifcm->asaddr.s_addr,
-                ifcm->haddr.s_addr);
+        LOG_DBG("iface %s\n", ifcm->ifname);
 
-        /* TODO: Configure as and host addr */
 
         /* TODO: Currently host control mode is on a per interface
          * basis, but we have a global control flag. We need a better

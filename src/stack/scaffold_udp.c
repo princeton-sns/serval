@@ -242,6 +242,14 @@ int scaffold_udp_rcv(struct sock *sk, struct sk_buff *skb)
         unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
         int err = 0;
         
+        /* Only ignore this message in case it has zero length and is
+         * not a FIN */
+        if (datalen == 0 && 
+            SCAFFOLD_SKB_CB(skb)->pkttype != SCAFFOLD_PKT_CLOSE) {
+                FREE_SKB(skb);
+                return 0;
+        }
+
         pskb_pull(skb, sizeof(*udph));
 
         /* LOG_DBG("data len=%u skb->len=%u\n", datalen, skb->len); */
@@ -268,8 +276,11 @@ static int scaffold_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         int ulen = len;
         struct service_id *srvid = NULL;
 
-	if (len > 0xFFFF)
+	if (len > 0xFFFF )
 		return -EMSGSIZE;
+
+        if (len == 0)
+                return -EINVAL;
 
 	if (msg->msg_flags & MSG_OOB) 
 		return -EOPNOTSUPP;
