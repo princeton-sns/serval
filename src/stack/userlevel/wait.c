@@ -105,7 +105,7 @@ long schedule_timeout(long timeo)
                 LOG_ERR("poll error: %s\n", strerror(errno));
         } else if (ret == 0) {
                 timeo = 0;
-        } else {
+        } else if (timeo != MAX_SCHEDULE_TIMEOUT) {
                 /*
                   On Linux, pselect returns the time not slept in the
                   timeout. Not sure how ppoll works. In any case, this

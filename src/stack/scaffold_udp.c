@@ -366,6 +366,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			goto found_ok_skb;
 	
                 if (sk->sk_err) {
+                        LOG_ERR("socket error\n");
                         retval = sock_error(sk);
                         break;
                 }
@@ -376,7 +377,7 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 }
 
 		if (sk->sk_state == SCAFFOLD_CLOSED) {
-                        LOG_DBG("Not in receivable state\n");
+                        LOG_ERR("not in receivable state\n");
 
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
@@ -397,8 +398,6 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			retval = sock_intr_errno(timeo);
 			break;
 		}
-                
-                LOG_DBG("waiting for data\n");
 
 		sk_wait_data(sk, &timeo);
 		continue;
@@ -434,10 +433,10 @@ static int scaffold_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                                        sizeof(sfaddr->sf_srvid));
                         }
                 }
-                
-                LOG_DBG("deque skb->len=%u len=%zu retval=%d\n", 
+                /*
+                LOG_DBG("skb->len=%u len=%zu retval=%d\n", 
                         skb->len, len, retval);
-
+                */
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */
 			retval = -EFAULT;
