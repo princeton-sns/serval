@@ -8,7 +8,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define NETLINK_SCAFFOLD 17
+#define NETLINK_SERVAL 17
 
 int nltest_sendmsg(int sock, struct nlmsghdr *nh)
 {
@@ -75,10 +75,10 @@ int main(int argc, char **argv)
 	sa.nl_family = AF_NETLINK;
 	sa.nl_groups = 0;
 	
-	sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_SCAFFOLD);
+	sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_SERVAL);
 
 	if (sock == -1) {
-		fprintf(stderr, "Could not open Scaffold netlink socket\n");
+		fprintf(stderr, "Could not open Serval netlink socket\n");
 		return -1;
 	}
 	

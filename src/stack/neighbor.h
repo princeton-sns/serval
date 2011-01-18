@@ -2,11 +2,11 @@
 #ifndef _NEIGHBOR_H_
 #define _NEIGHBOR_H_
 
-#include <scaffold/lock.h>
-#include <scaffold/list.h>
-#include <scaffold/atomic.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/dst.h>
+#include <serval/lock.h>
+#include <serval/list.h>
+#include <serval/atomic.h>
+#include <serval/skbuff.h>
+#include <serval/dst.h>
 #include "bst.h"
 
 struct flow_id;

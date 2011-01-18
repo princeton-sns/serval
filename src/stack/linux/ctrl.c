@@ -5,7 +5,7 @@
 #include <linux/netlink.h>
 #include <linux/skbuff.h>
 #include <libstack/ctrlmsg.h>
-#include <scaffold/debug.h>
+#include <serval/debug.h>
 #include <ctrl.h>
 
 static struct sock *nl_sk = NULL;
@@ -69,7 +69,7 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 
         NETLINK_CB(skb).dst_group = 1;
         nlh = (struct nlmsghdr *)skb_put(skb, NLMSG_LENGTH(msg->len));
-        nlh->nlmsg_type = NLMSG_SCAFFOLD;
+        nlh->nlmsg_type = NLMSG_SERVAL;
         nlh->nlmsg_len = NLMSG_LENGTH(msg->len);
         
         memcpy(NLMSG_DATA(nlh), msg, msg->len);
@@ -79,14 +79,14 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 
 int __init ctrl_init(void)
 {
-	nl_sk = netlink_kernel_create(&init_net, NETLINK_SCAFFOLD, 1, 
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL, 1, 
 				      ctrl_recv_skb, NULL, THIS_MODULE);
 
 	if (!nl_sk)
 		return -ENOMEM;
 
         /* Allow non-root daemons to receive notifications */
-	netlink_set_nonroot(NETLINK_SCAFFOLD, NL_NONROOT_RECV);
+	netlink_set_nonroot(NETLINK_SERVAL, NL_NONROOT_RECV);
 
 	return 0;
 }
@@ -105,4 +105,4 @@ void __exit ctrl_fini(void)
 #endif
 }
 
-MODULE_ALIAS_NET_PF_PROTO(PF_NETLINK, NETLINK_SCAFFOLD);
+MODULE_ALIAS_NET_PF_PROTO(PF_NETLINK, NETLINK_SERVAL);

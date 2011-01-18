@@ -1,12 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/netdevice.h>
-#include <scaffold/atomic.h>
-#include <scaffold/debug.h>
-#include <scaffold/list.h>
-#include <scaffold/lock.h>
-#include <scaffold/dst.h>
-#include <netinet/scaffold.h>
+#include <serval/platform.h>
+#include <serval/netdevice.h>
+#include <serval/atomic.h>
+#include <serval/debug.h>
+#include <serval/list.h>
+#include <serval/lock.h>
+#include <serval/dst.h>
+#include <netinet/serval.h>
 #if defined(OS_USER)
 #include <stdlib.h>
 #include <errno.h>
@@ -42,7 +42,7 @@ static void dst_entry_destroy(struct dst_entry *dst)
 }
 
 static struct dst_ops service_dst_ops = {
-	.family =		AF_SCAFFOLD,
+	.family =		AF_SERVAL,
 	.protocol =		cpu_to_be16(ETH_P_IP),
         .destroy =              dst_entry_destroy
 };

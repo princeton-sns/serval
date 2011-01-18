@@ -1,6 +1,6 @@
-bin_PROGRAMS = scaffold
+bin_PROGRAMS = serval
 
-scaffold_SOURCES = \
+serval_SOURCES = \
 	debug.c \
 	platform.c \
 	bst.c \
@@ -9,12 +9,12 @@ scaffold_SOURCES = \
 	input.c \
 	output.c \
 	ctrl_handler.c \
-	af_scaffold.c \
-	scaffold_sock.c \
-	scaffold_srv.c \
-	scaffold_ipv4.c \
-	scaffold_udp.c \
-	scaffold_tcp.c \
+	af_serval.c \
+	serval_sock.c \
+	serval_srv.c \
+	serval_ipv4.c \
+	serval_udp.c \
+	serval_tcp.c \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/sock.c \
@@ -25,77 +25,77 @@ scaffold_SOURCES = \
 	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/ctrl.c \
-	userlevel/scaffold.c
+	userlevel/serval.c
 
 if OS_LINUX
-scaffold_SOURCES += \
+serval_SOURCES += \
 	userlevel/packet_linux.c
 endif
 
 if OS_BSD
-scaffold_SOURCES += \
+serval_SOURCES += \
 	userlevel/packet_bpf.c
 endif
 
-SCAFFOLD_INCLUDE_DIR=$(top_builddir)/include
+SERVAL_INCLUDE_DIR=$(top_builddir)/include
 STACK_DIR=$(top_builddir)/src/stack
 
-SCAFFOLD_HDR = \
-	af_scaffold.h \
+SERVAL_HDR = \
+	af_serval.h \
 	ctrl.h \
 	bst.h \
 	neighbor.h \
 	service.h \
 	input.h \
 	output.h \
-	scaffold_sock.h \
-	scaffold_udp_sock.h \
-	scaffold_tcp_sock.h \
-	scaffold_ipv4.h \
-	scaffold_srv.h \
-	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
-	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/bitops.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/hash.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/dst.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/netdevice.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/timer.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/wait.h
+	serval_sock.h \
+	serval_udp_sock.h \
+	serval_tcp_sock.h \
+	serval_ipv4.h \
+	serval_srv.h \
+	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
+	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
+	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \
+	$(SERVAL_INCLUDE_DIR)/serval/platform.h \
+	$(SERVAL_INCLUDE_DIR)/serval/bitops.h \
+	$(SERVAL_INCLUDE_DIR)/serval/atomic.h \
+	$(SERVAL_INCLUDE_DIR)/serval/list.h \
+	$(SERVAL_INCLUDE_DIR)/serval/hash.h \
+	$(SERVAL_INCLUDE_DIR)/serval/debug.h \
+	$(SERVAL_INCLUDE_DIR)/serval/lock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/net.h \
+	$(SERVAL_INCLUDE_DIR)/serval/dst.h \
+	$(SERVAL_INCLUDE_DIR)/serval/netdevice.h \
+	$(SERVAL_INCLUDE_DIR)/serval/sock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/skbuff.h \
+	$(SERVAL_INCLUDE_DIR)/serval/timer.h \
+	$(SERVAL_INCLUDE_DIR)/serval/wait.h
 
 noinst_HEADERS = \
-	$(SCAFFOLD_HDR) \
+	$(SERVAL_HDR) \
 	userlevel/packet.h \
 	userlevel/client_msg.h \
 	userlevel/client.h
 
-scaffold_includedir=$(includedir)/netinet
-scaffold_include_HEADERS = \
-	$(top_srcdir)/include/netinet/scaffold.h
+serval_includedir=$(includedir)/netinet
+serval_include_HEADERS = \
+	$(top_srcdir)/include/netinet/serval.h
 
-scaffold_CPPFLAGS =-I$(SCAFFOLD_INCLUDE_DIR) -I$(STACK_DIR)
-scaffold_LDFLAGS =-lpthread 
+serval_CPPFLAGS =-I$(SERVAL_INCLUDE_DIR) -I$(STACK_DIR)
+serval_LDFLAGS =-lpthread 
 
 if OS_LINUX
-scaffold_LDFLAGS +=-lrt
+serval_LDFLAGS +=-lrt
 endif
 
-# scaffold module
+# serval module
 KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
-TARGETS = scaffold.ko
+TARGETS = serval.ko
 
-SCAFFOLD_KERNEL_HDR =
+SERVAL_KERNEL_HDR =
 
-SCAFFOLD_KERNEL_SRC = \
+SERVAL_KERNEL_SRC = \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
@@ -107,29 +107,29 @@ SCAFFOLD_KERNEL_SRC = \
 	service.c \
 	input.c \
 	output.c \
-	scaffold_sock.c \
-	scaffold_srv.c \
-	scaffold_ipv4.c \
-	scaffold_udp.c \
-	scaffold_tcp.c \
-	af_scaffold.c
+	serval_sock.c \
+	serval_srv.c \
+	serval_ipv4.c \
+	serval_udp.c \
+	serval_tcp.c \
+	af_serval.c
 
-SCAFFOLD_KERNEL_DEP = \
-	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
-	$(SCAFFOLD_HDR) \
-	$(SCAFFOLD_KERNEL_HDR) \
-	$(SCAFFOLD_KERNEL_SRC)
+SERVAL_KERNEL_DEP = \
+	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
+	$(SERVAL_HDR) \
+	$(SERVAL_KERNEL_HDR) \
+	$(SERVAL_KERNEL_SRC)
 
 EXTRA_DIST = \
 	Android.mk \
-	$(SCAFFOLD_KERNEL_HDR) \
-	$(SCAFFOLD_KERNEL_SRC)
+	$(SERVAL_KERNEL_HDR) \
+	$(SERVAL_KERNEL_SRC)
 
 if LINUX_KERNEL
-all: scaffold.ko
+all: serval.ko
 endif
 
-scaffold.ko: $(SCAFFOLD_KERNEL_DEP)
+serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean-local:

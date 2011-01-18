@@ -31,20 +31,20 @@ static int unix_handle_init(struct event_handler *eh)
 	struct unix_handle *uh = (struct unix_handle *)eh->private;
 	int ret;
         
-        LOG_DBG("initializing SCAFFOLD unix control\n");
+        LOG_DBG("initializing SERVAL unix control\n");
 
 	memset(uh, 0, sizeof(*uh));
 	
 	uh->sock = socket(AF_UNIX, SOCK_DGRAM, 0);
 
 	if (uh->sock == -1) {
-		LOG_ERR("Scaffold unix socket failure: %s\n",
+		LOG_ERR("Serval unix socket failure: %s\n",
                         strerror(errno));
 		goto error_sock;
 	}
 
 	uh->peer.sun_family = AF_UNIX;
-	strcpy(uh->peer.sun_path, SCAFFOLD_SCAFD_CTRL_PATH);
+	strcpy(uh->peer.sun_path, SERVAL_SCAFD_CTRL_PATH);
 	
 	ret = bind(uh->sock, (struct sockaddr *)&uh->peer, 
 		   sizeof(uh->peer));
@@ -57,14 +57,14 @@ static int unix_handle_init(struct event_handler *eh)
 
 
 	/* Now set the address to point to the stack */
-	strcpy(uh->peer.sun_path, SCAFFOLD_STACK_CTRL_PATH);
+	strcpy(uh->peer.sun_path, SERVAL_STACK_CTRL_PATH);
 
 	/* 
 	   Use the connect call to see if there is a control
-	   socket available. This means the userlevel Scaffold
+	   socket available. This means the userlevel Serval
 	   daemon is running. Since we are not a STREAM socket
 	   the connection will fail, but that is our cue that
-	   Scaffold is running.
+	   Serval is running.
 	*/
 	ret = connect(uh->sock, (struct sockaddr *)&uh->peer, 
 		      sizeof(uh->peer));
@@ -72,7 +72,7 @@ static int unix_handle_init(struct event_handler *eh)
 	if (ret == -1) {
 		if (errno == ENOENT) {
 			/* This probably means we are not running the
-			 * user space version of the Scaffold stack,
+			 * user space version of the Serval stack,
 			 * therefore unregister this handler and exit
 			 * without error. */
 			LOG_DBG("unix control not supported, disabling\n");
@@ -93,7 +93,7 @@ error_connect:
 error_bind:
 	close(uh->sock);
 	uh->sock = -1;
-	unlink(SCAFFOLD_SCAFD_CTRL_PATH);
+	unlink(SERVAL_SCAFD_CTRL_PATH);
 error_sock:
 	event_unregister_handler(eh);
 	goto out;
@@ -106,7 +106,7 @@ static void unix_handle_destroy(struct event_handler *eh)
 	if (uh->sock != -1) {
 		close(uh->sock);
 	}
-        unlink(SCAFFOLD_SCAFD_CTRL_PATH);
+        unlink(SERVAL_SCAFD_CTRL_PATH);
 }
 
 static int unix_handle_event(struct event_handler *eh)

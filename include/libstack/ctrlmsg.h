@@ -1,7 +1,7 @@
 #ifndef _LIBSTACK_CTRLMSG_H
 #define _LIBSTACK_CTRLMSG_H
 
-#include <netinet/scaffold.h>
+#include <netinet/serval.h>
 #if !defined(__KERNEL__)
 #include <net/if.h>
 #endif
@@ -60,17 +60,17 @@ struct ctrlmsg_service {
 
 #if defined(__linux__)
 #include <linux/netlink.h>
-#define NETLINK_SCAFFOLD 17
-#define NLMSG_SCAFFOLD NLMSG_MIN_TYPE
+#define NETLINK_SERVAL 17
+#define NLMSG_SERVAL NLMSG_MIN_TYPE
 #endif /* __linux__ */
 
 
 #if defined(OS_ANDROID)
-#define SCAFFOLD_STACK_CTRL_PATH "/data/local/tmp/scaffold-stack-ctrl.sock"
-#define SCAFFOLD_SCAFD_CTRL_PATH "/data/local/tmp/scaffold-libstack-ctrl.sock"
+#define SERVAL_STACK_CTRL_PATH "/data/local/tmp/serval-stack-ctrl.sock"
+#define SERVAL_SCAFD_CTRL_PATH "/data/local/tmp/serval-libstack-ctrl.sock"
 #else
-#define SCAFFOLD_STACK_CTRL_PATH "/tmp/scaffold-stack-ctrl.sock"
-#define SCAFFOLD_SCAFD_CTRL_PATH "/tmp/scaffold-libstack-ctrl.sock"
+#define SERVAL_STACK_CTRL_PATH "/tmp/serval-stack-ctrl.sock"
+#define SERVAL_SCAFD_CTRL_PATH "/tmp/serval-libstack-ctrl.sock"
 #endif
 
 #endif /* LIBSTACK_CTRLMSG_H */

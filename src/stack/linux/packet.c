@@ -1,7 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/debug.h>
-#include <scaffold/netdevice.h>
+#include <serval/platform.h>
+#include <serval/debug.h>
+#include <serval/netdevice.h>
 #include <linux/skbuff.h>
 #include <net/ip.h>
 #include <input.h>
@@ -17,7 +17,7 @@
 #define NF_INET_PRE_ROUTING NF_IP_PRE_ROUTING
 #endif
 
-static unsigned int scaffold_packet_rcv(unsigned int hooknum,
+static unsigned int serval_packet_rcv(unsigned int hooknum,
                                         struct sk_buff *skb,
                                         const struct net_device *in,
                                         const struct net_device *out,
@@ -36,10 +36,10 @@ static unsigned int scaffold_packet_rcv(unsigned int hooknum,
                 goto accept;
         }
 
-        /* scaffold_input assumes receive happens on mac layer */
+        /* serval_input assumes receive happens on mac layer */
         skb_push(skb, skb->dev->hard_header_len);
 
-	ret = scaffold_input(skb);
+	ret = serval_input(skb);
         
 	switch (ret) {
         case INPUT_DROP:
@@ -68,7 +68,7 @@ keep:
 }
 
 static struct nf_hook_ops ip_hook = { 
-        .hook = scaffold_packet_rcv, 
+        .hook = serval_packet_rcv, 
         .hooknum = NF_INET_PRE_ROUTING,
         .pf = PF_INET,
         .priority = NF_IP_PRI_FIRST,
@@ -79,7 +79,7 @@ static struct nf_hook_ops ip_hook = {
 #if defined(USE_PACKET)
 #include <linux/netdevice.h>
 
-static int scaffold_packet_rcv(struct sk_buff *skb, struct net_device *dev,
+static int serval_packet_rcv(struct sk_buff *skb, struct net_device *dev,
 			       struct packet_type *pt, struct net_device *orig_dev)
 {        
         int ret;
@@ -97,7 +97,7 @@ static int scaffold_packet_rcv(struct sk_buff *skb, struct net_device *dev,
                 goto drop;
         }
         
-	ret = scaffold_input(skb);
+	ret = serval_input(skb);
         
 	switch (ret) {
         case INPUT_KEEP:
@@ -128,22 +128,22 @@ keep:
 	return NET_RX_DROP;
 }
 
-/* Scaffold packet type for Scaffold over Ethernet */
-static struct packet_type scaffold_packet_type = {
+/* Serval packet type for Serval over Ethernet */
+static struct packet_type serval_packet_type = {
         .type = __constant_htons(ETH_P_IP),
-        .func = scaffold_packet_rcv,
+        .func = serval_packet_rcv,
 };
 
 #endif /* USE_PACKET */
 
 #if defined(USE_IPPROTO)
-#include <netinet/scaffold.h>
+#include <netinet/serval.h>
 #include <net/protocol.h>
 
-extern int scaffold_srv_rcv(struct sk_buff *);
+extern int serval_srv_rcv(struct sk_buff *);
 
-static const struct net_protocol scaffold_protocol = {
-	.handler =      scaffold_srv_rcv,
+static const struct net_protocol serval_protocol = {
+	.handler =      serval_srv_rcv,
 	.no_policy =	1,
 	.netns_ok =	1,
 };
@@ -157,10 +157,10 @@ int __init packet_init(void)
                 return -1;
 #endif
 #if defined(USE_PACKET)
-	dev_add_pack(&scaffold_packet_type);
+	dev_add_pack(&serval_packet_type);
 #endif
 #if defined(USE_IPPROTO)  
-        if (inet_add_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD) < 0) {
+        if (inet_add_protocol(&serval_protocol, IPPROTO_SERVAL) < 0) {
                 return -1;
         }
 #endif
@@ -173,9 +173,9 @@ void __exit packet_fini(void)
         nf_unregister_hook(&ip_hook);
 #endif
 #if defined(USE_PACKET)
-        dev_remove_pack(&scaffold_packet_type);
+        dev_remove_pack(&serval_packet_type);
 #endif
 #if defined(USE_IPPROTO) 
-        inet_del_protocol(&scaffold_protocol, IPPROTO_SCAFFOLD);
+        inet_del_protocol(&serval_protocol, IPPROTO_SERVAL);
 #endif
 }

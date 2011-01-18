@@ -1,8 +1,8 @@
 SUBDIRS = \
 	stack \
 	libstack \
-	libscaffold \
-	scafd
+	libserval \
+	servd
 
 if JAVA_BINDINGS
 SUBDIRS += javasock

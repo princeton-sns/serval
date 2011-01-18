@@ -1,5 +1,5 @@
-SUBDIRS = java/edu/princeton/cs/sns/scaffold jni
-JARFILE = scaffold-javasock.jar
+SUBDIRS = java/edu/princeton/cs/sns/serval jni
+JARFILE = serval-javasock.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)
 javasockdir = $(datadir)/java

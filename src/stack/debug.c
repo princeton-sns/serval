@@ -1,5 +1,5 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/debug.h>
+#include <serval/debug.h>
 #if defined(OS_USER)
 #include <pthread.h>
 #endif

@@ -28,19 +28,19 @@ static int netlink_handle_init(struct event_handler *eh)
 	struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
 	int ret;
         
-        LOG_DBG("initializing SCAFFOLD netlink control\n");
+        LOG_DBG("initializing SERVAL netlink control\n");
 
 	memset(nlh, 0, sizeof(*nlh));
 	nlh->peer.nl_family = AF_NETLINK;
 	nlh->peer.nl_pid = getpid();
 	nlh->peer.nl_groups = 1;
 
-	nlh->sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_SCAFFOLD);
+	nlh->sock = socket(PF_NETLINK, SOCK_RAW, NETLINK_SERVAL);
 
 	if (nlh->sock == -1) {
                 if (errno == EPROTONOSUPPORT) {
                         /* This probably means we are not running the
-			 * kernel space version of the Scaffold stack,
+			 * kernel space version of the Serval stack,
 			 * therefore unregister this handler and exit
 			 * without error. */
                         LOG_DBG("netlink not supported, disabling\n");
@@ -127,7 +127,7 @@ static int netlink_handle_event(struct event_handler *eh)
 		case NLMSG_DONE:
 			//LOG_DBG("NLMSG_DONE\n");
 			break;
-		case NLMSG_SCAFFOLD:
+		case NLMSG_SERVAL:
 			ret = ctrlmsg_handle((struct ctrlmsg *)NLMSG_DATA(nlm),
                                              ret - NLMSG_LENGTH(0));
 			break;

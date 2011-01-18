@@ -1,4 +1,4 @@
-Scaffold hoststack
+Serval hoststack
 ==================
 
 To compile:
@@ -34,7 +34,7 @@ src/scafd		user space control daemon for the stack (uses libstack).
 
 src/test		test programs for the stack.
 
-src/libscaffold		socket API abstraction for client applications interacting 
+src/libserval		socket API abstraction for client applications interacting 
 			with  user level version of the stack.
 
 Cross-compile Linux kernel module
@@ -44,4 +44,4 @@ Run ./configure to generate Makefiles
 
 Enter src/stack and issue the following command (example for Android):
 
-> make scaffold.ko ARCH=arm CROSS_COMPILE=<Path to NDK)/android-ndk-r4b/build/prebuilt/darwin-x86/arm-eabi-4.4.0/bin/arm-eabi- KDIR=<Path to kernel source>
+> make serval.ko ARCH=arm CROSS_COMPILE=<Path to NDK)/android-ndk-r4b/build/prebuilt/darwin-x86/arm-eabi-4.4.0/bin/arm-eabi- KDIR=<Path to kernel source>

@@ -1,7 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/debug.h>
-#include <scaffold/lock.h>
-#include <scaffold/timer.h>
+#include <serval/debug.h>
+#include <serval/lock.h>
+#include <serval/timer.h>
 #include <string.h>
 #include <pthread.h>
 #include <sys/time.h>

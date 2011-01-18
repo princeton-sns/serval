@@ -13,9 +13,9 @@ install-sh
 libtool
 ltmain.sh
 missing
-src/scafd/scafd
+src/servd/servd
 src/stack/Kbuild
-src/stack/scaffold
+src/stack/serval
 src/test/nltest
 src/test/send_udp_packet
 src/test/send_udp_packetn

@@ -1,4 +1,4 @@
-./edu/princeton/cs/sns/scaffold/ScaffoldDatagramSocket.java
-./edu/princeton/cs/sns/scaffold/ScaffoldSocket.java
-./edu/princeton/cs/sns/scaffold/ScaffoldSocketAddress.java
-./edu/princeton/cs/sns/scaffold/ServiceId.java
+./edu/princeton/cs/sns/serval/ServalDatagramSocket.java
+./edu/princeton/cs/sns/serval/ServalSocket.java
+./edu/princeton/cs/sns/serval/ServalSocketAddress.java
+./edu/princeton/cs/sns/serval/ServiceId.java

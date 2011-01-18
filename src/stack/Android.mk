@@ -2,7 +2,7 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 #
-# Scaffold
+# Serval
 #
 LOCAL_SRC_FILES := \
 	debug.c \
@@ -13,12 +13,12 @@ LOCAL_SRC_FILES := \
 	input.c \
 	output.c \
 	ctrl_handler.c \
-	af_scaffold.c \
-	scaffold_sock.c \
-	scaffold_srv.c \
-	scaffold_ipv4.c \
-	scaffold_udp.c \
-	scaffold_tcp.c \
+	af_serval.c \
+	serval_sock.c \
+	serval_srv.c \
+	serval_ipv4.c \
+	serval_udp.c \
+	serval_tcp.c \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/sock.c \
@@ -30,46 +30,46 @@ LOCAL_SRC_FILES := \
 	userlevel/client.c \
 	userlevel/packet_linux.c \
 	userlevel/ctrl.c \
-	userlevel/scaffold.c
+	userlevel/serval.c
 
-SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
+SERVAL_INCLUDE_DIR=$(LOCAL_PATH)/../../include
 
-SCAFFOLD_HDR = \
-	af_scaffold.h \
+SERVAL_HDR = \
+	af_serval.h \
 	ctrl.h \
 	bst.h \
 	neighbor.h \
         service.h \
 	input.h \
 	output.h \
-	scaffold_sock.h \
-	scaffold_udp_sock.h \
-	scaffold_tcp_sock.h \
-	scaffold_srv.h \
-	scaffold_ipv4.h \
+	serval_sock.h \
+	serval_udp_sock.h \
+	serval_tcp_sock.h \
+	serval_srv.h \
+	serval_ipv4.h \
 	userlevel/packet.h \
 	userlevel/client_msg.h \
 	userlevel/client.h \
-	$(SCAFFOLD_INCLUDE_DIR)/libstack/ctrlmsg.h \
-	$(SCAFFOLD_INCLUDE_DIR)/netinet/scaffold.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform_tcpip.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/platform.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/atomic.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/bitops.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/list.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/hash.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/debug.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/lock.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/net.h \
-        $(SCAFFOLD_INCLUDE_DIR)/scaffold/dst.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/netdevice.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/sock.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/skbuff.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/timer.h \
-	$(SCAFFOLD_INCLUDE_DIR)/scaffold/wait.h
+	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
+	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
+	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \
+	$(SERVAL_INCLUDE_DIR)/serval/platform.h \
+	$(SERVAL_INCLUDE_DIR)/serval/atomic.h \
+	$(SERVAL_INCLUDE_DIR)/serval/bitops.h \
+	$(SERVAL_INCLUDE_DIR)/serval/list.h \
+	$(SERVAL_INCLUDE_DIR)/serval/hash.h \
+	$(SERVAL_INCLUDE_DIR)/serval/debug.h \
+	$(SERVAL_INCLUDE_DIR)/serval/lock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/net.h \
+        $(SERVAL_INCLUDE_DIR)/serval/dst.h \
+	$(SERVAL_INCLUDE_DIR)/serval/netdevice.h \
+	$(SERVAL_INCLUDE_DIR)/serval/sock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/skbuff.h \
+	$(SERVAL_INCLUDE_DIR)/serval/timer.h \
+	$(SERVAL_INCLUDE_DIR)/serval/wait.h
 
 LOCAL_C_INCLUDES += \
-	$(SCAFFOLD_INCLUDE_DIR)
+	$(SERVAL_INCLUDE_DIR)
 
 #LOCAL_SHARED_LIBRARIES := \
 
@@ -85,7 +85,7 @@ LOCAL_CFLAGS:=-O2 -g $(EXTRA_DEFINES)
 LOCAL_CPPFLAGS +=$(EXTRA_DEFINES)
 
 LOCAL_PRELINK_MODULE := false
-LOCAL_MODULE := scaffold
+LOCAL_MODULE := serval
 
 # LOCAL_UNSTRIPPED_PATH := $(TARGET_ROOT_OUT_BIN_UNSTRIPPED)
 

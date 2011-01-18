@@ -1,7 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/netdevice.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/debug.h>
+#include <serval/netdevice.h>
+#include <serval/skbuff.h>
+#include <serval/debug.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netpacket/packet.h>
@@ -98,7 +98,7 @@ static int packet_linux_recv(struct net_device *dev)
 	skb->pkt_type = lladdr.sll_pkttype;
 	skb->protocol = lladdr.sll_protocol;
 
-	ret = scaffold_input(skb);
+	ret = serval_input(skb);
 	
 	switch (ret) {
 	case INPUT_OK:

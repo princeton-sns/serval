@@ -1,4 +1,4 @@
-AC_INIT([scaffold-stack], 0.1, [scaffold@lists.cs.princeton.edu])
+AC_INIT([serval-stack], 0.1, [serval@lists.cs.princeton.edu])
 
 dnl support for cross compiling
 AC_CANONICAL_SYSTEM
@@ -27,77 +27,77 @@ top_dir=${PWD}
 AC_SUBST(top_dir)
 
 # Check for platform
-scaffold_os_linux=no
+serval_os_linux=no
 PLATFORM=
 
 AC_MSG_CHECKING([for Linux])
 case $host in
   *-*-linux*)
-	scaffold_os_linux=yes
+	serval_os_linux=yes
 	PLATFORM=linux
 	;;
 esac
-AC_MSG_RESULT([$scaffold_os_linux])
+AC_MSG_RESULT([$serval_os_linux])
 
-scaffold_os_bsd=no
-scaffold_os_macosx=no
+serval_os_bsd=no
+serval_os_macosx=no
 
 AC_MSG_CHECKING([for MacOS X])
 case $host in
   *-*-darwin*)
-	scaffold_os_macosx=yes
-	scaffold_os_bsd=yes
+	serval_os_macosx=yes
+	serval_os_bsd=yes
 	PLATFORM=darwin
 	;;
 esac
 
-AC_MSG_RESULT([$scaffold_os_macosx])
+AC_MSG_RESULT([$serval_os_macosx])
 
-scaffold_os_iphoneos=no
+serval_os_iphoneos=no
 
 AC_MSG_CHECKING([for iPhoneOS])
 case $host in
   arm-*-darwin*)
-	scaffold_os_iphoneos=yes
+	serval_os_iphoneos=yes
 	PLATFORM=darwin
 	;;
 esac
 
-AC_MSG_RESULT([$scaffold_os_iphoneos])
+AC_MSG_RESULT([$serval_os_iphoneos])
 
 # Set some automake variables
-AM_CONDITIONAL(OS_LINUX, [test x$scaffold_os_linux = xyes])
-AM_CONDITIONAL(OS_MACOSX, [test x$scaffold_os_macosx = xyes])
-AM_CONDITIONAL(OS_BSD, [test x$scaffold_os_bsd = xyes])
-AM_CONDITIONAL(OS_IPHONEOS, [test x$scaffold_os_iphoneos = xyes])
+AM_CONDITIONAL(OS_LINUX, [test x$serval_os_linux = xyes])
+AM_CONDITIONAL(OS_MACOSX, [test x$serval_os_macosx = xyes])
+AM_CONDITIONAL(OS_BSD, [test x$serval_os_bsd = xyes])
+AM_CONDITIONAL(OS_IPHONEOS, [test x$serval_os_iphoneos = xyes])
 
 # Platform define could be set here or detected in platform.h header
-#if test x$scaffold_os_linux = xyes
+#if test x$serval_os_linux = xyes
 #then
 #	CPPFLAGS="${CPPFLAGS} -DOS_LINUX"
 #fi
-#if test x$scaffold_os_macosx = xyes
+#if test x$serval_os_macosx = xyes
 #then
 #	CPPFLAGS="${CPPFLAGS} -DOS_MACOSX"
 #fi
-#if test x$scaffold_os_iphoneos = xyes
+#if test x$serval_os_iphoneos = xyes
 #then
 #	CPPFLAGS="${CPPFLAGS} -DOS_IPHONEOS"
 #fi
 
-dnl In the future, we might want to override the SCAFFOLD_DIR,
+dnl In the future, we might want to override the SERVAL_DIR,
 dnl but for now, just go with default values.
-SCAFFOLD_DIR=${ac_default_prefix}
-SCAFFOLD_INCLUDE_DIR="${SCAFFOLD_DIR}/include"
-SCAFFOLD_LIB_DIR="${SCAFFOLD_DIR}/lib"
-SCAFFOLD_LDFLAGS="-L${SCAFFOLD_LIB_DIR}"
-AC_SUBST(SCAFFOLD_DIR)
-AC_SUBST(SCAFFOLD_LIB_DIR)
-AC_SUBST(SCAFFOLD_INCLUDE_DIR)
-AC_SUBST(SCAFFOLD_LDFLAGS)
+SERVAL_DIR=${ac_default_prefix}
+SERVAL_INCLUDE_DIR="${SERVAL_DIR}/include"
+SERVAL_LIB_DIR="${SERVAL_DIR}/lib"
+SERVAL_LDFLAGS="-L${SERVAL_LIB_DIR}"
+AC_SUBST(SERVAL_DIR)
+AC_SUBST(SERVAL_LIB_DIR)
+AC_SUBST(SERVAL_INCLUDE_DIR)
+AC_SUBST(SERVAL_LDFLAGS)
 
 dnl Put in config.h
-AC_DEFINE_UNQUOTED([SCAFFOLD_LDFLAGS], "${SCAFFOLD_LDFLAGS}", [Library and include paths for Scaffold])
+AC_DEFINE_UNQUOTED([SERVAL_LDFLAGS], "${SERVAL_LDFLAGS}", [Library and include paths for Serval])
 
 
 dnl Preset $prefix and $exec_prefix.
@@ -229,7 +229,7 @@ AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
   *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
 esac],[kernel=yes])
 
-AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes && test x$scaffold_os_linux = xyes])
+AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
@@ -259,13 +259,13 @@ AC_CONFIG_FILES([Makefile
 	src/Makefile
 	src/stack/Makefile
 	src/stack/Kbuild
-	src/libscaffold/Makefile
+	src/libserval/Makefile
 	src/libstack/Makefile
-	src/scafd/Makefile
+	src/servd/Makefile
 	src/test/Makefile
 	src/javasock/Makefile
 	src/javasock/jni/Makefile
-	src/javasock/java/edu/princeton/cs/sns/scaffold/Makefile
+	src/javasock/java/edu/princeton/cs/sns/serval/Makefile
 	])
 
 AC_OUTPUT

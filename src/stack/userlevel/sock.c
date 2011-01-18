@@ -1,12 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/debug.h>
-#include <scaffold/lock.h>
-#include <scaffold/timer.h>
-#include <scaffold/sock.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/wait.h>
-#include <scaffold/net.h>
-#include <scaffold/bitops.h>
+#include <serval/debug.h>
+#include <serval/lock.h>
+#include <serval/timer.h>
+#include <serval/sock.h>
+#include <serval/skbuff.h>
+#include <serval/wait.h>
+#include <serval/net.h>
+#include <serval/bitops.h>
 #include <pthread.h>
 
 #define RCV_BUF_DEFAULT 1000

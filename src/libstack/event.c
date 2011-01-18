@@ -7,7 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <poll.h>
-#include <scaffold/list.h>
+#include <serval/list.h>
 #include "event.h"
 #include "debug.h"
 

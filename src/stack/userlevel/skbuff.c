@@ -1,12 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <string.h>
 #include <sys/uio.h>
-#include <scaffold/debug.h>
-#include <scaffold/platform.h>
-#include <scaffold/lock.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/netdevice.h>
-#include <scaffold/dst.h>
+#include <serval/debug.h>
+#include <serval/platform.h>
+#include <serval/lock.h>
+#include <serval/skbuff.h>
+#include <serval/netdevice.h>
+#include <serval/dst.h>
 
 static void skb_release_head_state(struct sk_buff *skb)
 {

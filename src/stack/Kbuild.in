@@ -2,23 +2,23 @@ top_builddir := @top_dir@
 
 EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) -D__linux__ @EXTRA_DEFINES@
 
-obj-m := scaffold.o 
-scaffold-y := \
+obj-m := serval.o 
+serval-y := \
 	   linux/ctrl.o \
 	   linux/proc.o \
 	   linux/packet.o \
 	   linux/module.o \
 	   debug.o \
 	   platform.o \
-	   af_scaffold.o \
+	   af_serval.o \
 	   bst.o \
 	   neighbor.o \
 	   service.o \
 	   input.o \
 	   output.o \
 	   ctrl_handler.o \
-	   scaffold_sock.o \
-	   scaffold_srv.o \
-	   scaffold_ipv4.o \
-	   scaffold_udp.o \
-	   scaffold_tcp.o
+	   serval_sock.o \
+	   serval_srv.o \
+	   serval_ipv4.o \
+	   serval_udp.o \
+	   serval_tcp.o

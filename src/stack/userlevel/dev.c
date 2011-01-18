@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/netdevice.h>
-#include <scaffold/debug.h>
-#include <scaffold/list.h>
-#include <scaffold/hash.h>
-#include <scaffold/net.h>
-#include <scaffold/skbuff.h>
+#include <serval/netdevice.h>
+#include <serval/debug.h>
+#include <serval/list.h>
+#include <serval/hash.h>
+#include <serval/net.h>
+#include <serval/skbuff.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>

@@ -9,17 +9,17 @@ LOCAL_HDR_FILES :=
 LOCAL_SRC_FILES := \
 	udp_server.c
 
-SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
+SERVAL_INCLUDE_DIR=$(LOCAL_PATH)/../../include
 
 LOCAL_C_INCLUDES += \
-	$(SCAFFOLD_INCLUDE_DIR)
+	$(SERVAL_INCLUDE_DIR)
 
 # We need to compile our own version of libxml2, because the static
 # library provided in Android does not have the configured options we need.
-LOCAL_LDLIBS :=-lrt -lscaffold
-LOCAL_SHARED_LIBRARIES +=libdl libscaffold
+LOCAL_LDLIBS :=-lrt -lserval
+LOCAL_SHARED_LIBRARIES +=libdl libserval
 
-EXTRA_DEFINES:=-DOS_ANDROID -DENABLE_DEBUG -DSCAFFOLD_NATIVE
+EXTRA_DEFINES:=-DOS_ANDROID -DENABLE_DEBUG -DSERVAL_NATIVE
 LOCAL_CFLAGS:=-O2 -g $(EXTRA_DEFINES)
 LOCAL_CPPFLAGS +=$(EXTRA_DEFINES)
 
@@ -38,17 +38,17 @@ LOCAL_HDR_FILES :=
 LOCAL_SRC_FILES := \
 	udp_client.c
 
-SCAFFOLD_INCLUDE_DIR=$(LOCAL_PATH)/../../include
+SERVAL_INCLUDE_DIR=$(LOCAL_PATH)/../../include
 
 LOCAL_C_INCLUDES += \
-	$(SCAFFOLD_INCLUDE_DIR)
+	$(SERVAL_INCLUDE_DIR)
 
 # We need to compile our own version of libxml2, because the static
 # library provided in Android does not have the configured options we need.
-LOCAL_LDLIBS :=-lrt -lscaffold
-LOCAL_SHARED_LIBRARIES +=libdl libscaffold
+LOCAL_LDLIBS :=-lrt -lserval
+LOCAL_SHARED_LIBRARIES +=libdl libserval
 
-EXTRA_DEFINES:=-DOS_ANDROID -DENABLE_DEBUG -DSCAFFOLD_NATIVE
+EXTRA_DEFINES:=-DOS_ANDROID -DENABLE_DEBUG -DSERVAL_NATIVE
 LOCAL_CFLAGS:=-O2 -g $(EXTRA_DEFINES)
 LOCAL_CPPFLAGS +=$(EXTRA_DEFINES)
 

@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/atomic.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/lock.h>
-#include <scaffold/dst.h>
-#include <scaffold/netdevice.h>
+#include <serval/platform.h>
+#include <serval/atomic.h>
+#include <serval/skbuff.h>
+#include <serval/lock.h>
+#include <serval/dst.h>
+#include <serval/netdevice.h>
 #include <pthread.h>
 
 int dst_discard(struct sk_buff *skb)

@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <scaffold/debug.h>
+#include <serval/debug.h>
 #include <userlevel/client_msg.h>
 
 static const char *client_msg_str[] = {

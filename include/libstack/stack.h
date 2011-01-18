@@ -2,7 +2,7 @@
 #ifndef _LIBSTACK_H
 #define _LIBSTACK_H
 
-#include <netinet/scaffold.h>
+#include <netinet/serval.h>
 #include "callback.h"
 #include "ctrlmsg.h"
 

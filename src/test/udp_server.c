@@ -17,8 +17,8 @@
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 // ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER
 // DEALINGS IN THE WORK.
-#include <libscaffold/scaffold.h>
-#include <netinet/scaffold.h>
+#include <libserval/serval.h>
+#include <netinet/serval.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -33,14 +33,14 @@ void server(void)
         int sock;
         struct sockaddr_sf servaddr, cliaddr;  
     
-        if ((sock = socket_sf(AF_SCAFFOLD, SOCK_DGRAM, SCAFFOLD_PROTO_UDP)) < 0) {
-                fprintf(stderr, "error creating AF_SCAFFOLD socket: %s", 
+        if ((sock = socket_sf(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP)) < 0) {
+                fprintf(stderr, "error creating AF_SERVAL socket: %s", 
                         strerror(errno));
                 exit(EXIT_FAILURE);
         }
   
         bzero((void *)&servaddr, sizeof(servaddr));
-        servaddr.sf_family = AF_SCAFFOLD;
+        servaddr.sf_family = AF_SERVAL;
         servaddr.sf_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
   
         set_reuse_ok(sock);

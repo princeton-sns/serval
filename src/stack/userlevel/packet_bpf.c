@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/netdevice.h>
+#include <serval/platform.h>
+#include <serval/skbuff.h>
+#include <serval/netdevice.h>
 #include <sys/socket.h>
-#include <scaffold/debug.h>
-#include <scaffold/list.h>
+#include <serval/debug.h>
+#include <serval/list.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -177,7 +177,7 @@ static int packet_bpf_recv(struct net_device *dev)
                 skb->pkt_type = PACKET_HOST;
                 skb->protocol = htons(ETH_P_IP);
                 
-                ret = scaffold_input(skb);
+                ret = serval_input(skb);
                 
                 switch (ret) {
                 case INPUT_OK:

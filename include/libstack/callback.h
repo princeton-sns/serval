@@ -1,7 +1,7 @@
 #ifndef _LIBSTACK_CALLBACK_H_
 #define _LIBSTACK_CALLBACK_H_
 
-#include <netinet/scaffold.h>
+#include <netinet/serval.h>
 
 struct libstack_callbacks {
 	void (*srvregister)(struct service_id *);

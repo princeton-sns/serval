@@ -1,12 +1,12 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/skbuff.h>
-#include <scaffold/netdevice.h>
-#include <scaffold/debug.h>
-#include <scaffold_sock.h>
-#include <netinet/scaffold.h>
-#include <scaffold_srv.h>
-#include <scaffold_ipv4.h>
+#include <serval/platform.h>
+#include <serval/skbuff.h>
+#include <serval/netdevice.h>
+#include <serval/debug.h>
+#include <serval_sock.h>
+#include <netinet/serval.h>
+#include <serval_srv.h>
+#include <serval_ipv4.h>
 #include <output.h>
 #include <neighbor.h>
 #if defined(OS_USER)
@@ -15,7 +15,7 @@
 
 extern int packet_xmit(struct sk_buff *skb);
 
-int scaffold_output(struct sk_buff *skb)
+int serval_output(struct sk_buff *skb)
 {
 	char srcstr[18], dststr[18];
 	struct ethhdr *ethh;

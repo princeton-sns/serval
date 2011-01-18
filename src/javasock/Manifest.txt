@@ -1,8 +1,8 @@
-Name: edu/princeton/cs/sns/scaffold/
-Specification-Title: Java JNI classes for Scaffold
+Name: edu/princeton/cs/sns/serval/
+Specification-Title: Java JNI classes for Serval
 Specification-Version: 1.0
 Specification-Vendor: sns.cs.princeton.edu
-Implementation-Title: scaffold-javasock
+Implementation-Title: serval-javasock
 Implementation-Version: 1.0
 Implementation-Vendor: Princeton University
 

@@ -21,6 +21,6 @@ enum {
 
 #define IS_INPUT_ERROR(val) (val < 0)
 
-int scaffold_input(struct sk_buff *skb);
+int serval_input(struct sk_buff *skb);
 
 #endif /* _INPUT_H_ */

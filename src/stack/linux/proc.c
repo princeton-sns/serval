@@ -12,13 +12,13 @@
 #define proc_net init_net.proc_net
 #endif
 
-#define SCAFFOLD_PROC_DIR "scaffold"
-#define SCAFFOLD_PROC_FILE_SERVICE_TBL "service_table"
-#define SCAFFOLD_PROC_FILE_NEIGHBOR_TBL "neighbor_table"
+#define SERVAL_PROC_DIR "serval"
+#define SERVAL_PROC_FILE_SERVICE_TBL "service_table"
+#define SERVAL_PROC_FILE_NEIGHBOR_TBL "neighbor_table"
 
-static struct proc_dir_entry *scaffold_dir = NULL;
+static struct proc_dir_entry *serval_dir = NULL;
 
-static int scaffold_proc_service_table_read(char *page, char **start, 
+static int serval_proc_service_table_read(char *page, char **start, 
                                             off_t off, int count, 
                                             int *eof, void *data)
 {
@@ -42,7 +42,7 @@ static int scaffold_proc_service_table_read(char *page, char **start,
         return len;
 }
 
-static int scaffold_proc_neighbor_table_read(char *page, char **start, 
+static int serval_proc_neighbor_table_read(char *page, char **start, 
                                             off_t off, int count, 
                                             int *eof, void *data)
 {
@@ -71,27 +71,27 @@ int __init proc_init(void)
         struct proc_dir_entry *proc;
         int ret = -ENOMEM;
 
-        scaffold_dir = proc_mkdir(SCAFFOLD_PROC_DIR, proc_net);
+        serval_dir = proc_mkdir(SERVAL_PROC_DIR, proc_net);
 
-	if (!scaffold_dir) {
+	if (!serval_dir) {
                 return -ENOMEM;
 	}
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
-	scaffold_dir->owner = THIS_MODULE;
+	serval_dir->owner = THIS_MODULE;
 #endif
       
-        proc = create_proc_read_entry(SCAFFOLD_PROC_FILE_SERVICE_TBL, 0, 
-                                      scaffold_dir, 
-                                      scaffold_proc_service_table_read, 
+        proc = create_proc_read_entry(SERVAL_PROC_FILE_SERVICE_TBL, 0, 
+                                      serval_dir, 
+                                      serval_proc_service_table_read, 
                                       NULL);
 
         if (!proc)
                 goto fail_service_tbl;
 
-        proc = create_proc_read_entry(SCAFFOLD_PROC_FILE_NEIGHBOR_TBL, 0, 
-                                      scaffold_dir, 
-                                      scaffold_proc_neighbor_table_read, 
+        proc = create_proc_read_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, 0, 
+                                      serval_dir, 
+                                      serval_proc_neighbor_table_read, 
                                       NULL);
 
         if (!proc)
@@ -101,18 +101,18 @@ int __init proc_init(void)
 out:        
         return ret;
 fail_neighbor_tbl:
-        remove_proc_entry(SCAFFOLD_PROC_FILE_SERVICE_TBL, scaffold_dir);
+        remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
 fail_service_tbl:
-        remove_proc_entry(SCAFFOLD_PROC_DIR, proc_net);
+        remove_proc_entry(SERVAL_PROC_DIR, proc_net);
         goto out;
 }
 
 void proc_fini(void)
 {
-        if (!scaffold_dir)
+        if (!serval_dir)
                 return;
 
-        remove_proc_entry(SCAFFOLD_PROC_FILE_SERVICE_TBL, scaffold_dir);
-        remove_proc_entry(SCAFFOLD_PROC_FILE_NEIGHBOR_TBL, scaffold_dir);
-	remove_proc_entry(SCAFFOLD_PROC_DIR, proc_net);
+        remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
+        remove_proc_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, serval_dir);
+	remove_proc_entry(SERVAL_PROC_DIR, proc_net);
 }

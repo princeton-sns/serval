@@ -2,9 +2,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/net.h>
-#include <af_scaffold.h>
-#include <scaffold/debug.h>
-#include <scaffold/netdevice.h>
+#include <af_serval.h>
+#include <serval/debug.h>
+#include <serval/netdevice.h>
 #include <linux/inetdevice.h>
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
@@ -12,7 +12,7 @@
 #include <neighbor.h>
 
 MODULE_AUTHOR("Erik Nordstroem");
-MODULE_DESCRIPTION("Scaffold socket API for Linux");
+MODULE_DESCRIPTION("Serval socket API for Linux");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
@@ -27,7 +27,7 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
 
-static int scaffold_netdev_event(struct notifier_block *this,
+static int serval_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
@@ -83,7 +83,7 @@ static int scaffold_netdev_event(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
-static int scaffold_inetaddr_event(struct notifier_block *this,
+static int serval_inetaddr_event(struct notifier_block *this,
                                    unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
@@ -117,18 +117,18 @@ static int scaffold_inetaddr_event(struct notifier_block *this,
 }
 
 static struct notifier_block netdev_notifier = {
-	.notifier_call = scaffold_netdev_event,
+	.notifier_call = serval_netdev_event,
 };
 
 static struct notifier_block inetaddr_notifier = {
-	.notifier_call = scaffold_inetaddr_event,
+	.notifier_call = serval_inetaddr_event,
 };
 
-int scaffold_module_init(void)
+int serval_module_init(void)
 {
 	int err = 0;
 
-        LOG_DBG("Loaded scaffold protocol module\n");
+        LOG_DBG("Loaded serval protocol module\n");
         
         err = proc_init();
         
@@ -144,11 +144,11 @@ int scaffold_module_init(void)
                 goto fail_ctrl;
         }
 
-	err = scaffold_init();
+	err = serval_init();
 
 	if (err < 0) {
-		 LOG_CRIT("Cannot initialize scaffold protocol\n");
-		 goto fail_scaffold;
+		 LOG_CRIT("Cannot initialize serval protocol\n");
+		 goto fail_serval;
 	}
 
 	err = register_netdevice_notifier(&netdev_notifier);
@@ -169,8 +169,8 @@ out:
 fail_inetaddr_notifier:
         unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
-        scaffold_fini();
-fail_scaffold:
+        serval_fini();
+fail_serval:
         ctrl_fini();
 fail_ctrl:
         proc_fini();
@@ -178,18 +178,18 @@ fail_proc:
 	goto out;
 }
 
-void __exit scaffold_module_fini(void)
+void __exit serval_module_fini(void)
 {
         unregister_inetaddr_notifier(&inetaddr_notifier);
         unregister_netdevice_notifier(&netdev_notifier);
-	scaffold_fini();
+	serval_fini();
         ctrl_fini();
         proc_fini();
-        LOG_INF("Unloaded scaffold protocol module\n");
+        LOG_INF("Unloaded serval protocol module\n");
 }
 
-module_init(scaffold_module_init)
-module_exit(scaffold_module_fini)
+module_init(serval_module_init)
+module_exit(serval_module_fini)
 
-MODULE_ALIAS_NETPROTO(PF_SCAFFOLD);
+MODULE_ALIAS_NETPROTO(PF_SERVAL);
 

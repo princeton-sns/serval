@@ -2,8 +2,8 @@
 #ifndef _PACKET_H_
 #define _PACKET_H_
 
-#include <scaffold/netdevice.h>
-#include <scaffold/skbuff.h>
+#include <serval/netdevice.h>
+#include <serval/skbuff.h>
 
 struct packet_ops {
 	int (*init)(struct net_device *);

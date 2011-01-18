@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/debug.h>
+#include <serval/platform.h>
+#include <serval/debug.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/time.h>
 #endif

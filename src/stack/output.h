@@ -2,6 +2,6 @@
 #ifndef _OUTPUT_H_
 #define _OUTPUT_H_
 
-int scaffold_output(struct sk_buff *skb);
+int serval_output(struct sk_buff *skb);
 
 #endif /* _OUTPUT_H_ */

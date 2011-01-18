@@ -7,8 +7,8 @@ stags:
 clean-local:
 	rm -f *~
 	rm -f include/netinet/*~
-	rm -f include/scaffold/*~
+	rm -f include/serval/*~
 	rm -f include/libstack/*~
-	rm -f include/libscaffold/*~
+	rm -f include/libserval/*~
 
 EXTRA_DIST=Android.mk

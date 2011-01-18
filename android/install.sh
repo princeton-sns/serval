@@ -45,21 +45,21 @@ echo "Assuming android source is found in $ANDROID_DIR"
 echo "Check your device in case you need to allow permissions."
 echo "Please make sure this is correct before proceeding."
 echo
-echo "Press any key to install SCAFFOLD on these devices, or ctrl-c to abort"
+echo "Press any key to install SERVAL on these devices, or ctrl-c to abort"
 # Wait for some user input
 read
 
 pushd $SCRIPT_DIR
 
 LIB_PATH_PREFIX="system/lib"
-LIB_FILES="libstack.so libscaffold.so libscaffold_javasock_jni.so"
+LIB_FILES="libstack.so libserval.so libserval_javasock_jni.so"
 
 BIN_HOST_PREFIX=
 BIN_PATH_PREFIX="system/bin"
 BIN_FILES="scafd udp_client udp_server"
 
 # Binaries exectuting with root permissions
-BIN_FILES_SU="scaffold"
+BIN_FILES_SU="serval"
 
 APP_PATH_PREFIX="system/app"
 
@@ -124,7 +124,7 @@ for dev in $DEVICES; do
     popd
    
     # Cleanup data folder if any
-    #$ADB -s $dev shell rm /data/local/tmp/scaffold-*.sock
+    #$ADB -s $dev shell rm /data/local/tmp/serval-*.sock
 
     # Reset filesystem to read-only
     $ADB -s $dev shell su -c "mount -o remount,ro -t yaffs2 /dev/block/mtdblock3 /system"

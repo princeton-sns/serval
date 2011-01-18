@@ -1,7 +1,7 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
-#include <scaffold/list.h>
+#include <serval/list.h>
 #include <pthread.h>
 
 struct client;

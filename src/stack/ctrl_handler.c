@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/debug.h>
-#include <scaffold/netdevice.h>
+#include <serval/debug.h>
+#include <serval/netdevice.h>
 #include <libstack/ctrlmsg.h>
 #include "ctrl.h"
 

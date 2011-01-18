@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/platform.h>
-#include <scaffold/list.h>
-#include <scaffold/lock.h>
-#include <scaffold/debug.h>
-#include <scaffold/net.h>
-#include <scaffold/wait.h>
+#include <serval/platform.h>
+#include <serval/list.h>
+#include <serval/lock.h>
+#include <serval/debug.h>
+#include <serval/net.h>
+#include <serval/wait.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,7 +19,7 @@
 #include "client.h"
 
 /* Setting NPROTO to AF_MAX is overkill here, since we effectively
- * only register Scaffold protocols. Anyhow, the net_families is just
+ * only register Serval protocols. Anyhow, the net_families is just
  * an array of pointers, so the waste is not such a big deal. */
 #ifndef NPROTO
 #define NPROTO AF_MAX 

@@ -2,7 +2,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
-#include <scaffold/debug.h>
+#include <serval/debug.h>
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
 
@@ -99,7 +99,7 @@ int ctrl_init(void)
 	
 	memset(&unaddr, 0, sizeof(unaddr));
 	unaddr.sun_family = AF_UNIX;
-	strcpy(unaddr.sun_path, SCAFFOLD_STACK_CTRL_PATH);
+	strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
 	
 	ret = bind(ctrl_sock, 
 		   (struct sockaddr *)&unaddr, sizeof(unaddr));
@@ -109,19 +109,19 @@ int ctrl_init(void)
 		goto out_close_sock;
 	}
 	
-	ret = chmod(SCAFFOLD_STACK_CTRL_PATH, S_IRWXU|S_IRWXG|S_IRWXO);
+	ret = chmod(SERVAL_STACK_CTRL_PATH, S_IRWXU|S_IRWXG|S_IRWXO);
 
 	if (ret == -1) {
 		LOG_ERR("chmod file %s : %s\n",
-			SCAFFOLD_STACK_CTRL_PATH, strerror(errno));
+			SERVAL_STACK_CTRL_PATH, strerror(errno));
 		goto out_unbind;
 	}
 	/* Now set the address to point to scafd */
-	strcpy(unaddr.sun_path, SCAFFOLD_SCAFD_CTRL_PATH);
+	strcpy(unaddr.sun_path, SERVAL_SCAFD_CTRL_PATH);
 out:
 	return ret;
 out_unbind:
-	unlink(SCAFFOLD_STACK_CTRL_PATH);
+	unlink(SERVAL_STACK_CTRL_PATH);
 out_close_sock:
 	close(ctrl_sock);
 	goto out;
@@ -132,5 +132,5 @@ void ctrl_fini(void)
 	if (ctrl_sock != -1)
 		close(ctrl_sock);
 	
-	unlink(SCAFFOLD_STACK_CTRL_PATH);
+	unlink(SERVAL_STACK_CTRL_PATH);
 }

@@ -1,16 +1,16 @@
-lib_LTLIBRARIES = libscaffold_javasock_jni.la
+lib_LTLIBRARIES = libserval_javasock_jni.la
 
-libscaffold_javasock_jni_la_SOURCES = \
-	edu_princeton_cs_sns_scaffold_ScaffoldDatagramSocket.c
+libserval_javasock_jni_la_SOURCES = \
+	edu_princeton_cs_sns_serval_ServalDatagramSocket.c
 
-#libscaffold_javasock_jni_includedir=$(top_srcdir)/include
-#libscaffold_javasock_jni_include_HEADERS =
+#libserval_javasock_jni_includedir=$(top_srcdir)/include
+#libserval_javasock_jni_include_HEADERS =
 
 noinst_HEADERS = \
-	edu_princeton_cs_sns_scaffold_ScaffoldDatagramSocket.h	
+	edu_princeton_cs_sns_serval_ServalDatagramSocket.h	
 
-libscaffold_javasock_jni_la_CPPFLAGS =-I$(top_srcdir)/include $(JAVA_INCLUDE)
-libscaffold_javasock_jni_la_LDFLAGS =
+libserval_javasock_jni_la_CPPFLAGS =-I$(top_srcdir)/include $(JAVA_INCLUDE)
+libserval_javasock_jni_la_LDFLAGS =
 
 EXTRA_DIST =
 

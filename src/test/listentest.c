@@ -6,8 +6,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <netinet/scaffold.h>
-#include <libscaffold/scaffold.h>
+#include <netinet/serval.h>
+#include <libserval/serval.h>
 
 int main(int argc, char **argv)
 {
@@ -15,15 +15,15 @@ int main(int argc, char **argv)
 	ssize_t ret;
 	struct sockaddr_sf addr;
 
-	sock = socket_sf(AF_SCAFFOLD, SOCK_DGRAM, 0);
+	sock = socket_sf(AF_SERVAL, SOCK_DGRAM, 0);
 
 	if (sock == -1) { 
-		fprintf(stderr, "could not create SCAFFOLD socket: %s\n",
+		fprintf(stderr, "could not create SERVAL socket: %s\n",
 			strerror(errno));
 		return -1;
 	}
 
-	addr.sf_family = AF_SCAFFOLD;
+	addr.sf_family = AF_SERVAL;
 	addr.sf_srvid.s_sid16 = htons(7); 
 
 	ret = listen_sf(sock, 10);

@@ -1,10 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <scaffold/debug.h>
-#include <scaffold/atomic.h>
-#include <scaffold/timer.h>
-#include <scaffold/wait.h>
-#include <scaffold/net.h>
-#include <scaffold_sock.h>
+#include <serval/debug.h>
+#include <serval/atomic.h>
+#include <serval/timer.h>
+#include <serval/wait.h>
+#include <serval/net.h>
+#include <serval_sock.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/select.h>
@@ -147,7 +147,7 @@ struct client *client_create(client_type_t type,
 	c->state = CLIENT_STATE_NOT_RUNNING;
 	c->fd = sock;
 
-        err = sock_create(PF_SCAFFOLD, 
+        err = sock_create(PF_SERVAL, 
                           client_type_to_prot_type(type), 
                           0, &c->sock);
         if (err < 0) {
@@ -320,7 +320,7 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 		service_id_to_str(&req->srvid));	
 
         memset(&saddr, 0, sizeof(saddr));
-        saddr.sf_family = AF_SCAFFOLD;
+        saddr.sf_family = AF_SERVAL;
         memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
@@ -352,7 +352,7 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 		service_id_to_str(&req->srvid));
 
         memset(&addr, 0, sizeof(addr));
-        addr.sf_family = AF_SCAFFOLD;
+        addr.sf_family = AF_SERVAL;
         memcpy(&addr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         err = c->sock->ops->connect(c->sock, (struct sockaddr *)&addr, 
@@ -403,7 +403,7 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
 {
 	//struct client_msg_accept_req *req = (struct client_msg_accept_req *)msg;
         struct client_msg_accept_rsp rsp;
-        struct scaffold_sock *ssk = scaffold_sk(c->sock->sk);
+        struct serval_sock *ssk = serval_sk(c->sock->sk);
         int err = 0;
         
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT_RSP);
@@ -452,7 +452,7 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT2_RSP);
 
         /* Find parent sock */
-        psk = scaffold_sock_lookup_serviceid(&req->srvid);
+        psk = serval_sock_lookup_serviceid(&req->srvid);
 
         if (!psk) {
                 LOG_ERR("no parent sock\n");
@@ -493,7 +493,7 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         int ret;
 
         memset(&saddr, 0, sizeof(saddr));
-        saddr.sf_family = AF_SCAFFOLD;
+        saddr.sf_family = AF_SERVAL;
         memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
 
         memset(&mh, 0, sizeof(mh));

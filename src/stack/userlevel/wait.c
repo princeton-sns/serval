@@ -1,8 +1,8 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #define _GNU_SOURCE /* For ppoll to be defined */
-#include <scaffold/wait.h>
-#include <scaffold/timer.h>
-#include <scaffold/debug.h>
+#include <serval/wait.h>
+#include <serval/timer.h>
+#include <serval/debug.h>
 #include <userlevel/client.h>
 
 #include <pthread.h>

@@ -2,8 +2,8 @@
 #ifndef _CLIENT_MSG_H_
 #define _CLIENT_MSG_H_
 
-#include <scaffold/platform.h>
-#include <netinet/scaffold.h>
+#include <serval/platform.h>
+#include <netinet/serval.h>
 
 typedef enum client_msg_type { 
 	MSG_UNKNOWN = 0, 
