@@ -56,7 +56,7 @@ LIB_FILES="libstack.so libserval.so libserval_javasock_jni.so"
 
 BIN_HOST_PREFIX=
 BIN_PATH_PREFIX="system/bin"
-BIN_FILES="scafd udp_client udp_server"
+BIN_FILES="servd udp_client udp_server"
 
 # Binaries exectuting with root permissions
 BIN_FILES_SU="serval"
