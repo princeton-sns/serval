@@ -21,26 +21,36 @@ include/		headers that are shared between components under src/.
 
 src/			source code.
 
-src/stack		stack code.
+src/stack/		stack code.
 
-src/stack/linux		stack code specific for the linux kernel.
+src/stack/linux/	stack code specific for the linux kernel.
 
-src/stack/userlevel	stack code specific for user level.
+src/stack/userlevel/	stack code specific for user level.
 
-src/libstack		library that makes it easy to interact with the stack 
-			from user space independent of stack version.
+src/libstack/		library that makes it easy to interact with the stack 
+			from user space, independent of stack version (kernel/user).
 
-src/scafd		user space control daemon for the stack (uses libstack).
+src/servd/		user space control daemon for the stack (uses libstack).
 
-src/test		test programs for the stack.
+src/test/		test programs for the stack.
 
-src/libserval		socket API abstraction for client applications interacting 
-			with  user level version of the stack.
+src/libserval/		socket API abstraction for client applications interacting 
+			with the user level version of the stack.
 
+src/javasock/		Java bindings that make it possible to write Serval 
+			applications in Java.
+
+android/		Android specific files and applications.
+	
 Cross-compile Linux kernel module
 ---------------------------------
 
-Run ./configure to generate Makefiles
+Prerequisites:
+
+* Kernel source code matching your cross-compile environment.
+* A tool-chain for your cross-compile architecture.
+
+Run (./autogen.sh) ./configure to generate Makefiles
 
 Enter src/stack and issue the following command (example for Android):
 

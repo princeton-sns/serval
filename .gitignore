@@ -28,6 +28,9 @@ src/test/udp_clientn
 src/test/udp_server
 src/test/udp_servern
 src/javasock/classes.list
+android/ServalChat/bin/
+android/ServalChat/gen/
+android/ServalChat/src/
 stamp-h1
 #
 Makefile.in
