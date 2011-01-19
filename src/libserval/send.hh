@@ -9,7 +9,7 @@ class SendReq : public Message {
     SendReq();
     SendReq(bool nb, unsigned char *buf, 
             uint16_t len, int flags);    // bound flow
-    SendReq(sf_oid_t dst_obj_id, unsigned char *buf, uint16_t len,
+    SendReq(sv_srvid_t dst_obj_id, unsigned char *buf, uint16_t len,
             int flags);                                      // unbound flow
     ~SendReq() { }  // user manages nsfbuf alloc/dealloc
 
@@ -25,12 +25,12 @@ class SendReq : public Message {
     unsigned char *nonserial_buf_mutable()     { return _nsbuf; }
     const unsigned char *nonserial_buf() const { return _nsbuf; }
 
-    sf_oid_t dst_obj_id() const         { return _dst_obj_id; }
+    sv_srvid_t dst_obj_id() const         { return _dst_obj_id; }
     void print(const char *label) const;
 
   private:
     bool _nb; // non-blocking
-    sf_oid_t _dst_obj_id;        // don't care for conn. mode
+    sv_srvid_t _dst_obj_id;        // don't care for conn. mode
     unsigned char *_nsbuf;
     uint16_t _nonserial_len;
     int _flags;
@@ -47,7 +47,7 @@ SendReq::reset_nonserial(unsigned char *buf, uint16_t v)
 class SendRsp : public Message {
 public:
     SendRsp();
-    SendRsp(sf_err_t err);
+    SendRsp(sv_err_t err);
     int check_type() const;
     int serial_size() const;
     int write_serial_payload(unsigned char *buf) const;
@@ -55,10 +55,10 @@ public:
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sf_err_t err() const { return _err; }
+    sv_err_t err() const { return _err; }
 
   private:
-    sf_err_t _err;
+    sv_err_t _err;
 };
 
 

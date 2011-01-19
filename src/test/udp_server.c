@@ -31,40 +31,40 @@ int set_reuse_ok(int sock);
 void server(void)
 {
         int sock;
-        struct sockaddr_sf servaddr, cliaddr;  
+        struct sockaddr_sv servaddr, cliaddr;  
     
-        if ((sock = socket_sf(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP)) < 0) {
+        if ((sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP)) < 0) {
                 fprintf(stderr, "error creating AF_SERVAL socket: %s", 
                         strerror(errno));
                 exit(EXIT_FAILURE);
         }
   
         bzero((void *)&servaddr, sizeof(servaddr));
-        servaddr.sf_family = AF_SERVAL;
-        servaddr.sf_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
+        servaddr.sv_family = AF_SERVAL;
+        servaddr.sv_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
   
         set_reuse_ok(sock);
   
-        if (bind_sf(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+        if (bind_sv(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
                 fprintf(stderr, "error binding socket: %s", strerror(errno));
                 exit(EXIT_FAILURE);
         }
         fprintf(stdout, "server: bound to object id %d\n", ECHO_OBJECT_ID);
 
         int backlog = 8;
-        listen_sf(sock, backlog);
+        listen_sv(sock, backlog);
 
         do {
                 socklen_t l = sizeof(cliaddr);
                 printf("calling accept\n");
-                int fd = accept_sf(sock, (struct sockaddr *)&cliaddr, &l);
+                int fd = accept_sv(sock, (struct sockaddr *)&cliaddr, &l);
                 if (fd < 0) {
-                        fprintf(stderr, "error accepting new conn %s", strerror_sf(errno));
+                        fprintf(stderr, "error accepting new conn %s", strerror_sv(errno));
                         exit(EXIT_FAILURE);
                 }
 
                 printf("server: recv conn from object id %s; got fd = %d\n",
-                       service_id_to_str(&cliaddr.sf_srvid), fd);
+                       service_id_to_str(&cliaddr.sv_srvid), fd);
         
                 int k = 0;
                 do {
@@ -73,7 +73,7 @@ void server(void)
                         int n;
       
                         fprintf(stderr, "server: waiting on client request\n");
-                        if ((n = recv_sf(fd, buf, N, 0)) < 0) {
+                        if ((n = recv_sv(fd, buf, N, 0)) < 0) {
                                 fprintf(stderr, 
                                         "server: error receiving client request: %s\n",
                                         strerror(errno));
@@ -97,13 +97,13 @@ void server(void)
                                 for (i = 0; i < n; i++)
                                         fprintf(stderr, "%c", buf2[i]);
                                 fprintf(stderr, "\n");
-                                send_sf(fd, buf2, n, 0);
+                                send_sv(fd, buf2, n, 0);
                                 if (strcmp(buf, "quit") == 0)
                                         break;
                         }
                         k++;
                 } while (1);
-                close_sf(fd);
+                close_sv(fd);
                 fprintf(stderr, "Server listening for NEW connections\n");
         } while (1);
         exit(EXIT_SUCCESS);

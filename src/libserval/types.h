@@ -8,18 +8,17 @@
 /* These typedefs are for backwards compatibility with old defines in
  * libserval. The need for these should ideally go away in the
  * future. */
-typedef struct sock_id sf_sock_t;
-typedef struct service_id sf_oid_t;
-typedef struct host_addr sf_host_t;
+typedef struct sock_id sv_sock_t;
+typedef struct service_id sv_srvid_t;
+typedef struct host_addr sv_host_t;
 
-#define s_oid s_sid16
-#define sf_oid sf_srvid
+#define s_srvid s_sid16
 
 typedef struct {
 	uint8_t v;
-} sf_proto_t;
+} sv_proto_t;
 
-#define SF_OK                  0
+#define SERVAL_OK                  0
 #define ESOCKIDNOTAVAIL      200   /* Exhausted socket ids for host */
 #define ESCAFDUNREACH        201   /* Cannot reach Scafd daemon */
 #define ESFINTERNAL          202   /* undiagnosed internal SF errors */

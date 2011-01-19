@@ -71,15 +71,15 @@ AcceptReq::print(const char *label) const
 AcceptRsp::AcceptRsp()
         : Message(ACCEPT_RSP), _err(0)
 {
-    _local_obj_id.s_oid = htons(0xffff);
-    _remote_obj_id.s_oid = htons(0xffff);
+    _local_obj_id.s_srvid = htons(0xffff);
+    _remote_obj_id.s_srvid = htons(0xffff);
     _sock_id.s_id = 0xffff;
     set_pld_len_v(serial_pld_len());
 }
 
 
-AcceptRsp::AcceptRsp(sf_oid_t local_obj_id, sf_oid_t remote_obj_id,
-                     sf_sock_t sock_id, sf_err_t err)
+AcceptRsp::AcceptRsp(sv_srvid_t local_obj_id, sv_srvid_t remote_obj_id,
+                     sv_sock_t sock_id, sv_err_t err)
         : Message(ACCEPT_RSP),
           _sock_id(sock_id),
           _err(err)
@@ -141,13 +141,13 @@ AcceptRsp::print(const char *label) const
 AcceptReq2::AcceptReq2()
         : Message(ACCEPT_REQ2), _nb(false)
 {
-    _obj_id.s_oid = htons(0xffff);
+    _obj_id.s_srvid = htons(0xffff);
     _sock_id.s_id = 0xffff;
     set_pld_len_v(serial_pld_len());
 }
 
 
-AcceptReq2::AcceptReq2(sf_oid_t obj_id, sf_sock_t sock_id, bool nb)
+AcceptReq2::AcceptReq2(sv_srvid_t obj_id, sv_sock_t sock_id, bool nb)
         : Message(ACCEPT_REQ2), _sock_id(sock_id), _nb(nb)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
@@ -205,7 +205,7 @@ AcceptRsp2::AcceptRsp2()
 }
 
 
-AcceptRsp2::AcceptRsp2(sf_err_t err)
+AcceptRsp2::AcceptRsp2(sv_err_t err)
         : Message(ACCEPT_RSP), _err(err)
 {
     set_pld_len_v(serial_pld_len());

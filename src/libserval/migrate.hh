@@ -18,7 +18,7 @@ class MigrateReq : public Message {
 class MigrateRsp : public Message {
   public:
     MigrateRsp();
-    MigrateRsp(sf_err_t err);
+    MigrateRsp(sv_err_t err);
 
     int check_type() const;
     int write_serial_payload(unsigned char *buf) const;
@@ -26,10 +26,10 @@ class MigrateRsp : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sf_err_t err() const    { return _err; }
+    sv_err_t err() const    { return _err; }
 
   private:
-    sf_err_t _err;
+    sv_err_t _err;
 };
 
 #endif

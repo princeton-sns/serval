@@ -70,7 +70,7 @@ PacketType::packettype_s(const PacketType::Type &v)
 }
 
 const char *
-oid_to_str(sf_oid_t oid)
+oid_to_str(sv_srvid_t oid)
 {
   static char str[11];
 

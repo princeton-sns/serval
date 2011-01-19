@@ -74,17 +74,17 @@ Message::write_hdr(unsigned char *buf) const
 int
 Message::write_to_stream_soc(int soc)
 {
-    sf_err_t err;
+    sv_err_t err;
     if (write_to_stream_soc(soc, err) < 0) {
         lerr("write_to_stream_soc failed with error %s", 
-             _strerror_sf(err.v));
+             _strerror_sv(err.v));
         return -1;
     }
     return 0;
 }
 
 int                             /* not const due to writev().. */
-Message::write_to_stream_soc(int soc, sf_err_t &err) /*  const */
+Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
 {
     int slen = serial_len();
     info("writing %d bytes to stream soc %d", slen, soc);
@@ -131,7 +131,7 @@ Message::write_to_stream_soc(int soc, sf_err_t &err) /*  const */
 }
 
 int
-Message::read_from_stream_soc(int soc, sf_err_t &err)
+Message::read_from_stream_soc(int soc, sv_err_t &err)
 {
     int r1 = read_hdr_from_stream_soc(soc, err);
     if (r1 == 0) {
@@ -154,7 +154,7 @@ Message::read_from_stream_soc(int soc, sf_err_t &err)
 }
 
 int
-Message::read_hdr_from_stream_soc(int soc, sf_err_t &err)
+Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
 {
     int len = hdr_len();
     unsigned char *buf = new unsigned char[len];
@@ -180,7 +180,7 @@ Message::read_hdr_from_stream_soc(int soc, sf_err_t &err)
 }
 
 int
-Message::read_pld_from_stream_soc(int soc, sf_err_t &err)
+Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
 {
     if (!pld_len())
         return 0;

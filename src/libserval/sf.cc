@@ -22,14 +22,14 @@
 #include <libserval/serval.h>
 #include "socket.hh"
 
-static SFSockLib sock;
+static SVSockLib sock;
 
 int 
-socket_sf(int domain, int type, int protocol)
+socket_sv(int domain, int type, int protocol)
 {
-  sf_err_t err;
+  sv_err_t err;
   
-  int s = sock.socket_sf(domain, type, protocol, err);
+  int s = sock.socket_sv(domain, type, protocol, err);
   if (s == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -38,11 +38,11 @@ socket_sf(int domain, int type, int protocol)
 }
 
 int
-bind_sf(int soc, const struct sockaddr *address, socklen_t address_len)
+bind_sv(int soc, const struct sockaddr *address, socklen_t address_len)
 {
-  sf_err_t err;
+  sv_err_t err;
 
-  int n = sock.bind_sf(soc, address, address_len, err);
+  int n = sock.bind_sv(soc, address, address_len, err);
   if (n  == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -51,14 +51,14 @@ bind_sf(int soc, const struct sockaddr *address, socklen_t address_len)
 }
 
 int
-connect_sf(int soc, const struct sockaddr *address, socklen_t address_len)
+connect_sv(int soc, const struct sockaddr *address, socklen_t address_len)
 {
-  sf_err_t err;
+  sv_err_t err;
 
   if (address->sa_family != AF_SERVAL) {
     return ::connect(soc, address, address_len);
   }
-  int n = sock.connect_sf(soc, address, address_len, err);
+  int n = sock.connect_sv(soc, address, address_len, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -67,11 +67,11 @@ connect_sf(int soc, const struct sockaddr *address, socklen_t address_len)
 }
 
 int
-listen_sf(int soc, int backlog)
+listen_sv(int soc, int backlog)
 {
-  sf_err_t err;
+  sv_err_t err;
   int n;
-  n = sock.listen_sf(soc, backlog, err);
+  n = sock.listen_sv(soc, backlog, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -80,12 +80,12 @@ listen_sf(int soc, int backlog)
 }
 
 int
-mlisten_sf(int soc, int backlog, 
+mlisten_sv(int soc, int backlog, 
 	   const struct sockaddr *addr, socklen_t address_len)
 {
-  sf_err_t err;
+  sv_err_t err;
   int n;
-  n = sock.listen_sf(soc, addr, address_len, backlog, err);
+  n = sock.listen_sv(soc, addr, address_len, backlog, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -95,11 +95,11 @@ mlisten_sf(int soc, int backlog,
 
 
 int
-accept_sf(int soc, struct sockaddr *address, socklen_t *addr_len)
+accept_sv(int soc, struct sockaddr *address, socklen_t *addr_len)
 {
-  sf_err_t err;
+  sv_err_t err;
 
-  int fd = sock.accept_sf(soc, address, addr_len, err);
+  int fd = sock.accept_sv(soc, address, addr_len, err);
   if (fd == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -108,10 +108,10 @@ accept_sf(int soc, struct sockaddr *address, socklen_t *addr_len)
 }
 
 ssize_t 
-send_sf(int soc, const void *buffer, size_t length, int flags)
+send_sv(int soc, const void *buffer, size_t length, int flags)
 {
-  sf_err_t err;
-  int n = sock.send_sf(soc, buffer, length, flags, err);
+  sv_err_t err;
+  int n = sock.send_sv(soc, buffer, length, flags, err);
 
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
@@ -122,10 +122,10 @@ send_sf(int soc, const void *buffer, size_t length, int flags)
 }
 
 ssize_t 
-recv_sf(int soc, void *buffer, size_t length, int flags)
+recv_sv(int soc, void *buffer, size_t length, int flags)
 {
-  sf_err_t err;
-  int n = sock.recv_sf(soc, buffer, length, flags, err);
+  sv_err_t err;
+  int n = sock.recv_sv(soc, buffer, length, flags, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -135,11 +135,11 @@ recv_sf(int soc, void *buffer, size_t length, int flags)
 
 
 ssize_t 
-sendto_sf(int soc, const void *buffer, size_t length, int flags,
+sendto_sv(int soc, const void *buffer, size_t length, int flags,
 	  const struct sockaddr *dest_addr, socklen_t dest_len)
 {
-  sf_err_t err;
-  int n = sock.sendto_sf(soc, buffer, length, flags, 
+  sv_err_t err;
+  int n = sock.sendto_sv(soc, buffer, length, flags, 
 			 dest_addr, dest_len, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
@@ -149,11 +149,11 @@ sendto_sf(int soc, const void *buffer, size_t length, int flags,
 }
 
 ssize_t 
-recvfrom_sf(int soc, void *buffer, size_t length, int flags,
+recvfrom_sv(int soc, void *buffer, size_t length, int flags,
 	    struct sockaddr *address, socklen_t *address_len)
 {
-  sf_err_t err;
-  int n = sock.recvfrom_sf(soc, buffer, length, flags, 
+  sv_err_t err;
+  int n = sock.recvfrom_sv(soc, buffer, length, flags, 
 			   address, address_len, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
@@ -163,11 +163,11 @@ recvfrom_sf(int soc, void *buffer, size_t length, int flags,
 }
 
 int
-getsockopt_sf(int soc, int level, int option_name, 
+getsockopt_sv(int soc, int level, int option_name, 
 	      void *option_value, socklen_t *option_len)
 {
-  sf_err_t err;
-  int n = sock.getsockopt_sf(soc, level, option_name, option_value, 
+  sv_err_t err;
+  int n = sock.getsockopt_sv(soc, level, option_name, option_value, 
 			     option_len, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
@@ -177,10 +177,10 @@ getsockopt_sf(int soc, int level, int option_name,
 }
 
 int
-close_sf(int fd)
+close_sv(int fd)
 {
-  sf_err_t err;
-  int n = sock.close_sf(fd, err);
+  sv_err_t err;
+  int n = sock.close_sv(fd, err);
   if (n == SERVAL_SOCKET_ERROR) {
     errno = err.v;
     return -1;
@@ -190,10 +190,10 @@ close_sf(int fd)
 
 // sko begin
 int
-migrate_sf(int soc)
+migrate_sv(int soc)
 {
-  sf_err_t err;
-  int n = sock.migrate_sf(soc, err);
+  sv_err_t err;
+  int n = sock.migrate_sv(soc, err);
   if (n < 0) {
     errno = err.v;
     return -1;
@@ -202,7 +202,7 @@ migrate_sf(int soc)
 }
 
 char *
-strerror_sf(int errnum)
+strerror_sv(int errnum)
 {
-  return _strerror_sf(errnum);
+  return _strerror_sv(errnum);
 }

@@ -313,15 +313,15 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 	struct client_msg_bind_req *req = (struct client_msg_bind_req *)msg;
         struct client_msg_bind_rsp rsp;
         struct socket *sock = c->sock;
-        struct sockaddr_sf saddr;
+        struct sockaddr_sv saddr;
 	int ret;
         
 	LOG_DBG("bind request for service id %s\n", 
 		service_id_to_str(&req->srvid));	
 
         memset(&saddr, 0, sizeof(saddr));
-        saddr.sf_family = AF_SERVAL;
-        memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
+        saddr.sv_family = AF_SERVAL;
+        memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -345,15 +345,15 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_connect_req *req = (struct client_msg_connect_req *)msg;
 	struct client_msg_connect_rsp rsp;
-        struct sockaddr_sf addr;
+        struct sockaddr_sv addr;
         int err;
 
 	LOG_DBG("connect request for service id %s\n", 
 		service_id_to_str(&req->srvid));
 
         memset(&addr, 0, sizeof(addr));
-        addr.sf_family = AF_SERVAL;
-        memcpy(&addr.sf_srvid, &req->srvid, sizeof(req->srvid));
+        addr.sv_family = AF_SERVAL;
+        memcpy(&addr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         err = c->sock->ops->connect(c->sock, (struct sockaddr *)&addr, 
                                     sizeof(addr), req->flags); 
@@ -489,12 +489,12 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-        struct sockaddr_sf saddr;
+        struct sockaddr_sv saddr;
         int ret;
 
         memset(&saddr, 0, sizeof(saddr));
-        saddr.sf_family = AF_SERVAL;
-        memcpy(&saddr.sf_srvid, &req->srvid, sizeof(req->srvid));
+        saddr.sv_family = AF_SERVAL;
+        memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         memset(&mh, 0, sizeof(mh));
         mh.msg_name = &saddr;
@@ -527,7 +527,7 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-        struct sockaddr_sf saddr;
+        struct sockaddr_sv saddr;
         int ret;
 
         client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
@@ -548,7 +548,7 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
                 r.rsp.error = KERN_ERR(ret);
                 LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
         } else {
-                memcpy(&r.rsp.srvid, &saddr.sf_srvid, sizeof(saddr.sf_srvid));
+                memcpy(&r.rsp.srvid, &saddr.sv_srvid, sizeof(saddr.sv_srvid));
                 r.rsp.data_len = ret;
                 r.rsp.msghdr.payload_length += ret;
                 r.data[ret] = '\0';

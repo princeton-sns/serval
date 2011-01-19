@@ -14,9 +14,9 @@ int main(int argc, char **argv)
 	int sock;
 	unsigned long data = 8;
 	ssize_t ret;
-	struct sockaddr_sf addr;
+	struct sockaddr_sv addr;
 
-	sock = socket_sf(AF_SERVAL, SOCK_DGRAM, 0);
+	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
 
 	if (sock == -1) { 
 		fprintf(stderr, "could not create SERVAL socket: %s\n",
@@ -24,27 +24,27 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	addr.sf_family = AF_SERVAL;
-	addr.sf_srvid.s_sid16 = htons(7); 
+	addr.sv_family = AF_SERVAL;
+	addr.sv_srvid.s_sid16 = htons(7); 
 	
-	ret = bind_sf(sock, (struct sockaddr *)&addr, sizeof(addr));
+	ret = bind_sv(sock, (struct sockaddr *)&addr, sizeof(addr));
 
 	if (ret == -1) {
-		fprintf(stderr, "bind: %s\n", strerror_sf(errno));
-		close_sf(sock);
+		fprintf(stderr, "bind: %s\n", strerror_sv(errno));
+		close_sv(sock);
 		return -1;
 	}
 	
-	addr.sf_srvid.s_sid16 = htons(8);
+	addr.sv_srvid.s_sid16 = htons(8);
 
-	ret = sendto_sf(sock, &data, sizeof(data), 0, 
+	ret = sendto_sv(sock, &data, sizeof(data), 0, 
                         (struct sockaddr *)&addr, sizeof(addr));
 
 	if (ret == -1) {
-		fprintf(stderr, "sendto: %s\n", strerror_sf(errno));
+		fprintf(stderr, "sendto: %s\n", strerror_sv(errno));
 	}
 
-	close_sf(sock);
+	close_sv(sock);
 
 	return ret;
 }

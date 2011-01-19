@@ -122,12 +122,12 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 {
         struct sock *sk = sock->sk;
         struct serval_sock *ssk = serval_sk(sk);
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
+        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         int ret = 0;
         
-        if ((unsigned int)addr_len < sizeof(*sfaddr))
+        if ((unsigned int)addr_len < sizeof(*svaddr))
                 return -EINVAL;
-        else if (addr_len % sizeof(*sfaddr) != 0)
+        else if (addr_len % sizeof(*svaddr) != 0)
                 return -EINVAL;
         
         /* Call the protocol's own bind, if it exists */
@@ -147,7 +147,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
                 cm.cmh.len = sizeof(cm);
-                memcpy(&cm.srvid, &sfaddr->sf_srvid, sizeof(sfaddr->sf_srvid));
+                memcpy(&cm.srvid, &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
                 ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
         }
         if (ret < 0) {
@@ -156,8 +156,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 return ret;
         }
 
-        memcpy(&serval_sk(sk)->local_srvid, &sfaddr->sf_srvid, 
-               sizeof(sfaddr->sf_srvid));
+        memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid, 
+               sizeof(svaddr->sv_srvid));
         /* 
            Return value of 1 indicates we are in controller mode -->
            do not wait for a reply 
@@ -423,19 +423,19 @@ out:
 int serval_getname(struct socket *sock, struct sockaddr *addr,
 		 int *addr_len, int peer)
 {
-        struct sockaddr_sf *sa = (struct sockaddr_sf *)addr;
+        struct sockaddr_sv *sa = (struct sockaddr_sv *)addr;
         struct sock *sk = sock->sk;
 
-	sa->sf_family  = AF_SERVAL;
+	sa->sv_family  = AF_SERVAL;
 
 	if (peer)
-		memcpy(&sa->sf_srvid, &serval_sk(sk)->peer_srvid, 
-                       sizeof(struct sockaddr_sf));
+		memcpy(&sa->sv_srvid, &serval_sk(sk)->peer_srvid, 
+                       sizeof(struct sockaddr_sv));
 	else
-		memcpy(&sa->sf_srvid, &serval_sk(sk)->local_srvid, 
-                       sizeof(struct sockaddr_sf));
+		memcpy(&sa->sv_srvid, &serval_sk(sk)->local_srvid, 
+                       sizeof(struct sockaddr_sv));
 
-	*addr_len = sizeof(struct sockaddr_sf);
+	*addr_len = sizeof(struct sockaddr_sv);
 
         return 0;
 }
@@ -444,7 +444,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                             int alen, int flags)
 {
         struct sock *sk = sock->sk;
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)addr;
+        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         int err = 0;
         int nonblock = flags & O_NONBLOCK;
 
@@ -472,7 +472,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 			goto out;
                 */
                 /* Set the peer address */
-                memcpy(&serval_sk(sk)->peer_srvid, &sfaddr->sf_srvid, 
+                memcpy(&serval_sk(sk)->peer_srvid, &svaddr->sv_srvid, 
                        sizeof(struct service_id));
 
                 serval_sock_set_state(sk, SERVAL_REQUEST);

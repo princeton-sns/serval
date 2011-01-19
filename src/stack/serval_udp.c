@@ -161,13 +161,13 @@ static int serval_udp_connect(struct sock *sk, struct sockaddr *uaddr,
                                 int addr_len)
 {
         struct sk_buff *skb;
-        struct service_id *srvid = &((struct sockaddr_sf *)uaddr)->sf_srvid;
+        struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
         int err;
 
         LOG_DBG("srvid=%s addr_len=%d\n", 
                 service_id_to_str(srvid), addr_len);
 
-	if ((size_t)addr_len < sizeof(struct sockaddr_sf))
+	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;
         
         skb = ALLOC_SKB(UDP_MAX_HDR, GFP_KERNEL);
@@ -286,17 +286,17 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		return -EOPNOTSUPP;
 
 	if (msg->msg_name) {
-		struct sockaddr_sf *addr = 
-                        (struct sockaddr_sf *)msg->msg_name;
+		struct sockaddr_sv *addr = 
+                        (struct sockaddr_sv *)msg->msg_name;
 
 		if ((unsigned)msg->msg_namelen < sizeof(*addr))
 			return -EINVAL;
-		if (addr->sf_family != AF_SERVAL) {
-			if (addr->sf_family != AF_UNSPEC)
+		if (addr->sv_family != AF_SERVAL) {
+			if (addr->sv_family != AF_UNSPEC)
 				return -EAFNOSUPPORT;
 		}
                 
-                srvid = &addr->sf_srvid;
+                srvid = &addr->sv_srvid;
         } else if (sk->sk_state != SERVAL_CONNECTED) {
                 return -EDESTADDRREQ;
         }
@@ -349,7 +349,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                                 int *addr_len)
 {
 	struct serval_sock *ss = serval_sk(sk);
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
+        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;
 	long timeo;
         
@@ -362,7 +362,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		goto out;
 	}
 
-        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sf)) {
+        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
                 retval = -EINVAL;
                 LOG_DBG("address length is incorrect\n");
                 goto out;
@@ -427,21 +427,21 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 }
                 
                 /* Copy service id */
-                if (sfaddr) {
+                if (svaddr) {
                         size_t addrlen = msg->msg_namelen;
                         unsigned short from = udp_hdr(skb)->source;
 
-                        sfaddr->sf_family = AF_SERVAL;
-                        *addr_len = sizeof(*sfaddr);
-                        memcpy(&sfaddr->sf_srvid, &from, sizeof(struct service_id));
+                        svaddr->sv_family = AF_SERVAL;
+                        *addr_len = sizeof(*svaddr);
+                        memcpy(&svaddr->sv_srvid, &from, sizeof(struct service_id));
 
                         /* Copy also our local service id to the
                          * address buffer if size admits */
-                        if (addrlen >= sizeof(*sfaddr) * 2) {
-                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(*sfaddr));
-                                sfaddr->sf_family = AF_SERVAL;
-                                memcpy(&sfaddr->sf_srvid, &ss->local_srvid,
-                                       sizeof(sfaddr->sf_srvid));
+                        if (addrlen >= sizeof(*svaddr) * 2) {
+                                svaddr = (struct sockaddr_sv *)((char *)msg->msg_name + sizeof(*svaddr));
+                                svaddr->sv_family = AF_SERVAL;
+                                memcpy(&svaddr->sv_srvid, &ss->local_srvid,
+                                       sizeof(svaddr->sv_srvid));
                         }
                 }
                 /*

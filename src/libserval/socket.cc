@@ -22,22 +22,22 @@
 #include <serval/platform.h>
 
 #if defined(OS_ANDROID)
-const char *SFSockLib::DEFAULT_SF_CFG = "/data/local/tmp/serval.conf";
-const char *SFSockLib::SCAFD_TCP_PATH = "/data/local/tmp/serval-tcp.sock";
-const char *SFSockLib::SCAFD_UDP_PATH = "/data/local/tmp/serval-udp.sock";
+const char *SVSockLib::DEFAULT_SF_CFG = "/data/local/tmp/serval.conf";
+const char *SVSockLib::SCAFD_TCP_PATH = "/data/local/tmp/serval-tcp.sock";
+const char *SVSockLib::SCAFD_UDP_PATH = "/data/local/tmp/serval-udp.sock";
 #else
-const char *SFSockLib::DEFAULT_SF_CFG = "/etc/serval.conf";
-const char *SFSockLib::SCAFD_TCP_PATH = "/tmp/serval-tcp.sock";
-const char *SFSockLib::SCAFD_UDP_PATH = "/tmp/serval-udp.sock";
+const char *SVSockLib::DEFAULT_SF_CFG = "/etc/serval.conf";
+const char *SVSockLib::SCAFD_TCP_PATH = "/tmp/serval-tcp.sock";
+const char *SVSockLib::SCAFD_UDP_PATH = "/tmp/serval-udp.sock";
 #endif
-Cli SFSockLib::null_cli;
-uint32_t SFSockLib::_scafd_id = 0;
+Cli SVSockLib::null_cli;
+uint32_t SVSockLib::_scafd_id = 0;
 
 //
-// SFSockLib
+// SVSockLib
 //
 
-SFSockLib::SFSockLib(int scafd_id)
+SVSockLib::SVSockLib(int scafd_id)
 {
   char logname[30];
   memset(logname, 0, 30);
@@ -70,21 +70,21 @@ SFSockLib::SFSockLib(int scafd_id)
   INIT_LIST_HEAD(&_cli_list);
 }
 
-SFSockLib::~SFSockLib()
+SVSockLib::~SVSockLib()
 {
   while (1) {
     if (list_empty(&_cli_list))
       break;
 
     Cli *c = (Cli *)_cli_list.next;
-    sf_err_t err;
+    sv_err_t err;
 
     delete_cli(c, err);
   }
 }
 
 int
-SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)
+SVSockLib::socket_sv(int domain, int type, int proto, sv_err_t &err)
 {
   if (domain != AF_SERVAL) {
     err = EAFNOSUPPORT;     /* address family is not supported */
@@ -110,19 +110,19 @@ SFSockLib::socket_sf(int domain, int type, int proto, sf_err_t &err)
     }
   }
   int fd;
-  sf_proto_t p = { proto };
+  sv_proto_t p = { proto };
 
   if (create_cli(p, fd, err) < 0) {
     fprintf(stderr, "Could not create client\n");
     return SERVAL_SOCKET_ERROR;
   }
   
-  info("socket_sf: created socket for fd %d", fd);
+  info("socket_sv: created socket for fd %d", fd);
   return fd;
 }
 
 Cli &
-SFSockLib::get_cli(int soc, sf_err_t &err)
+SVSockLib::get_cli(int soc, sv_err_t &err)
 {
   struct list_head *pos;
 
@@ -138,21 +138,21 @@ SFSockLib::get_cli(int soc, sf_err_t &err)
 }
 
 int
-SFSockLib::basic_checks(int soc, const struct sockaddr *addr, 
+SVSockLib::basic_checks(int soc, const struct sockaddr *addr, 
                         socklen_t addr_len, bool check_local,
-                        sf_err_t &err)
+                        sv_err_t &err)
 {
   //
   // todo: test if scafd is reachable
   //
-  if (addr_len < (socklen_t)sizeof(struct sockaddr_sf) || !addr) {
+  if (addr_len < (socklen_t)sizeof(struct sockaddr_sv) || !addr) {
     err =  EINVAL;
     lerr("bad address length");
     return SERVAL_SOCKET_ERROR;
   }
 
-  const struct sockaddr_sf *sf_addr =  (const struct sockaddr_sf *)addr;
-  if (!is_valid(*sf_addr, check_local)) {
+  const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
+  if (!is_valid(*sv_addr, check_local)) {
     err = EADDRNOTAVAIL;
     lerr("invalid Serval address");
     return SERVAL_SOCKET_ERROR;
@@ -165,8 +165,8 @@ SFSockLib::basic_checks(int soc, const struct sockaddr *addr,
 //
  
 int
-SFSockLib::bind_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
-                   sf_err_t &err)
+SVSockLib::bind_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
+                   sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
   if (cli.is_null() ||
@@ -176,22 +176,22 @@ SFSockLib::bind_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
   if (check_state_for_bind(cli, err) < 0)
     return SERVAL_SOCKET_ERROR;
   
-  const struct sockaddr_sf *sf_addr =  (const struct sockaddr_sf *)addr;
+  const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_bind(sf_addr, cli, err) < 0) {
+  if (query_scafd_bind(sv_addr, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
   cli.restore_flags();
   cli.set_state(State::UNBOUND);
-  err = SF_OK;
-  info("bind_sf: bind on soc %d successful", soc);
+  err = SERVAL_OK;
+  info("bind_sv: bind on soc %d successful", soc);
   return 0;
 }
 
 int
-SFSockLib::check_state_for_bind(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_bind(const Cli &cli, sv_err_t &err) const
 {
   if (cli.state() != State::CLOSED) {
     lerr("check_state_for_bind: failed state %s", 
@@ -203,11 +203,11 @@ SFSockLib::check_state_for_bind(const Cli &cli, sf_err_t &err) const
 }
 
 int
-SFSockLib::query_scafd_bind(const struct sockaddr_sf *sf_addr,
-                            const Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_bind(const struct sockaddr_sv *sv_addr,
+                            const Cli &cli, sv_err_t &err)
 {
-  sf_oid_t u;
-  u.s_oid = (sf_addr->sf_oid).s_oid;
+  sv_srvid_t u;
+  u.s_srvid = (sv_addr->sv_srvid).s_srvid;
   BindReq breq(u);
   if (breq.write_to_stream_soc(cli.fd(), err) < 0)
     return SERVAL_SOCKET_ERROR;
@@ -227,7 +227,7 @@ SFSockLib::query_scafd_bind(const struct sockaddr_sf *sf_addr,
 }
 
 bool 
-SFSockLib::is_non_blocking(int fd) const
+SVSockLib::is_non_blocking(int fd) const
 {
   int flags;
   if ((flags = fcntl (fd, F_GETFL, 0)) < 0) {
@@ -238,7 +238,7 @@ SFSockLib::is_non_blocking(int fd) const
 }
 
 int
-SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_connect(const Cli &cli, sv_err_t &err) const
 {
   info("Checking whether state %s is valid", State::state_s(cli.state()));
 
@@ -246,7 +246,7 @@ SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
   if (cli.state() == State::REQUEST) {
     if (is_non_blocking(cli.fd())) {
       err = EALREADY;
-      info("error %s", strerror_sf(err.v));
+      info("error %s", strerror_sv(err.v));
     } else {
       lerr("strange state %s found while %s expected",
            State::state_s(cli.state()), 
@@ -258,13 +258,13 @@ SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
   
   if (cli.state() == State::BOUND) {
     err = EISCONN;
-    info("error %s", strerror_sf(err.v));
+    info("error %s", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   
   if (cli.state() == State::LISTEN) {
     err = EOPNOTSUPP;
-    info(" error %s", strerror_sf(err.v));
+    info(" error %s", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   
@@ -272,7 +272,7 @@ SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
     // CLOSED is a valid state in case a client app does not want to
     // register its object id with the object router
     err = ESFINTERNAL;
-    info("error %s", strerror_sf(err.v));
+    info("error %s", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   info("OK");
@@ -280,8 +280,8 @@ SFSockLib::check_state_for_connect(const Cli &cli, sf_err_t &err) const
 }
 
 int
-SFSockLib::connect_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
-                      sf_err_t &err)
+SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
+                      sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
 
@@ -297,7 +297,7 @@ SFSockLib::connect_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
   }
 
   info("remote_obj_id %s", 
-       oid_to_str(((const struct sockaddr_sf *)addr)->sf_oid));
+       oid_to_str(((const struct sockaddr_sv *)addr)->sv_srvid));
 
   bool nb = false;
   if (cli.is_non_blocking()) {
@@ -305,26 +305,26 @@ SFSockLib::connect_sf(int soc, const struct sockaddr *addr, socklen_t addr_len,
     nb = true;
   }
   
-  const struct sockaddr_sf *sf_addr =  (const struct sockaddr_sf *)addr;
+  const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_connect(sf_addr, nb, cli, err) < 0) {
+  if (query_scafd_connect(sv_addr, nb, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
   cli.restore_flags();
   cli.set_state(State::BOUND);
-  err = SF_OK;
+  err = SERVAL_OK;
   return 0;
 }
 
 int
-SFSockLib::query_scafd_connect(const struct sockaddr_sf *sf_addr, 
-                               bool nb, Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_connect(const struct sockaddr_sv *sv_addr, 
+                               bool nb, Cli &cli, sv_err_t &err)
 {
-  sf_oid_t u;
-  u.s_oid = sf_addr->sf_oid.s_oid;
-  uint16_t flags = sf_addr->sf_flags;
+  sv_srvid_t u;
+  u.s_srvid = sv_addr->sv_srvid.s_srvid;
+  uint16_t flags = sv_addr->sv_flags;
   ConnectReq creq(u, nb, flags);
   if (creq.write_to_stream_soc(cli.fd(), err) < 0) {
     lerr("write to stream sock failed");
@@ -340,7 +340,7 @@ SFSockLib::query_scafd_connect(const struct sockaddr_sf *sf_addr,
   if (nb) {
     err = EINPROGRESS;
     lerr("nb is true, returning %s",
-         strerror_sf(err.v));
+         strerror_sv(err.v));
     //
     // Linux does not support SO_SNDBUF modifications either
     // What a bummer!
@@ -378,9 +378,9 @@ SFSockLib::query_scafd_connect(const struct sockaddr_sf *sf_addr,
 // todo: support other async errors; currently handles only connect()
 // 
 int
-SFSockLib::getsockopt_sf(int soc, int level, int option_name, 
+SVSockLib::getsockopt_sv(int soc, int level, int option_name, 
                          void *option_value, socklen_t *option_len,
-                         sf_err_t &err)
+                         sv_err_t &err)
 {
   int *option = (int *)option_value;
 
@@ -427,7 +427,7 @@ SFSockLib::getsockopt_sf(int soc, int level, int option_name,
     break;
   }
   default:
-    lerr("SFSockLib::getsockopt_sf: option %d not supported", level);
+    lerr("SVSockLib::getsockopt_sv: option %d not supported", level);
     err = EINVAL;
     return SERVAL_SOCKET_ERROR;
   }
@@ -438,7 +438,7 @@ SFSockLib::getsockopt_sf(int soc, int level, int option_name,
 }
 
 int
-SFSockLib::query_scafd_soerror(Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_soerror(Cli &cli, sv_err_t &err)
 {
   ConnectRsp cresp;
   if (cresp.read_from_stream_soc(cli.fd(), err) < 0) // nothing to read
@@ -447,15 +447,15 @@ SFSockLib::query_scafd_soerror(Cli &cli, sf_err_t &err)
   
   if (cresp.err().v) {
     err = cresp.err();
-    info("getsockopt_sf: ERR cli [%s] : %s", cli.s(),
-         strerror_sf(err.v));
+    info("getsockopt_sv: ERR cli [%s] : %s", cli.s(),
+         strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   //if (cli.reset_writability(err) < 0)
   //    return SERVAL_SOCKET_ERROR;
   cli.set_state(State::BOUND);
   cli.set_connect_in_progress(false);
-  info("getsockopt_sf: OK cli [%s]", cli.s());
+  info("getsockopt_sv: OK cli [%s]", cli.s());
   return 0;
 }
 
@@ -463,7 +463,7 @@ SFSockLib::query_scafd_soerror(Cli &cli, sf_err_t &err)
 // Listen on file objects
 //
 int
-SFSockLib::listen_sf(int soc, int backlog, sf_err_t &err)
+SVSockLib::listen_sv(int soc, int backlog, sv_err_t &err)
 { 
   Cli &cli = get_cli(soc, err);
   if (cli.is_null())
@@ -485,18 +485,18 @@ SFSockLib::listen_sf(int soc, int backlog, sf_err_t &err)
 
 
 int
-SFSockLib::listen_sf(int soc, const struct sockaddr *addr,
+SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
                      socklen_t addr_len,
-                     int backlog, sf_err_t &err)
+                     int backlog, sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
   if (cli.is_null() ||
       basic_checks(soc, addr, addr_len, true, err) < 0)
     return SERVAL_SOCKET_ERROR;
 
-  const struct sockaddr_sf *sf_addr =  (const struct sockaddr_sf *)addr;
-  sf_oid_t local_obj_id;
-  local_obj_id.s_oid = sf_addr->sf_oid.s_oid;
+  const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
+  sv_srvid_t local_obj_id;
+  local_obj_id.s_srvid = sv_addr->sv_srvid.s_srvid;
   info("multi-listen: on obj id %s", oid_to_str(local_obj_id));
   cli.save_flags();
   cli.set_sync();
@@ -510,8 +510,8 @@ SFSockLib::listen_sf(int soc, const struct sockaddr *addr,
 }
 
 int
-SFSockLib::query_scafd_listen(int backlog, sf_oid_t local_obj_id, 
-                              const Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_listen(int backlog, sv_srvid_t local_obj_id, 
+                              const Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(local_obj_id, backlog);
   if (lreq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -531,7 +531,7 @@ SFSockLib::query_scafd_listen(int backlog, sf_oid_t local_obj_id,
 }
 
 int
-SFSockLib::check_state_for_listen(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_listen(const Cli &cli, sv_err_t &err) const
 {
   if (cli.state() != State::UNBOUND && cli.state() != State::LISTEN) {
     lerr("check_state_for_listen: failed state is %s", 
@@ -543,7 +543,7 @@ SFSockLib::check_state_for_listen(const Cli &cli, sf_err_t &err) const
 }
 
 int
-SFSockLib::query_scafd_listen(int backlog, const Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_listen(int backlog, const Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(backlog);
   if (lreq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -567,8 +567,8 @@ SFSockLib::query_scafd_listen(int backlog, const Cli &cli, sf_err_t &err)
 //
 
 int
-SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
-                     sf_err_t &err)
+SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
+                     sv_err_t &err)
 {
 
   Cli &cli = get_cli(soc, err);
@@ -576,10 +576,10 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
     return ::accept(soc, addr, addr_len);
   }
 
-  if (*addr_len < (socklen_t)sizeof(struct sockaddr_sf) || !addr) {
+  if (*addr_len < (socklen_t)sizeof(struct sockaddr_sv) || !addr) {
     err =  EINVAL;
     return SERVAL_SOCKET_ERROR;
-  } else if (*addr_len % sizeof(struct sockaddr_sf) != 0) {
+  } else if (*addr_len % sizeof(struct sockaddr_sv) != 0) {
     err = EINVAL;
     return SERVAL_SOCKET_ERROR;
   }
@@ -589,10 +589,10 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
 
   bool nb = false;
   if (cli.is_non_blocking()) {
-    info("accept_sf: non-blocking");
+    info("accept_sv: non-blocking");
     nb = true;
   } else
-    info("accept_sf: blocking");
+    info("accept_sv: blocking");
 
   cli.save_flags();
   cli.set_sync();
@@ -626,27 +626,27 @@ SFSockLib::accept_sf(int soc, struct sockaddr *addr, socklen_t *addr_len,
   // programs should not rely on inheritance or non-inheritance of file status
   // flags and always explicitly set all required flags on the socket returned
   // from accept().
-  struct sockaddr_sf *sf_addr =  (struct sockaddr_sf *)&addr[0];
-  sf_addr->sf_family = AF_SERVAL;
-  sf_addr->sf_oid.s_oid = aresp.remote_obj_id().s_oid;
+  struct sockaddr_sv *sv_addr =  (struct sockaddr_sv *)&addr[0];
+  sv_addr->sv_family = AF_SERVAL;
+  sv_addr->sv_srvid.s_srvid = aresp.remote_obj_id().s_srvid;
 
-  if (*addr_len >= (socklen_t)(2 * sizeof(struct sockaddr_sf))) {
+  if (*addr_len >= (socklen_t)(2 * sizeof(struct sockaddr_sv))) {
     // also give back the remote object id
-    struct sockaddr_sf *sf_addr2 =  (struct sockaddr_sf *)&addr[1];
-    sf_addr2->sf_family = AF_SERVAL;   
-    sf_addr2->sf_oid.s_oid = aresp.remote_obj_id().s_oid;
-    *addr_len = 2 * sizeof(struct sockaddr_sf);
+    struct sockaddr_sv *sv_addr2 =  (struct sockaddr_sv *)&addr[1];
+    sv_addr2->sv_family = AF_SERVAL;   
+    sv_addr2->sv_srvid.s_srvid = aresp.remote_obj_id().s_srvid;
+    *addr_len = 2 * sizeof(struct sockaddr_sv);
   } else {
-    *addr_len = sizeof(struct sockaddr_sf);
+    *addr_len = sizeof(struct sockaddr_sv);
   }
     
   return new_cli.fd();
 }
 
 int
-SFSockLib::query_scafd_accept2(bool nb, 
+SVSockLib::query_scafd_accept2(bool nb, 
                                const Cli &cli, const AcceptRsp &aresp,
-                               sf_err_t &err)
+                               sv_err_t &err)
 {
   AcceptReq2 areq2(aresp.local_obj_id(), aresp.sock_id(), nb);
   if (areq2.write_to_stream_soc(cli.fd(), err) < 0)
@@ -666,7 +666,7 @@ SFSockLib::query_scafd_accept2(bool nb,
 }
 
 int
-SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
+SVSockLib::create_cli(sv_proto_t proto, int &new_soc, sv_err_t &err)
 {
   new_soc = socket(AF_LOCAL, SOCK_STREAM, 0);
   if (new_soc < 0) {
@@ -716,7 +716,7 @@ SFSockLib::create_cli(sf_proto_t proto, int &new_soc, sf_err_t &err)
 }
 
 int
-SFSockLib::delete_cli(Cli *cli, sf_err_t &err)
+SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
 {
   if (cli->fd() >= 0)
     if (close(cli->fd()) < 0) {
@@ -737,8 +737,8 @@ SFSockLib::delete_cli(Cli *cli, sf_err_t &err)
 }
 
 int
-SFSockLib::query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
-                               sf_err_t &err)
+SVSockLib::query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
+                               sv_err_t &err)
 {
   AcceptReq areq;
   if (areq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -769,7 +769,7 @@ SFSockLib::query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
 }
 
 int
-SFSockLib::check_state_for_accept(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_accept(const Cli &cli, sv_err_t &err) const
 {
   if (cli.state() != State::LISTEN) {
     lerr("check_state_for_accept: failed state is %s, expected %s", 
@@ -781,8 +781,8 @@ SFSockLib::check_state_for_accept(const Cli &cli, sf_err_t &err) const
 }
 
 ssize_t 
-SFSockLib::send_sf(int soc, const void *buffer, size_t length, int flags,
-                   sf_err_t &err)
+SVSockLib::send_sv(int soc, const void *buffer, size_t length, int flags,
+                   sv_err_t &err)
 { 
   Cli &cli = get_cli(soc, err);
 
@@ -800,7 +800,7 @@ SFSockLib::send_sf(int soc, const void *buffer, size_t length, int flags,
   }
   
   if (length == 0) {
-    info("send_sf: 0 length send_sf");
+    info("send_sv: 0 length send_sv");
     return 0;
   }
 
@@ -829,9 +829,9 @@ SFSockLib::send_sf(int soc, const void *buffer, size_t length, int flags,
 }
 
 ssize_t
-SFSockLib::sendto_sf(int soc, const void *buffer, size_t length, int flags,
+SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
                      const struct sockaddr *dst_addr, socklen_t addr_len, 
-                     sf_err_t &err)
+                     sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
 
@@ -841,15 +841,15 @@ SFSockLib::sendto_sf(int soc, const void *buffer, size_t length, int flags,
       basic_checks(soc, dst_addr, addr_len, false, err) < 0)
     return ::sendto(soc, buffer, length, flags, dst_addr, addr_len);
   
-  sf_oid_t remote_obj_id;
-  remote_obj_id.s_oid = ((const struct sockaddr_sf *)dst_addr)->sf_oid.s_oid;
+  sv_srvid_t remote_obj_id;
+  remote_obj_id.s_srvid = ((const struct sockaddr_sv *)dst_addr)->sv_srvid.s_srvid;
   
-  info("sendto_sf: remote_obj_id %s", oid_to_str(remote_obj_id));
+  info("sendto_sv: remote_obj_id %s", oid_to_str(remote_obj_id));
   if (check_state_for_sendto(cli, err) < 0)
     return SERVAL_SOCKET_ERROR;
 
   if (length == 0) {
-    info("send_sf: 0 length send_sf");
+    info("send_sv: 0 length send_sv");
     return 0;
   }
 
@@ -874,7 +874,7 @@ SFSockLib::sendto_sf(int soc, const void *buffer, size_t length, int flags,
 }
 
 int
-SFSockLib::check_state_for_send(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_send(const Cli &cli, sv_err_t &err) const
 {
   if (cli.state() == State::REQUEST) {
     // What would be the correct thing to return here while connecting?
@@ -892,7 +892,7 @@ SFSockLib::check_state_for_send(const Cli &cli, sf_err_t &err) const
 }
 
 int
-SFSockLib::check_state_for_sendto(const Cli &cli, sf_err_t &err) const
+SVSockLib::check_state_for_sendto(const Cli &cli, sv_err_t &err) const
 {
   if (cli.state() != State::CLOSED &&
       cli.state() != State::BOUND &&   // allow sendto on connected sockets
@@ -906,8 +906,8 @@ SFSockLib::check_state_for_sendto(const Cli &cli, sf_err_t &err) const
 }
 
 int
-SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
-                            Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
+                            Cli &cli, sv_err_t &err)
 {
   SendReq sreq(nb, (unsigned char *)buffer, length, flags);
   if (sreq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -964,9 +964,9 @@ SFSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
 }
 
 int
-SFSockLib::query_scafd_sendto(sf_oid_t dst_obj_id,
+SVSockLib::query_scafd_sendto(sv_srvid_t dst_obj_id,
                               const void *buffer, size_t length, int flags,
-                              Cli &cli, sf_err_t &err)
+                              Cli &cli, sv_err_t &err)
 {
   SendReq sreq(dst_obj_id, (unsigned char *)buffer, length, flags);
   if (sreq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -975,8 +975,8 @@ SFSockLib::query_scafd_sendto(sf_oid_t dst_obj_id,
 }
 
 ssize_t 
-SFSockLib::recv_sf(int soc, void *buffer, size_t length, int flags,
-                   sf_err_t &err)
+SVSockLib::recv_sv(int soc, void *buffer, size_t length, int flags,
+                   sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
   if (cli.is_null())   // todo: what if local end is shut down ?
@@ -993,14 +993,14 @@ SFSockLib::recv_sf(int soc, void *buffer, size_t length, int flags,
   
   info("receiving data");
 
-  sf_oid_t src_obj_id; // ignore this since it's connected 
+  sv_srvid_t src_obj_id; // ignore this since it's connected 
   
   cli.save_flags();
   cli.set_sync();
   if (query_scafd_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, 
                        cli, err) < 0) {
     cli.restore_flags();
-    lerr("query_scafd_recv returned error '%s'", strerror_sf(err.v));
+    lerr("query_scafd_recv returned error '%s'", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   cli.restore_flags();
@@ -1011,9 +1011,9 @@ SFSockLib::recv_sf(int soc, void *buffer, size_t length, int flags,
 }
 
 ssize_t 
-SFSockLib::recvfrom_sf(int soc, void *buffer, size_t length, int flags,
+SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
                        struct sockaddr *src_addr, socklen_t *addr_len,
-                       sf_err_t &err)
+                       sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
   if (cli.is_null())   // todo: what if local end is shut down ?
@@ -1037,7 +1037,7 @@ SFSockLib::recvfrom_sf(int soc, void *buffer, size_t length, int flags,
   if (cli.is_non_blocking())
     nb = true;
   
-  sf_oid_t src_obj_id;
+  sv_srvid_t src_obj_id;
   
   cli.save_flags();
   cli.set_sync();
@@ -1048,26 +1048,26 @@ SFSockLib::recvfrom_sf(int soc, void *buffer, size_t length, int flags,
   }
   cli.restore_flags();
 
-  struct sockaddr_sf *sf_addr = (struct sockaddr_sf *)&src_addr[0];
-  sf_addr->sf_family = AF_SERVAL;
-  sf_addr->sf_oid.s_oid = src_obj_id.s_oid;
+  struct sockaddr_sv *sv_addr = (struct sockaddr_sv *)&src_addr[0];
+  sv_addr->sv_family = AF_SERVAL;
+  sv_addr->sv_srvid.s_srvid = src_obj_id.s_srvid;
 
-  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sf)) {
-    struct sockaddr_sf *sf_addr2 = (struct sockaddr_sf *)&src_addr[1];
-    sf_addr2->sf_family = AF_SERVAL;
-    sf_addr2->sf_oid.s_oid = htons(SERVAL_NULL_OID);
-    *addr_len = 2 * sizeof(struct sockaddr_sf);
+  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sv)) {
+    struct sockaddr_sv *sv_addr2 = (struct sockaddr_sv *)&src_addr[1];
+    sv_addr2->sv_family = AF_SERVAL;
+    sv_addr2->sv_srvid.s_srvid = htons(SERVAL_NULL_OID);
+    *addr_len = 2 * sizeof(struct sockaddr_sv);
   } else { 
-    *addr_len = sizeof(struct sockaddr_sf);
+    *addr_len = sizeof(struct sockaddr_sv);
   }
   return length;
 }
 
 
 int
-SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, 
-                            int flags, sf_oid_t &src_obj_id, 
-                            Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, 
+                            int flags, sv_srvid_t &src_obj_id, 
+                            Cli &cli, sv_err_t &err)
 {
   info("query_scafd_recv");
   bool got_havedata_msg = false;
@@ -1096,7 +1096,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
       // check if HaveData exists and discard it
       // This allows select() to wake up without
       // reading anything from the socket buffers
-      info("recv_sf on blocking socket");
+      info("recv_sv on blocking socket");
       bool v;
       if (cli.has_unread_data(1, v, err) >= 0) {
         if (v) {
@@ -1192,7 +1192,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 
   m.print("recv:app:rx:hdr");
   if (m.pld_len_v()) {
-    RecvRsp rresp(SF_OK);
+    RecvRsp rresp(SERVAL_OK);
     uint16_t nonserial_len = m.pld_len_v() - rresp.serial_pld_len();
     if (nonserial_len > len) {
       err = ENOMEM;          // todo: support incoming msg truncation
@@ -1209,7 +1209,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 
     if (rresp.err().v) {
       err = rresp.err();
-      lerr("RecvRsp has error %s", strerror_sf(err.v));
+      lerr("RecvRsp has error %s", strerror_sv(err.v));
       return SERVAL_SOCKET_ERROR;
     }
     info("read recv response");
@@ -1229,7 +1229,7 @@ SFSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 }
 
 int
-SFSockLib::close_sf(int soc, sf_err_t &err)
+SVSockLib::close_sv(int soc, sv_err_t &err)
 {
   Cli &cli = get_cli(soc, err);
   if (cli.is_null()) {
@@ -1256,7 +1256,7 @@ SFSockLib::close_sf(int soc, sf_err_t &err)
 }
 
 int
-SFSockLib::query_scafd_close(const Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_close(const Cli &cli, sv_err_t &err)
 {
   CloseReq creq;
   if (creq.write_to_stream_soc(cli.fd(), err) < 0)
@@ -1301,27 +1301,27 @@ SFSockLib::query_scafd_close(const Cli &cli, sf_err_t &err)
 }
 
 bool
-SFSockLib::is_valid(const struct sockaddr_sf &addr, bool local) const
+SVSockLib::is_valid(const struct sockaddr_sv &addr, bool local) const
 {
-  if (addr.sf_family == AF_SERVAL) {
-    if ((local && !is_reserved(addr.sf_oid)) ||
-        (!local && !is_reserved(addr.sf_oid)))
+  if (addr.sv_family == AF_SERVAL) {
+    if ((local && !is_reserved(addr.sv_srvid)) ||
+        (!local && !is_reserved(addr.sv_srvid)))
       return true;
     else {
       lerr("local !is_reserved");
     }
   } else {
-    lerr("Bad address family %d", addr.sf_family);
+    lerr("Bad address family %d", addr.sv_family);
   }
   return false;
 }
 
 bool
-SFSockLib::is_reserved(sf_oid_t obj_id) const
+SVSockLib::is_reserved(sv_srvid_t obj_id) const
 {
-  if  (obj_id.s_oid == htons(CONTROLLER_OID) || 
-       obj_id.s_oid == htons(SERVAL_OID) || 
-       obj_id.s_oid == htons(SERVAL_NULL_OID)) {
+  if  (obj_id.s_srvid == htons(CONTROLLER_OID) || 
+       obj_id.s_srvid == htons(SERVAL_OID) || 
+       obj_id.s_srvid == htons(SERVAL_NULL_OID)) {
     fprintf(stderr, "object ID %s not allowed", oid_to_str(obj_id));
     return true;
   }
@@ -1329,16 +1329,16 @@ SFSockLib::is_reserved(sf_oid_t obj_id) const
 }
 
 int
-SFSockLib::migrate_sf(int soc, sf_err_t &err)
+SVSockLib::migrate_sv(int soc, sv_err_t &err)
 {
-  info("migrate_sf");
+  info("migrate_sv");
   Cli &cli = get_cli(soc, err);
   if (cli.is_null())
     return SERVAL_SOCKET_ERROR;
 
   if (cli.state() != State::BOUND) {
     err = ENOTCONN;
-    lerr("migrate_sf: not BOUND");
+    lerr("migrate_sv: not BOUND");
     return SERVAL_SOCKET_ERROR;
   }
 
@@ -1351,14 +1351,14 @@ SFSockLib::migrate_sf(int soc, sf_err_t &err)
   cli.restore_flags();
 
   // within Scafd socket state transitions to 
-  // one of the SFSock::is_user_closed_state(s), 
+  // one of the SVSock::is_user_closed_state(s), 
   // it's OK to delete the app end of the socket
   delete_cli(&cli, err);
   return 0;
 }
 
 int
-SFSockLib::query_scafd_migrate(const Cli &cli, sf_err_t &err)
+SVSockLib::query_scafd_migrate(const Cli &cli, sv_err_t &err)
 {
   info("query_scafd_migrate");
   MigrateReq mreq;

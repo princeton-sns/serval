@@ -27,7 +27,7 @@
 SendReq::SendReq()
     :Message(SEND_REQ), _nb(false), _nsbuf(0), _nonserial_len(0), _flags(0)
 {
-    _dst_obj_id.s_oid = htons(SERVAL_NULL_OID);
+    _dst_obj_id.s_srvid = htons(SERVAL_NULL_OID);
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
@@ -36,11 +36,11 @@ SendReq::SendReq(bool nb,
     :Message(SEND_REQ), _nb(nb), _nsbuf(buf), _nonserial_len(buflen),
          _flags(flags)
 {
-    _dst_obj_id.s_oid = htons(SERVAL_NULL_OID);
+    _dst_obj_id.s_srvid = htons(SERVAL_NULL_OID);
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
-SendReq::SendReq(sf_oid_t dst_obj_id,
+SendReq::SendReq(sv_srvid_t dst_obj_id,
                  unsigned char *buf, uint16_t buflen, int flags)
     :Message(SEND_REQ), _nb(false), _nsbuf(buf), _nonserial_len(buflen),
          _flags(flags)
@@ -104,7 +104,7 @@ SendRsp::SendRsp()
 }
 
 
-SendRsp::SendRsp(sf_err_t err)
+SendRsp::SendRsp(sv_err_t err)
         : Message(SEND_RSP), _err(err)
 {
     set_pld_len_v(serial_pld_len());

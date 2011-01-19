@@ -76,7 +76,7 @@ MigrateRsp::MigrateRsp()
 }
 
 
-MigrateRsp::MigrateRsp(sf_err_t err)
+MigrateRsp::MigrateRsp(sv_err_t err)
         : Message(MIG_RSP), _err(err)
 {
     set_pld_len_v(serial_pld_len());

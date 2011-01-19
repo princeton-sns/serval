@@ -54,10 +54,10 @@ class Message {
     int write_hdr(unsigned char *buf) const;
     int read_hdr(const unsigned char *buf);
     int write_to_stream_soc(int soc);
-    int write_to_stream_soc(int soc, sf_err_t &err);
-    int read_from_stream_soc(int soc, sf_err_t &err);
-    int read_hdr_from_stream_soc(int soc, sf_err_t &err);
-    int read_pld_from_stream_soc(int soc, sf_err_t &err);
+    int write_to_stream_soc(int soc, sv_err_t &err);
+    int read_from_stream_soc(int soc, sv_err_t &err);
+    int read_hdr_from_stream_soc(int soc, sv_err_t &err);
+    int read_pld_from_stream_soc(int soc, sv_err_t &err);
 
     void print(const char *label) const;
     const char *type_cstr() const;

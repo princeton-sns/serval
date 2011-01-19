@@ -27,18 +27,18 @@
 ListenReq::ListenReq()
         :Message(LISTEN_REQ), _use_first(true), _backlog(DEFAULT_BACKLOG)
 {
-    _local_obj_id.s_oid = htons(SERVAL_NULL_OID);
+    _local_obj_id.s_srvid = htons(SERVAL_NULL_OID);
     set_pld_len_v(serial_pld_len());
 }
 
 ListenReq::ListenReq(int backlog)
         :Message(LISTEN_REQ), _use_first(true), _backlog(backlog)
 {
-    _local_obj_id.s_oid = htons(SERVAL_NULL_OID);
+    _local_obj_id.s_srvid = htons(SERVAL_NULL_OID);
     set_pld_len_v(serial_pld_len());
 }
 
-ListenReq::ListenReq(sf_oid_t obj_id, int backlog)
+ListenReq::ListenReq(sv_srvid_t obj_id, int backlog)
         :Message(LISTEN_REQ), _use_first(false), _backlog(backlog)
 {
     memcpy(&_local_obj_id, &obj_id, sizeof(obj_id));
@@ -84,12 +84,12 @@ ListenReq::print(const char *label) const
 //
 
 ListenRsp::ListenRsp()
-        : Message(LISTEN_RSP), _err(SF_OK)
+        : Message(LISTEN_RSP), _err(SERVAL_OK)
 {
     set_pld_len_v(serial_pld_len());
 }
 
-ListenRsp::ListenRsp(sf_err_t err)
+ListenRsp::ListenRsp(sv_err_t err)
         : Message(LISTEN_RSP), _err(err)
 {
     set_pld_len_v(serial_pld_len());

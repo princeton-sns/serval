@@ -26,7 +26,7 @@ static int native = 0; /* Whether the socket is native or libserval */
 
 static int should_exit = 0;
 static int p[2] = { -1, -1 };
-struct sockaddr_sf ctrlid;
+struct sockaddr_sv ctrlid;
 
 static int join_timeout(struct timer *t);
 
@@ -47,12 +47,12 @@ static ssize_t scafd_sendto(int sock, void *data, size_t len, int flags,
 		ret = sendto(sock, data, len, flags, 
 			     addr, addrlen);
 	else 
-		ret = sendto_sf(sock, data, len, flags, 
+		ret = sendto_sv(sock, data, len, flags, 
 				addr, addrlen);
 	
 	if (ret == -1) {
 		LOG_ERR("sendto failed: %s\n",
-			strerror_sf(errno));
+			strerror_sv(errno));
 	}
 
 	return ret;
@@ -67,12 +67,12 @@ static ssize_t scafd_recvfrom(int sock, void *buf, size_t len, int flags,
 		ret = recvfrom(sock, buf, len, flags, 
                                addr, addrlen);
 	else 
-		ret = recvfrom_sf(sock, buf, len, flags, 
+		ret = recvfrom_sv(sock, buf, len, flags, 
                                   addr, addrlen);
 	
 	if (ret == -1) {
 		LOG_ERR("recvfrom failed: %s\n",
-			strerror_sf(errno));
+			strerror_sv(errno));
 	}
 
 	return ret;
@@ -147,7 +147,7 @@ static struct libstack_callbacks callbacks = {
 int ctrlsock_read(int sock)
 {
         unsigned char buf[2000];
-        struct sockaddr_sf addr;
+        struct sockaddr_sv addr;
         socklen_t addrlen = 0;
         int ret;
 
@@ -156,7 +156,7 @@ int ctrlsock_read(int sock)
 
         if (ret > 0) {
                 printf("received message from service id %s\n",
-                       service_id_to_str(&addr.sf_srvid));
+                       service_id_to_str(&addr.sv_srvid));
         }
 
         return ret;
@@ -167,7 +167,7 @@ int close_ctrlsock(int sock)
 	if (native)
 		return close(ctrlsock);
 	
-	return close_sf(ctrlsock);
+	return close_sv(ctrlsock);
 }
 
 static int daemonize(void)
@@ -258,8 +258,8 @@ int main(int argc, char **argv)
 
 	/* Set controller service id */
 	memset(&ctrlid, 0, sizeof(ctrlid));
-	ctrlid.sf_family = AF_SERVAL;
-	ctrlid.sf_srvid.s_sid16 = htons(666);
+	ctrlid.sv_family = AF_SERVAL;
+	ctrlid.sv_srvid.s_sid16 = htons(666);
 
 	/* Try first a native socket */
 	ctrlsock = socket(AF_SERVAL, SOCK_DGRAM, 0);
@@ -269,11 +269,11 @@ int main(int argc, char **argv)
 		case EAFNOSUPPORT:
                 case EPROTONOSUPPORT:
 			/* Try libserval */
-			ctrlsock = socket_sf(AF_SERVAL, SOCK_DGRAM, 0);
+			ctrlsock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
 			
 			if (ctrlsock == -1) {
 				LOG_ERR("controller socket: %s\n",
-					strerror_sf(errno));
+					strerror_sv(errno));
 				return -1;
 			}
                         break;

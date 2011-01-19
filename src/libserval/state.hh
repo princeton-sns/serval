@@ -6,7 +6,7 @@
 #include "types.h"
 
 const char *
-oid_to_str(sf_oid_t oid);
+oid_to_str(sv_srvid_t oid);
 
 #define CRC_LEN 4
 
@@ -57,136 +57,136 @@ typedef enum {
     PACKET_STOLEN,
 } PacketRetval_t;
 
-class sf_err_t {
+class sv_err_t {
   public:
-    sf_err_t(): v(0) { }
-    sf_err_t(uint8_t err)
+    sv_err_t(): v(0) { }
+    sv_err_t(uint8_t err)
             : v(err) { }
-    sf_err_t(const sf_err_t &e)
+    sv_err_t(const sv_err_t &e)
             : v(e.v) { }
-    sf_err_t &operator=(const sf_err_t &u) { v = u.v; return *this; }
+    sv_err_t &operator=(const sv_err_t &u) { v = u.v; return *this; }
 
     uint8_t v;
 };
 
 inline bool
-operator==(const sf_err_t &u, const sf_err_t &v)
+operator==(const sv_err_t &u, const sv_err_t &v)
 {
     return u.v == v.v;
 }
 
 inline bool
-operator!=(const sf_err_t &u, const sf_err_t &v)
+operator!=(const sv_err_t &u, const sv_err_t &v)
 {
     return !(u == v);
 }
 
-// sf_oid_t
+// sv_srvid_t
 
 inline bool
-operator==(const sf_oid_t &u, const sf_oid_t &v)
+operator==(const sv_srvid_t &u, const sv_srvid_t &v)
 {
     return memcmp(&u, &v, sizeof(u)) == 0;
 }
 
 inline bool
-operator!=(const sf_oid_t &u, const sf_oid_t &v)
+operator!=(const sv_srvid_t &u, const sv_srvid_t &v)
 {
     return !(u == v);
 }
 
-// sf_host_t
+// sv_host_t
 
 inline bool
-operator==(const sf_host_t &u, const sf_host_t &v)
+operator==(const sv_host_t &u, const sv_host_t &v)
 {
     return memcmp(&u, &v, sizeof(u)) == 0;
 }
 
 inline bool
-operator!=(const sf_host_t &u, const sf_host_t &v)
+operator!=(const sv_host_t &u, const sv_host_t &v)
 {
     return !(u == v);
 }
 
-// sf_proto_t
+// sv_proto_t
 
 inline bool
-operator==(const sf_proto_t &u, const sf_proto_t &v)
+operator==(const sv_proto_t &u, const sv_proto_t &v)
 {
     return u.v == v.v;
 }
 
 inline bool
-operator!=(const sf_proto_t &u, const sf_proto_t &v)
+operator!=(const sv_proto_t &u, const sv_proto_t &v)
 {
     return !(u == v);
 }
 
 inline bool
-operator==(const sf_proto_t &u, int v)
+operator==(const sv_proto_t &u, int v)
 {
     return u.v == v;
 }
 
 inline bool
-operator!=(const sf_proto_t &u, int v)
+operator!=(const sv_proto_t &u, int v)
 {
     return !(u == v);
 }
 
 
-// sf_sock_t
+// sv_sock_t
 
 inline bool
-operator==(const sf_sock_t &u, const sf_sock_t &v)
+operator==(const sv_sock_t &u, const sv_sock_t &v)
 {
     return memcmp(&u, &v, sizeof(u)) == 0;
 }
 
 inline bool
-operator!=(const sf_sock_t &u, const sf_sock_t &v)
+operator!=(const sv_sock_t &u, const sv_sock_t &v)
 {
     return !(u == v);
 }
 
 inline size_t
-hashcode(const sf_sock_t &v)
+hashcode(const sv_sock_t &v)
 {
     return v.s_id;
 }
 
 inline size_t
-hashcode(const sf_oid_t &v)
+hashcode(const sv_srvid_t &v)
 {
     return v.s_sid16;
 }
 
 inline size_t
-hashcode(const sf_host_t &v)
+hashcode(const sv_host_t &v)
 {
     return v.s_addr;
 }
 
-inline sf_sock_t
+inline sv_sock_t
 ip_to_sock_id(uint32_t ip)
 {
-    sf_sock_t p;
+    sv_sock_t p;
     p.s_id = ip & 0xffff;
     return p;
 }
 
-inline sf_oid_t
+inline sv_srvid_t
 port_to_obj_id(uint16_t port)
 {
-    sf_oid_t p;
+    sv_srvid_t p;
     p.s_sid16 = port;
     return p;
 }
 
 #define STRERROR_UNIMPL_STR "strerror unimplemented in kernel"
 inline char *
-_strerror_sf_r(int errnum, char *buf, size_t buflen)
+_strerror_sv_r(int errnum, char *buf, size_t buflen)
 {
     switch (errnum) {
         case ESOCKIDNOTAVAIL: 
@@ -233,9 +233,9 @@ _strerror_sf_r(int errnum, char *buf, size_t buflen)
 
 static char st_buf[256];
 inline char *
-_strerror_sf(int errnum)
+_strerror_sv(int errnum)
 {
-    return _strerror_sf_r(errnum, st_buf, 256);
+    return _strerror_sv_r(errnum, st_buf, 256);
 }
 
 #endif

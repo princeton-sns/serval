@@ -7,7 +7,7 @@
 class ConnectReq : public Message {
   public:
     ConnectReq();
-    ConnectReq(sf_oid_t obj_id, bool nb, uint16_t flags);
+    ConnectReq(sv_srvid_t obj_id, bool nb, uint16_t flags);
 
     int check_type() const;
     int serial_size() const;
@@ -16,20 +16,20 @@ class ConnectReq : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sf_oid_t obj_id() const { return _obj_id; }
+    sv_srvid_t obj_id() const { return _obj_id; }
     bool nb() const         { return _nb; }
     uint16_t flags() const  { return _flags; }
 
   private:
-    sf_oid_t _obj_id;
+    sv_srvid_t _obj_id;
     bool _nb;
-    uint16_t _flags;  // from sockaddr_sf passed in by user
+    uint16_t _flags;  // from sockaddr_sv passed in by user
 };
 
 class ConnectRsp : public Message {
   public:
     ConnectRsp();
-    ConnectRsp(sf_oid_t obj_id, sf_err_t success);
+    ConnectRsp(sv_srvid_t obj_id, sv_err_t success);
 
     int check_type() const;
     int serial_size() const;
@@ -38,12 +38,12 @@ class ConnectRsp : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sf_err_t err() const    { return _err; }
-    sf_oid_t obj_id() const { return _obj_id; }
+    sv_err_t err() const    { return _err; }
+    sv_srvid_t obj_id() const { return _obj_id; }
 
   private:
-    sf_oid_t _obj_id;
-    sf_err_t _err;
+    sv_srvid_t _obj_id;
+    sv_err_t _err;
 };
 
 

@@ -6,13 +6,13 @@
 
 class RecvRsp : public Message {
   public:
-    RecvRsp(int err = SF_OK);
-    RecvRsp(unsigned char *buf, uint16_t len, int flags, int err = SF_OK);
-    RecvRsp(sf_oid_t src_obj_id,
+    RecvRsp(int err = SERVAL_OK);
+    RecvRsp(unsigned char *buf, uint16_t len, int flags, int err = SERVAL_OK);
+    RecvRsp(sv_srvid_t src_obj_id,
             unsigned char *buf, uint16_t len, int flags);
     ~RecvRsp() { }
     
-    sf_err_t err() const { return _err; }
+    sv_err_t err() const { return _err; }
     int check_type() const;
     int write_serial_payload(unsigned char *buf) const;
     int read_serial_payload(const unsigned char *buf);
@@ -27,14 +27,14 @@ class RecvRsp : public Message {
     void print(const char *label) const;
 
     unsigned char *nsbuf()             { return _nsbuf; }
-    sf_oid_t src_obj_id() const        { return _src_obj_id; }
+    sv_srvid_t src_obj_id() const        { return _src_obj_id; }
 
   private:
-    sf_oid_t _src_obj_id;
+    sv_srvid_t _src_obj_id;
     unsigned char *_nsbuf;
     uint16_t _nonserial_len;
     int _flags;
-    sf_err_t _err;
+    sv_err_t _err;
 };
 
 inline void

@@ -62,7 +62,7 @@ Cli::~Cli()
 }
 
 int
-Cli::bind(sf_err_t &err)
+Cli::bind(sv_err_t &err)
 {
   _cli.sun_family = AF_LOCAL;
   sprintf(_cli.sun_path, UNIXCLI_STR, getpid(), _unix_id);
@@ -138,7 +138,7 @@ Cli::set_sync()
 }
 
 int
-Cli::get_bufsize(bool rcv, int &len, sf_err_t &err)
+Cli::get_bufsize(bool rcv, int &len, sv_err_t &err)
 {
   int l;
   socklen_t size = sizeof(l);
@@ -155,7 +155,7 @@ Cli::get_bufsize(bool rcv, int &len, sf_err_t &err)
 }
 
 int
-Cli::set_bufsize(bool rcv, int len, sf_err_t &err)
+Cli::set_bufsize(bool rcv, int len, sv_err_t &err)
 {
 #ifdef USE_SO_SNDLOWAT
   int lowat;
@@ -182,7 +182,7 @@ Cli::set_bufsize(bool rcv, int len, sf_err_t &err)
 }
 
 int
-Cli::set_unreadable(sf_err_t &err)
+Cli::set_unreadable(sv_err_t &err)
 {
   int len;
   socklen_t size = sizeof(len);
@@ -210,7 +210,7 @@ Cli::set_unreadable(sf_err_t &err)
 }
 
 int
-Cli::reset_readability(sf_err_t &err)
+Cli::reset_readability(sv_err_t &err)
 {
   if (setsockopt(_fd, SOL_SOCKET, SO_RCVLOWAT, (char *)&_rcv_lowat, 
 		 sizeof(_rcv_lowat)) < 0) {
@@ -223,7 +223,7 @@ Cli::reset_readability(sf_err_t &err)
 }
 
 int
-Cli::set_unwritable(sf_err_t &err)
+Cli::set_unwritable(sv_err_t &err)
 {
 #ifdef USE_SO_SNDLOWAT   // SO_SNDLOWAT set is not implemented in Linux!
   int len;
@@ -264,7 +264,7 @@ Cli::set_unwritable(sf_err_t &err)
 }
 
 int
-Cli::reset_writability(sf_err_t &err)
+Cli::reset_writability(sv_err_t &err)
 {
 #ifdef USE_SO_SNDLOWAT // Linux does not support SO_SNDLOWAT!
   if (setsockopt(_fd, SOL_SOCKET, SO_SNDLOWAT, 
@@ -289,7 +289,7 @@ Cli::reset_writability(sf_err_t &err)
 }
 
 int
-Cli::has_unread_data(int atleast, bool &v, sf_err_t &err) const
+Cli::has_unread_data(int atleast, bool &v, sv_err_t &err) const
 {
   char buf[atleast];
   int n;
@@ -322,7 +322,7 @@ Cli::s(char *buf, size_t buflen) const
   len += snprintf(buf + len, buflen - len, "rcv_lowat=%d ", _rcv_lowat);
   len += snprintf(buf + len, buflen - len, "snd_lowat=%d ", _snd_lowat);
   len += snprintf(buf + len, buflen - len, "state=%s ", State::state_s(_state));
-  len += snprintf(buf + len, buflen - len, "err=%s ", strerror_sf(_err.v));
+  len += snprintf(buf + len, buflen - len, "err=%s ", strerror_sv(_err.v));
   len += snprintf(buf + len, buflen - len, "connecting=%s]", 
                   _connect_in_progress ? "true" : "false");
   return buf;

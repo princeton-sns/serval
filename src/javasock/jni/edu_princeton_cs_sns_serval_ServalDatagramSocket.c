@@ -20,16 +20,16 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_soc
  */
 JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_bind(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
-	struct sockaddr_sf sfaddr;
+	struct sockaddr_sv svaddr;
 	jboolean isCopy;
 	jbyte *arr = (*env)->GetByteArrayElements(env, serviceid, &isCopy);
 	
-	sfaddr.sf_family = AF_SERVAL;
-	memcpy(&sfaddr.sf_srvid, arr, sizeof(sfaddr.sf_srvid));
+	svaddr.sv_family = AF_SERVAL;
+	memcpy(&svaddr.sv_srvid, arr, sizeof(svaddr.sv_srvid));
 	
 	(*env)->ReleaseByteArrayElements(env, serviceid, arr, 0);
 	
-	return bind(fd, (struct sockaddr *)&sfaddr, sizeof(sfaddr));
+	return bind(fd, (struct sockaddr *)&svaddr, sizeof(svaddr));
 }
 
 
@@ -50,15 +50,15 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_lis
  */
 JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_accept(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
-	struct sockaddr_sf sfaddr;
-	socklen_t addrlen = sizeof(struct sockaddr_sf);	
+	struct sockaddr_sv svaddr;
+	socklen_t addrlen = sizeof(struct sockaddr_sv);	
 	jboolean isCopy;
 	jbyte *arr;
 	int client_fd;
 
-	sfaddr.sf_family = AF_SERVAL;
+	svaddr.sv_family = AF_SERVAL;
 
-	client_fd = accept(fd, (struct sockaddr *)&sfaddr, &addrlen);
+	client_fd = accept(fd, (struct sockaddr *)&svaddr, &addrlen);
 
 	if (client_fd == -1) {
 		return -1;
@@ -66,7 +66,7 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_acc
 
 	arr = (*env)->GetByteArrayElements(env, serviceid, &isCopy);
 
-	memcpy(arr, &sfaddr.sf_srvid, sizeof(sfaddr.sf_srvid));
+	memcpy(arr, &svaddr.sv_srvid, sizeof(svaddr.sv_srvid));
 
 	(*env)->ReleaseByteArrayElements(env, serviceid, arr, JNI_COMMIT);
 
@@ -80,17 +80,17 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_acc
  */
 JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_connect(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
-	struct sockaddr_sf sfaddr;
+	struct sockaddr_sv svaddr;
 	jboolean isCopy;
 	jbyte *arr = (*env)->GetByteArrayElements(env, serviceid, &isCopy);
 	int ret; 
 
-	sfaddr.sf_family = AF_SERVAL;
-	memcpy(&sfaddr.sf_srvid, arr, sizeof(sfaddr.sf_srvid));
+	svaddr.sv_family = AF_SERVAL;
+	memcpy(&svaddr.sv_srvid, arr, sizeof(svaddr.sv_srvid));
 
 	(*env)->ReleaseByteArrayElements(env, serviceid, arr, 0);
 
-	ret = connect(fd, (struct sockaddr *)&sfaddr, sizeof(sfaddr));
+	ret = connect(fd, (struct sockaddr *)&svaddr, sizeof(svaddr));
 
 	return ret;
 }

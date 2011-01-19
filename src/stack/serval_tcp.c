@@ -108,17 +108,17 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr
         /* Check if we are calling send() or sendto(), i.e., whether
            we are given the destination service id or not. */
         if (msg->msg_name) {
-                struct sockaddr_sf *sfaddr = msg->msg_name;
+                struct sockaddr_sv *svaddr = msg->msg_name;
                 
-                if (sfaddr->sf_family != AF_SERVAL)
+                if (svaddr->sv_family != AF_SERVAL)
                         return -EAFNOSUPPORT;
                 
-                memcpy(&dst_sid, &sfaddr->sf_srvid, sizeof(struct service_id)); 
+                memcpy(&dst_sid, &svaddr->sv_srvid, sizeof(struct service_id)); 
         } else {
                 memcpy(&dst_sid, &serval_sk(sk)->peer_srvid, sizeof(struct service_id));
         }
         
-        //LOG_DBG("sendmsg() to serviceId=%u\n", ntohs(dst_oid.s_oid));
+        //LOG_DBG("sendmsg() to serviceId=%u\n", ntohs(dst_srvid.s_srvid));
                
         lock_sock(sk);
         
@@ -143,7 +143,7 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr
                 }
         }
 
-        //ret = sfnet_handle_send_socket(sk, &dst_oid, msg->msg_iov, len, msg->msg_flags & MSG_DONTWAIT);
+        //ret = sfnet_handle_send_socket(sk, &dst_srvid, msg->msg_iov, len, msg->msg_flags & MSG_DONTWAIT);
 
         if (ret == 0) {
                 if (msg->msg_flags & MSG_DONTWAIT) {
@@ -180,14 +180,14 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
                                 struct msghdr *msg,
                                 size_t len, int nonblock, int flags, int *addr_len)
 {
-        struct sockaddr_sf *sfaddr = (struct sockaddr_sf *)msg->msg_name;
+        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;
 	long timeo;
         static size_t tot_bytes_read = 0;
 
         lock_sock(sk);
        
-        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sf)) {
+        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
                 retval = -EINVAL;
                 LOG_DBG("address length is incorrect\n");
                 goto out;
@@ -270,22 +270,22 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 }
                 
                 /* Copy service ids */
-                if (sfaddr) {
+                if (svaddr) {
                         size_t addrlen = msg->msg_namelen;
                         
-                        sfaddr->sf_family = AF_SERVAL;
-                        msg->msg_namelen = sizeof(struct sockaddr_sf);
-                        memcpy(&sfaddr->sf_srvid, 
+                        svaddr->sv_family = AF_SERVAL;
+                        msg->msg_namelen = sizeof(struct sockaddr_sv);
+                        memcpy(&svaddr->sv_srvid, 
                                &serval_sk(sk)->peer_srvid, 
                                sizeof(struct service_id));
 
                         /* Copy also our local service id to the
                          * address buffer if size admits */
-                        if (addrlen >= sizeof(struct sockaddr_sf) * 2) {
-                                sfaddr = (struct sockaddr_sf *)((char *)msg->msg_name + sizeof(struct sockaddr_sf));
-                                sfaddr->sf_family = AF_SERVAL;
+                        if (addrlen >= sizeof(struct sockaddr_sv) * 2) {
+                                svaddr = (struct sockaddr_sv *)((char *)msg->msg_name + sizeof(struct sockaddr_sv));
+                                svaddr->sv_family = AF_SERVAL;
 
-                                memcpy(&sfaddr->sf_srvid, 
+                                memcpy(&svaddr->sv_srvid, 
                                        &serval_sk(sk)->local_srvid, 
                                        sizeof(struct service_id));
                         }

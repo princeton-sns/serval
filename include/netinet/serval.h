@@ -46,10 +46,10 @@ struct service_id {
 #define s_sid32 u_id.u_id32
 };
 
-struct sockaddr_sf {
-        sa_family_t sf_family;
-        uint16_t sf_flags;
-        struct service_id sf_srvid;
+struct sockaddr_sv {
+        sa_family_t sv_family;
+        uint16_t sv_flags;
+        struct service_id sv_srvid;
 };
 
 struct sock_id {

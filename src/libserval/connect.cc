@@ -28,14 +28,14 @@
 ConnectReq::ConnectReq()
         :Message(CONNECT_REQ)
 {
-    _obj_id.s_oid = htons(0xffff);
+    _obj_id.s_srvid = htons(0xffff);
     _nb = false;
     _flags = 0;
     set_pld_len_v(serial_pld_len());
 }
 
 
-ConnectReq::ConnectReq(sf_oid_t obj_id, bool nb, uint16_t flags)
+ConnectReq::ConnectReq(sv_srvid_t obj_id, bool nb, uint16_t flags)
         :Message(CONNECT_REQ), _nb(nb), _flags(flags)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
@@ -88,12 +88,12 @@ ConnectReq::print(const char *label) const
 ConnectRsp::ConnectRsp()
         : Message(CONNECT_RSP), _err(0)
 {
-    _obj_id.s_oid = htons(0xffff);
+    _obj_id.s_srvid = htons(0xffff);
     set_pld_len_v(serial_pld_len());
 }
 
 
-ConnectRsp::ConnectRsp(sf_oid_t obj_id, sf_err_t err)
+ConnectRsp::ConnectRsp(sv_srvid_t obj_id, sv_err_t err)
         : Message(CONNECT_RSP), _err(err)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));

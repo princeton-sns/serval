@@ -76,7 +76,7 @@ CloseRsp::CloseRsp()
 }
 
 
-CloseRsp::CloseRsp(sf_err_t err)
+CloseRsp::CloseRsp(sv_err_t err)
         : Message(CLOSE_RSP), _err(err)
 {
     set_pld_len_v(serial_pld_len());

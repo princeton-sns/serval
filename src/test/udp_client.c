@@ -39,31 +39,31 @@ int set_reuse_ok(int soc)
 
 void client(void) {
 	int sock;
-	struct sockaddr_sf cliaddr;
-	struct sockaddr_sf srvaddr;
+	struct sockaddr_sv cliaddr;
+	struct sockaddr_sv srvaddr;
 	int n;
 	unsigned N = 512;
 	char sbuf[N], rbuf[N + 1];
 
 	bzero(&cliaddr, sizeof(cliaddr));
-	cliaddr.sf_family = AF_SERVAL;
-	cliaddr.sf_srvid.s_sid16 = htons(CLIENT_OBJECT_ID);
+	cliaddr.sv_family = AF_SERVAL;
+	cliaddr.sv_srvid.s_sid16 = htons(CLIENT_OBJECT_ID);
 
 	bzero(&srvaddr, sizeof(srvaddr));
-	srvaddr.sf_family = AF_SERVAL;
-	srvaddr.sf_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
+	srvaddr.sv_family = AF_SERVAL;
+	srvaddr.sv_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
   
-	sock = socket_sf(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
+	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
 	set_reuse_ok(sock);
 
-	if (bind_sf(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) < 0) {
-		fprintf(stderr, "error client binding socket: %s\n", strerror_sf(errno));
+	if (bind_sv(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) < 0) {
+		fprintf(stderr, "error client binding socket: %s\n", strerror_sv(errno));
 		exit(EXIT_FAILURE);
 	}
 
-	if (connect_sf(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr)) < 0) {
+	if (connect_sv(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr)) < 0) {
 		fprintf(stderr, "error client connecting to socket: %s\n",
-			strerror_sf(errno));
+			strerror_sv(errno));
 		exit(EXIT_FAILURE);
 	}
 	fprintf(stderr, "client: waiting on user input :>");
@@ -75,16 +75,16 @@ void client(void) {
 		if (strlen(sbuf) < N) // remove new line
 			sbuf[strlen(sbuf) - 1] = '\0';
 		fprintf(stderr, "client: sending \"%s\" to object ID %s\n", sbuf,
-			service_id_to_str(&srvaddr.sf_srvid));
-		if (send_sf(sock, sbuf, strlen(sbuf), 0) < 0) {
-			fprintf(stderr, "client: send_sf() failed (%s)\n", strerror_sf(errno));
+			service_id_to_str(&srvaddr.sv_srvid));
+		if (send_sv(sock, sbuf, strlen(sbuf), 0) < 0) {
+			fprintf(stderr, "client: send_sv() failed (%s)\n", strerror_sv(errno));
 			exit(EXIT_FAILURE);
 		}
-		n = recv_sf(sock, rbuf, N, 0);
+		n = recv_sv(sock, rbuf, N, 0);
 		rbuf[n] = 0;
 
                 if (n == -1) {
-                        fprintf(stderr, "recv error: %s\n", strerror_sf(errno));
+                        fprintf(stderr, "recv error: %s\n", strerror_sv(errno));
                 } else {
                         fprintf(stderr, "Response from server: %s\n", rbuf);
                         if (strcmp(sbuf, "quit") == 0)
@@ -92,8 +92,8 @@ void client(void) {
                 }
                 fprintf(stderr, "client: waiting on user input :>");
 	}
-	if (close_sf(sock) < 0)
-		fprintf(stderr, "client: error closing socket %s", strerror_sf(errno));
+	if (close_sv(sock) < 0)
+		fprintf(stderr, "client: error closing socket %s", strerror_sv(errno));
 	exit(EXIT_SUCCESS);
 }
 

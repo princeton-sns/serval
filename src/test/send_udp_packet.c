@@ -13,9 +13,9 @@ int main(int argc, char **argv)
 	int sock;
 	unsigned long data = 8;
 	ssize_t ret;
-	struct sockaddr_sf addr;
+	struct sockaddr_sv addr;
 
-	sock = socket_sf(AF_SERVAL, SOCK_DGRAM, 0);
+	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
 
 	if (sock == -1) { 
 		fprintf(stderr, "could not create SERVAL socket: %s\n",
@@ -23,14 +23,14 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	addr.sf_family = AF_SERVAL;
-	addr.sf_srvid.s_sid16 = htons(7); 
+	addr.sv_family = AF_SERVAL;
+	addr.sv_srvid.s_sid16 = htons(7); 
 	
-	ret = sendto_sf(sock, &data, sizeof(data), 0, (struct sockaddr *)&addr, 
-		     sizeof(struct sockaddr_sf));
+	ret = sendto_sv(sock, &data, sizeof(data), 0, (struct sockaddr *)&addr, 
+		     sizeof(struct sockaddr_sv));
 
 	if (ret == -1) {
-		fprintf(stderr, "sendto: %s\n", strerror_sf(errno));
+		fprintf(stderr, "sendto: %s\n", strerror_sv(errno));
 	}
 
 	return ret;
