@@ -38,7 +38,7 @@ static void signal_handler(int sig)
         ret = write(p[1], &q, 1);
 }
 
-static ssize_t scafd_sendto(int sock, void *data, size_t len, int flags, 
+static ssize_t servd_sendto(int sock, void *data, size_t len, int flags, 
                             struct sockaddr *addr, socklen_t addrlen)
 {
 	ssize_t ret;
@@ -58,7 +58,7 @@ static ssize_t scafd_sendto(int sock, void *data, size_t len, int flags,
 	return ret;
 }
 
-static ssize_t scafd_recvfrom(int sock, void *buf, size_t len, int flags, 
+static ssize_t servd_recvfrom(int sock, void *buf, size_t len, int flags, 
                               struct sockaddr *addr, socklen_t *addrlen)
 {
 	ssize_t ret;
@@ -100,7 +100,7 @@ void join_timer_destroy(struct timer *t)
         timer_free(t);
 }
 
-int scafd_send_join(const char *ifname)
+int servd_send_join(const char *ifname)
 {
         struct timer *t;
         
@@ -122,11 +122,11 @@ int scafd_send_join(const char *ifname)
 
         timer_schedule_secs(t, 5);
 
-	return scafd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
+	return servd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
                             (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 
-static void scafd_register_service(struct service_id *srvid)
+static void servd_register_service(struct service_id *srvid)
 {
 	int ret;
 	unsigned long data = 232366;
@@ -136,12 +136,12 @@ static void scafd_register_service(struct service_id *srvid)
 
 	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
 
-        ret = scafd_sendto(ctrlsock, &data, sizeof(data), 0, 
+        ret = servd_sendto(ctrlsock, &data, sizeof(data), 0, 
 			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
 }
 
 static struct libstack_callbacks callbacks = {
-	.srvregister = scafd_register_service,
+	.srvregister = servd_register_service,
 };
 
 int ctrlsock_read(int sock)
@@ -151,7 +151,7 @@ int ctrlsock_read(int sock)
         socklen_t addrlen = 0;
         int ret;
 
-        ret = scafd_recvfrom(sock, buf, 2000, 0, 
+        ret = servd_recvfrom(sock, buf, 2000, 0, 
                              (struct sockaddr *)&addr, &addrlen);
 
         if (ret > 0) {
@@ -373,7 +373,7 @@ int main(int argc, char **argv)
                 }        
         }
 
-	LOG_DBG("scafd exits\n");
+	LOG_DBG("servd exits\n");
 
         timer_list_destroy();
 

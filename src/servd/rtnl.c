@@ -15,7 +15,7 @@
 #include "debug.h"
 #include "rtnl.h"
 
-extern int scafd_send_join(const char *ifname);
+extern int servd_send_join(const char *ifname);
 
 struct if_info {
 	int msg_type;
@@ -306,7 +306,7 @@ int rtnl_read(struct netlink_handle *nlh)
                                     ifinfo.mac[5] == 0)
                                         break;
 						
-                                scafd_send_join(ifinfo.ifname);
+                                servd_send_join(ifinfo.ifname);
                         }
                         */
 			break;
@@ -331,7 +331,7 @@ int rtnl_read(struct netlink_handle *nlh)
                                         ifinfo.ifname, 
                                         inet_ntoa(ifinfo.ipaddr.sin_addr));
                                 
-                                scafd_send_join(ifinfo.ifname);
+                                servd_send_join(ifinfo.ifname);
                         }
 			break;
 		case NLMSG_DONE:
