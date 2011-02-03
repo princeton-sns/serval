@@ -7,8 +7,7 @@
 #include "ctrlmsg.h"
 
 int libstack_configure_interface(const char *ifname, 
-                                 const struct as_addr *asaddr,
-                                 const struct host_addr *haddr,
+                                 const struct net_addr *ipaddr,
 				 unsigned short flags);
 
 int libstack_set_service(struct service_id *srvid, const char *ifname);

@@ -20,9 +20,9 @@ class AcceptReq : public Message {
 class AcceptRsp : public Message {
   public:
     AcceptRsp();
-    AcceptRsp(sv_srvid_t local_obj_id,
-              sv_srvid_t remote_obj_id,
-              sv_sock_t sock_id, sv_err_t err);
+    AcceptRsp(const sv_srvid_t& local_obj_id,
+              const sv_srvid_t& remote_obj_id,
+              sv_sock_t flow_id, sv_err_t err);
 
     int check_type() const;
     int serial_size() const;
@@ -31,22 +31,22 @@ class AcceptRsp : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sv_srvid_t local_obj_id() const     {  return _local_obj_id; }
-    sv_srvid_t remote_obj_id() const    {  return _remote_obj_id; }
-    sv_sock_t sock_id() const   {  return _sock_id; }
+    const sv_srvid_t& local_obj_id() const     {  return _local_obj_id; }
+    const sv_srvid_t& remote_obj_id() const    {  return _remote_obj_id; }
+    sv_sock_t flow_id() const   {  return _flow_id; }
     sv_err_t err() const        {  return _err; }
 
   private:
     sv_srvid_t  _local_obj_id;
     sv_srvid_t  _remote_obj_id;
-    sv_sock_t _sock_id;
+    sv_sock_t _flow_id;
     sv_err_t  _err;
 };
 
 class AcceptReq2 : public Message {
   public:
     AcceptReq2();
-    AcceptReq2(sv_srvid_t obj_id, sv_sock_t sock_id, bool nb = false);
+    AcceptReq2(const sv_srvid_t& obj_id, sv_sock_t flow_id, bool nb = false);
 
     int check_type() const;
     int serial_size() const;
@@ -55,13 +55,13 @@ class AcceptReq2 : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sv_srvid_t obj_id() const   { return _obj_id; }
-    sv_sock_t sock_id() const { return _sock_id; }
+    const sv_srvid_t& obj_id() const   { return _obj_id; }
+    sv_sock_t flow_id() const { return _flow_id; }
     bool nb() const           { return _nb; }
 
   private:
     sv_srvid_t _obj_id;
-    sv_sock_t _sock_id;
+    sv_sock_t _flow_id;
     bool _nb;
 };
 

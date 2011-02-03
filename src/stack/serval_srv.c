@@ -51,7 +51,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         
         /* Cache neighbor */
-        neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
+        neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
         
@@ -72,7 +72,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         
         /* Copy fields in request packet into request sock */
-        memcpy(&rsk->peer_sockid, &sfh->src_sid, 
+        memcpy(&rsk->peer_flowid, &sfh->src_sid, 
                sizeof(sfh->src_sid));
         memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
                sizeof(srv_ext->src_srvid));
@@ -90,8 +90,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
         /* Update info in packet */
         memcpy(&sfh->dst_sid, &sfh->src_sid, 
                sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &rsk->local_sockid, 
-               sizeof(rsk->local_sockid));
+        memcpy(&sfh->src_sid, &rsk->local_flowid, 
+               sizeof(rsk->local_flowid));
         memcpy(&srv_ext->dst_srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
         
@@ -117,8 +117,8 @@ serval_srv_request_sock_handle(struct sock *sk,
         struct serval_request_sock *rsk;
 
         list_for_each_entry(rsk, &ssk->syn_queue, lh) {
-                if (memcmp(&rsk->local_sockid, &sfh->dst_sid, 
-                           sizeof(rsk->local_sockid)) == 0) {
+                if (memcmp(&rsk->local_flowid, &sfh->dst_sid, 
+                           sizeof(rsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
 
@@ -135,10 +135,10 @@ serval_srv_request_sock_handle(struct sock *sk,
                         atomic_inc(&serval_nr_socks);
                         nsk->sk_state = SERVAL_RESPOND;
                         nssk = serval_sk(nsk);
-                        memcpy(&nssk->local_sockid, &rsk->local_sockid, 
-                               sizeof(rsk->local_sockid));
-                        memcpy(&nssk->peer_sockid, &rsk->peer_sockid, 
-                               sizeof(rsk->peer_sockid));
+                        memcpy(&nssk->local_flowid, &rsk->local_flowid, 
+                               sizeof(rsk->local_flowid));
+                        memcpy(&nssk->peer_flowid, &rsk->peer_flowid, 
+                               sizeof(rsk->peer_flowid));
                         memcpy(&nssk->peer_srvid, &rsk->peer_srvid,
                                sizeof(rsk->peer_srvid));
                         memcpy(&nssk->dst_flowid, &rsk->dst_flowid,
@@ -265,7 +265,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         int err = 0;
                 
         /* Cache neighbor */
-        neighbor_add((struct flow_id *)&ip_hdr(skb)->saddr, 32, 
+        neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
         
@@ -295,9 +295,9 @@ static int serval_srv_request_state_process(struct sock *sk,
         skb->protocol = IPPROTO_SERVAL;
 
         /* Fill in socket ids */
-        memcpy(&ssk->peer_sockid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &ssk->local_sockid, sizeof(sfh->src_sid));
-        memcpy(&sfh->dst_sid, &ssk->peer_sockid, sizeof(sfh->dst_sid));
+        memcpy(&ssk->peer_flowid, &sfh->src_sid, sizeof(sfh->src_sid));
+        memcpy(&sfh->src_sid, &ssk->local_flowid, sizeof(sfh->src_sid));
+        memcpy(&sfh->dst_sid, &ssk->peer_flowid, sizeof(sfh->dst_sid));
 
         /* Update service extension header */
         memcpy(&srv_ext->dst_srvid, &ssk->peer_srvid, 
@@ -404,14 +404,14 @@ int serval_srv_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        LOG_DBG("sockid (src,dst)=(%u,%u)\n", 
+        LOG_DBG("flowid (src,dst)=(%u,%u)\n", 
                 ntohs(sfh->src_sid.s_id), ntohs(sfh->dst_sid.s_id));
        
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
         if (!(sfh->flags & SFH_SYN && !(sfh->flags & SFH_ACK))) {
                 /* Ok, check if we can demux on socket id */
-                sk = serval_sock_lookup_sockid(&sfh->dst_sid);
+                sk = serval_sock_lookup_flowid(&sfh->dst_sid);
         }
         
         if (!sk) {
@@ -530,8 +530,8 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
         sfh->flags = flags;
         sfh->protocol = skb->protocol;
         sfh->length = htons(hdr_len);
-        memcpy(&sfh->src_sid, &ssk->local_sockid, sizeof(ssk->local_sockid));
-        memcpy(&sfh->dst_sid, &ssk->peer_sockid, sizeof(ssk->peer_sockid));
+        memcpy(&sfh->src_sid, &ssk->local_flowid, sizeof(ssk->local_flowid));
+        memcpy(&sfh->dst_sid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
                 
@@ -577,7 +577,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 		
                 /* Remember the flow destination */
 		service_entry_dev_dst(se, &SERVAL_SKB_CB(skb)->dst_flowid,
-                                      sizeof(struct flow_id));
+                                      sizeof(struct net_addr));
 
 		next_dev = service_entry_dev_next(se);
 		

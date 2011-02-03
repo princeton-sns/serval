@@ -6,7 +6,7 @@
 #include "types.h"
 
 const char *
-oid_to_str(sv_srvid_t oid);
+oid_to_str(const sv_srvid_t *oid);
 
 #define CRC_LEN 4
 
@@ -95,20 +95,6 @@ operator!=(const sv_srvid_t &u, const sv_srvid_t &v)
     return !(u == v);
 }
 
-// sv_host_t
-
-inline bool
-operator==(const sv_host_t &u, const sv_host_t &v)
-{
-    return memcmp(&u, &v, sizeof(u)) == 0;
-}
-
-inline bool
-operator!=(const sv_host_t &u, const sv_host_t &v)
-{
-    return !(u == v);
-}
-
 // sv_proto_t
 
 inline bool
@@ -156,31 +142,11 @@ hashcode(const sv_sock_t &v)
     return v.s_id;
 }
 
-inline size_t
-hashcode(const sv_srvid_t &v)
-{
-    return v.s_sid16;
-}
-
-inline size_t
-hashcode(const sv_host_t &v)
-{
-    return v.s_addr;
-}
-
 inline sv_sock_t
-ip_to_sock_id(uint32_t ip)
+ip_to_flow_id(uint32_t ip)
 {
     sv_sock_t p;
     p.s_id = ip & 0xffff;
-    return p;
-}
-
-inline sv_srvid_t
-port_to_obj_id(uint16_t port)
-{
-    sv_srvid_t p;
-    p.s_sid16 = port;
     return p;
 }
 

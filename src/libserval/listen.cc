@@ -27,14 +27,14 @@
 ListenReq::ListenReq()
         :Message(LISTEN_REQ), _use_first(true), _backlog(DEFAULT_BACKLOG)
 {
-    _local_obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
     set_pld_len_v(serial_pld_len());
 }
 
 ListenReq::ListenReq(int backlog)
         :Message(LISTEN_REQ), _use_first(true), _backlog(backlog)
 {
-    _local_obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
     set_pld_len_v(serial_pld_len());
 }
 
@@ -76,7 +76,7 @@ ListenReq::print(const char *label) const
 {
     Message::print(label);
     info("%s: use_first=%s, local_obj_id=%s, backlog=%d\n", label,
-         (_use_first ? "t" : "f"), oid_to_str(_local_obj_id), _backlog);
+         (_use_first ? "t" : "f"), oid_to_str(&_local_obj_id), _backlog);
 }
 
 //

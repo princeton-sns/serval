@@ -7,7 +7,7 @@
 class ConnectReq : public Message {
   public:
     ConnectReq();
-    ConnectReq(sv_srvid_t obj_id, bool nb, uint16_t flags);
+    ConnectReq(const sv_srvid_t& obj_id, bool nb, uint16_t flags);
 
     int check_type() const;
     int serial_size() const;
@@ -16,7 +16,7 @@ class ConnectReq : public Message {
     uint16_t serial_pld_len() const;
     void print(const char *label) const;
 
-    sv_srvid_t obj_id() const { return _obj_id; }
+    const sv_srvid_t& obj_id() const { return _obj_id; }
     bool nb() const         { return _nb; }
     uint16_t flags() const  { return _flags; }
 
@@ -29,7 +29,7 @@ class ConnectReq : public Message {
 class ConnectRsp : public Message {
   public:
     ConnectRsp();
-    ConnectRsp(sv_srvid_t obj_id, sv_err_t success);
+    ConnectRsp(const sv_srvid_t& obj_id, sv_err_t success);
 
     int check_type() const;
     int serial_size() const;
@@ -39,7 +39,7 @@ class ConnectRsp : public Message {
     void print(const char *label) const;
 
     sv_err_t err() const    { return _err; }
-    sv_srvid_t obj_id() const { return _obj_id; }
+    const sv_srvid_t& obj_id() const { return _obj_id; }
 
   private:
     sv_srvid_t _obj_id;

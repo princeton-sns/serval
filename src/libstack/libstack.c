@@ -16,8 +16,7 @@ extern void netlink_fini(void);
 #endif
 
 int libstack_configure_interface(const char *ifname, 
-                                 const struct as_addr *asaddr,
-                                 const struct host_addr *haddr,
+                                 const struct net_addr *ipaddr,
                                  unsigned short flags)
 {
 	struct ctrlmsg_iface_conf cm;
@@ -26,11 +25,9 @@ int libstack_configure_interface(const char *ifname,
 	cm.cmh.type = CTRLMSG_TYPE_IFACE_CONF;
 	cm.cmh.len = sizeof(cm);
 	strncpy(cm.ifname, ifname, IFNAMSIZ - 1);
-        if (asaddr)
-                memcpy(&cm.asaddr, asaddr, sizeof(*asaddr));
-        if (haddr)
-                memcpy(&cm.haddr, haddr, sizeof(*haddr));
-	cm.flags = flags;
+        if (ipaddr)
+                memcpy(&cm.ipaddr, ipaddr, sizeof(*ipaddr));
+       	cm.flags = flags;
 
 	return event_sendmsg(&cm, cm.cmh.len);
 }

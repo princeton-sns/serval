@@ -71,17 +71,18 @@ AcceptReq::print(const char *label) const
 AcceptRsp::AcceptRsp()
         : Message(ACCEPT_RSP), _err(0)
 {
-    _local_obj_id.s_srvid = htons(0xffff);
-    _remote_obj_id.s_srvid = htons(0xffff);
-    _sock_id.s_id = 0xffff;
+    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
+    memset(&_remote_obj_id, 0xff, sizeof(_remote_obj_id));
+    memset(&_flow_id, 0xff, sizeof(_flow_id));
     set_pld_len_v(serial_pld_len());
 }
 
 
-AcceptRsp::AcceptRsp(sv_srvid_t local_obj_id, sv_srvid_t remote_obj_id,
-                     sv_sock_t sock_id, sv_err_t err)
+AcceptRsp::AcceptRsp(const sv_srvid_t& local_obj_id, 
+                     const sv_srvid_t& remote_obj_id,
+                     sv_sock_t flow_id, sv_err_t err)
         : Message(ACCEPT_RSP),
-          _sock_id(sock_id),
+          _flow_id(flow_id),
           _err(err)
 {
     memcpy(&_local_obj_id, &local_obj_id, sizeof(local_obj_id));
@@ -94,7 +95,7 @@ AcceptRsp::serial_pld_len() const
 {
     return sizeof(_local_obj_id)
             + sizeof(_remote_obj_id)
-            + sizeof(_sock_id)
+            + sizeof(_flow_id)
             + sizeof(_err);
 }
 
@@ -110,7 +111,7 @@ AcceptRsp::write_serial_payload(unsigned char *buf) const
     unsigned char *p = buf;
     p += serial_write(_local_obj_id, p);
     p += serial_write(_remote_obj_id, p);
-    p += serial_write(_sock_id, p);
+    p += serial_write(_flow_id, p);
     p += serial_write(_err, p);
     return p - buf;
 }
@@ -121,7 +122,7 @@ AcceptRsp::read_serial_payload(const unsigned char *buf)
     const unsigned char *p = buf;
     p += serial_read(&_local_obj_id, p);
     p += serial_read(&_remote_obj_id, p);
-    p += serial_read(&_sock_id, p);
+    p += serial_read(&_flow_id, p);
     p += serial_read(&_err, p);
     return p - buf;
 }
@@ -130,9 +131,9 @@ void
 AcceptRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: local_obj_id=%s, remote_obj_id=%s, sock_id = %d, err=%s",
-         label, oid_to_str(_local_obj_id), oid_to_str(_remote_obj_id),
-         _sock_id.s_id, _err.v ? "t" : "f");
+    info("%s: local_obj_id=%s, remote_obj_id=%s, flow_id = %d, err=%s",
+         label, oid_to_str(&_local_obj_id), oid_to_str(&_remote_obj_id),
+         _flow_id.s_id, _err.v ? "t" : "f");
 }
 
 //
@@ -141,14 +142,15 @@ AcceptRsp::print(const char *label) const
 AcceptReq2::AcceptReq2()
         : Message(ACCEPT_REQ2), _nb(false)
 {
-    _obj_id.s_srvid = htons(0xffff);
-    _sock_id.s_id = 0xffff;
+
+    memset(&_obj_id, 0xff, sizeof(_obj_id));
+    memset(&_flow_id, 0xff, sizeof(_flow_id));
     set_pld_len_v(serial_pld_len());
 }
 
 
-AcceptReq2::AcceptReq2(sv_srvid_t obj_id, sv_sock_t sock_id, bool nb)
-        : Message(ACCEPT_REQ2), _sock_id(sock_id), _nb(nb)
+AcceptReq2::AcceptReq2(const sv_srvid_t& obj_id, sv_sock_t flow_id, bool nb)
+        : Message(ACCEPT_REQ2), _flow_id(flow_id), _nb(nb)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
     set_pld_len_v(serial_pld_len());
@@ -157,7 +159,7 @@ AcceptReq2::AcceptReq2(sv_srvid_t obj_id, sv_sock_t sock_id, bool nb)
 uint16_t
 AcceptReq2::serial_pld_len() const
 {
-    return sizeof(_obj_id) + sizeof(_sock_id) + sizeof(_nb);
+    return sizeof(_obj_id) + sizeof(_flow_id) + sizeof(_nb);
 }
 
 int
@@ -171,7 +173,7 @@ AcceptReq2::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_obj_id, p);
-    p += serial_write(_sock_id, p);
+    p += serial_write(_flow_id, p);
     p += serial_write(_nb, p);
     return p - buf;
 }
@@ -181,7 +183,7 @@ AcceptReq2::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_obj_id, p);
-    p += serial_read(&_sock_id, p);
+    p += serial_read(&_flow_id, p);
     p += serial_read(&_nb, p);
     return p - buf;
 }
@@ -190,8 +192,8 @@ void
 AcceptReq2::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s, sock_id = %d, nb = %s", 
-         label, oid_to_str(_obj_id), _sock_id.s_id,
+    info("%s: obj_id=%s, flow_id = %d, nb = %s", 
+         label, oid_to_str(&_obj_id), _flow_id.s_id,
          _nb ? "t" : "f");
 }
 

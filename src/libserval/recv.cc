@@ -27,7 +27,7 @@
 RecvRsp::RecvRsp(int err)
         :Message(RECV_RSP), _nsbuf(0), _nonserial_len(0), _flags(0), _err(err)
 {
-    _src_obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_src_obj_id, 0xff, sizeof(_src_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
@@ -50,11 +50,11 @@ RecvRsp::RecvRsp(unsigned char *buf, uint16_t buflen, int flags, int err)
         :Message(RECV_RSP), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
          _err(err)
 {
-    _src_obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_src_obj_id, 0xff, sizeof(_src_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
-RecvRsp::RecvRsp(sv_srvid_t src_obj_id,
+RecvRsp::RecvRsp(const sv_srvid_t& src_obj_id,
                  unsigned char *buf, uint16_t buflen, int flags)
         :Message(RECV_RSP), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
          _err(SERVAL_OK)
@@ -90,7 +90,7 @@ RecvRsp::print(const char *label) const
 {
     Message::print(label);
     info("%s: src_obj_id = %s, buflen=%d, flags=%d, err=%d\n",
-         label, oid_to_str(_src_obj_id), _nonserial_len, _flags, _err.v);
+         label, oid_to_str(&_src_obj_id), _nonserial_len, _flags, _err.v);
 }
 
 //

@@ -424,8 +424,8 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
         /* Write the service id of the parent in the response */
         memcpy(&rsp.local_srvid, &ssk->local_srvid, 
                sizeof(ssk->local_srvid));
-        memcpy(&rsp.sockid, &ssk->local_sockid, 
-               sizeof(ssk->local_sockid));
+        memcpy(&rsp.flowid, &ssk->local_flowid, 
+               sizeof(ssk->local_flowid));
 
         LOG_DBG("parent service id=%s\n",
                 service_id_to_str(&rsp.local_srvid));

@@ -51,3 +51,4 @@ Makefile
 *.class
 *.stamp
 *.jar
+.DS_Store

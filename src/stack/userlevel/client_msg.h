@@ -126,7 +126,7 @@ struct client_msg_accept_rsp {
 	struct client_msg msghdr;
         struct service_id local_srvid;
         struct service_id peer_srvid;
-        struct sock_id sockid;
+        struct flow_id flowid;
 	uint8_t error;
 } __attribute__((packed));
 
@@ -136,7 +136,7 @@ struct client_msg_accept_rsp {
 struct client_msg_accept2_req {
 	struct client_msg msghdr;
 	struct service_id srvid;
-        struct sock_id sockid;
+        struct flow_id flowid;
         bool_t nonblock;
 } __attribute__((packed));
 

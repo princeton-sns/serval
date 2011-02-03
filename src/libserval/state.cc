@@ -70,12 +70,11 @@ PacketType::packettype_s(const PacketType::Type &v)
 }
 
 const char *
-oid_to_str(sv_srvid_t oid)
+oid_to_str(const sv_srvid_t *oid)
 {
-  static char str[11];
-
-  snprintf(str, 10, "%u", ntohs(oid.s_sid16));
-  str[10] = '\0';
-
-  return str;
+    return service_id_to_str(oid);
 }
+
+struct service_id _controller_srvid;
+struct service_id _serval_srvid;
+struct service_id _serval_null_srvid;

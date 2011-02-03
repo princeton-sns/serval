@@ -25,7 +25,7 @@
 class BindReq : public Message {
   public:
     BindReq();
-    BindReq(sv_srvid_t obj_id);
+    BindReq(const sv_srvid_t& obj_id);
 
     int check_type() const;
     int write_serial_payload(unsigned char *buf) const;
@@ -33,7 +33,7 @@ class BindReq : public Message {
     uint16_t serial_pld_len() const;
 
     void print(const char *label) const;
-    sv_srvid_t obj_id() const { return _obj_id; }
+    const sv_srvid_t& obj_id() const { return _obj_id; }
 
   private:
     sv_srvid_t _obj_id;
@@ -42,7 +42,7 @@ class BindReq : public Message {
 class BindRsp : public Message {
   public:
     BindRsp();
-    BindRsp(sv_srvid_t obj_id, sv_err_t err);
+    BindRsp(const sv_srvid_t& obj_id, sv_err_t err);
 
     int check_type() const;
     int write_serial_payload(unsigned char *buf) const;

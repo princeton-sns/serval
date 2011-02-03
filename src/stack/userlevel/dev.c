@@ -505,7 +505,7 @@ int netdev_populate_table(int sizeof_priv,
                        prefix_len++;
              
                 service_add(NULL, 0, dev, &dev->ipv4.broadcast, 4, 0);
-                neighbor_add((struct flow_id *)&dev->ipv4.broadcast, 
+                neighbor_add((struct net_addr *)&dev->ipv4.broadcast, 
                              prefix_len, 
                              dev, dev->broadcast, dev->addr_len, 0);
                

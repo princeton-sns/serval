@@ -71,7 +71,7 @@ private:
   
   bool is_valid(const struct sockaddr_sv &addr, 
 		bool is_valid) const;
-  bool is_reserved(sv_srvid_t obj_id) const;
+  bool is_reserved(const sv_srvid_t& obj_id) const;
   bool is_non_blocking(int soc) const;
 
   void print(const char *label, const unsigned char *buf, int buflen);
@@ -94,7 +94,7 @@ private:
 			  bool nb, Cli &cli, sv_err_t &err);
   int query_scafd_soerror(Cli &cli, sv_err_t &err);
   int query_scafd_listen(int backlog, const Cli &cli, sv_err_t &err);
-  int query_scafd_listen(int backlog, sv_srvid_t local_obj_id, 
+  int query_scafd_listen(int backlog, const sv_srvid_t& local_obj_id, 
 			 const Cli &cli, sv_err_t &err);
   int query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
 			  sv_err_t &err);
@@ -102,11 +102,11 @@ private:
 			  sv_err_t &err);
   int query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
 		       Cli &cli, sv_err_t &err);
-  int query_scafd_sendto(sv_srvid_t dst_obj_id, 
+  int query_scafd_sendto(const sv_srvid_t& dst_obj_id, 
 			 const void *buffer, size_t length, int flags,
 			 Cli &cli, sv_err_t &err);
   int query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, int flags,
-		       sv_srvid_t &src_obj_id, Cli &cli, sv_err_t &err);
+                       sv_srvid_t &src_obj_id, Cli &cli, sv_err_t &err);
   int query_scafd_close(const Cli &cli, sv_err_t &err);
   int query_scafd_migrate(const Cli &cli, sv_err_t &err);
   

@@ -32,12 +32,12 @@
                      sizeof(struct serval_service_ext)) 
 
 static int serval_udp_connection_request(struct sock *sk, 
-                                           struct sk_buff *skb);
+                                         struct sk_buff *skb);
 
 struct sock *serval_udp_connection_respond_sock(struct sock *sk, 
-                                                  struct sk_buff *skb,
-                                                  struct serval_request_sock *req,
-                                                  struct dst_entry *dst);
+                                                struct sk_buff *skb,
+                                                struct serval_request_sock *req,
+                                                struct dst_entry *dst);
 
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
 
@@ -66,8 +66,8 @@ static void udp_checksum(uint16_t total_len,
 }
 
 static int serval_udp_transmit_skb(struct sock *sk, 
-                                     struct sk_buff *skb,
-                                     enum serval_packet_type type)
+                                   struct sk_buff *skb,
+                                   enum serval_packet_type type)
 {
         int err;
         unsigned short tot_len;
@@ -81,8 +81,8 @@ static int serval_udp_transmit_skb(struct sock *sk,
         tot_len = skb->len + 20 + 14;
         
         /* Build UDP header */
-        uh->source = serval_sk(sk)->local_srvid.s_sid16;
-        memcpy(&uh->dest, &SERVAL_SKB_CB(skb)->srvid, sizeof(uh->dest));
+        uh->source = 0;
+        uh->dest = 0;
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, &serval_sk(sk)->src_flowid);
         
@@ -158,7 +158,7 @@ static void serval_udp_close(struct sock *sk, long timeout)
 }
 
 static int serval_udp_connect(struct sock *sk, struct sockaddr *uaddr, 
-                                int addr_len)
+                              int addr_len)
 {
         struct sk_buff *skb;
         struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
@@ -269,7 +269,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 }
 
 static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk, 
-                                struct msghdr *msg, size_t len)
+                              struct msghdr *msg, size_t len)
 {
         int err;
         struct sk_buff *skb;
@@ -344,9 +344,8 @@ out:
 }
 
 static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk, 
-                                struct msghdr *msg,
-                                size_t len, int nonblock, int flags, 
-                                int *addr_len)
+                              struct msghdr *msg, size_t len, int nonblock, 
+                              int flags, int *addr_len)
 {
 	struct serval_sock *ss = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;

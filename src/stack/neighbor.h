@@ -9,7 +9,7 @@
 #include <serval/dst.h>
 #include "bst.h"
 
-struct flow_id;
+struct net_addr;
 
 struct neighbor_entry {
 	union {
@@ -26,12 +26,12 @@ struct net_device *neighbor_entry_get_dev(struct neighbor_entry *neigh);
 int neighbor_entry_get_dst(struct neighbor_entry *neigh, unsigned char *dst, 
                            int dstlen);
 
-int neighbor_add(struct flow_id *flw, unsigned int prefix_bits,
+int neighbor_add(struct net_addr *flw, unsigned int prefix_bits,
 		struct net_device *dev, void *dst,
                 int dstlen, gfp_t alloc);
-void neighbor_del(struct flow_id *flw, unsigned int prefix_bits);
+void neighbor_del(struct net_addr *flw, unsigned int prefix_bits);
 int neighbor_del_dev(const char *devname);
-struct neighbor_entry *neighbor_find(struct flow_id *flw);
+struct neighbor_entry *neighbor_find(struct net_addr *flw);
 void neighbor_entry_hold(struct neighbor_entry *neigh);
 void neighbor_entry_put(struct neighbor_entry *neigh);
 int neighbor_entry_print(struct neighbor_entry *neigh, char *buf, int buflen);

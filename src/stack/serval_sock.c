@@ -15,7 +15,7 @@
 #endif
 
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
-static atomic_t serval_sock_id = ATOMIC_INIT(1);
+static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
 static struct serval_table listen_table;
 
@@ -116,10 +116,10 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
         return sk;
 }
 
-struct sock *serval_sock_lookup_sockid(struct sock_id *sockid)
+struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 {
         return serval_sock_lookup(&established_table, &init_net, 
-                                    sockid, sizeof(*sockid));
+                                    flowid, sizeof(*flowid));
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
@@ -131,8 +131,8 @@ struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
 static inline unsigned int serval_ehash(struct sock *sk)
 {
         return serval_hashfn(sock_net(sk), 
-                               &serval_sk(sk)->local_sockid,
-                               sizeof(struct sock_id),
+                               &serval_sk(sk)->local_flowid,
+                               sizeof(struct flow_id),
                                established_table.mask);
 }
 
@@ -184,9 +184,9 @@ static void __serval_sock_hash(struct sock *sk)
 
         } else { 
                 LOG_DBG("hashing socket %p based on socket id %s\n",
-                        sk, socket_id_to_str(&serval_sk(sk)->local_sockid));
-                serval_sk(sk)->hash_key = &serval_sk(sk)->local_sockid;
-                serval_sk(sk)->hash_key_len = sizeof(serval_sk(sk)->local_sockid);
+                        sk, flow_id_to_str(&serval_sk(sk)->local_flowid));
+                serval_sk(sk)->hash_key = &serval_sk(sk)->local_flowid;
+                serval_sk(sk)->hash_key_len = sizeof(serval_sk(sk)->local_flowid);
                 __serval_table_hash(&established_table, sk);
         }
 }
@@ -214,8 +214,8 @@ void serval_sock_unhash(struct sock *sk)
                                           sizeof(struct service_id))->lock;
         } else {
                 lock = &serval_hashslot(&established_table,
-                                          net, &serval_sk(sk)->local_sockid, 
-                                          sizeof(struct sock_id))->lock;
+                                          net, &serval_sk(sk)->local_flowid, 
+                                          sizeof(struct flow_id))->lock;
         }
 
 	spin_lock_bh(lock);
@@ -256,21 +256,21 @@ void __exit serval_sock_tables_fini(void)
                                    * compiling with debug off */
 }
 
-int __serval_assign_sockid(struct sock *sk)
+int __serval_assign_flowid(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
        
         /* 
            TODO: 
            - Check for ID wraparound and conflicts 
-           - Make sure code does not assume sockid is a short
+           - Make sure code does not assume flowid is a short
         */
-        return serval_sock_get_sockid(&ssk->local_sockid);
+        return serval_sock_get_flowid(&ssk->local_flowid);
 }
 
-int serval_sock_get_sockid(struct sock_id *sid)
+int serval_sock_get_flowid(struct flow_id *sid)
 {
-        sid->s_id = htons(atomic_inc_return(&serval_sock_id));
+        sid->s_id = htons(atomic_inc_return(&serval_flow_id));
 
         return 0;
 }
@@ -296,7 +296,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
          * socket. If socket is NULL, then it means this socket is a
          * child socket from a LISTENing socket, and it will be
          * assigned the socket id from the request sock */
-        if (sock && __serval_assign_sockid(sk) < 0) {
+        if (sock && __serval_assign_flowid(sk) < 0) {
                 LOG_DBG("could not assign sock id\n");
                 sock_put(sk);
                 return NULL;

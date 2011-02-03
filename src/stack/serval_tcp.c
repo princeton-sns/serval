@@ -83,14 +83,14 @@ int serval_tcp_rcv(struct sk_buff *skb)
 {
 	struct sock *sk;
         struct tcphdr *tcph = tcp_hdr(skb);
-        struct sock_id *sockid = (struct sock_id *)&tcph->dest;
+        struct flow_id *flowid = (struct flow_id *)&tcph->dest;
         int err = 0;
         
         LOG_DBG("tcp packet seq=%lu ack=%lu\n",  
                 ntohl(tcph->seq),
                 ntohl(tcph->ack_seq));
 
-        sk = serval_sock_lookup_sockid(sockid);
+        sk = serval_sock_lookup_flowid(flowid);
         
         if (!sk) {
                 LOG_ERR("No matching serval sock\n");

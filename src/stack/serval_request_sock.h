@@ -14,9 +14,9 @@
 struct serval_request_sock {
         struct sock *sk;
         struct service_id peer_srvid;
-        struct sock_id local_sockid;
-        struct sock_id peer_sockid;
-        struct flow_id dst_flowid;
+        struct flow_id local_flowid;
+        struct flow_id peer_flowid;
+        struct net_addr dst_flowid;
         uint32_t seqno;
         unsigned char flags;
         struct list_head lh;
@@ -33,7 +33,7 @@ static inline struct serval_request_sock *serval_rsk_alloc(int alloc)
 
         INIT_LIST_HEAD(&rsk->lh);
         
-        serval_sock_get_sockid(&rsk->local_sockid);
+        serval_sock_get_flowid(&rsk->local_flowid);
 
         return rsk;
 }

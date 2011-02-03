@@ -5,10 +5,14 @@
 #include <netinet/serval.h>
 #include <stdio.h>
 
+
 /* Reserved Object IDs */
-#define CONTROLLER_OID 0xFFFE
-#define SERVAL_OID 0xFFFD
-#define SERVAL_NULL_OID 0xFFFF
+extern struct service_id _controller_srvid;
+extern struct service_id _serval_srvid;
+extern struct service_id _serval_null_srvid;
+#define CONTROLLER_OID (&_controller_srvid)
+#define SERVAL_OID (&_serval_srvid)
+#define SERVAL_NULL_OID (&_serval_null_srvid)
 
 /* connect_sv() or listen_sv() flags
    typically SF_WANT_FAILOVER in connect_sv and

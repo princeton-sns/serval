@@ -8,7 +8,7 @@
 /* These typedefs are for backwards compatibility with old defines in
  * libserval. The need for these should ideally go away in the
  * future. */
-typedef struct sock_id sv_sock_t;
+typedef struct flow_id sv_sock_t;
 typedef struct service_id sv_srvid_t;
 typedef struct host_addr sv_host_t;
 
@@ -33,10 +33,5 @@ typedef struct {
                                    */
 #define EFRESYNCPROG         207   /* resync after failover in progress */
 #define EFRESYNCFAIL         208   /* resync after failover failed */
-
-/* Reserved Object IDs */
-#define CONTROLLER_OID 0xFFFE
-#define SERVAL_OID 0xFFFD
-#define SERVAL_NULL_OID 0xFFFF
 
 #endif /* _TYPES_H_ */

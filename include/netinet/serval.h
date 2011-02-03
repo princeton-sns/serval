@@ -37,13 +37,19 @@
 
 struct service_id {
         union { 
-                uint8_t	u_id8[2];
-                uint16_t u_id16;
-                /* uint32_t u_sid32[]; */
-        } u_id;
-#define s_sid u_id.u_id8
-#define s_sid16 u_id.u_id16
-#define s_sid32 u_id.u_id32
+                struct {
+                        uint8_t un_ss[12];
+                        uint8_t un_selfcert[20];
+                };
+                uint8_t	un_id8[32];
+                uint16_t un_id16[16];
+                uint32_t un_id32[8];
+        } srv_un;
+#define s_ss srv_un.un_ss;
+#define s_sfc srv_un.un_selfcert;
+#define s_sid srv_un.un_id8
+#define s_sid16 srv_un.un_id16
+#define s_sid32 srv_un.un_id32
 };
 
 struct sockaddr_sv {
@@ -52,43 +58,43 @@ struct sockaddr_sv {
         struct service_id sv_srvid;
 };
 
-struct sock_id {
-        uint16_t s_id;
-};
-
-struct host_addr {
-        uint8_t s_addr;
-};
-
-struct as_addr {
-        uint8_t s_addr;
-};
-
 struct flow_id {
+        uint32_t s_id;
+};
+
+struct net_addr {
         union {
-                struct {
-                        struct as_addr as;
-                        struct host_addr host;
-                        struct sock_id sock;
-                } fl_s;
-#define fl_as fl_s.as
-#define fl_host fl_s.host
-#define fl_sock fl_s.sock
-                struct in_addr fl_ip;
+                struct in6_addr net_ip6;
+                struct in_addr net_ip;
+                unsigned char raw[0];
         };
 };
 
-static inline const char *service_id_to_str(struct service_id *srvid)
+static inline const char *__hexdump(const void *data, int datalen, 
+                                    char *buf, int buflen)
 {
-        static char str[20];
-        snprintf(str, 20, "%u", ntohs(srvid->s_sid16));
-        return str;
+        int i = 0, len = 0;
+        const unsigned char *h = (const unsigned char *)data;
+        
+        while (i < datalen) {
+                unsigned char c = (i + 1 < datalen) ? h[i+1] : 0;
+                len += snprintf(buf + len, buflen - len, 
+                                "%02x%02x ", h[i], c);
+                i += 2;
+        }
+        return buf;
 }
 
-static inline const char *socket_id_to_str(struct sock_id *sockid)
+static inline const char *service_id_to_str(const struct service_id *srvid)
+{
+        static char str[66];
+        return __hexdump(srvid, 32, str, 66);  
+}
+
+static inline const char *flow_id_to_str(const struct flow_id *flowid)
 {
         static char str[20];
-        snprintf(str, 20, "%u", ntohs(sockid->s_id));
+        snprintf(str, 20, "%u", ntohl(flowid->s_id));
         return str;
 }
 
@@ -115,8 +121,8 @@ struct serval_hdr {
 #define SFH_ACK	        0x10
 #define SFH_RSYN	0x20
         uint8_t protocol;
-        struct sock_id src_sid;
-        struct sock_id dst_sid;
+        struct flow_id src_sid;
+        struct flow_id dst_sid;
 };
 
 /* Generic extension header */
@@ -132,8 +138,8 @@ struct serval_flow_ext {
         uint8_t type;
         uint8_t flags;
         uint16_t length;
-        struct flow_id src;
-        struct flow_id dst;
+        struct net_addr src;
+        struct net_addr dst;
 };
 
 #define SERVAL_SERVICE_EXT 2

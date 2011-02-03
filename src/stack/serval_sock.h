@@ -65,12 +65,12 @@ struct serval_sock {
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;
-        struct sock_id          local_sockid;
-        struct sock_id          peer_sockid;
+        struct flow_id          local_flowid;
+        struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        struct flow_id          dst_flowid;
-        struct flow_id          src_flowid;
+        struct net_addr          dst_flowid;
+        struct net_addr          src_flowid;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
         unsigned long           tot_bytes_sent;
@@ -93,7 +93,7 @@ struct serval_table {
 	unsigned int mask;
 };
 
-int serval_sock_get_sockid(struct sock_id *sid);
+int serval_sock_get_flowid(struct flow_id *sid);
 
 static inline unsigned int serval_hashfn(struct net *net, 
                                            void *key,
@@ -116,7 +116,7 @@ static inline struct serval_hslot *serval_hashslot(struct serval_table *table,
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *);
-struct sock *serval_sock_lookup_sockid(struct sock_id *);
+struct sock *serval_sock_lookup_flowid(struct flow_id *);
 
 void serval_sock_hash(struct sock *sk);
 void serval_sock_unhash(struct sock *sk);
@@ -140,7 +140,7 @@ static inline int serval_sock_flag(struct serval_sock *ssk,
 }
 
 
-int __serval_assign_sockid(struct sock *sk);
+int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
                                gfp_t priority, int protocol, 
                                struct proto *prot);

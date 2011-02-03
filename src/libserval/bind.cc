@@ -26,11 +26,11 @@
 BindReq::BindReq()
         :Message(BIND_REQ)
 {
-    _obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_obj_id, 0, sizeof(_obj_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindReq::BindReq(sv_srvid_t obj_id)
+BindReq::BindReq(const sv_srvid_t& obj_id)
         :Message(BIND_REQ)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
@@ -69,7 +69,7 @@ void
 BindReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s", label, oid_to_str(_obj_id));
+    info("%s: obj_id=%s", label, oid_to_str(&_obj_id));
 }
 
 //
@@ -79,11 +79,11 @@ BindReq::print(const char *label) const
 BindRsp::BindRsp()
         : Message(BIND_RSP), _err(0)
 {
-    _obj_id.s_srvid = htons(SERVAL_NULL_OID);
+    memset(&_obj_id, 0, sizeof(_obj_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindRsp::BindRsp(sv_srvid_t obj_id, sv_err_t err)
+BindRsp::BindRsp(const sv_srvid_t& obj_id, sv_err_t err)
         : Message(BIND_RSP), _err(err)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
@@ -124,6 +124,6 @@ void
 BindRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s, err=%s", label, oid_to_str(_obj_id),
+    info("%s: obj_id=%s, err=%s", label, oid_to_str(&_obj_id),
          _err.v ? "t" : "f");
 }

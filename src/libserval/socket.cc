@@ -19,6 +19,7 @@
 // DEALINGS IN THE WORK.
 
 #include "socket.hh"
+#include <libserval/serval.h>
 #include <serval/platform.h>
 
 #if defined(OS_ANDROID)
@@ -206,9 +207,7 @@ int
 SVSockLib::query_scafd_bind(const struct sockaddr_sv *sv_addr,
                             const Cli &cli, sv_err_t &err)
 {
-  sv_srvid_t u;
-  u.s_srvid = (sv_addr->sv_srvid).s_srvid;
-  BindReq breq(u);
+  BindReq breq(sv_addr->sv_srvid);
   if (breq.write_to_stream_soc(cli.fd(), err) < 0)
     return SERVAL_SOCKET_ERROR;
   breq.print("bind:app:tx");
@@ -297,7 +296,7 @@ SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
   }
 
   info("remote_obj_id %s", 
-       oid_to_str(((const struct sockaddr_sv *)addr)->sv_srvid));
+       oid_to_str(&((const struct sockaddr_sv *)addr)->sv_srvid));
 
   bool nb = false;
   if (cli.is_non_blocking()) {
@@ -322,10 +321,8 @@ int
 SVSockLib::query_scafd_connect(const struct sockaddr_sv *sv_addr, 
                                bool nb, Cli &cli, sv_err_t &err)
 {
-  sv_srvid_t u;
-  u.s_srvid = sv_addr->sv_srvid.s_srvid;
-  uint16_t flags = sv_addr->sv_flags;
-  ConnectReq creq(u, nb, flags);
+   uint16_t flags = sv_addr->sv_flags;
+  ConnectReq creq(sv_addr->sv_srvid, nb, flags);
   if (creq.write_to_stream_soc(cli.fd(), err) < 0) {
     lerr("write to stream sock failed");
     return SERVAL_SOCKET_ERROR;
@@ -495,12 +492,11 @@ SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
     return SERVAL_SOCKET_ERROR;
 
   const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
-  sv_srvid_t local_obj_id;
-  local_obj_id.s_srvid = sv_addr->sv_srvid.s_srvid;
-  info("multi-listen: on obj id %s", oid_to_str(local_obj_id));
+
+  info("multi-listen: on obj id %s", oid_to_str(&sv_addr->sv_srvid));
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_listen(backlog, local_obj_id, cli, err) < 0) {
+  if (query_scafd_listen(backlog, sv_addr->sv_srvid, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -510,7 +506,7 @@ SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
 }
 
 int
-SVSockLib::query_scafd_listen(int backlog, sv_srvid_t local_obj_id, 
+SVSockLib::query_scafd_listen(int backlog, const sv_srvid_t& local_obj_id, 
                               const Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(local_obj_id, backlog);
@@ -628,13 +624,13 @@ SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
   // from accept().
   struct sockaddr_sv *sv_addr =  (struct sockaddr_sv *)&addr[0];
   sv_addr->sv_family = AF_SERVAL;
-  sv_addr->sv_srvid.s_srvid = aresp.remote_obj_id().s_srvid;
+  memcpy(&sv_addr->sv_srvid, &aresp.remote_obj_id(), sizeof(sv_addr->sv_srvid));
 
   if (*addr_len >= (socklen_t)(2 * sizeof(struct sockaddr_sv))) {
     // also give back the remote object id
     struct sockaddr_sv *sv_addr2 =  (struct sockaddr_sv *)&addr[1];
     sv_addr2->sv_family = AF_SERVAL;   
-    sv_addr2->sv_srvid.s_srvid = aresp.remote_obj_id().s_srvid;
+    memcpy(&sv_addr2->sv_srvid, &aresp.remote_obj_id(), sizeof(sv_addr2->sv_srvid));
     *addr_len = 2 * sizeof(struct sockaddr_sv);
   } else {
     *addr_len = sizeof(struct sockaddr_sv);
@@ -648,7 +644,7 @@ SVSockLib::query_scafd_accept2(bool nb,
                                const Cli &cli, const AcceptRsp &aresp,
                                sv_err_t &err)
 {
-  AcceptReq2 areq2(aresp.local_obj_id(), aresp.sock_id(), nb);
+  AcceptReq2 areq2(aresp.local_obj_id(), aresp.flow_id(), nb);
   if (areq2.write_to_stream_soc(cli.fd(), err) < 0)
     return SERVAL_SOCKET_ERROR;
   areq2.print("accept2:app:tx");
@@ -841,8 +837,8 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
       basic_checks(soc, dst_addr, addr_len, false, err) < 0)
     return ::sendto(soc, buffer, length, flags, dst_addr, addr_len);
   
-  sv_srvid_t remote_obj_id;
-  remote_obj_id.s_srvid = ((const struct sockaddr_sv *)dst_addr)->sv_srvid.s_srvid;
+  const sv_srvid_t *remote_obj_id;
+  remote_obj_id = &((const struct sockaddr_sv *)dst_addr)->sv_srvid;
   
   info("sendto_sv: remote_obj_id %s", oid_to_str(remote_obj_id));
   if (check_state_for_sendto(cli, err) < 0)
@@ -865,7 +861,7 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
   
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_sendto(remote_obj_id, buffer, length, flags, cli, err) < 0) {
+  if (query_scafd_sendto(*remote_obj_id, buffer, length, flags, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -964,7 +960,7 @@ SVSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
 }
 
 int
-SVSockLib::query_scafd_sendto(sv_srvid_t dst_obj_id,
+SVSockLib::query_scafd_sendto(const sv_srvid_t& dst_obj_id,
                               const void *buffer, size_t length, int flags,
                               Cli &cli, sv_err_t &err)
 {
@@ -1050,12 +1046,12 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
 
   struct sockaddr_sv *sv_addr = (struct sockaddr_sv *)&src_addr[0];
   sv_addr->sv_family = AF_SERVAL;
-  sv_addr->sv_srvid.s_srvid = src_obj_id.s_srvid;
+  memcpy(&sv_addr->sv_srvid, &src_obj_id, sizeof(sv_addr->sv_srvid));
 
   if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sv)) {
     struct sockaddr_sv *sv_addr2 = (struct sockaddr_sv *)&src_addr[1];
     sv_addr2->sv_family = AF_SERVAL;
-    sv_addr2->sv_srvid.s_srvid = htons(SERVAL_NULL_OID);
+    memcpy(&sv_addr2->sv_srvid, SERVAL_NULL_OID, sizeof(sv_addr2->sv_srvid));
     *addr_len = 2 * sizeof(struct sockaddr_sv);
   } else { 
     *addr_len = sizeof(struct sockaddr_sv);
@@ -1216,7 +1212,7 @@ SVSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 
     if (len > rresp.nonserial_pld_len())
       len = rresp.nonserial_pld_len();
-    src_obj_id = rresp.src_obj_id();
+    memcpy(&src_obj_id, &rresp.src_obj_id(), sizeof(src_obj_id));
   } else {
     info("recv: expected to read data, found EOF on soc %s", 
          cli.s());
@@ -1317,12 +1313,12 @@ SVSockLib::is_valid(const struct sockaddr_sv &addr, bool local) const
 }
 
 bool
-SVSockLib::is_reserved(sv_srvid_t obj_id) const
+SVSockLib::is_reserved(const sv_srvid_t& obj_id) const
 {
-  if  (obj_id.s_srvid == htons(CONTROLLER_OID) || 
-       obj_id.s_srvid == htons(SERVAL_OID) || 
-       obj_id.s_srvid == htons(SERVAL_NULL_OID)) {
-    fprintf(stderr, "object ID %s not allowed", oid_to_str(obj_id));
+  if  (memcmp(&obj_id, CONTROLLER_OID, sizeof(obj_id)) == 0 || 
+       memcmp(&obj_id, SERVAL_OID, sizeof(obj_id)) == 0 || 
+       memcmp(&obj_id, SERVAL_NULL_OID, sizeof(obj_id)) == 0) {
+    fprintf(stderr, "object ID %s not allowed", oid_to_str(&obj_id));
     return true;
   }
   return false;

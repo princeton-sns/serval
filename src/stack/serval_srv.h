@@ -20,7 +20,7 @@ struct serval_skb_cb {
         enum serval_packet_type pkttype;
         struct service_id srvid;
         struct service_entry *se;
-	struct flow_id dst_flowid;
+	struct net_addr dst_flowid;
         unsigned char hard_addr[];
 };
 

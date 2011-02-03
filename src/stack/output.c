@@ -27,7 +27,7 @@ int serval_output(struct sk_buff *skb)
                 goto drop;
         }
         
-        neigh = neighbor_find((struct flow_id *)&ip_hdr(skb)->daddr);
+        neigh = neighbor_find((struct net_addr *)&ip_hdr(skb)->daddr);
 
         if (!neigh) {
                 char buf[15];

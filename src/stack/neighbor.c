@@ -117,7 +117,7 @@ int neighbor_entry_get_dst(struct neighbor_entry *neigh, unsigned char *dst,
 
 static int __neighbor_entry_print(struct bst_node *n, char *buf, int buflen)
 {
-#define PREFIX_BUFLEN (sizeof(struct flow_id)*2+4)
+#define PREFIX_BUFLEN (sizeof(struct net_addr)*2+4)
         char prefix[PREFIX_BUFLEN];
         struct neighbor_entry *neigh = get_neighbor(n);
         char macstr[18];
@@ -159,7 +159,7 @@ int neighbors_print(char *buf, int buflen)
 }
 
 static struct neighbor_entry *neighbor_table_find(struct neighbor_table *tbl, 
-                                                  struct flow_id *flw)
+                                                  struct net_addr *flw)
 {
         struct neighbor_entry *neigh = NULL;
         struct bst_node *n;
@@ -181,12 +181,12 @@ static struct neighbor_entry *neighbor_table_find(struct neighbor_table *tbl,
         return neigh;
 }
 
-struct neighbor_entry *neighbor_find(struct flow_id *flw)
+struct neighbor_entry *neighbor_find(struct net_addr *flw)
 {
         return neighbor_table_find(&neightable, flw);
 }
 
-int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw, 
+int neighbor_table_add(struct neighbor_table *tbl, struct net_addr *flw, 
                        unsigned int prefix_bits, struct net_device *dev,
                        unsigned char *dst, int dstlen,
                        gfp_t alloc)
@@ -227,7 +227,7 @@ int neighbor_table_add(struct neighbor_table *tbl, struct flow_id *flw,
         return ret;
 }
 
-int neighbor_add(struct flow_id *flw, unsigned int prefix_bits, 
+int neighbor_add(struct net_addr *flw, unsigned int prefix_bits, 
                  struct net_device *dev, void *dst, 
                  int dstlen, gfp_t alloc)
 {
@@ -235,7 +235,7 @@ int neighbor_add(struct flow_id *flw, unsigned int prefix_bits,
                                  dev, dst, dstlen, alloc);
 }
 
-void neighbor_table_del(struct neighbor_table *tbl, struct flow_id *flw, 
+void neighbor_table_del(struct neighbor_table *tbl, struct net_addr *flw, 
                         unsigned int prefix_bits)
 {
         write_lock_bh(&tbl->lock);
@@ -243,7 +243,7 @@ void neighbor_table_del(struct neighbor_table *tbl, struct flow_id *flw,
         write_unlock_bh(&tbl->lock);
 }
 
-void neighbor_del(struct flow_id *flw, unsigned int prefix_bits)
+void neighbor_del(struct net_addr *flw, unsigned int prefix_bits)
 {
         return neighbor_table_del(&neightable, flw, prefix_bits);
 }
@@ -307,7 +307,7 @@ void neighbor_table_init(struct neighbor_table *tbl)
 
 int __init neighbor_init(void)
 {
-        struct flow_id broadcast;
+        struct net_addr broadcast;
         unsigned char mac[6] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 
         neighbor_table_init(&neightable);

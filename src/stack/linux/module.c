@@ -41,7 +41,7 @@ static int serval_netdev_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
-                struct flow_id dst;
+                struct net_addr dst;
                 u32 mask = 0;
                 unsigned int prefix_len = 0;
 
