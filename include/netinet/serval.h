@@ -75,22 +75,25 @@ struct net_addr {
 static inline const char *__hexdump(const void *data, int datalen, 
                                     char *buf, int buflen)
 {
-        int i = 0, len = 0;
         const unsigned char *h = (const unsigned char *)data;
-        
-        while (i < datalen) {
-                unsigned char c = (i + 1 < datalen) ? h[i+1] : 0;
+        int len = 0;
+
+        while (datalen > 0 && len < buflen) {
                 len += snprintf(buf + len, buflen - len, 
-                                "%02x%02x ", h[i], c);
-                i += 2;
+                                "%02x",
+                                *h++);
+
+                if (datalen && datalen % 2)
+                        len += snprintf(buf + len, buflen - len, " ");
+                datalen--;
         }
         return buf;
 }
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
-        static char str[66];
-        return __hexdump(srvid, 32, str, 66);  
+        static char str[84];
+        return __hexdump(srvid, sizeof(*srvid), str, 84);  
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)

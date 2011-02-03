@@ -1315,12 +1315,14 @@ SVSockLib::is_valid(const struct sockaddr_sv &addr, bool local) const
 bool
 SVSockLib::is_reserved(const sv_srvid_t& obj_id) const
 {
+  /*
   if  (memcmp(&obj_id, CONTROLLER_OID, sizeof(obj_id)) == 0 || 
        memcmp(&obj_id, SERVAL_OID, sizeof(obj_id)) == 0 || 
        memcmp(&obj_id, SERVAL_NULL_OID, sizeof(obj_id)) == 0) {
     fprintf(stderr, "object ID %s not allowed", oid_to_str(&obj_id));
     return true;
   }
+  */
   return false;
 }
 
