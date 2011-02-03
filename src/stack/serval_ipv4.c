@@ -67,7 +67,7 @@ const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
 }
 
 int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
-                              struct ipcm_cookie *ipcm)
+                            struct ipcm_cookie *ipcm)
 {
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
@@ -155,7 +155,7 @@ inhdr_error:
 }
 
 int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
-                                     uint32_t daddr, struct ip_options *opt)
+                                   uint32_t daddr, struct ip_options *opt)
 {
 	struct ipcm_cookie ipcm;
         int err = 0;
@@ -200,7 +200,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         }
 
 	memset(&ipcm, 0, sizeof(ipcm));
-        memcpy(&ipcm.addr, &SERVAL_SKB_CB(skb)->dst_flowid,
+        memcpy(&ipcm.addr, &SERVAL_SKB_CB(skb)->dst_addr,
                sizeof(ipcm.addr));
 
         err = serval_ipv4_fill_in_hdr(sk, skb, &ipcm);

@@ -1,5 +1,5 @@
-#ifndef _LINUX_HASH_H
-#define _LINUX_HASH_H
+#ifndef _SERVAL_HASH_H
+#define _SERVAL_HASH_H
 /* Fast hashing routine for ints,  longs and pointers.
    (C) 2002 William Lee Irwin III, IBM */
 
@@ -15,6 +15,10 @@
  */
 
 /* Taken from linux kernel and slightly modified. */
+
+#if defined(__KERNEL__) && defined(__linux__)
+#include <linux/hash.h>
+#else
 
 #include <sys/types.h>
 
@@ -110,5 +114,31 @@ full_name_hash(const char *name, unsigned int len)
 		hash = partial_name_hash(*name++, hash);
 	return end_name_hash(hash);
 }
+#endif /* LINUX_KERNEL */
 
-#endif /* _LINUX_HASH_H */
+/* Compute the hash for the bitprefix of a binary data structure. 
+   The num_bits argument is the size of the prefix to use in bits. */
+static inline unsigned int
+full_bitstring_hash(const void *bits_in, unsigned int num_bits)
+{
+	const unsigned char *bits = (const unsigned char *)bits_in;
+	unsigned int len = num_bits / 8;
+	unsigned long hash = init_name_hash();
+	
+	/* Compute the number of bits in the last byte to hash */
+	num_bits -= (len * 8);
+
+	/* Hash up to the last byte. */
+	while (len--)
+		hash = partial_name_hash(*bits++, hash);
+	
+	/* Hash the bits of the last byte if necessary */
+	if (num_bits) {
+		/* We need to mask off the last bits to use and hash those */
+		unsigned char last_bits = (0xff << (8 - num_bits)) & *bits;
+		partial_name_hash(last_bits, hash);
+	}
+	return end_name_hash(hash);
+}
+
+#endif /* _SERVAL_HASH_H */

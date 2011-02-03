@@ -16,7 +16,7 @@ struct serval_request_sock {
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
-        struct net_addr dst_flowid;
+        struct net_addr dst_addr;
         uint32_t seqno;
         unsigned char flags;
         struct list_head lh;

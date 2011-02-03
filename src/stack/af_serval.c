@@ -108,6 +108,8 @@ static int serval_autobind(struct sock *sk)
                 }
         }
 #endif
+        /* Bind to full service id */
+        ssk->srvid_prefix_bits = 0;
         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
 
         /* Add to protocol hash chains. */
@@ -158,6 +160,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid, 
                sizeof(svaddr->sv_srvid));
+        serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
         /* 
            Return value of 1 indicates we are in controller mode -->
            do not wait for a reply 
@@ -705,7 +708,8 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 	return mask;
 }
 
-static int serval_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
+static int serval_ioctl(struct socket *sock, unsigned int cmd, 
+                        unsigned long arg)
 {
 	struct sock *sk = sock->sk;
 	int ret = 0;

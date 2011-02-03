@@ -258,7 +258,7 @@ int main(int argc, char **argv)
 	/* Set controller service id */
 	memset(&ctrlid, 0, sizeof(ctrlid));
 	ctrlid.sv_family = AF_SERVAL;
-	//ctrlid.sv_srvid.s_sid16 = htons(666);
+	ctrlid.sv_srvid.s_sid16[0] = htons(666);
 
 	/* Try first a native socket */
 	ctrlsock = socket(AF_SERVAL, SOCK_DGRAM, 0);

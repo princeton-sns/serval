@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 	}
 
 	addr.sv_family = AF_SERVAL;
-	addr.sv_srvid.s_sid16 = htons(7); 
+	addr.sv_srvid.s_sid16[0] = htons(7); 
 	
 	ret = bind_sv(sock, (struct sockaddr *)&addr, sizeof(addr));
 
@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
-	addr.sv_srvid.s_sid16 = htons(8);
+	addr.sv_srvid.s_sid16[0] = htons(8);
 
 	ret = sendto_sv(sock, &data, sizeof(data), 0, 
                         (struct sockaddr *)&addr, sizeof(addr));

@@ -27,8 +27,8 @@
 
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
-#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR + \
-                     sizeof(struct serval_hdr) + \
+#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR +      \
+                     sizeof(struct serval_hdr) +        \
                      sizeof(struct serval_service_ext)) 
 
 static int serval_udp_connection_request(struct sock *sk, 
@@ -84,7 +84,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, &serval_sk(sk)->src_flowid);
+        udp_checksum(tot_len, uh, &serval_sk(sk)->src_addr);
         
         skb->protocol = IPPROTO_UDP;
 
@@ -116,7 +116,7 @@ static int serval_udp_init_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
 static int serval_udp_destroy_sock(struct sock *sk)
 #else
-static void serval_udp_destroy_sock(struct sock *sk)
+        static void serval_udp_destroy_sock(struct sock *sk)
 #endif
 {
         //struct serval_udp_sock *usk = serval_udp_sk(sk);
@@ -218,9 +218,9 @@ int serval_udp_connection_request(struct sock *sk, struct sk_buff *skb)
 }
 
 struct sock *serval_udp_connection_respond_sock(struct sock *sk, 
-                                                  struct sk_buff *skb,
-                                                  struct serval_request_sock *req,
-                                                  struct dst_entry *dst)
+                                                struct sk_buff *skb,
+                                                struct serval_request_sock *req,
+                                                struct dst_entry *dst)
 {
         struct sock *nsk;
 
@@ -444,8 +444,8 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         }
                 }
                 /*
-                LOG_DBG("skb->len=%u len=%zu retval=%d\n", 
-                        skb->len, len, retval);
+                  LOG_DBG("skb->len=%u len=%zu retval=%d\n", 
+                  skb->len, len, retval);
                 */
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */

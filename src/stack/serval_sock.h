@@ -5,6 +5,7 @@
 #include <netinet/serval.h>
 #include <serval/list.h>
 #include <serval/lock.h>
+#include <serval/hash.h>
 #include <serval/sock.h>
 #include <serval/net.h>
 #include <serval/timer.h>
@@ -61,7 +62,9 @@ struct serval_sock {
         struct net_device       *dev; /* TX device for connected flows */
         unsigned char           flags;
         void                    *hash_key;
-        unsigned int            hash_key_len;
+        unsigned int            hash_key_len; /* Keylen in bytes or
+                                               * bits, depending on
+                                               * what we hash on. */
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;
@@ -69,8 +72,9 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        struct net_addr          dst_flowid;
-        struct net_addr          src_flowid;
+        unsigned short          srvid_prefix_bits;
+        struct net_addr         dst_addr;
+        struct net_addr         src_addr;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
         unsigned long           tot_bytes_sent;
@@ -90,29 +94,52 @@ struct serval_hslot {
 
 struct serval_table {
 	struct serval_hslot *hash;
+        unsigned int (*hashfn)(struct serval_table *tbl, struct sock *sk);
+        struct serval_hslot *(*hashslot)(struct serval_table *tbl,
+                                         struct net *net,
+                                         void *key,
+                                         size_t keylen);
 	unsigned int mask;
 };
 
 int serval_sock_get_flowid(struct flow_id *sid);
 
 static inline unsigned int serval_hashfn(struct net *net, 
-                                           void *key,
-                                           size_t keylen,
-                                           unsigned int mask)
+                                         void *key,
+                                         size_t keylen,
+                                         unsigned int mask)
 {
         unsigned int num = 0;
         memcpy(&num, key, keylen < sizeof(num) ? keylen : sizeof(num));
 	return num & mask;
 }
 
+static inline unsigned int serval_hashfn_listen(struct net *net, 
+                                                void *key,
+                                                size_t keylen,
+                                                unsigned int mask)
+{
+        return full_bitstring_hash(key, keylen) & mask;
+}
+
 extern struct serval_table serval_table;
 
-static inline struct serval_hslot *serval_hashslot(struct serval_table *table,
-						       struct net *net, 
-                                                       void *key,
-                                                       size_t keylen)
+static inline 
+struct serval_hslot *serval_hashslot(struct serval_table *table,
+                                     struct net *net, 
+                                     void *key,
+                                     size_t keylen)
 {
 	return &table->hash[serval_hashfn(net, key, keylen, table->mask)];
+}
+
+static inline 
+struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
+                                            struct net *net, 
+                                            void *key,
+                                            size_t keylen)
+{
+	return &table->hash[serval_hashfn_listen(net, key, keylen, table->mask)];
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *);
@@ -122,19 +149,19 @@ void serval_sock_hash(struct sock *sk);
 void serval_sock_unhash(struct sock *sk);
 
 static inline void serval_sock_set_flag(struct serval_sock *ssk, 
-                                          enum serval_sock_flags flag)
+                                        enum serval_sock_flags flag)
 {
         ssk->flags |= (0x1 << flag);
 }
 
 static inline void serval_sock_reset_flag(struct serval_sock *ssk, 
-                                            enum serval_sock_flags flag)
+                                          enum serval_sock_flags flag)
 {
         ssk->flags &= (flag ^ -1UL);
 }
 
 static inline int serval_sock_flag(struct serval_sock *ssk, 
-                                     enum serval_sock_flags flag)
+                                   enum serval_sock_flags flag)
 {
 	return ssk->flags & (0x1 << flag);
 }
@@ -142,8 +169,8 @@ static inline int serval_sock_flag(struct serval_sock *ssk,
 
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
-                               gfp_t priority, int protocol, 
-                               struct proto *prot);
+                             gfp_t priority, int protocol, 
+                             struct proto *prot);
 void serval_sock_init(struct sock *sk);
 void serval_sock_destruct(struct sock *sk);
 int serval_sock_set_state(struct sock *sk, int state);

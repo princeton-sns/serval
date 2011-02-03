@@ -25,12 +25,12 @@ extern int serval_udp_rcv(struct sk_buff *);
 extern atomic_t serval_nr_socks;
 
 static int serval_srv_state_process(struct sock *sk, 
-                                      struct serval_hdr *sfh, 
-                                      struct sk_buff *skb);
+                                    struct serval_hdr *sfh, 
+                                    struct sk_buff *skb);
         
 static int serval_srv_syn_rcv(struct sock *sk, 
-                                struct serval_hdr *sfh,
-                                struct sk_buff *skb)
+                              struct serval_hdr *sfh,
+                              struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_request_sock *rsk;
@@ -76,8 +76,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_sid));
         memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
                sizeof(srv_ext->src_srvid));
-        memcpy(&rsk->dst_flowid, &ip_hdr(skb)->saddr,
-               sizeof(rsk->dst_flowid));
+        memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
+               sizeof(rsk->dst_addr));
         
         list_add(&rsk->lh, &ssk->syn_queue);
         
@@ -99,7 +99,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         skb->protocol = IPPROTO_SERVAL;
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
-                                               ip_hdr(skb)->saddr, NULL);
+                                             ip_hdr(skb)->saddr, NULL);
 done:        
         return err;
 drop:
@@ -109,8 +109,8 @@ drop:
 
 static struct sock *
 serval_srv_request_sock_handle(struct sock *sk,
-                                 struct serval_hdr *sfh,
-                                 struct sk_buff *skb)
+                               struct serval_hdr *sfh,
+                               struct sk_buff *skb)
 {
 
         struct serval_sock *ssk = serval_sk(sk);
@@ -141,8 +141,8 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_flowid));
                         memcpy(&nssk->peer_srvid, &rsk->peer_srvid,
                                sizeof(rsk->peer_srvid));
-                        memcpy(&nssk->dst_flowid, &rsk->dst_flowid,
-                               sizeof(rsk->dst_flowid));
+                        memcpy(&nssk->dst_addr, &rsk->dst_addr,
+                               sizeof(rsk->dst_addr));
                          
                         rsk->sk = nsk;
 
@@ -157,7 +157,7 @@ serval_srv_request_sock_handle(struct sock *sk,
 }
 
 static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
-                             struct sk_buff *skb)
+                           struct sk_buff *skb)
 {
         sk->sk_shutdown |= SEND_SHUTDOWN;
         sock_set_flag(sk, SOCK_DONE);
@@ -180,8 +180,8 @@ static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
 }
 
 static int serval_srv_connected_state_process(struct sock *sk, 
-                                                struct serval_hdr *sfh,
-                                                struct sk_buff *skb)
+                                              struct serval_hdr *sfh,
+                                              struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
@@ -199,8 +199,8 @@ static int serval_srv_connected_state_process(struct sock *sk,
 }
 
 static int serval_srv_child_process(struct sock *parent, struct sock *child,
-                                      struct serval_hdr *sfh,
-                                      struct sk_buff *skb)
+                                    struct serval_hdr *sfh,
+                                    struct sk_buff *skb)
 {
         int ret = 0;
         int state = child->sk_state;
@@ -229,8 +229,8 @@ static int serval_srv_child_process(struct sock *parent, struct sock *child,
 }
 
 static int serval_srv_listen_state_process(struct sock *sk,
-                                             struct serval_hdr *sfh,
-                                             struct sk_buff *skb)
+                                           struct serval_hdr *sfh,
+                                           struct sk_buff *skb)
 {
         int err = 0;                         
 
@@ -255,8 +255,8 @@ static int serval_srv_listen_state_process(struct sock *sk,
 }
 
 static int serval_srv_request_state_process(struct sock *sk, 
-                                              struct serval_hdr *sfh,
-                                              struct sk_buff *skb)
+                                            struct serval_hdr *sfh,
+                                            struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_service_ext *srv_ext = 
@@ -278,8 +278,8 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
         dev_hold(ssk->dev);
-        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->saddr, 
-               sizeof(ssk->dst_flowid));
+        memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
+               sizeof(ssk->dst_addr));
 
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);      
@@ -306,7 +306,7 @@ static int serval_srv_request_state_process(struct sock *sk,
                sizeof(ssk->local_srvid));
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
-                                               ip_hdr(skb)->saddr, NULL);
+                                             ip_hdr(skb)->saddr, NULL);
 
         if (err < 0)
                 goto drop;
@@ -318,8 +318,8 @@ drop:
 }
 
 static int serval_srv_respond_state_process(struct sock *sk, 
-                                              struct serval_hdr *sfh,
-                                              struct sk_buff *skb)
+                                            struct serval_hdr *sfh,
+                                            struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
@@ -332,8 +332,8 @@ static int serval_srv_respond_state_process(struct sock *sk,
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
         dev_hold(ssk->dev);
-        memcpy(&ssk->dst_flowid, &ip_hdr(skb)->saddr, 
-               sizeof(ssk->dst_flowid));
+        memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
+               sizeof(ssk->dst_addr));
 
         FREE_SKB(skb);
 
@@ -341,8 +341,8 @@ static int serval_srv_respond_state_process(struct sock *sk,
 }
 
 int serval_srv_state_process(struct sock *sk, 
-                               struct serval_hdr *sfh, 
-                               struct sk_buff *skb)
+                             struct serval_hdr *sfh, 
+                             struct sk_buff *skb)
 {
         int err = 0;
 
@@ -373,7 +373,7 @@ drop:
 }
 
 int serval_srv_do_rcv(struct sock *sk, 
-                        struct sk_buff *skb)
+                      struct sk_buff *skb)
 {
         struct serval_hdr *sfh = 
                 (struct serval_hdr *)skb_transport_header(skb);
@@ -466,10 +466,10 @@ drop:
 }
 
 #define EXTRA_HDR (20)
-#define SERVAL_MAX_HDR (MAX_HEADER + 20 +                             \
-                          sizeof(struct serval_hdr) +                 \
-                          sizeof(struct serval_service_ext) +         \
-                          EXTRA_HDR)
+#define SERVAL_MAX_HDR (MAX_HEADER + 20 +                       \
+                        sizeof(struct serval_hdr) +             \
+                        sizeof(struct serval_service_ext) +     \
+                        EXTRA_HDR)
 
 static int serval_srv_rexmit_skb(struct sk_buff *skb)
 {        
@@ -538,8 +538,8 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 	if (sk->sk_state == SERVAL_CONNECTED) {
                 if (ssk->dev) {
                         skb_set_dev(skb, ssk->dev);
-                        memcpy(&SERVAL_SKB_CB(skb)->dst_flowid,
-                               &ssk->dst_flowid, sizeof(ssk->dst_flowid));
+                        memcpy(&SERVAL_SKB_CB(skb)->dst_addr,
+                               &ssk->dst_addr, sizeof(ssk->dst_addr));
                         err = ssk->af_ops->queue_xmit(skb);
                 } else {
                         err = -ENODEV;
@@ -576,7 +576,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 		struct net_device *next_dev;
 		
                 /* Remember the flow destination */
-		service_entry_dev_dst(se, &SERVAL_SKB_CB(skb)->dst_flowid,
+		service_entry_dev_dst(se, &SERVAL_SKB_CB(skb)->dst_addr,
                                       sizeof(struct net_addr));
 
 		next_dev = service_entry_dev_next(se);

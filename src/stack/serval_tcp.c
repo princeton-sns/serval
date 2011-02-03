@@ -42,7 +42,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
 static int serval_tcp_destroy_sock(struct sock *sk)
 #else
-static void serval_tcp_destroy_sock(struct sock *sk)
+        static void serval_tcp_destroy_sock(struct sock *sk)
 #endif
 {
         struct serval_tcp_sock *tsk = serval_tcp_sk(sk);
@@ -59,7 +59,7 @@ static void serval_tcp_close(struct sock *sk, long timeout)
 }
 
 static int serval_tcp_connect(struct sock *sk, struct sockaddr *uaddr, 
-                                int addr_len)
+                              int addr_len)
 {
         LOG_DBG("\n");
         return 0;
@@ -101,7 +101,7 @@ int serval_tcp_rcv(struct sk_buff *skb)
 }
 
 static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
-                                size_t len)
+                              size_t len)
 {
         int ret = -ENOMEM;
         struct service_id dst_sid;
@@ -177,8 +177,8 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr
 }
 
 static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk, 
-                                struct msghdr *msg,
-                                size_t len, int nonblock, int flags, int *addr_len)
+                              struct msghdr *msg,
+                              size_t len, int nonblock, int flags, int *addr_len)
 {
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;

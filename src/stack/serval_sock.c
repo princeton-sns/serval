@@ -39,18 +39,27 @@ static const char *sock_state_str[] = {
         "SIMCLOSE"  
 };
 
-int __init serval_table_init(struct serval_table *table, const char *name)
+int __init serval_table_init(struct serval_table *table,
+                             unsigned int (*hashfn)(struct serval_table *tbl, 
+                                                    struct sock *sk),
+                             struct serval_hslot *(*hashslot)(struct serval_table *tbl,
+                                                              struct net *net,
+                                                              void *key,
+                                                              size_t keylen),
+                             const char *name)
 {
 	unsigned int i;
 
 	table->hash = MALLOC(SERVAL_HTABLE_SIZE_MIN *
-			      2 * sizeof(struct serval_hslot), GFP_KERNEL);
+                             2 * sizeof(struct serval_hslot), GFP_KERNEL);
 	if (!table->hash) {
 		/* panic(name); */
 		return -1;
 	}
 
 	table->mask = SERVAL_HTABLE_SIZE_MIN - 1;
+        table->hashfn = hashfn;
+        table->hashslot = hashslot;
 
 	for (i = 0; i <= table->mask; i++) {
 		INIT_HLIST_HEAD(&table->hash[i].head);
@@ -72,7 +81,7 @@ void __exit serval_table_fini(struct serval_table *table)
                         struct sock *sk;
 
                         sk = hlist_entry(table->hash[i].head.first, 
-                                          struct sock, sk_node);
+                                         struct sock, sk_node);
                         
                         hlist_del(&sk->sk_node);
                         table->hash[i].count--;
@@ -85,8 +94,8 @@ void __exit serval_table_fini(struct serval_table *table)
 }
 
 static struct sock *serval_sock_lookup(struct serval_table *table,
-                                         struct net *net, void *key, 
-                                         size_t keylen)
+                                       struct net *net, void *key, 
+                                       size_t keylen)
 {
         struct serval_hslot *slot;
         struct hlist_node *walk;
@@ -95,7 +104,7 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
         if (!key)
                 return NULL;
 
-        slot = serval_hashslot(table, net, key, keylen);
+        slot = table->hashslot(table, net, key, keylen);
 
         if (!slot)
                 return NULL;
@@ -110,7 +119,7 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
                 }
         }
         sk = NULL;
- out:
+out:
         spin_unlock_bh(&slot->lock);
         
         return sk;
@@ -119,40 +128,38 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
 struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 {
         return serval_sock_lookup(&established_table, &init_net, 
-                                    flowid, sizeof(*flowid));
+                                  flowid, sizeof(*flowid));
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
 {
         return serval_sock_lookup(&listen_table, &init_net, 
-                                    srvid, sizeof(*srvid));
+                                  srvid, sizeof(*srvid));
 }
 
-static inline unsigned int serval_ehash(struct sock *sk)
+static inline unsigned int serval_sock_ehash(struct serval_table *table,
+                                             struct sock *sk)
 {
         return serval_hashfn(sock_net(sk), 
-                               &serval_sk(sk)->local_flowid,
-                               sizeof(struct flow_id),
-                               established_table.mask);
+                             &serval_sk(sk)->local_flowid,
+                             serval_sk(sk)->hash_key_len,
+                             table->mask);
 }
 
-static inline unsigned int serval_lhash(struct sock *sk)
+static inline unsigned int serval_sock_lhash(struct serval_table *table, 
+                                             struct sock *sk)
 {
-        return serval_hashfn(sock_net(sk), 
-                               &serval_sk(sk)->local_srvid, 
-                               sizeof(struct service_id),
-                               listen_table.mask);
+        return serval_hashfn_listen(sock_net(sk), 
+                                    &serval_sk(sk)->local_srvid, 
+                                    serval_sk(sk)->hash_key_len,
+                                    table->mask);
 }
 
 static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 {
-        struct serval_sock *ssk = serval_sk(sk);
         struct serval_hslot *slot;
 
-        sk->sk_hash = serval_hashfn(sock_net(sk), 
-                                      ssk->hash_key,
-                                      ssk->hash_key_len,
-                                      table->mask);
+        sk->sk_hash = table->hashfn(table, sk);
 
         slot = &table->hash[sk->sk_hash];
 
@@ -179,14 +186,20 @@ static void __serval_sock_hash(struct sock *sk)
                 LOG_DBG("hashing socket %p based on service id %s\n",
                         sk, service_id_to_str(&serval_sk(sk)->local_srvid));
                 serval_sk(sk)->hash_key = &serval_sk(sk)->local_srvid;
-                serval_sk(sk)->hash_key_len = sizeof(serval_sk(sk)->local_srvid);
+                /* Set the number of bits to hash on, if 0 then we use
+                 * all bits */
+                serval_sk(sk)->hash_key_len = 
+                        serval_sk(sk)->srvid_prefix_bits == 0 ? 
+                        sizeof(serval_sk(sk)->local_srvid) * 8 : 
+                        serval_sk(sk)->srvid_prefix_bits;
                 __serval_table_hash(&listen_table, sk);
 
         } else { 
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&serval_sk(sk)->local_flowid));
                 serval_sk(sk)->hash_key = &serval_sk(sk)->local_flowid;
-                serval_sk(sk)->hash_key_len = sizeof(serval_sk(sk)->local_flowid);
+                serval_sk(sk)->hash_key_len = 
+                        sizeof(serval_sk(sk)->local_flowid);
                 __serval_table_hash(&established_table, sk);
         }
 }
@@ -209,15 +222,15 @@ void serval_sock_unhash(struct sock *sk)
 
         /* grab correct lock */
         if (sk->sk_state == SERVAL_LISTEN) {
-                lock = &serval_hashslot(&listen_table, net, 
-                                          &serval_sk(sk)->local_srvid, 
-                                          sizeof(struct service_id))->lock;
+                lock = &listen_table.hashslot(&listen_table, net, 
+                                              &serval_sk(sk)->local_srvid, 
+                                              serval_sk(sk)->hash_key_len)->lock;
         } else {
-                lock = &serval_hashslot(&established_table,
-                                          net, &serval_sk(sk)->local_flowid, 
-                                          sizeof(struct flow_id))->lock;
+                lock = &established_table.hashslot(&established_table,
+                                                   net, &serval_sk(sk)->local_flowid, 
+                                                   serval_sk(sk)->hash_key_len)->lock;
         }
-
+        
 	spin_lock_bh(lock);
 
         if (!hlist_unhashed(&sk->sk_node)) {
@@ -237,12 +250,18 @@ int __init serval_sock_tables_init(void)
 {
         int ret;
 
-        ret = serval_table_init(&listen_table, "LISTEN");
+        ret = serval_table_init(&listen_table, 
+                                serval_sock_lhash, 
+                                serval_hashslot_listen,
+                                "LISTEN");
 
         if (ret < 0)
                 goto fail_table;
         
-        ret = serval_table_init(&established_table, "ESTABLISHED");
+        ret = serval_table_init(&established_table, 
+                                serval_sock_ehash, 
+                                serval_hashslot,
+                                "ESTABLISHED");
 
 fail_table:
         return ret;
@@ -276,8 +295,8 @@ int serval_sock_get_flowid(struct flow_id *sid)
 }
 
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
-                               gfp_t priority, int protocol, 
-                               struct proto *prot)
+                             gfp_t priority, int protocol, 
+                             struct proto *prot)
 {
         struct sock *sk;
 
@@ -305,7 +324,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
-               sk, atomic_read(&serval_nr_socks));
+                sk, atomic_read(&serval_nr_socks));
 
         return sk;
 }
@@ -356,7 +375,7 @@ void serval_sock_destruct(struct sock *sk)
 	atomic_dec(&serval_nr_socks);
 
 	LOG_DBG("SERVAL socket %p destroyed, %d are still alive.\n", 
-               sk, atomic_read(&serval_nr_socks));
+                sk, atomic_read(&serval_nr_socks));
 }
 
 int serval_sock_set_state(struct sock *sk, int new_state)

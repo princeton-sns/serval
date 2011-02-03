@@ -41,7 +41,7 @@ void server(void)
   
         bzero((void *)&servaddr, sizeof(servaddr));
         servaddr.sv_family = AF_SERVAL;
-        servaddr.sv_srvid.s_sid16 = htons(ECHO_OBJECT_ID);
+        servaddr.sv_srvid.s_sid16[0] = htons(ECHO_OBJECT_ID);
   
         set_reuse_ok(sock);
   
