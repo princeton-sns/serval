@@ -135,6 +135,8 @@ static int packet_linux_xmit(struct sk_buff *skb)
 	lladdr.sll_protocol = skb->protocol;
 	lladdr.sll_pkttype = PACKET_OUTGOING;
         
+        LOG_DBG("sending message len=%u\n", skb->len);
+
 	err = sendto(skb->dev->fd, skb->data, 
 		     skb->len, 0, 
 		     (struct sockaddr *)&lladdr, 

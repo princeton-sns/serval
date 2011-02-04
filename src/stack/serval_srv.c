@@ -72,8 +72,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         
         /* Copy fields in request packet into request sock */
-        memcpy(&rsk->peer_flowid, &sfh->src_sid, 
-               sizeof(sfh->src_sid));
+        memcpy(&rsk->peer_flowid, &sfh->src_flowid, 
+               sizeof(sfh->src_flowid));
         memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
                sizeof(srv_ext->src_srvid));
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
@@ -88,9 +88,9 @@ static int serval_srv_syn_rcv(struct sock *sk,
         skb_reset_transport_header(skb);
         
         /* Update info in packet */
-        memcpy(&sfh->dst_sid, &sfh->src_sid, 
-               sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &rsk->local_flowid, 
+        memcpy(&sfh->dst_flowid, &sfh->src_flowid, 
+               sizeof(sfh->src_flowid));
+        memcpy(&sfh->src_flowid, &rsk->local_flowid, 
                sizeof(rsk->local_flowid));
         memcpy(&srv_ext->dst_srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
@@ -117,7 +117,7 @@ serval_srv_request_sock_handle(struct sock *sk,
         struct serval_request_sock *rsk;
 
         list_for_each_entry(rsk, &ssk->syn_queue, lh) {
-                if (memcmp(&rsk->local_flowid, &sfh->dst_sid, 
+                if (memcmp(&rsk->local_flowid, &sfh->dst_flowid, 
                            sizeof(rsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
@@ -295,9 +295,9 @@ static int serval_srv_request_state_process(struct sock *sk,
         skb->protocol = IPPROTO_SERVAL;
 
         /* Fill in socket ids */
-        memcpy(&ssk->peer_flowid, &sfh->src_sid, sizeof(sfh->src_sid));
-        memcpy(&sfh->src_sid, &ssk->local_flowid, sizeof(sfh->src_sid));
-        memcpy(&sfh->dst_sid, &ssk->peer_flowid, sizeof(sfh->dst_sid));
+        memcpy(&ssk->peer_flowid, &sfh->src_flowid, sizeof(sfh->src_flowid));
+        memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(sfh->src_flowid));
+        memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(sfh->dst_flowid));
 
         /* Update service extension header */
         memcpy(&srv_ext->dst_srvid, &ssk->peer_srvid, 
@@ -405,13 +405,13 @@ int serval_srv_rcv(struct sk_buff *skb)
         }
         
         LOG_DBG("flowid (src,dst)=(%u,%u)\n", 
-                ntohs(sfh->src_sid.s_id), ntohs(sfh->dst_sid.s_id));
+                ntohs(sfh->src_flowid.s_id), ntohs(sfh->dst_flowid.s_id));
        
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
         if (!(sfh->flags & SFH_SYN && !(sfh->flags & SFH_ACK))) {
                 /* Ok, check if we can demux on socket id */
-                sk = serval_sock_lookup_flowid(&sfh->dst_sid);
+                sk = serval_sock_lookup_flowid(&sfh->dst_flowid);
         }
         
         if (!sk) {
@@ -500,6 +500,9 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
         int hdr_len = sizeof(*sfh);
 	int err = 0;
 
+        LOG_DBG("1. skb->len=%u sizeof(serval_skb_cb)=%u\n", 
+                skb->len, sizeof(struct serval_skb_cb));
+
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
         case SERVAL_PKT_SYNACK:
@@ -525,16 +528,20 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 break;
         }
 
+        LOG_DBG("2. skb->len=%u\n", skb->len);
+
         /* Add Serval header */
         sfh = (struct serval_hdr *)skb_push(skb, sizeof(*sfh));
         sfh->flags = flags;
         sfh->protocol = skb->protocol;
         sfh->length = htons(hdr_len);
-        memcpy(&sfh->src_sid, &ssk->local_flowid, sizeof(ssk->local_flowid));
-        memcpy(&sfh->dst_sid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
+        memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
+        memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
                 
+        LOG_DBG("3. skb->len=%u\n", skb->len);
+
 	if (sk->sk_state == SERVAL_CONNECTED) {
                 if (ssk->dev) {
                         skb_set_dev(skb, ssk->dev);
@@ -593,6 +600,8 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 				FREE_SKB(skb);
 				break;
 			}
+
+                        LOG_DBG("cskb->len=%u\n", cskb->len);
 		}
                 
 		/* Set the output device */

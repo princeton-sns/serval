@@ -15,13 +15,15 @@ struct service_entry;
    We must be careful that this struct does not overflow the 48 bytes
    that the skb struct gives us in the cb field.
 
+   NOTE: Currently adds up to 48 bytes (non packed) on 64-bit platform.
+   Should probably find another solution for storing a reference to
+   the service id instead of a copy.
 */
 struct serval_skb_cb {
         enum serval_packet_type pkttype;
-        struct service_id srvid;
-        struct service_entry *se;
 	struct net_addr dst_addr;
-        unsigned char hard_addr[];
+        struct service_entry *se;
+        struct service_id srvid;
 };
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
