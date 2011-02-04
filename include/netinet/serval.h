@@ -39,7 +39,8 @@ struct service_id {
         union { 
                 struct {
                         uint8_t un_ss[4];
-                        uint8_t un_local[8];
+                        uint8_t un_local[4];
+                        uint8_t un_group[4];
                         uint8_t un_selfcert[20];
                 };
                 uint8_t	un_id8[32];
@@ -48,6 +49,7 @@ struct service_id {
         } srv_un;
 #define s_ss srv_un.un_ss;
 #define s_local srv_un.un_local;
+#define s_group srv_un.un_group;
 #define s_sfc srv_un.un_selfcert;
 #define s_sid srv_un.un_id8
 #define s_sid16 srv_un.un_id16
@@ -57,7 +59,6 @@ struct service_id {
 struct sockaddr_sv {
         sa_family_t sv_family;
         uint8_t sv_flags;
-        uint8_t sv_prefix_bits;
         struct service_id sv_srvid;
 };
 

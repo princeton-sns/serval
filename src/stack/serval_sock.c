@@ -19,6 +19,9 @@ static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
 static struct serval_table listen_table;
 
+/* The number of (prefix) bytes to hash on in the serviceID */
+#define SERVICE_KEY_LEN (8)
+
 static const char *sock_state_str[] = {
         "UNDEFINED",
         "CLOSED",
@@ -134,7 +137,7 @@ struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
 {
         return serval_sock_lookup(&listen_table, &init_net, 
-                                  srvid, sizeof(*srvid));
+                                  srvid, SERVICE_KEY_LEN);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,
@@ -151,7 +154,7 @@ static inline unsigned int serval_sock_lhash(struct serval_table *table,
 {
         return serval_hashfn_listen(sock_net(sk), 
                                     &serval_sk(sk)->local_srvid, 
-                                    serval_sk(sk)->hash_key_len,
+                                    serval_sk(sk)->hash_key_len * 8,
                                     table->mask);
 }
 
@@ -160,6 +163,8 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
         struct serval_hslot *slot;
 
         sk->sk_hash = table->hashfn(table, sk);
+
+        LOG_DBG("hash=%lu\n", sk->sk_hash);
 
         slot = &table->hash[sk->sk_hash];
 
@@ -186,12 +191,7 @@ static void __serval_sock_hash(struct sock *sk)
                 LOG_DBG("hashing socket %p based on service id %s\n",
                         sk, service_id_to_str(&serval_sk(sk)->local_srvid));
                 serval_sk(sk)->hash_key = &serval_sk(sk)->local_srvid;
-                /* Set the number of bits to hash on, if 0 then we use
-                 * all bits */
-                serval_sk(sk)->hash_key_len = 
-                        serval_sk(sk)->srvid_prefix_bits == 0 ? 
-                        sizeof(serval_sk(sk)->local_srvid) * 8 : 
-                        serval_sk(sk)->srvid_prefix_bits;
+                serval_sk(sk)->hash_key_len = SERVICE_KEY_LEN;
                 __serval_table_hash(&listen_table, sk);
 
         } else { 

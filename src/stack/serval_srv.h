@@ -35,7 +35,6 @@ static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 
 #define SERVAL_SKB_CB(__skb) __serval_skb_cb(__skb)
 
-
 int serval_srv_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_srv_rexmit_timeout(unsigned long data);
 

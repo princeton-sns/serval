@@ -164,8 +164,8 @@ static int serval_udp_connect(struct sock *sk, struct sockaddr *uaddr,
         struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
         int err;
 
-        LOG_DBG("srvid=%s addr_len=%d alloc_len=%u\n", 
-                service_id_to_str(srvid), addr_len, UDP_MAX_HDR);
+        LOG_DBG("srvid=%s addr_len=%d\n", 
+                service_id_to_str(srvid), addr_len);
 
 	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;

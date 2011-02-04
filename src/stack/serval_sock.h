@@ -62,9 +62,7 @@ struct serval_sock {
         struct net_device       *dev; /* TX device for connected flows */
         unsigned char           flags;
         void                    *hash_key;
-        unsigned int            hash_key_len; /* Keylen in bytes or
-                                               * bits, depending on
-                                               * what we hash on. */
+        unsigned int            hash_key_len;  /* Keylen in bytes */
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;
@@ -72,7 +70,6 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        unsigned short          srvid_prefix_bits;
         struct net_addr         dst_addr;
         struct net_addr         src_addr;
         struct list_head        syn_queue;
@@ -139,7 +136,7 @@ struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
                                             void *key,
                                             size_t keylen)
 {
-	return &table->hash[serval_hashfn_listen(net, key, keylen, table->mask)];
+	return &table->hash[serval_hashfn_listen(net, key, keylen*8, table->mask)];
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *);

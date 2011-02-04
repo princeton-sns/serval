@@ -71,13 +71,9 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 {
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
-        
-        LOG_DBG("1. skb->len=%u\n", skb->len);
 
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
-      
-        LOG_DBG("1. skb->len=%u\n", skb->len);
 
         /* Build IP header */
         memset(iph, 0, iph_len);
@@ -202,8 +198,6 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 FREE_SKB(skb);
                 return -ENODEV;
         }
-
-        LOG_DBG("skb->len=%u\n", skb->len);
 
 	memset(&ipcm, 0, sizeof(ipcm));
         memcpy(&ipcm.addr, &SERVAL_SKB_CB(skb)->dst_addr,

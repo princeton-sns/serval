@@ -405,7 +405,8 @@ int serval_srv_rcv(struct sk_buff *skb)
         }
         
         LOG_DBG("flowid (src,dst)=(%u,%u)\n", 
-                ntohs(sfh->src_flowid.s_id), ntohs(sfh->dst_flowid.s_id));
+                ntohs(sfh->src_flowid.s_id), 
+                ntohs(sfh->dst_flowid.s_id));
        
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
@@ -423,7 +424,8 @@ int serval_srv_rcv(struct sk_buff *skb)
                  * extension always directly follows the main Serval
                  * header */
                 if (hdr_len <= sizeof(*sfh)) {
-                        LOG_ERR("No service extension, too short length\n");
+                        LOG_ERR("No service extension, hdr_len=%u\n", 
+                                hdr_len);
                         goto drop;
                 }
                 
@@ -432,6 +434,9 @@ int serval_srv_rcv(struct sk_buff *skb)
                         goto drop;
                 }
                 
+                LOG_DBG("SYN with srvid=%s\n", 
+                        service_id_to_str(&srv_ext->dst_srvid));
+
                 sk = serval_sock_lookup_serviceid(&srv_ext->dst_srvid);
                 
                 if (!sk) {
@@ -500,9 +505,6 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
         int hdr_len = sizeof(*sfh);
 	int err = 0;
 
-        LOG_DBG("1. skb->len=%u sizeof(serval_skb_cb)=%u\n", 
-                skb->len, sizeof(struct serval_skb_cb));
-
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
         case SERVAL_PKT_SYNACK:
@@ -528,8 +530,6 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 break;
         }
 
-        LOG_DBG("2. skb->len=%u\n", skb->len);
-
         /* Add Serval header */
         sfh = (struct serval_hdr *)skb_push(skb, sizeof(*sfh));
         sfh->flags = flags;
@@ -539,8 +539,6 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
-                
-        LOG_DBG("3. skb->len=%u\n", skb->len);
 
 	if (sk->sk_state == SERVAL_CONNECTED) {
                 if (ssk->dev) {
@@ -561,6 +559,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_SYN) {
                 sk_reset_timer(sk, &ssk->retransmit_timer, 
                                msecs_to_jiffies(2000));
+                LOG_DBG("SYN hdr_len=%u\n", htons(sfh->length));
         }
 	/* Unresolved packet, use service id */
 	se = service_find(&SERVAL_SKB_CB(skb)->srvid);
