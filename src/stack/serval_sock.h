@@ -63,6 +63,7 @@ struct serval_sock {
         unsigned char           flags;
         void                    *hash_key;
         unsigned int            hash_key_len;  /* Keylen in bytes */
+        unsigned short          srvid_prefix_bits;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;
@@ -169,7 +170,9 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                              gfp_t priority, int protocol, 
                              struct proto *prot);
 void serval_sock_init(struct sock *sk);
-void serval_sock_destruct(struct sock *sk);
+void serval_sock_destroy(struct sock *sk);
+void serval_sock_done(struct sock *sk);
+
 int serval_sock_set_state(struct sock *sk, int state);
 void serval_sock_rexmit_timeout(unsigned long data);
 

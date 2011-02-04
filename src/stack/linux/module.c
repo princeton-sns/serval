@@ -55,7 +55,7 @@ static int serval_netdev_event(struct notifier_block *this,
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(NULL, 0, dev, &dst, sizeof(dst), GFP_ATOMIC);
+                service_add(NULL, 0, dev, &dst, sizeof(dst), NULL, GFP_ATOMIC);
 
                 dev_get_ipv4_netmask(dev, &mask);
 

@@ -44,7 +44,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
          * instance. */
        
         err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid) * 8, 
-                          skb->dev, &ip_hdr(skb)->saddr, 4, GFP_ATOMIC);
+                          skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
         
         if (err < 0) {
                 LOG_ERR("could not cache service for incoming packet\n");

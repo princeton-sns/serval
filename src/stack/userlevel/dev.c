@@ -504,7 +504,7 @@ int netdev_populate_table(int sizeof_priv,
                 while (dev->ipv4.netmask & (0x1 << prefix_len))
                        prefix_len++;
              
-                service_add(NULL, 0, dev, &dev->ipv4.broadcast, 4, 0);
+                service_add(NULL, 0, dev, &dev->ipv4.broadcast, 4, NULL, 0);
                 neighbor_add((struct net_addr *)&dev->ipv4.broadcast, 
                              prefix_len, 
                              dev, dev->broadcast, dev->addr_len, 0);

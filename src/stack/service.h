@@ -7,6 +7,7 @@
 #include <serval/atomic.h>
 #include <serval/skbuff.h>
 #include <serval/dst.h>
+#include <serval/sock.h>
 #include "bst.h"
 
 struct service_id;
@@ -17,6 +18,7 @@ struct service_entry {
 	} u;
         struct bst_node *node;
         struct list_head dev_list, *dev_pos;
+        struct sock *sk;
         rwlock_t devlock;
         atomic_t refcnt;
 };
@@ -38,7 +40,7 @@ int service_entry_dev_dst(struct service_entry *se, void *dst,
 
 int service_add(struct service_id *srvid, unsigned int prefix_bits,
 		struct net_device *dev, void *dst,
-                int dstlen, gfp_t alloc);
+                int dstlen, struct sock *sk, gfp_t alloc);
 void service_del(struct service_id *srvid, unsigned int prefix_bits);
 int service_del_dev(const char *devname);
 struct service_entry *service_find(struct service_id *srvid);

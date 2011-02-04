@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <libstack/ctrlmsg.h>
 #include <libstack/callback.h>
+#include <serval/platform.h>
 #include <event.h>
 #include <string.h>
 #include "debug.h"

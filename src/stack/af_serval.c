@@ -109,6 +109,7 @@ static int serval_autobind(struct sock *sk)
         }
 #endif
         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+        serval_sk(sk)->srvid_prefix_bits = 0;
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
@@ -158,6 +159,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid, 
                sizeof(svaddr->sv_srvid));
+        serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
+
         /* 
            Return value of 1 indicates we are in controller mode -->
            do not wait for a reply 
@@ -621,11 +624,11 @@ int serval_release(struct socket *sock)
         struct sock *sk = sock->sk;
 
 	if (sk) {
+                int state;
                 long timeout;
                 
                 serval_shutdown(sock, 2);
 
-                sock_orphan(sk);
                 timeout = 0;
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
@@ -639,29 +642,43 @@ int serval_release(struct socket *sock)
                 sk->sk_shutdown = SHUTDOWN_MASK;
 
                 if (sk->sk_state == SERVAL_LISTEN) {
-                        /* Should unregister. */
                         serval_listen_stop(sk);
+                        sk->sk_prot->unhash(sk);
+                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                } else {                 
+                        /* the protocol specific function called here
+                         * should not lock sock */
+                        sk->sk_prot->close(sk, timeout);
                 }
                 
-                /* should not lock sock in protocol specific functions */
-                sk->sk_prot->close(sk, timeout);
-
-                serval_sock_set_state(sk, SERVAL_CLOSED);
+                state = sk->sk_state;
+                /* Hold reference so that the sock is not
+                   destroyed by a bh when we release lock */
+                sock_hold(sk);
+                sock_orphan(sk);
                 
-                LOG_DBG("SERVAL sock %p refcnt=%d tot_bytes_sent=%lu\n",
-                        sk, atomic_read(&sk->sk_refcnt) - 1, 
-                        serval_sk(sk)->tot_bytes_sent);
-                
-                LOG_DBG("sock rmem=%u wmem=%u omem=%u\n",
-                        atomic_read(&sk->sk_rmem_alloc),
-                        atomic_read(&sk->sk_wmem_alloc),
-                        atomic_read(&sk->sk_omem_alloc));
-
                 release_sock(sk);
 
-                sk_common_release(sk);
-        }
+                /* Now socket is owned by kernel and we acquire BH lock
+                   to finish close. No need to check for user refs.
+                */
+                local_bh_disable();
+                bh_lock_sock(sk);
 
+                /* Have we already been destroyed by a softirq or backlog? */
+                if (state != SERVAL_CLOSED && sk->sk_state == SERVAL_CLOSED)
+                        goto out;
+
+                /* Other cleanup stuff goes here */
+
+                if (sk->sk_state == SERVAL_CLOSED)
+                        serval_sock_destroy(sk);
+        out:                
+                bh_unlock_sock(sk);
+                local_bh_enable();
+                sock_put(sk);
+        }
+        
         return err;
 }
 

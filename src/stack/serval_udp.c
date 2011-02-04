@@ -135,7 +135,8 @@ static void serval_udp_close(struct sock *sk, long timeout)
         if (sk->sk_state == SERVAL_CONNECTED ||
             sk->sk_state == SERVAL_REQUEST ||
             sk->sk_state == SERVAL_RESPOND) {
-                
+                                
+                serval_sock_set_state(sk, TCP_FINWAIT1);
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
                 for (;;) {
@@ -154,6 +155,9 @@ static void serval_udp_close(struct sock *sk, long timeout)
                 if (err < 0) {
                         LOG_ERR("udp close xmit failed\n");
                 }
+        } else {
+                sk->sk_prot->unhash(sk);
+                serval_sock_set_state(sk, SERVAL_CLOSED);
         }
 }
 

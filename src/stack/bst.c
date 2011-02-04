@@ -457,7 +457,10 @@ void bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
         n = bst_find_longest_prefix(tree, prefix, prefix_bits);
         
         if (n) {
+                LOG_DBG("Found prefix, removing\n");
                 bst_remove_node(tree, n);
+        } else {
+                LOG_DBG("Prefix not found\n");
         }
 }
 

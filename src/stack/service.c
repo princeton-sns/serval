@@ -191,7 +191,7 @@ int service_entry_remove_dev(struct service_entry *se,
         return ret;
 }
 
-static struct service_entry *service_entry_create(gfp_t alloc)
+static struct service_entry *service_entry_create(struct sock *sk, gfp_t alloc)
 {
         struct service_entry *se;
     
@@ -206,6 +206,11 @@ static struct service_entry *service_entry_create(gfp_t alloc)
         atomic_set(&se->refcnt, 1);
         se->dev_pos = NULL;
 
+        if (sk) {
+                se->sk = sk;
+                sock_hold(sk);
+        }
+
         return se;
 }
 
@@ -216,11 +221,6 @@ int service_entry_init(struct bst_node *n)
 
 void __service_entry_free(struct service_entry *se)
 {
-        /* No locking should be necessary here since we are protected
-         * by the reference count. If refrence count is zero, there is
-         * only one thread with a reference to this entry. 
-         */
-
         while (1) {
                 struct dev_entry *de;
                 
@@ -231,6 +231,9 @@ void __service_entry_free(struct service_entry *se)
                 list_del(&de->lh);
                 dev_entry_free(de);
         }
+
+        if (se->sk)
+                sock_put(se->sk);
 
         rwlock_destroy(&se->devlock);
 
@@ -310,15 +313,16 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         char prefix[PREFIX_BUFLEN];
         struct service_entry *se = get_service(n);
         struct dev_entry *de;
-        char dststr[18];
+        char dststr[18]; /* Currently sufficient for IPv4 */
         int len = 0;
 
         read_lock_bh(&se->devlock);
 
         bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
         
-        len += snprintf(buf + len, buflen - len, "%-20s %-6u ",
-                        prefix, bst_node_prefix_bits(n));
+        len += snprintf(buf + len, buflen - len, "%-64s %-6u %-4u ",
+                        prefix, bst_node_prefix_bits(n), 
+                        se->sk ? 1 : 0);
 
         list_for_each_entry(de, &se->dev_list, lh) {
                 len += snprintf(buf + len, buflen - len, "[%-5s %s] ",
@@ -345,8 +349,8 @@ static int service_table_print(struct service_table *tbl, char *buf, int buflen)
         int ret;
 
         /* print header */
-        ret = snprintf(buf, buflen, "%-20s %-6s [iface dst]\n", 
-                       "prefix", "bits");
+        ret = snprintf(buf, buflen, "%-64s %-6s %-4s [iface dst]\n", 
+                       "prefix", "bits", "sock");
 
         read_lock_bh(&tbl->lock);
         ret += bst_print(&tbl->tree, buf + ret, buflen - ret);
@@ -356,7 +360,6 @@ static int service_table_print(struct service_table *tbl, char *buf, int buflen)
 
 int services_print(char *buf, int buflen)
 {
-        LOG_DBG("service table entries=%u\n", srvtable.tree.entries);
         return service_table_print(&srvtable, buf, buflen);
 }
 
@@ -388,62 +391,73 @@ struct service_entry *service_find(struct service_id *srvid)
         return service_table_find(&srvtable, srvid);
 }
 
-int service_table_add(struct service_table *tbl, struct service_id *srvid, 
-                      unsigned int prefix_bits, struct net_device *dev,
-                      unsigned char *dst, int dstlen,
-                      gfp_t alloc)
+static int service_table_add(struct service_table *tbl, struct service_id *srvid, 
+                             unsigned int prefix_bits, struct net_device *dev,
+                             unsigned char *dst, int dstlen, struct sock *sk,
+                             gfp_t alloc)
 {
         struct service_entry *se;
         struct bst_node *n;
+        int ret = 0;
 
-        int ret;
-
-        read_lock_bh(&tbl->lock);
+        write_lock_bh(&tbl->lock);
         
         n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
 
         if (n && bst_node_prefix_bits(n) >= prefix_bits) {
-                ret = __service_entry_add_dev(get_service(n), 
-                                              dev,
-                                              dst,
-                                              dstlen,
-                                              alloc);
-                read_unlock_bh(&tbl->lock);
-                return ret;
+                if (sk) {
+                        ret = -EADDRINUSE;
+                        goto out;
+                }
+                if (dst) {
+                        if (get_service(n)->sk) {
+                                ret =  -EADDRINUSE;
+                                goto out;
+                        }
+                        ret = __service_entry_add_dev(get_service(n), 
+                                                      dev,
+                                                      dst,
+                                                      dstlen,
+                                                      alloc);
+                }
+                goto out;
         }
         
-        read_unlock_bh(&tbl->lock);
+        se = service_entry_create(sk, alloc);
         
-        se = service_entry_create(alloc);
+        if (!se) {
+                ret = -ENOMEM;
+                goto out;
+        }
         
-        if (!se)
-                return -ENOMEM;
+        if (dst) {
+                ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
 
-        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
-
-        if (ret < 0) {
-                service_entry_free(se);
-        } else {
-                write_lock_bh(&tbl->lock);
-                se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
-                                             se, srvid, prefix_bits, alloc);
-                write_unlock_bh(&tbl->lock);
-                
-                if (!se->node) {
+                if (ret < 0) {
                         service_entry_free(se);
                         ret = -ENOMEM;
+                        goto out;
                 }
         }
+        se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
+                                     se, srvid, prefix_bits, alloc);
+                
+        if (!se->node) {
+                service_entry_free(se);
+                ret = -ENOMEM;
+        }
+out:  
+        write_unlock_bh(&tbl->lock);
 
         return ret;
 }
 
 int service_add(struct service_id *srvid, unsigned int prefix_bits, 
                 struct net_device *dev, void *dst, 
-                int dstlen, gfp_t alloc)
+                int dstlen, struct sock *sk, gfp_t alloc)
 {
         return service_table_add(&srvtable, srvid, prefix_bits, 
-                                 dev, dst, dstlen, alloc);
+                                 dev, dst, dstlen, sk, alloc);
 }
 
 void service_table_del(struct service_table *tbl, struct service_id *srvid, 

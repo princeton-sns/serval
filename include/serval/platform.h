@@ -117,6 +117,7 @@ static inline void yield(void) {}
 #define __exit
 
 #define panic(name) { int *foo = NULL; *foo = 1; } /* Cause a sefault */
+#define WARN_ON(cond)
 
 #if !HAVE_OFFSETOF
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)

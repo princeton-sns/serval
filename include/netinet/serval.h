@@ -59,6 +59,7 @@ struct service_id {
 struct sockaddr_sv {
         sa_family_t sv_family;
         uint8_t sv_flags;
+        uint8_t sv_prefix_bits;
         struct service_id sv_srvid;
 };
 
