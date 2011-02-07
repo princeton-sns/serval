@@ -136,39 +136,29 @@ struct serval_hdr {
 };
 
 /* Generic extension header */
-struct serval_hdr_ext {
+struct serval_ext {
         uint8_t type;
         uint8_t flags;
         uint16_t length;
 };
 
-#define SERVAL_SERVICE_EXT 1
+#define SERVAL_CONNECTION_EXT 1
 
-struct serval_service_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
-        struct service_id src_srvid;
-        struct service_id dst_srvid;
-};
-
-#define SERVAL_FLOW_EXT 2
-
-struct serval_flow_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
-        struct net_addr src;
-        struct net_addr dst;
-};
-
-#define SERVAL_DATA_EXT 3
-
-struct serval_data_ext {
+struct serval_connection_ext {
         uint8_t type;
         uint8_t flags;
         uint16_t length;
         uint32_t seqno;
+        struct service_id srvid;
+};
+
+#define SERVAL_DESCRIPTION_EXT 2
+
+struct serval_description_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        struct net_addr addrs[0];
 };
 
 

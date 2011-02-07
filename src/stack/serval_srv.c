@@ -34,8 +34,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_request_sock *rsk;
-        struct serval_service_ext *srv_ext = 
-                (struct serval_service_ext *)(sfh + 1);
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
         
@@ -43,13 +43,15 @@ static int serval_srv_syn_rcv(struct sock *sk,
          * some point so that we aren't always redirected to same
          * instance. */
        
-        err = service_add(&srv_ext->src_srvid, sizeof(srv_ext->src_srvid) * 8, 
+        /*
+        err = service_add(&conn_ext->src_srvid, sizeof(conn_ext->src_srvid) * 8, 
                           skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
         
         if (err < 0) {
                 LOG_ERR("could not cache service for incoming packet\n");
         }
-        
+        */
+
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
@@ -74,8 +76,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
         /* Copy fields in request packet into request sock */
         memcpy(&rsk->peer_flowid, &sfh->src_flowid, 
                sizeof(sfh->src_flowid));
-        memcpy(&rsk->peer_srvid, &srv_ext->src_srvid,            
-               sizeof(srv_ext->src_srvid));
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
         
@@ -92,7 +92,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&sfh->src_flowid, &rsk->local_flowid, 
                sizeof(rsk->local_flowid));
-        memcpy(&srv_ext->dst_srvid, &rsk->peer_srvid,            
+        memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
         
         sfh->flags |= SFH_ACK;
@@ -259,8 +259,8 @@ static int serval_srv_request_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_service_ext *srv_ext = 
-                (struct serval_service_ext *)(sfh + 1);        
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);        
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
                 
@@ -286,10 +286,10 @@ static int serval_srv_request_state_process(struct sock *sk,
         skb_reset_transport_header(skb);
 
         /* Trim away the service extension at the end */
-        //pskb_trim(skb, sizeof(*srv_ext));
+        //pskb_trim(skb, sizeof(*conn_ext));
         
         /* Update headers */
-        sfh->length = htons(sizeof(*sfh) + sizeof(*srv_ext));
+        sfh->length = htons(sizeof(*sfh) + sizeof(*conn_ext));
         sfh->flags = 0;
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SERVAL;
@@ -300,10 +300,8 @@ static int serval_srv_request_state_process(struct sock *sk,
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(sfh->dst_flowid));
 
         /* Update service extension header */
-        memcpy(&srv_ext->dst_srvid, &ssk->peer_srvid, 
+        memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
-        memcpy(&srv_ext->src_srvid, &ssk->local_srvid, 
-               sizeof(ssk->local_srvid));
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
                                              ip_hdr(skb)->saddr, NULL);
@@ -417,8 +415,8 @@ int serval_srv_rcv(struct sk_buff *skb)
         
         if (!sk) {
                 /* Try to demux on service id */
-                struct serval_service_ext *srv_ext = 
-                        (struct serval_service_ext *)(sfh + 1);
+                struct serval_connection_ext *conn_ext = 
+                        (struct serval_connection_ext *)(sfh + 1);
 
                 /* Check for service extension. We require that this
                  * extension always directly follows the main Serval
@@ -429,15 +427,15 @@ int serval_srv_rcv(struct sk_buff *skb)
                         goto drop;
                 }
                 
-                if (srv_ext->type != SERVAL_SERVICE_EXT) {
+                if (conn_ext->type != SERVAL_CONNECTION_EXT) {
                         LOG_ERR("No service extension, bad extension type\n");
                         goto drop;
                 }
                 
                 LOG_DBG("SYN with srvid=%s\n", 
-                        service_id_to_str(&srv_ext->dst_srvid));
+                        service_id_to_str(&conn_ext->srvid));
 
-                sk = serval_sock_lookup_serviceid(&srv_ext->dst_srvid);
+                sk = serval_sock_lookup_serviceid(&conn_ext->srvid);
                 
                 if (!sk) {
                         LOG_ERR("No matching serval sock\n");
@@ -473,7 +471,7 @@ drop:
 #define EXTRA_HDR (20)
 #define SERVAL_MAX_HDR (MAX_HEADER + 20 +                       \
                         sizeof(struct serval_hdr) +             \
-                        sizeof(struct serval_service_ext) +     \
+                        sizeof(struct serval_connection_ext) +     \
                         EXTRA_HDR)
 
 static int serval_srv_rexmit_skb(struct sk_buff *skb)
@@ -500,7 +498,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 	struct service_entry *se;
 	struct net_device *dev;
         struct serval_hdr *sfh;
-        struct serval_service_ext *srv_ext;
+        struct serval_connection_ext *conn_ext;
         uint8_t flags = 0;
         int hdr_len = sizeof(*sfh);
 	int err = 0;
@@ -511,15 +509,13 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 flags |= SFH_ACK;
         case SERVAL_PKT_SYN:
                 flags |= SFH_SYN;
-                srv_ext = (struct serval_service_ext *)skb_push(skb, sizeof(*srv_ext));
-                srv_ext->type = SERVAL_SERVICE_EXT;
-                srv_ext->length = htons(sizeof(*srv_ext));
-                srv_ext->flags = 0;                
-                memcpy(&srv_ext->src_srvid, &ssk->local_srvid, 
-                       sizeof(ssk->local_srvid));
-                memcpy(&srv_ext->dst_srvid, &SERVAL_SKB_CB(skb)->srvid, 
+                conn_ext = (struct serval_connection_ext *)skb_push(skb, sizeof(*conn_ext));
+                conn_ext->type = SERVAL_CONNECTION_EXT;
+                conn_ext->length = htons(sizeof(*conn_ext));
+                conn_ext->flags = 0;
+                memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
                        sizeof(SERVAL_SKB_CB(skb)->srvid));
-                hdr_len += sizeof(*srv_ext);
+                hdr_len += sizeof(*conn_ext);
                 break;
         case SERVAL_PKT_ACK:
                 flags |= SFH_ACK;

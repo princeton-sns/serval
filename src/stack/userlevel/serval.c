@@ -26,6 +26,9 @@ struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
 
+extern int telnet_init(void);
+extern void telnet_fini(void);
+
 #define MAX(x, y) (x >= y ? x : y)
 
 void signal_handler(int sig)
@@ -454,8 +457,19 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
+        ret = telnet_init();
+
+        if (ret == -1) {
+		LOG_ERR("Could not initialize telnet server\n");
+                ctrl_fini();
+                netdev_fini();
+		serval_fini();
+		return -1;
+	}
+
 	ret = server_run();
 
+        telnet_fini();
 	ctrl_fini();
 	serval_fini();
 

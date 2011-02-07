@@ -25,6 +25,7 @@ serval_SOURCES = \
 	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/ctrl.c \
+	userlevel/telnet.c \
 	userlevel/serval.c
 
 if OS_LINUX

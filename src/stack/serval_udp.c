@@ -29,7 +29,7 @@
 /* payload + LL + IP + extra */
 #define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR +      \
                      sizeof(struct serval_hdr) +        \
-                     sizeof(struct serval_service_ext)) 
+                     sizeof(struct serval_connection_ext)) 
 
 static int serval_udp_connection_request(struct sock *sk, 
                                          struct sk_buff *skb);
