@@ -202,32 +202,7 @@ static int server_run(void)
 			goto out_close_socks;
 		}
 	}
-#ifdef ENABLE_TEST_CLIENTS
-	{
-		/* Start some test clients */
-		int i;
-		for (i = 0; i < 3; i++) {
-			struct client *c;
-			
-			c = client_create(CLIENT_TYPE_UDP, -1, 
-					  atomic_inc_return(num_clients), 
-                                          &sa, &orig_sigset);
-			
-			if (!c)
-				break;
 
-			list_add_tail(&c->link, &client_list);
-
-			ret = test_client_start(c);
-		
-			if (ret == -1) {
-				LOG_ERR("Could not start client\n");
-				client_destroy(c);
-				break;
-			}
-		}
-	}
-#endif	
 	LOG_DBG("Server starting\n");
 	/* Add garbage collection timer */
 	add_timer(&garbage_timer);
