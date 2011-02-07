@@ -8,6 +8,7 @@
 #include <service.h>
 #include <neighbor.h>
 
+#define TELNET_ADDR "127.0.0.1"
 #define TELNET_PORT 9999
 static pthread_t telnet_thread;
 static int telnet_sock = -1;
@@ -15,11 +16,79 @@ static int pipefd[2] = { -1, -1 };
 
 struct telnet_client {
 	int sock;
+	FILE *str;
 	struct sockaddr_in inaddr;
 	struct list_head lh;
 };
 
 static struct list_head telnet_client_list;
+
+struct command {
+	const char *cmd_long, *cmd_short, *help_msg;
+	void (*cmd_handler)(struct telnet_client *, char *, int);
+};
+
+static void telnet_client_destroy(struct telnet_client *tc);
+
+static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
+{
+	int ret;
+
+	ret = sprintf(buf, "# Service table:\n");
+
+	ret += services_print(buf + ret, buflen - ret);
+		
+	if (ret < 0)
+		return;
+
+	send(tc->sock, buf, ret, 0);	
+}
+
+static void cmd_neighbors_print(struct telnet_client *tc, char *buf, int buflen)
+{
+	int ret;
+	
+	ret = sprintf(buf, "# Neighbor table:\n");
+
+	ret += neighbors_print(buf + ret, buflen - ret);
+	
+	if (ret < 0)
+		return;
+
+	send(tc->sock, buf, ret, 0);	
+}
+
+static void cmd_quit(struct telnet_client *tc, char *buf, int buflen)
+{
+	telnet_client_destroy(tc);
+}
+
+static void cmd_help(struct telnet_client *tc, char *buf, int buflen);
+
+static struct command command_list[] = {
+	{ "help", "h", "print help (this info)", cmd_help },
+	{ "quit", "q", "quit telnet session", cmd_quit },
+	{ "exit", "e", "quit telnet session", cmd_quit },
+	{ "neighbors", "nt", "print neighbor table", cmd_neighbors_print },
+	{ "services", "st", "print service table", cmd_services_print },
+	{ NULL, NULL, NULL, NULL }
+};
+
+void cmd_help(struct telnet_client *tc, char *buf, int buflen)
+{
+	int i = 0;
+		
+	fprintf(tc->str, "# Command list:\n");
+
+	while (command_list[i].cmd_short) {
+		fprintf(tc->str, "%s | %s\t%s\n", 
+			command_list[i].cmd_long,
+			command_list[i].cmd_short,
+			command_list[i].help_msg);
+		i++;
+	}
+	fflush(tc->str);
+}
 
 static struct telnet_client *telnet_client_create(int sock, 
 						  const struct sockaddr_in *inaddr)
@@ -34,19 +103,24 @@ static struct telnet_client *telnet_client_create(int sock,
 	memset(tc, 0, sizeof(*tc));
 	
 	tc->sock = sock;
+	tc->str = fdopen(tc->sock, "w");
 	memcpy(&tc->inaddr, inaddr, sizeof(*inaddr));
 	INIT_LIST_HEAD(&tc->lh);
 
 	return tc;
 }
 
-static void telnet_client_destroy(struct telnet_client *tc)
+void telnet_client_destroy(struct telnet_client *tc)
 {
-	if (tc->sock != -1) 
-		close(tc->sock);
-
+	if (tc->sock != -1) {
+		/* Closing the stream will also close the associated
+		 * socket */
+		fclose(tc->str);
+		tc->sock = -1;
+	}
 	list_del(&tc->lh);
 	free(tc);
+	LOG_DBG("telnet client exits\n");
 }
 
 static struct telnet_client *telnet_new_client_handle(int sock)
@@ -55,7 +129,7 @@ static struct telnet_client *telnet_new_client_handle(int sock)
 	struct sockaddr_in inaddr;
 	socklen_t addrlen = 0;
 	struct telnet_client *tc;
-
+#define WELCOME_MSG "# Mjau! Welcome to Serval. Type 'help' for help\n"
 	client_sock = accept(sock, (struct sockaddr *)&inaddr, &addrlen);
 
 	if (client_sock == -1) {
@@ -73,6 +147,10 @@ static struct telnet_client *telnet_new_client_handle(int sock)
 
 	list_add_tail(&tc->lh, &telnet_client_list);
 
+	send(tc->sock, WELCOME_MSG, strlen(WELCOME_MSG), 0);
+
+	LOG_DBG("new telnet client\n");
+
 	return tc;
 }
 
@@ -82,6 +160,7 @@ static void telnet_client_handle(struct telnet_client *tc)
 #define BUFLEN 1024
 	char buf[BUFLEN];
 	char ctrlc[5] = { 0xff, 0xf4, 0xff, 0xfd, 0x06 };
+	int i = 0;
 
 	ret = recv(tc->sock, buf, BUFLEN, 0);
 
@@ -100,33 +179,27 @@ static void telnet_client_handle(struct telnet_client *tc)
 	buf[ret-2] = '\0';
 
 	/* LOG_DBG("request: %d %s\n", ret, buf); */
-	
-	if (strcmp(buf, "service_table") == 0 ||
-	    strcmp(buf, "service table") == 0 ||
-	    strcmp(buf, "st") == 0) {
-		ret = services_print(buf, BUFLEN);
-
-		if (ret > 0) 
-			ret = send(tc->sock, buf, ret, 0);
-	} else if (strcmp(buf, "neighbor_table") == 0 ||
-		   strcmp(buf, "neighbor table") == 0 ||
-		   strcmp(buf, "nt") == 0) {
-		ret = neighbors_print(buf, BUFLEN);
-		
-		if (ret > 0) 
-			ret = send(tc->sock, buf, ret, 0);
-	} else if (strcmp(buf, "quit") == 0 ||
-		   strcmp(buf, "exit") == 0) {
-		telnet_client_destroy(tc);
-	} else {
-		ret = sprintf(buf, "syntax error.\n");
-		send(tc->sock, buf, ret, 0);
+	while (1) {
+		if (!command_list[i].cmd_short) {
+			ret = sprintf(buf, "syntax error.\n");
+			send(tc->sock, buf, ret, 0);
+			break;
+		}
+		if (strcmp(buf, command_list[i].cmd_short) == 0 ||
+		    strcmp(buf, command_list[i].cmd_long) == 0) {
+			command_list[i].cmd_handler(tc, buf, BUFLEN);
+			break;
+		}
+		i++;
 	}
 }
 
 void *telnet_runloop(void *arg)
 {
 	struct telnet_client *tc, *tmp;
+
+	LOG_DBG("TELNET SERVER - you can connect to %s:%u\n",
+		TELNET_ADDR, TELNET_PORT);
 
 	while (1) {
 		int ret, maxfd;
@@ -150,6 +223,7 @@ void *telnet_runloop(void *arg)
 		if (ret == -1) {
 			LOG_ERR("select: %s\n",
 				strerror(errno));
+			break;
 		} else {
 			/* Exit signal */
 			if (FD_ISSET(pipefd[0], &readfds)) {
@@ -207,7 +281,7 @@ int telnet_init(void)
 	memset(&inaddr, 0, sizeof(inaddr));
 	inaddr.sin_family = AF_INET;
 	inaddr.sin_port = htons(TELNET_PORT);
-	inet_pton(AF_INET, "127.0.0.1", &inaddr.sin_addr);
+	inet_pton(AF_INET, TELNET_ADDR, &inaddr.sin_addr);
 	
 	ret = bind(telnet_sock, (struct sockaddr *)&inaddr, sizeof(inaddr));
 	
