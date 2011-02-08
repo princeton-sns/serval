@@ -134,9 +134,15 @@ static void serval_udp_close(struct sock *sk, long timeout)
         
         if (sk->sk_state == SERVAL_CONNECTED ||
             sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+            sk->sk_state == SERVAL_RESPOND ||
+            sk->sk_state == SERVAL_CLOSEWAIT) {
                                 
-                serval_sock_set_state(sk, TCP_FINWAIT1);
+                if (sk->sk_state == SERVAL_CLOSEWAIT) {
+                        sk->sk_prot->unhash(sk);
+                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                } else {
+                        serval_sock_set_state(sk, TCP_FINWAIT1);
+                }
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
                 for (;;) {
