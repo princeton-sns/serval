@@ -75,8 +75,8 @@ struct serval_sock {
         struct net_addr         src_addr;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
-        uint8_t                 local_nonce[8];
-        uint8_t                 peer_nonce[8];
+        uint8_t                 local_nonce[SERVAL_NONCE_SIZE];
+        uint8_t                 peer_nonce[SERVAL_NONCE_SIZE];
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;

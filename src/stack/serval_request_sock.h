@@ -18,7 +18,7 @@ struct serval_request_sock {
         struct flow_id peer_flowid;
         struct net_addr dst_addr;
         uint32_t seqno;
-        uint8_t nonce[8];
+        uint8_t nonce[SERVAL_NONCE_SIZE];
         unsigned char flags;
         struct list_head lh;
 };

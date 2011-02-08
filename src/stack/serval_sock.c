@@ -267,13 +267,6 @@ void serval_sock_unhash(struct sock *sk)
                 sock_prot_dec_use(sk->sk_prot);
 #endif
 #endif
-#if !defined(OS_LINUX_KERNEL)
-                {
-                        char buf[2048];
-                        services_print(buf, 2048);
-                        printf("%s\n", buf);
-                }
-#endif
                 return;
         } else {
                 lock = &established_table.hashslot(&established_table,
@@ -374,11 +367,11 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 
         ssk = serval_sk(sk);
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(&ssk->local_nonce, 8);
+        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
 #else
         {
                 unsigned int i;
-                for (i = 0; i < 8; i++) {
+                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
         }

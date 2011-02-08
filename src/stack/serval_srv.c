@@ -72,7 +72,8 @@ static int has_control_extension(struct sock *sk, struct serval_hdr *sfh)
                 return 0;
         }
 
-        if (memcmp(ctrl_ext->nonce, serval_sk(sk)->peer_nonce, 8) != 0) {
+        if (memcmp(ctrl_ext->nonce, serval_sk(sk)->peer_nonce, 
+                   SERVAL_NONCE_SIZE) != 0) {
                 LOG_ERR("Control extension has bad nonce\n");
                 return 0;
         }
@@ -130,7 +131,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
-        memcpy(rsk->nonce, conn_ext->nonce, 8);
+        memcpy(rsk->nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         
         list_add(&rsk->lh, &ssk->syn_queue);
         
@@ -149,7 +150,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(rsk->peer_srvid));
         
         /* Copy our nonce to connection extension */
-        memcpy(conn_ext->nonce, ssk->local_nonce, 8);
+        memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
         
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SERVAL;
@@ -199,7 +200,7 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_srvid));
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
-                        memcpy(nssk->peer_nonce, rsk->nonce, 8);
+                        memcpy(nssk->peer_nonce, rsk->nonce, SERVAL_NONCE_SIZE);
 
                         rsk->sk = nsk;
 
@@ -350,7 +351,7 @@ static int serval_srv_request_state_process(struct sock *sk,
                sizeof(ssk->dst_addr));
 
         /* Save nonce */
-        memcpy(ssk->peer_nonce, conn_ext->nonce, 8);
+        memcpy(ssk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
 
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);      
@@ -373,7 +374,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Update connection extension header */
         memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
-        memcpy(conn_ext->nonce, ssk->local_nonce, 8);
+        memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
                                              ip_hdr(skb)->saddr, NULL);
@@ -400,7 +401,8 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 LOG_ERR("No connection extension\n");
                 goto drop;
         }
-        if (memcmp(conn_ext->nonce, ssk->peer_nonce, 8) != 0) {
+        if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
+                   SERVAL_NONCE_SIZE) != 0) {
                 LOG_ERR("bad nonce in connection extension\n");
                 goto drop;
         }
@@ -601,7 +603,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 ctrl_ext->type = SERVAL_CONTROL_EXT;
                 ctrl_ext->length = htons(sizeof(*ctrl_ext));
                 ctrl_ext->flags = 0;
-                memcpy(ctrl_ext->nonce, ssk->local_nonce, 8);
+                memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
                 hdr_len += sizeof(*ctrl_ext);
         default:
                 break;

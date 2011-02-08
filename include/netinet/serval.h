@@ -155,12 +155,14 @@ struct serval_connection_ext {
 
 #define SERVAL_CONTROL_EXT 2
 
+#define SERVAL_NONCE_SIZE 8
+
 struct serval_control_ext {
         uint8_t type;
         uint8_t flags;
         uint16_t length;
         uint32_t seqno;
-        uint8_t nonce[8];
+        uint8_t nonce[SERVAL_NONCE_SIZE];
 };
 
 #define SERVAL_DESCRIPTION_EXT 3
