@@ -199,7 +199,7 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_srvid));
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
-                        memcpy(nssk->peer_nonce, &rsk->nonce, 8);
+                        memcpy(nssk->peer_nonce, rsk->nonce, 8);
 
                         rsk->sk = nsk;
 
