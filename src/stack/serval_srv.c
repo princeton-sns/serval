@@ -102,7 +102,7 @@ static inline int has_valid_control_extension(struct sock *sk,
                 LOG_ERR("Control extension has bad nonce\n");
                 return 0;
         }
-        if (ntohl(ctrl_ext->seqno) <= ssk->peer_seqno + 1) {
+        if (ntohl(ctrl_ext->seqno) <= ssk->peer_seqno) {
                 LOG_ERR("Bad sequence number old=%u new=%u\n",
                         ssk->peer_seqno, ntohl(ctrl_ext->seqno));
                 return 0;
@@ -260,7 +260,7 @@ serval_srv_request_sock_handle(struct sock *sk,
         return sk;
 }
 
-static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
+static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                            struct sk_buff *skb)
 {
         struct serval_control_ext *ctrl_ext = 
@@ -271,7 +271,7 @@ static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
         if (!has_valid_control_extension(sk, sfh)) {
                 LOG_DBG("Bad control extension\n");
                 FREE_SKB(skb);
-                return;
+                return -1;
         }
             
         sk->sk_shutdown |= SEND_SHUTDOWN;
@@ -291,6 +291,8 @@ static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
         default:
                 break;
         }
+
+        return 0;
 }
 
 static int serval_srv_connected_state_process(struct sock *sk, 
@@ -302,12 +304,13 @@ static int serval_srv_connected_state_process(struct sock *sk,
         
         if (sfh->flags & SFH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                serval_srv_fin(sk, sfh, skb);
+                err = serval_srv_fin(sk, sfh, skb);
         } else {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         }
 
-        err = ssk->af_ops->receive(sk, skb);
+        if (err == 0)
+                err = ssk->af_ops->receive(sk, skb);
         
         return err;
 }
