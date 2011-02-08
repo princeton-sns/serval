@@ -132,6 +132,11 @@ static int serval_srv_syn_rcv(struct sock *sk,
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
         memcpy(rsk->nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
+        {
+                char buf[200];
+                LOG_DBG("saving nonce %s\n", 
+                        hexdump(conn_ext->nonce, 8, buf, 200));
+        }
         
         list_add(&rsk->lh, &ssk->syn_queue);
         
@@ -151,7 +156,11 @@ static int serval_srv_syn_rcv(struct sock *sk,
         
         /* Copy our nonce to connection extension */
         memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-        
+        {
+                char buf[200];
+                LOG_DBG("setting nonce %s\n", 
+                        hexdump(conn_ext->nonce, 8, buf, 200));
+        }
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SERVAL;
 
@@ -201,7 +210,11 @@ serval_srv_request_sock_handle(struct sock *sk,
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
                         memcpy(nssk->peer_nonce, rsk->nonce, SERVAL_NONCE_SIZE);
-
+                        {
+                                char buf[200];
+                                LOG_DBG("peer nonce is %s\n", 
+                                        hexdump(nssk->peer_nonce, 8, buf, 200));
+                        }
                         rsk->sk = nsk;
 
                         /* Hash the sock to make it available */
@@ -400,6 +413,11 @@ static int serval_srv_respond_state_process(struct sock *sk,
         if (!has_connection_extension(sfh)) {
                 LOG_ERR("No connection extension\n");
                 goto drop;
+        }
+        {
+                char buf[200];
+                LOG_DBG("nonce is %s\n", 
+                        hexdump(conn_ext->nonce, 8, buf, 200));
         }
         if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {

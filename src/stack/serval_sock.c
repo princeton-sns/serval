@@ -374,8 +374,12 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                 for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
-        }
+        }       
 #endif
+        {
+                char buf[200];
+                LOG_DBG("nonce is %s\n", hexdump(ssk->local_nonce, 8, buf, 200));
+        }
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
