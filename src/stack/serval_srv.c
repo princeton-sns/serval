@@ -28,6 +28,58 @@ static int serval_srv_state_process(struct sock *sk,
                                     struct serval_hdr *sfh, 
                                     struct sk_buff *skb);
         
+
+static int has_connection_extension(struct serval_hdr *sfh)
+{
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
+        unsigned int hdr_len = ntohs(sfh->length);
+
+        /* Check for connection extension. We require that this
+         * extension always directly follows the main Serval
+         * header */
+        if (hdr_len < sizeof(*sfh) + sizeof(*conn_ext)) {
+                LOG_ERR("No connection extension, hdr_len=%u\n", 
+                        hdr_len);
+                return 0;
+        }
+        
+        if (conn_ext->type != SERVAL_CONNECTION_EXT) {
+                LOG_ERR("No connection extension, bad extension type\n");
+                return 0;
+        }
+
+        return 1;
+}
+
+static int has_control_extension(struct sock *sk, struct serval_hdr *sfh)
+{
+        struct serval_control_ext *ctrl_ext = 
+                (struct serval_control_ext *)(sfh + 1);
+        unsigned int hdr_len = ntohs(sfh->length);
+
+        /* Check for control extension. We require that this
+         * extension always directly follows the main Serval
+         * header */
+        if (hdr_len < sizeof(*sfh) + sizeof(*ctrl_ext)) {
+                LOG_ERR("No control extension, hdr_len=%u\n", 
+                        hdr_len);
+                return 0;
+        }
+        
+        if (ctrl_ext->type != SERVAL_CONTROL_EXT) {
+                LOG_ERR("No control extension, bad extension type\n");
+                return 0;
+        }
+
+        if (memcmp(ctrl_ext->nonce, serval_sk(sk)->peer_nonce, 8) != 0) {
+                LOG_ERR("Control extension has bad nonce\n");
+                return 0;
+        }
+
+        return 1;
+}
+
 static int serval_srv_syn_rcv(struct sock *sk, 
                               struct serval_hdr *sfh,
                               struct sk_buff *skb)
@@ -78,6 +130,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
+        memcpy(rsk->nonce, conn_ext->nonce, 8);
         
         list_add(&rsk->lh, &ssk->syn_queue);
         
@@ -94,6 +147,9 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(rsk->local_flowid));
         memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
+        
+        /* Copy our nonce to connection extension */
+        memcpy(conn_ext->nonce, ssk->local_nonce, 8);
         
         sfh->flags |= SFH_ACK;
         skb->protocol = IPPROTO_SERVAL;
@@ -143,7 +199,8 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_srvid));
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
-                         
+                        memcpy(nssk->peer_nonce, &rsk->nonce, 8);
+
                         rsk->sk = nsk;
 
                         /* Hash the sock to make it available */
@@ -159,10 +216,16 @@ serval_srv_request_sock_handle(struct sock *sk,
 static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                            struct sk_buff *skb)
 {
+        LOG_DBG("received FIN\n");
+        
+        if (!has_control_extension(sk, sfh)) {
+                LOG_DBG("Bad control extension\n");
+                FREE_SKB(skb);
+                return;
+        }
+            
         sk->sk_shutdown |= SEND_SHUTDOWN;
         sock_set_flag(sk, SOCK_DONE);
-
-        LOG_DBG("received FIN\n");
 
         switch (sk->sk_state) {
         case SERVAL_REQUEST:
@@ -264,6 +327,11 @@ static int serval_srv_request_state_process(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
                 
+        if (!has_connection_extension(sfh)) {
+                LOG_ERR("No connection extension\n");
+                goto drop;
+        }
+        
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
@@ -281,11 +349,14 @@ static int serval_srv_request_state_process(struct sock *sk,
         memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_addr));
 
+        /* Save nonce */
+        memcpy(ssk->peer_nonce, conn_ext->nonce, 8);
+
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);      
         skb_reset_transport_header(skb);
 
-        /* Trim away the service extension at the end */
+        /* Trim away the connection extension at the end */
         //pskb_trim(skb, sizeof(*conn_ext));
         
         /* Update headers */
@@ -298,10 +369,11 @@ static int serval_srv_request_state_process(struct sock *sk,
         memcpy(&ssk->peer_flowid, &sfh->src_flowid, sizeof(sfh->src_flowid));
         memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(sfh->src_flowid));
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(sfh->dst_flowid));
-
-        /* Update service extension header */
+      
+        /* Update connection extension header */
         memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
+        memcpy(conn_ext->nonce, ssk->local_nonce, 8);
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
                                              ip_hdr(skb)->saddr, NULL);
@@ -320,8 +392,18 @@ static int serval_srv_respond_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
         int err = 0;
 
+        if (!has_connection_extension(sfh)) {
+                LOG_ERR("No connection extension\n");
+                goto drop;
+        }
+        if (memcmp(conn_ext->nonce, ssk->peer_nonce, 8) != 0) {
+                LOG_ERR("bad nonce in connection extension\n");
+                goto drop;
+        }
         /* TODO: check packet, allow data. */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
 
@@ -332,7 +414,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
         dev_hold(ssk->dev);
         memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_addr));
-
+drop:
         FREE_SKB(skb);
 
         return err;
@@ -418,20 +500,12 @@ int serval_srv_rcv(struct sk_buff *skb)
                 struct serval_connection_ext *conn_ext = 
                         (struct serval_connection_ext *)(sfh + 1);
 
-                /* Check for service extension. We require that this
+                /* Check for connection extension. We require that this
                  * extension always directly follows the main Serval
                  * header */
-                if (hdr_len <= sizeof(*sfh)) {
-                        LOG_ERR("No service extension, hdr_len=%u\n", 
-                                hdr_len);
+                if (!has_connection_extension(sfh))
                         goto drop;
-                }
-                
-                if (conn_ext->type != SERVAL_CONNECTION_EXT) {
-                        LOG_ERR("No service extension, bad extension type\n");
-                        goto drop;
-                }
-                
+
                 LOG_DBG("SYN with srvid=%s\n", 
                         service_id_to_str(&conn_ext->srvid));
 
@@ -499,6 +573,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
 	struct net_device *dev;
         struct serval_hdr *sfh;
         struct serval_connection_ext *conn_ext;
+        struct serval_control_ext *ctrl_ext;
         uint8_t flags = 0;
         int hdr_len = sizeof(*sfh);
 	int err = 0;
@@ -522,6 +597,12 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 break;
         case SERVAL_PKT_CLOSE:
                 flags |= SFH_FIN;
+                ctrl_ext = (struct serval_control_ext *)skb_push(skb, sizeof(*ctrl_ext));
+                ctrl_ext->type = SERVAL_CONTROL_EXT;
+                ctrl_ext->length = htons(sizeof(*ctrl_ext));
+                ctrl_ext->flags = 0;
+                memcpy(ctrl_ext->nonce, ssk->local_nonce, 8);
+                hdr_len += sizeof(*ctrl_ext);
         default:
                 break;
         }

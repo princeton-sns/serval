@@ -349,6 +349,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                              struct proto *prot)
 {
         struct sock *sk;
+        struct serval_sock *ssk;
 
         sk = sk_alloc(net, PF_SERVAL, priority, prot);
 
@@ -371,6 +372,17 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                 return NULL;
         }
 
+        ssk = serval_sk(sk);
+#if defined(OS_LINUX_KERNEL)
+        get_random_bytes(&ssk->local_nonce, 8);
+#else
+        {
+                unsigned int i;
+                for (i = 0; i < 8; i++) {
+                        ssk->local_nonce[i] = random() & 0xff;
+                }
+        }
+#endif
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 

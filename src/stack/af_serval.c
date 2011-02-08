@@ -850,7 +850,6 @@ int __init serval_init(void)
 {
         int err = 0;
 
-        
         err = neighbor_init();
 
         if (err < 0) {
@@ -909,6 +908,10 @@ fail_service:
 fail_neighbor:
         goto out;      
 }
+
+#if defined(OS_LINUX_KERNEL)
+#include <net/ip.h>
+#endif
 
 void __exit serval_fini(void)
 {

@@ -4,6 +4,9 @@
 
 #include <serval_sock.h>
 #include <serval/skbuff.h>
+#if defined(OS_LINUX_KERNEL)
+#include <net/tcp.h>
+#endif
 
 /* The AF_SERVAL socket */
 struct serval_tcp_sock {

@@ -149,10 +149,21 @@ struct serval_connection_ext {
         uint8_t flags;
         uint16_t length;
         uint32_t seqno;
+        uint8_t nonce[8];
         struct service_id srvid;
 };
 
-#define SERVAL_DESCRIPTION_EXT 2
+#define SERVAL_CONTROL_EXT 2
+
+struct serval_control_ext {
+        uint8_t type;
+        uint8_t flags;
+        uint16_t length;
+        uint32_t seqno;
+        uint8_t nonce[8];
+};
+
+#define SERVAL_DESCRIPTION_EXT 3
 
 struct serval_description_ext {
         uint8_t type;
