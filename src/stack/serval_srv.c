@@ -213,10 +213,9 @@ serval_srv_request_sock_handle(struct sock *sk,
                            sizeof(rsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
-                        
 
                         if (memcmp(rsk->nonce, conn_ext->nonce, 
-                                   SERVAL_NONCE_SIZE) == 0) {
+                                   SERVAL_NONCE_SIZE) != 0) {
                                 LOG_ERR("Bad nonce\n");
                                 return NULL;
                         }
@@ -381,7 +380,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
                 
-        if (!has_valid_connection_extension(sk, sfh)) {
+        if (!has_connection_extension(sfh)) {
                 LOG_ERR("No connection extension\n");
                 goto drop;
         }
