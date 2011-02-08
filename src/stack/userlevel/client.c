@@ -530,6 +530,7 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         struct sockaddr_sv saddr;
         int ret;
 
+        memset(&r, 0, sizeof(r));
         client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));
         mh.msg_name = &saddr;

@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/un.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
@@ -372,7 +373,8 @@ int main(int argc, char **argv)
 	struct sigaction action;
         int daemon = 0;
 	int ret;
-	
+        struct timeval now;
+        
 	if (getuid() != 0 && geteuid() != 0) {
 		fprintf(stderr, "%s must run as uid=0 (root)\n",
 			basename(argv[0]));
@@ -388,6 +390,11 @@ int main(int argc, char **argv)
 	sigaction(SIGINT, &action, 0);
 	
         client_list_init(&client_list);
+
+        /* Seed random number generator */
+        gettimeofday(&now, NULL);
+
+        srandom((unsigned int)now.tv_sec);
 
 	argc--;
 	argv++;

@@ -186,8 +186,8 @@ int client_msg_write(int sock, struct client_msg *msg)
 
 void client_msg_hdr_init(struct client_msg *msg, client_msg_type_t type)
 {
+        memset(msg, 0, client_msg_lengths[type]);
 	msg->version = CLIENT_MSG_VERSION;
 	msg->type = type;
 	msg->payload_length = client_msg_lengths[msg->type] - CLIENT_MSG_HDR_LEN;
-	memset(msg->payload, 0, msg->payload_length);
 }
