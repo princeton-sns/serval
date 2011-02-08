@@ -368,18 +368,19 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
         ssk = serval_sk(sk);
 #if defined(OS_LINUX_KERNEL)
         get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(&ssk->local_seqno, sizeof(ssk->local_seqno));
 #else
         {
                 unsigned int i;
+                unsigned char *seqno = (unsigned char *)&ssk->local_seqno;
                 for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
+                for (i = 0; i < sizeof(ssk->local_seqno); i++) {
+                        seqno[i] = random() & 0xff;
+                }
         }       
 #endif
-        {
-                char buf[200];
-                LOG_DBG("nonce is %s\n", hexdump(ssk->local_nonce, 8, buf, 200));
-        }
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 

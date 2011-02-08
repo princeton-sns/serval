@@ -27,9 +27,8 @@ extern atomic_t serval_nr_socks;
 static int serval_srv_state_process(struct sock *sk, 
                                     struct serval_hdr *sfh, 
                                     struct sk_buff *skb);
-        
 
-static int has_connection_extension(struct serval_hdr *sfh)
+static inline int has_connection_extension(struct serval_hdr *sfh)
 {
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);
@@ -52,8 +51,34 @@ static int has_connection_extension(struct serval_hdr *sfh)
         return 1;
 }
 
-static int has_control_extension(struct sock *sk, struct serval_hdr *sfh)
+static inline int has_valid_connection_extension(struct sock *sk, 
+                                          struct serval_hdr *sfh)
 {
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
+
+        if (!has_connection_extension(sfh))
+                return 0;
+
+        if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
+                   SERVAL_NONCE_SIZE) != 0) {
+                LOG_ERR("Connection extension has bad nonce\n");
+                return 0;
+        }
+
+        if (ntohl(conn_ext->seqno) <= ssk->peer_seqno) {
+                LOG_ERR("Bad sequence number  old=%u new=%u\n",
+                        ssk->peer_seqno, ntohl(conn_ext->seqno));
+                return 0;
+        }
+        return 1;
+}
+
+static inline int has_valid_control_extension(struct sock *sk, 
+                                              struct serval_hdr *sfh)
+{
+        struct serval_sock *ssk = serval_sk(sk);
         struct serval_control_ext *ctrl_ext = 
                 (struct serval_control_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
@@ -72,12 +97,16 @@ static int has_control_extension(struct sock *sk, struct serval_hdr *sfh)
                 return 0;
         }
 
-        if (memcmp(ctrl_ext->nonce, serval_sk(sk)->peer_nonce, 
+        if (memcmp(ctrl_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {
                 LOG_ERR("Control extension has bad nonce\n");
                 return 0;
         }
-
+        if (ntohl(ctrl_ext->seqno) <= ssk->peer_seqno + 1) {
+                LOG_ERR("Bad sequence number old=%u new=%u\n",
+                        ssk->peer_seqno, ntohl(ctrl_ext->seqno));
+                return 0;
+        }
         return 1;
 }
 
@@ -125,6 +154,9 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 err = -ENOMEM;
                 goto drop;
         }
+
+        /* Update expected seqno */
+        ssk->peer_seqno = ntohl(conn_ext->seqno);
         
         /* Copy fields in request packet into request sock */
         memcpy(&rsk->peer_flowid, &sfh->src_flowid, 
@@ -132,7 +164,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
         memcpy(rsk->nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
-      
+        rsk->seqno = ntohl(conn_ext->seqno);
+
         list_add(&rsk->lh, &ssk->syn_queue);
         
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_SYNACK;
@@ -148,6 +181,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(rsk->local_flowid));
         memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
+        conn_ext->seqno = htonl(ssk->local_seqno++);
         
         /* Copy our nonce to connection extension */
         memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
@@ -169,16 +203,29 @@ serval_srv_request_sock_handle(struct sock *sk,
                                struct serval_hdr *sfh,
                                struct sk_buff *skb)
 {
-
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_request_sock *rsk;
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
 
         list_for_each_entry(rsk, &ssk->syn_queue, lh) {
                 if (memcmp(&rsk->local_flowid, &sfh->dst_flowid, 
                            sizeof(rsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
+                        
 
+                        if (memcmp(rsk->nonce, conn_ext->nonce, 
+                                   SERVAL_NONCE_SIZE) == 0) {
+                                LOG_ERR("Bad nonce\n");
+                                return NULL;
+                        }
+
+                        if (ntohl(conn_ext->seqno) <= rsk->seqno) {
+                                LOG_ERR("Bad sequence number old=%u new=%u\n",
+                                        rsk->seqno, ntohl(conn_ext->seqno));
+                                return NULL;
+                        }
                         /* Move request sock to accept queue */
                         list_del(&rsk->lh);
                         list_add_tail(&rsk->lh, &ssk->accept_queue);
@@ -201,7 +248,7 @@ serval_srv_request_sock_handle(struct sock *sk,
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
                         memcpy(nssk->peer_nonce, rsk->nonce, SERVAL_NONCE_SIZE);
-                        
+                        nssk->peer_seqno = rsk->seqno;
                         rsk->sk = nsk;
 
                         /* Hash the sock to make it available */
@@ -217,9 +264,12 @@ serval_srv_request_sock_handle(struct sock *sk,
 static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                            struct sk_buff *skb)
 {
+        struct serval_control_ext *ctrl_ext = 
+                (struct serval_control_ext *)(sfh + 1);
+
         LOG_DBG("received FIN\n");
         
-        if (!has_control_extension(sk, sfh)) {
+        if (!has_valid_control_extension(sk, sfh)) {
                 LOG_DBG("Bad control extension\n");
                 FREE_SKB(skb);
                 return;
@@ -227,6 +277,7 @@ static void serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
             
         sk->sk_shutdown |= SEND_SHUTDOWN;
         sock_set_flag(sk, SOCK_DONE);
+        serval_sk(sk)->peer_seqno = ntohl(ctrl_ext->seqno);
 
         switch (sk->sk_state) {
         case SERVAL_REQUEST:
@@ -271,17 +322,19 @@ static int serval_srv_child_process(struct sock *parent, struct sock *child,
 
         serval_sk(child)->dev = NULL;
         
+        /* Check lock on child socket, similarly to how we handled the
+        parent sock for the incoming skb. */
         if (!sock_owned_by_user(child)) {
                 ret = serval_srv_state_process(child, sfh, skb);
-                /* Wakeup parent, send SIGIO */
                 if (state == SERVAL_RESPOND && child->sk_state != state) {
                         LOG_DBG("waking up parent (listening) sock\n");
                         parent->sk_data_ready(parent, 0);
                 }
         } else {
-                /* Alas, it is possible again, because we do lookup
-                 * in main socket hash table and lock on listening
-                 * socket does not protect us more.
+                /* 
+                   User got lock, add skb to backlog so that it will
+                   be processed in user context when the lock is
+                   released.
                  */
                 __sk_add_backlog(child, skb);
         }
@@ -328,7 +381,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
                 
-        if (!has_connection_extension(sfh)) {
+        if (!has_valid_connection_extension(sk, sfh)) {
                 LOG_ERR("No connection extension\n");
                 goto drop;
         }
@@ -375,6 +428,10 @@ static int serval_srv_request_state_process(struct sock *sk,
         memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
         memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        conn_ext->seqno = htonl(ssk->local_seqno++);
+
+        /* Update expected sequence number */
+        ssk->peer_seqno = ntohl(conn_ext->seqno);
 
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
                                              ip_hdr(skb)->saddr, NULL);
@@ -397,16 +454,11 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 (struct serval_connection_ext *)(sfh + 1);
         int err = 0;
 
-        if (!has_connection_extension(sfh)) {
+        if (!has_valid_connection_extension(sk, sfh)) {
                 LOG_ERR("No connection extension\n");
                 goto drop;
         }
-      
-        if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
-                   SERVAL_NONCE_SIZE) != 0) {
-                LOG_ERR("bad nonce in connection extension\n");
-                goto drop;
-        }
+
         /* TODO: check packet, allow data. */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
 
@@ -417,6 +469,9 @@ static int serval_srv_respond_state_process(struct sock *sk,
         dev_hold(ssk->dev);
         memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_addr));
+        
+        /* Everything fine, increase expexted sequence number */
+        ssk->peer_seqno = ntohl(conn_ext->seqno);
 drop:
         FREE_SKB(skb);
 
@@ -591,6 +646,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 conn_ext->type = SERVAL_CONNECTION_EXT;
                 conn_ext->length = htons(sizeof(*conn_ext));
                 conn_ext->flags = 0;
+                conn_ext->seqno = htonl(ssk->local_seqno++);
                 memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
                        sizeof(SERVAL_SKB_CB(skb)->srvid));
                 memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
@@ -605,6 +661,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 ctrl_ext->type = SERVAL_CONTROL_EXT;
                 ctrl_ext->length = htons(sizeof(*ctrl_ext));
                 ctrl_ext->flags = 0;
+                ctrl_ext->seqno = htonl(ssk->local_seqno++);
                 memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
                 hdr_len += sizeof(*ctrl_ext);
         default:
