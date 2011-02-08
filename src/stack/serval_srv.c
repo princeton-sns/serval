@@ -610,6 +610,7 @@ int serval_srv_xmit_skb(struct sk_buff *skb)
                 conn_ext->flags = 0;
                 memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
                        sizeof(SERVAL_SKB_CB(skb)->srvid));
+                memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
                 hdr_len += sizeof(*conn_ext);
                 break;
         case SERVAL_PKT_ACK:
