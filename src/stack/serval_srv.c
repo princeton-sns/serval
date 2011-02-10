@@ -240,7 +240,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         skb->protocol = 0;
         
         memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_SYN;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
         SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.iss;
         serval_sk(sk)->snd_seq.nxt = serval_sk(sk)->snd_seq.iss + 1;
 
@@ -376,7 +376,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         list_add(&rsk->lh, &ssk->syn_queue);
         
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_SYNACK;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYNACK;
 
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);
@@ -431,8 +431,8 @@ serval_srv_request_sock_handle(struct sock *sk,
                         }
 
                         if (ntohl(conn_ext->seqno) != rsk->rcv_seq + 1) {
-                                LOG_ERR("Bad sequence number old=%u new=%u\n",
-                                        rsk->rcv_seq, ntohl(conn_ext->seqno));
+                                LOG_ERR("Bad seqno received=%u expected=%u\n",
+                                        ntohl(conn_ext->seqno), rsk->rcv_seq + 1);
                                 return NULL;
                         }
                         /* Move request sock to accept queue */
@@ -689,7 +689,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         serval_srv_ack_process(sk, sfh, skb);
         
         /* Update control block */
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_ACK;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt++;
         skb->protocol = IPPROTO_SERVAL;
 
@@ -908,6 +908,44 @@ static inline int serval_srv_do_xmit(struct sk_buff *skb)
          return err;
 }
 
+static inline int serval_srv_add_conn_ext(struct sock *sk, 
+                                          struct sk_buff *skb,
+                                          int flags)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_connection_ext *conn_ext;
+ 
+        conn_ext = (struct serval_connection_ext *)
+                skb_push(skb, sizeof(*conn_ext));
+        conn_ext->type = SERVAL_CONNECTION_EXT;
+        conn_ext->length = htons(sizeof(*conn_ext));
+        conn_ext->flags = flags;
+        conn_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
+        conn_ext->ackno = htonl(ssk->rcv_seq.nxt);
+        memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
+               sizeof(SERVAL_SKB_CB(skb)->srvid));
+        memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        return sizeof(*conn_ext);
+}
+
+static inline int serval_srv_add_ctrl_ext(struct sock *sk, 
+                                          struct sk_buff *skb,
+                                          int flags)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_control_ext *ctrl_ext;
+
+        ctrl_ext = (struct serval_control_ext *)
+                skb_push(skb, sizeof(*ctrl_ext));
+        ctrl_ext->type = SERVAL_CONTROL_EXT;
+        ctrl_ext->length = htons(sizeof(*ctrl_ext));
+        ctrl_ext->flags = flags;
+        ctrl_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
+        ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
+        memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        return sizeof(*ctrl_ext);
+}
+
 int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                             int clone_it, gfp_t gfp_mask)
 {
@@ -915,8 +953,6 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct service_entry *se;
 	struct net_device *dev;
         struct serval_hdr *sfh;
-        struct serval_connection_ext *conn_ext;
-        struct serval_control_ext *ctrl_ext;
         uint8_t flags = 0;
         int hdr_len = sizeof(*sfh);
 	int err = 0;
@@ -934,48 +970,26 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
-        case SERVAL_PKT_SYNACK:
+        case SERVAL_PKT_CONN_SYNACK:
                 flags |= SVH_ACK;
-        case SERVAL_PKT_SYN:
+        case SERVAL_PKT_CONN_SYN:
                 flags |= SVH_SYN;
-                conn_ext = (struct serval_connection_ext *)
-                        skb_push(skb, sizeof(*conn_ext));
-                conn_ext->type = SERVAL_CONNECTION_EXT;
-                conn_ext->length = htons(sizeof(*conn_ext));
-                conn_ext->flags = 0;
-                conn_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
-                conn_ext->ackno = htonl(ssk->rcv_seq.nxt);
-                memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
-                       sizeof(SERVAL_SKB_CB(skb)->srvid));
-                memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-                hdr_len += sizeof(*conn_ext);
+                hdr_len += serval_srv_add_conn_ext(sk, skb, 0);
+                break;
+        case SERVAL_PKT_CONN_ACK:
+                flags |= SVH_ACK;
+                hdr_len += serval_srv_add_conn_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_ACK:
                 flags |= SVH_ACK;
-                ctrl_ext = (struct serval_control_ext *)
-                        skb_push(skb, sizeof(*ctrl_ext));
-                ctrl_ext->type = SERVAL_CONTROL_EXT;
-                ctrl_ext->length = htons(sizeof(*ctrl_ext));
-                ctrl_ext->flags = 0;
-                ctrl_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
-                ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
-                memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-                hdr_len += sizeof(*ctrl_ext);
+                hdr_len += serval_srv_add_ctrl_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_CLOSEACK:
                 flags |= SVH_ACK;
                 /* Fall through */
         case SERVAL_PKT_CLOSE:
                 flags |= SVH_FIN;
-                ctrl_ext = (struct serval_control_ext *)
-                        skb_push(skb, sizeof(*ctrl_ext));
-                ctrl_ext->type = SERVAL_CONTROL_EXT;
-                ctrl_ext->length = htons(sizeof(*ctrl_ext));
-                ctrl_ext->flags = 0;
-                ctrl_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
-                ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
-                memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-                hdr_len += sizeof(*ctrl_ext);
+                hdr_len += serval_srv_add_ctrl_ext(sk, skb, 0);
         default:
                 break;
         }

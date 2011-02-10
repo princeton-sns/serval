@@ -17,8 +17,9 @@ struct serval_request_sock;
 
 enum serval_packet_type { 
         SERVAL_PKT_DATA = 1,
-        SERVAL_PKT_SYN,
-        SERVAL_PKT_SYNACK,
+        SERVAL_PKT_CONN_SYN,
+        SERVAL_PKT_CONN_SYNACK,
+        SERVAL_PKT_CONN_ACK,
         SERVAL_PKT_ACK,
         SERVAL_PKT_RESET,
         SERVAL_PKT_CLOSE,
