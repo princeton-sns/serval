@@ -690,6 +690,8 @@ static int serval_srv_request_state_process(struct sock *sk,
         
         /* Update control block */
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
+               sizeof(ssk->peer_srvid));
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt++;
         skb->protocol = IPPROTO_SERVAL;
 
@@ -707,12 +709,12 @@ static int serval_srv_respond_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_control_ext *ctrl_ext = 
-                (struct serval_control_ext *)(sfh + 1);
+        struct serval_connection_ext *conn_ext = 
+                (struct serval_connection_ext *)(sfh + 1);
         int err = 0;
 
-        if (!has_valid_control_extension(sk, sfh)) {
-                LOG_ERR("No control extension\n");
+        if (!has_valid_connection_extension(sk, sfh)) {
+                LOG_ERR("No connection extension\n");
                 goto drop;
         }
 
@@ -728,7 +730,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
                sizeof(ssk->dst_addr));
         
         /* Everything fine, increase expexted sequence number */
-        ssk->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;
+        ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
 
         /* Process any ACK */
         serval_srv_ack_process(sk, sfh, skb);
@@ -828,7 +830,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                 if (!has_connection_extension(sfh))
                         goto drop;
 
-                LOG_DBG("SYN with srvid=%s\n", 
+                LOG_DBG("Demux on srvid=%s\n", 
                         service_id_to_str(&conn_ext->srvid));
 
                 sk = serval_sock_lookup_serviceid(&conn_ext->srvid);
