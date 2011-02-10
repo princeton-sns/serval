@@ -128,13 +128,14 @@ static inline int has_valid_control_extension(struct sock *sk,
 
 static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
-	//tp->write_seq = TCP_SKB_CB(skb)->end_seq;
 	skb_header_release(skb);
 	serval_srv_add_ctrl_queue_tail(sk, skb);
         /* Check if the skb became first in queue, in that case update
          * unacknowledged seqno. */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
                 serval_sk(sk)->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
+                LOG_DBG("setting snd_una=%u\n",
+                        serval_sk(sk)->snd_seq.una);
         }
 }
 
@@ -142,8 +143,12 @@ static int serval_srv_write_xmit(struct sock *sk, unsigned int limit, gfp_t gfp)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
+        unsigned int num = 0;
         int err = 0;
         
+        LOG_DBG("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
+                ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
+
 	while ((skb = serval_srv_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                                 
@@ -153,9 +158,11 @@ static int serval_srv_write_xmit(struct sock *sk, unsigned int limit, gfp_t gfp)
                         LOG_ERR("xmit failed\n");
                         break;
                 }
-                
                 serval_srv_advance_send_head(sk, skb);
+                num++;
         }
+
+        LOG_DBG("sent %u packets\n", num);
 
         return err;
 }
@@ -187,19 +194,26 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
+        unsigned int num = 0;
         int err = 0;
-
+       
         while ((skb = serval_srv_ctrl_queue_head(sk)) && 
                skb != serval_srv_send_head(sk)) {
                 if (ackno > SERVAL_SKB_CB(skb)->seqno) {
                         serval_srv_unlink_ctrl_queue(skb, sk);
+                        LOG_DBG("cleaned rtx queue seqno=%u\n", 
+                                SERVAL_SKB_CB(skb)->seqno);
                         FREE_SKB(skb);
                         skb = serval_srv_ctrl_queue_head(sk);
-                        ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
+                        if (skb)
+                                ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
+                        num++;
                 } else {
                         break;
                 }
         }
+
+        LOG_DBG("cleaned up %u packets from rtx queue\n", num);
 
         return err;
 }
@@ -375,7 +389,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(rsk->local_flowid));
         memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
-        conn_ext->seqno = htonl(rsk->iss_seq);
+        SERVAL_SKB_CB(skb)->pkttype = htonl(rsk->iss_seq);
+        conn_ext->seqno = SERVAL_SKB_CB(skb)->pkttype;
         conn_ext->ackno = htonl(rsk->rcv_seq + 1);
 
         /* Copy our nonce to connection extension */
@@ -465,7 +480,7 @@ static int serval_srv_ack_process(struct sock *sk,
         struct serval_ext *ext = (struct serval_ext *)(sfh + 1);
         uint32_t ackno = 0;       
 
-        if (sfh->flags & SVH_ACK)
+        if (!(sfh->flags & SVH_ACK))
                 return 0;
 
         switch (ext->type) {
@@ -490,6 +505,9 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
+        } else {
+                LOG_ERR("ackno %u out or sequence, expected %u\n",
+                        ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 done:
         return 0;
@@ -628,7 +646,6 @@ static int serval_srv_request_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);        
-        unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
                 
         if (!has_connection_extension(sfh)) {
@@ -636,6 +653,13 @@ static int serval_srv_request_state_process(struct sock *sk,
                 goto drop;
         }
         
+        if (!(sfh->flags & SVH_SYN && sfh->flags & SVH_ACK)) {
+                LOG_ERR("packet is not a SYNACK\n");
+                goto drop;
+        }
+
+        LOG_DBG("Got SYNACK\n");
+
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
@@ -655,37 +679,21 @@ static int serval_srv_request_state_process(struct sock *sk,
 
         /* Save nonce */
         memcpy(ssk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
+        /* Update socket ids */
+        memcpy(&ssk->peer_flowid, &sfh->src_flowid, sizeof(sfh->src_flowid));
+      
+        /* Update expected rcv sequence number */
+        ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
 
         /* Process any ACK */
         serval_srv_ack_process(sk, sfh, skb);
-
-        /* Push back the Serval header again to make IP happy */
-        skb_push(skb, hdr_len);      
-        skb_reset_transport_header(skb);
-
-        /* Trim away the connection extension at the end */
-        //pskb_trim(skb, sizeof(*conn_ext));
         
-        /* Update headers */
-        sfh->length = htons(sizeof(*sfh) + sizeof(*conn_ext));
-        sfh->flags = 0;
-        sfh->flags |= SVH_ACK;
+        /* Update control block */
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_ACK;
+        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt++;
         skb->protocol = IPPROTO_SERVAL;
 
-        /* Fill in socket ids */
-        memcpy(&ssk->peer_flowid, &sfh->src_flowid, sizeof(sfh->src_flowid));
-        memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(sfh->src_flowid));
-        memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(sfh->dst_flowid));
-      
-        /* Update connection extension header */
-        memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
-               sizeof(ssk->peer_srvid));
-        memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-        conn_ext->seqno = htonl(ssk->snd_seq.nxt++);
-
-        /* Update expected sequence number */
-        ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
-
+        /* Queue and xmit */
         err = serval_srv_queue_and_push(sk, skb);
                 
         return err;
@@ -699,12 +707,12 @@ static int serval_srv_respond_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_connection_ext *conn_ext = 
-                (struct serval_connection_ext *)(sfh + 1);
+        struct serval_control_ext *ctrl_ext = 
+                (struct serval_control_ext *)(sfh + 1);
         int err = 0;
 
-        if (!has_valid_connection_extension(sk, sfh)) {
-                LOG_ERR("No connection extension\n");
+        if (!has_valid_control_extension(sk, sfh)) {
+                LOG_ERR("No control extension\n");
                 goto drop;
         }
 
@@ -720,7 +728,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
                sizeof(ssk->dst_addr));
         
         /* Everything fine, increase expexted sequence number */
-        ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
+        ssk->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;
 
         /* Process any ACK */
         serval_srv_ack_process(sk, sfh, skb);
@@ -944,6 +952,15 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 break;
         case SERVAL_PKT_ACK:
                 flags |= SVH_ACK;
+                ctrl_ext = (struct serval_control_ext *)
+                        skb_push(skb, sizeof(*ctrl_ext));
+                ctrl_ext->type = SERVAL_CONTROL_EXT;
+                ctrl_ext->length = htons(sizeof(*ctrl_ext));
+                ctrl_ext->flags = 0;
+                ctrl_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
+                ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
+                memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+                hdr_len += sizeof(*ctrl_ext);
                 break;
         case SERVAL_PKT_CLOSEACK:
                 flags |= SVH_ACK;
