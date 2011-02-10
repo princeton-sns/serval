@@ -145,7 +145,7 @@ static int serval_srv_write_xmit(struct sock *sk, unsigned int limit, gfp_t gfp)
         int err = 0;
         
 	while ((skb = serval_srv_send_head(sk)) && 
-               (ssk->snd_seq.nxt - ssk->snd_seq.una) < ssk->snd_seq.wnd ) {
+               (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                                 
                 err = serval_srv_transmit_skb(sk, skb, 1, gfp);
                 
