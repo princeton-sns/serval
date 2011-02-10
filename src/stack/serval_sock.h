@@ -15,6 +15,20 @@
 
 struct serval_request_sock;
 
+enum serval_packet_type { 
+        SERVAL_PKT_DATA = 1,
+        SERVAL_PKT_SYN,
+        SERVAL_PKT_SYNACK,
+        SERVAL_PKT_ACK,
+        SERVAL_PKT_RESET,
+        SERVAL_PKT_CLOSE,
+        SERVAL_PKT_CLOSEACK,
+        SERVAL_PKT_MIG,
+        SERVAL_PKT_RSYN,
+        SERVAL_PKT_MIGDATA,
+        SERVAL_PKT_RSYNACK
+};
+
 enum serval_sock_state {
         SERVAL_CLOSED = 1, 
         SERVAL_REQUEST,
@@ -42,14 +56,16 @@ enum serval_sock_flags {
 };
 
 struct serval_sock_af_ops {
-	int	    (*queue_xmit)(struct sk_buff *skb);
-	int	    (*receive)(struct sock *sk, struct sk_buff *skb);
-	void	    (*send_check)(struct sock *sk, struct sk_buff *skb);
-	int	    (*rebuild_header)(struct sock *sk);
-	int	    (*conn_request)(struct sock *sk, struct sk_buff *skb);
-	struct sock *(*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
+	int	        (*queue_xmit)(struct sk_buff *skb);
+	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
+	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
+	int	        (*rebuild_header)(struct sock *sk);
+	int	        (*conn_request)(struct sock *sk, struct sk_buff *skb);
+	struct sock    *(*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
                                         struct serval_request_sock *req,
                                         struct dst_entry *dst);
+        int             (*close_request)(struct sock *sk, struct sk_buff *skb);
+        int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
 };
 
 /* The AF_SERVAL socket */
@@ -75,10 +91,21 @@ struct serval_sock {
         struct net_addr         src_addr;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
+	struct sk_buff_head	ctrl_queue;
+	struct sk_buff		*ctrl_send_head;
         uint8_t                 local_nonce[SERVAL_NONCE_SIZE];
         uint8_t                 peer_nonce[SERVAL_NONCE_SIZE];
-        unsigned int            local_seqno;
-        unsigned int            peer_seqno;
+        struct {
+                uint32_t        una;
+                uint32_t        nxt;
+                uint32_t        wnd;
+                uint32_t        iss;
+        } snd_seq;
+        struct {
+                uint32_t        nxt;
+                uint32_t        wnd;
+                uint32_t        iss;
+        } rcv_seq;
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;

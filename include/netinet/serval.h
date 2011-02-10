@@ -72,9 +72,11 @@ struct net_addr {
                 /* IPv6 address too big to fit in serval_skb_cb
                    together with 256-bit service_id atm. */
                 /* struct in6_addr net_ip6; */
-                struct in_addr net_ip;
-                unsigned char raw[0];
-        };
+                struct in_addr un_ip;
+                unsigned char un_raw[4];
+        } net_un;
+#define net_ip net_un.un_ip
+#define net_raw net_un.un_raw
 };
 
 static inline const char *__hexdump(const void *data, int datalen, 
@@ -108,28 +110,15 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         return str;
 }
 
-enum serval_packet_type { 
-        SERVAL_PKT_DATA = 1,
-        SERVAL_PKT_SYN,
-        SERVAL_PKT_SYNACK,
-        SERVAL_PKT_ACK,
-        SERVAL_PKT_RESET,
-        SERVAL_PKT_CLOSE,
-        SERVAL_PKT_MIG,
-        SERVAL_PKT_RSYN,
-        SERVAL_PKT_MIGDATA,
-        SERVAL_PKT_RSYNACK
-};
-
 struct serval_hdr {
         uint16_t length;  
         uint8_t flags;
-#define SFH_FIN	        0x01
-#define SFH_SYN	        0x02
-#define SFH_RST	        0x04
-#define SFH_MIG	        0x08
-#define SFH_ACK	        0x10
-#define SFH_RSYN	0x20
+#define SVH_FIN	        0x01
+#define SVH_SYN	        0x02
+#define SVH_RST	        0x04
+#define SVH_MIG	        0x08
+#define SVH_ACK	        0x10
+#define SVH_RSYN	0x20
         uint8_t protocol;
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
@@ -149,6 +138,7 @@ struct serval_connection_ext {
         uint8_t flags;
         uint16_t length;
         uint32_t seqno;
+        uint32_t ackno;
         uint8_t nonce[8];
         struct service_id srvid;
 };
@@ -162,6 +152,7 @@ struct serval_control_ext {
         uint8_t flags;
         uint16_t length;
         uint32_t seqno;
+        uint32_t ackno;
         uint8_t nonce[SERVAL_NONCE_SIZE];
 };
 

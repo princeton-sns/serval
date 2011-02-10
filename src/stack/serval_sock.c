@@ -355,6 +355,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 	sk->sk_destruct	= serval_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
         
+
         /* Only assign socket id here in case we have a user
          * socket. If socket is NULL, then it means this socket is a
          * child socket from a LISTENing socket, and it will be
@@ -366,21 +367,29 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
         }
 
         ssk = serval_sk(sk);
+
+        skb_queue_head_init(&ssk->ctrl_queue);
+        ssk->ctrl_send_head = NULL;
+
 #if defined(OS_LINUX_KERNEL)
         get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
-        get_random_bytes(&ssk->local_seqno, sizeof(ssk->local_seqno));
+        get_random_bytes(&ssk->snd_seq.iss, sizeof(ssk->snd_seq.iss));
 #else
         {
                 unsigned int i;
-                unsigned char *seqno = (unsigned char *)&ssk->local_seqno;
+                unsigned char *seqno = (unsigned char *)&ssk->snd_seq.iss;
                 for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
-                for (i = 0; i < sizeof(ssk->local_seqno); i++) {
+                for (i = 0; i < sizeof(ssk->snd_seq.iss); i++) {
                         seqno[i] = random() & 0xff;
                 }
         }       
 #endif
+        /* Default to stop-and-wait behavior */
+        ssk->rcv_seq.wnd = 1;
+        ssk->snd_seq.wnd = 1;
+        
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
@@ -388,7 +397,6 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 
         return sk;
 }
-
 
 void serval_sock_init(struct sock *sk)
 {
@@ -448,6 +456,9 @@ void serval_sock_destruct(struct sock *sk)
 
         __skb_queue_purge(&sk->sk_receive_queue);
         __skb_queue_purge(&sk->sk_error_queue);
+
+        /* Clean control queue */
+        serval_srv_ctrl_queue_purge(sk);
 
         if (ssk->dev) {
                 dev_put(ssk->dev);

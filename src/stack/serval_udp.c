@@ -28,8 +28,7 @@
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
 #define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR +      \
-                     sizeof(struct serval_hdr) +        \
-                     sizeof(struct serval_connection_ext)) 
+                     sizeof(struct serval_hdr)) 
 
 static int serval_udp_connection_request(struct sock *sk, 
                                          struct sk_buff *skb);
@@ -39,7 +38,7 @@ struct sock *serval_udp_connection_respond_sock(struct sock *sk,
                                                 struct serval_request_sock *req,
                                                 struct dst_entry *dst);
 
-int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
+static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
 
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
@@ -123,82 +122,6 @@ static int serval_udp_destroy_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
         return 0;
 #endif
-}
-
-static void serval_udp_close(struct sock *sk, long timeout)
-{
-        struct sk_buff *skb = NULL;
-        int err = 0;
-
-        LOG_DBG("\n");
-        
-        if (sk->sk_state == SERVAL_CONNECTED ||
-            sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND ||
-            sk->sk_state == SERVAL_CLOSEWAIT) {
-                                
-                if (sk->sk_state == SERVAL_CLOSEWAIT) {
-                        sk->sk_prot->unhash(sk);
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
-                } else {
-                        serval_sock_set_state(sk, TCP_FINWAIT1);
-                }
-                /* We are under lock, so allocation must be atomic */
-                /* Socket is locked, keep trying until memory is available. */
-                for (;;) {
-                        skb = ALLOC_SKB(UDP_MAX_HDR, GFP_ATOMIC);
-                        
-                        if (skb)
-                                break;
-                        yield();
-                }
-                
-                skb_set_owner_w(skb, sk);
-                skb_reserve(skb, UDP_MAX_HDR);
-                
-                err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_CLOSE);
-                
-                if (err < 0) {
-                        LOG_ERR("udp close xmit failed\n");
-                }
-        } else {
-                sk->sk_prot->unhash(sk);
-                serval_sock_set_state(sk, SERVAL_CLOSED);
-        }
-}
-
-static int serval_udp_connect(struct sock *sk, struct sockaddr *uaddr, 
-                              int addr_len)
-{
-        struct sk_buff *skb;
-        struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
-        int err;
-
-        LOG_DBG("srvid=%s addr_len=%d\n", 
-                service_id_to_str(srvid), addr_len);
-
-	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
-		return -EINVAL;
-        
-        skb = ALLOC_SKB(UDP_MAX_HDR, GFP_KERNEL);
-
-        if (!skb)
-                return -ENOMEM;
-        
-	skb_set_owner_w(skb, sk);
-        skb_reserve(skb, UDP_MAX_HDR);
-        
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
-        
-        /* __skb_queue_tail(&sk->sk_write_queue, skb); */
-
-        err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_SYN);
-        
-        if (err < 0) {
-                LOG_ERR("udp xmit failed\n");
-        }
-
-        return err;
 }
 
 static int serval_udp_disconnect(struct sock *sk, int flags)
@@ -285,6 +208,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         struct sk_buff *skb;
         int ulen = len;
         struct service_id *srvid = NULL;
+        struct net_addr *netaddr = NULL;
 
 	if (len > 0xFFFF )
 		return -EMSGSIZE;
@@ -296,17 +220,29 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		return -EOPNOTSUPP;
 
 	if (msg->msg_name) {
-		struct sockaddr_sv *addr = 
+		struct sockaddr_sv *svaddr = 
                         (struct sockaddr_sv *)msg->msg_name;
+                struct sockaddr_in *inaddr = 
+                        (struct sockaddr_in *)(svaddr + 1);
 
-		if ((unsigned)msg->msg_namelen < sizeof(*addr))
+		if ((unsigned)msg->msg_namelen < sizeof(*svaddr))
 			return -EINVAL;
-		if (addr->sv_family != AF_SERVAL) {
-			if (addr->sv_family != AF_UNSPEC)
+
+		if (svaddr->sv_family != AF_SERVAL) {
+			if (svaddr->sv_family != AF_UNSPEC)
 				return -EAFNOSUPPORT;
 		}
                 
-                srvid = &addr->sv_srvid;
+                srvid = &svaddr->sv_srvid;
+
+                /* Check for advisory IP address */
+                if ((unsigned)msg->msg_namelen >= 
+                    (sizeof(*svaddr) + sizeof(*inaddr))) {
+                        if (inaddr->sin_family != AF_INET)
+                                return -EAFNOSUPPORT;
+
+                        netaddr = (struct net_addr *)&inaddr->sin_addr;
+                }
         } else if (sk->sk_state != SERVAL_CONNECTED) {
                 return -EDESTADDRREQ;
         }
@@ -323,6 +259,12 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         if (srvid) {
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
+        }
+        if (netaddr) {
+                memcpy(&SERVAL_SKB_CB(skb)->dst_addr, netaddr, sizeof(*netaddr));
+        } else {
+                /* Make sure we zero this address to signal it is unset */
+                memset(&SERVAL_SKB_CB(skb)->dst_addr, 0, sizeof(*netaddr));
         }
         /* 
            TODO: 
@@ -357,7 +299,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                               struct msghdr *msg, size_t len, int nonblock, 
                               int flags, int *addr_len)
 {
-	struct serval_sock *ss = serval_sk(sk);
+	struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;
 	long timeo;
@@ -438,19 +380,21 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 /* Copy service id */
                 if (svaddr) {
                         size_t addrlen = msg->msg_namelen;
-                        unsigned short from = udp_hdr(skb)->source;
 
                         svaddr->sv_family = AF_SERVAL;
                         *addr_len = sizeof(*svaddr);
-                        memcpy(&svaddr->sv_srvid, &from, sizeof(struct service_id));
+                        memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid, 
+                               sizeof(svaddr->sv_srvid));
 
-                        /* Copy also our local service id to the
-                         * address buffer if size admits */
-                        if (addrlen >= sizeof(*svaddr) * 2) {
-                                svaddr = (struct sockaddr_sv *)((char *)msg->msg_name + sizeof(*svaddr));
-                                svaddr->sv_family = AF_SERVAL;
-                                memcpy(&svaddr->sv_srvid, &ss->local_srvid,
-                                       sizeof(svaddr->sv_srvid));
+                        /* Copy also IP address if possible */
+                        if (addrlen == sizeof(*svaddr) + 
+                            sizeof(struct sockaddr_in)) {
+                                struct sockaddr_in *inaddr = 
+                                        (struct sockaddr_in *)(svaddr + 1);
+                                inaddr->sin_family = AF_INET;
+                                memcpy(&inaddr->sin_addr, &ssk->src_addr,
+                                       sizeof(ssk->src_addr));
+                                *addr_len +=sizeof(*inaddr);
                         }
                 }
                 /*
@@ -479,8 +423,8 @@ struct proto serval_udp_proto = {
 	.owner			= THIS_MODULE,
         .init                   = serval_udp_init_sock,
         .destroy                = serval_udp_destroy_sock,        
-	.close  		= serval_udp_close,   
-        .connect                = serval_udp_connect,
+	.close  		= serval_srv_close,   
+        .connect                = serval_srv_connect,
 	.disconnect 		= serval_udp_disconnect,
 	.shutdown		= serval_udp_shutdown,
         .sendmsg                = serval_udp_sendmsg,

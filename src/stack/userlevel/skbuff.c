@@ -173,6 +173,96 @@ struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 	return __skb_clone(n, skb);
 }
 
+static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+{
+	__copy_skb_header(new, old);
+}
+
+/**
+ *	skb_copy	-	create private copy of an sk_buff
+ *	@skb: buffer to copy
+ *	@gfp_mask: allocation priority
+ *
+ *	Make a copy of both an &sk_buff and its data. This is used when the
+ *	caller wishes to modify the data and needs a private copy of the
+ *	data to alter. Returns %NULL on failure or the pointer to the buffer
+ *	on success. The returned buffer has a reference count of 1.
+ *
+ *	As by-product this function converts non-linear &sk_buff to linear
+ *	one, so that &sk_buff becomes completely private and caller is allowed
+ *	to modify all the data of returned buffer. This means that this
+ *	function is not recommended for use in circumstances when only
+ *	header is going to be modified. Use pskb_copy() instead.
+ */
+
+struct sk_buff *skb_copy(const struct sk_buff *skb, gfp_t gfp_mask)
+{
+	int headerlen = skb->data - skb->head;
+	/*
+	 *	Allocate the copy buffer
+	 */
+	struct sk_buff *n;
+
+	n = alloc_skb(skb->end + skb->data_len);
+
+	if (!n)
+		return NULL;
+
+	/* Set the data pointer */
+	skb_reserve(n, headerlen);
+	/* Set the tail pointer and length */
+	skb_put(n, skb->len);
+
+        /*
+	if (skb_copy_bits(skb, -headerlen, n->head, headerlen + skb->len))
+		BUG();
+        */
+
+	copy_skb_header(n, skb);
+	return n;
+}
+
+/**
+ *	pskb_copy	-	create copy of an sk_buff with private head.
+ *	@skb: buffer to copy
+ *	@gfp_mask: allocation priority
+ *
+ *	Make a copy of both an &sk_buff and part of its data, located
+ *	in header. Fragmented data remain shared. This is used when
+ *	the caller wishes to modify only header of &sk_buff and needs
+ *	private copy of the header to alter. Returns %NULL on failure
+ *	or the pointer to the buffer on success.
+ *	The returned buffer has a reference count of 1.
+ */
+
+struct sk_buff *pskb_copy(struct sk_buff *skb, gfp_t gfp_mask)
+{
+	/*
+	 *	Allocate the copy buffer
+	 */
+	struct sk_buff *n;
+
+	n = alloc_skb(skb->end);
+
+	if (!n)
+		goto out;
+
+	/* Set the data pointer */
+	skb_reserve(n, skb->data - skb->head);
+	/* Set the tail pointer and length */
+	skb_put(n, skb_headlen(skb));
+	/* Copy the bytes */
+	skb_copy_from_linear_data(skb, n->data, n->len);
+
+	n->truesize += skb->data_len;
+	n->data_len  = skb->data_len;
+	n->len	     = skb->len;
+
+	copy_skb_header(n, skb);
+out:
+	return n;
+}
+
 /**
  *	skb_dequeue - remove from the head of the queue
  *	@list: list to dequeue from
