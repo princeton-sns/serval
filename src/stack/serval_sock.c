@@ -342,7 +342,6 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                              struct proto *prot)
 {
         struct sock *sk;
-        struct serval_sock *ssk;
 
         sk = sk_alloc(net, PF_SERVAL, priority, prot);
 
@@ -365,7 +364,24 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                 return NULL;
         }
 
-        ssk = serval_sk(sk);
+        atomic_inc(&serval_nr_socks);
+                
+        LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
+                sk, atomic_read(&serval_nr_socks));
+
+        return sk;
+}
+
+void serval_sock_init(struct sock *sk)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+        sk->sk_state = 0;
+        INIT_LIST_HEAD(&ssk->accept_queue);
+        INIT_LIST_HEAD(&ssk->syn_queue);
+        setup_timer(&ssk->retransmit_timer, 
+                    serval_srv_rexmit_timeout,
+                    (unsigned long)sk);
 
         serval_srv_init_ctrl_queue(sk);
 
@@ -384,27 +400,10 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                 }
         }       
 #endif
+
         /* Default to stop-and-wait behavior */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
-        
-        atomic_inc(&serval_nr_socks);
-                
-        LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
-                sk, atomic_read(&serval_nr_socks));
-
-        return sk;
-}
-
-void serval_sock_init(struct sock *sk)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-        sk->sk_state = 0;
-        INIT_LIST_HEAD(&ssk->accept_queue);
-        INIT_LIST_HEAD(&ssk->syn_queue);
-        setup_timer(&ssk->retransmit_timer, 
-                    serval_srv_rexmit_timeout,
-                    (unsigned long)sk);
 }
 
 void serval_sock_destroy(struct sock *sk)

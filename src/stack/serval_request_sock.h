@@ -19,7 +19,8 @@ struct serval_request_sock {
         struct net_addr dst_addr;
         uint32_t rcv_seq;
         uint32_t iss_seq;
-        uint8_t nonce[SERVAL_NONCE_SIZE];
+        uint8_t local_nonce[SERVAL_NONCE_SIZE];
+        uint8_t peer_nonce[SERVAL_NONCE_SIZE];
         unsigned char flags;
         struct list_head lh;
 };
@@ -38,11 +39,15 @@ static inline struct serval_request_sock *serval_rsk_alloc(int alloc)
         serval_sock_get_flowid(&rsk->local_flowid);
 
 #if defined(OS_LINUX_KERNEL)
+        get_random_bytes(rsk->local_nonce, SERVAL_NONCE_SIZE);
         get_random_bytes(&rsk->iss_seq, sizeof(rsk->iss_seq));
 #else
         {
                 unsigned int i;
                 unsigned char *seqno = (unsigned char *)&rsk->iss_seq;
+                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                        rsk->local_nonce[i] = random() & 0xff;
+                }
                 for (i = 0; i < sizeof(rsk->iss_seq); i++) {
                         seqno[i] = random() & 0xff;
                 }

@@ -309,12 +309,15 @@ int serval_srv_close_request(struct sock *sk, struct sk_buff *rskb)
         
         skb_reserve(skb, SERVAL_MAX_HDR);
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
-        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
 
-        err = serval_srv_queue_and_push(sk, skb);
+        /* Do not increment sequence numbers for pure ACKs */
+        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt;
+
+        /* Do not queue pure ACKs */
+        err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
         
         if (err < 0) {
-                LOG_ERR("queuing failed\n");
+                LOG_ERR("xmit failed\n");
         }
         
         return err;
@@ -370,7 +373,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
                sizeof(rsk->dst_addr));
-        memcpy(rsk->nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
+        memcpy(rsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         rsk->rcv_seq = ntohl(conn_ext->seqno);
 
         list_add(&rsk->lh, &ssk->syn_queue);
@@ -393,7 +396,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         conn_ext->ackno = htonl(rsk->rcv_seq + 1);
 
         /* Copy our nonce to connection extension */
-        memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        memcpy(conn_ext->nonce, rsk->local_nonce, SERVAL_NONCE_SIZE);
        
         sfh->flags |= SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
@@ -407,6 +410,27 @@ done:
 drop:
         FREE_SKB(skb);
         goto done;
+}
+
+static struct sock *
+serval_srv_create_respond_sock(struct sock *sk, 
+                               struct sk_buff *skb,
+                               struct serval_request_sock *req,
+                               struct dst_entry *dst)
+{
+        struct sock *nsk;
+
+        nsk = sk_clone(sk, GFP_ATOMIC);
+
+        if (nsk) {
+                atomic_inc(&serval_nr_socks);
+                serval_sock_init(nsk);
+
+                /* Transport protocol specific init. */                
+                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, nsk, NULL);
+        }        
+        
+        return nsk;
 }
 
 static struct sock *
@@ -425,7 +449,7 @@ serval_srv_request_sock_handle(struct sock *sk,
                         struct sock *nsk;
                         struct serval_sock *nssk;
 
-                        if (memcmp(rsk->nonce, conn_ext->nonce, 
+                        if (memcmp(rsk->peer_nonce, conn_ext->nonce, 
                                    SERVAL_NONCE_SIZE) != 0) {
                                 LOG_ERR("Bad nonce\n");
                                 return NULL;
@@ -441,13 +465,12 @@ serval_srv_request_sock_handle(struct sock *sk,
                         list_del(&rsk->lh);
                         list_add_tail(&rsk->lh, &ssk->accept_queue);
                         
-                        nsk = ssk->af_ops->conn_child_sock(sk, skb, 
-                                                           rsk, NULL);
+                        nsk = serval_srv_create_respond_sock(sk, skb, 
+                                                             rsk, NULL);
                         
                         if (!nsk)
                                 return NULL;
                         
-                        atomic_inc(&serval_nr_socks);
                         nsk->sk_state = SERVAL_RESPOND;
                         nssk = serval_sk(nsk);
                         memcpy(&nssk->local_flowid, &rsk->local_flowid, 
@@ -458,7 +481,10 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_srvid));
                         memcpy(&nssk->dst_addr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
-                        memcpy(nssk->peer_nonce, rsk->nonce, SERVAL_NONCE_SIZE);
+                        memcpy(nssk->local_nonce, rsk->local_nonce, 
+                               SERVAL_NONCE_SIZE);
+                        memcpy(nssk->peer_nonce, rsk->peer_nonce, 
+                               SERVAL_NONCE_SIZE);
                         nssk->snd_seq.iss = rsk->iss_seq;
                         nssk->snd_seq.una = rsk->iss_seq;
                         nssk->snd_seq.nxt = rsk->iss_seq + 1;
@@ -696,12 +722,12 @@ static int serval_srv_request_state_process(struct sock *sk,
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
         memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
-        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt++;
+        /* Do not increase sequence number for pure ACK */
+        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
         skb->protocol = IPPROTO_SERVAL;
 
         /* Xmit, do not queue ACK */
         err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
-        //err = serval_srv_queue_and_push(sk, skb);
                 
         return err;
 drop:
@@ -734,7 +760,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
         memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
                sizeof(ssk->dst_addr));
         
-        /* Everything fine, increase expexted sequence number */
+        /* Everything fine, increase expected sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
 
         /* Process any ACK */
@@ -1081,6 +1107,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	return err;
 }
 
+/* This function is typically called by transport to send data */
 int serval_srv_xmit_skb(struct sk_buff *skb) 
 {
         return serval_srv_transmit_skb(skb->sk, skb, 0, GFP_ATOMIC);

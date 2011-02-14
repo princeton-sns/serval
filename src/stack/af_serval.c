@@ -408,7 +408,7 @@ static int serval_accept(struct socket *sock, struct socket *newsock,
                 
                 LOG_DBG("waiting for an incoming connect request\n");
 		err = serval_wait_for_connect(sk, timeo);
-                LOG_DBG("wait for incoming onnect returned err=%d\n", err);
+                LOG_DBG("wait for incoming connect returned err=%d\n", err);
 
 		if (err)
 			goto out;

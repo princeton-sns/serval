@@ -33,10 +33,10 @@
 static int serval_udp_connection_request(struct sock *sk, 
                                          struct sk_buff *skb);
 
-struct sock *serval_udp_connection_respond_sock(struct sock *sk, 
+static void serval_udp_connection_respond_sock(struct sock *sk, 
                                                 struct sk_buff *skb,
-                                                struct serval_request_sock *req,
-                                                struct dst_entry *dst);
+                                                struct sock *child,
+                                               struct dst_entry *dst);
 
 static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
 
@@ -150,20 +150,11 @@ int serval_udp_connection_request(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
-struct sock *serval_udp_connection_respond_sock(struct sock *sk, 
-                                                struct sk_buff *skb,
-                                                struct serval_request_sock *req,
-                                                struct dst_entry *dst)
+void serval_udp_connection_respond_sock(struct sock *sk, 
+                                        struct sk_buff *skb,
+                                        struct sock *child,
+                                        struct dst_entry *dst)
 {
-        struct sock *nsk;
-
-        nsk = sk_clone(sk, GFP_ATOMIC);
-
-        if (nsk) {
-                /* Initialize UDP specific fields */
-        }        
-        
-        return nsk;
 }
 
 /* 

@@ -62,9 +62,9 @@ struct serval_sock_af_ops {
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
 	int	        (*conn_request)(struct sock *sk, struct sk_buff *skb);
-	struct sock    *(*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
-                                        struct serval_request_sock *req,
-                                        struct dst_entry *dst);
+        void            (*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
+                                           struct sock *child,
+                                           struct dst_entry *dst);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
 };

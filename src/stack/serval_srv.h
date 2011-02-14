@@ -47,7 +47,7 @@ static inline void serval_srv_ctrl_queue_purge(struct sock *sk)
                 skb_queue_empty(&serval_sk(sk)->ctrl_queue));
                 
 	while ((skb = __skb_dequeue(&serval_sk(sk)->ctrl_queue)) != NULL) {
-		LOG_DBG("Freeing skb\n");
+		LOG_DBG("Freeing skb %p\n", skb);
 		FREE_SKB(skb);
 	}
 	/* serval_srv_clear_all_retrans_hints(serval_srv_sk(sk)); */
