@@ -199,7 +199,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
        
         while ((skb = serval_srv_ctrl_queue_head(sk)) && 
                skb != serval_srv_send_head(sk)) {
-                if (ackno > SERVAL_SKB_CB(skb)->seqno) {
+                if (ackno == SERVAL_SKB_CB(skb)->seqno + 1) {
                         serval_srv_unlink_ctrl_queue(skb, sk);
                         LOG_DBG("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);

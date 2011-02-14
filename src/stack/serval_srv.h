@@ -38,6 +38,7 @@ static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 
 
 /* control queue abstraction */
+
 static inline void serval_srv_ctrl_queue_purge(struct sock *sk)
 {
 	struct sk_buff *skb;
@@ -114,6 +115,12 @@ static inline void serval_srv_check_send_head(struct sock *sk,
 static inline void serval_srv_init_send_head(struct sock *sk)
 {
 	serval_sk(sk)->ctrl_send_head = NULL;
+}
+
+static inline void serval_srv_init_ctrl_queue(struct sock *sk)
+{
+        skb_queue_head_init(&serval_sk(sk)->ctrl_queue);
+        serval_srv_init_send_head(sk);
 }
 
 static inline void __serval_srv_add_ctrl_queue_tail(struct sock *sk, 

@@ -354,7 +354,6 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 	sk->sk_protocol	= protocol;
 	sk->sk_destruct	= serval_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
-        
 
         /* Only assign socket id here in case we have a user
          * socket. If socket is NULL, then it means this socket is a
@@ -368,8 +367,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 
         ssk = serval_sk(sk);
 
-        skb_queue_head_init(&ssk->ctrl_queue);
-        ssk->ctrl_send_head = NULL;
+        serval_srv_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)
         get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
