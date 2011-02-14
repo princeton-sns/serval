@@ -65,8 +65,29 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
         return 1;
 }
 
+static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
+{        
+        int ret = 1;
+
+        /* Basically modelled after TCP, should check whether it makes
+         * sense... */
+        if (seg_seq == 0) {
+                if (!(seg_seq = ssk->rcv_seq.nxt))
+                        ret = 0;
+        } else if (!(seg_seq >= ssk->rcv_seq.nxt &&
+                     seg_seq < (ssk->rcv_seq.nxt + 
+                                ssk->rcv_seq.wnd))) {
+                ret = 0;
+        }
+        if (ret == 0) {
+                LOG_ERR("Bad sequence number received=%u next=%u\n",
+                        seg_seq, ssk->rcv_seq.nxt);
+        }
+        return ret;
+}
+
 static inline int has_valid_connection_extension(struct sock *sk, 
-                                          struct serval_hdr *sfh)
+                                                 struct serval_hdr *sfh)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_connection_ext *conn_ext = 
@@ -81,12 +102,7 @@ static inline int has_valid_connection_extension(struct sock *sk,
                 return 0;
         }
 
-        if (ntohl(conn_ext->seqno) != ssk->rcv_seq.nxt) {
-                LOG_ERR("Bad sequence number received=%u expected=%u\n",
-                        ntohl(conn_ext->seqno), ssk->rcv_seq.nxt);
-                return 0;
-        }
-        return 1;
+        return has_valid_seqno(ntohl(conn_ext->seqno), ssk);
 }
 
 static inline int has_valid_control_extension(struct sock *sk, 
@@ -117,12 +133,7 @@ static inline int has_valid_control_extension(struct sock *sk,
                 return 0;
         }
 
-        if (ntohl(ctrl_ext->seqno) != ssk->rcv_seq.nxt) {
-                LOG_ERR("Bad sequence number received=%u expected=%u\n",
-                        ntohl(ctrl_ext->seqno), ssk->rcv_seq.nxt);
-                return 0;
-        }
-        return 1;
+        return has_valid_seqno(ntohl(ctrl_ext->seqno), ssk);
 }
 
 static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)

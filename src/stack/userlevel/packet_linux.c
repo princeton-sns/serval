@@ -112,9 +112,10 @@ static int packet_linux_recv(struct net_device *dev)
         case INPUT_NO_PROT:
         case INPUT_DROP:
         case INPUT_DELIVER:
-        default:
                 //LOG_DBG("Deleting skb\n");
                 free_skb(skb);
+        default:
+                break;
 	}
 
 	return 0;

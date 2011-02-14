@@ -190,8 +190,9 @@ static int packet_bpf_recv(struct net_device *dev)
                         break;
                 case INPUT_NO_PROT:
                 case INPUT_DROP:
-                default:
                         free_skb(skb);
+                        break;
+                default:
                         break;
                 }
                 /* Move to next packet */
