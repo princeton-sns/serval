@@ -129,6 +129,7 @@ static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
 	skb_header_release(skb);
 	serval_srv_add_ctrl_queue_tail(sk, skb);
+        LOG_DBG("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
         /* Check if the skb became first in queue, in that case update
          * unacknowledged seqno. */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
@@ -319,7 +320,6 @@ int serval_srv_close_request(struct sock *sk, struct sk_buff *rskb)
         return err;
 }
 
-
 static int serval_srv_syn_rcv(struct sock *sk, 
                               struct serval_hdr *sfh,
                               struct sk_buff *skb)
@@ -398,6 +398,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
         sfh->flags |= SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
 
+        /* Cannot use serval_srv_transmit_skb here since we do not yet
+         * have a full accepted socket (sk is the listening sock). */
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
                                              ip_hdr(skb)->saddr, NULL);
 done:        
@@ -431,7 +433,8 @@ serval_srv_request_sock_handle(struct sock *sk,
 
                         if (ntohl(conn_ext->seqno) != rsk->rcv_seq + 1) {
                                 LOG_ERR("Bad seqno received=%u expected=%u\n",
-                                        ntohl(conn_ext->seqno), rsk->rcv_seq + 1);
+                                        ntohl(conn_ext->seqno), 
+                                        rsk->rcv_seq + 1);
                                 return NULL;
                         }
                         /* Move request sock to accept queue */
@@ -457,6 +460,7 @@ serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->dst_addr));
                         memcpy(nssk->peer_nonce, rsk->nonce, SERVAL_NONCE_SIZE);
                         nssk->snd_seq.iss = rsk->iss_seq;
+                        nssk->snd_seq.una = rsk->iss_seq;
                         nssk->snd_seq.nxt = rsk->iss_seq + 1;
                         nssk->rcv_seq.iss = rsk->rcv_seq;
                         nssk->rcv_seq.nxt = rsk->rcv_seq + 1;
@@ -505,7 +509,7 @@ static int serval_srv_ack_process(struct sock *sk,
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
         } else {
-                LOG_ERR("ackno %u out or sequence, expected %u\n",
+                LOG_ERR("ackno %u out of sequence, expected %u\n",
                         ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 done:
