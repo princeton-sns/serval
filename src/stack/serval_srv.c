@@ -67,20 +67,21 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
 
 static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
 {        
-        int ret = 1;
+        int ret = 0;
 
         /* Basically modelled after TCP, should check whether it makes
          * sense... */
         if (seg_seq == 0) {
-                if (!(seg_seq = ssk->rcv_seq.nxt))
-                        ret = 0;
-        } else if (!(seg_seq >= ssk->rcv_seq.nxt &&
-                     seg_seq < (ssk->rcv_seq.nxt + 
-                                ssk->rcv_seq.wnd))) {
-                ret = 0;
+                if (seg_seq == ssk->rcv_seq.nxt)
+                        ret = 1;
+        } else if (seg_seq >= ssk->rcv_seq.nxt &&
+                   seg_seq < (ssk->rcv_seq.nxt + 
+                              ssk->rcv_seq.wnd)) {
+                ret = 1;
         }
         if (ret == 0) {
-                LOG_ERR("Bad sequence number received=%u next=%u\n",
+                LOG_ERR("Seqno not in sequence received=%u next=%u."
+                        " Could be ACK though...\n",
                         seg_seq, ssk->rcv_seq.nxt);
         }
         return ret;
@@ -102,7 +103,7 @@ static inline int has_valid_connection_extension(struct sock *sk,
                 return 0;
         }
 
-        return has_valid_seqno(ntohl(conn_ext->seqno), ssk);
+        return 1;
 }
 
 static inline int has_valid_control_extension(struct sock *sk, 
@@ -133,7 +134,7 @@ static inline int has_valid_control_extension(struct sock *sk,
                 return 0;
         }
 
-        return has_valid_seqno(ntohl(ctrl_ext->seqno), ssk);
+        return 1;
 }
 
 static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
@@ -554,8 +555,9 @@ done:
 }
 
 static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
-                           struct sk_buff *skb)
+                          struct sk_buff *skb)
 {
+        int err = 0;
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_control_ext *ctrl_ext = 
                 (struct serval_control_ext *)(sfh + 1);
@@ -564,36 +566,37 @@ static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
         
         if (!has_valid_control_extension(sk, sfh)) {
                 LOG_DBG("Bad control extension\n");
-                FREE_SKB(skb);
                 return -1;
         }
-            
-        sk->sk_shutdown |= SEND_SHUTDOWN;
-        sock_set_flag(sk, SOCK_DONE);
-        serval_sk(sk)->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;
-
-        switch (sk->sk_state) {
-        case SERVAL_REQUEST:
-        case SERVAL_RESPOND:
-        case SERVAL_CONNECTED:
-                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                break;
-        case SERVAL_CLOSING:
-                break;
-        case SERVAL_CLOSEWAIT:
-                break;
-        case TCP_FINWAIT1:
-                /* Simultaneous close */
-                serval_sock_set_state(sk, SERVAL_CLOSING);
-        default:
-                break;
+        
+        if (has_valid_seqno(ntohl(ctrl_ext->seqno), ssk)) {
+                sk->sk_shutdown |= SEND_SHUTDOWN;
+                sock_set_flag(sk, SOCK_DONE);
+                serval_sk(sk)->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;
+                
+                switch (sk->sk_state) {
+                case SERVAL_REQUEST:
+                case SERVAL_RESPOND:
+                case SERVAL_CONNECTED:
+                        serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+                        break;
+                case SERVAL_CLOSING:
+                        break;
+                case SERVAL_CLOSEWAIT:
+                        break;
+                case TCP_FINWAIT1:
+                        /* Simultaneous close */
+                        serval_sock_set_state(sk, SERVAL_CLOSING);
+                default:
+                        break;
+                }
+                
+                /* TODO: Send FIN-ACK... */
+                if (ssk->af_ops->close_request)
+                        return ssk->af_ops->close_request(sk, skb);
         }
-
-        /* TODO: Send FIN-ACK... */
-        if (ssk->af_ops->close_request)
-                return ssk->af_ops->close_request(sk, skb);
-
-        return 0;
+        
+        return err;
 }
 
 static int serval_srv_connected_state_process(struct sock *sk, 
@@ -606,17 +609,25 @@ static int serval_srv_connected_state_process(struct sock *sk,
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 err = serval_srv_fin(sk, sfh, skb);
+
+                if (err == 0) {
+                        /* Valid FIN means valid ctrl header that may
+                           contain ACK */
+                        serval_srv_ack_process(sk, sfh, skb);     
+                }
         } else {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         }
 
-        serval_srv_ack_process(sk, sfh, skb);
-
+        /* Should also pass FIN to user, as it needs to pick it off
+         * its receive queue to notice EOF. */
         if (err == 0) {
                 /* Set the received service id */
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
                        sizeof(ssk->peer_srvid));
                 err = ssk->af_ops->receive(sk, skb);
+        } else {
+                FREE_SKB(skb);
         }
         return err;
 }
@@ -782,6 +793,26 @@ drop:
         return err;
 }
 
+static int serval_srv_finwait1_state_process(struct sock *sk, 
+                                             struct serval_hdr *sfh, 
+                                             struct sk_buff *skb)
+{
+        int err;
+        
+        if (sfh->flags & SVH_FIN) {
+                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+                err = serval_srv_fin(sk, sfh, skb);
+
+                if (err != 0) {
+                        FREE_SKB(skb);
+                }
+        } else {
+                err = serval_srv_ack_process(sk, sfh, skb);
+                FREE_SKB(skb);
+        }
+        return err;
+}
+
 int serval_srv_state_process(struct sock *sk, 
                              struct serval_hdr *sfh, 
                              struct sk_buff *skb)
@@ -802,11 +833,7 @@ int serval_srv_state_process(struct sock *sk,
                 err = serval_srv_listen_state_process(sk, sfh, skb);
                 break;
         case TCP_FINWAIT1:
-                if (sfh->flags & SVH_FIN) {
-                        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                        err = serval_srv_fin(sk, sfh, skb);
-                        break;
-                }
+                err = serval_srv_finwait1_state_process(sk, sfh, skb);
         default:
                 LOG_ERR("bad socket state %u\n", sk->sk_state);
                 goto drop;
@@ -1025,15 +1052,14 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 hdr_len += serval_srv_add_conn_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_ACK:
+        case SERVAL_PKT_CLOSEACK:
                 flags |= SVH_ACK;
                 hdr_len += serval_srv_add_ctrl_ext(sk, skb, 0);
                 break;
-        case SERVAL_PKT_CLOSEACK:
-                flags |= SVH_ACK;
-                /* Fall through */
         case SERVAL_PKT_CLOSE:
                 flags |= SVH_FIN;
                 hdr_len += serval_srv_add_ctrl_ext(sk, skb, 0);
+                break;
         default:
                 break;
         }
