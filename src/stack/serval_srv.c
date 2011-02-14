@@ -20,7 +20,6 @@
 #include <service.h>
 #include <neighbor.h>
 
-
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE
 /* payload + LL + IP + extra */
@@ -680,7 +679,8 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Save nonce */
         memcpy(ssk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         /* Update socket ids */
-        memcpy(&ssk->peer_flowid, &sfh->src_flowid, sizeof(sfh->src_flowid));
+        memcpy(&ssk->peer_flowid, &sfh->src_flowid, 
+               sizeof(sfh->src_flowid));
       
         /* Update expected rcv sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
@@ -695,8 +695,9 @@ static int serval_srv_request_state_process(struct sock *sk,
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt++;
         skb->protocol = IPPROTO_SERVAL;
 
-        /* Queue and xmit */
-        err = serval_srv_queue_and_push(sk, skb);
+        /* Xmit, do not queue ACK */
+        err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
+        //err = serval_srv_queue_and_push(sk, skb);
                 
         return err;
 drop:
