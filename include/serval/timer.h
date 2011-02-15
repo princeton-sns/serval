@@ -68,6 +68,7 @@ static inline void setup_timer(struct timer_list *timer,
 	timer->data = data;
 }
 
+int gettime(struct timespec *ts);
 unsigned long gettime_jiffies(void);
 #define jiffies gettime_jiffies()
 
@@ -83,7 +84,7 @@ unsigned long gettime_jiffies(void);
 #define secs_to_jiffies(s) (s * HZ)
 #define msecs_to_jiffies(ms) (ms / (MSECS_PER_SEC - HZ))
 #define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
-#define nsecs_to_jiffies(ns) (ns / TICKS_PER_NSEC)
+#define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
 #define jiffies_to_nsecs(j) (j * TICKS_PER_NSEC)
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \

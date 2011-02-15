@@ -65,7 +65,8 @@ int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
  */
 long schedule_timeout(long timeo)
 {        
-        wait_queue_head_t *q = (wait_queue_head_t *)pthread_getspecific(wq_key);
+        wait_queue_head_t *q = 
+                (wait_queue_head_t *)pthread_getspecific(wq_key);
         wait_queue_t *w = (wait_queue_t *)pthread_getspecific(w_key);
         struct client *c = client_get_current();
         struct timespec now = { 0, 0 }, later = { 0, 0 };
@@ -77,14 +78,8 @@ long schedule_timeout(long timeo)
                 return timeo;
         }
 
-#if defined(OS_LINUX)
-        if (clock_gettime(CLOCK, &now) == -1) {
-                LOG_ERR("clock_gettime failed!!\n");
-                return timeo;
-        }
-#else
-#warning "Must implement clock_gettime()!"
-#endif
+        gettime(&now);
+
         fds[0].fd = w->pipefd[0];
         fds[0].events = POLLERR | POLLIN;
         fds[1].fd = client_get_signalfd(c);
@@ -111,14 +106,7 @@ long schedule_timeout(long timeo)
                   timeout. Not sure how ppoll works. In any case, this
                   is not portable.
                  */
-#if defined(OS_LINUX)
-                if (clock_gettime(CLOCK, &later) == -1) {
-                        LOG_ERR("clock_gettime failed!!\n");
-                        return timeo;
-                }
-#else
-#warning "Must implement clock_gettime()!"
-#endif
+                gettime(&later);
                 
                 timespec_sub(&later, &now);
 

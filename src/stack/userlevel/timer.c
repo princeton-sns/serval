@@ -36,7 +36,7 @@ static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 
 #define CLOCK CLOCK_THREAD_CPUTIME_ID
 
-static int gettime(struct timespec *ts)
+int gettime(struct timespec *ts)
 {
         int err = 0;
 
@@ -345,13 +345,13 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 
 	timespec_add_nsec(&timer->expires_abs, 
                           jiffies_to_nsecs(delta)); 
-        /*
+
         LOG_DBG("timer[expires=%lu delta=%lu"
                 " tv_sec=%ld tv_nsec=%ld]\n",
                 expires, delta, 
                 timer->expires_abs.tv_sec, 
                 timer->expires_abs.tv_nsec);
-        */
+
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
                 timer_list_signal_add_timer(tlh);
