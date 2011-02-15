@@ -71,19 +71,25 @@ static inline void setup_timer(struct timer_list *timer,
 unsigned long gettime_jiffies(void);
 #define jiffies gettime_jiffies()
 
-#define TICKS_PER_SEC 1000000000L
-#define HZ (10000000L)
-#define secs_to_jiffies(s) ((s * TICKS_PER_SEC) / HZ)
-#define msecs_to_jiffies(ms) (ms / 10)
-#define ticks_to_jiffies(t) (t / HZ)
-#define nsecs_to_jiffies(ns) (ns / HZ)
-#define jiffies_to_nsecs(j) (j * HZ)
+/* Timer interrupt frequency (based on common kernel value) */
+#define HZ (100)
+#define TICKS_PER_SEC  1000000000L
+#define TICKS_PER_NSEC 1L
+#define TICKS_PER_HZ   10000000L
+#define NSECS_PER_SEC  1000000000L
+#define USECS_PER_SEC  1000000L
+#define MSECS_PER_SEC  1000L
+
+#define secs_to_jiffies(s) (s * HZ)
+#define msecs_to_jiffies(ms) (ms / (MSECS_PER_SEC - HZ))
+#define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
+#define nsecs_to_jiffies(ns) (ns / TICKS_PER_NSEC)
+#define jiffies_to_nsecs(j) (j * TICKS_PER_NSEC)
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \
          nsecs_to_jiffies((ts)->tv_usecs))
 
 /* convenience functions (from RTLinux) */
-#define NSECS_PER_SEC 1000000000L
 
 #define timespec_normalize(t) {                         \
                 if ((t)->tv_nsec >= NSECS_PER_SEC) {    \
