@@ -190,7 +190,7 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
            queue */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
-                               msecs_to_jiffies(2000)); 
+                               jiffies + msecs_to_jiffies(2000)); 
         }
         
         err = serval_srv_write_xmit(sk, 1, GFP_ATOMIC);
@@ -263,6 +263,14 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         }
         
         return err;
+}
+
+static void serval_srv_timewait(struct sock *sk)
+{
+        serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+        /* FIXME: Dynamically set timeout */
+        sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
+                       jiffies + msecs_to_jiffies(8000)); 
 }
 
 void serval_srv_close(struct sock *sk, long timeout)
@@ -816,10 +824,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                         err = serval_srv_ack_process(sk, sfh, skb);
                         
                         if (err == 0) {
-                                serval_sock_set_state(sk, SERVAL_TIMEWAIT);
-                                /* FIXME: Dynamically set timeout */
-                                sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
-                                               msecs_to_jiffies(8000)); 
+                                serval_srv_timewait(sk);
                         }
                 }
         } else {
@@ -848,10 +853,7 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
                 err = serval_srv_fin(sk, sfh, skb);
 
                 if (err == 0) {
-                        serval_sock_set_state(sk, SERVAL_TIMEWAIT);
-                        /* FIXME: Dynamically set timeout */
-                        sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
-                                       msecs_to_jiffies(8000)); 
+                        serval_srv_timewait(sk);
                 }
         }
 
@@ -870,7 +872,7 @@ static int serval_srv_closing_state_process(struct sock *sk,
                 
         if (err == 0) {
                 /* ACK was valid */
-                serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+                serval_srv_timewait(sk);
         }
 
         FREE_SKB(skb);

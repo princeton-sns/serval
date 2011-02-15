@@ -38,8 +38,9 @@ void signal_handler(int sig)
         should_exit = 1;       
 }
 
+#define GARBAGE_INTERVAL (jiffies + secs_to_jiffies(10))
 static void garbage_collect_clients(unsigned long data);
-static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 10000000, 0);
+static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 0, 0);
 
 static int daemonize(void)
 {
@@ -117,7 +118,7 @@ void garbage_collect_clients(unsigned long data)
         client_list_unlock(&client_list);
 
 	/* Schedule us again */
-	add_timer(&garbage_timer);
+	mod_timer(&garbage_timer, GARBAGE_INTERVAL);
 }
 
 #define NUM_SERVER_SOCKS 2
@@ -206,7 +207,7 @@ static int server_run(void)
 
 	LOG_DBG("Server starting\n");
 	/* Add garbage collection timer */
-	add_timer(&garbage_timer);
+	mod_timer(&garbage_timer, GARBAGE_INTERVAL);
 
 	while (!should_exit) {
 		fd_set readfds;
