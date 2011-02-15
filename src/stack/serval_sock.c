@@ -36,11 +36,9 @@ static const char *sock_state_str[] = {
         "RRESPOND",
         "LISTEN",
         "CLOSEWAIT",
-        /* TCP only */
         "FINWAIT1",
         "FINWAIT2",
-        "LASTACK",
-        "SIMCLOSE"  
+        "LASTACK"
 };
 
 static void serval_sock_destruct(struct sock *sk);

@@ -25,10 +25,9 @@
 static int serval_sock_is_valid_conn_state(int state)
 {
         return (state == SERVAL_CONNECTED ||
-                state == TCP_FINWAIT1 ||
-                state == TCP_FINWAIT2 ||
-                state == TCP_SIMCLOSE ||
-                state == TCP_LASTACK ||
+                state == SERVAL_FINWAIT1 ||
+                state == SERVAL_FINWAIT2 ||
+                state == SERVAL_LASTACK ||
                 state == SERVAL_CLOSEWAIT);
 }
 
@@ -100,7 +99,8 @@ int serval_tcp_rcv(struct sk_buff *skb)
         return err;
 }
 
-static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
+static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, 
+                              struct msghdr *msg,
                               size_t len)
 {
         int ret = -ENOMEM;

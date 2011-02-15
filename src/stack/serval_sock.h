@@ -42,15 +42,13 @@ enum serval_sock_state {
         SERVAL_RRESPOND,
         SERVAL_LISTEN,
         SERVAL_CLOSEWAIT,
-        /* TCP only */
-        TCP_FINWAIT1,
-        TCP_FINWAIT2,
-        TCP_LASTACK,
-        TCP_SIMCLOSE,
+        SERVAL_FINWAIT1,
+        SERVAL_FINWAIT2,
+        SERVAL_LASTACK
 };
 
 #define SERVAL_SOCK_STATE_MIN (1)
-#define SERVAL_SOCK_STATE_MAX (TCP_SIMCLOSE)
+#define SERVAL_SOCK_STATE_MAX (SERVAL_LASTACK)
 
 enum serval_sock_flags {
         SSK_FLAG_BOUND = 0,

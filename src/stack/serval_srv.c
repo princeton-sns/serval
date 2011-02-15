@@ -281,7 +281,7 @@ void serval_srv_close(struct sock *sk, long timeout)
                         sk->sk_prot->unhash(sk);
                         serval_sock_set_state(sk, SERVAL_CLOSED);
                 } else {
-                        serval_sock_set_state(sk, TCP_FINWAIT1);
+                        serval_sock_set_state(sk, SERVAL_FINWAIT1);
                 }
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
@@ -309,21 +309,31 @@ void serval_srv_close(struct sock *sk, long timeout)
 }
 
 /* We got a close request (FIN) from our peer */
-int serval_srv_close_request(struct sock *sk, struct sk_buff *rskb)
+int serval_srv_close_request(struct sock *sk, struct serval_hdr *sfh, 
+                             struct sk_buff *rskb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         int err = 0;
+        
+        LOG_DBG("Close request\n");
 
         skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
                         
-        if (skb)
+        if (!skb)
                 return -ENOMEM;
         
         skb_reserve(skb, SERVAL_MAX_HDR);
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
 
         /* Do not increment sequence numbers for pure ACKs */
-        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt;
+        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
+
+        /* Give transport a chance to chip in */ 
+        if (ssk->af_ops->close_request)
+                return ssk->af_ops->close_request(sk, skb);
+        
+        LOG_DBG("Sending Close ACK\n");
 
         /* Do not queue pure ACKs */
         err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
@@ -519,10 +529,11 @@ static int serval_srv_ack_process(struct sock *sk,
                                   struct sk_buff *skb)
 {
         struct serval_ext *ext = (struct serval_ext *)(sfh + 1);
-        uint32_t ackno = 0;       
+        uint32_t ackno = 0;
+        int err = -1;
 
         if (!(sfh->flags & SVH_ACK))
-                return 0;
+                return -1;
 
         switch (ext->type) {
         case SERVAL_CONNECTION_EXT:
@@ -546,12 +557,13 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
+                err = 0;
         } else {
                 LOG_ERR("ackno %u out of sequence, expected %u\n",
                         ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 done:
-        return 0;
+        return err;
 }
 
 static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
@@ -584,16 +596,13 @@ static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                         break;
                 case SERVAL_CLOSEWAIT:
                         break;
-                case TCP_FINWAIT1:
+                case SERVAL_FINWAIT1:
                         /* Simultaneous close */
                         serval_sock_set_state(sk, SERVAL_CLOSING);
                 default:
                         break;
                 }
-                
-                /* TODO: Send FIN-ACK... */
-                if (ssk->af_ops->close_request)
-                        return ssk->af_ops->close_request(sk, skb);
+                err = serval_srv_close_request(sk, sfh, skb);
         }
         
         return err;
@@ -762,8 +771,6 @@ static int serval_srv_respond_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_connection_ext *conn_ext = 
-                (struct serval_connection_ext *)(sfh + 1);
         int err = 0;
 
         if (!has_valid_connection_extension(sk, sfh)) {
@@ -771,22 +778,20 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 goto drop;
         }
 
-        /* TODO: check packet, allow data. */
-        serval_sock_set_state(sk, SERVAL_CONNECTED);
-
-        LOG_DBG("\n");
-
-        /* Save device and peer flow id */
-        ssk->dev = skb->dev;
-        dev_hold(ssk->dev);
-        memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
-               sizeof(ssk->dst_addr));
-        
-        /* Everything fine, increase expected sequence number */
-        ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
-
-        /* Process any ACK */
-        serval_srv_ack_process(sk, sfh, skb);
+        /* Process ACK */
+        if (serval_srv_ack_process(sk, sfh, skb) == 0) {
+                
+                /* Valid ACK */
+                serval_sock_set_state(sk, SERVAL_CONNECTED);
+                
+                LOG_DBG("\n");
+                
+                /* Save device and peer flow id */
+                ssk->dev = skb->dev;
+                dev_hold(ssk->dev);
+                memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
+                       sizeof(ssk->dst_addr));
+        }
 drop:
         FREE_SKB(skb);
 
@@ -804,12 +809,65 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                 err = serval_srv_fin(sk, sfh, skb);
 
                 if (err != 0) {
+                        /* Bad FIN, throw away */
                         FREE_SKB(skb);
+                } else {
+                        /* Both FIN and ACK */
+                        err = serval_srv_ack_process(sk, sfh, skb);
+                        
+                        if (err == 0) {
+                                serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+                        }
                 }
         } else {
+                /* Only ACK */
                 err = serval_srv_ack_process(sk, sfh, skb);
+                
+                if (err == 0) {
+                        /* ACK was valid */
+                        serval_sock_set_state(sk, SERVAL_FINWAIT2);
+                }
                 FREE_SKB(skb);
         }
+        return err;
+}
+
+static int serval_srv_finwait2_state_process(struct sock *sk, 
+                                             struct serval_hdr *sfh, 
+                                             struct sk_buff *skb)
+{
+        int err = 0;
+        
+        if (sfh->flags & SVH_FIN) {
+                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+                err = serval_srv_fin(sk, sfh, skb);
+
+                if (err != 0) {
+                        FREE_SKB(skb);
+                } else {
+                        serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+                }
+        } else {
+                FREE_SKB(skb);
+        }
+        return err;
+}
+
+static int serval_srv_closing_state_process(struct sock *sk, 
+                                            struct serval_hdr *sfh, 
+                                            struct sk_buff *skb)
+{
+        int err = 0;
+
+        err = serval_srv_ack_process(sk, sfh, skb);
+                
+        if (err == 0) {
+                /* ACK was valid */
+                serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+        }
+
+        FREE_SKB(skb);
+
         return err;
 }
 
@@ -832,8 +890,15 @@ int serval_srv_state_process(struct sock *sk,
         case SERVAL_LISTEN:
                 err = serval_srv_listen_state_process(sk, sfh, skb);
                 break;
-        case TCP_FINWAIT1:
+        case SERVAL_FINWAIT1:
                 err = serval_srv_finwait1_state_process(sk, sfh, skb);
+                break;
+        case SERVAL_FINWAIT2:
+                err = serval_srv_finwait2_state_process(sk, sfh, skb);
+                break;
+        case SERVAL_CLOSING:
+                err = serval_srv_closing_state_process(sk, sfh, skb);
+                break;
         default:
                 LOG_ERR("bad socket state %u\n", sk->sk_state);
                 goto drop;
