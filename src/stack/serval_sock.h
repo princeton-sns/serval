@@ -81,7 +81,8 @@ struct serval_sock {
         unsigned short          srvid_prefix_bits;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
- 	struct timer_list	retransmit_timer;
+ 	struct timer_list	retransmit_timer;        
+	struct timer_list	tw_timer;
         struct flow_id          local_flowid;
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;

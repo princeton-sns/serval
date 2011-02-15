@@ -381,6 +381,10 @@ void serval_sock_init(struct sock *sk)
                     serval_srv_rexmit_timeout,
                     (unsigned long)sk);
 
+        setup_timer(&ssk->tw_timer, 
+                    serval_srv_timewait_timeout,
+                    (unsigned long)sk);
+
         serval_srv_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)

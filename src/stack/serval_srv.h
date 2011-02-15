@@ -185,5 +185,6 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 void serval_srv_close(struct sock *sk, long timeout);
 int serval_srv_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_srv_rexmit_timeout(unsigned long data);
+void serval_srv_timewait_timeout(unsigned long data);
 
 #endif /* _SERVAL_SRV_H_ */

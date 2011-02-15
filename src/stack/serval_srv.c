@@ -331,17 +331,19 @@ int serval_srv_close_request(struct sock *sk, struct serval_hdr *sfh,
 
         /* Give transport a chance to chip in */ 
         if (ssk->af_ops->close_request)
-                return ssk->af_ops->close_request(sk, skb);
+                err = ssk->af_ops->close_request(sk, skb);
         
-        LOG_DBG("Sending Close ACK\n");
-
-        /* Do not queue pure ACKs */
-        err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
-        
+        if (err == 0) {
+                LOG_DBG("Sending Close ACK\n");
+                
+                /* Do not queue pure ACKs */
+                err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
+        }
+               
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
         }
-        
+   
         return err;
 }
 
@@ -625,6 +627,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
                         serval_srv_ack_process(sk, sfh, skb);     
                 }
         } else {
+                serval_srv_ack_process(sk, sfh, skb);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         }
 
@@ -808,15 +811,15 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 err = serval_srv_fin(sk, sfh, skb);
 
-                if (err != 0) {
-                        /* Bad FIN, throw away */
-                        FREE_SKB(skb);
-                } else {
+                if (err == 0) {
                         /* Both FIN and ACK */
                         err = serval_srv_ack_process(sk, sfh, skb);
                         
                         if (err == 0) {
                                 serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+                                /* FIXME: Dynamically set timeout */
+                                sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
+                                               msecs_to_jiffies(8000)); 
                         }
                 }
         } else {
@@ -827,8 +830,10 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                         /* ACK was valid */
                         serval_sock_set_state(sk, SERVAL_FINWAIT2);
                 }
-                FREE_SKB(skb);
         }
+
+        FREE_SKB(skb);
+        
         return err;
 }
 
@@ -842,14 +847,16 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 err = serval_srv_fin(sk, sfh, skb);
 
-                if (err != 0) {
-                        FREE_SKB(skb);
-                } else {
+                if (err == 0) {
                         serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+                        /* FIXME: Dynamically set timeout */
+                        sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
+                                       msecs_to_jiffies(8000)); 
                 }
-        } else {
-                FREE_SKB(skb);
         }
+
+        FREE_SKB(skb);
+
         return err;
 }
 
@@ -899,6 +906,7 @@ int serval_srv_state_process(struct sock *sk,
         case SERVAL_CLOSING:
                 err = serval_srv_closing_state_process(sk, sfh, skb);
                 break;
+        case SERVAL_TIMEWAIT:
         default:
                 LOG_ERR("bad socket state %u\n", sk->sk_state);
                 goto drop;
@@ -1010,10 +1018,17 @@ static int serval_srv_rexmit_skb(struct sk_buff *skb)
 void serval_srv_rexmit_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
-        int err;
+        serval_srv_rexmit_skb(NULL);
+        sock_put(sk);
+}
 
-        err = serval_srv_rexmit_skb(skb_peek(&serval_sk(sk)->ctrl_queue));
-
+void serval_srv_timewait_timeout(unsigned long data)
+{
+        struct sock *sk = (struct sock *)data;
+        sk->sk_prot->unhash(sk);
+        serval_sock_set_state(sk, SERVAL_CLOSED);
+        serval_sock_destroy(sk);
+        /* put for the timer. */
         sock_put(sk);
 }
 

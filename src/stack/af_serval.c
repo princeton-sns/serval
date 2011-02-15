@@ -666,7 +666,8 @@ int serval_release(struct socket *sock)
                 bh_lock_sock(sk);
 
                 /* Have we already been destroyed by a softirq or backlog? */
-                if (state != SERVAL_CLOSED && sk->sk_state == SERVAL_CLOSED)
+                if (state != SERVAL_CLOSED && 
+                    sk->sk_state == SERVAL_CLOSED)
                         goto out;
 
                 /* Other cleanup stuff goes here */
