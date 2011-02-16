@@ -312,18 +312,22 @@ void add_timer(struct timer_list *timer)
 int del_timer(struct timer_list *timer)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
-	
+	int signal_change = 0;
+
 	if (!tlh)
 		return -1;
 	
 	if (timer->entry.prev == &tlh->head) {
                 /* Entry is first in queue, must signal change */
-                timer_list_signal_timer_change(tlh);
+                signal_change = 1;
         } 
 
         list_del(&timer->entry);
 
 	timer_list_unlock(tlh);
+
+        if (signal_change) 
+                timer_list_signal_timer_change(tlh);
 
 	return 1;
 }
@@ -338,8 +342,10 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 		return -1;
 
         if (timer_pending(timer) && 
-            timer->expires == expires)
-		return 1;
+            timer->expires == expires) {
+                timer_list_unlock(tlh);
+                return 1;
+        }
 
 	if (timer_pending(timer)) {
 		list_del(&timer->entry);
