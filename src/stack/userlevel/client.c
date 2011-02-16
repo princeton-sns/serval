@@ -60,16 +60,26 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 	return 0;
 }
 
-static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_listen_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_accept_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_recv_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_clear_data_msg(struct client *c, struct client_msg *msg);
-static int client_handle_have_data_msg(struct client *c, struct client_msg *msg);
+static int client_handle_bind_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_connect_req_msg(struct client *c, 
+                                         struct client_msg *msg);
+static int client_handle_listen_req_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_accept_req_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_accept2_req_msg(struct client *c, 
+                                         struct client_msg *msg);
+static int client_handle_send_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_recv_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_close_req_msg(struct client *c, 
+                                       struct client_msg *msg);
+static int client_handle_clear_data_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_have_data_msg(struct client *c, 
+                                       struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
@@ -343,7 +353,8 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct client_msg_connect_req *req = (struct client_msg_connect_req *)msg;
+	struct client_msg_connect_req *req = 
+                (struct client_msg_connect_req *)msg;
 	struct client_msg_connect_rsp rsp;
         struct sockaddr_sv addr;
         int err;

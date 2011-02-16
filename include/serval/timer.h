@@ -86,6 +86,7 @@ unsigned long gettime_jiffies(void);
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \
          nsecs_to_jiffies((ts)->tv_nsec))
+#define jiffies_to_secs(j) (j / HZ)
 
 static inline uint64_t jiffies_to_nsecs(unsigned long j)
 {
