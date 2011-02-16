@@ -85,7 +85,7 @@ unsigned long gettime_jiffies(void);
 #define msecs_to_jiffies(ms) (ms / (MSECS_PER_SEC - HZ))
 #define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
 #define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
-#define jiffies_to_nsecs(j) (j * TICKS_PER_NSEC)
+#define jiffies_to_nsecs(j) (j * TICKS_PER_HZ)
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \
          nsecs_to_jiffies((ts)->tv_usecs))
@@ -103,9 +103,8 @@ unsigned long gettime_jiffies(void);
         }
 
 #define timespec_add_nsec(t1, nsec) do {                                \
-                unsigned long secs = nsec / NSECS_PER_SEC;              \
-                (t1)->tv_sec += secs;                                   \
-                (t1)->tv_nsec += (nsec - (secs * NSECS_PER_SEC));       \
+                (t1)->tv_sec += nsec / NSECS_PER_SEC;                   \
+                (t1)->tv_nsec += nsec % NSECS_PER_SEC;                  \
                 timespec_normalize(t1);                                 \
         } while (0)
 

@@ -324,7 +324,7 @@ int del_timer(struct timer_list *timer)
 int mod_timer(struct timer_list *timer, unsigned long expires)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
-        unsigned long delta;
+        unsigned long delta, toadd;
         int ret = 0;
 
 	if (!tlh)
@@ -342,16 +342,16 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
         gettime(&timer->expires_abs);
 	timer->expires = expires;
         delta = expires - jiffies;
+        toadd = jiffies_to_nsecs(delta);
 
-	timespec_add_nsec(&timer->expires_abs, 
-                          jiffies_to_nsecs(delta)); 
-
-        LOG_DBG("timer[expires=%lu delta=%lu"
+	timespec_add_nsec(&timer->expires_abs, toadd); 
+        /*
+        LOG_DBG("timer[expires=%lu delta=%lu toadd=%u"
                 " tv_sec=%ld tv_nsec=%ld]\n",
-                expires, delta, 
+                expires, delta, toadd,
                 timer->expires_abs.tv_sec, 
                 timer->expires_abs.tv_nsec);
-
+        */
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
                 timer_list_signal_add_timer(tlh);
