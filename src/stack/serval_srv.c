@@ -281,9 +281,9 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         return err;
 }
 
-static void serval_srv_timewait(struct sock *sk)
+static void serval_srv_timewait(struct sock *sk, int state)
 {
-        serval_sock_set_state(sk, SERVAL_TIMEWAIT);
+        serval_sock_set_state(sk, state);
         /* FIXME: Dynamically set timeout */
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
                        jiffies + msecs_to_jiffies(8000)); 
@@ -592,6 +592,7 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
+                LOG_DBG("received valid ACK %u\n", ackno);
                 err = 0;
         } else {
                 LOG_ERR("ackno %u out of sequence, expected %u\n",
@@ -849,7 +850,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                         err = serval_srv_ack_process(sk, sfh, skb);
                         
                         if (err == 0) {
-                                serval_srv_timewait(sk);
+                                serval_srv_timewait(sk, SERVAL_TIMEWAIT);
                         }
                 }
         } else {
@@ -858,7 +859,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                 
                 if (err == 0) {
                         /* ACK was valid */
-                        serval_sock_set_state(sk, SERVAL_FINWAIT2);
+                        serval_srv_timewait(sk, SERVAL_FINWAIT2);
                 }
         }
 
@@ -878,7 +879,7 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
                 err = serval_srv_fin(sk, sfh, skb);
 
                 if (err == 0) {
-                        serval_srv_timewait(sk);
+                        serval_srv_timewait(sk, SERVAL_TIMEWAIT);
                 }
         }
 
@@ -897,7 +898,7 @@ static int serval_srv_closing_state_process(struct sock *sk,
                 
         if (err == 0) {
                 /* ACK was valid */
-                serval_srv_timewait(sk);
+                serval_srv_timewait(sk, SERVAL_TIMEWAIT);
         }
 
         FREE_SKB(skb);
@@ -1104,10 +1105,12 @@ void serval_srv_rexmit_timeout(unsigned long data)
         sock_put(sk);
 }
 
+/* This timeout is used for TIMEWAIT and FINWAIT2 */
 void serval_srv_timewait_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
         bh_lock_sock_nested(sk);
+        LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
         serval_srv_set_closed(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */

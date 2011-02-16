@@ -496,6 +496,16 @@ void serval_sock_destruct(struct sock *sk)
                 sk, atomic_read(&serval_nr_socks));
 }
 
+const char *serval_sock_state_str(struct sock *sk)
+{
+        if (sk->sk_state < SERVAL_SOCK_STATE_MIN ||
+            sk->sk_state > SERVAL_SOCK_STATE_MAX) {
+                LOG_ERR("invalid state\n");
+                return sock_state_str[0];
+        }
+        return sock_state_str[sk->sk_state];
+}
+
 int serval_sock_set_state(struct sock *sk, int new_state)
 {
         /* TODO: state transition checks */
