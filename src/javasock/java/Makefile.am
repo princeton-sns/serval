@@ -1,10 +1,11 @@
 # Do not install compiled class files. We instead generate and install
 # a jar file with the class files in a subdirectory
 noinst_JAVA = \
-	ServiceId.java \
-	ServalSocketAddress.java \
-	ServalSocket.java \
-	ServalDatagramSocket.java
+	serval/net/ServiceId.java \
+	serval/net/ServalSocketAddress.java \
+	serval/net/ServalSocket.java \
+	serval/net/ServalDatagramSocket.java \
+	serval/test/UDPClient.java
 
 EXTRA_DIST=
 

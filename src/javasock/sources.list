@@ -1,4 +1,5 @@
-./edu/princeton/cs/sns/serval/ServalDatagramSocket.java
-./edu/princeton/cs/sns/serval/ServalSocket.java
-./edu/princeton/cs/sns/serval/ServalSocketAddress.java
-./edu/princeton/cs/sns/serval/ServiceId.java
+./serval/net/ServalSocket.java
+./serval/net/ServiceId.java
+./serval/net/ServalSocketAddress.java
+./serval/net/ServalDatagramSocket.java
+./serval/test/UDPClient.java

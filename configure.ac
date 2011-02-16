@@ -264,8 +264,8 @@ AC_CONFIG_FILES([Makefile
 	src/servd/Makefile
 	src/test/Makefile
 	src/javasock/Makefile
+	src/javasock/java/Makefile	
 	src/javasock/jni/Makefile
-	src/javasock/java/edu/princeton/cs/sns/serval/Makefile
 	])
 
 AC_OUTPUT

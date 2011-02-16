@@ -2,7 +2,7 @@ LOCAL_PATH := $(my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
-	edu_princeton_cs_sns_serval_ServalDatagramSocket.c
+	serval_net_ServalDatagramSocket.c
 
 LOCAL_C_INCLUDES += \
 	$(JNI_H_INCLUDE) \

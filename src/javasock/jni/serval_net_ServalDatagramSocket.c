@@ -1,24 +1,25 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <sys/socket.h>
 #include <unistd.h>
 #include <netinet/serval.h>
-#include "edu_princeton_cs_sns_serval_ServalDatagramSocket.h"
+#include "serval_net_ServalDatagramSocket.h"
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    socket
  * Signature: ()I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_socket(JNIEnv *env, jobject obj)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_socket(JNIEnv *env, jobject obj)
 {
 	return socket(AF_SERVAL, SOCK_DGRAM, 0);
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    bind
  * Signature: (I[BI)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_bind(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_bind(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
 	struct sockaddr_sv svaddr;
 	jboolean isCopy;
@@ -34,21 +35,21 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_bin
 
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    listen
  * Signature: (II)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_listen(JNIEnv *env, jobject obj, jint fd, jint backlog)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_listen(JNIEnv *env, jobject obj, jint fd, jint backlog)
 {
 	return listen(fd, backlog);
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    accept
  * Signature: (I[B)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_accept(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_accept(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
 	struct sockaddr_sv svaddr;
 	socklen_t addrlen = sizeof(struct sockaddr_sv);	
@@ -74,11 +75,11 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_acc
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    connect
  * Signature: (I[BI)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_connect(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_connect(JNIEnv *env, jobject obj, jint fd, jbyteArray serviceid)
 {
 	struct sockaddr_sv svaddr;
 	jboolean isCopy;
@@ -96,11 +97,11 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_con
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    send
  * Signature: (I[BII)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_send(JNIEnv *env, jobject obj, jint fd, jbyteArray buffer, jint flags)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_send(JNIEnv *env, jobject obj, jint fd, jbyteArray buffer, jint flags)
 {
 	jboolean isCopy;
 	jbyte *data = (*env)->GetByteArrayElements(env, buffer, &isCopy);
@@ -114,11 +115,11 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_sen
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    recv
  * Signature: (I[BII)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_recv(JNIEnv *env, jobject obj, jint fd, jbyteArray buffer, jint flags)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_recv(JNIEnv *env, jobject obj, jint fd, jbyteArray buffer, jint flags)
 {
 	jboolean isCopy;
 	jbyte *data = (*env)->GetByteArrayElements(env, buffer, &isCopy);
@@ -132,11 +133,11 @@ JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_rec
 }
 
 /*
- * Class:     edu_princeton_cs_sns_serval_ServalDatagramSocket
+ * Class:     serval_net_ServalDatagramSocket
  * Method:    close
  * Signature: (I)I
  */
-JNIEXPORT jint JNICALL Java_edu_princeton_cs_sns_serval_ServalDatagramSocket_close(JNIEnv *env, jobject obj, jint fd)
+JNIEXPORT jint JNICALL Java_serval_net_ServalDatagramSocket_close(JNIEnv *env, jobject obj, jint fd)
 {
 	return close(fd);
 }
