@@ -48,8 +48,6 @@ int gettime(struct timespec *ts)
 		LOG_ERR("clock_gettime failed: %s\n", 
                         strerror(errno));
 	}
-        LOG_DBG("time=[%ld %ld]\n",
-                ts->tv_sec, ts->tv_nsec);
 #else
         struct timeval now;
 
@@ -66,15 +64,10 @@ int gettime(struct timespec *ts)
 unsigned long gettime_jiffies(void)
 {
         struct timespec now;
-        unsigned long j;
         gettime(&now);
         timespec_sub(&now, &timer_list.start_time);
         
-        j = timespec_to_jiffies(&now);
-
-        LOG_DBG("now=[%ld %ld] jiffies=%lu\n", now.tv_sec, now.tv_nsec, j);
-
-        return j;
+        return timespec_to_jiffies(&now);
 }
 
 static inline int timer_list_lock(struct timer_list_head *tlh)
@@ -349,16 +342,15 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
         gettime(&timer->expires_abs);
 	timer->expires = expires;
         delta = expires - jiffies;
-
 	timespec_add_nsec(&timer->expires_abs, 
                           jiffies_to_nsecs(delta)); 
-
-        LOG_DBG("timer[expires=%lu now=%lu delta=%lu"
+        /*
+        LOG_DBG("timer[expires=%lu delta=%lu"
                 " tv_sec=%ld tv_nsec=%ld]\n",
-                expires, jiffies, delta, 
+                expires, delta,
                 timer->expires_abs.tv_sec, 
                 timer->expires_abs.tv_nsec);
-
+        */
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
                 timer_list_signal_add_timer(tlh);
