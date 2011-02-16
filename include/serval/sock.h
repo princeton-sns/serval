@@ -299,7 +299,12 @@ static inline int sock_flag(struct sock *sk, enum sock_flags flag)
 
 static inline int sock_error(struct sock *sk)
 {
-        return 0;
+        int err;
+	if (likely(!sk->sk_err))
+		return 0;
+	err = sk->sk_err;
+        sk->sk_err = 0;
+	return -err;
 }
 
 static inline int sock_intr_errno(long timeo)

@@ -162,7 +162,7 @@ int timer_list_signal_lower(void)
 	return __timer_list_signal_lower(timer_list_get());
 }
 
-static int timer_list_signal_add_timer(struct timer_list_head *tlh)
+static int timer_list_signal_timer_change(struct timer_list_head *tlh)
 {
         char w = 'w';
         
@@ -316,9 +316,16 @@ int del_timer(struct timer_list *timer)
 	if (!tlh)
 		return -1;
 	
+	if (timer->entry.prev == &tlh->head) {
+                /* Entry is first in queue, must signal change */
+                timer_list_signal_timer_change(tlh);
+        } 
+
+        list_del(&timer->entry);
+
 	timer_list_unlock(tlh);
 
-	return 0;
+	return 1;
 }
 
 int mod_timer(struct timer_list *timer, unsigned long expires)
@@ -353,7 +360,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
         */
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
-                timer_list_signal_add_timer(tlh);
+                timer_list_signal_timer_change(tlh);
 	} else {
 		unsigned int num = 0;
 		struct timer_list *tl;
@@ -370,7 +377,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 		if (timer->entry.prev == &tlh->head) {
                         /* Inserted first in queue, so we must signal
                          * that the timeout has changed. */
-                        timer_list_signal_add_timer(tlh);
+                        timer_list_signal_timer_change(tlh);
                 } 
 	}
 	

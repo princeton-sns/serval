@@ -501,9 +501,8 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
                 LOG_DBG("waiting for connect\n");
 
-                err = wait_event_interruptible_timeout(*sk_sleep(sk), 
-                                                       sk->sk_state != SERVAL_REQUEST,
-                                                       msecs_to_jiffies(5000));
+                err = wait_event_interruptible(*sk_sleep(sk),
+                                               sk->sk_state != SERVAL_REQUEST);
                 lock_sock(sk);
                 
                 LOG_DBG("wait for connect returned=%d\n", err);

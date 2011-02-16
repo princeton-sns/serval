@@ -106,10 +106,15 @@ struct serval_sock {
                 uint32_t        wnd;
                 uint32_t        iss;
         } rcv_seq;
+        unsigned short          rexmt_shift;
+        unsigned long           rto;
+        unsigned long           srtt;
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
 };
+
+#define SERVAL_INITIAL_RTO (3000)
 
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 

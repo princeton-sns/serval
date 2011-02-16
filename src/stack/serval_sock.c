@@ -406,6 +406,8 @@ void serval_sock_init(struct sock *sk)
         /* Default to stop-and-wait behavior */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
+        ssk->srtt = 0;
+        ssk->rto = SERVAL_INITIAL_RTO;
 }
 
 void serval_sock_destroy(struct sock *sk)

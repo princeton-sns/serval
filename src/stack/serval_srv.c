@@ -35,6 +35,9 @@ static struct net_addr null_addr = {
         .net_raw = { 0x00, 0x00, 0x00, 0x00 } 
 };
 
+static uint8_t backoff[] = 
+{ 1, 2, 4, 8, 16, 32, 64, 64, 64, 64, 64, 64, 64, 0 };
+
 static int serval_srv_state_process(struct sock *sk, 
                                     struct serval_hdr *sfh, 
                                     struct sk_buff *skb);
@@ -151,7 +154,8 @@ static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
         }
 }
 
-static int serval_srv_write_xmit(struct sock *sk, unsigned int limit, gfp_t gfp)
+static int serval_srv_write_xmit(struct sock *sk, 
+                                 unsigned int limit, gfp_t gfp)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
@@ -181,6 +185,7 @@ static int serval_srv_write_xmit(struct sock *sk, unsigned int limit, gfp_t gfp)
 
 static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err;
         
         serval_srv_queue_ctrl_skb(sk, skb);
@@ -190,7 +195,7 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
            queue */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
-                               jiffies + msecs_to_jiffies(2000)); 
+                               jiffies + msecs_to_jiffies(ssk->rto)); 
         }
         
         err = serval_srv_write_xmit(sk, 1, GFP_ATOMIC);
@@ -205,7 +210,7 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
 static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct sk_buff *skb;
+        struct sk_buff *skb, *fskb = serval_srv_ctrl_queue_head(sk);
         unsigned int num = 0;
         int err = 0;
        
@@ -226,7 +231,18 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         }
 
         LOG_DBG("cleaned up %u packets from rtx queue\n", num);
+        
+        /* Did we remove the first packet in the queue? */
+        if (serval_srv_ctrl_queue_head(sk) != fskb) {
+                sk_stop_timer(sk, &serval_sk(sk)->retransmit_timer);
+                ssk->rexmt_shift = 0;
+        }
 
+        if (serval_srv_ctrl_queue_head(sk)) {
+                LOG_DBG("Setting retrans timer\n");
+                sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
+                               jiffies + msecs_to_jiffies(ssk->rto));
+        }
         return err;
 }
 
@@ -281,7 +297,6 @@ void serval_srv_close(struct sock *sk, long timeout)
         LOG_DBG("\n");
         
         if (sk->sk_state == SERVAL_CONNECTED ||
-            sk->sk_state == SERVAL_REQUEST ||
             sk->sk_state == SERVAL_RESPOND ||
             sk->sk_state == SERVAL_CLOSEWAIT) {
                                 
@@ -1010,26 +1025,62 @@ drop:
         return err;
 }
 
-static int serval_srv_rexmit_skb(struct sk_buff *skb)
+static int serval_srv_rexmit(struct sock *sk)
 {        
-        LOG_WARN("not implemented\n");
+        struct sk_buff *skb;
+        int err;
 
-        return 0;
+        skb = serval_srv_ctrl_queue_head(sk);
+        
+        if (!skb) {
+                LOG_ERR("No packet to retransmit!\n");
+                return -1;
+        }
+        
+        err = serval_srv_transmit_skb(sk, skb, 1, GFP_ATOMIC);
+        
+        if (err < 0) {
+                LOG_ERR("retransmit failed\n");
+        }
+
+        return err;
 }
 
 void serval_srv_rexmit_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
-        serval_srv_rexmit_skb(NULL);
+        struct serval_sock *ssk = serval_sk(sk);
+
+        bh_lock_sock_nested(sk);
+
+        if (sk->sk_state == SERVAL_REQUEST &&
+            backoff[ssk->rexmt_shift + 1] == 0) {
+                /* TODO: check error values here */
+                sk->sk_err = ETIMEDOUT;
+                sk->sk_prot->unhash(sk);
+                serval_sock_set_state(sk, SERVAL_CLOSED);
+                serval_sock_destroy(sk);
+        } else {
+                sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
+                               jiffies + (msecs_to_jiffies(ssk->rto) * 
+                                          backoff[ssk->rexmt_shift]));
+                serval_srv_rexmit(sk);
+                
+                if (backoff[ssk->rexmt_shift + 1] != 0)
+                        ssk->rexmt_shift++;
+        }
+        bh_unlock_sock(sk);
         sock_put(sk);
 }
 
 void serval_srv_timewait_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
+        bh_lock_sock_nested(sk);
         sk->sk_prot->unhash(sk);
         serval_sock_set_state(sk, SERVAL_CLOSED);
         serval_sock_destroy(sk);
+        bh_unlock_sock(sk);
         /* put for the timer. */
         sock_put(sk);
 }
