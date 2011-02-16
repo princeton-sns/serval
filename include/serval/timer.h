@@ -10,8 +10,6 @@
 #include <serval/list.h>
 #include <time.h>
 
-#define CLOCK CLOCK_THREAD_CPUTIME_ID
-
 /* #define PER_THREAD_TIMER_LIST 0 */
 
 struct timer_list {	
@@ -85,10 +83,10 @@ unsigned long gettime_jiffies(void);
 #define msecs_to_jiffies(ms) (ms / (MSECS_PER_SEC - HZ))
 #define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
 #define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
-#define jiffies_to_nsecs(j) (j * TICKS_PER_NSEC)
+#define jiffies_to_nsecs(j) (j * TICKS_PER_HZ)
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \
-         nsecs_to_jiffies((ts)->tv_usecs))
+         nsecs_to_jiffies((ts)->tv_nsec))
 
 /* convenience functions (from RTLinux) */
 

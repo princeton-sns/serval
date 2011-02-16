@@ -22,6 +22,7 @@ struct timer_list_head {
 };
 
 #if !defined(PER_THREAD_TIMER_LIST)
+#define CLOCK CLOCK_REALTIME
 static struct timer_list_head timer_list = {
         .num_timers = 0,
         .start_time = { 0, 0 },
@@ -30,11 +31,11 @@ static struct timer_list_head timer_list = {
         .signal = { -1, -1 },
 };
 #else
+#define CLOCK CLOCK_THREAD_CPUTIME_ID
 static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 #endif
 
-#define CLOCK CLOCK_THREAD_CPUTIME_ID
 
 int gettime(struct timespec *ts)
 {
@@ -47,6 +48,8 @@ int gettime(struct timespec *ts)
 		LOG_ERR("clock_gettime failed: %s\n", 
                         strerror(errno));
 	}
+        LOG_DBG("time=[%ld %ld]\n",
+                ts->tv_sec, ts->tv_nsec);
 #else
         struct timeval now;
 
@@ -63,11 +66,15 @@ int gettime(struct timespec *ts)
 unsigned long gettime_jiffies(void)
 {
         struct timespec now;
+        unsigned long j;
         gettime(&now);
         timespec_sub(&now, &timer_list.start_time);
         
-        return secs_to_jiffies(now.tv_sec) +
-                nsecs_to_jiffies(now.tv_nsec);
+        j = timespec_to_jiffies(&now);
+
+        LOG_DBG("now=[%ld %ld] jiffies=%lu\n", now.tv_sec, now.tv_nsec, j);
+
+        return j;
 }
 
 static inline int timer_list_lock(struct timer_list_head *tlh)
@@ -346,9 +353,9 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 	timespec_add_nsec(&timer->expires_abs, 
                           jiffies_to_nsecs(delta)); 
 
-        LOG_DBG("timer[expires=%lu delta=%lu"
+        LOG_DBG("timer[expires=%lu now=%lu delta=%lu"
                 " tv_sec=%ld tv_nsec=%ld]\n",
-                expires, delta, 
+                expires, jiffies, delta, 
                 timer->expires_abs.tv_sec, 
                 timer->expires_abs.tv_nsec);
 
