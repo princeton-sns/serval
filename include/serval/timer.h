@@ -80,7 +80,7 @@ unsigned long gettime_jiffies(void);
 #define MSECS_PER_SEC  1000L
 
 #define secs_to_jiffies(s) (s * HZ)
-#define msecs_to_jiffies(ms) (ms / (MSECS_PER_SEC - HZ))
+#define msecs_to_jiffies(ms) (ms / 10)
 #define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
 #define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
 #define timespec_to_jiffies(ts)                 \
