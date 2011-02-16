@@ -455,6 +455,11 @@ void serval_sock_destruct(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
+        /* Stop timers */
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+        sk_stop_timer(sk, &ssk->tw_timer);
+        
+        /* Purge queues */
         __skb_queue_purge(&sk->sk_receive_queue);
         __skb_queue_purge(&sk->sk_error_queue);
 

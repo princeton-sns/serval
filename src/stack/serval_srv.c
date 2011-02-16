@@ -289,6 +289,14 @@ static void serval_srv_timewait(struct sock *sk)
                        jiffies + msecs_to_jiffies(8000)); 
 }
 
+static void serval_srv_set_closed(struct sock *sk)
+{
+        sk->sk_prot->unhash(sk);
+        serval_sock_set_state(sk, SERVAL_CLOSED);
+        serval_sock_destroy(sk);
+}
+
+/* Called as a result of user app close() */
 void serval_srv_close(struct sock *sk, long timeout)
 {
         struct sk_buff *skb = NULL;
@@ -301,8 +309,7 @@ void serval_srv_close(struct sock *sk, long timeout)
             sk->sk_state == SERVAL_CLOSEWAIT) {
                                 
                 if (sk->sk_state == SERVAL_CLOSEWAIT) {
-                        sk->sk_prot->unhash(sk);
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                        serval_sock_set_state(sk, SERVAL_LASTACK);
                 } else {
                         serval_sock_set_state(sk, SERVAL_FINWAIT1);
                 }
@@ -328,6 +335,9 @@ void serval_srv_close(struct sock *sk, long timeout)
         } else {
                 sk->sk_prot->unhash(sk);
                 serval_sock_set_state(sk, SERVAL_CLOSED);
+                /* Do not destroy sock here, user process will take
+                 * care of that in the end of the calling close
+                 * function */
         }
 }
 
@@ -895,6 +905,24 @@ static int serval_srv_closing_state_process(struct sock *sk,
         return err;
 }
 
+static int serval_srv_lastack_state_process(struct sock *sk, 
+                                            struct serval_hdr *sfh, 
+                                            struct sk_buff *skb)
+{
+        int err = 0;
+        
+        err = serval_srv_ack_process(sk, sfh, skb);
+                
+        if (err == 0) {
+                /* ACK was valid */
+                serval_srv_set_closed(sk);
+        }
+
+        FREE_SKB(skb);
+
+        return err;
+}
+
 int serval_srv_state_process(struct sock *sk, 
                              struct serval_hdr *sfh, 
                              struct sk_buff *skb)
@@ -922,6 +950,9 @@ int serval_srv_state_process(struct sock *sk,
                 break;
         case SERVAL_CLOSING:
                 err = serval_srv_closing_state_process(sk, sfh, skb);
+                break;
+        case SERVAL_LASTACK:
+                err = serval_srv_lastack_state_process(sk, sfh, skb);
                 break;
         case SERVAL_TIMEWAIT:
         default:
@@ -1057,10 +1088,10 @@ void serval_srv_rexmit_timeout(unsigned long data)
             backoff[ssk->rexmt_shift + 1] == 0) {
                 /* TODO: check error values here */
                 sk->sk_err = ETIMEDOUT;
-                sk->sk_prot->unhash(sk);
-                serval_sock_set_state(sk, SERVAL_CLOSED);
-                serval_sock_destroy(sk);
+                serval_srv_set_closed(sk);
         } else {
+                LOG_DBG("Retransmit timeout!\n");
+
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + (msecs_to_jiffies(ssk->rto) * 
                                           backoff[ssk->rexmt_shift]));
@@ -1077,9 +1108,7 @@ void serval_srv_timewait_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
         bh_lock_sock_nested(sk);
-        sk->sk_prot->unhash(sk);
-        serval_sock_set_state(sk, SERVAL_CLOSED);
-        serval_sock_destroy(sk);
+        serval_srv_set_closed(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */
         sock_put(sk);
