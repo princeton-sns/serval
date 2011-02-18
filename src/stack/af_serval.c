@@ -152,7 +152,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
         }
         if (ret < 0) {
-                LOG_ERR("bind failed, scafd not running?\n");
+                LOG_ERR("bind failed, servd not running?\n");
                 release_sock(sk);
                 return ret;
         }

@@ -1,5 +1,0 @@
-./serval/net/ServalSocket.java
-./serval/net/ServiceId.java
-./serval/net/ServalSocketAddress.java
-./serval/net/ServalDatagramSocket.java
-./serval/test/UDPClient.java

@@ -1,11 +1,12 @@
-/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */package edu.princeton.cs.sns.ServalChat;
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+package edu.princeton.cs.sns.ServalChat;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
 import java.net.SocketException;
-
 import edu.princeton.cs.sns.ServalChat.R;
-import edu.princeton.cs.sns.serval.*;
+import serval.net.ServalDatagramSocket;
+import serval.net.ServalDatagramPacket;
+import serval.net.ServiceID;
 import android.app.Activity;
 import android.os.Bundle;
 import android.text.Editable;
@@ -67,9 +68,8 @@ public class ChatActivity extends Activity {
 		Log.d("ServalChat", "onStart");
 		
 		try {
-			sock = new ServalDatagramSocket();
-			sock.bind(new ServalSocketAddress(new ServiceId((short) 32769)));
-			sock.connect(new ServalSocketAddress(new ServiceId((short) 16385)));
+			sock = new ServalDatagramSocket(new ServiceID((short) 32769));
+			sock.connect(new ServiceID((short) 16385));
 			Log.d("ServalChat", "connected");
 			statusText.setText("Connected");
 		} catch (SocketException e) {
@@ -104,7 +104,8 @@ public class ChatActivity extends Activity {
 			byte[] data = msg.getBytes();
 			
 			try {
-				DatagramPacket pack = new DatagramPacket(data, data.length);
+				ServalDatagramPacket pack = 
+                    new ServalDatagramPacket(data, data.length);
 				sock.send(pack);
 				// FIXME: Should not do a blocking receive in this function
 				sock.receive(pack);

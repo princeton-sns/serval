@@ -412,7 +412,10 @@ void serval_sock_init(struct sock *sk)
 
 void serval_sock_destroy(struct sock *sk)
 {
-        /* struct serval_sock *ssk = serval_sk(sk); */
+        struct serval_sock *ssk = serval_sk(sk);
+
+        LOG_DBG("Destroying Serval sock %p\n", sk);
+        
 	WARN_ON(sk->sk_state != SERVAL_CLOSED);
 
 	/* It cannot be in hash table! */
@@ -423,6 +426,11 @@ void serval_sock_destroy(struct sock *sk)
 		return;
 	}
 
+        /* Stop timers */
+        LOG_DBG("Stopping timers\n");
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+        sk_stop_timer(sk, &ssk->tw_timer);
+        
 	if (sk->sk_prot->destroy)
 		sk->sk_prot->destroy(sk);
 
@@ -455,10 +463,6 @@ void serval_sock_destruct(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        /* Stop timers */
-        sk_stop_timer(sk, &ssk->retransmit_timer);
-        sk_stop_timer(sk, &ssk->tw_timer);
-        
         /* Purge queues */
         __skb_queue_purge(&sk->sk_receive_queue);
         __skb_queue_purge(&sk->sk_error_queue);
@@ -466,9 +470,8 @@ void serval_sock_destruct(struct sock *sk)
         /* Clean control queue */
         serval_srv_ctrl_queue_purge(sk);
 
-        if (ssk->dev) {
+        if (ssk->dev)
                 dev_put(ssk->dev);
-        }
 
 	if (sk->sk_type == SOCK_STREAM && 
             sk->sk_state != SERVAL_CLOSED) {
@@ -478,7 +481,7 @@ void serval_sock_destruct(struct sock *sk)
 	}
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
-		LOG_DBG("Attempt to release alive serval socket: %p\n", sk);
+		LOG_WARN("Attempt to release alive serval socket: %p\n", sk);
 		return;
 	}
 

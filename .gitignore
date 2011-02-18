@@ -28,6 +28,7 @@ src/test/udp_clientn
 src/test/udp_server
 src/test/udp_servern
 src/javasock/classes.list
+src/javasock/sources.list
 android/ServalChat/bin/
 android/ServalChat/gen/
 stamp-h1

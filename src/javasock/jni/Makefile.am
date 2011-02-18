@@ -1,16 +1,18 @@
-lib_LTLIBRARIES = libserval_javasock_jni.la
+lib_LTLIBRARIES = libservalnet_jni.la
 
-libserval_javasock_jni_la_SOURCES = \
-	serval_net_ServalDatagramSocket.c
+libservalnet_jni_la_SOURCES = \
+	JNIHelp.c \
+	serval_platform_ServalNetworkStack.c
 
 #libserval_javasock_jni_includedir=$(top_srcdir)/include
 #libserval_javasock_jni_include_HEADERS =
 
 noinst_HEADERS = \
-	serval_net_ServalDatagramSocket.h	
+	JNIHelp.h \
+	serval_platform_ServalNetworkStack.h	
 
-libserval_javasock_jni_la_CPPFLAGS =-I$(top_srcdir)/include $(JAVA_INCLUDE)
-libserval_javasock_jni_la_LDFLAGS =
+libservalnet_jni_la_CPPFLAGS =-I$(top_srcdir)/include $(JAVA_INCLUDE)
+libservalnet_jni_la_LDFLAGS =
 
 EXTRA_DIST =
 

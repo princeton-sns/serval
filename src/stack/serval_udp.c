@@ -115,7 +115,7 @@ static int serval_udp_init_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
 static int serval_udp_destroy_sock(struct sock *sk)
 #else
-        static void serval_udp_destroy_sock(struct sock *sk)
+static void serval_udp_destroy_sock(struct sock *sk)
 #endif
 {
         //struct serval_udp_sock *usk = serval_udp_sk(sk);
