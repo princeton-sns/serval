@@ -144,7 +144,7 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         synchronized (fd) {
             if (fd.valid()) {
                 try {
-                   netImpl.close(fd);
+                    netImpl.close(fd);
                 } catch (IOException e) {
                 }
                 fd = new FileDescriptor();

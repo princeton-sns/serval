@@ -293,6 +293,7 @@ static void serval_srv_set_closed(struct sock *sk)
 {
         sk->sk_prot->unhash(sk);
         serval_sock_set_state(sk, SERVAL_CLOSED);
+        sk->sk_state_change(sk);
         serval_sock_destroy(sk);
 }
 
@@ -335,6 +336,7 @@ void serval_srv_close(struct sock *sk, long timeout)
         } else {
                 sk->sk_prot->unhash(sk);
                 serval_sock_set_state(sk, SERVAL_CLOSED);
+                sk->sk_state_change(sk);
                 /* Do not destroy sock here, user process will take
                  * care of that in the end of the calling close
                  * function */
@@ -764,7 +766,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
-        /* Let app know we are connected. */
+        /* Let async apps know we are connected. */
         sk->sk_state_change(sk);
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 
@@ -1085,14 +1087,17 @@ void serval_srv_rexmit_timeout(unsigned long data)
 
         bh_lock_sock_nested(sk);
 
+        LOG_DBG("Retransmit timeout sock=%p num=%u backoff=%u\n", 
+                sk, ssk->rexmt_shift, backoff[ssk->rexmt_shift]);
+        
         if (sk->sk_state == SERVAL_REQUEST &&
             backoff[ssk->rexmt_shift + 1] == 0) {
                 /* TODO: check error values here */
+                LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
                 serval_srv_set_closed(sk);
         } else {
-                LOG_DBG("Retransmit timeout!\n");
-
+                LOG_DBG("retransmitting and rescheduling timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + (msecs_to_jiffies(ssk->rto) * 
                                           backoff[ssk->rexmt_shift]));

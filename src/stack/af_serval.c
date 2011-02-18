@@ -46,24 +46,47 @@ int host_ctrl_mode = 0;
 
 static struct sock *serval_accept_dequeue(struct sock *parent, 
                                             struct socket *newsock);
-/* Wait for the socket to reach a specific state. */
-int serval_wait_state(struct sock *sk, int state, unsigned long timeo)
+
+/* Wait for the socket to reach or leave a specific state, depending
+ * on the outofstate variable. It this variable is "true" the function
+ * will wait until the socket leaves the given state, otherwise it
+ * will wait until the given state is reached.
+ */
+static int serval_wait_state(struct sock *sk, int state,
+                             long timeo, int outofstate)
 {
 	DECLARE_WAITQUEUE(wait, current);
 	int err = 0;
 
-	add_wait_queue(sk_sleep(sk), &wait);
+        if (timeo < 0)
+                timeo = MAX_SCHEDULE_TIMEOUT;
 
-	while (sk->sk_state != state) {
+	add_wait_queue(sk_sleep(sk), &wait);
+        
+	while (1) {
+                if (outofstate) {
+                        if (sk->sk_state != state) {
+                                LOG_DBG("outofstate: State is new=%s old=%s\n",
+                                        serval_sock_state_str(sk),
+                                        serval_state_str(state));
+                                break;
+                        }
+                } else if (sk->sk_state == state) {
+                        LOG_DBG("State is new=%s\n",
+                                serval_sock_state_str(sk));
+                        break;
+                }
 		set_current_state(TASK_INTERRUPTIBLE);
 
 		if (!timeo) {
 			err = -EINPROGRESS;
+                        LOG_DBG("timeout 0 - EINPROGRESS\n");
 			break;
 		}
 
 		if (signal_pending(current)) {
 			err = sock_intr_errno(timeo);
+                        LOG_DBG("Signal pending\n");
 			break;
 		}
 
@@ -73,8 +96,10 @@ int serval_wait_state(struct sock *sk, int state, unsigned long timeo)
 
 		err = sock_error(sk);
 
-		if (err)
+		if (err) {
+                        LOG_ERR("socket error %d\n", err);
 			break;
+                }
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(sk_sleep(sk), &wait);
@@ -497,13 +522,16 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if (!nonblock) {
                 /* Go to sleep, wait for timeout or successful connection */
-                release_sock(sk);
+                //release_sock(sk);
 
                 LOG_DBG("waiting for connect\n");
-
+                /*
                 err = wait_event_interruptible(*sk_sleep(sk),
                                                sk->sk_state != SERVAL_REQUEST);
-                lock_sock(sk);
+                */
+                //lock_sock(sk);
+                
+                err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
                 
                 LOG_DBG("wait for connect returned=%d\n", err);
         } else {
@@ -622,6 +650,8 @@ int serval_release(struct socket *sock)
         int err = 0;
         struct sock *sk = sock->sk;
 
+        LOG_DBG("\n");
+
 	if (sk) {
                 int state;
                 long timeout;
@@ -677,6 +707,8 @@ int serval_release(struct socket *sock)
                 bh_unlock_sock(sk);
                 local_bh_enable();
                 sock_put(sk);
+        } else {
+                LOG_ERR("sk is NULL\n");
         }
         
         return err;

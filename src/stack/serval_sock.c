@@ -501,12 +501,22 @@ void serval_sock_destruct(struct sock *sk)
 
 const char *serval_sock_state_str(struct sock *sk)
 {
-        if (sk->sk_state < SERVAL_SOCK_STATE_MIN ||
+        if (sk->sk_state < 0 ||
             sk->sk_state > SERVAL_SOCK_STATE_MAX) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
         return sock_state_str[sk->sk_state];
+}
+
+const char *serval_state_str(int state)
+{
+        if (state < 0 ||
+            state > SERVAL_SOCK_STATE_MAX) {
+                LOG_ERR("invalid state\n");
+                return sock_state_str[0];
+        }
+        return sock_state_str[state];
 }
 
 int serval_sock_set_state(struct sock *sk, int new_state)

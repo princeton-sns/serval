@@ -152,8 +152,6 @@ public class ServalDatagramSocket {
      *            the target address of this socket.
      */
     public void connect(ServiceID aServiceID, InetAddress anAddress) {
-        System.out.println("connecting...");
-
         if (aServiceID == null || !aServiceID.valid()) {
             throw new IllegalArgumentException();
         }
