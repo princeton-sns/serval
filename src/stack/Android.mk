@@ -30,6 +30,7 @@ LOCAL_SRC_FILES := \
 	userlevel/client.c \
 	userlevel/packet_linux.c \
 	userlevel/ctrl.c \
+	userlevel/telnet.c \
 	userlevel/serval.c
 
 SERVAL_INCLUDE_DIR=$(LOCAL_PATH)/../../include
@@ -50,6 +51,7 @@ SERVAL_HDR = \
 	userlevel/packet.h \
 	userlevel/client_msg.h \
 	userlevel/client.h \
+	userlevel/telnet.h \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
 	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \

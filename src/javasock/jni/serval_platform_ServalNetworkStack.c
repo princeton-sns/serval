@@ -44,7 +44,8 @@ static void fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr,
 						      gServiceIDFields.getID);
 	jbyte *arr = (*env)->GetByteArrayElements(env, byteArr, &isCopy);
 	
-	if (bits < 0 || bits > ((sizeof(svaddr->sv_srvid) * 8) - 1))
+	if (bits < 0 || (unsigned int)bits > 
+            ((sizeof(svaddr->sv_srvid) * 8) - 1))
 		bits = 0;
 
 	memset(svaddr, 0, sizeof(*svaddr));
@@ -414,7 +415,7 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 	
 	free(buffer);
 
-	return 0;
+	return ret;
 }
 
 /*
@@ -484,6 +485,10 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
 	case JAVASOCKOPT_IP_TOS:
 		ret = setsockopt(sock, IPPROTO_IP, IP_TOS, &ival, sizeof(ival));
 		break;
+        case JAVASOCKOPT_SO_BROADCAST:
+                LOG_WARN("SO_BROADCAST not implemented!\n");
+                ret = 0;
+                break;
 	default:
 		jniThrowException(env, "java/lang/IllegalArgumentException", 
 				  "Bad socket option");
