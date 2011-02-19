@@ -292,15 +292,17 @@ public class ServalDatagramSocketImpl implements SocketOptions {
             }
         }
     }
-    public void connect(ServiceID serviceID, InetAddress inetAddr)
+    public void connect(ServiceID serviceID, InetAddress inetAddr, 
+                        int timeout)
         throws SocketException {
         
-        netImpl.connect(fd, serviceID, inetAddr);
+        netImpl.connect(fd, serviceID, inetAddr, timeout);
         connectedServiceID = serviceID;
         isNativeConnected = true;
     }
-    public void connect(ServiceID serviceID) throws SocketException {
-        connect(serviceID, null);        
+    public void connect(ServiceID serviceID, int timeout) 
+        throws SocketException {
+        connect(serviceID, null, timeout);        
     }
 
     public void disconnect() {

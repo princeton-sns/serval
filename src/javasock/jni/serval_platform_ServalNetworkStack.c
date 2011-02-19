@@ -6,6 +6,7 @@
 #include <poll.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include "JNIHelp.h"
 #include "serval_platform_ServalNetworkStack.h"
 
@@ -247,26 +248,28 @@ jobject Java_serval_platform_ServalNetworkStack_accept(JNIEnv *env,
 		return NULL;
 	}
 
-	return jniCreateFileDescriptor(env, ret);;
+	return jniCreateFileDescriptor(env, ret);
 }
 
 /*
  * Class:     serval_platform_ServalNetworkStack
  * Method:    connect
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;Ljava/net/InetAddress;)I
+ * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;Ljava/net/InetAddress;I)I
  */
 jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env, 
 						     jobject obj, 
 						     jobject fd, 
 						     jobject service_id, 
-						     jobject ipaddr)
+						     jobject ipaddr,
+                                                     jint timeout)
 {
 	struct {
 		struct sockaddr_sv svaddr;
 		struct sockaddr_in inaddr;
 	} sa;
 	socklen_t addrlen = sizeof(sa);
-	int sock, ret;
+        struct pollfd fds;
+	int sock, ret, nonblock = 1;
 
 	sock = jniGetFDFromFileDescriptor(env, fd);
 
@@ -283,11 +286,91 @@ jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env,
 		fill_in_sockaddr_in(env, &sa.inaddr, ipaddr);
 	}
 
+        ret = ioctl(sock, FIONBIO, &nonblock);
+
+        if (ret == -1) {
+                LOG_ERR("Setting non-block failed: %s\n",
+                        strerror(errno));
+                jniThrowSocketException(env, errno);
+                return -1;
+        }
+
 	ret = connect(sock, (struct sockaddr *)&sa, addrlen);
 
 	if (ret == -1) {
-		jniThrowSocketException(env, errno);
+                if (errno == EINPROGRESS) {
+                        /* Everything OK */
+                } else {
+                        jniThrowSocketException(env, errno);
+                        LOG_DBG("Connect failure: %s\n", strerror(errno));
+                        goto out;
+                }
 	}
+
+        fds.fd = sock;
+        fds.events = POLLIN | POLLOUT | POLLERR | POLLHUP;
+        fds.revents = 0;
+	
+        ret = poll(&fds, 1, timeout);
+        
+        if (ret == -1) {
+                LOG_ERR("poll fail: %s\n", strerror(errno));
+                jniThrowSocketException(env, errno);
+        } else if (ret == 0) {
+                /* Timeout */
+                jniThrowConnectException(env, ETIMEDOUT);
+        } else {
+                if (fds.revents & POLLOUT) {
+                        /* If write does not block, we either
+                         * connected of failed */
+                        if (fds.revents & POLLIN) {
+                                int err = 0;
+                                socklen_t errlen = sizeof(err);
+                                
+                                /* Figure out what to do */
+                                ret = getsockopt(sock, SOL_SOCKET, SO_ERROR,
+                                                 &err, &errlen);
+
+                                if (ret >= 0) {
+                                        ret = err;
+                                        jniThrowConnectException(env, err);
+                                } else {
+                                        LOG_ERR("getsockopt err=%s\n",
+                                                strerror(errno));
+                                        jniThrowSocketException(env, errno);
+                                }
+                                goto out;
+                        } else {
+                                /* Connected! */
+                                ret = 0;
+                                goto out;
+                        }
+                }
+           
+                if (fds.revents & POLLERR) {
+                        int err = 0;
+                        socklen_t errlen = sizeof(err);
+                        
+                        LOG_DBG("POLLERR\n");
+
+                        /* Figure out error */
+                        ret = getsockopt(sock, SOL_SOCKET, SO_ERROR,
+                                         &err, &errlen);
+                        
+                        if (ret >= 0) {
+                                ret = err;
+                                jniThrowConnectException(env, err);
+                        } else {
+                                LOG_ERR("getsockopt err=%s\n",
+                                        strerror(errno));
+                                jniThrowSocketException(env, errno);
+                        }
+                }
+        }
+out:   
+        nonblock = 0;
+
+        ret = ioctl(sock, FIONBIO, &nonblock);
 
 	return ret;
 }

@@ -458,10 +458,12 @@ void serval_sock_done(struct sock *sk)
 	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
-	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_state_change(sk);
-	else
-		serval_sock_destroy(sk);
+        /* If there is still a user around, notify it. Otherwise,
+         * destroy the socket now. */
+	if (!sock_flag(sk, SOCK_DEAD)) 
+                sk->sk_state_change(sk); 
+        else
+                serval_sock_destroy(sk); 
 }
 
 /* Destructor, called when refcount hits zero */

@@ -162,6 +162,11 @@ void jniThrowBindException(JNIEnv* env, int error)
         jniThrowExceptionWithErrno(env, "java/net/BindException", error);
 }
 
+void jniThrowConnectException(JNIEnv* env, int error) 
+{
+        jniThrowExceptionWithErrno(env, "java/net/ConnectException", error);
+}
+
 void jniThrowSocketException(JNIEnv* env, int error) 
 {
         jniThrowExceptionWithErrno(env, "java/net/SocketException", error);

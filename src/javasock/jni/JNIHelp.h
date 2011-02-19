@@ -108,6 +108,7 @@ void throwSocketException(JNIEnv *env, int errorCode);
 void jniThrowExceptionWithErrno(JNIEnv* env,
                                 const char* exceptionClassName, int error);
 void jniThrowBindException(JNIEnv* env, int error);
+void jniThrowConnectException(JNIEnv* env, int error);
 void jniThrowSocketException(JNIEnv* env, int error);
 void jniThrowSocketTimeoutException(JNIEnv* env, int error);
 void jniThrowBadAddressFamily(JNIEnv* env);

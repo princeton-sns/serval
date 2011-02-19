@@ -525,20 +525,12 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if (!nonblock) {
                 /* Go to sleep, wait for timeout or successful connection */
-                //release_sock(sk);
-
                 LOG_DBG("waiting for connect\n");
-                /*
-                err = wait_event_interruptible(*sk_sleep(sk),
-                                               sk->sk_state != SERVAL_REQUEST);
-                */
-                //lock_sock(sk);
-                
                 err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
-                
                 LOG_DBG("wait for connect returned=%d\n", err);
         } else {
                 /* TODO: handle nonblocking connect */
+                LOG_DBG("non-blocking connect\n");
                 err = -EINPROGRESS;
                 goto out;
         }
@@ -712,8 +704,6 @@ int serval_release(struct socket *sock)
                 bh_unlock_sock(sk);
                 local_bh_enable();
                 sock_put(sk);
-        } else {
-                LOG_ERR("sk is NULL\n");
         }
         
         return err;
@@ -725,36 +715,54 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 {
 	struct sock *sk = sock->sk;
 	unsigned int mask = 0;
-	poll_wait(file, sk_sleep(sk), wait);
-	mask = 0;
+
+	sock_poll_wait(file, sk_sleep(sk), wait);
 
         if (sk->sk_state == SERVAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
-                return list_empty(&ssk->accept_queue) ? 0 : (POLLIN | POLLRDNORM);
+                return list_empty(&ssk->accept_queue) ? 0 : 
+                        (POLLIN | POLLRDNORM);
         }
-	/* exceptional events? */
-	if (sk->sk_err)
-		mask |= POLLERR;
-	if (sk->sk_shutdown == SHUTDOWN_MASK)
-		mask |= POLLHUP;
-	if (sk->sk_shutdown & RCV_SHUTDOWN)
-		mask |= POLLRDHUP;
 
-	/* readable? */
-        if (sk->sk_type == SOCK_DGRAM || 
-            sk->sk_type == SOCK_STREAM) {
-                if (!skb_queue_empty(&sk->sk_receive_queue) ||
-                    (sk->sk_shutdown & RCV_SHUTDOWN))
-                        mask |= POLLIN | POLLRDNORM;
-        }
-        
-	/* Connection-based need to check for termination and startup */
-	if ((sk->sk_type == SOCK_STREAM || sk->sk_type == SOCK_DGRAM) && 
+        mask = 0;
+
+	if (sk->sk_err)
+		mask = POLLERR;
+
+	if (sk->sk_shutdown == SHUTDOWN_MASK || 
             sk->sk_state == SERVAL_CLOSED)
 		mask |= POLLHUP;
+	if (sk->sk_shutdown & RCV_SHUTDOWN)
+		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	if (sock_writeable(sk))
-		mask |= POLLOUT | POLLWRNORM | POLLWRBAND;
+        LOG_DBG("Connect state?\n");
+
+	//if ((1 << sk->sk_state) & ~(DCCPF_REQUESTING | DCCPF_RESPOND)) {
+        if (!(sk->sk_state == SERVAL_REQUEST || 
+              sk->sk_state == SERVAL_RESPOND)) {
+                
+		if (atomic_read(&sk->sk_rmem_alloc) > 0)
+			mask |= POLLIN | POLLRDNORM;
+
+		if (!(sk->sk_shutdown & SEND_SHUTDOWN)) {
+			if (sk_stream_wspace(sk) >= 
+                            sk_stream_min_wspace(sk)) {
+				mask |= POLLOUT | POLLWRNORM;
+			} else {  /* send SIGIO later */
+				set_bit(SOCK_ASYNC_NOSPACE,
+					&sk->sk_socket->flags);
+				set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+
+				/* Race breaker. If space is freed after
+				 * wspace test but before the flags are set,
+				 * IO signal will be lost.
+				 */
+				if (sk_stream_wspace(sk) >= 
+                                    sk_stream_min_wspace(sk))
+					mask |= POLLOUT | POLLWRNORM;
+			}
+		}
+	}
 
 	return mask;
 }

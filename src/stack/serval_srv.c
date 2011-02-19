@@ -34,9 +34,8 @@ extern atomic_t serval_nr_socks;
 static struct net_addr null_addr = { 
         .net_raw = { 0x00, 0x00, 0x00, 0x00 } 
 };
-
-static uint8_t backoff[] = 
-{ 1, 2, 4, 8, 16, 32, 64, 64, 64, 64, 64, 64, 64, 0 };
+/* Backoff multipliers for retransmission, fail when reaching 0. */
+static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
 static int serval_srv_state_process(struct sock *sk, 
                                     struct serval_hdr *sfh, 
@@ -154,6 +153,11 @@ static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
         }
 }
 
+/* 
+   This function writes packets in the control queue to the
+   network. It will write up to the current send window or the limit
+   given as argument.  
+*/
 static int serval_srv_write_xmit(struct sock *sk, 
                                  unsigned int limit, gfp_t gfp)
 {
@@ -167,7 +171,10 @@ static int serval_srv_write_xmit(struct sock *sk,
 
 	while ((skb = serval_srv_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
-                                
+                
+                if (limit && num == limit)
+                        break;
+
                 err = serval_srv_transmit_skb(sk, skb, 1, gfp);
                 
                 if (err < 0) {
@@ -183,6 +190,9 @@ static int serval_srv_write_xmit(struct sock *sk,
         return err;
 }
 
+/*
+  Queue packet on control queue and push pending packets.
+*/
 static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
@@ -198,6 +208,10 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
                                jiffies + msecs_to_jiffies(ssk->rto)); 
         }
         
+        /* 
+           Write packets in queue to network.
+           NOTE: only one packet for now. Should implement TX window.
+        */
         err = serval_srv_write_xmit(sk, 1, GFP_ATOMIC);
 
         if (err != 0) {
@@ -207,6 +221,14 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
         return err;
 }
 
+/*
+  Given an ACK, clean all packets from the control queue that this ACK
+  acknowledges.
+
+  Reschedule retransmission timer as neccessary, i.e., if there are
+  still unacked packets in the queue and we removed the first packet
+  in the queue.
+ */
 static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
 {
         struct serval_sock *ssk = serval_sk(sk);
@@ -289,6 +311,7 @@ static void serval_srv_timewait(struct sock *sk, int state)
                        jiffies + msecs_to_jiffies(8000)); 
 }
 /*
+  Use serval_sock_done() instead, should remove... 
 static void serval_srv_set_closed(struct sock *sk)
 {
         serval_sock_set_state(sk, SERVAL_CLOSED);
@@ -467,6 +490,9 @@ drop:
         goto done;
 }
 
+/*
+  Create new child socket in RESPOND state. This happens as a result
+  of a LISTEN:ing socket receiving an ACK in response to a SYNACK.  */
 static struct sock *
 serval_srv_create_respond_sock(struct sock *sk, 
                                struct sk_buff *skb,
@@ -488,10 +514,21 @@ serval_srv_create_respond_sock(struct sock *sk,
         return nsk;
 }
 
-static struct sock *
-serval_srv_request_sock_handle(struct sock *sk,
-                               struct serval_hdr *sfh,
-                               struct sk_buff *skb)
+
+/*
+  This function is called as a result of receiving a ACK in response
+  to a SYNACK that was sent by a "parent" sock in LISTEN state (the sk
+  argument). 
+   
+  The objective is to find a serval_request_sock that corresponds to
+  the ACK just received and initiate processing on that request
+  sock. Such processing includes transforming the request sock into a
+  regular sock and putting it on the parent sock's accept queue.
+
+ */
+static struct sock * serval_srv_request_sock_handle(struct sock *sk,
+                                                    struct serval_hdr *sfh,
+                                                    struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_request_sock *rsk;

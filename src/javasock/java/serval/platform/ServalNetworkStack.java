@@ -11,6 +11,7 @@ import java.io.InterruptedIOException;
 import java.net.SocketOptions;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.net.ConnectException;
 
 public class ServalNetworkStack {
 	private static ServalNetworkStack stack = null;
@@ -20,13 +21,14 @@ public class ServalNetworkStack {
         throws SocketException;
 	public native int createStreamSocket(FileDescriptor fd, int protocol) 
         throws SocketException;
-	public native int bind(FileDescriptor fd, ServiceID serviceID, int bindBits) 
-        throws SocketException;
+	public native int bind(FileDescriptor fd, ServiceID serviceID, 
+                           int bindBits) throws SocketException;
 	public native int listen(FileDescriptor fd, int backlog);	
 	public native FileDescriptor accept(FileDescriptor fd, 
 				 ServalDatagramSocketImpl sImpl);
 	public native int connect(FileDescriptor fd, ServiceID serviceID, 
-                              InetAddress address) throws SocketException;
+                              InetAddress address, int timeout) 
+        throws SocketException;
     public native int disconnect(FileDescriptor fd) throws SocketException;
 	/*
 	  private native int sendto(FileDescriptor fd, byte[] data, int flags);
