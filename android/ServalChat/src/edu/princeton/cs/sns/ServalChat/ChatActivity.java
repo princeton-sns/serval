@@ -135,12 +135,14 @@ public class ChatActivity extends Activity {
 
 			try {
 				sock = new ServalDatagramSocket(new ServiceID((short) 32769));
-				sock.connect(new ServiceID((short) 16385));
+				statusText.post(new StatusUpdater("Connecting..."));
+				sock.connect(new ServiceID((short) 16385), 3000);
 				Log.d("ServalChat", "connected");
 				
 				statusText.post(new StatusUpdater("Connected"));
 			} catch (Exception e) {
 				Log.d("ServalChat", "Connection failed: " + e.getMessage());
+				statusText.post(new StatusUpdater("Connection failed: " + e.getMessage()));
 				if (sock != null) {
 					sock.close();
 					sock = null;
