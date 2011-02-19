@@ -2,13 +2,13 @@
 package edu.princeton.cs.sns.ServalChat;
 
 import java.io.IOException;
-import java.net.SocketException;
 import edu.princeton.cs.sns.ServalChat.R;
 import serval.net.ServalDatagramSocket;
 import serval.net.ServalDatagramPacket;
 import serval.net.ServiceID;
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Process;
 import android.text.Editable;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
@@ -68,13 +68,6 @@ public class ChatActivity extends Activity {
 		super.onStart();
 		Log.d("ServalChat", "onStart");
 		
-		try {
-			sock = new ServalDatagramSocket(new ServiceID((short) 32769));
-		} catch (SocketException e) {
-			Log.d("ServalChat", "Error: " + e.getMessage());
-			sock = null;
-			return;
-		}
 		textReceiverThread = new Thread(new TextReceiver());
 		textReceiverThread.start();
     }
@@ -83,13 +76,18 @@ public class ChatActivity extends Activity {
 	protected void onStop() {
 		super.onStop();
 		Log.d("ServalChat", "onStop");
+		
 		if (sock != null) {
 			Log.d("ServalChat", "Closing socket");
 			sock.close();
 		}
-
-		if (textReceiverThread != null &&
-			textReceiverThread.isAlive()) {
+		if (textReceiverThread != null) {
+			if (textReceiverThread.isAlive()) {
+				// Interrupt a connect or other blocking call.
+				Log.d("Serval Chat", "Interrupting receive thread");
+				Process.sendSignal(Process.myPid(), Process.SIGNAL_QUIT);
+				textReceiverThread.interrupt();
+			}
 			try {
 				textReceiverThread.join();
 			} catch (InterruptedException e) {
@@ -136,13 +134,17 @@ public class ChatActivity extends Activity {
 			Log.d("ServalChat", "Text receiver thread running");
 
 			try {
+				sock = new ServalDatagramSocket(new ServiceID((short) 32769));
 				sock.connect(new ServiceID((short) 16385));
 				Log.d("ServalChat", "connected");
+				
 				statusText.post(new StatusUpdater("Connected"));
 			} catch (Exception e) {
 				Log.d("ServalChat", "Connection failed: " + e.getMessage());
-				sock.close();
-				sock = null;
+				if (sock != null) {
+					sock.close();
+					sock = null;
+				}
 				return;
 			}
 			while (true) {
