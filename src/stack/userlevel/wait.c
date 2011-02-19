@@ -205,6 +205,7 @@ void finish_wait(wait_queue_head_t *q, wait_queue_t *wait)
 		list_del_init(&wait->thread_list);
                 pthread_mutex_unlock(&q->lock);
 	}
+        destroy_wait(wait);
 }
 
 void add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait)

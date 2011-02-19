@@ -103,6 +103,7 @@ static int serval_wait_state(struct sock *sk, int state,
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(sk_sleep(sk), &wait);
+        UNDECLARE_WAITQUEUE(wait);
 
 	return err;
 }
@@ -289,6 +290,8 @@ static int serval_listen_stop(struct sock *sk)
 
                         sk->sk_prot->disconnect(child, O_NONBLOCK);
 
+                        /* Orphaning will mark the sock with flag DEAD,
+                         * allowing the sock to be destroyed. */
                         sock_orphan(child);
                         
                         LOG_DBG("removing socket from accept queue\n");
@@ -672,7 +675,6 @@ int serval_release(struct socket *sock)
 
                 if (sk->sk_state == SERVAL_LISTEN) {
                         serval_listen_stop(sk);
-                        sk->sk_prot->unhash(sk);
                         serval_sock_set_state(sk, SERVAL_CLOSED);
                 } else {                 
                         /* the protocol specific function called here
@@ -684,6 +686,9 @@ int serval_release(struct socket *sock)
                 /* Hold reference so that the sock is not
                    destroyed by a bh when we release lock */
                 sock_hold(sk);
+                
+                /* Orphaning will mark the sock with flag DEAD,
+                 * allowing the sock to be destroyed. */
                 sock_orphan(sk);
                 
                 release_sock(sk);

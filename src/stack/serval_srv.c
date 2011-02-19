@@ -288,14 +288,14 @@ static void serval_srv_timewait(struct sock *sk, int state)
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
                        jiffies + msecs_to_jiffies(8000)); 
 }
-
+/*
 static void serval_srv_set_closed(struct sock *sk)
 {
-        sk->sk_prot->unhash(sk);
         serval_sock_set_state(sk, SERVAL_CLOSED);
         sk->sk_state_change(sk);
         serval_sock_destroy(sk);
 }
+*/
 
 /* Called as a result of user app close() */
 void serval_srv_close(struct sock *sk, long timeout)
@@ -334,9 +334,11 @@ void serval_srv_close(struct sock *sk, long timeout)
                         LOG_ERR("queuing failed\n");
                 }
         } else {
-                sk->sk_prot->unhash(sk);
+                /*
                 serval_sock_set_state(sk, SERVAL_CLOSED);
                 sk->sk_state_change(sk);
+                */
+                serval_sock_done(sk);
                 /* Do not destroy sock here, user process will take
                  * care of that in the end of the calling close
                  * function */
@@ -344,14 +346,14 @@ void serval_srv_close(struct sock *sk, long timeout)
 }
 
 /* We got a close request (FIN) from our peer */
-int serval_srv_close_request(struct sock *sk, struct serval_hdr *sfh, 
-                             struct sk_buff *rskb)
+static int serval_srv_send_close_ack(struct sock *sk, struct serval_hdr *sfh, 
+                                     struct sk_buff *rskb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         int err = 0;
-        
-        LOG_DBG("Close request\n");
+
+        LOG_DBG("Sending Close ACK\n");
 
         skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
                         
@@ -364,13 +366,7 @@ int serval_srv_close_request(struct sock *sk, struct serval_hdr *sfh,
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
 
-        /* Give transport a chance to chip in */ 
-        if (ssk->af_ops->close_request)
-                err = ssk->af_ops->close_request(sk, skb);
-        
         if (err == 0) {
-                LOG_DBG("Sending Close ACK\n");
-                
                 /* Do not queue pure ACKs */
                 err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
         }
@@ -604,8 +600,8 @@ done:
         return err;
 }
 
-static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
-                          struct sk_buff *skb)
+static int serval_srv_rcv_fin(struct sock *sk, struct serval_hdr *sfh,
+                              struct sk_buff *skb)
 {
         int err = 0;
         struct serval_sock *ssk = serval_sk(sk);
@@ -626,13 +622,21 @@ static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                 
                 switch (sk->sk_state) {
                 case SERVAL_REQUEST:
+                        /* FIXME: check correct processing here in
+                         * REQUEST state. */
                 case SERVAL_RESPOND:
                 case SERVAL_CONNECTED:
                         serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+                        sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                         break;
                 case SERVAL_CLOSING:
                         break;
                 case SERVAL_CLOSEWAIT:
+                        /* Must be retransmitted FIN */
+                        
+                        /* FIXME: is this the right place for async
+                                 * wake? */
+                        sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                         break;
                 case SERVAL_FINWAIT1:
                         /* Simultaneous close */
@@ -640,7 +644,12 @@ static int serval_srv_fin(struct sock *sk, struct serval_hdr *sfh,
                 default:
                         break;
                 }
-                err = serval_srv_close_request(sk, sfh, skb);
+
+                /* Give transport a chance to chip in */ 
+                if (ssk->af_ops->close_request)
+                        err = ssk->af_ops->close_request(sk, skb);
+                
+                err = serval_srv_send_close_ack(sk, sfh, skb);
         }
         
         return err;
@@ -655,7 +664,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_fin(sk, sfh, skb);
 
                 if (err == 0) {
                         /* Valid FIN means valid ctrl header that may
@@ -766,9 +775,11 @@ static int serval_srv_request_state_process(struct sock *sk,
         
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
-        /* Let async apps know we are connected. */
-        sk->sk_state_change(sk);
-        sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+        /* Let user know we are connected. */
+	if (!sock_flag(sk, SOCK_DEAD)) {
+                sk->sk_state_change(sk);
+                sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+        }
 
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
@@ -825,6 +836,10 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 
                 LOG_DBG("\n");
                 
+                /* Let user know */
+                sk->sk_state_change(sk);
+                sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+
                 /* Save device and peer flow id */
                 ssk->dev = skb->dev;
                 dev_hold(ssk->dev);
@@ -845,7 +860,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_fin(sk, sfh, skb);
 
                 if (err == 0) {
                         /* Both FIN and ACK */
@@ -878,7 +893,7 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_fin(sk, sfh, skb);
 
                 if (err == 0) {
                         serval_srv_timewait(sk, SERVAL_TIMEWAIT);
@@ -918,7 +933,8 @@ static int serval_srv_lastack_state_process(struct sock *sk,
                 
         if (err == 0) {
                 /* ACK was valid */
-                serval_srv_set_closed(sk);
+                serval_sock_done(sk);
+                //serval_srv_set_closed(sk);
         }
 
         FREE_SKB(skb);
@@ -1095,7 +1111,8 @@ void serval_srv_rexmit_timeout(unsigned long data)
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
-                serval_srv_set_closed(sk);
+                serval_sock_done(sk);
+                //serval_srv_set_closed(sk);
         } else {
                 LOG_DBG("retransmitting and rescheduling timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
@@ -1116,7 +1133,8 @@ void serval_srv_timewait_timeout(unsigned long data)
         struct sock *sk = (struct sock *)data;
         bh_lock_sock_nested(sk);
         LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
-        serval_srv_set_closed(sk);
+        serval_sock_done(sk);
+        //serval_srv_set_closed(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */
         sock_put(sk);

@@ -446,10 +446,16 @@ void serval_sock_destroy(struct sock *sk)
 	sock_put(sk);
 }
 
+static void serval_sock_clear_xmit_timers(struct sock *sk)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        sk_stop_timer(sk, &ssk->retransmit_timer);        
+}
+
 void serval_sock_done(struct sock *sk)
 {
 	serval_sock_set_state(sk, SERVAL_CLOSED);
-
+	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
 	if (!sock_flag(sk, SOCK_DEAD))
@@ -520,18 +526,24 @@ const char *serval_state_str(int state)
 }
 
 int serval_sock_set_state(struct sock *sk, int new_state)
-{
-        /* TODO: state transition checks */
-        
+{ 
         if (new_state < SERVAL_SOCK_STATE_MIN ||
             new_state > SERVAL_SOCK_STATE_MAX) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
-
+        
         LOG_DBG("%s -> %s\n",
                 sock_state_str[sk->sk_state],
                 sock_state_str[new_state]);
+        
+        switch (new_state) {
+        case SERVAL_CLOSED:
+                sk->sk_prot->unhash(sk);
+                break;
+        default:
+                break;
+        }
 
         sk->sk_state = new_state;
 

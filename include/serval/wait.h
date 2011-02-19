@@ -7,6 +7,7 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/wait.h>
 #define UNDEFINE_WAIT(name)
+#define UNDECLARE_WAITQUEUE(name)
 #else
 #include <serval/list.h>
 #include <pthread.h>
@@ -50,7 +51,10 @@ typedef struct __wait_queue_head wait_queue_head_t;
         .thread_list	= { &(name).thread_list, &(name).thread_list } }
 
 #define DECLARE_WAITQUEUE(name, tsk)					\
-	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk)
+	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk);         \
+        init_wait(&name)
+
+#define UNDECLARE_WAITQUEUE(name) destroy_wait(&name)
 
 #define __WAIT_QUEUE_HEAD_INITIALIZER(name) {				\
 	.lock		= PTHREAD_MUTEX_INITIALIZER,		        \
