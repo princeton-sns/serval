@@ -23,22 +23,32 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <unistd.h>
+#include <signal.h>
 
 static unsigned short CLIENT_OBJECT_ID = 32769;
 static unsigned short ECHO_OBJECT_ID = 16385;
 
+static int sock;
+
+void signal_handler(int sig)
+{
+        printf("signal caught! closing socket...\n");
+        //close(sock);
+}
+
 int set_reuse_ok(int soc)
 {
 	int option = 1;
-	if (setsockopt(soc, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
+        
+	if (setsockopt(soc, SOL_SOCKET, SO_REUSEADDR, 
+                       &option, sizeof(option)) < 0) {
 		fprintf(stderr, "proxy setsockopt error");
 		return -1;
 	}
 	return 0;
 }
 
-void client(void) {
-	int sock;
+int client(void) {
 	struct sockaddr_sv cliaddr;
 	struct sockaddr_sv srvaddr;
 	int n;
@@ -54,53 +64,83 @@ void client(void) {
 	srvaddr.sv_srvid.s_sid16[0] = htons(ECHO_OBJECT_ID);
   
 	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
+
+        if (sock == -1) {
+                fprintf(stderr, "socket: %s\n",
+                        strerror_sv(errno));
+                return -1;
+        }
+
 	set_reuse_ok(sock);
 
 	if (bind_sv(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) < 0) {
-		fprintf(stderr, "error client binding socket: %s\n", strerror_sv(errno));
-		exit(EXIT_FAILURE);
+		fprintf(stderr, "bind: %s\n", 
+                        strerror_sv(errno));
+		return -1;
 	}
 
 	if (connect_sv(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr)) < 0) {
-		fprintf(stderr, "error client connecting to socket: %s\n",
+		fprintf(stderr, "connect: %s\n",
 			strerror_sv(errno));
-		exit(EXIT_FAILURE);
+		return -1;
 	}
-	fprintf(stderr, "client: waiting on user input :>");
+
+	printf("client: waiting on user input :>");
+
 	while (fgets(sbuf, N, stdin) != NULL) {
 		if (strlen(sbuf) == 1) {
-			fprintf(stderr, "\n\nclient: waiting on user input :>");
+			printf("\n\nclient: waiting on user input :>");
 			continue;
 		}
 		if (strlen(sbuf) < N) // remove new line
 			sbuf[strlen(sbuf) - 1] = '\0';
-		fprintf(stderr, "client: sending \"%s\" to object ID %s\n", sbuf,
-			service_id_to_str(&srvaddr.sv_srvid));
+
+		printf("client: sending \"%s\" to object ID %s\n", 
+                       sbuf, service_id_to_str(&srvaddr.sv_srvid));
+                
 		if (send_sv(sock, sbuf, strlen(sbuf), 0) < 0) {
-			fprintf(stderr, "client: send_sv() failed (%s)\n", strerror_sv(errno));
-			exit(EXIT_FAILURE);
+			fprintf(stderr, "send failed (%s)\n", 
+                                strerror_sv(errno));
+			return -1;
 		}
 		n = recv_sv(sock, rbuf, N, 0);
 		rbuf[n] = 0;
 
                 if (n == -1) {
-                        fprintf(stderr, "recv error: %s\n", strerror_sv(errno));
+                        fprintf(stderr, "recv: %s\n", strerror_sv(errno));
                 } else {
-                        fprintf(stderr, "Response from server: %s\n", rbuf);
+                        printf("Response from server: %s\n", rbuf);
+                        
                         if (strcmp(sbuf, "quit") == 0)
                                 break;
                 }
-                fprintf(stderr, "client: waiting on user input :>");
+                
+                printf("client: waiting on user input :>");
 	}
 	if (close_sv(sock) < 0)
-		fprintf(stderr, "client: error closing socket %s", strerror_sv(errno));
-	exit(EXIT_SUCCESS);
+		fprintf(stderr, "close: %s", 
+                        strerror_sv(errno));
+
+        return 0;
 }
 
 int main(int argc, char **argv)
 {
-	client();
+	struct sigaction action;
+        int ret;
 
-	return 0;
+	memset(&action, 0, sizeof(struct sigaction));
+        action.sa_handler = signal_handler;
+        
+	/* The server should shut down on these signals. */
+        //sigaction(SIGTERM, &action, 0);
+	//sigaction(SIGHUP, &action, 0);
+	//sigaction(SIGINT, &action, 0);
+
+	ret = client();
+
+        printf("client done..\n");
+
+        return ret;
 }
 

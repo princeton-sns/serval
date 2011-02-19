@@ -210,6 +210,7 @@ void serval_sock_destroy(struct sock *sk);
 void serval_sock_done(struct sock *sk);
 
 const char *serval_sock_state_str(struct sock *sk);
+const char *serval_state_str(int state);
 int serval_sock_set_state(struct sock *sk, int state);
 void serval_sock_rexmit_timeout(unsigned long data);
 

@@ -141,8 +141,8 @@ public class ServalDatagramSocket {
 
     /**
      * Connects this Serval datagram socket to the specific target
-     * host with the serviceID {@code aServiceID} and address {@code
-     * anAdress}. The host and port are validated, thereafter the only
+     * host with the serviceID {@code aServiceID} and address 
+     * {@code anAdress}. The host and port are validated, thereafter the only
      * validation on {@code send()} and {@code receive()} is to check
      * whether the packet address/port matches the connected target.
      *
@@ -150,10 +150,11 @@ public class ServalDatagramSocket {
      *            the target serviceID of this socket.
      * @param anAddress
      *            the target address of this socket.
+     * @param timeout
+     *            the timeout for connecting (negative = infinite).
      */
-    public void connect(ServiceID aServiceID, InetAddress anAddress) {
-        System.out.println("connecting...");
-
+    public void connect(ServiceID aServiceID, InetAddress anAddress,
+                        int timeout) throws SocketException {
         if (aServiceID == null || !aServiceID.valid()) {
             throw new IllegalArgumentException();
         }
@@ -179,9 +180,9 @@ public class ServalDatagramSocket {
             */
 
             try {
-                impl.connect(aServiceID, anAddress);
+                impl.connect(aServiceID, anAddress, timeout);
             } catch (SocketException e) {
-                // not connected at the native level just do what we did before
+                throw e;
             }
             serviceID = aServiceID;
             address = anAddress;
@@ -197,10 +198,13 @@ public class ServalDatagramSocket {
      *
      * @param remoteAddr
      *            the serviceID of the target host.
+     * @param timeout
+     *            the timeout for connecting (negative = infinite).
      * @throws SocketException
      *                if an error occurs during connecting.
      */
-    public void connect(SocketAddress remoteAddr) throws SocketException {
+    public void connect(SocketAddress remoteAddr, int timeout) 
+        throws SocketException {
         if (remoteAddr == null) {
             throw new IllegalArgumentException();
         }
@@ -213,11 +217,31 @@ public class ServalDatagramSocket {
         if (servalAddr.getServiceID() == null) {
             throw new SocketException(servalAddr.getHostName());
         }
-        connect(servalAddr.getServiceID(), servalAddr.getAddress());
+        connect(servalAddr.getServiceID(), servalAddr.getAddress(), timeout);
     }
 
-    public void connect(ServiceID aServiceID) {
-        connect(aServiceID, null);
+    /**
+     * Connects this datagram socket to the remote serviceID specified
+     * by {@code remoteAddr}. The serviceID is validated, thereafter
+     * the only validation on {@code send()} and {@code receive()} is
+     * that the packet serviceID matches the connected target.
+     *
+     * @param remoteAddr
+     *            the serviceID of the target host.
+     * @throws SocketException
+     *                if an error occurs during connecting.
+     */
+    public void connect(SocketAddress remoteAddr) throws SocketException {
+        connect(remoteAddr, -1);
+    }
+
+    public void connect(ServiceID aServiceID) throws SocketException {
+        connect(aServiceID, null, -1);
+    }
+
+    public void connect(ServiceID aServiceID, int timeout) 
+        throws SocketException {
+        connect(aServiceID, null, timeout);
     }
     /**
      * Disconnects this Serval datagram socket from the remote

@@ -46,24 +46,47 @@ int host_ctrl_mode = 0;
 
 static struct sock *serval_accept_dequeue(struct sock *parent, 
                                             struct socket *newsock);
-/* Wait for the socket to reach a specific state. */
-int serval_wait_state(struct sock *sk, int state, unsigned long timeo)
+
+/* Wait for the socket to reach or leave a specific state, depending
+ * on the outofstate variable. It this variable is "true" the function
+ * will wait until the socket leaves the given state, otherwise it
+ * will wait until the given state is reached.
+ */
+static int serval_wait_state(struct sock *sk, int state,
+                             long timeo, int outofstate)
 {
 	DECLARE_WAITQUEUE(wait, current);
 	int err = 0;
 
-	add_wait_queue(sk_sleep(sk), &wait);
+        if (timeo < 0)
+                timeo = MAX_SCHEDULE_TIMEOUT;
 
-	while (sk->sk_state != state) {
+	add_wait_queue(sk_sleep(sk), &wait);
+        
+	while (1) {
+                if (outofstate) {
+                        if (sk->sk_state != state) {
+                                LOG_DBG("outofstate: State is new=%s old=%s\n",
+                                        serval_sock_state_str(sk),
+                                        serval_state_str(state));
+                                break;
+                        }
+                } else if (sk->sk_state == state) {
+                        LOG_DBG("State is new=%s\n",
+                                serval_sock_state_str(sk));
+                        break;
+                }
 		set_current_state(TASK_INTERRUPTIBLE);
 
 		if (!timeo) {
 			err = -EINPROGRESS;
+                        LOG_DBG("timeout 0 - EINPROGRESS\n");
 			break;
 		}
 
 		if (signal_pending(current)) {
 			err = sock_intr_errno(timeo);
+                        LOG_DBG("Signal pending\n");
 			break;
 		}
 
@@ -73,11 +96,14 @@ int serval_wait_state(struct sock *sk, int state, unsigned long timeo)
 
 		err = sock_error(sk);
 
-		if (err)
+		if (err) {
+                        LOG_ERR("socket error %d\n", err);
 			break;
+                }
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(sk_sleep(sk), &wait);
+        UNDECLARE_WAITQUEUE(wait);
 
 	return err;
 }
@@ -264,6 +290,8 @@ static int serval_listen_stop(struct sock *sk)
 
                         sk->sk_prot->disconnect(child, O_NONBLOCK);
 
+                        /* Orphaning will mark the sock with flag DEAD,
+                         * allowing the sock to be destroyed. */
                         sock_orphan(child);
                         
                         LOG_DBG("removing socket from accept queue\n");
@@ -497,17 +525,12 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if (!nonblock) {
                 /* Go to sleep, wait for timeout or successful connection */
-                release_sock(sk);
-
                 LOG_DBG("waiting for connect\n");
-
-                err = wait_event_interruptible(*sk_sleep(sk),
-                                               sk->sk_state != SERVAL_REQUEST);
-                lock_sock(sk);
-                
+                err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
                 LOG_DBG("wait for connect returned=%d\n", err);
         } else {
                 /* TODO: handle nonblocking connect */
+                LOG_DBG("non-blocking connect\n");
                 err = -EINPROGRESS;
                 goto out;
         }
@@ -622,6 +645,8 @@ int serval_release(struct socket *sock)
         int err = 0;
         struct sock *sk = sock->sk;
 
+        LOG_DBG("\n");
+
 	if (sk) {
                 int state;
                 long timeout;
@@ -642,7 +667,6 @@ int serval_release(struct socket *sock)
 
                 if (sk->sk_state == SERVAL_LISTEN) {
                         serval_listen_stop(sk);
-                        sk->sk_prot->unhash(sk);
                         serval_sock_set_state(sk, SERVAL_CLOSED);
                 } else {                 
                         /* the protocol specific function called here
@@ -654,6 +678,9 @@ int serval_release(struct socket *sock)
                 /* Hold reference so that the sock is not
                    destroyed by a bh when we release lock */
                 sock_hold(sk);
+                
+                /* Orphaning will mark the sock with flag DEAD,
+                 * allowing the sock to be destroyed. */
                 sock_orphan(sk);
                 
                 release_sock(sk);
@@ -688,36 +715,54 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 {
 	struct sock *sk = sock->sk;
 	unsigned int mask = 0;
-	poll_wait(file, sk_sleep(sk), wait);
-	mask = 0;
+
+	sock_poll_wait(file, sk_sleep(sk), wait);
 
         if (sk->sk_state == SERVAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
-                return list_empty(&ssk->accept_queue) ? 0 : (POLLIN | POLLRDNORM);
+                return list_empty(&ssk->accept_queue) ? 0 : 
+                        (POLLIN | POLLRDNORM);
         }
-	/* exceptional events? */
-	if (sk->sk_err)
-		mask |= POLLERR;
-	if (sk->sk_shutdown == SHUTDOWN_MASK)
-		mask |= POLLHUP;
-	if (sk->sk_shutdown & RCV_SHUTDOWN)
-		mask |= POLLRDHUP;
 
-	/* readable? */
-        if (sk->sk_type == SOCK_DGRAM || 
-            sk->sk_type == SOCK_STREAM) {
-                if (!skb_queue_empty(&sk->sk_receive_queue) ||
-                    (sk->sk_shutdown & RCV_SHUTDOWN))
-                        mask |= POLLIN | POLLRDNORM;
-        }
-        
-	/* Connection-based need to check for termination and startup */
-	if ((sk->sk_type == SOCK_STREAM || sk->sk_type == SOCK_DGRAM) && 
+        mask = 0;
+
+	if (sk->sk_err)
+		mask = POLLERR;
+
+	if (sk->sk_shutdown == SHUTDOWN_MASK || 
             sk->sk_state == SERVAL_CLOSED)
 		mask |= POLLHUP;
+	if (sk->sk_shutdown & RCV_SHUTDOWN)
+		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	if (sock_writeable(sk))
-		mask |= POLLOUT | POLLWRNORM | POLLWRBAND;
+        LOG_DBG("Connect state?\n");
+
+	//if ((1 << sk->sk_state) & ~(DCCPF_REQUESTING | DCCPF_RESPOND)) {
+        if (!(sk->sk_state == SERVAL_REQUEST || 
+              sk->sk_state == SERVAL_RESPOND)) {
+                
+		if (atomic_read(&sk->sk_rmem_alloc) > 0)
+			mask |= POLLIN | POLLRDNORM;
+
+		if (!(sk->sk_shutdown & SEND_SHUTDOWN)) {
+			if (sk_stream_wspace(sk) >= 
+                            sk_stream_min_wspace(sk)) {
+				mask |= POLLOUT | POLLWRNORM;
+			} else {  /* send SIGIO later */
+				set_bit(SOCK_ASYNC_NOSPACE,
+					&sk->sk_socket->flags);
+				set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+
+				/* Race breaker. If space is freed after
+				 * wspace test but before the flags are set,
+				 * IO signal will be lost.
+				 */
+				if (sk_stream_wspace(sk) >= 
+                                    sk_stream_min_wspace(sk))
+					mask |= POLLOUT | POLLWRNORM;
+			}
+		}
+	}
 
 	return mask;
 }

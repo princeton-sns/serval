@@ -58,10 +58,10 @@ JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_accept
 /*
  * Class:     serval_platform_ServalNetworkStack
  * Method:    connect
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;Ljava/net/InetAddress;)I
+ * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;Ljava/net/InetAddress;I)I
  */
 JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_connect
-  (JNIEnv *, jobject, jobject, jobject, jobject);
+  (JNIEnv *, jobject, jobject, jobject, jobject, jint);
 
 /*
  * Class:     serval_platform_ServalNetworkStack

@@ -715,8 +715,8 @@ int
 SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
 {
   if (cli->fd() >= 0)
-    if (close(cli->fd()) < 0) {
-      lerr("error closing fd %d", cli->fd());
+    if (::close(cli->fd()) < 0) {
+      //lerr("error closing fd %d", cli->fd());
       err = ESFINTERNAL;
       return SERVAL_SOCKET_ERROR;
     }

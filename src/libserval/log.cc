@@ -116,7 +116,7 @@ Logger::xlog(Level level, const char *func, const char *format, ...)
     fprintf(_logfd, "[%s]%s: [%d] [%3s] ", get_time(), func, id, get_level_str(level));
     vfprintf(_logfd, format, ap);
     fprintf(_logfd, "\n");
-    fflush(_logfd);
+    //fflush(_logfd);
     va_end(ap);
 
     return 0;
