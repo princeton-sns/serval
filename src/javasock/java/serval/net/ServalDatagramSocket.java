@@ -58,8 +58,7 @@ public class ServalDatagramSocket {
 
     /**
      * Constructs a Serval datagram socket which is bound to the
-     * specific port {@code aPort} on the localhost. Valid values for
-     * {@code aPort} are between 0 and 65535 inclusive.
+     * specific serviceID {@code aServiceID} on the localhost.
      *
      * @param serviceID
      *            the serviceID to bind on the localhost.
@@ -74,8 +73,7 @@ public class ServalDatagramSocket {
 
     /**
      * Constructs a Serval datagram socket which is bound to the
-     * specific port {@code aPort} on the localhost. Valid values for
-     * {@code aPort} are between 0 and 65535 inclusive.
+     * specific serviceID {@code aServiceID} on the localhost.
      *
      * @param serviceID
      *            the serviceID to bind on the localhost.
@@ -109,10 +107,7 @@ public class ServalDatagramSocket {
     }
 
     /**
-     * Sends prior to attempting to bind the socket, checks whether
-     * the port is within the valid port range and verifies with the
-     * security manager that the port may be bound by the current
-     * context.
+     * Sends prior to attempting to bind the socket.
      *
      * @param serviceID
      *            the serviceID on the localhost that is to be bound.
@@ -142,9 +137,7 @@ public class ServalDatagramSocket {
     /**
      * Connects this Serval datagram socket to the specific target
      * host with the serviceID {@code aServiceID} and address 
-     * {@code anAdress}. The host and port are validated, thereafter the only
-     * validation on {@code send()} and {@code receive()} is to check
-     * whether the packet address/port matches the connected target.
+     * {@code anAdress}.
      *
      * @param aServiceID
      *            the target serviceID of this socket.
@@ -310,7 +303,7 @@ public class ServalDatagramSocket {
     }
 
     /**
-     * Gets the local port which this socket is bound to.
+     * Gets the local serviceID which this socket is bound to.
      *
      * @return the local serviceID of this socket or {@code null} if
      *         this socket is closed and an invalid serviceID if it is
@@ -795,8 +788,8 @@ public class ServalDatagramSocket {
     }
 
     /**
-     * Gets the bound local serviceId and address and port of this
-     * socket. If the socket is unbound, {@code null} is returned.
+     * Gets the bound local serviceID and address of this socket. If
+     * the socket is unbound, {@code null} is returned.
      *
      * @return the local socket address.
      */

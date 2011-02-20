@@ -613,9 +613,13 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
                                  SO_RCVBUF, &ival, sizeof(ival));
 		break;
         case JAVASOCKOPT_SO_RCVTIMEOUT:
+        {
+                struct timeval timeout = { ival / 1000, 
+                                           (ival % 1000) * 1000 };
 		ret = setsockopt(sock, SOL_SOCKET, 
-                                 SO_RCVTIMEO, &ival, sizeof(ival));
+                                 SO_RCVTIMEO, &timeout, sizeof(timeout));
 		break;
+        }
         case JAVASOCKOPT_SO_OOBINLINE:
 		ret = setsockopt(sock, SOL_SOCKET, 
                                  SO_OOBINLINE, &bval, sizeof(bval));
@@ -682,8 +686,13 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 		ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &val, &len);
 		break;
         case JAVASOCKOPT_SO_RCVTIMEOUT:
+        {
+                struct timeval timeout = { 0, 0 };
+                len = sizeof(timeout);
 		ret = getsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &val, &len);
+                val = timeout.tv_sec * 1000 + (timeout.tv_usec / 1000);
 		break;
+        }
         case JAVASOCKOPT_SO_OOBINLINE:
 		ret = getsockopt(sock, SOL_SOCKET, SO_OOBINLINE, &val, &len);
 	default:
