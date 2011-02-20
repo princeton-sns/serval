@@ -24,8 +24,11 @@ public class UDPClient {
                     new ServalDatagramPacket(data, data.length);
 				sock.send(pack);
 				// FIXME: Should not do a blocking receive in this function
-				sock.receive(pack);
 
+                System.out.println("Receiving...");
+                sock.setSoTimeout(3000);
+				sock.receive(pack);
+                System.out.println("Receive returned");
 				String rsp = new String(pack.getData(), 0, pack.getLength());
 				//System.out.println("response length=" + pack.getLength());
 				System.out.println("Response: " + rsp);

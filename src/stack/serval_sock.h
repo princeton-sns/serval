@@ -30,8 +30,9 @@ enum serval_packet_type {
         SERVAL_PKT_RSYNACK
 };
 
-enum serval_sock_state {
-        SERVAL_CLOSED = 1, 
+enum {
+        SERVAL_MIN_STATE = 1,
+        SERVAL_CLOSED = SERVAL_MIN_STATE, 
         SERVAL_REQUEST,
         SERVAL_RESPOND,
         SERVAL_CONNECTED,
@@ -44,11 +45,26 @@ enum serval_sock_state {
         SERVAL_CLOSEWAIT,
         SERVAL_FINWAIT1,
         SERVAL_FINWAIT2,
-        SERVAL_LASTACK
+        SERVAL_LASTACK,
+        SERVAL_MAX_STATE
 };
 
-#define SERVAL_SOCK_STATE_MIN (1)
-#define SERVAL_SOCK_STATE_MAX (SERVAL_LASTACK)
+enum {
+        SERVALF_CLOSED    = (1 << 1), 
+        SERVALF_REQUEST   = (1 << 2),
+        SERVALF_RESPOND   = (1 << 3),
+        SERVALF_CONNECTED = (1 << 4),
+        SERVALF_CLOSING   = (1 << 5),
+        SERVALF_TIMEWAIT  = (1 << 6),
+        SERVALF_MIGRATE   = (1 << 7),
+        SERVALF_RECONNECT = (1 << 8),
+        SERVALF_RRESPOND  = (1 << 9),
+        SERVALF_LISTEN    = (1 << 10),
+        SERVALF_CLOSEWAIT = (1 << 11),
+        SERVALF_FINWAIT1  = (1 << 12),
+        SERVALF_FINWAIT2  = (1 << 13),
+        SERVALF_LASTACK   = (1 << 14),
+};
 
 enum serval_sock_flags {
         SSK_FLAG_BOUND = 0,
@@ -211,7 +227,7 @@ void serval_sock_done(struct sock *sk);
 
 const char *serval_sock_state_str(struct sock *sk);
 const char *serval_state_str(unsigned int state);
-int serval_sock_set_state(struct sock *sk, int state);
+int serval_sock_set_state(struct sock *sk, unsigned int state);
 void serval_sock_rexmit_timeout(unsigned long data);
 
 int __init serval_sock_tables_init(void);

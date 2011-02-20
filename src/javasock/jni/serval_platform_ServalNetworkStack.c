@@ -428,10 +428,15 @@ jint Java_serval_platform_ServalNetworkStack_send(JNIEnv *env,
 		return -1;
 	}
 
-	ret = send(sock, (((char *)data) + offset), length, 0);
+        do {
+                ret = send(sock, (((char *)data) + offset), length, 0);
+                /* Try again for non-critical errors */
+        } while (ret == -1 && errno == EINTR);
 
 	if (ret == -1) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                        /* Send on a non-blocking socket --> return 0
+                         * bytes sent */
 			ret = 0;
 		} else {
 			jniThrowSocketException(env, errno);
@@ -471,9 +476,9 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 		fds.fd = sock;
 		fds.events = POLLIN | POLLERR;
 		fds.revents = 0;
-		
+
 		ret = poll(&fds, 1, timeout);
-		
+
 		if (ret == -1) {
                         jniThrowSocketException(env, errno);
 			return -1;
@@ -495,7 +500,6 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
                         switch (errno) {
                         case EINTR:
                                 /* Interrupted, continue */
-                                LOG_DBG("interrupted\n");
                                 break;
                         case EAGAIN:
                                 /* Timeout, in case SO_RCVTIMEO was set. */

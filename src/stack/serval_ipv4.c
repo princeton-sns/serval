@@ -200,7 +200,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         }
 
 	memset(&ipcm, 0, sizeof(ipcm));
-        memcpy(&ipcm.addr, &SERVAL_SKB_CB(skb)->dst_addr,
+        memcpy(&ipcm.addr, &SERVAL_SKB_CB(skb)->addr,
                sizeof(ipcm.addr));
 
         err = serval_ipv4_fill_in_hdr(sk, skb, &ipcm);

@@ -703,11 +703,8 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	//if ((1 << sk->sk_state) & ~(DCCPF_REQUESTING | DCCPF_RESPOND)) {
-        if (!(sk->sk_state == SERVAL_REQUEST || 
-              sk->sk_state == SERVAL_RESPOND)) {
-                
-		if (atomic_read(&sk->sk_rmem_alloc) > 0)
+	if ((1 << sk->sk_state) & ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+                if (atomic_read(&sk->sk_rmem_alloc) > 0)
 			mask |= POLLIN | POLLRDNORM;
 
 		if (!(sk->sk_shutdown & SEND_SHUTDOWN)) {
