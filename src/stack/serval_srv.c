@@ -271,6 +271,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
 int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr, 
                        int addr_len)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
         int err;
@@ -291,8 +292,10 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         
         memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
-        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.iss;
-        serval_sk(sk)->snd_seq.nxt = serval_sk(sk)->snd_seq.iss + 1;
+        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
+        ssk->snd_seq.nxt = ssk->snd_seq.iss + 1;
+        memcpy(&SERVAL_SKB_CB(skb)->dst_addr, &ssk->dst_addr, 
+               sizeof(ssk->dst_addr));
 
         err = serval_srv_queue_and_push(sk, skb);
         
@@ -323,6 +326,7 @@ static void serval_srv_set_closed(struct sock *sk)
 /* Called as a result of user app close() */
 void serval_srv_close(struct sock *sk, long timeout)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb = NULL;
         int err = 0;
 
@@ -350,6 +354,8 @@ void serval_srv_close(struct sock *sk, long timeout)
                 skb_reserve(skb, SERVAL_MAX_HDR);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
+                memcpy(&SERVAL_SKB_CB(skb)->dst_addr, &ssk->dst_addr, 
+                       sizeof(ssk->dst_addr));
 
                 err = serval_srv_queue_and_push(sk, skb);
                 
@@ -385,7 +391,8 @@ static int serval_srv_send_close_ack(struct sock *sk, struct serval_hdr *sfh,
         
         skb_reserve(skb, SERVAL_MAX_HDR);
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
-
+        memcpy(&SERVAL_SKB_CB(skb)->dst_addr, &ssk->dst_addr, 
+               sizeof(ssk->dst_addr));
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
 
@@ -840,6 +847,9 @@ static int serval_srv_request_state_process(struct sock *sk,
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
         memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
+        memcpy(&SERVAL_SKB_CB(skb)->dst_addr, &ssk->dst_addr, 
+               sizeof(ssk->dst_addr));
+
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
         skb->protocol = IPPROTO_SERVAL;
