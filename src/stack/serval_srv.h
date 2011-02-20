@@ -22,7 +22,7 @@ struct service_entry;
 */
 struct serval_skb_cb {
         enum serval_packet_type pkttype;
-	struct net_addr dst_addr;
+	struct net_addr addr;
         uint32_t seqno;
         struct service_id srvid;
 };

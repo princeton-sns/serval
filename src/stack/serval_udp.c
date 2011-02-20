@@ -186,6 +186,9 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         if (datalen < skb->len) {
                 pskb_trim(skb, datalen);
         }
+
+        /* Increase readable memory */
+        skb_set_owner_r(skb, sk);
         skb_queue_tail(&sk->sk_receive_queue, skb);
         sk->sk_data_ready(sk, datalen);
 
@@ -252,10 +255,10 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         }
         if (netaddr) {
-                memcpy(&SERVAL_SKB_CB(skb)->dst_addr, netaddr, sizeof(*netaddr));
+                memcpy(&SERVAL_SKB_CB(skb)->addr, netaddr, sizeof(*netaddr));
         } else {
                 /* Make sure we zero this address to signal it is unset */
-                memset(&SERVAL_SKB_CB(skb)->dst_addr, 0, sizeof(*netaddr));
+                memset(&SERVAL_SKB_CB(skb)->addr, 0, sizeof(*netaddr));
         }
         /* 
            TODO: 
@@ -290,10 +293,11 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                               struct msghdr *msg, size_t len, int nonblock, 
                               int flags, int *addr_len)
 {
-	struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;
 	long timeo;
+
+        LOG_DBG("\n");
         
         lock_sock(sk);
         
@@ -312,14 +316,13 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 	timeo = sock_rcvtimeo(sk, nonblock);
 
-	do {
+	do {                
 		struct sk_buff *skb = skb_peek(&sk->sk_receive_queue);
 
 		if (skb)
 			goto found_ok_skb;
 	
                 if (sk->sk_err) {
-                        LOG_ERR("socket error\n");
                         retval = sock_error(sk);
                         break;
                 }
@@ -330,8 +333,6 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 }
 
 		if (sk->sk_state == SERVAL_CLOSED) {
-                        LOG_ERR("not in receivable state\n");
-
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
 				break;
@@ -388,15 +389,12 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                                 struct sockaddr_in *inaddr = 
                                         (struct sockaddr_in *)(svaddr + 1);
                                 inaddr->sin_family = AF_INET;
-                                memcpy(&inaddr->sin_addr, &ssk->src_addr,
-                                       sizeof(ssk->src_addr));
+                                memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
+                                       sizeof(ip_hdr(skb)->saddr));
                                 *addr_len +=sizeof(*inaddr);
                         }
                 }
-                /*
-                  LOG_DBG("skb->len=%u len=%zu retval=%d\n", 
-                  skb->len, len, retval);
-                */
+                                
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */
 			retval = -EFAULT;
