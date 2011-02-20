@@ -347,7 +347,6 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		}
 
 		if (signal_pending(current)) {
-                        LOG_ERR("signal is pending\n");
 			retval = sock_intr_errno(timeo);
 			break;
 		}
