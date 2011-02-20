@@ -37,7 +37,7 @@ static struct {
         jclass      clazz;
 } gServiceIDFields;
 
-static void fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr, 
+static int fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr, 
 				jobject srvid, int bits)
 {
 	jboolean isCopy;
@@ -55,22 +55,31 @@ static void fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr,
 	memcpy(&svaddr->sv_srvid, arr, sizeof(svaddr->sv_srvid));
 	
 	(*env)->ReleaseByteArrayElements(env, byteArr, arr, 0);
+
+        return 0;
 }
 
-static void fill_in_sockaddr_in(JNIEnv *env, struct sockaddr_in *saddr, 
-				jobject ipaddr)
+static int fill_in_sockaddr_in(JNIEnv *env, struct sockaddr_in *saddr, 
+                               jobject ipaddr)
 {
 	jboolean isCopy;
 	jclass clazz = (*env)->GetObjectClass(env, ipaddr);
 	jmethodID mid = (*env)->GetMethodID(env, clazz, "getAddress", "()[B");
 	jbyteArray byteArr = (*env)->CallObjectMethod(env, ipaddr, mid);
-	jbyte *arr = (*env)->GetByteArrayElements(env, byteArr, &isCopy);
+	jbyte *arr;
 	
-	memset(saddr, 0, sizeof(*saddr));
-	saddr->sin_family = AF_INET;
-	memcpy(&saddr->sin_addr, arr, sizeof(saddr->sin_addr));
+        /* Verify that this is an IPv4 address. */
+        if ((*env)->GetArrayLength(env, byteArr) != 4)
+                return -1;
+
+        arr = (*env)->GetByteArrayElements(env, byteArr, &isCopy);
+        memset(saddr, 0, sizeof(*saddr));
+        saddr->sin_family = AF_INET;
+        memcpy(&saddr->sin_addr, arr, sizeof(saddr->sin_addr));
 	
 	(*env)->ReleaseByteArrayElements(env, byteArr, arr, 0);
+
+        return 0;
 }
 
 /*
@@ -282,8 +291,10 @@ jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env,
 	
 	if (ipaddr == NULL) {
 		addrlen = sizeof(sa.svaddr);
-	} else {
-		fill_in_sockaddr_in(env, &sa.inaddr, ipaddr);
+	} else if (fill_in_sockaddr_in(env, &sa.inaddr, ipaddr) != 0) {
+		jniThrowException(env, "java/lang/IllegalArgumentException", 
+				  "Bad IP address");
+                return -1;
 	}
 
         ret = ioctl(sock, FIONBIO, &nonblock);
@@ -351,8 +362,6 @@ jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env,
                         int err = 0;
                         socklen_t errlen = sizeof(err);
                         
-                        LOG_DBG("POLLERR\n");
-
                         /* Figure out error */
                         ret = getsockopt(sock, SOL_SOCKET, SO_ERROR,
                                          &err, &errlen);
@@ -449,19 +458,12 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 	int buflen = (length < 65536) ? length : 65536;
 	jbyte *buffer;
 	int flags = peek ? MSG_PEEK : 0;
+        int retry = 1;
 
 	sock = jniGetFDFromFileDescriptor(env, fd);
 
 	if ((*env)->ExceptionCheck(env)) {
 		return -1;
-	}
-	
-	buffer = (jbyte*) malloc(buflen);
-
-	if (buffer == NULL) {
-		jniThrowException(env, "java/lang/OutOfMemoryError",
-				  "couldn't allocate enough memory for recv");
-		return 0;
 	}
 
 	if (timeout != 0) {
@@ -473,23 +475,41 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 		ret = poll(&fds, 1, timeout);
 		
 		if (ret == -1) {
-			free(buffer);
-			return 0;
-		}
+                        jniThrowSocketException(env, errno);
+			return -1;
+                } 
+	}
+	
+	buffer = (jbyte*) malloc(buflen);
+
+	if (buffer == NULL) {
+		jniThrowException(env, "java/lang/OutOfMemoryError",
+				  "couldn't allocate enough memory for recv");
+		return -1;
 	}
 
-	while (1) {
+	while (retry) {
 		ret = recv(sock, (char *)buffer, buflen, flags);
 
 		if (ret == -1) {
-			if (errno != EINTR) {
+                        switch (errno) {
+                        case EINTR:
+                                /* Interrupted, continue */
+                                LOG_DBG("interrupted\n");
+                                break;
+                        case EAGAIN:
+                                /* Timeout, in case SO_RCVTIMEO was set. */
+                                jniThrowSocketTimeoutException(env, errno);
+                                retry = 0;
+                                break;
+                        default:
 				jniThrowSocketException(env, errno);
-				free(buffer);
-				return ret;
+                                retry = 0;
+                                break;
 			}
 		} else {
-			break;
-		}
+                        break;
+                }
 	}
 
 	if (ret > 0) {
@@ -519,10 +539,7 @@ jint Java_serval_platform_ServalNetworkStack_close(JNIEnv *env,
 	}
 	
 	ret = close(sock);
-	
-	if (ret == -1) {
-		jniThrowSocketException(env, errno);
-	}
+
 	return ret;
 }
 
@@ -553,10 +570,8 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
 						       jint int_value)
 {
 	int sock, ret = 0;
-	/* int bval = bool_value; */
+	int bval = bool_value ? 1 : 0;
 	int ival = int_value;
-
-	LOG_WARN("Not completely implemented!\n");
 
 	sock = jniGetFDFromFileDescriptor(env, fd);
 	
@@ -565,12 +580,45 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
 	}
 
 	switch (opt) {
-	case JAVASOCKOPT_IP_TOS:
-		ret = setsockopt(sock, IPPROTO_IP, IP_TOS, &ival, sizeof(ival));
+        case JAVASOCKOPT_IP_TOS:
+		ret = setsockopt(sock, IPPROTO_IP, 
+                                 IP_TOS, &ival, sizeof(ival));
 		break;
+        case JAVASOCKOPT_SO_KEEPALIVE:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_KEEPALIVE, &bval, sizeof(bval));
+                break;
         case JAVASOCKOPT_SO_BROADCAST:
-                LOG_WARN("SO_BROADCAST not implemented!\n");
-                ret = 0;
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_BROADCAST, &bval, sizeof(bval));
+		break;
+        case JAVASOCKOPT_SO_LINGER:
+        {
+                struct linger l  = { bval, ival };
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_LINGER, &l, sizeof(l));
+                break;
+        }
+        case JAVASOCKOPT_SO_REUSEADDR:
+        case JAVASOCKOPT_REUSEADDR_AND_REUSEPORT:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_REUSEADDR, &bval, sizeof(bval));
+                break;
+        case JAVASOCKOPT_SO_SNDBUF:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_SNDBUF, &ival, sizeof(ival));
+		break;
+        case JAVASOCKOPT_SO_RCVBUF:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_RCVBUF, &ival, sizeof(ival));
+		break;
+        case JAVASOCKOPT_SO_RCVTIMEOUT:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_RCVTIMEO, &ival, sizeof(ival));
+		break;
+        case JAVASOCKOPT_SO_OOBINLINE:
+		ret = setsockopt(sock, SOL_SOCKET, 
+                                 SO_OOBINLINE, &bval, sizeof(bval));
                 break;
 	default:
 		jniThrowException(env, "java/lang/IllegalArgumentException", 
@@ -596,10 +644,8 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 						       jint opt)
 {
 	int sock, ret;
-	int ival = 0;
-	socklen_t len = sizeof(ival);
-
-	LOG_WARN("Not properly implemented yet!\n");
+	int val = 0;
+	socklen_t len = sizeof(val);
 
 	sock = jniGetFDFromFileDescriptor(env, fd);
 	
@@ -609,8 +655,37 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 	
 	switch (opt) {
 	case JAVASOCKOPT_IP_TOS:
-		ret = getsockopt(sock, IPPROTO_IP, IP_TOS, &ival, &len);
+		ret = getsockopt(sock, IPPROTO_IP, IP_TOS, &val, &len);
 		break;
+        case JAVASOCKOPT_SO_KEEPALIVE:
+		ret = getsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, &val, &len);
+                break;
+        case JAVASOCKOPT_SO_BROADCAST:
+		ret = getsockopt(sock, SOL_SOCKET, SO_BROADCAST, &val, &len);
+		break;
+        case JAVASOCKOPT_SO_LINGER:
+        {
+                struct linger l  = { 0, 0 };
+                len = sizeof(l);
+		ret = getsockopt(sock, SOL_SOCKET, SO_LINGER, &l, &len);
+                val = l.l_onoff;
+                break;
+        }
+        case JAVASOCKOPT_SO_REUSEADDR:
+        case JAVASOCKOPT_REUSEADDR_AND_REUSEPORT:
+		ret = getsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &val, &len);
+                break;
+        case JAVASOCKOPT_SO_SNDBUF:
+		ret = getsockopt(sock, SOL_SOCKET, SO_SNDBUF, &val, &len);
+		break;
+        case JAVASOCKOPT_SO_RCVBUF:
+		ret = getsockopt(sock, SOL_SOCKET, SO_RCVBUF, &val, &len);
+		break;
+        case JAVASOCKOPT_SO_RCVTIMEOUT:
+		ret = getsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &val, &len);
+		break;
+        case JAVASOCKOPT_SO_OOBINLINE:
+		ret = getsockopt(sock, SOL_SOCKET, SO_OOBINLINE, &val, &len);
 	default:
 		jniThrowException(env, "java/lang/IllegalArgumentException", 
 				  "Bad socket option");
@@ -619,9 +694,10 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 
 	if (ret == -1) {
 		jniThrowSocketException(env, errno);
+                return -1;
 	}
 
-	return 0;
+	return val;
 }
 
 /*

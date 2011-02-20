@@ -165,66 +165,34 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
                 return ret;
         }
-        lock_sock(sk);
 
-        if (host_ctrl_mode) {
-                ret = 1;
-                serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
-        } else {
+        if (!host_ctrl_mode) {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
                 cm.cmh.len = sizeof(cm);
                 memcpy(&cm.srvid, &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
                 ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
+                
+                if (ret < 0) {
+                        LOG_ERR("bind failed, servd not running?\n");
+                        return ret;
+                }
         }
-        if (ret < 0) {
-                LOG_ERR("bind failed, servd not running?\n");
-                release_sock(sk);
-                return ret;
-        }
+
+        lock_sock(sk);
+
+        /* Mark socket as bound */
+        serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
 
         memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid, 
                sizeof(svaddr->sv_srvid));
         serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
 
-        /* 
-           Return value of 1 indicates we are in controller mode -->
-           do not wait for a reply 
-        */
-        if (ret == 1) {
-                LOG_DBG("in controller mode\n");
-                /* Add to protocol hash chains. */
-                sk->sk_prot->hash(sk);
+        /* Hash socket */
+        sk->sk_prot->hash(sk);
+        
+        release_sock(sk);
 
-                release_sock(sk);
-                ret = 0;
-        } else if (ret == 0) {
-                release_sock(sk);
-                /* Sleep and wait for response or timeout */
-                ret = wait_event_interruptible_timeout(*sk_sleep(sk), serval_sock_flag(ssk, SSK_FLAG_BOUND), msecs_to_jiffies(5000));
-
-                if (ret < 0) {
-                        if (ret == -ERESTARTSYS) {
-                                LOG_ERR("bind interrupted\n");
-                        } else {
-                                LOG_ERR("wait failed\n");
-                        }
-                } else if (ret == 0) {
-                        LOG_DBG("bind timeout\n");
-                        ret = -ETIMEDOUT;
-                } else  {
-                        LOG_DBG("bind returned %d\n", ret);
-                        
-                        lock_sock(sk);
-
-                        /* Add to protocol hash chains. */
-                        sk->sk_prot->hash(sk);
-
-                        release_sock(sk);
-                }
-        } else {
-                release_sock(sk);
-        }
         return ret;
 }
 
@@ -734,8 +702,6 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 		mask |= POLLHUP;
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
-
-        LOG_DBG("Connect state?\n");
 
 	//if ((1 << sk->sk_state) & ~(DCCPF_REQUESTING | DCCPF_RESPOND)) {
         if (!(sk->sk_state == SERVAL_REQUEST || 
