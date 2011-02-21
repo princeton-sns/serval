@@ -147,10 +147,13 @@ static int unix_getfd(struct event_handler *eh)
 static int unix_send(struct event_handler *eh, const void *data, size_t datalen)
 {
         struct unix_handle *uh = (struct unix_handle *)eh->private;
+#if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
+        return send(uh->sock, data, datalen, 0);
+#else
         struct iovec iov = { (void *)data, datalen };
         struct msghdr mh = { &uh->peer, sizeof(uh->peer), &iov, 1, NULL, 0, 0 };
-        
         return sendmsg(uh->sock, &mh, 0);
+#endif
 }
 
 static struct unix_handle uh;

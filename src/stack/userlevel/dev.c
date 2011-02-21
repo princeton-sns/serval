@@ -458,7 +458,13 @@ int netdev_populate_table(int sizeof_priv,
                 if (ifr->ifr_flags & IFF_UP)
                         dev->flags |= IFF_UP;
 
-                /* Save ip configuration */
+                /* Get and save ip configuration */
+                if (ioctl(fd, SIOCGIFADDR, ifr) == -1) {
+                        LOG_ERR("SIOCGIFADDR: %s\n",
+                                strerror(errno));
+                        free_netdev(dev);
+                        goto out;
+                }
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                                 
@@ -471,15 +477,7 @@ int netdev_populate_table(int sizeof_priv,
 
                 memcpy(&dev->ipv4.broadcast, 
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
-#if defined(ENABLE_DEBUG)
-                {
-                        char ip[18], broad[18];
-                        LOG_DBG("ip %s - %s\n",
-                                inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
-                                inet_ntop(AF_INET, &dev->ipv4.broadcast, broad, 18));
 
-                }       
-#endif       
                 if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
                         LOG_ERR("SIOCGIFNETMASK: %s\n",
                                 strerror(errno));
@@ -490,9 +488,22 @@ int netdev_populate_table(int sizeof_priv,
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
 #else
-                LOG_WARN("CHECK that netmask is really returned here\n");
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char ip[18], broad[18], netmask[18];
+                        LOG_DBG("%s %s/%s/%s\n",
+                                dev->name,
+                                inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
+                                inet_ntop(AF_INET, &dev->ipv4.broadcast, 
+                                          broad, 18),
+                                inet_ntop(AF_INET, &dev->ipv4.netmask,
+                                          netmask, sizeof(netmask)));
+
+                }       
+#endif       
 #endif
                 ret = register_netdev(dev);
 

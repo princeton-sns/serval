@@ -8,9 +8,15 @@ servd_SOURCES += \
 	rtnl.c
 endif
 
+if OS_BSD
+servd_SOURCES += \
+	ifa.c
+endif
+
 noinst_HEADERS = \
 	debug.h \
 	timer.h \
+	ifa.h \
 	rtnl.h
 
 servd_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack

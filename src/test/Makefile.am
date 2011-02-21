@@ -1,5 +1,4 @@
 bin_PROGRAMS = \
-	nltest \
 	send_udp_packet \
 	send_udp_packetn \
 	bindtest \
@@ -11,7 +10,12 @@ bin_PROGRAMS = \
 	udp_client \
 	udp_clientn
 
+if OS_LINUX
+bin_PROGRAMS += \
+	nltest
+
 nltest_SOURCES = nltest.c
+endif
 
 send_udp_packet_SOURCES = send_udp_packet.c
 send_udp_packet_CPPFLAGS =-I$(top_srcdir)/include

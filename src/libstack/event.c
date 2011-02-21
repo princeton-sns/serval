@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <poll.h>
+#include <errno.h>
 #include <serval/list.h>
 #include "event.h"
 #include "debug.h"
@@ -142,8 +143,8 @@ static int eventloop_dequeue_msg_xmit(struct event_handle *h)
                                                        me->data, me->datalen);
                         
                         if (ret == -1) {
-                                LOG_ERR("send failure for handler '%s'\n",
-                                        h->handlers[i]->name);
+                                LOG_ERR("send failure for handler '%s' : %s\n",
+                                        h->handlers[i]->name, strerror(errno));
                         }
                 }
                 n++;
