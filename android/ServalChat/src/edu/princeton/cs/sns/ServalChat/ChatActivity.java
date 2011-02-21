@@ -2,13 +2,15 @@
 package edu.princeton.cs.sns.ServalChat;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.SocketTimeoutException;
+
 import edu.princeton.cs.sns.ServalChat.R;
 import serval.net.ServalDatagramSocket;
 import serval.net.ServalDatagramPacket;
 import serval.net.ServiceID;
 import android.app.Activity;
 import android.os.Bundle;
-import android.os.Process;
 import android.text.Editable;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
@@ -26,6 +28,7 @@ public class ChatActivity extends Activity {
 	private Button sendButton = null;
 	private Button cancelButton = null;
 	private ServalDatagramSocket sock = null;
+	private TextReceiver textReceiver = null;
 	private Thread textReceiverThread = null;
 	
     @Override
@@ -68,7 +71,8 @@ public class ChatActivity extends Activity {
 		super.onStart();
 		Log.d("ServalChat", "onStart");
 		
-		textReceiverThread = new Thread(new TextReceiver());
+		textReceiver = new TextReceiver();
+		textReceiverThread = new Thread(textReceiver);
 		textReceiverThread.start();
     }
     
@@ -82,12 +86,7 @@ public class ChatActivity extends Activity {
 			sock.close();
 		}
 		if (textReceiverThread != null) {
-			if (textReceiverThread.isAlive()) {
-				// Interrupt a connect or other blocking call.
-				Log.d("Serval Chat", "Interrupting receive thread");
-				Process.sendSignal(Process.myPid(), Process.SIGNAL_QUIT);
-				textReceiverThread.interrupt();
-			}
+			textReceiver.signalExit();
 			try {
 				textReceiverThread.join();
 			} catch (InterruptedException e) {
@@ -103,7 +102,8 @@ public class ChatActivity extends Activity {
 	}
     
     private class TextReceiver implements Runnable {
-		ServalDatagramPacket pack = 
+		private volatile boolean shouldExit = false;
+		private ServalDatagramPacket pack = 
             new ServalDatagramPacket(new byte[1024], 1024);
 		
 		private class ChatWindowUpdater implements Runnable {
@@ -118,6 +118,7 @@ public class ChatActivity extends Activity {
 			}
 		}
 		private class StatusUpdater implements Runnable {
+			
 			String text;
 			
 			public StatusUpdater(String text) {
@@ -128,13 +129,19 @@ public class ChatActivity extends Activity {
 				statusText.setText(text);
 			}
 		}
+
+		public synchronized void signalExit() {
+			shouldExit = false;
+		}
 		
 		@Override
 		public void run() {
+			
 			Log.d("ServalChat", "Text receiver thread running");
 
 			try {
 				sock = new ServalDatagramSocket(new ServiceID((short) 32769));
+				sock.setSoTimeout(3000);
 				statusText.post(new StatusUpdater("Connecting..."));
 				sock.connect(new ServiceID((short) 16385), 3000);
 				Log.d("ServalChat", "connected");
@@ -149,8 +156,10 @@ public class ChatActivity extends Activity {
 				}
 				return;
 			}
-			while (true) {
+			
+			while (!shouldExit) {
 				try {
+					Log.d("ServalChat", "receiving...");
 					sock.receive(pack);
 
 					String rsp = new String(pack.getData(), 0, pack.getLength());
@@ -159,8 +168,13 @@ public class ChatActivity extends Activity {
 					
 					chatWindow.post(new ChatWindowUpdater(rsp));
 					
+				} catch (SocketTimeoutException e) {
+					/* SO_RCVTIMEO set, try again. */
+					Log.d("ServalChat", "TimeoutException: " + e.getMessage());
+				} catch (InterruptedIOException e) {
+					Log.d("ServalChat", "InterruptException: " + e.getMessage());
 				} catch (Exception e) {
-					Log.d("ServalChat", "Text receiver thread exits");
+					Log.d("ServalChat", "ERROR - " + e.getMessage());
 					break;
 				}
 			}
