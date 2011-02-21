@@ -102,7 +102,7 @@ private:
 			  sv_err_t &err);
   int query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
 		       Cli &cli, sv_err_t &err);
-  int query_scafd_sendto(const sv_srvid_t& dst_obj_id, 
+  int query_scafd_sendto(const sv_srvid_t& dst_obj_id, uint32_t ipaddr,
 			 const void *buffer, size_t length, int flags,
 			 Cli &cli, sv_err_t &err);
   int query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, int flags,

@@ -501,16 +501,26 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-        struct sockaddr_sv saddr;
+        struct {
+                struct sockaddr_sv sv;
+                struct sockaddr_in in;
+        } addr;
+        socklen_t addrlen = sizeof(addr.sv);
         int ret;
 
-        memset(&saddr, 0, sizeof(saddr));
-        saddr.sv_family = AF_SERVAL;
-        memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
-
+        memset(&addr, 0, sizeof(addr));
+        addr.sv.sv_family = AF_SERVAL;
+        memcpy(&addr.sv.sv_srvid, &req->srvid, sizeof(req->srvid));
+        addr.in.sin_family = AF_INET;
+        
+        if (req->ipaddr != 0) {
+                memcpy(&addr.in.sin_addr, &req->ipaddr, 
+                       sizeof(req->ipaddr));
+                addrlen = sizeof(addr);
+        }
         memset(&mh, 0, sizeof(mh));
-        mh.msg_name = &saddr;
-        mh.msg_namelen = sizeof(saddr);
+        mh.msg_name = &addr;
+        mh.msg_namelen = addrlen;
         mh.msg_iov = &iov;
         mh.msg_iovlen = 1;
         

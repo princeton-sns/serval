@@ -313,15 +313,6 @@ static void serval_srv_timewait(struct sock *sk, int state)
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
                        jiffies + msecs_to_jiffies(8000)); 
 }
-/*
-  Use serval_sock_done() instead, should remove... 
-static void serval_srv_set_closed(struct sock *sk)
-{
-        serval_sock_set_state(sk, SERVAL_CLOSED);
-        sk->sk_state_change(sk);
-        serval_sock_destroy(sk);
-}
-*/
 
 /* Called as a result of user app close() */
 void serval_srv_close(struct sock *sk, long timeout)
@@ -363,14 +354,7 @@ void serval_srv_close(struct sock *sk, long timeout)
                         LOG_ERR("queuing failed\n");
                 }
         } else {
-                /*
-                serval_sock_set_state(sk, SERVAL_CLOSED);
-                sk->sk_state_change(sk);
-                */
                 serval_sock_done(sk);
-                /* Do not destroy sock here, user process will take
-                 * care of that in the end of the calling close
-                 * function */
         }
 }
 
@@ -737,6 +721,15 @@ static int serval_srv_connected_state_process(struct sock *sk,
         return err;
 }
 
+/*
+  This function works as the initial receive function for a child
+  socket that has just been created by a parent (as a result of
+  successful connection handshake).
+
+  The processing resembles that which happened for the parent socket
+  when this packet was first received by the parent.
+
+ */
 static int serval_srv_child_process(struct sock *parent, struct sock *child,
                                     struct serval_hdr *sfh,
                                     struct sk_buff *skb)
@@ -985,7 +978,6 @@ static int serval_srv_lastack_state_process(struct sock *sk,
         if (err == 0) {
                 /* ACK was valid */
                 serval_sock_done(sk);
-                //serval_srv_set_closed(sk);
         }
 
         FREE_SKB(skb);
@@ -1157,7 +1149,8 @@ void serval_srv_rexmit_timeout(unsigned long data)
         LOG_DBG("Retransmit timeout sock=%p num=%u backoff=%u\n", 
                 sk, ssk->retransmits, backoff[ssk->retransmits]);
         
-        if (backoff[ssk->retransmits + 1] == 0) {
+        if (sk->sk_state == SERVAL_REQUEST &&
+            backoff[ssk->retransmits + 1] == 0) {
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
@@ -1183,7 +1176,6 @@ void serval_srv_timewait_timeout(unsigned long data)
         bh_lock_sock_nested(sk);
         LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
         serval_sock_done(sk);
-        //serval_srv_set_closed(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */
         sock_put(sk);
@@ -1195,6 +1187,19 @@ static inline int serval_srv_do_xmit(struct sk_buff *skb)
          struct serval_sock *ssk = serval_sk(sk);
          int err = 0;
 
+         /*
+           FIXME: we kind of hard code the outgoing device here based
+           on what has been bound to the socket in the connection
+           setup phase. Instead, the device should be resolved based
+           on, e.g., dst IP (if it exists at this point).
+
+           However, we currently do not implement an IP routing table,
+           which would otherwise be used for this resolution.
+
+           Packets that are sent using an advisory IP may fail here
+           unless the socket has had its interface set by a previous
+           send event.
+          */
          if (ssk->dev) {
                  skb_set_dev(skb, ssk->dev);
                  

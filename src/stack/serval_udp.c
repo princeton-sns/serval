@@ -228,13 +228,20 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		}
                 
                 srvid = &svaddr->sv_srvid;
-
+                
                 /* Check for advisory IP address */
                 if ((unsigned)msg->msg_namelen >= 
                     (sizeof(*svaddr) + sizeof(*inaddr))) {
+                        char buf[20];
+                                
                         if (inaddr->sin_family != AF_INET)
                                 return -EAFNOSUPPORT;
 
+                        LOG_DBG("Advisory IP %s\n",
+                                inet_ntop(inaddr->sin_family, 
+                                          &inaddr->sin_addr,
+                                          buf, sizeof(buf)));
+                        
                         netaddr = (struct net_addr *)&inaddr->sin_addr;
                 }
         } else if (sk->sk_state != SERVAL_CONNECTED) {
@@ -374,10 +381,10 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         *addr_len = sizeof(*svaddr);
                         memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid, 
                                sizeof(svaddr->sv_srvid));
-
+                        
                         /* Copy also IP address if possible */
-                        if (addrlen == sizeof(*svaddr) + 
-                            sizeof(struct sockaddr_in)) {
+                        if (addrlen == (sizeof(*svaddr) + 
+                                        sizeof(struct sockaddr_in))) {
                                 struct sockaddr_in *inaddr = 
                                         (struct sockaddr_in *)(svaddr + 1);
                                 inaddr->sin_family = AF_INET;

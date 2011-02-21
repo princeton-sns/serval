@@ -25,7 +25,8 @@
 //
 
 SendReq::SendReq()
-    :Message(SEND_REQ), _nb(false), _nsbuf(0), _nonserial_len(0), _flags(0)
+    :Message(SEND_REQ), _nb(false), _ipaddr(0),
+     _nsbuf(0), _nonserial_len(0), _flags(0)
 {
     memset(&_dst_obj_id, 0xff, sizeof(_dst_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
@@ -33,8 +34,8 @@ SendReq::SendReq()
 
 SendReq::SendReq(bool nb, 
                  unsigned char *buf, uint16_t buflen, int flags)
-    :Message(SEND_REQ), _nb(nb), _nsbuf(buf), _nonserial_len(buflen),
-         _flags(flags)
+    :Message(SEND_REQ), _nb(nb), _ipaddr(0),
+     _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
 {
     memset(&_dst_obj_id, 0xff, sizeof(_dst_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
@@ -42,8 +43,17 @@ SendReq::SendReq(bool nb,
 
 SendReq::SendReq(sv_srvid_t dst_obj_id,
                  unsigned char *buf, uint16_t buflen, int flags)
-    :Message(SEND_REQ), _nb(false), _nsbuf(buf), _nonserial_len(buflen),
-         _flags(flags)
+    :Message(SEND_REQ), _nb(false), _ipaddr(0),
+     _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
+{
+    memcpy(&_dst_obj_id, &dst_obj_id, sizeof(dst_obj_id));
+    set_pld_len_v(serial_pld_len() + nonserial_pld_len());
+}
+
+SendReq::SendReq(sv_srvid_t dst_obj_id, uint32_t ipaddr,
+                 unsigned char *buf, uint16_t buflen, int flags)
+    :Message(SEND_REQ), _nb(false), _ipaddr(ipaddr),
+     _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
 {
     memcpy(&_dst_obj_id, &dst_obj_id, sizeof(dst_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
@@ -53,7 +63,8 @@ uint16_t
 SendReq::serial_pld_len() const
 {
     return sizeof(_nb) + 
-        sizeof(_dst_obj_id) + sizeof(_nonserial_len) + sizeof(_flags);
+        sizeof(_dst_obj_id) + sizeof(_ipaddr) + 
+        sizeof(_nonserial_len) + sizeof(_flags);
 }
 
 int
@@ -68,6 +79,7 @@ SendReq::write_serial_payload(unsigned char *buf) const
     unsigned char *p = buf;
     p += serial_write(_nb, p);
     p += serial_write(_dst_obj_id, p);
+    p += serial_write(_ipaddr, p);
     p += serial_write(_nonserial_len, p);
     p += serial_write(_flags, p);
     return p - buf;
@@ -79,6 +91,7 @@ SendReq::read_serial_payload(const unsigned char *buf)
     const unsigned char *p = buf;
     p += serial_read(&_nb, p);
     p += serial_read(&_dst_obj_id, p);
+    p += serial_read(&_ipaddr, p);
     p += serial_read(&_nonserial_len, p);
     p += serial_read(&_flags, p);
     return p - buf;

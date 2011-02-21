@@ -154,6 +154,7 @@ struct client_msg_send_req {
 	struct client_msg msghdr;
         bool_t non_blocking;
         struct service_id srvid;
+        uint32_t ipaddr;
         uint16_t data_len;
         int flags;
         unsigned char data[0];

@@ -22,11 +22,6 @@ int serval_output(struct sk_buff *skb)
         struct neighbor_entry *neigh;
 	int err;
 
-        if (!skb->dev) {
-                err =  -ENODEV;
-                goto drop;
-        }
-        
         neigh = neighbor_find((struct net_addr *)&ip_hdr(skb)->daddr);
 
         if (!neigh) {
@@ -35,6 +30,13 @@ int serval_output(struct sk_buff *skb)
                         inet_ntop(AF_INET, &ip_hdr(skb)->daddr,
                                   buf, 15));
                 err = -EHOSTUNREACH;
+                goto drop;
+        } else if (neigh->dev) {
+                 skb_set_dev(skb, neigh->dev);
+        }
+        
+        if (!skb->dev) {
+                err =  -ENODEV;
                 goto drop;
         }
         
