@@ -350,16 +350,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			break;
 		}
 
-                LOG_DBG("wait data timeo=%ld\n", timeo);
-		retval = sk_wait_data(sk, &timeo);
-
-                LOG_DBG("wait data returned=%d\n", retval);
-
-                if (retval == 0) {
-                        /* Timeout. */
-                        retval = -EAGAIN;
-                        break;
-                }
+                sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
                 if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {

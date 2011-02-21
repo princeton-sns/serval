@@ -355,7 +355,9 @@ void proto_unregister(struct proto *prot)
 	write_unlock(&proto_list_lock);
 }
 
-
+/* 
+   Wait for data in receive queue, return 1 if data exists, else 0.
+ */
 int sk_wait_data(struct sock *sk, long *timeo)
 {
         int rc;
