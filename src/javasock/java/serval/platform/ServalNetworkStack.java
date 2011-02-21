@@ -64,6 +64,8 @@ public class ServalNetworkStack {
         
         if (len > 0) {
             pack.setLength(len);
+        } else {
+            pack.setLength(0);
         }
 	}
     

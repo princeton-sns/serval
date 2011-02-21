@@ -296,8 +296,6 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
         int retval = -ENOMEM;
 	long timeo;
-
-        LOG_DBG("\n");
         
         lock_sock(sk);
         
