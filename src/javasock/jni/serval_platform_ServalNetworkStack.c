@@ -483,7 +483,7 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
                         jniThrowSocketException(env, errno);
 			return -1;
                 } else if (ret == 0) {                       
-                        jniThrowSocketException(env, EAGAIN);
+                        jniThrowSocketTimeoutException(env, EAGAIN);
                         return 0;
                 }
 	}
@@ -545,9 +545,7 @@ jint Java_serval_platform_ServalNetworkStack_close(JNIEnv *env,
 		return -1;
 	}
 	
-        LOG_DBG("closing\n");
 	ret = close(sock);
-        LOG_DBG("close returned %d\n", ret);
 
 	return ret;
 }
