@@ -257,7 +257,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         /* Did we remove the first packet in the queue? */
         if (serval_srv_ctrl_queue_head(sk) != fskb) {
                 sk_stop_timer(sk, &serval_sk(sk)->retransmit_timer);
-                ssk->rexmt_shift = 0;
+                ssk->retransmits = 0;
         }
 
         if (serval_srv_ctrl_queue_head(sk)) {
@@ -1155,24 +1155,22 @@ void serval_srv_rexmit_timeout(unsigned long data)
         bh_lock_sock_nested(sk);
 
         LOG_DBG("Retransmit timeout sock=%p num=%u backoff=%u\n", 
-                sk, ssk->rexmt_shift, backoff[ssk->rexmt_shift]);
+                sk, ssk->retransmits, backoff[ssk->retransmits]);
         
-        if (sk->sk_state == SERVAL_REQUEST &&
-            backoff[ssk->rexmt_shift + 1] == 0) {
+        if (backoff[ssk->retransmits + 1] == 0) {
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
                 serval_sock_done(sk);
-                //serval_srv_set_closed(sk);
         } else {
                 LOG_DBG("retransmitting and rescheduling timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + (msecs_to_jiffies(ssk->rto) * 
-                                          backoff[ssk->rexmt_shift]));
+                                          backoff[ssk->retransmits]));
                 serval_srv_rexmit(sk);
                 
-                if (backoff[ssk->rexmt_shift + 1] != 0)
-                        ssk->rexmt_shift++;
+                if (backoff[ssk->retransmits + 1] != 0)
+                        ssk->retransmits++;
         }
         bh_unlock_sock(sk);
         sock_put(sk);

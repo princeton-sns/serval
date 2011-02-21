@@ -122,7 +122,7 @@ struct serval_sock {
                 uint32_t        wnd;
                 uint32_t        iss;
         } rcv_seq;
-        unsigned short          rexmt_shift;
+        unsigned short          retransmits;
         unsigned long           rto;
         unsigned long           srtt;
         unsigned long           tot_bytes_sent;
