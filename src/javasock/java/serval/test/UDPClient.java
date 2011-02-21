@@ -3,13 +3,33 @@ package serval.test;
 
 import java.io.IOException;
 import java.lang.System;
+import java.lang.Thread;
+import java.lang.Runnable;
 import serval.net.*;
 
 public class UDPClient {
     private ServalDatagramSocket sock;
-    
+    private Thread closeThr = null;
+
     public UDPClient() {
 
+    }
+
+    private class CloseThread implements Runnable {
+        public CloseThread() {
+        }
+        public void run() {
+            System.out.println("CloseThread running\n");
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+
+            }
+            
+            System.out.println("Closing socket\n");
+            sock.close();
+            System.out.println("Socket closed\n");
+        }
     }
     private void sendMessage(String msg) {
 		if (msg.length() == 0) {
@@ -26,12 +46,16 @@ public class UDPClient {
 				// FIXME: Should not do a blocking receive in this function
 
                 System.out.println("Receiving...");
-                sock.setSoTimeout(3000);
 				sock.receive(pack);
                 System.out.println("Receive returned");
 				String rsp = new String(pack.getData(), 0, pack.getLength());
 				//System.out.println("response length=" + pack.getLength());
 				System.out.println("Response: " + rsp);
+
+
+                System.out.println("Receiving...");
+				sock.receive(pack);
+                System.out.println("Receive returned");
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
                 System.out.println("Error: " + e.getMessage());
@@ -46,6 +70,7 @@ public class UDPClient {
     private void run() {
         try {
             sock = new ServalDatagramSocket(new ServiceID((short) 32769));
+            sock.setSoTimeout(5000);
             sock.connect(new ServiceID((short) 16385), 4000);
         } catch (Exception e) {
             System.out.println("failure: " + e.getMessage());
@@ -60,6 +85,8 @@ public class UDPClient {
 
         System.out.println("Sending: " + msg);
  
+        (new Thread(new CloseThread())).start();
+
         sendMessage(msg);
 
         if (sock != null)
