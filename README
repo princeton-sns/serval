@@ -54,7 +54,7 @@ Run (./autogen.sh) ./configure to generate Makefiles
 
 Enter src/stack and issue the following command (example for Android):
 
-> make serval.ko ARCH=arm CROSS_COMPILE=<Path to NDK)/android-ndk-r4b/build/prebuilt/darwin-x86/arm-eabi-4.4.0/bin/arm-eabi- KDIR=<Path to kernel source>
+> make serval.ko ARCH=arm CROSS_COMPILE=<Path to NDK)/build/prebuilt/darwin-x86/arm-eabi-4.4.0/bin/arm-eabi- KDIR=<Path to kernel source>
 
 
 Running Serval in user-level mode
@@ -71,7 +71,7 @@ Start servd:
 Wait until a service router is discovered or a timeout occurs (in
 which case host control mode is set).
 
-Start any clients, e.g.,:
+Start any clients, e.g.:
 
 > ./src/test/udp_server
 
@@ -96,7 +96,7 @@ Start any clients, e.g.,:
 
 > ./src/test/udp_servern
 
-Access internal state through /proc/net/serval/.
+Access internal state and debug output through /proc/net/serval/.
 
 When done, shut down all clients and servd, then remove Serval module:
 

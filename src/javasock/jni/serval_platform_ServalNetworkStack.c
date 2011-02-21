@@ -482,7 +482,10 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 		if (ret == -1) {
                         jniThrowSocketException(env, errno);
 			return -1;
-                } 
+                } else if (ret == 0) {                       
+                        jniThrowSocketException(env, EAGAIN);
+                        return 0;
+                }
 	}
 	
 	buffer = (jbyte*) malloc(buflen);
@@ -542,7 +545,9 @@ jint Java_serval_platform_ServalNetworkStack_close(JNIEnv *env,
 		return -1;
 	}
 	
+        LOG_DBG("closing\n");
 	ret = close(sock);
+        LOG_DBG("close returned %d\n", ret);
 
 	return ret;
 }
@@ -620,6 +625,9 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
         {
                 struct timeval timeout = { ival / 1000, 
                                            (ival % 1000) * 1000 };
+
+                LOG_DBG("SO_RCVTIMEO %ld.%06ld\n", 
+                        timeout.tv_sec, timeout.tv_usec);
 		ret = setsockopt(sock, SOL_SOCKET, 
                                  SO_RCVTIMEO, &timeout, sizeof(timeout));
 		break;

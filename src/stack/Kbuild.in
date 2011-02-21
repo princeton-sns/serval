@@ -8,6 +8,7 @@ serval-y := \
 	   linux/proc.o \
 	   linux/packet.o \
 	   linux/module.o \
+	   linux/log.o \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \

@@ -126,7 +126,7 @@ int serval_module_init(void)
 {
 	int err = 0;
 
-        LOG_DBG("Loaded serval protocol module\n");
+        pr_alert("Loaded serval protocol module\n");
         
         err = proc_init();
         
@@ -183,7 +183,7 @@ void __exit serval_module_fini(void)
 	serval_fini();
         ctrl_fini();
         proc_fini();
-        LOG_INF("Unloaded serval protocol module\n");
+        pr_alert("Unloaded serval protocol module\n");
 }
 
 module_init(serval_module_init)

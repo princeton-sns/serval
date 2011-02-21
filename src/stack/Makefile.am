@@ -94,13 +94,15 @@ KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
 TARGETS = serval.ko
 
-SERVAL_KERNEL_HDR =
+SERVAL_KERNEL_HDR = \
+	linux/log.h
 
 SERVAL_KERNEL_SRC = \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
 	linux/module.c \
+	linux/log.c \
 	debug.c \
 	platform.c \
 	bst.c \
