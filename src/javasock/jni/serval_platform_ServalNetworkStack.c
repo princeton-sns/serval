@@ -211,11 +211,19 @@ jint Java_serval_platform_ServalNetworkStack_listen(JNIEnv *env,
 						    jobject fd,
 						    jint backlog)
 {
-	int ret;
+	int sock, ret;
 
-	ret = listen(jniGetFDFromFileDescriptor(env, fd), backlog);
+	sock = jniGetFDFromFileDescriptor(env, fd);
+
+	if ((*env)->ExceptionCheck(env)) {
+                LOG_ERR("Could not get sock from FD\n");
+		return -1;
+	}
+
+	ret = listen(sock, backlog);
 
 	if (ret == -1) {
+                LOG_ERR("listen failed: %s\n", strerror(errno));
 		jniThrowSocketException(env, errno);
 	}
 
@@ -244,6 +252,7 @@ jobject Java_serval_platform_ServalNetworkStack_accept(JNIEnv *env,
 	sock = jniGetFDFromFileDescriptor(env, fd);
 
 	if ((*env)->ExceptionCheck(env)) {
+                LOG_ERR("Could not get sock from FD\n");
 		return NULL;
 	}
 
@@ -253,6 +262,7 @@ jobject Java_serval_platform_ServalNetworkStack_accept(JNIEnv *env,
 	} while (ret < 0 && errno == EINTR);
 
 	if (ret == -1) {
+                LOG_ERR("Accept fail: %s\n", strerror(errno));
 		jniThrowSocketException(env, errno);
 		return NULL;
 	}
@@ -514,7 +524,12 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
                                 retry = 0;
                                 break;
 			}
-		} else {
+		} else if (ret == 0) {
+                        /* Other end closed connection, return -1
+                         * similarly to InputStream.read() */
+                        ret = -1;
+                        break;
+                } else {
                         break;
                 }
 	}

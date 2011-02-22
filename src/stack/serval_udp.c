@@ -203,8 +203,10 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         int ulen = len;
         struct service_id *srvid = NULL;
         struct net_addr *netaddr = NULL;
+        int nonblock = msg->msg_flags & MSG_DONTWAIT;
+        long timeo;
 
-	if (len > 0xFFFF )
+	if (len > 0xFFFF)
 		return -EMSGSIZE;
 
         if (len == 0)
@@ -250,11 +252,22 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
         ulen += sizeof(struct udphdr);
 
-        skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen,
-                                  (msg->msg_flags & MSG_DONTWAIT), &err);
+        lock_sock(sk);
+
+	timeo = sock_sndtimeo(sk, nonblock);
+
+	/* Wait for a connection to finish. */
+        /*
+
+	if ((1 << sk->sk_state) & ~SERVALF_CONNECTED)
+		if ((rc = sk_stream_wait_connect(sk, &timeo)) != 0)
+                goto out_release;
+        */
+
+        skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen, nonblock, &err);
 
         if (!skb)
-                return -ENOMEM;
+                goto out;
         
         skb_reserve(skb, UDP_MAX_HDR);
 
@@ -267,14 +280,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 /* Make sure we zero this address to signal it is unset */
                 memset(&SERVAL_SKB_CB(skb)->addr, 0, sizeof(*netaddr));
         }
-        /* 
-           TODO: 
-           
-           This is an extra copy operation for the user space version
-           that we could try to get rid of, i.e., reading the data
-           from the file descriptor directly into the socket buffer
-        */
-        
+
         err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
      
         if (err < 0) {
@@ -282,17 +288,15 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 FREE_SKB(skb);
                 goto out;
         }
-
-        lock_sock(sk);
                 
         err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
         
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
         }
-
-        release_sock(sk);
 out:
+        release_sock(sk);
+
         return err;
 }
 

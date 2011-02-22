@@ -8,7 +8,9 @@ noinst_JAVA = \
 	serval/net/ServalDatagramSocket.java \
 	serval/net/ServalDatagramSocketImpl.java \
 	serval/net/ServalDatagramSocketImplFactory.java \
+	serval/net/ServalServerDatagramSocket.java \
 	serval/platform/ServalNetworkStack.java \
+	serval/test/UDPServer.java \
 	serval/test/UDPClient.java
 
 EXTRA_DIST=

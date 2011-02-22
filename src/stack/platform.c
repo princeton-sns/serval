@@ -115,7 +115,8 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 #include <poll.h>
 #include <signal.h>
 
-int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *set)
+int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, 
+          sigset_t *set)
 {
         int to = 0;
         sigset_t oldset;

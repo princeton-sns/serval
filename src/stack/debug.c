@@ -20,8 +20,6 @@ extern int log_vprintk(const char *levelstr, const char *func,
 void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
-
-	va_start(ap, format);
         
 #if defined(OS_LINUX_KERNEL)
         switch (level) {
@@ -31,10 +29,14 @@ void logme(log_level_t level, const char *func, const char *format, ...)
                 pr_alert("{%d}[%3s]%s: ", 
                          task_pid_nr(current), 
                          log_level_str[level], func);
+                va_start(ap, format);
                 vprintk(format, ap);
+                va_end(ap);
         case LOG_LEVEL_DBG:
         case LOG_LEVEL_INF:
+                va_start(ap, format);
                 log_vprintk(log_level_str[level], func, format, ap);
+                va_end(ap);
                 break;
         }
 #endif
@@ -53,12 +55,14 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 			s = stderr;
 			break;
 		}
+
+                va_start(ap, format);
 		fprintf(s, "%s{%010ld}[%3s]%s: ", 
 			get_strtime(), (long)pthread_self(), 
                         log_level_str[level], func);
 		vfprintf(s, format, ap);
+                va_end(ap);
 		fflush(s);
 	}
 #endif
-	va_end(ap);
 }

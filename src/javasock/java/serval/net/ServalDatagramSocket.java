@@ -391,9 +391,12 @@ public class ServalDatagramSocket {
      * @throws IOException
      *                if an error occurs while receiving the packet.
      */
-    public synchronized void receive(ServalDatagramPacket pack) 
+    public synchronized int receive(ServalDatagramPacket pack) 
         throws IOException, IllegalArgumentException {
-        checkClosedAndBind(true);
+        int ret = 0;
+
+        //checkClosedAndBind(true);
+        checkClosedAndBind(false);
 
         ServiceID senderServiceID;
         InetAddress senderAddr;
@@ -412,7 +415,7 @@ public class ServalDatagramSocket {
             if (pack == null) {
                 throw new NullPointerException();
             }
-
+        
             // iterate over incoming packets
             while (true) {
                 copy = false;
@@ -480,7 +483,7 @@ public class ServalDatagramSocket {
                     break;
                 } else if (!copy) {
                     // drop packet and continue
-                    impl.receive(tempPack);
+                    ret = impl.receive(tempPack);
                 }
             }
         }
@@ -495,10 +498,11 @@ public class ServalDatagramSocket {
             pack.setAddress(tempPack.getAddress());
         } else {
             pack.setLength(pack.getData().length);
-            impl.receive(pack);
+            ret = impl.receive(pack);
             // pack's length field is now updated by native code call;
             // pack's capacity field is unchanged
         }
+        return ret;
     }
 
     /**
@@ -513,7 +517,8 @@ public class ServalDatagramSocket {
      *                if an error occurs while sending the packet.
      */
     public void send(ServalDatagramPacket pack) throws IOException {
-        checkClosedAndBind(true);
+        //checkClosedAndBind(true);
+        checkClosedAndBind(false);
 
         InetAddress packAddr = pack.getAddress();
         SocketAddress sa;
@@ -530,17 +535,17 @@ public class ServalDatagramSocket {
         ServalSocketAddress ssa = (ServalSocketAddress)sa;
         ServiceID packServiceID = ssa.getServiceID();
 
-        if (serviceID != null) { // The socket is connected
+        if (isConnected) {
             if (packServiceID != null) {
-                if (!serviceID.equals(packServiceID)) {
-                    throw new IllegalArgumentException();
+                if (serviceID != null && !serviceID.equals(packServiceID)) {
+                    throw new IllegalArgumentException("Invalid destination serviceID");
                 }
             } else {
                 pack.setSocketAddress(new ServalSocketAddress(serviceID));
             }
             if (packAddr != null) {
                 if (!address.equals(packAddr)) {
-                    throw new IllegalArgumentException();
+                    throw new IllegalArgumentException("Invalid destination address");
                 }
             } else {
                 pack.setAddress(address);
@@ -549,7 +554,7 @@ public class ServalDatagramSocket {
             // not connected so the target address is not allowed to be null
             if (packServiceID == null) {
                 // KA019 Destination address is null
-                throw new NullPointerException();
+                throw new NullPointerException("No destination serviceID");
             }
 
             if (!packServiceID.valid()) {
@@ -671,6 +676,8 @@ public class ServalDatagramSocket {
             throw new NullPointerException();
         }
         impl = socketImpl;
+        isClosed = false;
+        isConnected = true;
     }
 
     /**
@@ -710,6 +717,8 @@ public class ServalDatagramSocket {
 
     void checkClosedAndBind(boolean bind) throws SocketException {
         if (isClosed()) {
+            System.out.println("socket closed");
+        
             throw new SocketException();
         }
         if (bind && !isBound()) {

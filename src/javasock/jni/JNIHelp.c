@@ -262,41 +262,6 @@ void jniHelpInit(JNIEnv* env)
         }
 }
 
-/*
- * checks to see if class is inited and inits if needed, returning -1
- * on fail and 0 on success
- */
-static int checkClassInit (JNIEnv *env) {
-        if (gCachedFields.clazz == NULL) {
-                /* this should cause the class to be inited and
-                 * our static variables to be filled in
-                 *
-                 * (Note that FindClass just loads the class; it doesn't get
-                 * initialized until we try to do something with it.)
-                 */
-                jclass clazz;
-                clazz = (*env)->FindClass(env, "java/io/FileDescriptor");
-                if(clazz == NULL) {
-                        jniThrowException(env, "java/lang/ClassNotFoundException", 
-                                          "java.io.FileDescriptor");
-                        return -1;
-                }
-
-                jfieldID readWriteId;
-                readWriteId = (*env)->GetStaticFieldID(env, clazz, "in", 
-                                                       "Ljava/io/FileDescriptor;");
-                if(readWriteId == NULL) {
-                        jniThrowException(env, "java/lang/NoSuchFieldException", 
-                                          "FileDescriptor.readOnly(Z)");
-                        return -1;
-                }
-
-                (void) (*env)->GetStaticObjectField(env, clazz, readWriteId);
-        }
-
-        return 0;
-}
-
 /* 
  * For JNIHelp.c
  * Get an int file descriptor from a java.io.FileDescriptor
@@ -304,12 +269,7 @@ static int checkClassInit (JNIEnv *env) {
 
 jobject jniCreateFileDescriptor(JNIEnv *env, int fd) {
         jobject ret;
-        
-        /* the class may not have been loaded yet */
-        if (checkClassInit(env) < 0) {
-                return NULL;
-        }
-        
+                
         ret = (*env)->NewObject(env, gCachedFields.clazz,
                                 gCachedFields.constructorInt);
         

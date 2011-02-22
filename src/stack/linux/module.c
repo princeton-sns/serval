@@ -126,7 +126,7 @@ int serval_module_init(void)
 {
 	int err = 0;
 
-        pr_alert("Loaded serval protocol module\n");
+        pr_alert("Loaded Serval protocol module\n");
         
         err = proc_init();
         
@@ -183,7 +183,7 @@ void __exit serval_module_fini(void)
 	serval_fini();
         ctrl_fini();
         proc_fini();
-        pr_alert("Unloaded serval protocol module\n");
+        pr_alert("Unloaded Serval protocol module\n");
 }
 
 module_init(serval_module_init)

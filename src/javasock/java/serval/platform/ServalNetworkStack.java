@@ -55,10 +55,10 @@ public class ServalNetworkStack {
 		return stack == null ? new ServalNetworkStack() : stack;
 	}
     
-	public void recvConnectedDatagram(FileDescriptor fd, 
-                                      ServalDatagramPacket pack,
-                                      byte[] data, int offset, int length, 
-                                      int timeout, boolean peek)
+	public int recvConnectedDatagram(FileDescriptor fd, 
+                                     ServalDatagramPacket pack,
+                                     byte[] data, int offset, int length, 
+                                     int timeout, boolean peek)
         throws InterruptedIOException {
         int len = recv(fd, data, offset, length, timeout, peek);
         
@@ -67,6 +67,7 @@ public class ServalNetworkStack {
         } else {
             pack.setLength(0);
         }
+        return len;
 	}
     
 	public void sendConnectedDatagram(FileDescriptor fd, byte[] data, 

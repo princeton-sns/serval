@@ -62,7 +62,6 @@ static struct dev_entry *dev_entry_create(struct net_device *dev,
                 return NULL;
 
         memset(de, 0, sizeof(*de) + dstlen);
-
         de->dev = dev;
         dev_hold(dev);
         de->dstlen = dstlen;
@@ -209,6 +208,8 @@ static struct service_entry *service_entry_create(struct sock *sk, gfp_t alloc)
         if (sk) {
                 se->sk = sk;
                 sock_hold(sk);
+        } else {
+                se->sk = NULL;
         }
 
         return se;
@@ -411,7 +412,7 @@ static int service_table_add(struct service_table *tbl, struct service_id *srvid
                 }
                 if (dst) {
                         if (get_service(n)->sk) {
-                                ret =  -EADDRINUSE;
+                                ret = -EADDRINUSE;
                                 goto out;
                         }
                         ret = __service_entry_add_dev(get_service(n), 

@@ -1149,8 +1149,7 @@ void serval_srv_rexmit_timeout(unsigned long data)
         LOG_DBG("Retransmit timeout sock=%p num=%u backoff=%u\n", 
                 sk, ssk->retransmits, backoff[ssk->retransmits]);
         
-        if (sk->sk_state == SERVAL_REQUEST &&
-            backoff[ssk->retransmits + 1] == 0) {
+        if (backoff[ssk->retransmits + 1] == 0) {
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
@@ -1324,7 +1323,6 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
          * is set already by user. */
         if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
                             sizeof(null_addr)) != 0) {
-                LOG_DBG("xmit based on user IP\n");
                 return serval_srv_do_xmit(skb);
         }
 

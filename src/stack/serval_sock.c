@@ -182,6 +182,7 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 
         slot = &table->hash[sk->sk_hash];
 
+        /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
         slot->count++;
         hlist_add_head(&sk->sk_node, &slot->head);
@@ -197,42 +198,57 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 
 static void __serval_sock_hash(struct sock *sk)
 {
-        if (!hlist_unhashed(&sk->sk_node)) {
+        struct serval_sock *ssk = serval_sk(sk);
+ 
+       if (!hlist_unhashed(&sk->sk_node)) {
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         
         if (sk->sk_state == SERVAL_LISTEN) {
-                int err = 0;
-
-                LOG_DBG("adding socket %p based on service id %s\n",
-                        sk, service_id_to_str(&serval_sk(sk)->local_srvid));
-                serval_sk(sk)->hash_key = &serval_sk(sk)->local_srvid;
-                serval_sk(sk)->hash_key_len = serval_sk(sk)->srvid_prefix_bits;
+                /* We use the service table for listening sockets. See
+                 * serval_sock_hash() */
                 /* __serval_table_hash(&listen_table, sk); */
-
-                err = service_add(&serval_sk(sk)->local_srvid, 
-                                  serval_sk(sk)->srvid_prefix_bits == 0 ? 
-                                  sizeof(serval_sk(sk)->local_srvid) * 8: 
-                                  serval_sk(sk)->srvid_prefix_bits, 
-                                  NULL, NULL, 0, sk, GFP_ATOMIC);
-                
-                if (err < 0) {
-                        LOG_ERR("could not add service for listening demux\n");
-                }
-
         } else { 
                 LOG_DBG("hashing socket %p based on socket id %s\n",
-                        sk, flow_id_to_str(&serval_sk(sk)->local_flowid));
-                serval_sk(sk)->hash_key = &serval_sk(sk)->local_flowid;
-                serval_sk(sk)->hash_key_len = 
-                        sizeof(serval_sk(sk)->local_flowid);
+                        sk, flow_id_to_str(&ssk->local_flowid));
+                ssk->hash_key = &ssk->local_flowid;
+                ssk->hash_key_len = sizeof(ssk->local_flowid);
                 __serval_table_hash(&established_table, sk);
         }
 }
 
 void serval_sock_hash(struct sock *sk)
 {
-        if (sk->sk_state != SERVAL_CLOSED) {
+        if (sk->sk_state == SERVAL_CLOSED)
+                return;
+
+        if (sk->sk_state == SERVAL_LISTEN) {
+                struct serval_sock *ssk = serval_sk(sk);
+                int err = 0;
+                
+                LOG_DBG("adding socket %p based on service id %s\n",
+                        sk, service_id_to_str(&ssk->local_srvid));
+
+                ssk->hash_key = &ssk->local_srvid;
+                ssk->hash_key_len = ssk->srvid_prefix_bits;
+
+                err = service_add(&ssk->local_srvid, 
+                                  ssk->srvid_prefix_bits == 0 ? 
+                                  sizeof(ssk->local_srvid) * 8: 
+                                  ssk->srvid_prefix_bits, 
+                                  NULL, NULL, 0, sk, GFP_ATOMIC);
+                if (err < 0) {
+                        LOG_ERR("could not add service for listening demux\n");
+                } else {
+#if defined(OS_LINUX_KERNEL)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+                        sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
+#else
+                        sock_prot_inc_use(sk->sk_prot);
+#endif
+#endif
+                }
+        } else {
 		local_bh_disable();
 		__serval_sock_hash(sk);
 		local_bh_enable();
@@ -241,6 +257,7 @@ void serval_sock_hash(struct sock *sk)
 
 void serval_sock_unhash(struct sock *sk)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct net *net = sock_net(sk);
         spinlock_t *lock;
 
@@ -250,14 +267,13 @@ void serval_sock_unhash(struct sock *sk)
         if (sk->sk_state == SERVAL_LISTEN) {
                 /*
                 lock = &listen_table.hashslot(&listen_table, net, 
-                                              &serval_sk(sk)->local_srvid, 
-                                              serval_sk(sk)->hash_key_len)->lock;
+                                              &ssk->local_srvid, 
+                                              ssk->hash_key_len)->lock;
                 */
-                service_del(&serval_sk(sk)->local_srvid,
-                            serval_sk(sk)->srvid_prefix_bits == 0 ?
-                            sizeof(serval_sk(sk)->local_srvid) * 8 :
-                            serval_sk(sk)->srvid_prefix_bits);
-                
+                service_del(&ssk->local_srvid,
+                            ssk->srvid_prefix_bits == 0 ?
+                            sizeof(ssk->local_srvid) * 8 :
+                            ssk->srvid_prefix_bits);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
@@ -268,8 +284,8 @@ void serval_sock_unhash(struct sock *sk)
                 return;
         } else {
                 lock = &established_table.hashslot(&established_table,
-                                                   net, &serval_sk(sk)->local_flowid, 
-                                                   serval_sk(sk)->hash_key_len)->lock;
+                                                   net, &ssk->local_flowid, 
+                                                   ssk->hash_key_len)->lock;
         }
         
 	spin_lock_bh(lock);

@@ -55,6 +55,7 @@ public class ServalDatagramSocketImpl implements SocketOptions {
     public boolean shutdownInput;
 
     private ServiceID localServiceID = null;
+    private InetAddress localAddress = null;
     /**
      * The number of the local serviceID to which this socket is
      * connected to at the native level.
@@ -77,6 +78,13 @@ public class ServalDatagramSocketImpl implements SocketOptions {
                                     ServiceID localServiceID) {
         this.fd = fd;
         this.localServiceID = localServiceID;
+    }
+    
+    public ServalDatagramSocketImpl(FileDescriptor fd) {
+        this.fd = fd;
+        /* FileDescriptor should already be bound, retreive the bound
+         * serviceID */
+        this.localServiceID = netImpl.getSocketLocalServiceID(fd);
     }
 
     public ServalDatagramSocketImpl() {
@@ -101,13 +109,21 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         } catch (IOException e) {
         }
     }
-    
+
+    public void bind(ServiceID serviceID, int bindBits) 
+        throws SocketException {
+
+        // FIXME: Should implement IP address binding
+        bind(serviceID, null, bindBits);
+    }
+
     public void bind(ServiceID serviceID) 
         throws SocketException {
 
         // FIXME: Should implement IP address binding
         bind(serviceID, null, 0);
     }
+
     public void bind(ServiceID serviceID, InetAddress addr) 
         throws SocketException {
 
@@ -137,7 +153,13 @@ public class ServalDatagramSocketImpl implements SocketOptions {
             throw new IOException("socket not created");
         }
 
-        s.fd = netImpl.accept(fd, s);
+        FileDescriptor clientFd = netImpl.accept(fd, s);
+
+        if (clientFd == null) {
+            throw new IOException("client socket not created");
+        }
+        s.fd = clientFd;
+        s.isNativeConnected = true;
     }
 
     public void close() {
@@ -183,29 +205,32 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         }
     }
     
-    public void receive(ServalDatagramPacket pack) throws java.io.IOException {
+    public int receive(ServalDatagramPacket pack) throws java.io.IOException {
+        int ret = 0;
+
         try {
             if (isNativeConnected) {
                 // do not peek
-                netImpl.recvConnectedDatagram(fd, pack, 
-                                              pack.getData(), 
-                                              pack.getOffset(), 
-                                              pack.getLength(), 
-                                              receiveTimeout, false);
+                ret = netImpl.recvConnectedDatagram(fd, pack, 
+                                                    pack.getData(), 
+                                                    pack.getOffset(), 
+                                                    pack.getLength(), 
+                                                    receiveTimeout, false);
                 updatePacketRecvAddress(pack);
             } else {
                 // receiveDatagramImpl2
                 /*
-                netImpl.receiveDatagram(fd, pack, 
-                                        pack.getData(), 
-                                        pack.getOffset(), 
-                                        pack.getLength(), 
-                                        receiveTimeout, false);
+                ret = netImpl.receiveDatagram(fd, pack, 
+                pack.getData(), 
+                pack.getOffset(), 
+                pack.getLength(), 
+                receiveTimeout, false);
                 */
             }
         } catch (InterruptedIOException e) {
             throw new SocketTimeoutException(e.getMessage());
         }
+        return ret;
     }
 
     public void send(ServalDatagramPacket packet) throws IOException {
@@ -384,6 +409,9 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         return localServiceID;
     }
 
+    public ServalSocketAddress getLocalSocketAddress() {
+        return new ServalSocketAddress(localServiceID, localAddress);
+    }
     public Object getSocketOption(int optID) throws SocketException {
         if (fd == null) {
             throw new SocketException("socket not created");

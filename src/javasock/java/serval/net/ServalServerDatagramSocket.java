@@ -4,8 +4,8 @@ package serval.net;
 import java.net.SocketAddress;
 import java.net.SocketException;
 import java.io.IOException;
+import java.io.FileDescriptor;
 import java.nio.channels.DatagramChannel;
-import serval.netPlainDatagramSocketImpl;
 
 /*
   This code is based on the DatagramSocket implementation from the
@@ -13,15 +13,13 @@ import serval.netPlainDatagramSocketImpl;
  */
 
 /**
- * This class implements a Serval datagram socket for sending and
- * receiving {@code DatagramPacket}. A {@code ServalDatagramSocket}
- * object can be used for both endpoints of a connection for a packet
- * delivery service.
+ * This class implements a Server Serval datagram socket for accepting
+ * incoming connections
  *
  * @see DatagramPacket
  * @see ServalDatagramSocketImplFactory
  */
-public class ServalDatagramSocket {
+public class ServalServerDatagramSocket {
 
     ServalDatagramSocketImpl impl;
     private final ServalSocketAddress localAddress;
@@ -29,21 +27,37 @@ public class ServalDatagramSocket {
 	private static final int LISTEN_BACKLOG = 10;
 
     /**
-     * Crewates a new server socket listening at specified name.
+     * Creates a new server socket listening at specified name.
      * On the Android platform, the name is created in the Linux
      * abstract namespace (instead of on the filesystem).
      * 
-     * @param name address for socket
+     * @param serviceID to listen on
      * @throws IOException
      */
     public ServalServerDatagramSocket(ServiceID serviceID) 
         throws IOException {
         impl = new ServalDatagramSocketImpl();
-
-        impl.create(true);
-
+        impl.create();
         localAddress = new ServalSocketAddress(serviceID);
         impl.bind(serviceID);
+        impl.listen(LISTEN_BACKLOG);
+    }
+
+    /**
+     * Creates a new server socket listening at specified name.
+     * On the Android platform, the name is created in the Linux
+     * abstract namespace (instead of on the filesystem).
+     * 
+     * @param serviceID to listen on
+     * @param bindBits the number of bits of the serviceID to bind on
+     * @throws IOException
+     */
+    public ServalServerDatagramSocket(ServiceID serviceID, int bindBits) 
+        throws IOException {
+        impl = new ServalDatagramSocketImpl();
+        impl.create();
+        localAddress = new ServalSocketAddress(serviceID, bindBits);
+        impl.bind(serviceID, localAddress.getPrefixBits());
         impl.listen(LISTEN_BACKLOG);
     }
 
@@ -58,16 +72,16 @@ public class ServalDatagramSocket {
      */
     public ServalServerDatagramSocket(FileDescriptor fd) throws IOException {
         impl = new ServalDatagramSocketImpl(fd);
+        localAddress = impl.getLocalSocketAddress();
         impl.listen(LISTEN_BACKLOG);
-        localAddress = impl.getSockAddress();
     }
 
     /**
      * Obtains the socket's local address
      *
-     * @return local address
+     * @return Serval socket address
      */
-    public LocalSocketAddress getLocalSocketAddress()
+    public SocketAddress geLocalSocketAddress()
     {
         return localAddress;
     }
@@ -79,13 +93,13 @@ public class ServalDatagramSocket {
      * @return a socket representing the new connection.
      * @throws IOException
      */
-    public LocalSocket accept() throws IOException
+    public ServalDatagramSocket accept() throws IOException
     {
-        LocalSocketImpl acceptedImpl = new LocalSocketImpl();
+        ServalDatagramSocketImpl acceptedImpl = new ServalDatagramSocketImpl();
 
-        impl.accept (acceptedImpl);
+        impl.accept(acceptedImpl);
 
-        return new LocalSocket(acceptedImpl);
+        return new ServalDatagramSocket(acceptedImpl);
     }
 
     /**

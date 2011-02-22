@@ -617,18 +617,16 @@ int serval_release(struct socket *sock)
 
 	if (sk) {
                 int state;
-                long timeout;
-                
-                serval_shutdown(sock, 2);
+                long timeout = 0;
 
-                timeout = 0;
+                serval_shutdown(sock, 2);
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
 			timeout = sk->sk_lingertime;
 		
                 sock->sk = NULL;
-                
+
                 lock_sock(sk);
 
                 sk->sk_shutdown = SHUTDOWN_MASK;

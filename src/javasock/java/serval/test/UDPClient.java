@@ -51,13 +51,7 @@ public class UDPClient {
 				String rsp = new String(pack.getData(), 0, pack.getLength());
 				//System.out.println("response length=" + pack.getLength());
 				System.out.println("Response: " + rsp);
-
-
-                System.out.println("Receiving...");
-				sock.receive(pack);
-                System.out.println("Receive returned");
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
                 System.out.println("Error: " + e.getMessage());
 				if (sock != null) {
 					sock.close();
