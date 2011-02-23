@@ -67,6 +67,26 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
         return 1;
 }
 
+static inline int has_service_extension(struct serval_hdr *sfh)
+{
+        struct serval_service_ext *srv_ext = 
+                (struct serval_service_ext *)(sfh + 1);
+        unsigned int hdr_len = ntohs(sfh->length);
+
+        if (hdr_len < sizeof(*sfh) + sizeof(*srv_ext)) {
+                LOG_ERR("No service extension, hdr_len=%u\n", 
+                        hdr_len);
+                return 0;
+        }
+        
+        if (srv_ext->type != SERVAL_SERVICE_EXT) {
+                LOG_ERR("No service extension, bad extension type\n");
+                return 0;
+        }
+
+        return 1;
+}
+
 static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
 {        
         int ret = 0;
@@ -1041,7 +1061,7 @@ static int serval_srv_init_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-                
+
         /* Set receive IP */
         memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
                sizeof(ip_hdr(skb)->saddr));
@@ -1144,23 +1164,36 @@ int serval_srv_rcv(struct sk_buff *skb)
         
         if (!sk) {
                 /* Try to demux on service id */
-                struct serval_connection_ext *conn_ext = 
-                        (struct serval_connection_ext *)(sfh + 1);
+                struct service_id *srvid = NULL;
 
                 /* Check for connection extension. We require that this
                  * extension always directly follows the main Serval
                  * header */
                 if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK) {
+                        struct serval_connection_ext *conn_ext = 
+                                (struct serval_connection_ext *)(sfh + 1);
                         /* Check for connection extension and do early
                          * drop if SYN or ACK flags are set. */
                         if (!has_connection_extension(sfh))
                                 goto drop;
+                        
+                        srvid = &conn_ext->srvid;
+                } else if (sk->sk_type == SOCK_DGRAM &&
+                           sk->sk_state == SERVAL_INIT) {
+                        struct serval_service_ext *srv_ext = 
+                                (struct serval_service_ext *)(sfh + 1);
+                        if (!has_service_extension(sfh))
+                                goto drop;
+                        
+                        srvid = &srv_ext->srvid;
+                } else {
+                        LOG_INF("Cannot demux packet\n");
+                        goto drop;
                 }
 
-                LOG_DBG("Demux on srvid=%s\n", 
-                        service_id_to_str(&conn_ext->srvid));
+                LOG_DBG("Demux on srvid=%s\n", service_id_to_str(srvid));
 
-                sk = serval_sock_lookup_serviceid(&conn_ext->srvid);
+                sk = serval_sock_lookup_serviceid(srvid);
                 
                 if (!sk) {
                         LOG_ERR("No matching serval sock\n");
@@ -1335,6 +1368,23 @@ static inline int serval_srv_add_ctrl_ext(struct sock *sk,
         return sizeof(*ctrl_ext);
 }
 
+static inline int serval_srv_add_service_ext(struct sock *sk, 
+                                             struct sk_buff *skb,
+                                             int flags)
+{
+        struct serval_service_ext *srv_ext;
+
+        srv_ext = (struct serval_service_ext *)
+                skb_push(skb, sizeof(*srv_ext));
+        srv_ext->type = SERVAL_SERVICE_EXT;
+        srv_ext->length = htons(sizeof(*srv_ext));
+        srv_ext->flags = flags;
+        memcpy(&srv_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
+               sizeof(SERVAL_SKB_CB(skb)->srvid));
+
+        return sizeof(*srv_ext);
+}
+
 int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                             int clone_it, gfp_t gfp_mask)
 {
@@ -1392,6 +1442,12 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 flags |= SVH_FIN;
                 hdr_len += serval_srv_add_ctrl_ext(sk, skb, 0);
                 break;
+        case SERVAL_PKT_DATA:
+                /* Unconnected datagram, add service extension */
+                if (sk->sk_state == SERVAL_INIT && 
+                    sk->sk_type == SOCK_DGRAM) {
+                        hdr_len += serval_srv_add_service_ext(sk, skb, 0);
+                }
         default:
                 break;
         }

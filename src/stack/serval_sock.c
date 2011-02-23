@@ -222,7 +222,9 @@ void serval_sock_hash(struct sock *sk)
         if (sk->sk_state == SERVAL_CLOSED)
                 return;
 
-        if (sk->sk_state == SERVAL_LISTEN) {
+        if (sk->sk_state == SERVAL_LISTEN || 
+            (sk->sk_type == SOCK_DGRAM && 
+             sk->sk_state == SERVAL_INIT)) {
                 struct serval_sock *ssk = serval_sk(sk);
                 int err = 0;
                 
@@ -263,8 +265,9 @@ void serval_sock_unhash(struct sock *sk)
 
         LOG_DBG("unhashing socket %p\n", sk);
 
-        /* grab correct lock */
-        if (sk->sk_state == SERVAL_LISTEN) {
+        if (sk->sk_state == SERVAL_LISTEN || 
+            (sk->sk_type == SOCK_DGRAM && 
+             sk->sk_state == SERVAL_INIT)) {
                 /*
                 lock = &listen_table.hashslot(&listen_table, net, 
                                               &ssk->local_srvid, 

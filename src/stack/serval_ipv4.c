@@ -267,22 +267,22 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         security_sk_classify_flow(sk, &fl);
 
         if (ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
-                LOG_DBG("No route\n");
+                LOG_DBG("No route!\n");
                 FREE_SKB(skb);
                 err = -EHOSTUNREACH;
         } else {
-
+                /*
                 char src[18], dst[18];
                 LOG_DBG("Route found, src %s dst %s\n",
                         inet_ntop(AF_INET, &rt->rt_src, 
                                   src, sizeof(src)),
                         inet_ntop(AF_INET, &rt->rt_dst, 
                                   dst, sizeof(dst)));
-
+                */
                 sk_setup_caps(sk, &rt->u.dst);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
-                skb_dst_set(skb, &rt->u.dst);
+                skb_dst_set(skb, dst_clone(&rt->u.dst));
 #else
                 skb_dst_set_noref(skb, &rt->u.dst);
 #endif
@@ -328,8 +328,6 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 	skb->mark = sk->sk_mark;
 
 	err = ip_local_out(skb);
-
-        LOG_DBG("local out returned %d\n", err);
 
 	rcu_read_unlock();
 #else
