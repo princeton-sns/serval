@@ -1063,11 +1063,17 @@ static int serval_srv_init_state_process(struct sock *sk,
                                          struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct serval_service_ext *srv_ext = 
+                (struct serval_service_ext *)(sfh + 1);
         int err = 0;
 
         /* Set receive IP */
         memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
                sizeof(ip_hdr(skb)->saddr));
+
+        /* Set source serviceID */
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &srv_ext->src_srvid,
+               sizeof(srv_ext->src_srvid));
         
         err = ssk->af_ops->receive(sk, skb);
 
@@ -1188,7 +1194,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                         if (!has_service_extension(sfh))
                                 goto drop;
                         
-                        srvid = &srv_ext->srvid;
+                        srvid = &srv_ext->dst_srvid;
                 }
 
                 LOG_DBG("Demux on srvid=%s\n", service_id_to_str(srvid));
@@ -1372,6 +1378,7 @@ static inline int serval_srv_add_service_ext(struct sock *sk,
                                              struct sk_buff *skb,
                                              int flags)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct serval_service_ext *srv_ext;
 
         srv_ext = (struct serval_service_ext *)
@@ -1379,8 +1386,13 @@ static inline int serval_srv_add_service_ext(struct sock *sk,
         srv_ext->type = SERVAL_SERVICE_EXT;
         srv_ext->length = htons(sizeof(*srv_ext));
         srv_ext->flags = flags;
-        memcpy(&srv_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
+        memcpy(&srv_ext->dst_srvid, &SERVAL_SKB_CB(skb)->srvid, 
                sizeof(SERVAL_SKB_CB(skb)->srvid));
+        /* FIXME: check if socket is bound, if not, indicate somehow
+         * that the source service id is not valid (e.g., with a
+         * flag). */
+        memcpy(&srv_ext->src_srvid, &ssk->local_srvid, 
+               sizeof(ssk->local_srvid));
 
         return sizeof(*srv_ext);
 }

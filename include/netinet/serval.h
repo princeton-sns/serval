@@ -162,7 +162,8 @@ struct serval_service_ext {
         uint8_t type;
         uint8_t flags;
         uint16_t length;
-        struct service_id srvid;
+        struct service_id src_srvid;
+        struct service_id dst_srvid;
 };
 
 #define SERVAL_DESCRIPTION_EXT 4
