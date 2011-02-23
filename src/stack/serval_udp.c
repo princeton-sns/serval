@@ -382,21 +382,21 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 /* Copy service id */
                 if (svaddr) {
                         size_t addrlen = msg->msg_namelen;
-
+                        
                         svaddr->sv_family = AF_SERVAL;
                         *addr_len = sizeof(*svaddr);
                         memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid, 
                                sizeof(svaddr->sv_srvid));
                         
                         /* Copy also IP address if possible */
-                        if (addrlen == (sizeof(*svaddr) + 
+                        if (addrlen >= (sizeof(*svaddr) + 
                                         sizeof(struct sockaddr_in))) {
                                 struct sockaddr_in *inaddr = 
                                         (struct sockaddr_in *)(svaddr + 1);
                                 inaddr->sin_family = AF_INET;
                                 memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
                                        sizeof(ip_hdr(skb)->saddr));
-                                *addr_len +=sizeof(*inaddr);
+                                *addr_len += sizeof(*inaddr);
                         }
                 }
                                 
