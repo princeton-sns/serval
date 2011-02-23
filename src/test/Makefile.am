@@ -1,6 +1,8 @@
 bin_PROGRAMS = \
 	send_udp_packet \
 	send_udp_packetn \
+	recv_udp_packet \
+	recv_udp_packetn \
 	bindtest \
 	bindtestn \
 	listentest \
@@ -24,6 +26,14 @@ send_udp_packet_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval
 send_udp_packetn_SOURCES = send_udp_packet.c
 send_udp_packetn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
 send_udp_packetn_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval
+
+recv_udp_packet_SOURCES = recv_udp_packet.c
+recv_udp_packet_CPPFLAGS =-I$(top_srcdir)/include
+recv_udp_packet_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval
+
+recv_udp_packetn_SOURCES = recv_udp_packet.c
+recv_udp_packetn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
+recv_udp_packetn_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval
 
 bindtest_SOURCES = bindtest.c
 bindtest_CPPFLAGS =-I$(top_srcdir)/include

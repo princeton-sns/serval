@@ -77,13 +77,15 @@ static int serval_udp_transmit_skb(struct sock *sk,
 	skb_reset_transport_header(skb);
         SERVAL_SKB_CB(skb)->pkttype = type;
         
+        skb_set_owner_w(skb, sk);
+
         tot_len = skb->len + 20 + 14;
         
         /* Build UDP header */
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, &serval_sk(sk)->src_addr);
+        udp_checksum(tot_len, uh, &inet_sk(sk)->inet_saddr);
         
         skb->protocol = IPPROTO_UDP;
 
@@ -288,7 +290,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 FREE_SKB(skb);
                 goto out;
         }
-                
+
         err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
         
         if (err < 0) {

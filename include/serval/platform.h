@@ -166,6 +166,7 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_USER */
 
+uint16_t in_cksum(const void *data, size_t len);
 const char *mac_ntop(const void *src, char *dst, size_t size);
 int mac_pton(const char *src, void *dst);
 const char *get_strtime(void);

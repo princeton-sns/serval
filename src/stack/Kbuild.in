@@ -13,10 +13,7 @@ serval-y := \
 	   platform.o \
 	   af_serval.o \
 	   bst.o \
-	   neighbor.o \
 	   service.o \
-	   input.o \
-	   output.o \
 	   ctrl_handler.o \
 	   serval_sock.o \
 	   serval_srv.o \

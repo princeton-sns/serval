@@ -106,10 +106,7 @@ SERVAL_KERNEL_SRC = \
 	debug.c \
 	platform.c \
 	bst.c \
-	neighbor.c \
 	service.c \
-	input.c \
-	output.c \
 	serval_sock.c \
 	serval_srv.c \
 	serval_ipv4.c \

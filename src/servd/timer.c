@@ -264,9 +264,11 @@ void timer_list_destroy(void)
 			break;
 		
 		t = list_first_entry(&timer_list, struct timer, lh);
+
+                _timer_del(t);
+
 		if (t->destruct)
                         t->destruct(t);
-                _timer_del(t);
         }
 	pthread_mutex_unlock(&timer_lock);	
 }

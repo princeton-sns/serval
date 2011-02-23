@@ -7,6 +7,7 @@
 #include <serval/lock.h>
 #include <serval/hash.h>
 #include <serval/sock.h>
+#include <serval/inet_sock.h>
 #include <serval/net.h>
 #include <serval/timer.h>
 #if defined(OS_USER)
@@ -86,7 +87,7 @@ struct serval_sock_af_ops {
 /* The AF_SERVAL socket */
 struct serval_sock {
 	/* NOTE: sk has to be the first member */
-	struct sock		sk;
+        struct inet_sock        sk;
 #if defined(OS_USER)
         struct client           *client;
 #endif
@@ -103,8 +104,6 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        struct net_addr         dst_addr;
-        struct net_addr         src_addr;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
@@ -232,6 +231,25 @@ void serval_sock_rexmit_timeout(unsigned long data);
 
 int __init serval_sock_tables_init(void);
 void __exit serval_sock_tables_fini(void);
+
+void serval_sock_wfree(struct sk_buff *skb);
+void serval_sock_rfree(struct sk_buff *skb);
+
+static inline void skb_serval_set_owner_w(struct sk_buff *skb, struct sock *sk)
+{
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = serval_sock_wfree;
+        /* Guarantees the socket is not free'd for in-flight packets */
+        sock_hold(sk);
+}
+
+static inline void skb_serval_set_owner_r(struct sk_buff *skb, struct sock *sk)
+{
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = serval_sock_rfree;
+}
 
 
 #endif /* _SERVAL_SOCK_H */

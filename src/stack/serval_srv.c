@@ -15,10 +15,10 @@
 #endif
 #if defined(OS_USER)
 #include <signal.h>
+#include <neighbor.h>
 #endif
 #include <serval_request_sock.h>
 #include <service.h>
-#include <neighbor.h>
 
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE
@@ -288,14 +288,15 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
                 return -ENOMEM;
         
         skb_reserve(skb, SERVAL_MAX_HDR);
+        skb_serval_set_owner_w(skb, sk);
         skb->protocol = 0;
         
         memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
         ssk->snd_seq.nxt = ssk->snd_seq.iss + 1;
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ssk->dst_addr, 
-               sizeof(ssk->dst_addr));
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+               sizeof(inet_sk(sk)->inet_daddr));
 
         err = serval_srv_queue_and_push(sk, skb);
         
@@ -317,7 +318,6 @@ static void serval_srv_timewait(struct sock *sk, int state)
 /* Called as a result of user app close() */
 void serval_srv_close(struct sock *sk, long timeout)
 {
-        struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb = NULL;
         int err = 0;
 
@@ -343,10 +343,11 @@ void serval_srv_close(struct sock *sk, long timeout)
                 }
                 
                 skb_reserve(skb, SERVAL_MAX_HDR);
+                skb_serval_set_owner_w(skb, sk);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
-                memcpy(&SERVAL_SKB_CB(skb)->addr, &ssk->dst_addr, 
-                       sizeof(ssk->dst_addr));
+                memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+                       sizeof(inet_sk(sk)->inet_daddr));
 
                 err = serval_srv_queue_and_push(sk, skb);
                 
@@ -374,9 +375,10 @@ static int serval_srv_send_close_ack(struct sock *sk, struct serval_hdr *sfh,
                 return -ENOMEM;
         
         skb_reserve(skb, SERVAL_MAX_HDR);
+        skb_serval_set_owner_w(skb, sk);
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ssk->dst_addr, 
-               sizeof(ssk->dst_addr));
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+               sizeof(inet_sk(sk)->inet_daddr));
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
 
@@ -401,6 +403,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
+        struct net_addr saddr;
         int err = 0;
         
         /* Cache this service. FIXME, need to garbage this entry at
@@ -416,11 +419,13 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         */
 
+#if defined(OS_USER)
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
-        
+#endif
+
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
 
@@ -429,6 +434,19 @@ static int serval_srv_syn_rcv(struct sock *sk,
         
         if (err < 0)
                 goto drop;
+
+        /* Try to figure out the source address for the incoming
+         * interface so that we can use it in our reply.  
+         *
+         * FIXME:
+         * should probably route the reply here somehow in case we
+         * want to reply on another interface than the incoming one.
+         */
+        if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
+                LOG_ERR("No source address for interface %s\n",
+                        skb->dev);
+                goto drop;
+        }
 
         rsk = serval_rsk_alloc(GFP_ATOMIC);
 
@@ -470,9 +488,36 @@ static int serval_srv_syn_rcv(struct sock *sk,
         sfh->flags |= SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
 
+        /* Need to drop dst since this packet is routed for
+         * input. Otherwise, kernel IP stack will be confused when
+         * transmitting this packet. */
+        skb_dst_drop(skb);
+#if defined(OS_LINUX_KERNEL)
+        {
+                /*
+                  For kernel, we need to route this packet and
+                  associate a dst_entry with the skb for it to be
+                  accepted by the kernel IP stack.
+                 */
+                struct dst_entry *dst;
+
+                dst = serval_ipv4_req_route(sk, rsk, skb->protocol,
+                                            saddr.net_ip.s_addr,
+                                            ip_hdr(skb)->saddr);
+
+                if (!dst) {
+                        LOG_ERR("SYN-ACK not routable\n");
+                        goto drop;
+                }
+
+                skb_dst_set(skb, dst);
+        }
+#endif /* OS_LINUX_KERNEL */
+
         /* Cannot use serval_srv_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
+                                             saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
 done:        
         return err;
@@ -562,7 +607,7 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(rsk->peer_flowid));
                         memcpy(&nssk->peer_srvid, &rsk->peer_srvid,
                                sizeof(rsk->peer_srvid));
-                        memcpy(&nssk->dst_addr, &rsk->dst_addr,
+                        memcpy(&inet_sk(sk)->inet_daddr, &rsk->dst_addr,
                                sizeof(rsk->dst_addr));
                         memcpy(nssk->local_nonce, rsk->local_nonce, 
                                SERVAL_NONCE_SIZE);
@@ -809,11 +854,12 @@ static int serval_srv_request_state_process(struct sock *sk,
 
         LOG_DBG("Got SYNACK\n");
 
+#if defined(OS_USER)
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
                      skb->dev, eth_hdr(skb)->h_source, 
                      ETH_ALEN, GFP_ATOMIC);
-        
+#endif
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
         /* Let user know we are connected. */
@@ -825,8 +871,8 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Save device and peer flow id */
         ssk->dev = skb->dev;
         dev_hold(ssk->dev);
-        memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
-               sizeof(ssk->dst_addr));
+        memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
+               sizeof(inet_sk(sk)->inet_daddr));
 
         /* Save nonce */
         memcpy(ssk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
@@ -844,12 +890,13 @@ static int serval_srv_request_state_process(struct sock *sk,
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
         memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ssk->dst_addr, 
-               sizeof(ssk->dst_addr));
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+               sizeof(inet_sk(sk)->inet_daddr));
 
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
         skb->protocol = IPPROTO_SERVAL;
+        skb_serval_set_owner_w(skb, sk);
 
         /* Xmit, do not queue ACK */
         err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
@@ -887,8 +934,8 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 /* Save device and peer flow id */
                 ssk->dev = skb->dev;
                 dev_hold(ssk->dev);
-                memcpy(&ssk->dst_addr, &ip_hdr(skb)->saddr, 
-                       sizeof(ssk->dst_addr));
+                memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
+                       sizeof(inet_sk(sk)->inet_daddr));
         }
 drop:
         FREE_SKB(skb);
@@ -1192,27 +1239,29 @@ static inline int serval_srv_do_xmit(struct sk_buff *skb)
            setup phase. Instead, the device should be resolved based
            on, e.g., dst IP (if it exists at this point).
 
-           However, we currently do not implement an IP routing table,
-           which would otherwise be used for this resolution.
+           However, we currently do not implement an IP routing table
+           for userlevel, which would otherwise be used for this
+           resolution. Kernel space should work, because it routes
+           packet according to the kernel's routing table, thus
+           figuring out the device along the way.
 
-           Packets that are sent using an advisory IP may fail here
-           unless the socket has had its interface set by a previous
-           send event.
+           Packets that are sent using an advisory IP may fail in
+           queue_xmit for userlevel unless the socket has had its
+           interface set by a previous send event.
           */
-         if (ssk->dev) {
+         if (ssk->dev)
                  skb_set_dev(skb, ssk->dev);
-                 
-                 if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
-                            sizeof(null_addr)) == 0) {
-                         memcpy(&SERVAL_SKB_CB(skb)->addr,
-                                &ssk->dst_addr, sizeof(ssk->dst_addr));
-                 }
-
-                 err = ssk->af_ops->queue_xmit(skb);
-         } else {
-                 err = -ENODEV;
-                 FREE_SKB(skb);
+          
+         if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
+                    sizeof(null_addr)) == 0) {
+                 /* Copy address from socket if no address is set */
+                 memcpy(&SERVAL_SKB_CB(skb)->addr,
+                        &inet_sk(sk)->inet_daddr, 
+                        sizeof(inet_sk(sk)->inet_daddr));
          }
+         
+         err = ssk->af_ops->queue_xmit(skb);
+         
          if (err < 0) {
                  LOG_ERR("xmit failed\n");
          }
@@ -1276,9 +1325,23 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			skb = skb_clone(skb, gfp_mask);
 		if (unlikely(!skb))
 			return -ENOBUFS;
+
+                if (!skb->sk)
+                        skb_serval_set_owner_w(skb, sk);
 	}
 
-	skb_set_owner_w(skb, sk);
+        /* NOTE:
+         * 
+         * Do not use skb_set_owner_w(skb, sk) here as that will
+         * reserve write space for the socket on the transport
+         * queue. We might not want to reserve such space for control
+         * packets as they might then fill up the write queue/buffer
+         * for the socket. However, skb_set_owner_w(skb, sk) also
+         * guarantess that the socket is not released until skb is
+         * free'd, which is good. I guess we could implement our own
+         * version of skb_set_owner_w() and grab a socket refcount
+         * instead, which is released in the skb's destructor.
+         */
 
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
@@ -1363,13 +1426,15 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                 FREE_SKB(skb);
 				break;
 			}
+                        /* Cloned skb will have no socket set. */
+                        skb_serval_set_owner_w(cskb, sk);
 
                         LOG_DBG("cskb->len=%u\n", cskb->len);
 		}
                 
 		/* Set the output device */
 		skb_set_dev(cskb, dev);
-                
+
 		err = ssk->af_ops->queue_xmit(cskb);
                 
 		if (err < 0) {

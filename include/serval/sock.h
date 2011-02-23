@@ -119,7 +119,7 @@ struct sock {
 	struct timer_list	sk_timer;
 	struct socket		*sk_socket;
 	struct sk_buff		*sk_send_head;
-
+	uint32_t		sk_mark;
         void (*sk_destruct)(struct sock *sk);
 	void (*sk_state_change)(struct sock *sk);
 	void (*sk_data_ready)(struct sock *sk, int bytes);

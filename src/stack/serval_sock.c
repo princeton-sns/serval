@@ -565,3 +565,21 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
         return new_state;
 }
+
+/* 
+   These functions are equivalent to the sock_wfree() and sock_rfree()
+   of sock.c. However, these can be used as destructors for an skb to
+   free up associated sock state and bindings, specific to Serval and
+   control packets, when an skb is free'd.
+
+   These will be pointed to by skb->destructor and set by
+   skb_serval_set_owner_w() and skb_serval_set_owner_r().
+ */
+void serval_sock_wfree(struct sk_buff *skb)
+{
+        sock_put(skb->sk);
+}
+
+void serval_sock_rfree(struct sk_buff *skb)
+{
+}

@@ -19,6 +19,8 @@ src/stack/serval
 src/test/nltest
 src/test/send_udp_packet
 src/test/send_udp_packetn
+src/test/recv_udp_packet
+src/test/recv_udp_packetn
 src/test/bindtest
 src/test/bindtestn
 src/test/listentest

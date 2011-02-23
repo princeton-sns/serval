@@ -9,7 +9,6 @@
 #include <libstack/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
-#include <neighbor.h>
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Serval stack for Linux");
@@ -17,6 +16,7 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
 #if defined(ENABLE_DEBUG)
+/* NOTE: debug setting currently not used, or implemented */
 static uint debug = 0;
 module_param(debug, uint, 0);
 MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
@@ -28,8 +28,9 @@ extern void __exit proc_fini(void);
 static int dev_configuration(struct net_device *dev)
 {
         struct net_addr dst;
-        u32 mask = 0;
+        /* u32 mask = 0;
         unsigned int prefix_len = 0;
+        */
         int ret;
         
         ret = dev_get_ipv4_broadcast(dev, &dst);
@@ -44,14 +45,15 @@ static int dev_configuration(struct net_device *dev)
                 }
 #endif
                 service_add(NULL, 0, dev, &dst, sizeof(dst), NULL, GFP_ATOMIC);
-                
+                /*
                 dev_get_ipv4_netmask(dev, &mask);
                 
                 while (mask & (0x1 << prefix_len))
                         prefix_len++;
-                
+
                 neighbor_add(&dst, prefix_len, dev, dev->broadcast, 
                              dev->addr_len, GFP_ATOMIC);
+                */
         } 
         return ret;
 }

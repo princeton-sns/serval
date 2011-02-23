@@ -18,7 +18,7 @@
 #define SERVAL_PROC_DIR "serval"
 #define SERVAL_PROC_DBG "dbg"
 #define SERVAL_PROC_FILE_SERVICE_TBL "service_table"
-#define SERVAL_PROC_FILE_NEIGHBOR_TBL "neighbor_table"
+/* #define SERVAL_PROC_FILE_NEIGHBOR_TBL "neighbor_table" */
 
 static struct proc_dir_entry *serval_dir = NULL;
 
@@ -45,7 +45,7 @@ static int serval_proc_service_table_read(char *page, char **start,
 
         return len;
 }
-
+/*
 static int serval_proc_neighbor_table_read(char *page, char **start, 
                                             off_t off, int count, 
                                             int *eof, void *data)
@@ -69,6 +69,8 @@ static int serval_proc_neighbor_table_read(char *page, char **start,
 
         return len;
 }
+*/
+
 /*
   Debug output through /proc/serval/dbg based on linux kernel
   /proc/kmsg
@@ -140,7 +142,7 @@ int __init proc_init(void)
 
         if (!proc)
                 goto fail_service_tbl;
-
+        /*
         proc = create_proc_read_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, 0, 
                                       serval_dir, 
                                       serval_proc_neighbor_table_read, 
@@ -148,12 +150,14 @@ int __init proc_init(void)
 
         if (!proc)
                 goto fail_neighbor_tbl;
-
+        */
         ret = 0;
 out:        
         return ret;
+/*
 fail_neighbor_tbl:
         remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
+*/
 fail_service_tbl:
         remove_proc_entry(SERVAL_PROC_DBG, serval_dir);
 fail_dbg:
@@ -167,7 +171,9 @@ void proc_fini(void)
                 return;
 
         remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
+        /*
         remove_proc_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, serval_dir);
+        */
         remove_proc_entry(SERVAL_PROC_DBG, serval_dir);
 	remove_proc_entry(SERVAL_PROC_DIR, proc_net);
 }
