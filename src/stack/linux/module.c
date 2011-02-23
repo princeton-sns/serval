@@ -25,6 +25,37 @@ MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
 
+static int dev_configuration(struct net_device *dev)
+{
+        struct net_addr dst;
+        u32 mask = 0;
+        unsigned int prefix_len = 0;
+        int ret;
+        
+        ret = dev_get_ipv4_broadcast(dev, &dst);
+
+        if (ret) {
+#if defined(ENABLE_DEBUG)
+                {
+                        char buf[16];
+                        LOG_DBG("dev %s bc=%s\n", 
+                                dev->name, 
+                                inet_ntop(AF_INET, &dst, buf, 16));
+                }
+#endif
+                service_add(NULL, 0, dev, &dst, sizeof(dst), NULL, GFP_ATOMIC);
+                
+                dev_get_ipv4_netmask(dev, &mask);
+                
+                while (mask & (0x1 << prefix_len))
+                        prefix_len++;
+                
+                neighbor_add(&dst, prefix_len, dev, dev->broadcast, 
+                             dev->addr_len, GFP_ATOMIC);
+        } 
+        return ret;
+}
+
 static int serval_netdev_event(struct notifier_block *this,
                                  unsigned long event, void *ptr)
 {
@@ -39,36 +70,15 @@ static int serval_netdev_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
-                struct net_addr dst;
-                u32 mask = 0;
-                unsigned int prefix_len = 0;
-
-                dev_get_ipv4_broadcast(dev, &dst);
-
-#if defined(ENABLE_DEBUG)
-                {
-                        char buf[16];
-                        LOG_DBG("netdev UP %s bc=%s\n", 
-                                dev->name, 
-                                inet_ntop(AF_INET, &dst, buf, 16));
-                }
-#endif
-                service_add(NULL, 0, dev, &dst, sizeof(dst), NULL, GFP_ATOMIC);
-
-                dev_get_ipv4_netmask(dev, &mask);
-
-                while (mask & (0x1 << prefix_len))
-                       prefix_len++;
-
-                neighbor_add(&dst, prefix_len, dev, dev->broadcast, 
-                             dev->addr_len, GFP_ATOMIC);
+                LOG_DBG("netdev UP %s\n", dev->name);
+                dev_configuration(dev);
                 break;
         }
 	case NETDEV_GOING_DOWN:
-        {
-                LOG_DBG("netdev GOING_DOWN %s\n", dev->name);
+        {           
+                LOG_DBG("netdev GOING DOWN %s\n", dev->name);
                 service_del_dev(dev->name);
-                //neighbor_del_dev(dev->name);
+                // neighbor_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:
@@ -95,8 +105,8 @@ static int serval_inetaddr_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
-       		LOG_DBG("inetdev UP %s\n", 
-                        dev->name);
+                LOG_DBG("inetdev UP %s\n", dev->name);
+                dev_configuration(dev);
                 break;
         }
 	case NETDEV_GOING_DOWN:
@@ -106,6 +116,7 @@ static int serval_inetaddr_event(struct notifier_block *this,
         }
 	case NETDEV_DOWN:
                 LOG_DBG("inetdev DOWN\n");
+                //service_del_dev(dev->name);
                 break;
 	default:
 		break;

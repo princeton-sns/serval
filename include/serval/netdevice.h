@@ -45,7 +45,7 @@ static inline int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
         endfor_ifa(indev);
 
         in_dev_put(indev);
-        return 0;
+        return ret;
 }
 
 static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
@@ -61,7 +61,7 @@ static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
         endfor_ifa(indev);
 
         in_dev_put(indev);
-        return 0;
+        return ret;
 }
 
 #endif /* OS_LINUX_KERNEL */
