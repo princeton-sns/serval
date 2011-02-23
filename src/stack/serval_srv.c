@@ -59,7 +59,8 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
                 return 0;
         }
         
-        if (conn_ext->type != SERVAL_CONNECTION_EXT) {
+        if (conn_ext->type != SERVAL_CONNECTION_EXT || 
+            ntohs(conn_ext->length) != sizeof(*conn_ext)) {
                 LOG_ERR("No connection extension, bad extension type\n");
                 return 0;
         }
@@ -79,7 +80,8 @@ static inline int has_service_extension(struct serval_hdr *sfh)
                 return 0;
         }
         
-        if (srv_ext->type != SERVAL_SERVICE_EXT) {
+        if (srv_ext->type != SERVAL_SERVICE_EXT || 
+            ntohs(srv_ext->length) != sizeof(*srv_ext)) {
                 LOG_ERR("No service extension, bad extension type\n");
                 return 0;
         }
@@ -145,7 +147,8 @@ static inline int has_valid_control_extension(struct sock *sk,
                 return 0;
         }
         
-        if (ctrl_ext->type != SERVAL_CONTROL_EXT) {
+        if (ctrl_ext->type != SERVAL_CONTROL_EXT ||
+            ntohs(ctrl_ext->length) != sizeof(*ctrl_ext)) {
                 LOG_ERR("No control extension, bad extension type\n");
                 return 0;
         }
@@ -302,7 +305,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
 	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;
         
-        skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_KERNEL);
+        skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
 
         if (!skb)
                 return -ENOMEM;
@@ -1140,14 +1143,14 @@ int serval_srv_rcv(struct sk_buff *skb)
         unsigned int hdr_len = ntohs(sfh->length);
         int err = 0;
 
-        if (!pskb_may_pull(skb, hdr_len)) {
-                LOG_ERR("cannot pull header (hdr_len=%u)\n",
-                        hdr_len);
+        if (hdr_len < sizeof(*sfh)) {
+                LOG_ERR("header length too short\n");
                 goto drop;
         }
 
-        if (hdr_len < sizeof(*sfh)) {
-                LOG_ERR("header length too short\n");
+        if (!pskb_may_pull(skb, hdr_len)) {
+                LOG_ERR("cannot pull header (hdr_len=%u)\n",
+                        hdr_len);
                 goto drop;
         }
         
@@ -1178,17 +1181,14 @@ int serval_srv_rcv(struct sk_buff *skb)
                                 goto drop;
                         
                         srvid = &conn_ext->srvid;
-                } else if (sk->sk_type == SOCK_DGRAM &&
-                           sk->sk_state == SERVAL_INIT) {
+                } else {
                         struct serval_service_ext *srv_ext = 
                                 (struct serval_service_ext *)(sfh + 1);
+                        
                         if (!has_service_extension(sfh))
                                 goto drop;
                         
                         srvid = &srv_ext->srvid;
-                } else {
-                        LOG_INF("Cannot demux packet\n");
-                        goto drop;
                 }
 
                 LOG_DBG("Demux on srvid=%s\n", service_id_to_str(srvid));

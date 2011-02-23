@@ -156,7 +156,7 @@ struct serval_control_ext {
         uint8_t nonce[SERVAL_NONCE_SIZE];
 };
 
-#define SERVAL_SERVICE_EXT 2
+#define SERVAL_SERVICE_EXT 3
 
 struct serval_service_ext {
         uint8_t type;
