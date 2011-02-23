@@ -280,7 +280,12 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                                   dst, sizeof(dst)));
 
                 sk_setup_caps(sk, &rt->u.dst);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+                skb_dst_set(skb, &rt->u.dst);
+#else
                 skb_dst_set_noref(skb, &rt->u.dst);
+#endif
         }
 
         if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
