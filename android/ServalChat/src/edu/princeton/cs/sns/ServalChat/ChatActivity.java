@@ -160,8 +160,13 @@ public class ChatActivity extends Activity {
 			while (!shouldExit) {
 				try {
 					Log.d("ServalChat", "receiving...");
-					sock.receive(pack);
+					int len = sock.receive(pack);
 
+					if (len == -1) {
+						// Other end closed
+						shouldExit = true;
+						break;
+					}
 					String rsp = new String(pack.getData(), 0, pack.getLength());
 					Log.d("ServalChat", "response length=" + pack.getLength());
 					Log.d("ServalChat", rsp);
