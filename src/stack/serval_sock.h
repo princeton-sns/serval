@@ -32,8 +32,9 @@ enum serval_packet_type {
 };
 
 enum {
-        SERVAL_MIN_STATE = 1,
-        SERVAL_CLOSED = SERVAL_MIN_STATE, 
+        SERVAL_MIN_STATE = 0,
+        SERVAL_INIT = SERVAL_MIN_STATE,
+        SERVAL_CLOSED,
         SERVAL_REQUEST,
         SERVAL_RESPOND,
         SERVAL_CONNECTED,

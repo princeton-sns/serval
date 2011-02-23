@@ -1032,6 +1032,25 @@ static int serval_srv_lastack_state_process(struct sock *sk,
         return err;
 }
 
+/*
+  Receive for datagram sockets that are not connected.
+ */
+static int serval_srv_init_state_process(struct sock *sk, 
+                                         struct serval_hdr *sfh, 
+                                         struct sk_buff *skb)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        int err = 0;
+                
+        /* Set receive IP */
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
+               sizeof(ip_hdr(skb)->saddr));
+        
+        err = ssk->af_ops->receive(sk, skb);
+
+        return err;
+}
+
 int serval_srv_state_process(struct sock *sk, 
                              struct serval_hdr *sfh, 
                              struct sk_buff *skb)
@@ -1039,6 +1058,11 @@ int serval_srv_state_process(struct sock *sk,
         int err = 0;
 
         switch (sk->sk_state) {
+        case SERVAL_INIT:
+                if (sk->sk_type == SOCK_STREAM) 
+                        goto drop;
+                err = serval_srv_init_state_process(sk, sfh, skb);
+                break;
         case SERVAL_CONNECTED:
                 err = serval_srv_connected_state_process(sk, sfh, skb);
                 break;
@@ -1126,8 +1150,12 @@ int serval_srv_rcv(struct sk_buff *skb)
                 /* Check for connection extension. We require that this
                  * extension always directly follows the main Serval
                  * header */
-                if (!has_connection_extension(sfh))
-                        goto drop;
+                if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK) {
+                        /* Check for connection extension and do early
+                         * drop if SYN or ACK flags are set. */
+                        if (!has_connection_extension(sfh))
+                                goto drop;
+                }
 
                 LOG_DBG("Demux on srvid=%s\n", 
                         service_id_to_str(&conn_ext->srvid));
