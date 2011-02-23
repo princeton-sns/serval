@@ -24,7 +24,7 @@ static struct serval_table listen_table;
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        "UNDEFINED",
+        "INIT",
         "CLOSED",
         "REQUEST",
         "RESPOND",
@@ -543,7 +543,7 @@ const char *serval_state_str(unsigned int state)
 
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state < SERVAL_MIN_STATE ||
+        if (new_state == SERVAL_MIN_STATE ||
             new_state >= SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
