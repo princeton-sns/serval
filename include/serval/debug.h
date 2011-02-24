@@ -22,11 +22,11 @@
 #endif /* OS_LINUX_KERNEL */
 
 typedef enum {
-	LOG_LEVEL_INF = 0,
-	LOG_LEVEL_DBG,
-	LOG_LEVEL_WARN,
+	LOG_LEVEL_CRIT = 1,
 	LOG_LEVEL_ERR,
-	LOG_LEVEL_CRIT,
+	LOG_LEVEL_WARN,
+	LOG_LEVEL_INF,
+	LOG_LEVEL_DBG
 } log_level_t;
 
 void logme(log_level_t level, const char *func, const char *format, ...);

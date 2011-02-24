@@ -1202,12 +1202,14 @@ int serval_srv_rcv(struct sk_buff *skb)
                         srvid = &srv_ext->dst_srvid;
                 }
 
-                LOG_DBG("Demux on srvid=%s\n", service_id_to_str(srvid));
+                LOG_DBG("Demux on serviceID %s\n", 
+                        service_id_to_str(srvid));
 
                 sk = serval_sock_lookup_serviceid(srvid);
                 
                 if (!sk) {
-                        LOG_ERR("No matching serval sock\n");
+                        LOG_INF("No matching sock for serviceID %s\n",
+                                service_id_to_str(srvid));
                         goto drop;
                 }
         }

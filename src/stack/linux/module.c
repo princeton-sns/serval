@@ -16,8 +16,8 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
 #if defined(ENABLE_DEBUG)
-/* NOTE: debug setting currently not used, or implemented */
-static uint debug = 0;
+/* Debug defined in debug.c */
+extern unsigned int debug;
 module_param(debug, uint, 0);
 MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
 #endif
@@ -174,7 +174,7 @@ int serval_module_init(void)
 	if (err < 0) {
                 LOG_CRIT("Cannot register inetaddr notifier\n");
                 goto fail_inetaddr_notifier;
-        }
+        }        
 out:
 	return err;
 fail_inetaddr_notifier:

@@ -4,12 +4,16 @@
 #include <pthread.h>
 #endif
 
+/* Debug level */
+unsigned int debug = LOG_LEVEL_DBG;
+
 static const char *log_level_str[] = {
-	"INF",
-	"DBG",
-        "WARN",
-	"ERR",
-        "CRIT"
+        [ 0 ] = "UNDEF",
+        [LOG_LEVEL_CRIT] = "CRIT",
+	[LOG_LEVEL_ERR] = "ERR",
+        [LOG_LEVEL_WARN] = "WARN",
+	[LOG_LEVEL_INF] = "INF",
+	[LOG_LEVEL_DBG] = "DBG"
 };
 
 #if defined(OS_LINUX_KERNEL)
@@ -21,11 +25,14 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
         
+        if ((unsigned int)level > debug)
+                return;
+        
 #if defined(OS_LINUX_KERNEL)
         switch (level) {
+        case LOG_LEVEL_ERR:
         case LOG_LEVEL_WARN:
         case LOG_LEVEL_CRIT:
-        case LOG_LEVEL_ERR:
                 pr_alert("{%d}[%3s]%s: ", 
                          task_pid_nr(current), 
                          log_level_str[level], func);

@@ -29,6 +29,7 @@ static volatile int should_exit = 0;
 
 extern int telnet_init(void);
 extern void telnet_fini(void);
+extern unsigned int debug;
 
 #define MAX(x, y) (x >= y ? x : y)
 
@@ -409,7 +410,22 @@ int main(int argc, char **argv)
 		} else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
-		}
+		} else if (strcmp(argv[0], "-dl") == 0 ||
+                           strcmp(argv[0], "-l") == 0 ||
+                           strcmp(argv[0], "--debug-level") == 0) {
+                        char *p = NULL;
+                        unsigned int d = strtoul(argv[1], &p, 10);
+                        
+                        if (*argv[1] != '\0' && *p == '\0') {
+                                argv++;
+                                argc--;
+                                LOG_DBG("Setting debug to %u\n", d);
+                                debug = d;
+                        } else {
+                                fprintf(stderr, "Invalid debug setting %s\n",
+                                        argv[1]);
+                        }
+		} 
 		argc--;
 		argv++;
 	}	
