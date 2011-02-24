@@ -90,6 +90,7 @@ static void timer_list_head_destructor(void *arg)
 							 struct timer_list, 
 							 entry);
 		list_del(&tl->entry);
+                tl->entry.next = NULL;
 	}
 
 	pthread_mutex_destroy(&tlh->lock);
@@ -220,6 +221,7 @@ int timer_list_handle_timeout(void)
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
 	
 	list_del(&timer->entry);
+        timer->entry.next = NULL;
 
 	timer_list_unlock(tlh);
 
@@ -323,6 +325,7 @@ int del_timer(struct timer_list *timer)
         } 
 
         list_del(&timer->entry);
+        timer->entry.next = NULL;
 
 	timer_list_unlock(tlh);
 

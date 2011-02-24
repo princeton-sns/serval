@@ -137,6 +137,7 @@ static int serval_autobind(struct sock *sk)
         }
 #endif
         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+        serval_sock_set_flag(ssk, SSK_FLAG_AUTOBOUND);
         serval_sk(sk)->srvid_prefix_bits = 0;
 
         /* Add to protocol hash chains. */
@@ -168,6 +169,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 return ret;
         }
 
+        /* Notify the service daemon */
         if (!host_ctrl_mode) {
                 struct ctrlmsg_register cm;
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
@@ -176,15 +178,19 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
                 
                 if (ret < 0) {
-                        LOG_ERR("bind failed, servd not running?\n");
-                        return ret;
+                        LOG_INF("servd not running?\n");
                 }
         }
 
         lock_sock(sk);
 
-        /* Mark socket as bound */
-        serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+        /* Already bound? */
+        if (serval_sock_flag(ssk, SSK_FLAG_BOUND)) {
+                sk->sk_prot->unhash(sk);
+        } else {
+                /* Mark socket as bound */
+                serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+        }
 
         memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid, 
                sizeof(svaddr->sv_srvid));
@@ -200,19 +206,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
 static int serval_listen_start(struct sock *sk, int backlog)
 {
-        //struct serval_sock *ssk = serval_sk(sk);
-
-        /* Unhash the socket since we need to hash it into listen table */
-        sk->sk_prot->unhash(sk);
-        /* TODO: create accept queue */
         serval_sock_set_state(sk, SERVAL_LISTEN);
         sk->sk_ack_backlog = 0;
-        
-        /* Hash it on the service id. This will put the socket in
-           another hash table than the initial hashing on socket
-           id. */
-
-        sk->sk_prot->hash(sk);
 
         return 0;
 }
@@ -302,12 +297,17 @@ static int serval_listen(struct socket *sock, int backlog)
                 err = -EINVAL;
                 goto out;
         }
-        
+
+        if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND) && 
+            serval_autobind(sk) < 0)
+		return -EAGAIN;
+        /*
 	if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND)) {
                 LOG_ERR("socket not BOUND\n");
                 err = -EDESTADDRREQ;
                 goto out;
         }
+        */
 
         err = serval_listen_start(sk, backlog);
 
@@ -468,26 +468,25 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 		break;
 	case SS_UNCONNECTED:
 		err = -EISCONN;
-                /*
-		if (sk->sk_state != SERVAL_CLOSED)
+
+		if (sk->sk_state == SERVAL_LISTEN)
 			goto out;
-                */
+
                 /* Set the peer address */
                 memcpy(&serval_sk(sk)->peer_srvid, &svaddr->sv_srvid, 
                        sizeof(struct service_id));
                 
                 /*
-                  We need to rehash the socket if it is SOCK_DGRAM,
-                  because it is initially hashed on serviceID for
-                  being able to receive unconnected datagrams 
-                */                
-                if (sk->sk_type == SOCK_DGRAM)
+                  We need to rehash the socket because it may be
+                  initially hashed on serviceID for being able to
+                  receive unconnected datagrams
+                */
+                if (serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND))
                         sk->sk_prot->unhash(sk);
 
                 serval_sock_set_state(sk, SERVAL_REQUEST);
                 
-                if (sk->sk_type == SOCK_DGRAM)
-                        sk->sk_prot->hash(sk);
+                sk->sk_prot->hash(sk);
 
                 err = sk->sk_prot->connect(sk, addr, alen);
 

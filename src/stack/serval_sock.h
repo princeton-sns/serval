@@ -70,6 +70,7 @@ enum {
 
 enum serval_sock_flags {
         SSK_FLAG_BOUND = 0,
+        SSK_FLAG_AUTOBOUND,
 };
 
 struct serval_sock_af_ops {
@@ -159,8 +160,11 @@ static inline unsigned int serval_hashfn(struct net *net,
                                          size_t keylen,
                                          unsigned int mask)
 {
-        unsigned int num = 0;
-        memcpy(&num, key, keylen < sizeof(num) ? keylen : sizeof(num));
+        unsigned int num = 0, i;
+        unsigned char *key_num = (unsigned char *)key;
+        for (i = 0; i < keylen; i++) {
+                num += key_num[i];
+        }
 	return num & mask;
 }
 

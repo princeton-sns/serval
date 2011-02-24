@@ -368,6 +368,10 @@ void sk_free(struct sock *sk);
 static inline void sock_hold(struct sock *sk)
 {
         atomic_inc(&sk->sk_refcnt);
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n",
+               __func__, sk, atomic_read(&sk->sk_refcnt));
+#endif
 }
 
 /* 
@@ -376,11 +380,19 @@ static inline void sock_hold(struct sock *sk)
  */
 static inline void __sock_put(struct sock *sk)
 {
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n", 
+               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
+#endif
 	atomic_dec(&sk->sk_refcnt);
 }
 
 static inline void sock_put(struct sock *sk)
 {
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n", 
+               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
+#endif
         if (atomic_dec_and_test(&sk->sk_refcnt))
                 sk_free(sk);
 }
