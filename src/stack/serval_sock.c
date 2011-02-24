@@ -349,7 +349,7 @@ int __serval_assign_flowid(struct sock *sk)
 
 int serval_sock_get_flowid(struct flow_id *sid)
 {
-        sid->s_id = htons(atomic_inc_return(&serval_flow_id));
+        sid->s_id = htonl(atomic_inc_return(&serval_flow_id));
 
         return 0;
 }

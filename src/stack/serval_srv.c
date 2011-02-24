@@ -508,7 +508,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         /* Copy our nonce to connection extension */
         memcpy(conn_ext->nonce, rsk->local_nonce, SERVAL_NONCE_SIZE);
        
-        sfh->flags |= SVH_ACK;
+        sfh->flags = SVH_SYN | SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
 
         /* Need to drop dst since this packet is routed for
@@ -1161,14 +1161,19 @@ int serval_srv_rcv(struct sk_buff *skb)
         }
         
         LOG_DBG("flowid (src,dst)=(%u,%u)\n", 
-                ntohs(sfh->src_flowid.s_id), 
-                ntohs(sfh->dst_flowid.s_id));
+                ntohl(sfh->src_flowid.s_id), 
+                ntohl(sfh->dst_flowid.s_id));
        
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
-        if (!(sfh->flags & SVH_SYN && !(sfh->flags & SVH_ACK))) {
+         if (!(sfh->flags & SVH_SYN && !(sfh->flags & SVH_ACK))) {
                 /* Ok, check if we can demux on socket id */
                 sk = serval_sock_lookup_flowid(&sfh->dst_flowid);
+
+                if (!sk) {
+                        LOG_INF("No matching sock for flowid %u\n",
+                                ntohl(sfh->dst_flowid.s_id));
+                }
         }
         
         if (!sk) {

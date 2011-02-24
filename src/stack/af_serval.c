@@ -475,8 +475,19 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 /* Set the peer address */
                 memcpy(&serval_sk(sk)->peer_srvid, &svaddr->sv_srvid, 
                        sizeof(struct service_id));
+                
+                /*
+                  We need to rehash the socket if it is SOCK_DGRAM,
+                  because it is initially hashed on serviceID for
+                  being able to receive unconnected datagrams 
+                */                
+                if (sk->sk_type == SOCK_DGRAM)
+                        sk->sk_prot->unhash(sk);
 
                 serval_sock_set_state(sk, SERVAL_REQUEST);
+                
+                if (sk->sk_type == SOCK_DGRAM)
+                        sk->sk_prot->hash(sk);
 
                 err = sk->sk_prot->connect(sk, addr, alen);
 
