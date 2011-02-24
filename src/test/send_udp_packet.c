@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 
         memset(&addr, 0, sizeof(addr));
 	addr.sv.sv_family = AF_SERVAL;
-	addr.sv.sv_srvid.s_sid16[0] = htons(7); 
+	addr.sv.sv_srvid.s_sid16[0] = htons(6); 
 	addr.in.sin_family = AF_INET;
 	
         if (inet_pton(AF_INET, ipdst, &addr.in.sin_addr) != 1) {
@@ -43,9 +43,8 @@ int main(int argc, char **argv)
                 goto out;
         }
         
-        printf("My serviceID is %s sending to %s\n",
-               service_id_to_str(&addr.sv.sv_srvid),
-               ipdst);
+        printf("My serviceID is \'%s\'\n",
+               service_id_to_str(&addr.sv.sv_srvid));
                
         ret = bind(sock, (struct sockaddr *)&addr, sizeof(addr.sv));
 
@@ -53,7 +52,13 @@ int main(int argc, char **argv)
 		fprintf(stderr, "bind: %s\n", strerror_sv(errno));
                 goto out;
         }
+
+	addr.sv.sv_srvid.s_sid16[0] = htons(7);
         
+        printf("Sending to \'%s\' %s\n",
+               service_id_to_str(&addr.sv.sv_srvid),
+               ipdst);
+
 	ret = sendto_sv(sock, &data, sizeof(data), 0, 
                         (struct sockaddr *)&addr, sizeof(addr));
 
