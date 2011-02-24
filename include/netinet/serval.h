@@ -90,10 +90,11 @@ static inline const char *__hexdump(const void *data, int datalen,
                                 "%02x",
                                 *h++);
 
-                if (datalen && datalen % 2)
+                if (datalen && datalen % 2 && datalen != 1)
                         len += snprintf(buf + len, buflen - len, " ");
                 datalen--;
         }
+
         return buf;
 }
 

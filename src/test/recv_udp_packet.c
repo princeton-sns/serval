@@ -48,9 +48,10 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	printf("Received a %zd byte packet from %s\n",
-	       ret, inet_ntop(AF_INET, &addr.in.sin_addr, 
-			      src, sizeof(src)));
+	printf("Received a %zd byte packet from \'%s\' at %s\n", ret,
+               service_id_to_str(&addr.sv.sv_srvid),
+               inet_ntop(AF_INET, &addr.in.sin_addr, 
+                         src, sizeof(src)));
 
 	return ret;
 }
