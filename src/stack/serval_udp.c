@@ -77,8 +77,6 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
         SERVAL_SKB_CB(skb)->pkttype = type;
-        
-        skb_set_owner_w(skb, sk);
 
         tot_len = skb->len + 20 + 14;
         

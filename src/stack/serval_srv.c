@@ -1323,7 +1323,7 @@ static inline int serval_srv_do_xmit(struct sk_buff *skb)
            queue_xmit for userlevel unless the socket has had its
            interface set by a previous send event.
           */
-         if (ssk->dev)
+         if (!skb->dev && ssk->dev)
                  skb_set_dev(skb, ssk->dev);
           
          if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,

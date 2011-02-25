@@ -161,6 +161,8 @@ route_err:
 no_route:
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
+#else
+	IP_INC_STATS(IPSTATS_MIB_OUTNOROUTES);
 #endif
 	return NULL;
 }
@@ -258,6 +260,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         }
         return err;
 }
+
 #if defined(OS_LINUX_KERNEL)
 static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 {
