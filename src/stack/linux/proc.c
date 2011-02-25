@@ -114,6 +114,24 @@ static const struct file_operations proc_dbg_operations = {
 	.llseek		= generic_file_llseek,
 };
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+static inline 
+struct proc_dir_entry *proc_create(const char *name, mode_t mode, 
+                                   struct proc_dir_entry *parent,
+                                   const struct file_operations *proc_fops)
+{
+        struct proc_dir_entry *proc;
+
+        proc = create_proc_entry(name, mode, parent);
+
+        if (proc) {
+                proc->proc_fops = proc_fops;
+        }
+
+        return proc;
+}
+#endif
+
 int __init proc_init(void)
 {
         struct proc_dir_entry *proc;

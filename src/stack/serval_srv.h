@@ -66,13 +66,21 @@ static inline struct sk_buff *serval_srv_ctrl_queue_tail(struct sock *sk)
 static inline struct sk_buff *serval_srv_ctrl_queue_next(struct sock *sk, 
 							 struct sk_buff *skb)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
 	return skb_queue_next(&serval_sk(sk)->ctrl_queue, skb);
+#else
+        return skb->next;
+#endif
 }
 
 static inline struct sk_buff *serval_srv_ctrl_queue_prev(struct sock *sk, 
 							 struct sk_buff *skb)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,29))
 	return skb_queue_prev(&serval_sk(sk)->ctrl_queue, skb);
+#else
+        return skb->prev;
+#endif
 }
 
 #define serval_srv_for_ctrl_queue(skb, sk)	\
@@ -92,7 +100,12 @@ static inline struct sk_buff *serval_srv_send_head(struct sock *sk)
 static inline int serval_srv_skb_is_last(const struct sock *sk,
 					 const struct sk_buff *skb)
 {
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
 	return skb_queue_is_last(&serval_sk(sk)->ctrl_queue, skb);
+#else
+        return (skb->next == (struct sk_buff *)&serval_sk(sk)->ctrl_queue);
+#endif
 }
 
 static inline void serval_srv_advance_send_head(struct sock *sk, 
@@ -164,8 +177,11 @@ static inline void serval_srv_insert_ctrl_queue_before(struct sk_buff *new,
 						       struct sk_buff *skb,
 						       struct sock *sk)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26))
 	__skb_queue_before(&serval_sk(sk)->ctrl_queue, skb, new);
-
+#else
+        __skb_insert(new, skb->prev, skb, &serval_sk(sk)->ctrl_queue);
+#endif
 	if (serval_sk(sk)->ctrl_send_head == skb)
 		serval_sk(sk)->ctrl_send_head = new;
 }

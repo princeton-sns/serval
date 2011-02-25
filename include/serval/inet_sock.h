@@ -6,7 +6,16 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/inet_sock.h>
-#endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,33))
+/* This is for compatibility with naming in the inet_sock structures
+ * of older kernels. */
+#define inet_daddr daddr
+#define inet_saddr saddr
+#define inet_rcv_saddr rcv_saddr
+#define inet_sport sport
+#define inet_dport dport
+#endif 
+#endif /* OS_LINUX_KERNEL */
 #if defined(OS_USER)
 #include <serval/sock.h>
 

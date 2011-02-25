@@ -142,10 +142,12 @@ static struct packet_type serval_packet_type = {
 
 extern int serval_srv_rcv(struct sk_buff *);
 
-static const struct net_protocol serval_protocol = {
+static struct net_protocol serval_protocol = {
 	.handler =      serval_srv_rcv,
 	.no_policy =	1,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26))
 	.netns_ok =	1,
+#endif
 };
 
 #endif /* USE_IPPROTO */

@@ -9,7 +9,7 @@
 #define FREE_SKB(skb) kfree_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz, prio)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26))
 static inline struct net *dev_net(const struct net_device *dev)
 {
 #ifdef CONFIG_NET_NS
@@ -17,6 +17,20 @@ static inline struct net *dev_net(const struct net_device *dev)
 #else
         return &init_net;
 #endif
+}
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31))
+static inline void skb_dst_drop(struct sk_buff *skb)
+{
+        if (skb->dst)
+                dst_release(skb->dst);
+        skb->dst = 0UL;
+}
+
+static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
+{
+        skb->dst = dst;
 }
 #endif
 

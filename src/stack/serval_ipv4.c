@@ -12,6 +12,7 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
 #include <linux/inetdevice.h>
+#include <linux/netfilter_ipv4.h>
 #include <net/route.h>
 #include <net/ip.h>
 #elif !defined(OS_ANDROID)
@@ -75,7 +76,43 @@ inhdr_error:
 
 #endif
 
+static inline int serval_ip_local_out(struct sk_buff *skb)
+{
+        int err;
+        
 #if defined(OS_LINUX_KERNEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+	err = ip_local_out(skb);
+#else
+        err = NF_HOOK(PF_INET, NF_IP_LOCAL_OUT, skb, NULL, skb->dst->dev,
+                      dst_output);
+#endif
+#else
+        /* Calculate checksum */
+        ip_send_check(ip_hdr(skb));
+
+        err = serval_output(skb);
+#endif
+        return err;
+}
+
+#if defined(OS_LINUX_KERNEL)
+
+/* A wrapper around ip_route_output_flow to handle differences between
+ * various kernel versions. */
+static inline
+int serval_ip_route_output_flow(struct net *net, struct rtable **rp, 
+                                struct flowi *flp, struct sock *sk, int flags)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+        return ip_route_output_flow(net, rp, flp, sk, flags);
+#else
+        return ip_route_output_flow(rp, flp, sk, flags);
+#endif       
+}
+
+
+
 /*
   This will route a SYN-ACK, i.e., the response to a request to open a
   new connection.
@@ -89,18 +126,20 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 	struct rtable *rt;
 	struct ip_options *opt = NULL; /* inet_rsk(req)->opt; */
 	struct flowi fl = { .oif = sk->sk_bound_dev_if,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 			    .mark = sk->sk_mark,
+#endif
 			    .nl_u = { .ip4_u =
 				      { .daddr = daddr,
 					.saddr = saddr,
 					.tos = RT_CONN_FLAGS(sk) } },
 			    .proto = protocol,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
 			    .flags = inet_sk_flowi_flags(sk),
+#endif
 			    .uli_u = { .ports =
 				       { .sport = 0,
 					 .dport = 0 } } };
-	struct net *net = sock_net(sk);
-
         /*
           FIXME:
 
@@ -111,7 +150,7 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
          */
 	/* security_req_classify_flow(req, &fl); */
 
-	if (ip_route_output_flow(net, &rt, &fl, sk, 0))
+	if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0))
 		goto no_route;
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
@@ -120,7 +159,9 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 route_err:
 	ip_rt_put(rt);
 no_route:
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
+#endif
 	return NULL;
 }
 
@@ -163,7 +204,9 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->daddr = daddr;
 	skb->protocol = htons(ETH_P_IP);
 	skb->priority = sk->sk_priority;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	skb->mark = sk->sk_mark;
+#endif
 
 #if defined(ENABLE_DEBUG)
         {
@@ -208,14 +251,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         }
 
         /* Transmit */
-#if defined(OS_LINUX_KERNEL)
-	err = ip_local_out(skb);
-#else
-        /* Calculate checksum */
-        ip_send_check(ip_hdr(skb));
-
-        err = serval_output(skb);
-#endif
+        err = serval_ip_local_out(skb);
 
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
@@ -251,13 +287,17 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         struct inet_sock *inet = inet_sk(sk);
 	struct ip_options *opt = inet->opt;
         struct flowi fl = { .oif = sk->sk_bound_dev_if,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
                             .mark = sk->sk_mark,
+#endif
                             .nl_u = { .ip4_u =
                                       { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
                                         .saddr = inet->inet_saddr,
                                         .tos = RT_CONN_FLAGS(sk) } },
                             .proto = sk->sk_protocol,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
                             .flags = inet_sk_flowi_flags(sk),
+#endif
                             .uli_u = { .ports =
                                        { .sport = inet->inet_sport,
                                          .dport = inet->inet_dport } } };
@@ -266,7 +306,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         
         security_sk_classify_flow(sk, &fl);
 
-        if (ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
+        if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
                 LOG_DBG("No route!\n");
                 FREE_SKB(skb);
                 err = -EHOSTUNREACH;
@@ -281,7 +321,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 */
                 sk_setup_caps(sk, &rt->u.dst);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
                 skb_dst_set(skb, dst_clone(&rt->u.dst));
 #else
                 skb_dst_set_noref(skb, &rt->u.dst);
@@ -325,9 +365,11 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 
 	skb->priority = sk->sk_priority;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	skb->mark = sk->sk_mark;
+#endif
 
-	err = ip_local_out(skb);
+	err = serval_ip_local_out(skb);
 
 	rcu_read_unlock();
 #else
@@ -360,11 +402,8 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 goto drop;
         }
 
-        /* Checksum */
-        ip_send_check(ip_hdr(skb));
-
         /* Transmit */
-        err = serval_output(skb);
+        err = serval_ip_local_out(skb);
 #endif        
 out:
         if (err < 0) {

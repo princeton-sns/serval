@@ -694,8 +694,11 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 	struct sock *sk = sock->sk;
 	unsigned int mask = 0;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
 	sock_poll_wait(file, sk_sleep(sk), wait);
-
+#else
+        poll_wait(file, sk->sk_sleep, wait);
+#endif
         if (sk->sk_state == SERVAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 : 
