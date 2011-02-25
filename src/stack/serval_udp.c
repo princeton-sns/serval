@@ -237,16 +237,18 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 /* Check for advisory IP address */
                 if ((unsigned)msg->msg_namelen >= 
                     (sizeof(*svaddr) + sizeof(*inaddr))) {
-                        char buf[20];
                                 
                         if (inaddr->sin_family != AF_INET)
                                 return -EAFNOSUPPORT;
-
-                        LOG_DBG("Advisory IP %s\n",
-                                inet_ntop(inaddr->sin_family, 
+#if defined(ENABLE_DEBUG)
+                        {
+                                char buf[20];
+                                LOG_DBG("Advisory IP %s\n",
+                                        inet_ntop(inaddr->sin_family, 
                                           &inaddr->sin_addr,
-                                          buf, sizeof(buf)));
-                        
+                                                  buf, sizeof(buf)));
+                        }
+#endif
                         netaddr = (struct net_addr *)&inaddr->sin_addr;
                 }
         } else if (sk->sk_state != SERVAL_CONNECTED) {

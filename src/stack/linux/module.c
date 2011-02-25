@@ -15,12 +15,10 @@ MODULE_DESCRIPTION("Serval stack for Linux");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
-#if defined(ENABLE_DEBUG)
 /* Debug defined in debug.c */
 extern unsigned int debug;
 module_param(debug, uint, 0);
 MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
-#endif
 
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
