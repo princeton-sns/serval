@@ -300,13 +300,11 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                                       { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
                                         .saddr = inet->inet_saddr,
                                         .tos = RT_CONN_FLAGS(sk) } },
-                            .proto = sk->sk_protocol,
+                            .proto = skb->protocol,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
                             .flags = inet_sk_flowi_flags(sk),
 #endif
-                            .uli_u = { .ports =
-                                       { .sport = inet->inet_sport,
-                                         .dport = inet->inet_dport } } };
+        };
         
 	rcu_read_lock();
         
@@ -418,6 +416,8 @@ out:
 
         return err;
 drop:
+        LOG_DBG("Dropping skb!\n");
+
         FREE_SKB(skb);
         
         goto out;

@@ -77,6 +77,8 @@ int serval_output(struct sk_buff *skb)
 out:
         return err;
 drop:
+        LOG_DBG("Dropping skb!\n");
+
         FREE_SKB(skb);
         goto out;
 }

@@ -1495,7 +1495,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	se = service_find(&SERVAL_SKB_CB(skb)->srvid);
 	
 	if (!se) {
-		LOG_ERR("service lookup failed\n");
+		LOG_INF("service lookup failed\n");
                 FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
@@ -1507,6 +1507,18 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	
 	dev = service_entry_dev_next(se);
 	
+        if (!dev) {
+                if (se->sk) {
+                        LOG_INF("local service routing NOT implemented\n");
+                } else {
+                        LOG_DBG("No device to transmit on!\n");
+                }
+                FREE_SKB(skb);
+                service_entry_dev_iterate_end(se);
+                service_entry_put(se);
+                return -EHOSTUNREACH;
+        }
+
 	while (dev) {
 		struct sk_buff *cskb;
 		struct net_device *next_dev;

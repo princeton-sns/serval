@@ -619,6 +619,16 @@ enum signal dev_read_signal(struct net_device *dev)
         return (enum signal)s;
 }
 
+static inline void dev_queue_purge(struct net_device *dev)
+{
+	struct sk_buff *skb;
+
+	while ((skb = skb_dequeue(&dev->tx_queue.q)) != NULL) {
+		LOG_DBG("Freeing skb %p\n", skb);
+		free_skb(skb);
+	}
+}
+
 int dev_xmit(struct net_device *dev)
 {
         int n = 0;
@@ -693,6 +703,8 @@ void *dev_thread(void *arg)
                 }
         }
 
+        dev_queue_purge(dev);
+
         return NULL;
 }
 
@@ -703,13 +715,14 @@ int dev_queue_xmit(struct sk_buff *skb)
         if (!dev || 
             !dev->pack_ops || 
             !dev->pack_ops->xmit) {
+                LOG_ERR("No device or packet ops\n");
                 free_skb(skb);
                 return -1;
         }
         
         if (dev->tx_queue_len == dev->tx_queue.q.qlen) {
-                free_skb(skb);
                 LOG_ERR("Max tx_queue_len reached, dropping packet\n");
+                free_skb(skb);
                 return 0;
         }
         
@@ -771,7 +784,11 @@ void netdev_fini(void)
                 unregister_netdev(dev);
 
                 dev_signal(dev, SIGNAL_EXIT);
-                
+
+                /* Queue should be purged already, but just to make
+                 * sure. */
+                dev_queue_purge(dev);
+
                 LOG_DBG("joining with device thread %s\n",
                         dev->name);
 

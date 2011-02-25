@@ -127,6 +127,7 @@ static int packet_linux_xmit(struct sk_buff *skb)
 	int err;
 
 	if (!skb->dev) {
+                LOG_ERR("No device set in skb\n");
 		free_skb(skb);
 		return -1;
 	}
