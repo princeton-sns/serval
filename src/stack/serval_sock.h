@@ -13,6 +13,9 @@
 #if defined(OS_USER)
 #include <string.h>
 #endif
+#if defined(OS_LINUX_KERNEL)
+#include <net/tcp_states.h>
+#endif
 
 struct serval_request_sock;
 
@@ -31,41 +34,58 @@ enum serval_packet_type {
         SERVAL_PKT_RSYNACK
 };
 
+/*
+  TCP states from net/tcp_states.h, should be as compatible as
+  possible.
+  
+	TCP_ESTABLISHED = 1,
+	TCP_SYN_SENT,
+	TCP_SYN_RECV,
+	TCP_FIN_WAIT1,
+	TCP_FIN_WAIT2,
+	TCP_TIME_WAIT,
+	TCP_CLOSE,
+	TCP_CLOSE_WAIT,
+	TCP_LAST_ACK,
+	TCP_LISTEN,
+	TCP_CLOSING,
+	TCP_MAX_STATES	
+ */
 enum {
         SERVAL_MIN_STATE = 0,
         SERVAL_INIT = SERVAL_MIN_STATE,
-        SERVAL_CLOSED,
+        SERVAL_CONNECTED,
         SERVAL_REQUEST,
         SERVAL_RESPOND,
-        SERVAL_CONNECTED,
-        SERVAL_CLOSING,
+        SERVAL_FINWAIT1,
+        SERVAL_FINWAIT2,
         SERVAL_TIMEWAIT,
+        SERVAL_CLOSED,
+        SERVAL_CLOSEWAIT,
+        SERVAL_LASTACK,
+        SERVAL_LISTEN,
+        SERVAL_CLOSING,
         SERVAL_MIGRATE,
         SERVAL_RECONNECT,
         SERVAL_RRESPOND,
-        SERVAL_LISTEN,
-        SERVAL_CLOSEWAIT,
-        SERVAL_FINWAIT1,
-        SERVAL_FINWAIT2,
-        SERVAL_LASTACK,
         SERVAL_MAX_STATE
 };
 
 enum {
-        SERVALF_CLOSED    = (1 << 1), 
+        SERVALF_CONNECTED = (1 << 1),
         SERVALF_REQUEST   = (1 << 2),
         SERVALF_RESPOND   = (1 << 3),
-        SERVALF_CONNECTED = (1 << 4),
-        SERVALF_CLOSING   = (1 << 5),
+        SERVALF_FINWAIT1  = (1 << 4),
+        SERVALF_FINWAIT2  = (1 << 5),
         SERVALF_TIMEWAIT  = (1 << 6),
-        SERVALF_MIGRATE   = (1 << 7),
-        SERVALF_RECONNECT = (1 << 8),
-        SERVALF_RRESPOND  = (1 << 9),
+        SERVALF_CLOSED    = (1 << 7), 
+        SERVALF_CLOSEWAIT = (1 << 8),
+        SERVALF_LASTACK   = (1 << 9),
         SERVALF_LISTEN    = (1 << 10),
-        SERVALF_CLOSEWAIT = (1 << 11),
-        SERVALF_FINWAIT1  = (1 << 12),
-        SERVALF_FINWAIT2  = (1 << 13),
-        SERVALF_LASTACK   = (1 << 14),
+        SERVALF_CLOSING   = (1 << 11),
+        SERVALF_MIGRATE   = (1 << 12),
+        SERVALF_RECONNECT = (1 << 13),
+        SERVALF_RRESPOND  = (1 << 14)
 };
 
 enum serval_sock_flags {

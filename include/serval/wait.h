@@ -54,7 +54,7 @@ typedef struct __wait_queue_head wait_queue_head_t;
 	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk);         \
         init_wait(&name)
 
-#define UNDECLARE_WAITQUEUE(name) destroy_wait(&name)
+#define UNDECLARE_WAITQUEUE(name) destroy_wait(name)
 
 #define __WAIT_QUEUE_HEAD_INITIALIZER(name) {				\
 	.lock		= PTHREAD_MUTEX_INITIALIZER,		        \

@@ -364,18 +364,60 @@ int services_print(char *buf, int buflen)
         return service_table_print(&srvtable, buf, buflen);
 }
 
+
+static int service_entry_local_match(struct bst_node *n)
+{
+        struct service_entry *se = get_service(n);
+        
+        if (se->sk)
+                return 1;
+
+        return 0;
+}
+
+static int service_entry_global_match(struct bst_node *n)
+{
+        struct service_entry *se = get_service(n);
+        
+        if (!se->sk)
+                return 1;
+
+        return 0;
+}
+
+static int service_entry_any_match(struct bst_node *n)
+{
+        return 1;
+}
+
 static struct service_entry *service_table_find(struct service_table *tbl, 
-                                                struct service_id *srvid)
+                                                struct service_id *srvid, 
+                                                service_entry_type_t type)
 {
         struct service_entry *se = NULL;
         struct bst_node *n;
+        int (*match)(struct bst_node *) = NULL;
 
         if (!srvid)
                 return NULL;
 
+        switch (type) {
+        case SERVICE_ENTRY_LOCAL:
+                match = service_entry_local_match;
+                break;
+        case SERVICE_ENTRY_GLOBAL:
+                match = service_entry_global_match;
+                break;
+        case SERVICE_ENTRY_ANY:
+                match = service_entry_any_match;
+                break;
+        }
+
         read_lock_bh(&tbl->lock);
         
-        n = bst_find_longest_prefix(&tbl->tree, srvid, sizeof(*srvid) * 8);
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, 
+                                          sizeof(*srvid) * 8,
+                                          match);
 
         if (n) {
                 se = get_service(n);
@@ -387,14 +429,19 @@ static struct service_entry *service_table_find(struct service_table *tbl,
         return se;
 }
 
-struct service_entry *service_find(struct service_id *srvid)
+struct service_entry *service_find_type(struct service_id *srvid, 
+                                        service_entry_type_t type)
 {
-        return service_table_find(&srvtable, srvid);
+        return service_table_find(&srvtable, srvid, type);
 }
 
-static int service_table_add(struct service_table *tbl, struct service_id *srvid, 
-                             unsigned int prefix_bits, struct net_device *dev,
-                             unsigned char *dst, int dstlen, struct sock *sk,
+static int service_table_add(struct service_table *tbl, 
+                             struct service_id *srvid, 
+                             unsigned int prefix_bits,
+                             struct net_device *dev,
+                             unsigned char *dst, 
+                             int dstlen, 
+                             struct sock *sk,
                              gfp_t alloc)
 {
         struct service_entry *se;
@@ -495,7 +542,8 @@ static int del_dev_func(struct bst_node *n, void *arg)
         return ret;
 }
 
-static int service_table_del_dev(struct service_table *tbl, const char *devname)
+static int service_table_del_dev(struct service_table *tbl, 
+                                 const char *devname)
 {
         int ret = 0;
 

@@ -105,7 +105,7 @@ static int serval_wait_state(struct sock *sk, int state,
 	}
 	set_current_state(TASK_RUNNING);
 	remove_wait_queue(sk_sleep(sk), &wait);
-        UNDECLARE_WAITQUEUE(wait);
+        UNDECLARE_WAITQUEUE(&wait);
 
 	return err;
 }

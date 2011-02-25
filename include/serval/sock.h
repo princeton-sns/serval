@@ -488,6 +488,8 @@ static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
         return sk->sk_backlog_rcv(sk, skb);
 }
 
+int sk_stream_wait_connect(struct sock *sk, long *timeo_p);
+
 #endif /* OS_USER */
 
 #endif /* _SOCK_H_ */

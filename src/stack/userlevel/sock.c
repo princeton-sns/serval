@@ -8,6 +8,7 @@
 #include <serval/net.h>
 #include <serval/bitops.h>
 #include <pthread.h>
+#include <serval_sock.h>
 
 #define RCV_BUF_DEFAULT 1000
 #define SND_BUF_DEFAULT 1000
@@ -554,4 +555,51 @@ void release_sock(struct sock *sk)
         
         sk->sk_lock.owned = 0;
         spin_unlock(&sk->sk_lock.slock);
+}
+
+/* From net/core/stream.c */
+/**
+ * sk_stream_wait_connect - Wait for a socket to get into the connected state
+ * @sk: sock to wait on
+ * @timeo_p: for how long to wait
+ *
+ * Must be called with the socket locked.
+ */
+int sk_stream_wait_connect(struct sock *sk, long *timeo_p)
+{
+	int done, err = 0;
+	DEFINE_WAIT(wait);
+
+	do {
+		err = sock_error(sk);
+		if (err)
+                        break;
+		if ((1 << sk->sk_state) & 
+                    ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+			err = -EPIPE;
+                        break;
+                }
+		if (!*timeo_p) {
+			err = -EAGAIN;
+                        break;
+                }
+		if (signal_pending(current)) {
+			err = sock_intr_errno(*timeo_p);
+                        break;
+                }
+
+		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+		sk->sk_write_pending++;
+		done = sk_wait_event(sk, timeo_p,
+				     !sk->sk_err &&
+				     !((1 << sk->sk_state) &
+				       ~(SERVALF_CONNECTED | 
+                                         SERVALF_CLOSEWAIT)));
+		finish_wait(sk_sleep(sk), &wait);
+		sk->sk_write_pending--;
+	} while (!done);
+        
+        UNDEFINE_WAIT(&wait);
+
+	return err;
 }

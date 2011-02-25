@@ -321,6 +321,9 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
+        LOG_DBG("Sending SYN seqno=%u\n",
+                SERVAL_SKB_CB(skb)->seqno);
+
         err = serval_srv_queue_and_push(sk, skb);
         
         if (err < 0) {
@@ -442,6 +445,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         */
 
+        LOG_DBG("SYN seqno=%u\n", ntohl(conn_ext->seqno));
+
 #if defined(OS_USER)
         /* Cache neighbor */
         neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
@@ -488,8 +493,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         list_add(&rsk->lh, &ssk->syn_queue);
         
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);
         skb_reset_transport_header(skb);
@@ -501,8 +504,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(rsk->local_flowid));
         memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
                sizeof(rsk->peer_srvid));
-        SERVAL_SKB_CB(skb)->pkttype = htonl(rsk->iss_seq);
-        conn_ext->seqno = SERVAL_SKB_CB(skb)->pkttype;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYNACK;
+        conn_ext->seqno = htonl(rsk->iss_seq);
         conn_ext->ackno = htonl(rsk->rcv_seq + 1);
 
         /* Copy our nonce to connection extension */
@@ -537,6 +540,10 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
 #endif /* OS_LINUX_KERNEL */
 
+        LOG_DBG("Sending SYNACK seqno=%u ackno=%u\n",
+                ntohl(conn_ext->seqno),
+                ntohl(conn_ext->ackno));
+                
         /* Cannot use serval_srv_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
         err = serval_ipv4_build_and_send_pkt(skb, sk, 
@@ -610,6 +617,12 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                 LOG_ERR("Bad seqno received=%u expected=%u\n",
                                         ntohl(conn_ext->seqno), 
                                         rsk->rcv_seq + 1);
+                                return NULL;
+                        }
+                        if (ntohl(conn_ext->ackno) != rsk->iss_seq + 1) {
+                                LOG_ERR("Bad ackno received=%u expected=%u\n",
+                                        ntohl(conn_ext->ackno), 
+                                        rsk->iss_seq + 1);
                                 return NULL;
                         }
                         /* Move request sock to accept queue */
@@ -686,7 +699,8 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
-                LOG_DBG("received valid ACK %u\n", ackno);
+                LOG_DBG("received valid ACK ackno=%u\n", 
+                        ackno);
                 err = 0;
         } else {
                 LOG_ERR("ackno %u out of sequence, expected %u\n",
@@ -765,16 +779,22 @@ static int serval_srv_connected_state_process(struct sock *sk,
                 if (err == 0) {
                         /* Valid FIN means valid ctrl header that may
                            contain ACK */
-                        serval_srv_ack_process(sk, sfh, skb);     
+                        serval_srv_ack_process(sk, sfh, skb);
+                        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
                 }
-        } else {
+        }
+
+        if (sfh->flags & SVH_ACK) {
                 serval_srv_ack_process(sk, sfh, skb);
+        } else if (sfh->flags == 0) {
+                /* FIXME: Should find better way to detect that this
+                 * might be a data packet */
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         }
 
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
-        if (err == 0) {
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_DATA) {
                 /* Set the received service id */
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
                        sizeof(ssk->peer_srvid));
@@ -848,8 +868,6 @@ static int serval_srv_listen_state_process(struct sock *sk,
                 }
                 FREE_SKB(skb);
         } else if (sfh->flags & SVH_SYN) {
-                LOG_DBG("SYN recv\n");
-
                 err = serval_srv_syn_rcv(sk, sfh, skb);
         }
 
@@ -875,7 +893,9 @@ static int serval_srv_request_state_process(struct sock *sk,
                 goto drop;
         }
 
-        LOG_DBG("Got SYNACK\n");
+        LOG_DBG("Got SYNACK seqno=%u ackno=%u\n",
+                ntohl(conn_ext->seqno), 
+                ntohl(conn_ext->ackno));
 
 #if defined(OS_USER)
         /* Cache neighbor */
@@ -1160,7 +1180,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        LOG_DBG("flowid (src,dst)=(%u,%u)\n", 
+        LOG_DBG("flowid (src,dst)=(%u,%u)\n",
                 ntohl(sfh->src_flowid.s_id), 
                 ntohl(sfh->dst_flowid.s_id));
        
@@ -1492,7 +1512,8 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 return serval_srv_do_xmit(skb);
         }
 
-	se = service_find(&SERVAL_SKB_CB(skb)->srvid);
+	se = service_find_type(&SERVAL_SKB_CB(skb)->srvid,
+                               SERVICE_ENTRY_GLOBAL);
 	
 	if (!se) {
 		LOG_INF("service lookup failed\n");

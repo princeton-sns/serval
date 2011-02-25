@@ -128,18 +128,23 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
         return len;
 }
 
+static
 struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                                               struct bst_node **prev,
                                               void *prefix,
-                                              unsigned int prefix_bits)
+                                              unsigned int prefix_bits,
+                                              int (*match)(struct bst_node *))
 {
         if (!n)
                 return NULL;
 
         while (1) {
-                /* Keep track of the previous active node */
-                if (bst_node_flag(n, BST_FLAG_ACTIVE))
-                        *prev = n;
+                /* Keep track of the previous matching node */
+                if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                        if (!match || (match && match(n))) {
+                                *prev = n;
+                        }
+                }
                 
                 if (n->prefix_bits == prefix_bits)
                         break;
@@ -184,18 +189,29 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
         return n;
 }
 
+struct bst_node *bst_find_longest_prefix_match(struct bst *tree, 
+                                               void *prefix,
+                                               unsigned int prefix_bits,
+                                               int (*match)(struct bst_node *))
+{
+        struct bst_node *n, *prev = NULL;
+        
+        n = bst_node_find_longest_prefix(tree->root, 
+                                         &prev, prefix, 
+                                         prefix_bits, match);
+
+        if (n && (!bst_node_flag(n, BST_FLAG_ACTIVE) || 
+                  (match && !match(n))))
+                return prev;
+        
+        return n;
+}
+
 struct bst_node *bst_find_longest_prefix(struct bst *tree, 
                                          void *prefix,
                                          unsigned int prefix_bits)
 {
-        struct bst_node *n, *prev = NULL;
-        
-        n = bst_node_find_longest_prefix(tree->root, &prev, prefix, prefix_bits);
-
-        if (n && !bst_node_flag(n, BST_FLAG_ACTIVE))
-                return prev;
-        
-        return n;
+        return bst_find_longest_prefix_match(tree, prefix, prefix_bits, NULL);
 }
 
 /*
@@ -479,7 +495,8 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 {
 	struct bst_node *n, *prev = NULL;
         
-	n = bst_node_find_longest_prefix(root, &prev, prefix, prefix_bits);	
+	n = bst_node_find_longest_prefix(root, &prev, prefix, 
+                                         prefix_bits, NULL);	
 	
 	/*
           printf("found %p %p %p %p %u %u\n", 

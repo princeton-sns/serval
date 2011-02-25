@@ -24,21 +24,21 @@ static struct serval_table listen_table;
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        "INIT",
-        "CLOSED",
-        "REQUEST",
-        "RESPOND",
-        "CONNECTED",
-        "CLOSING",
-        "TIMEWAIT",
-        "MIGRATE",
-        "RECONNECT",
-        "RRESPOND",
-        "LISTEN",
-        "CLOSEWAIT",
-        "FINWAIT1",
-        "FINWAIT2",
-        "LASTACK"
+        [ SERVAL_INIT ]      = "INIT",
+        [ SERVAL_CONNECTED ] = "CONNECTED",
+        [ SERVAL_REQUEST ]   = "REQUEST",
+        [ SERVAL_RESPOND ]   = "RESPOND",
+        [ SERVAL_FINWAIT1 ]  = "FINWAIT1",
+        [ SERVAL_FINWAIT2 ]  = "FINWAIT2",
+        [ SERVAL_TIMEWAIT ]  = "TIMEWAIT",
+        [ SERVAL_CLOSED ]    = "CLOSED",
+        [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
+        [ SERVAL_LASTACK ]   = "LASTACK",
+        [ SERVAL_LISTEN ]    = "LISTEN",
+        [ SERVAL_CLOSING ]   = "CLOSING",
+        [ SERVAL_MIGRATE ]   = "MIGRATE",
+        [ SERVAL_RECONNECT ] = "RECONNECT",
+        [ SERVAL_RRESPOND ]  = "RRESPOND"
 };
 
 static void serval_sock_destruct(struct sock *sk);
@@ -141,7 +141,8 @@ struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
            return serval_sock_lookup(&listen_table, &init_net, 
                                   srvid, SERVICE_KEY_LEN);
         */
-        struct service_entry *se = service_find(srvid);
+        struct service_entry *se = service_find_type(srvid,
+                                                     SERVICE_ENTRY_LOCAL);
 
         if (!se)
                 return NULL;
@@ -425,6 +426,9 @@ void serval_sock_init(struct sock *sk)
         }       
 #endif
 
+        ssk->rcv_seq.nxt = 0;        
+        ssk->snd_seq.una = 0;
+        ssk->snd_seq.nxt = 0;
         /* Default to stop-and-wait behavior */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;

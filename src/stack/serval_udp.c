@@ -140,15 +140,7 @@ static void serval_udp_shutdown(struct sock *sk, int how)
 
 int serval_udp_connection_request(struct sock *sk, struct sk_buff *skb)
 {
-        //struct serval_sock *ssk = serval_sk(sk);
-        /* struct iphdr *iph = ip_hdr(skb);
-           struct udphdr *udph = udp_hdr(skb); */
-
-        int err = 0;
-
-        LOG_DBG("SYN received\n");
-
-        return err;
+        return 0;
 }
 
 void serval_udp_connection_respond_sock(struct sock *sk, 
@@ -177,7 +169,8 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 
         pskb_pull(skb, sizeof(*udph));
 
-        /* LOG_DBG("data len=%u skb->len=%u\n", datalen, skb->len); */
+        /* LOG_DBG("data len=%u skb->len=%u\n", 
+           datalen, skb->len); */
         
         /* Ideally, this trimming would not be necessary. However, it
          * seems that somewhere in the receive process trailing
@@ -260,12 +253,9 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	timeo = sock_sndtimeo(sk, nonblock);
 
 	/* Wait for a connection to finish. */
-        /*
-
 	if ((1 << sk->sk_state) & ~SERVALF_CONNECTED)
-		if ((rc = sk_stream_wait_connect(sk, &timeo)) != 0)
-                goto out_release;
-        */
+		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
+                        goto out;
 
         skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen, nonblock, &err);
 
@@ -312,7 +302,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	long timeo;
         
         lock_sock(sk);
-        
+
         if (sk->sk_state == SERVAL_CLOSED) {
                 /* SERVAL_CLOSED is a valid state here because recvmsg
                  * should return 0 and not an error */
@@ -336,6 +326,8 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	
                 if (sk->sk_err) {
                         retval = sock_error(sk);
+                        LOG_ERR("sk=%p error=%d\n",
+                                sk, retval);
                         break;
                 }
 

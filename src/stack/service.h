@@ -23,6 +23,12 @@ struct service_entry {
         atomic_t refcnt;
 };
 
+typedef enum {
+        SERVICE_ENTRY_LOCAL,
+        SERVICE_ENTRY_GLOBAL,
+        SERVICE_ENTRY_ANY
+} service_entry_type_t;
+
 struct net_device *service_entry_get_dev(struct service_entry *se, 
                                          const char *ifname);
 int service_entry_remove_dev(struct service_entry *se, 
@@ -43,7 +49,14 @@ int service_add(struct service_id *srvid, unsigned int prefix_bits,
                 int dstlen, struct sock *sk, gfp_t alloc);
 void service_del(struct service_id *srvid, unsigned int prefix_bits);
 int service_del_dev(const char *devname);
-struct service_entry *service_find(struct service_id *srvid);
+struct service_entry *service_find_type(struct service_id *srvid, 
+                                        service_entry_type_t type);
+
+static inline struct service_entry *service_find(struct service_id *srvid)
+{
+        return service_find_type(srvid, SERVICE_ENTRY_ANY);
+}
+
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
 int service_entry_print(struct service_entry *se, char *buf, int buflen);

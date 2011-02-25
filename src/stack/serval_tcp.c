@@ -127,7 +127,8 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 
                 LOG_DBG("af_serval: in RECONNECT. Waiting...\n");
 
-                ret = wait_event_interruptible(*sk_sleep(sk), sk->sk_state != SERVAL_RECONNECT);
+                ret = wait_event_interruptible(*sk_sleep(sk), 
+                                               sk->sk_state != SERVAL_RECONNECT);
                 
                 /* Check if we were interrupted */
                 if (ret != 0) {
