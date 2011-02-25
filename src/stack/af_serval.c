@@ -333,15 +333,11 @@ struct sock *serval_accept_dequeue(struct sock *parent,
                         continue;
 
                 sk = rsk->sk;
-
-                lock_sock(sk);
                
                 if (newsock) {
                         sock_graft(sk, newsock);
                         newsock->state = SS_CONNECTED;
                 }
-                                
-                release_sock(sk);
 
                 list_del(&rsk->lh);
                 serval_rsk_free(rsk);                

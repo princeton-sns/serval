@@ -84,6 +84,11 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	err = ip_local_out(skb);
 #else
+        struct iphdr *iph = ip_hdr(skb);
+        
+        iph->tot_len = htons(skb->len);
+	ip_send_check(iph);
+
         err = NF_HOOK(PF_INET, NF_IP_LOCAL_OUT, skb, NULL, skb->dst->dev,
                       dst_output);
 #endif
@@ -110,8 +115,6 @@ int serval_ip_route_output_flow(struct net *net, struct rtable **rp,
         return ip_route_output_flow(rp, flp, sk, flags);
 #endif       
 }
-
-
 
 /*
   This will route a SYN-ACK, i.e., the response to a request to open a
