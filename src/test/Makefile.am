@@ -14,9 +14,17 @@ bin_PROGRAMS = \
 
 if OS_LINUX
 bin_PROGRAMS += \
-	nltest
+	nltest \
+	translator \
+	tcp_inet_client
 
 nltest_SOURCES = nltest.c
+
+translator_SOURCES = translator.c
+translator_CPPFLAGS =-I$(top_srcdir)/include
+translator_LDFLAGS =-lpthread
+
+tcp_inet_client_SOURCES = tcp_inet_client.c
 endif
 
 send_udp_packet_SOURCES = send_udp_packet.c
