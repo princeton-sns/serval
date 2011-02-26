@@ -252,11 +252,13 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
 	timeo = sock_sndtimeo(sk, nonblock);
 
-	/* Wait for a connection to finish. */
+	/* Wait for a connection to finish. How do we know to wait in
+         * case this is an unconnected socket? */
+        /*
 	if ((1 << sk->sk_state) & ~SERVALF_CONNECTED)
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
                         goto out;
-
+        */
         skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen, nonblock, &err);
 
         if (!skb)

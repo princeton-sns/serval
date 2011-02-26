@@ -238,12 +238,12 @@ void serval_sock_hash(struct sock *sk)
                         sk, service_id_to_str(&ssk->local_srvid));
 
                 ssk->hash_key = &ssk->local_srvid;
-                ssk->hash_key_len = ssk->srvid_prefix_bits;
+                ssk->hash_key_len = ssk->srvid_prefix_bits == 0 ? 
+                        sizeof(ssk->local_srvid) * 8: 
+                        ssk->srvid_prefix_bits;
 
-                err = service_add(&ssk->local_srvid, 
-                                  ssk->srvid_prefix_bits == 0 ? 
-                                  sizeof(ssk->local_srvid) * 8: 
-                                  ssk->srvid_prefix_bits, 
+                err = service_add(ssk->hash_key, 
+                                  ssk->hash_key_len, 
                                   NULL, NULL, 0, sk, GFP_ATOMIC);
                 if (err < 0) {
                         LOG_ERR("could not add service for listening demux\n");
@@ -265,7 +265,11 @@ void serval_sock_unhash(struct sock *sk)
         struct net *net = sock_net(sk);
         spinlock_t *lock;
 
-        
+        if (ssk->hash_key_len == 0)
+                return;
+
+        ssk->hash_key_len = 0;
+                
         if (sk->sk_state == SERVAL_LISTEN ||
             sk->sk_state == SERVAL_INIT) {
                 /*

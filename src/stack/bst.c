@@ -564,7 +564,7 @@ void bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
 
         n = bst_find_longest_prefix(tree, prefix, prefix_bits);
         
-        if (n) {
+        if (n && n->prefix_bits == prefix_bits) {
                 bst_remove_node(tree, n);
         }
 }

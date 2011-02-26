@@ -29,7 +29,7 @@
 #define JAVASOCKOPT_SO_RCVTIMEOUT  4102
 #define JAVASOCKOPT_SO_OOBINLINE  4099
 
-static int kernelStack = 0;
+static int kernelStack = 1;
 
 static struct {
         jmethodID   constructor;
@@ -90,8 +90,9 @@ static int fill_in_sockaddr_in(JNIEnv *env, struct sockaddr_in *saddr,
 void Java_serval_platform_ServalNetworkStack_nativeInit(JNIEnv *env, 
 							jobject obj)
 {
-	int sock = socket(AF_SERVAL, SOCK_DGRAM, 0);
 	jclass clazz;
+#if defined(AUTODETECT_STACK)
+	int sock = socket(AF_SERVAL, SOCK_DGRAM, 0);
 
 	if (sock == -1) {
 		if (errno == EAFNOSUPPORT) {
@@ -104,7 +105,7 @@ void Java_serval_platform_ServalNetworkStack_nativeInit(JNIEnv *env,
 		kernelStack = 1;
 		close(sock);
 	}
-
+#endif
 	jniHelpInit(env);
 
 	clazz = (*env)->FindClass(env, "serval/net/ServiceID");
