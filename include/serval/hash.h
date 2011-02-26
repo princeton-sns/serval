@@ -21,6 +21,14 @@
 #else
 #include <stdint.h>
 
+#if defined(__BIONIC__)
+#if __SIZEOF_LONG__ == 8
+#define __WORDSIZE 64
+#elif __SIZEOF_LONG__ == 4
+#define __WORDSIZE 32
+#endif
+#endif
+
 /* 2^31 + 2^29 - 2^25 + 2^22 - 2^19 - 2^16 + 1 */
 #define GOLDEN_RATIO_PRIME_32 0x9e370001UL
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
