@@ -432,7 +432,8 @@ void serval_sock_init(struct sock *sk)
                 }
         }       
 #endif
-
+        ssk->hash_key = NULL;
+        ssk->hash_key_len = 0;
         ssk->rcv_seq.nxt = 0;        
         ssk->snd_seq.una = 0;
         ssk->snd_seq.nxt = 0;
