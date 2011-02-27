@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <serval/platform.h>
 #include <serval/debug.h>
+#include <serval/list.h>
 #if defined(OS_USER)
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +38,7 @@ struct bst_node {
         struct bst *tree;
 	struct bst_node *parent, *left, *right;
         struct bst_node_ops *ops;
+        struct list_head lh; /* Used for printing trees non-recursively */
 	unsigned char flags;
         void *private;
 	unsigned int prefix_bits;
@@ -92,14 +94,60 @@ int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)
         return len;
 }
 
+static void stack_push(struct list_head *stack, struct bst_node *n)
+{
+        list_add(&n->lh, stack);
+}
+
+static struct bst_node *stack_pop(struct list_head *stack)
+{
+        struct bst_node *n;
+
+        if (list_empty(stack))
+                return NULL;
+
+        n = list_first_entry(stack, struct bst_node, lh);
+        list_del(&n->lh);
+
+        return n;
+}
+
+int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
+{
+       struct list_head stack;
+       int len = 0;
+
+        if (buflen <= 0)
+                return len;
+
+       INIT_LIST_HEAD(&stack);
+
+       stack_push(&stack, n);
+       
+       while (!list_empty(&stack)) {
+               n = stack_pop(&stack);
+               if (n) {
+                       if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                               if (n->ops && n->ops->print) {
+                                       len += n->ops->print(n, buf + len, 
+                                                            buflen - len);
+                               }
+                       }
+                       if (n->right)
+                               stack_push(&stack, n->right);
+
+                       if (n->left)
+                               stack_push(&stack, n->left);
+               }
+       }
+       return len;
+}
+
 /*
-  TODO: Make a non recursive version of this printing function to make
-  sure that we do not overflow the kernel stack.
-
-  If kernel crashes are experienced when printing a BST, then this
-  function could be the cause.
-
-  */
+  Print using recursing. Cannot use this in kernel due to limited
+  stack space. Must instead use the non-recursive version above that
+  implements its own stack.
+ */
 int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
 {
         int len = 0;
@@ -412,7 +460,8 @@ static struct bst_node *bst_create_node(struct bst_node *parent,
         n->prefix_size = prefix_size;
 	n->prefix_bits = parent->prefix_bits + 1;
 	memcpy(n->prefix, prefix, n->prefix_size);
-
+        INIT_LIST_HEAD(&n->lh);
+        
         if (bst_node_init(n, ops, private) == -1) {
                 FREE(n);
                 return NULL;
@@ -574,7 +623,7 @@ int bst_print(struct bst *tree, char *buf, int buflen)
         if (!tree || tree->entries == 0)
                 return 0;
 
-        return bst_node_print_recursive(tree->root, buf, buflen);
+        return bst_node_print_nonrecursive(tree->root, buf, buflen);
 }
 
 static int bst_node_init_default(struct bst_node *n)

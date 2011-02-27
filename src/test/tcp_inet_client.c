@@ -92,6 +92,9 @@ int client(struct in_addr *ipaddr) {
 
                 if (ret == -1) {
                         fprintf(stderr, "recv: %s\n", strerror(errno));
+                } else if (ret == 0) {
+                        printf("other end closed\n");
+                        break;
                 } else {
                         printf("Response from server: %s\n", buf);
                         
