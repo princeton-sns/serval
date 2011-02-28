@@ -9,6 +9,7 @@
 #include <linux/version.h>
 #include <linux/poll.h>
 #include <linux/file.h>
+#include <linux/fs.h>
 #include <linux/string.h>
 #include <net/protocol.h>
 
@@ -526,6 +527,7 @@ sock_error:
 		sock->state = SS_DISCONNECTING;
         goto out;
 }
+
 static int serval_sendmsg(struct kiocb *iocb, struct socket *sock, 
                             struct msghdr *msg, size_t size)
 {
@@ -768,7 +770,7 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 }
 #endif
 
-static const struct proto_ops serval_ops = {
+static const struct proto_ops serval_stream_ops = {
 	.family =	PF_SERVAL,
 	.owner =	THIS_MODULE,
 	.release =	serval_release,
@@ -788,9 +790,43 @@ static const struct proto_ops serval_ops = {
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,
+#if defined(ENABLE_SPLICE)
+	/* .splice_read =  serval_tcp_splice_read, */ 
+#endif
 #endif
 };
 
+#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
+extern ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
+                                      struct pipe_inode_info *pipe, size_t len,
+                                      unsigned int flags);
+#endif
+
+static const struct proto_ops serval_dgram_ops = {
+	.family =	PF_SERVAL,
+	.owner =	THIS_MODULE,
+	.release =	serval_release,
+	.bind =		serval_bind,
+	.connect =	serval_connect,
+	.accept =	serval_accept,
+	.getname =	serval_getname,
+	.listen =	serval_listen,
+	.shutdown =	serval_shutdown,
+	.sendmsg =	serval_sendmsg,
+	.recvmsg =	serval_recvmsg,
+#if defined(OS_LINUX_KERNEL)
+	.setsockopt =	sock_no_setsockopt,
+	.getsockopt =	sock_no_getsockopt,
+	.socketpair =	sock_no_socketpair,
+	.poll =	        serval_poll,
+	.ioctl =	serval_ioctl,
+	.mmap =		sock_no_mmap,
+	.sendpage =	sock_no_sendpage,
+#if defined(ENABLE_SPLICE)
+	.splice_read =  serval_udp_splice_read,
+#endif
+#endif
+};
 
 /**
    Create a new Serval socket.
@@ -817,7 +853,7 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
                 case SOCK_DGRAM:
                         if (!protocol)
                                 protocol = SERVAL_PROTO_UDP;
-                        sock->ops = &serval_ops;
+                        sock->ops = &serval_dgram_ops;
                         sk = serval_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
                                                protocol,
@@ -826,7 +862,7 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
                 case SOCK_STREAM: 
                         if (!protocol)
                                 protocol = SERVAL_PROTO_TCP;
-                        sock->ops = &serval_ops;
+                        sock->ops = &serval_stream_ops;
                         sk = serval_sk_alloc(net, sock, 
                                                GFP_KERNEL, 
                                                protocol,

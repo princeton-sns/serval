@@ -211,24 +211,12 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                 if (CHECK_BIT(prefix, n->prefix_bits)) {
                         if (n->right) {
                                 n = n->right;
-                                /*
-                                return bst_node_find_longest_prefix(n->right,
-                                                                    prev,
-                                                                    prefix, 
-                                                                    prefix_bits);
-                                */
                         } else {
                                 break;
                         }
                 } else {
                         if (n->left) {
                                 n = n->left;
-                                /*
-                                return bst_node_find_longest_prefix(n->left,
-                                                                    prev,
-                                                                    prefix, 
-                                                                    prefix_bits);
-                                */
                         } else {
                                 break;
                         }

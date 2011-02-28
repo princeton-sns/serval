@@ -201,4 +201,3 @@ module_init(serval_module_init)
 module_exit(serval_module_fini)
 
 MODULE_ALIAS_NETPROTO(PF_SERVAL);
-

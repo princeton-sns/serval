@@ -88,6 +88,8 @@ int client(struct in_addr *ipaddr) {
 		}
                 printf("waiting for response...\n");
 
+                memset(buf, 0, sizeof(buf));
+
 		ret = recv(sock, buf, sizeof(buf), 0);
 
                 if (ret == -1) {

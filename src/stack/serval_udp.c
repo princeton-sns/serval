@@ -412,6 +412,191 @@ out:
         return retval;
 }
 
+#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
+/*
+ * UDP splice context
+ */
+struct udp_splice_state {
+	struct pipe_inode_info *pipe;
+	size_t len;
+	unsigned int flags;
+};
+
+typedef int (*sk_read_actor_t)(read_descriptor_t *, struct sk_buff *,
+				unsigned int, size_t);
+
+extern int skb_splice_bits(struct sk_buff *skb, unsigned int offset,
+                           struct pipe_inode_info *pipe, unsigned int tlen,
+                           unsigned int flags);
+
+static int serval_udp_splice_data_recv(read_descriptor_t *rd_desc, 
+                                       struct sk_buff *skb,
+                                       unsigned int offset, size_t len)
+{
+	struct udp_splice_state *tss = rd_desc->arg.data;
+	int ret;
+
+	ret = skb_splice_bits(skb, offset, tss->pipe,
+                              min(rd_desc->count, len), tss->flags);
+	if (ret > 0)
+		rd_desc->count -= ret;
+	return ret;
+}
+
+/*
+ * This routine provides an alternative to serval_udp_recvmsg() for
+ * routines that would like to handle copying from skbuffs directly in
+ * 'sendfile' fashion.
+ * Note:
+ *	- It is assumed that the socket was locked by the caller.
+ *	- The routine does not block.
+ *	- At present, there is no support for reading OOB data
+ *	  or for 'peeking' the socket using this routine
+ *	  (although both would be easy to implement).
+ */
+int serval_udp_read_sock(struct sock *sk, read_descriptor_t *desc,
+                         sk_read_actor_t recv_actor)
+{
+	struct sk_buff *skb;
+	int retval = 0;
+
+	if (sk->sk_state == SERVAL_LISTEN)
+		return -ENOTCONN;
+
+        skb = skb_peek(&sk->sk_receive_queue);
+        
+        if (!skb)
+                return 0;
+        
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+                retval = 0;
+        } else {
+                LOG_DBG("reading skb\n");
+                retval = recv_actor(desc, skb, 0, skb->len);
+                
+                //skb = skb_peek(&sk->sk_receive_queue);
+                /*
+                 * If recv_actor drops the lock (e.g. TCP splice
+                 * receive) the skb pointer might be invalid when
+                 * getting here: tcp_collapse might have deleted it
+                 * while aggregating skbs from the socket queue.
+                 */
+        }
+        sk_eat_skb(sk, skb, 0);
+
+	return retval;
+}
+
+static int __serval_udp_splice_read(struct sock *sk,
+                                    struct udp_splice_state *tss)
+{
+	/* Store TCP splice context information in read_descriptor_t. */
+	read_descriptor_t rd_desc = {
+		.arg.data = tss,
+		.count	  = tss->len,
+	};
+
+	return serval_udp_read_sock(sk, &rd_desc, serval_udp_splice_data_recv);
+}
+
+/**
+ *  serval_udp_splice_read - splice data from DGRAM socket to a pipe
+ * @sock:	socket to splice from
+ * @ppos:	position (not valid)
+ * @pipe:	pipe to splice to
+ * @len:	number of bytes to splice
+ * @flags:	splice modifier flags
+ *
+ * Description:
+ *    Will read pages from given socket and fill them into a pipe.
+ *
+ **/
+ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
+                               struct pipe_inode_info *pipe, size_t len,
+                               unsigned int flags)
+{
+	struct sock *sk = sock->sk;
+	struct udp_splice_state tss = {
+		.pipe = pipe,
+		.len = len,
+		.flags = flags,
+	};
+	long timeo;
+	ssize_t spliced;
+	int ret;
+
+	sock_rps_record_flow(sk);
+
+	/*
+	 * We can't seek on a socket input
+	 */
+	if (unlikely(*ppos))
+		return -ESPIPE;
+
+	ret = spliced = 0;
+
+	lock_sock(sk);
+
+	timeo = sock_rcvtimeo(sk, sock->file->f_flags & O_NONBLOCK);
+
+	while (tss.len) {
+		ret = __serval_udp_splice_read(sk, &tss);
+		if (ret < 0)
+			break;
+		else if (!ret) {
+			if (spliced)
+				break;
+			if (sock_flag(sk, SOCK_DONE))
+				break;
+			if (sk->sk_err) {
+				ret = sock_error(sk);
+				break;
+			}
+			if (sk->sk_shutdown & RCV_SHUTDOWN)
+				break;
+			if (sk->sk_state == SERVAL_CLOSED) {
+				/*
+				 * This occurs when user tries to read
+				 * from never connected socket.
+				 */
+				if (!sock_flag(sk, SOCK_DONE))
+					ret = -ENOTCONN;
+				break;
+			}
+			if (!timeo) {
+				ret = -EAGAIN;
+				break;
+			}
+			sk_wait_data(sk, &timeo);
+			if (signal_pending(current)) {
+				ret = sock_intr_errno(timeo);
+				break;
+			}
+			continue;
+		}
+		tss.len -= ret;
+		spliced += ret;
+
+		if (!timeo)
+			break;
+		release_sock(sk);
+		lock_sock(sk);
+
+		if (sk->sk_err || sk->sk_state == SERVAL_CLOSED ||
+		    (sk->sk_shutdown & RCV_SHUTDOWN) ||
+		    signal_pending(current))
+			break;
+	}
+
+	release_sock(sk);
+
+	if (spliced)
+		return spliced;
+
+	return ret;
+}
+#endif /* ENABLE_SPLICE */
+
 struct proto serval_udp_proto = {
 	.name			= "SERVAL_UDP",
 	.owner			= THIS_MODULE,
