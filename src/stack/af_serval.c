@@ -823,7 +823,7 @@ static const struct proto_ops serval_dgram_ops = {
 	.poll =	        serval_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
-#if defined(ENABLE_SPLICE)
+#if defined(ENABLE_SPLICE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	.splice_read =  serval_udp_splice_read,
 	.sendpage =	serval_udp_sendpage,
 #else
@@ -836,7 +836,7 @@ static const struct proto_ops serval_dgram_ops = {
    Create a new Serval socket.
  */
 static int serval_create(struct net *net, struct socket *sock, int protocol
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
                            , int kern
 #endif
 )
