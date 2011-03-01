@@ -522,8 +522,9 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 	ssize_t spliced;
 	int ret;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
 	sock_rps_record_flow(sk);
-
+#endif
 	/*
 	 * We can't seek on a socket input
 	 */
