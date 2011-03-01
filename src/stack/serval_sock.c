@@ -222,7 +222,11 @@ static void __serval_sock_hash(struct sock *sk)
 
 void serval_sock_hash(struct sock *sk)
 {
-        if (sk->sk_state == SERVAL_CLOSED)
+        struct serval_sock *ssk = serval_sk(sk);
+        
+        /* Do not hash if closed or already hashed */
+        if (sk->sk_state == SERVAL_CLOSED ||
+            ssk->hash_key_len > 0)
                 return;
 
         if (sk->sk_state == SERVAL_REQUEST ||
@@ -231,7 +235,6 @@ void serval_sock_hash(struct sock *sk)
 		__serval_sock_hash(sk);
 		local_bh_enable();
         } else {
-                struct serval_sock *ssk = serval_sk(sk);
                 int err = 0;
                 
                 LOG_DBG("adding socket %p based on service id %s\n",
@@ -429,7 +432,8 @@ void serval_sock_init(struct sock *sk)
                 }
         }       
 #endif
-
+        ssk->hash_key = NULL;
+        ssk->hash_key_len = 0;
         ssk->rcv_seq.nxt = 0;        
         ssk->snd_seq.una = 0;
         ssk->snd_seq.nxt = 0;

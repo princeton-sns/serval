@@ -58,8 +58,11 @@ int serval_ipv4_rcv(struct sk_buff *skb)
                         hdr_len, ntohs(iph->tot_len), iph->protocol);
         }
 #endif
-        if (!pskb_may_pull(skb, hdr_len))
+        if (!pskb_may_pull(skb, hdr_len)) {
+                LOG_ERR("pskb_may_pull failed! skb->len=%u hdr_len=%u\n",
+                        skb->len, hdr_len);
                 goto inhdr_error;
+        }
         
         pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
@@ -312,8 +315,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 
         if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
                 LOG_DBG("No route!\n");
-                FREE_SKB(skb);
                 err = -EHOSTUNREACH;
+                rcu_read_unlock();
+                goto drop;
         } else {
                 /*
                 char src[18], dst[18];
@@ -364,8 +368,8 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 		ip_options_build(skb, opt, inet->inet_daddr, rt, 0);
                 */
 	}
-
-	ip_select_ident_more(iph, &rt->u.dst, sk,
+        
+        ip_select_ident_more(iph, &rt->u.dst, sk,
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 
 	skb->priority = sk->sk_priority;

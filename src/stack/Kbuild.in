@@ -1,6 +1,6 @@
 top_builddir := @top_dir@
 
-EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) -D__linux__ @EXTRA_DEFINES@
+EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@
 
 obj-m := serval.o 
 serval-y := \
@@ -9,6 +9,7 @@ serval-y := \
 	   linux/packet.o \
 	   linux/module.o \
 	   linux/log.o \
+	   linux/splice.o \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \

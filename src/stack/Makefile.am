@@ -103,6 +103,7 @@ SERVAL_KERNEL_SRC = \
 	linux/proc.c \
 	linux/module.c \
 	linux/log.c \
+	linux/splice.c \
 	debug.c \
 	platform.c \
 	bst.c \

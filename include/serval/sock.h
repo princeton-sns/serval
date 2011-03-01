@@ -171,6 +171,7 @@ struct proto {
 	void			(*unhash)(struct sock *sk);
 	int			(*get_port)(struct sock *sk, unsigned short snum);
 
+	int			max_header;
 	unsigned int		obj_size;
 	char			name[32];
 
@@ -295,6 +296,18 @@ static inline void sock_reset_flag(struct sock *sk, enum sock_flags flag)
 static inline int sock_flag(struct sock *sk, enum sock_flags flag)
 {
 	return sk->sk_flags & (0x1 << flag);
+}
+
+static inline void sock_rps_record_flow(const struct sock *sk)
+{
+}
+
+static inline void sock_rps_reset_flow(const struct sock *sk)
+{
+}
+
+static inline void sock_rps_save_rxhash(struct sock *sk, uint32_t rxhash)
+{
 }
 
 static inline int sock_error(struct sock *sk)

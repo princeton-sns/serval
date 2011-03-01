@@ -10,14 +10,23 @@ bin_PROGRAMS = \
 	udp_server \
 	udp_servern \
 	udp_client \
-	udp_clientn
+	udp_clientn \
+	tcp_inet_client
 
 if OS_LINUX
 bin_PROGRAMS += \
-	nltest
+	nltest \
+	translator
 
 nltest_SOURCES = nltest.c
+
+translator_SOURCES = translator.c
+translator_CPPFLAGS =-I$(top_srcdir)/include
+translator_LDFLAGS =-lpthread
+
 endif
+
+tcp_inet_client_SOURCES = tcp_inet_client.c
 
 send_udp_packet_SOURCES = send_udp_packet.c
 send_udp_packet_CPPFLAGS =-I$(top_srcdir)/include

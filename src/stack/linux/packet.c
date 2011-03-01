@@ -141,9 +141,11 @@ static struct packet_type serval_packet_type = {
 #include <net/protocol.h>
 
 extern int serval_srv_rcv(struct sk_buff *);
+extern void serval_srv_error_rcv(struct sk_buff *, u32 info);
 
 static struct net_protocol serval_protocol = {
 	.handler =      serval_srv_rcv,
+        .err_handler =  serval_srv_error_rcv,
 	.no_policy =	1,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,26))
 	.netns_ok =	1,
