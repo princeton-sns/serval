@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <linux/kernel.h>
+#include <linux/version.h>
 #include <linux/skbuff.h>
 #include <linux/splice.h>
 #include <linux/pagemap.h>
@@ -15,6 +16,65 @@
  * for transport protocols. Therefore, we copy-paste kernel code here
  * so that we can call skb_splice_bits() from our module.
  */
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+#define NUM_PIPE_BUFFERS(p) (p)->buffers
+#else
+#define NUM_PIPE_BUFFERS(p) PIPE_BUFFERS
+#define PIPE_DEF_BUFFERS PIPE_BUFFERS
+
+/* The following functions are not exported in kernels < 2.6.35 */
+/**
+ * generic_pipe_buf_map - virtually map a pipe buffer
+ * @pipe:	the pipe that the buffer belongs to
+ * @buf:	the buffer that should be mapped
+ * @atomic:	whether to use an atomic map
+ *
+ * Description:
+ *	This function returns a kernel virtual address mapping for the
+ *	pipe_buffer passed in @buf. If @atomic is set, an atomic map is provided
+ *	and the caller has to be careful not to fault before calling
+ *	the unmap function.
+ *
+ *	Note that this function occupies KM_USER0 if @atomic != 0.
+ */
+void *generic_pipe_buf_map(struct pipe_inode_info *pipe,
+			   struct pipe_buffer *buf, int atomic)
+{
+	if (atomic) {
+		buf->flags |= PIPE_BUF_FLAG_ATOMIC;
+		return kmap_atomic(buf->page, KM_USER0);
+	}
+
+	return kmap(buf->page);
+}
+
+/**
+ * generic_pipe_buf_unmap - unmap a previously mapped pipe buffer
+ * @pipe:	the pipe that the buffer belongs to
+ * @buf:	the buffer that should be unmapped
+ * @map_data:	the data that the mapping function returned
+ *
+ * Description:
+ *	This function undoes the mapping that ->map() provided.
+ */
+void generic_pipe_buf_unmap(struct pipe_inode_info *pipe,
+			    struct pipe_buffer *buf, void *map_data)
+{
+	if (buf->flags & PIPE_BUF_FLAG_ATOMIC) {
+		buf->flags &= ~PIPE_BUF_FLAG_ATOMIC;
+		kunmap_atomic(map_data, KM_USER0);
+	} else
+		kunmap(buf->page);
+}
+
+int generic_pipe_buf_confirm(struct pipe_inode_info *info,
+			     struct pipe_buffer *buf)
+{
+	return 0;
+}
+
+#endif /* LINUX_VERSION_CODE */
 
 /* Drop the inode semaphore and wait for a pipe event, atomically */
 void pipe_wait(struct pipe_inode_info *pipe)
@@ -43,6 +103,7 @@ void pipe_wait(struct pipe_inode_info *pipe)
  *    function will link that data to the pipe.
  *
  */
+
 ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 		       struct splice_pipe_desc *spd)
 {
@@ -63,8 +124,9 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 			break;
 		}
 
-		if (pipe->nrbufs < pipe->buffers) {
-			int newbuf = (pipe->curbuf + pipe->nrbufs) & (pipe->buffers - 1);
+		if (pipe->nrbufs < NUM_PIPE_BUFFERS(pipe)) {
+			int newbuf = (pipe->curbuf + pipe->nrbufs) & 
+                                (NUM_PIPE_BUFFERS(pipe) - 1);
 			struct pipe_buffer *buf = pipe->bufs + newbuf;
 
 			buf->page = spd->pages[page_nr];
@@ -84,7 +146,7 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 
 			if (!--spd->nr_pages)
 				break;
-			if (pipe->nrbufs < pipe->buffers)
+			if (pipe->nrbufs < NUM_PIPE_BUFFERS(pipe))
 				continue;
 
 			break;
@@ -136,11 +198,11 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
  */
 int splice_grow_spd(struct pipe_inode_info *pipe, struct splice_pipe_desc *spd)
 {
-	if (pipe->buffers <= PIPE_DEF_BUFFERS)
+	if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
 		return 0;
 
-	spd->pages = kmalloc(pipe->buffers * sizeof(struct page *), GFP_KERNEL);
-	spd->partial = kmalloc(pipe->buffers * sizeof(struct partial_page), GFP_KERNEL);
+	spd->pages = kmalloc(NUM_PIPE_BUFFERS(pipe) * sizeof(struct page *), GFP_KERNEL);
+	spd->partial = kmalloc(NUM_PIPE_BUFFERS(pipe) * sizeof(struct partial_page), GFP_KERNEL);
 
 	if (spd->pages && spd->partial)
 		return 0;
@@ -153,7 +215,7 @@ int splice_grow_spd(struct pipe_inode_info *pipe, struct splice_pipe_desc *spd)
 void splice_shrink_spd(struct pipe_inode_info *pipe,
 		       struct splice_pipe_desc *spd)
 {
-	if (pipe->buffers <= PIPE_DEF_BUFFERS)
+	if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
 		return;
 
 	kfree(spd->pages);
@@ -237,7 +299,7 @@ static inline int spd_fill_page(struct splice_pipe_desc *spd,
 				struct sk_buff *skb, int linear,
 				struct sock *sk)
 {
-	if (unlikely(spd->nr_pages == pipe->buffers))
+	if (unlikely(spd->nr_pages == NUM_PIPE_BUFFERS(pipe)))
 		return 1;
 
 	if (linear) {
