@@ -85,7 +85,6 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         
 #if defined(OS_LINUX_KERNEL)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        LOG_DBG("skb->len=%u\n", skb->len);
 	err = ip_local_out(skb);
 #else
         struct iphdr *iph = ip_hdr(skb);
@@ -369,8 +368,8 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 		ip_options_build(skb, opt, inet->inet_daddr, rt, 0);
                 */
 	}
-
-	ip_select_ident_more(iph, &rt->u.dst, sk,
+        
+        ip_select_ident_more(iph, &rt->u.dst, sk,
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 
 	skb->priority = sk->sk_priority;

@@ -1520,8 +1520,6 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
-        LOG_DBG("Tx length=%u skb->len=%u\n", ntohs(sfh->length), skb->len);
-
         skb->protocol = IPPROTO_SERVAL;
 
         /* If we are connected, transmit immediately */

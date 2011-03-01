@@ -15,6 +15,7 @@
 #include <limits.h>
 #include <pthread.h>
 #include <sys/select.h>
+#include <signal.h>
 
 static unsigned int client_num = 0;
 
@@ -40,7 +41,7 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
                  return rlen;
          } 
          
-         printf("splice1 %zd bytes\n", rlen);
+         /* printf("splice1 %zd bytes\n", rlen); */
          
          wlen = splice(pipefd[0], NULL, to, NULL,
                        rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
@@ -51,20 +52,18 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
                  return wlen;
          }
          
-         printf("splice2 %zd bytes\n", wlen);
+         /* printf("splice2 %zd bytes\n", wlen); */
 
          return wlen;
 }
 
 static ssize_t legacy_to_serval(struct client *c)
 {
-        printf("forwarding legacy to serval\n");
         return forward_data(c->inet_sock, c->serval_sock, c->pipefd);
 }
 
 static ssize_t serval_to_legacy(struct client *c)
 {
-        printf("forwarding serval to legacy\n");
         return forward_data(c->serval_sock, c->inet_sock, c->pipefd);
 }
 
@@ -157,43 +156,57 @@ void *client_thread(void *arg)
                         break;
                 } else if (ret > 0) {
                         if (FD_ISSET(c->inet_sock, &fds)) {
-                                printf("inet_sock readable\n");
                                 bytes = legacy_to_serval(c);
 
                                 if (bytes == 0) {
-                                        printf("tcp sock closed\n");
                                         break;
-                                }
+                                } else if (bytes < 0) {
+                                        fprintf(stderr, "forwarding error\n");
+                                        break;
+                                } 
                         }
 
                         if (FD_ISSET(c->serval_sock, &fds)) {
-                                printf("serval_sock readable\n");
                                 bytes = serval_to_legacy(c);
                                 
                                 if (bytes == 0) {
-                                        printf("serval sock closed\n");
                                         break;
-                                }
+                                } else if (bytes < 0) {
+                                        fprintf(stderr, "forwarding error\n");
+                                        break;
+                                } 
                         }
-
-                        if (bytes < 0) {
-                                fprintf(stderr, "forwarding error\n");
-                                break;
-                        } 
-                        printf("forwarded %zd bytes\n", bytes);
                 }
         }
+
+        printf("client %u exits\n", c->id);
 
         client_free(c);
 
         return NULL;
 }
 
-int main(int argc, char **argv)
+static void signal_handler(int sig)
 {
+        /* printf("signal caught! exiting...\n"); */
+}
+
+#define TRANSLATOR_PORT 5555
+
+int main(int argc, char **argv)
+{       
+	struct sigaction action;
 	int sock, ret = 0;
 	struct sockaddr_in saddr;
-
+	
+        memset(&action, 0, sizeof(struct sigaction));
+        action.sa_handler = signal_handler;
+        
+	/* The server should shut down on these signals. */
+        sigaction(SIGTERM, &action, 0);
+	sigaction(SIGHUP, &action, 0);
+	sigaction(SIGINT, &action, 0);
+	
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 
 	if (sock == -1) {
@@ -205,7 +218,10 @@ int main(int argc, char **argv)
         memset(&saddr, 0, sizeof(saddr));
         saddr.sin_family = AF_INET;
         saddr.sin_addr.s_addr = INADDR_ANY;
-        saddr.sin_port = htons(5555);
+        saddr.sin_port = htons(TRANSLATOR_PORT);
+
+        printf("Serval translator running on port %u\n", 
+               TRANSLATOR_PORT);
 
         ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -228,18 +244,26 @@ int main(int argc, char **argv)
                 socklen_t addrlen = sizeof(saddr);
                 struct client *c;
                 
-                printf("Waiting for legacy client\n");
+                printf("Waiting for client...\n");
 
                 client_sock = accept(sock, (struct sockaddr *)&saddr,
                                      &addrlen);
 
                 if (client_sock == -1) {
-                        fprintf(stderr, "accept: %s\n",
-                                strerror(errno));
+                        switch (errno) {
+                        case EINTR:
+                                /* This means we should exit
+                                 * (ctrl-c) */
+                                break;
+                        default:
+                                /* Other error, exit anyway */
+                                fprintf(stderr, "accept: %s\n",
+                                        strerror(errno));
+                        }
                         break;
                 }
 
-                printf("accepted new client\n");
+                printf("client connected\n");
 
                 c = client_create(client_sock);
 
@@ -257,8 +281,6 @@ int main(int argc, char **argv)
                         break;
                 }
                 
-                printf("new client %u\n", c->id);
-
                 ret = pthread_detach(c->thr);
 
                 if (ret != 0) {
@@ -268,6 +290,7 @@ int main(int argc, char **argv)
                 }
         }
         
+        printf("Translator exits.\n");
 fail_bind_sock:
 	close(sock);
 fail_sock:

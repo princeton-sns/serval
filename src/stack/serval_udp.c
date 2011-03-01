@@ -434,8 +434,6 @@ static int serval_udp_splice_data_recv(read_descriptor_t *rd_desc,
 	struct udp_splice_state *tss = rd_desc->arg.data;
 	int ret;
 
-        LOG_DBG("splicing bits len=%zu\n", len);
-
 	ret = skb_splice_bits(skb, offset, tss->pipe,
                               min(rd_desc->count, len), tss->flags);
 	if (ret > 0)
@@ -471,7 +469,6 @@ int serval_udp_read_sock(struct sock *sk, read_descriptor_t *desc,
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
                 retval = 0;
         } else {
-                LOG_DBG("reading skb\n");
                 retval = recv_actor(desc, skb, 0, skb->len);
                 
                 //skb = skb_peek(&sk->sk_receive_queue);
@@ -526,8 +523,6 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 	int ret;
 
 	sock_rps_record_flow(sk);
-
-        LOG_DBG("splicing %zu bytes from sock to pipe\n", len);
 
 	/*
 	 * We can't seek on a socket input
@@ -591,10 +586,9 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 	}
 
 	release_sock(sk);
-
-
+        /*
         LOG_DBG("spliced=%zu ret=%d\n", spliced, ret);
-
+        */
 	if (spliced)
 		return spliced;
 
@@ -641,14 +635,8 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
 		struct page *page = pages[poffset / PAGE_SIZE];
 		int offset = poffset % PAGE_SIZE;
 		int size = min_t(size_t, psize, PAGE_SIZE - offset);
-
-                
                 skb = alloc_skb_fclone(sk->sk_prot->max_header, GFP_ATOMIC);
 
-                /*
-                skb = sock_alloc_send_skb(sk, sk->sk_prot->max_header, 
-                                          nonblock, &err);
-                */
                 if (!skb) {
                         goto out_err;
                 }
@@ -659,11 +647,11 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 memset(&SERVAL_SKB_CB(skb)->addr, 0, 4);
 
                 get_page(page);
-                skb_fill_page_desc(skb, 0, page, 0, size);
-                skb->len = size;
-                skb->data_len = size;
+                skb_fill_page_desc(skb, 0, page, offset, size);
+                skb->len += size;
+                skb->data_len += size;
                 skb->truesize += size;
-		skb->ip_summed = CHECKSUM_PARTIAL;
+		skb->ip_summed = CHECKSUM_NONE;
 		skb_shinfo(skb)->gso_segs = 0;
                 skb_set_owner_w(skb, sk);
                 copied += size;
@@ -671,9 +659,6 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 
                 /* FIXME: we only handle one page at this time... Must
                  * really clean up this code. */
-
-                LOG_DBG("Sending skb->len=%u psize=%zu size=%d\n", 
-                        skb->len, psize, size);
 
                 err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
                 
@@ -683,7 +668,6 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 break;
 	}
 
-        LOG_DBG("copied %zd\n", copied);
         return copied;
 out_err:
         LOG_ERR("Error\n");
