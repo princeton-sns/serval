@@ -127,7 +127,6 @@ static void serval_udp_destroy_sock(struct sock *sk)
 
 static int serval_udp_disconnect(struct sock *sk, int flags)
 {
-
         LOG_DBG("\n");
         
         return 0;
@@ -169,8 +168,8 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 
         pskb_pull(skb, sizeof(*udph));
 
-        /* LOG_DBG("data len=%u skb->len=%u\n", 
-           datalen, skb->len); */
+        LOG_DBG("data len=%u skb->len=%u\n", 
+                datalen, skb->len); 
         
         /* Ideally, this trimming would not be necessary. However, it
          * seems that somewhere in the receive process trailing
@@ -252,19 +251,18 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
 	timeo = sock_sndtimeo(sk, nonblock);
 
-	/* Wait for a connection to finish. How do we know to wait in
-         * case this is an unconnected socket? */
-        /*
-	if ((1 << sk->sk_state) & ~SERVALF_CONNECTED)
+	/* Wait for a connection to finish. */
+	if ((1 << sk->sk_state) & SERVALF_REQUEST)
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
                         goto out;
-        */
-        skb = sock_alloc_send_skb(sk, UDP_MAX_HDR + ulen, nonblock, &err);
+
+        skb = sock_alloc_send_skb(sk, sk->sk_prot->max_header + ulen, 
+                                  nonblock, &err);
 
         if (!skb)
                 goto out;
         
-        skb_reserve(skb, UDP_MAX_HDR);
+        skb_reserve(skb, sk->sk_prot->max_header);
 
         if (srvid) {
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
@@ -436,6 +434,8 @@ static int serval_udp_splice_data_recv(read_descriptor_t *rd_desc,
 	struct udp_splice_state *tss = rd_desc->arg.data;
 	int ret;
 
+        LOG_DBG("splicing bits len=%zu\n", len);
+
 	ret = skb_splice_bits(skb, offset, tss->pipe,
                               min(rd_desc->count, len), tss->flags);
 	if (ret > 0)
@@ -527,6 +527,8 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 
 	sock_rps_record_flow(sk);
 
+        LOG_DBG("splicing %zu bytes from sock to pipe\n", len);
+
 	/*
 	 * We can't seek on a socket input
 	 */
@@ -590,10 +592,119 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 
 	release_sock(sk);
 
+
+        LOG_DBG("spliced=%zu ret=%d\n", spliced, ret);
+
 	if (spliced)
 		return spliced;
 
 	return ret;
+}
+
+static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages, 
+                                       int poffset, size_t psize, int flags)
+{
+	int err;
+	ssize_t copied = 0;
+        int nonblock = flags & MSG_DONTWAIT;
+	long timeo = sock_sndtimeo(sk, nonblock);
+
+        if (sk->sk_state == SERVAL_INIT) {
+                err = -ENOTCONN;
+                goto out_err;
+        }
+
+	/* Wait for a connection to finish. */
+	if ((1 << sk->sk_state) & (SERVALF_REQUEST))
+		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
+			goto out_err;
+
+        if (psize > 0xffff) {
+                LOG_ERR("Too much data\n");
+                err = -ENOMEM;
+                goto out_err;
+        }
+	clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+
+	err = -EPIPE;
+
+	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
+		goto out_err;
+
+        /*
+          This code is adapted from do_tcp_sendpages and is currently
+          very much experimental. This needs some serious cleanups
+          before ready.
+         */
+	while (psize > 0) {
+		struct sk_buff *skb;
+		struct page *page = pages[poffset / PAGE_SIZE];
+		int offset = poffset % PAGE_SIZE;
+		int size = min_t(size_t, psize, PAGE_SIZE - offset);
+
+                
+                skb = alloc_skb_fclone(sk->sk_prot->max_header, GFP_ATOMIC);
+
+                /*
+                skb = sock_alloc_send_skb(sk, sk->sk_prot->max_header, 
+                                          nonblock, &err);
+                */
+                if (!skb) {
+                        goto out_err;
+                }
+
+                skb_reserve(skb, sk->sk_prot->max_header);
+                
+                /* Make sure we zero this address to signal it is unset */
+                memset(&SERVAL_SKB_CB(skb)->addr, 0, 4);
+
+                get_page(page);
+                skb_fill_page_desc(skb, 0, page, 0, size);
+                skb->len = size;
+                skb->data_len = size;
+                skb->truesize += size;
+		skb->ip_summed = CHECKSUM_PARTIAL;
+		skb_shinfo(skb)->gso_segs = 0;
+                skb_set_owner_w(skb, sk);
+                copied += size;
+		poffset += size;
+                
+                /* FIXME: we only handle one page at this time... Must
+                 * really clean up this code. */
+
+                LOG_DBG("Sending skb->len=%u psize=%zu size=%d\n", 
+                        skb->len, psize, size);
+
+                err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
+                
+                if (err < 0) {
+                        LOG_ERR("xmit failed\n");
+                }
+                break;
+	}
+
+        LOG_DBG("copied %zd\n", copied);
+        return copied;
+out_err:
+        LOG_ERR("Error\n");
+	return sk_stream_error(sk, flags, err);
+}
+
+ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
+                            size_t size, int flags)
+{
+	ssize_t res;
+	struct sock *sk = sock->sk;
+
+	if (!(sk->sk_route_caps & NETIF_F_SG) ||
+	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM))
+		return sock_no_sendpage(sock, page, offset, size, flags);
+
+	lock_sock(sk);
+	res = serval_udp_do_sendpages(sk, &page, offset, size, flags);
+	release_sock(sk);
+        
+	return res;
 }
 #endif /* ENABLE_SPLICE */
 
@@ -611,5 +722,6 @@ struct proto serval_udp_proto = {
 	.backlog_rcv		= serval_srv_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
+	.max_header		= UDP_MAX_HDR,
 	.obj_size		= sizeof(struct serval_udp_sock),
 };

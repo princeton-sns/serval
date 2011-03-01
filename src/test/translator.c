@@ -159,19 +159,28 @@ void *client_thread(void *arg)
                         if (FD_ISSET(c->inet_sock, &fds)) {
                                 printf("inet_sock readable\n");
                                 bytes = legacy_to_serval(c);
+
+                                if (bytes == 0) {
+                                        printf("tcp sock closed\n");
+                                        break;
+                                }
                         }
 
                         if (FD_ISSET(c->serval_sock, &fds)) {
                                 printf("serval_sock readable\n");
                                 bytes = serval_to_legacy(c);
+                                
+                                if (bytes == 0) {
+                                        printf("serval sock closed\n");
+                                        break;
+                                }
                         }
 
                         if (bytes < 0) {
                                 fprintf(stderr, "forwarding error\n");
                                 break;
-                        }
-                        printf("forwarded %zd bytes\n",
-                               bytes);
+                        } 
+                        printf("forwarded %zd bytes\n", bytes);
                 }
         }
 

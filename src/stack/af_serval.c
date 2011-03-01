@@ -800,6 +800,8 @@ static const struct proto_ops serval_stream_ops = {
 extern ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
                                       struct pipe_inode_info *pipe, size_t len,
                                       unsigned int flags);
+ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
+                            size_t size, int flags);
 #endif
 
 static const struct proto_ops serval_dgram_ops = {
@@ -821,9 +823,11 @@ static const struct proto_ops serval_dgram_ops = {
 	.poll =	        serval_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
-	.sendpage =	sock_no_sendpage,
 #if defined(ENABLE_SPLICE)
 	.splice_read =  serval_udp_splice_read,
+	.sendpage =	serval_udp_sendpage,
+#else
+	.sendpage =	sock_no_sendpage,
 #endif
 #endif
 };

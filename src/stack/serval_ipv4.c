@@ -58,8 +58,11 @@ int serval_ipv4_rcv(struct sk_buff *skb)
                         hdr_len, ntohs(iph->tot_len), iph->protocol);
         }
 #endif
-        if (!pskb_may_pull(skb, hdr_len))
+        if (!pskb_may_pull(skb, hdr_len)) {
+                LOG_ERR("pskb_may_pull failed! skb->len=%u hdr_len=%u\n",
+                        skb->len, hdr_len);
                 goto inhdr_error;
+        }
         
         pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
@@ -82,6 +85,7 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         
 #if defined(OS_LINUX_KERNEL)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+        LOG_DBG("skb->len=%u\n", skb->len);
 	err = ip_local_out(skb);
 #else
         struct iphdr *iph = ip_hdr(skb);
@@ -312,8 +316,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 
         if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
                 LOG_DBG("No route!\n");
-                FREE_SKB(skb);
                 err = -EHOSTUNREACH;
+                rcu_read_unlock();
+                goto drop;
         } else {
                 /*
                 char src[18], dst[18];

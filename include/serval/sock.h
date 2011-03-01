@@ -171,6 +171,7 @@ struct proto {
 	void			(*unhash)(struct sock *sk);
 	int			(*get_port)(struct sock *sk, unsigned short snum);
 
+	int			max_header;
 	unsigned int		obj_size;
 	char			name[32];
 

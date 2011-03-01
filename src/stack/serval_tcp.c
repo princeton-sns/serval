@@ -324,5 +324,6 @@ struct proto serval_tcp_proto = {
 	.backlog_rcv		= serval_srv_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
+	/* .max_header		= TCP_MAX_HEADER, */
 	.obj_size		= sizeof(struct serval_tcp_sock),
 };

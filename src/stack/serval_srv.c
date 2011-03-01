@@ -1161,16 +1161,37 @@ int serval_srv_do_rcv(struct sock *sk,
         return serval_srv_state_process(sk, sfh, skb);
 }
 
+void serval_srv_error_rcv(struct sk_buff *skb, u32 info)
+{
+        LOG_ERR("received ICMP error!\n");
+
+        /* TODO: deal with ICMP errors, e.g., wake user and report. */
+}
+
 int serval_srv_rcv(struct sk_buff *skb)
 {
         struct sock *sk = NULL;
         struct serval_hdr *sfh = 
                 (struct serval_hdr *)skb_transport_header(skb);
-        unsigned int hdr_len = ntohs(sfh->length);
+        unsigned int hdr_len;
         int err = 0;
 
+        if (skb->len < sizeof(*sfh)) {
+                LOG_ERR("skb length too short (%u bytes)\n", 
+                        skb->len);
+                goto drop;
+        }
+
+        if (!sfh) {
+                LOG_ERR("No serval header\n");
+                goto drop;
+        }
+
+        hdr_len = ntohs(sfh->length);
+
         if (hdr_len < sizeof(*sfh)) {
-                LOG_ERR("header length too short\n");
+                LOG_ERR("Serval header length too short (%u bytes)\n",
+                        hdr_len);
                 goto drop;
         }
 
@@ -1498,6 +1519,8 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
         sfh->length = htons(hdr_len);
         memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
+
+        LOG_DBG("Tx length=%u skb->len=%u\n", ntohs(sfh->length), skb->len);
 
         skb->protocol = IPPROTO_SERVAL;
 
