@@ -71,14 +71,14 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
          * extension always directly follows the main Serval
          * header */
         if (hdr_len < sizeof(*sfh) + sizeof(*conn_ext)) {
-                LOG_ERR("No connection extension, hdr_len=%u\n", 
+                LOG_PKT("No connection extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (conn_ext->type != SERVAL_CONNECTION_EXT || 
             ntohs(conn_ext->length) != sizeof(*conn_ext)) {
-                LOG_ERR("No connection extension, bad extension type\n");
+                LOG_DBG("No connection extension, bad extension type\n");
                 return 0;
         }
 
@@ -92,14 +92,14 @@ static inline int has_service_extension(struct serval_hdr *sfh)
         unsigned int hdr_len = ntohs(sfh->length);
 
         if (hdr_len < sizeof(*sfh) + sizeof(*srv_ext)) {
-                LOG_ERR("No service extension, hdr_len=%u\n", 
+                LOG_PKT("No service extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (srv_ext->type != SERVAL_SERVICE_EXT || 
             ntohs(srv_ext->length) != sizeof(*srv_ext)) {
-                LOG_ERR("No service extension, bad extension type\n");
+                LOG_DBG("No service extension, bad extension type\n");
                 return 0;
         }
 
@@ -121,7 +121,7 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
                 ret = 1;
         }
         if (ret == 0) {
-                LOG_ERR("Seqno not in sequence received=%u next=%u."
+                LOG_PKT("Seqno not in sequence received=%u next=%u."
                         " Could be ACK though...\n",
                         seg_seq, ssk->rcv_seq.nxt);
         }
@@ -140,7 +140,7 @@ static inline int has_valid_connection_extension(struct sock *sk,
 
         if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {
-                LOG_ERR("Connection extension has bad nonce\n");
+                LOG_PKT("Connection extension has bad nonce\n");
                 return 0;
         }
 
@@ -159,20 +159,20 @@ static inline int has_valid_control_extension(struct sock *sk,
          * extension always directly follows the main Serval
          * header */
         if (hdr_len < sizeof(*sfh) + sizeof(*ctrl_ext)) {
-                LOG_ERR("No control extension, hdr_len=%u\n", 
+                LOG_PKT("No control extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (ctrl_ext->type != SERVAL_CONTROL_EXT ||
             ntohs(ctrl_ext->length) != sizeof(*ctrl_ext)) {
-                LOG_ERR("No control extension, bad extension type\n");
+                LOG_PKT("No control extension, bad extension type\n");
                 return 0;
         }
 
         if (memcmp(ctrl_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {
-                LOG_ERR("Control extension has bad nonce\n");
+                LOG_PKT("Control extension has bad nonce\n");
                 return 0;
         }
 
@@ -183,12 +183,12 @@ static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
 	skb_header_release(skb);
 	serval_srv_add_ctrl_queue_tail(sk, skb);
-        LOG_DBG("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
+        LOG_PKT("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
         /* Check if the skb became first in queue, in that case update
          * unacknowledged seqno. */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
                 serval_sk(sk)->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
-                LOG_DBG("setting snd_una=%u\n",
+                LOG_PKT("setting snd_una=%u\n",
                         serval_sk(sk)->snd_seq.una);
         }
 }
@@ -206,9 +206,9 @@ static int serval_srv_write_xmit(struct sock *sk,
         unsigned int num = 0;
         int err = 0;
         
-        LOG_DBG("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
+        LOG_PKT("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
                 ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
-
+        
 	while ((skb = serval_srv_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                 
@@ -225,7 +225,7 @@ static int serval_srv_write_xmit(struct sock *sk,
                 num++;
         }
 
-        LOG_DBG("sent %u packets\n", num);
+        LOG_PKT("sent %u packets\n", num);
 
         return err;
 }
@@ -280,7 +280,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                skb != serval_srv_send_head(sk)) {
                 if (ackno == SERVAL_SKB_CB(skb)->seqno + 1) {
                         serval_srv_unlink_ctrl_queue(skb, sk);
-                        LOG_DBG("cleaned rtx queue seqno=%u\n", 
+                        LOG_PKT("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);
                         FREE_SKB(skb);
                         skb = serval_srv_ctrl_queue_head(sk);
@@ -292,7 +292,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                 }
         }
 
-        LOG_DBG("cleaned up %u packets from rtx queue\n", num);
+        LOG_PKT("cleaned up %u packets from rtx queue\n", num);
         
         /* Did we remove the first packet in the queue? */
         if (serval_srv_ctrl_queue_head(sk) != fskb) {
@@ -301,7 +301,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         }
 
         if (serval_srv_ctrl_queue_head(sk)) {
-                LOG_DBG("Setting retrans timer\n");
+                LOG_PKT("Setting retrans timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + msecs_to_jiffies(ssk->rto));
         }
@@ -315,7 +315,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         struct sk_buff *skb;
         struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
         int err;
-
+        
         LOG_DBG("srvid=%s addr_len=%d\n", 
                 service_id_to_str(srvid), addr_len);
 
@@ -716,11 +716,11 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
-                LOG_DBG("received valid ACK ackno=%u\n", 
+                LOG_PKT("received valid ACK ackno=%u\n", 
                         ackno);
                 err = 0;
         } else {
-                LOG_ERR("ackno %u out of sequence, expected %u\n",
+                LOG_PKT("ackno %u out of sequence, expected %u\n",
                         ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 done:
@@ -901,7 +901,6 @@ static int serval_srv_request_state_process(struct sock *sk,
         int err = 0;
                 
         if (!has_connection_extension(sfh)) {
-                LOG_ERR("No connection extension\n");
                 goto drop;
         }
         
@@ -975,7 +974,6 @@ static int serval_srv_respond_state_process(struct sock *sk,
         int err = 0;
 
         if (!has_valid_connection_extension(sk, sfh)) {
-                LOG_ERR("No connection extension\n");
                 goto drop;
         }
 
@@ -1180,8 +1178,8 @@ int serval_srv_do_rcv(struct sock *sk,
 
 void serval_srv_error_rcv(struct sk_buff *skb, u32 info)
 {
-        LOG_ERR("received ICMP error!\n");
-
+        LOG_PKT("received ICMP error!\n");
+        
         /* TODO: deal with ICMP errors, e.g., wake user and report. */
 }
 
@@ -1218,7 +1216,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        LOG_DBG("flowid (src,dst)=(%u,%u)\n",
+        LOG_PKT("flowid (src,dst)=(%u,%u)\n",
                 ntohl(sfh->src_flowid.s_id), 
                 ntohl(sfh->dst_flowid.s_id));
        
@@ -1260,7 +1258,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                         srvid = &srv_ext->dst_srvid;
                 }
 
-                LOG_DBG("Demux on serviceID %s\n", 
+                LOG_PKT("Demux on serviceID %s\n", 
                         service_id_to_str(srvid));
 
                 sk = serval_sock_lookup_serviceid(srvid);

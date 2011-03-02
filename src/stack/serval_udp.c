@@ -89,8 +89,8 @@ static int serval_udp_transmit_skb(struct sock *sk,
         udp_checksum(tot_len, uh, &inet_sk(sk)->inet_saddr);
         
         skb->protocol = IPPROTO_UDP;
-
-        LOG_DBG("udp pkt [s=%u d=%u len=%u]\n",
+        
+        LOG_PKT("udp pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len));
@@ -176,10 +176,9 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 
         pskb_pull(skb, sizeof(*udph));
 
-        /*
-        LOG_DBG("data len=%u skb->len=%u\n", 
+        
+        LOG_PKT("data len=%u skb->len=%u\n", 
                 datalen, skb->len); 
-        */
                 
         /* Ideally, this trimming would not be necessary. However, it
          * seems that somewhere in the receive process trailing
