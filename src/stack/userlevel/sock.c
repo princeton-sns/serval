@@ -10,8 +10,10 @@
 #include <pthread.h>
 #include <serval_sock.h>
 
-#define RCV_BUF_DEFAULT 1000
-#define SND_BUF_DEFAULT 1000
+#define _SK_MEM_PACKETS		256
+#define _SK_MEM_OVERHEAD	(sizeof(struct sk_buff) + 256)
+#define SK_WMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
+#define SK_RMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
 
 LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
@@ -114,8 +116,8 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_send_head	=	NULL;
 	init_timer(&sk->sk_timer);
 	sk->sk_net              =       &init_net;
-	sk->sk_rcvbuf		=	RCV_BUF_DEFAULT;
-	sk->sk_sndbuf		=       SND_BUF_DEFAULT;
+	sk->sk_rcvbuf		=	SK_RMEM_MAX;
+	sk->sk_sndbuf		=       SK_WMEM_MAX;
 	sk->sk_state		=	0;
 	sk_set_socket(sk, sock);
 	sock_set_flag(sk, SOCK_ZAPPED);

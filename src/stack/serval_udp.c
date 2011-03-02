@@ -170,6 +170,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 
         /* Drop if receive queue is full. */
         if (sk_rcvqueues_full(sk, skb)) {
+                LOG_ERR("receive queue full!\n");
                 FREE_SKB(skb);
                 return -ENOBUFS;                        
         }
@@ -180,7 +181,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("data len=%u skb->len=%u\n", 
                 datalen, skb->len); 
         */
-
+                
         /* Ideally, this trimming would not be necessary. However, it
          * seems that somewhere in the receive process trailing
          * bytes are added to the packet. Perhaps this is a result of
@@ -198,6 +199,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         err = sock_queue_rcv_skb(sk, skb);
 
         if (err < 0) {
+                LOG_ERR("queuing failed\n");
                 /* Increase error statistics. These are standard
                  * macros defined for standard UDP. */
                 if (err == -ENOMEM) {

@@ -11,7 +11,7 @@
 #include "packet.h"
 #include <input.h>
 
-#define RCVLEN 2000 /* Should be more than enough for normal MTUs */
+#define RCVLEN 1500 /* Should be more than enough for normal MTUs */
 #define get_priv(dev) ((struct packet_linux_priv *)dev_get_priv(dev))
 
 static int packet_linux_init(struct net_device *dev)
