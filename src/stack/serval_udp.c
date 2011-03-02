@@ -168,12 +168,15 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 return 0;
         }
 
-        /* Drop if receive queue is full. */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+        /* Drop if receive queue is full. Dropping due to full queue
+         * is done below in sock_queue_rcv for those kernel versions
+         * that do not define this sk_rcvqueues_full().  */
         if (sk_rcvqueues_full(sk, skb)) {
                 FREE_SKB(skb);
                 return -ENOBUFS; 
         }
-
+#endif
         pskb_pull(skb, sizeof(*udph));
 
         
