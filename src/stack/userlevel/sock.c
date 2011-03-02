@@ -372,6 +372,25 @@ int sk_wait_data(struct sock *sk, long *timeo)
         return rc;
 }
 
+/**
+ *	__sk_reclaim - reclaim memory_allocated
+ *	@sk: socket
+ */
+void __sk_mem_reclaim(struct sock *sk)
+{
+        /*
+	struct proto *prot = sk->sk_prot;
+
+          atomic_sub(sk->sk_forward_alloc >> SK_MEM_QUANTUM_SHIFT,
+          prot->memory_allocated);
+          sk->sk_forward_alloc &= SK_MEM_QUANTUM - 1;
+          
+	if (prot->memory_pressure && *prot->memory_pressure &&
+        (atomic_read(prot->memory_allocated) < prot->sysctl_mem[0]))
+        *prot->memory_pressure = 0;
+        */
+}
+
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
                     unsigned long expires)
 {
@@ -387,7 +406,51 @@ void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
-        return 0;
+	int skb_len;
+	struct sk_buff_head *list = &sk->sk_receive_queue;
+
+	/* Cast sk->rcvbuf to unsigned... It's pointless, but reduces
+	   number of warnings when compiling with -W --ANK
+	 */
+	if (atomic_read(&sk->sk_rmem_alloc) + skb->truesize >=
+	    (unsigned)sk->sk_rcvbuf) {
+		atomic_inc(&sk->sk_drops);
+		return -ENOMEM;
+	}
+
+        /*
+	err = sk_filter(sk, skb);
+	if (err)
+		return err;
+        
+	if (!sk_rmem_schedule(sk, skb->truesize)) {
+		atomic_inc(&sk->sk_drops);
+		return -ENOBUFS;
+	}
+        */
+
+	skb->dev = NULL;
+	skb_set_owner_r(skb, sk);
+
+	/* Cache the SKB length before we tack it onto the receive
+	 * queue.  Once it is added it no longer belongs to us and
+	 * may be freed by other threads of control pulling packets
+	 * from the queue.
+	 */
+	skb_len = skb->len;
+
+	/* we escape from rcu protected region, make sure we dont leak
+	 * a norefcounted dst
+	 */
+	/* skb_dst_force(skb); */
+
+	skb->dropcount = atomic_read(&sk->sk_drops);
+	__skb_queue_tail(list, skb);
+
+	if (!sock_flag(sk, SOCK_DEAD))
+		sk->sk_data_ready(sk, skb_len);
+
+	return 0;
 }
 
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)

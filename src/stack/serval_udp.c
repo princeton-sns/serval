@@ -422,8 +422,10 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			break;
 		}
         found_fin_ok:
-		if (!(flags & MSG_PEEK))
+		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, 0);
+                        sk_mem_reclaim_partial(sk);
+                }
 		break;
 	} while (1);
 out:
