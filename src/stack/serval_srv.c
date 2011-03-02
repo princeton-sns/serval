@@ -1298,10 +1298,16 @@ int serval_srv_rcv(struct sk_buff *skb)
         bh_unlock_sock(sk);
         sock_put(sk);
 
-	return err;
+        /*
+          IP will resubmit packet if return value is less than
+          zero. Therefore, make sure we always return 0, even if we drop the
+          packet.
+        */
+
+	return 0;
 drop:
         FREE_SKB(skb);
-        return err;
+        return 0;
 }
 
 static int serval_srv_rexmit(struct sock *sk)

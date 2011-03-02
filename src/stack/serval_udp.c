@@ -152,8 +152,8 @@ void serval_udp_connection_respond_sock(struct sock *sk,
 }
 
 /* 
-   Receive from network
-*/
+   Receive from network.
+  */
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
@@ -170,9 +170,8 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 
         /* Drop if receive queue is full. */
         if (sk_rcvqueues_full(sk, skb)) {
-                LOG_ERR("receive queue full!\n");
                 FREE_SKB(skb);
-                return -ENOBUFS;                        
+                return -ENOBUFS; 
         }
 
         pskb_pull(skb, sizeof(*udph));
@@ -199,7 +198,6 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         err = sock_queue_rcv_skb(sk, skb);
 
         if (err < 0) {
-                LOG_ERR("queuing failed\n");
                 /* Increase error statistics. These are standard
                  * macros defined for standard UDP. */
                 if (err == -ENOMEM) {
