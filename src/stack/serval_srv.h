@@ -36,18 +36,14 @@ static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 
 #define SERVAL_SKB_CB(__skb) __serval_skb_cb(__skb)
 
+#define MAX_CTRL_QUEUE_LEN 20
 
 /* control queue abstraction */
-
 static inline void serval_srv_ctrl_queue_purge(struct sock *sk)
 {
 	struct sk_buff *skb;
 
-        LOG_DBG("queue empty=%u\n",
-                skb_queue_empty(&serval_sk(sk)->ctrl_queue));
-                
 	while ((skb = __skb_dequeue(&serval_sk(sk)->ctrl_queue)) != NULL) {
-		LOG_DBG("Freeing skb %p\n", skb);
 		FREE_SKB(skb);
 	}
 	/* serval_srv_clear_all_retrans_hints(serval_srv_sk(sk)); */
@@ -149,7 +145,6 @@ static inline void serval_srv_add_ctrl_queue_tail(struct sock *sk,
 
 	/* Queue it, remembering where we must start sending. */
 	if (serval_sk(sk)->ctrl_send_head == NULL) {
-		LOG_DBG("updating send head\n");
 		serval_sk(sk)->ctrl_send_head = skb;
 		/*
 		if (serval_srv_sk(sk)->highest_sack == NULL)
@@ -195,6 +190,11 @@ static inline void serval_srv_unlink_ctrl_queue(struct sk_buff *skb,
 static inline int serval_srv_ctrl_queue_empty(struct sock *sk)
 {
 	return skb_queue_empty(&serval_sk(sk)->ctrl_queue);
+}
+
+static inline unsigned int serval_srv_ctrl_queue_len(struct sock *sk)
+{
+        return skb_queue_len(&serval_sk(sk)->ctrl_queue);
 }
 
 int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);

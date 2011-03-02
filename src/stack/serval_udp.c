@@ -23,6 +23,8 @@
 #else
 #include <netinet/udp.h>
 #endif
+#define UDP_INC_STATS_USER(x,y,z)
+#define UDP_INC_STATS_BH(x,y,z)
 #endif /* OS_USER */
 
 #define EXTRA_HDR (20)
@@ -166,11 +168,19 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 return 0;
         }
 
+        /* Drop if receive queue is full. */
+        if (sk_rcvqueues_full(sk, skb)) {
+                FREE_SKB(skb);
+                return -ENOBUFS;                        
+        }
+
         pskb_pull(skb, sizeof(*udph));
 
+        /*
         LOG_DBG("data len=%u skb->len=%u\n", 
                 datalen, skb->len); 
-        
+        */
+
         /* Ideally, this trimming would not be necessary. However, it
          * seems that somewhere in the receive process trailing
          * bytes are added to the packet. Perhaps this is a result of
@@ -180,10 +190,22 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 pskb_trim(skb, datalen);
         }
 
-        /* Increase readable memory */
-        skb_set_owner_r(skb, sk);
-        skb_queue_tail(&sk->sk_receive_queue, skb);
-        sk->sk_data_ready(sk, datalen);
+        /* 
+           sock_queue_rcv_skb() will increase readable memory (i.e.,
+           decrease free receive buffer memory), do socket filtering
+           and wake user process.
+        */
+        err = sock_queue_rcv_skb(sk, skb);
+
+        if (err < 0) {
+                /* Increase error statistics. These are standard
+                 * macros defined for standard UDP. */
+                if (err == -ENOMEM) {
+			UDP_INC_STATS_BH(sock_net(sk), UDP_MIB_RCVBUFERRORS, 0);
+                }
+		UDP_INC_STATS_BH(sock_net(sk), UDP_MIB_INERRORS, 0);
+                FREE_SKB(skb);
+        }
 
         return err;
 }
@@ -636,6 +658,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
 		struct page *page = pages[poffset / PAGE_SIZE];
 		int offset = poffset % PAGE_SIZE;
 		int size = min_t(size_t, psize, PAGE_SIZE - offset);
+
                 skb = alloc_skb_fclone(sk->sk_prot->max_header, GFP_ATOMIC);
 
                 if (!skb) {

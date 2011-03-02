@@ -44,6 +44,23 @@ static int serval_srv_state_process(struct sock *sk,
 static int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                                    int clone_it, gfp_t gfp_mask);
 
+/* FIXME: should find a better way to distinguish between control
+ * packets and data */
+static inline int is_control_packet(struct sk_buff *skb)
+{
+        struct serval_hdr *sfh = 
+                (struct serval_hdr *)skb_transport_header(skb);
+
+        if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK)
+                return 1;
+        return 0;
+}
+
+static inline int is_data_packet(struct sk_buff *skb)
+{
+        return !is_control_packet(skb);
+}
+
 static inline int has_connection_extension(struct serval_hdr *sfh)
 {
         struct serval_connection_ext *conn_ext = 
@@ -1254,23 +1271,30 @@ int serval_srv_rcv(struct sk_buff *skb)
                         goto drop;
                 }
         }
- 
+
+        /* Drop check if control queue is full here */
+        if (is_control_packet(skb) && 
+            serval_srv_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN)
+                        goto drop;
+
         bh_lock_sock_nested(sk);
 
         if (!sock_owned_by_user(sk)) {
                 err = serval_srv_do_rcv(sk, skb);
-        } 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-        else {
-                sk_add_backlog(sk, skb);
+        } else {
+                /*
+                  Add to backlog and process in user context when
+                  the user process releases its lock ownership.
+                  
+                  Note, we do not use the regular sk_add_backlog()
+                  function here as it will reject backlogging if the
+                  receive queue is full. A full receive queue (for
+                  data) should not affect control packets.
+                */
+                __sk_add_backlog(sk, skb);
+                sk->sk_backlog.len += skb->truesize;
         }
-#else
-        else if (unlikely(sk_add_backlog(sk, skb))) {
-                bh_unlock_sock(sk);
-                sock_put(sk);
-                goto drop;
-        }
-#endif
+
         bh_unlock_sock(sk);
         sock_put(sk);
 
@@ -1461,9 +1485,13 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			skb = pskb_copy(skb, gfp_mask);
 		else
 			skb = skb_clone(skb, gfp_mask);
-		if (unlikely(!skb))
-			return -ENOBUFS;
-
+		if (unlikely(!skb)) {
+                        /* Shouldn't free the passed skb here, since
+                         * we were asked to clone it. That probably
+                         * means the original skb sits in a queue
+                         * somewhere, and freeing it would be bad. */
+                        return -ENOBUFS;
+                }
                 if (!skb->sk)
                         skb_serval_set_owner_w(skb, sk);
 	}
@@ -1581,12 +1609,11 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
                                 FREE_SKB(skb);
+                                err = -ENOBUFS;
 				break;
 			}
                         /* Cloned skb will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
-
-                        LOG_DBG("cskb->len=%u\n", cskb->len);
 		}
                 
 		/* Set the output device */
