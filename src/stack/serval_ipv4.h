@@ -13,6 +13,8 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 					uint32_t daddr);
 #endif
 
+#define SERVAL_DEFTTL 64
+
 int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 				   uint32_t saddr, uint32_t daddr, 
 				   struct ip_options *opt);

@@ -26,6 +26,7 @@
 #include <serval/sock.h>
 #include <serval/net.h>
 #include <serval/skbuff.h>
+#include <serval/inet_sock.h>
 #include <netinet/serval.h>
 #include <serval_sock.h>
 #include <serval_request_sock.h>
@@ -842,6 +843,7 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
 )
 {
         struct sock *sk = NULL;
+        struct inet_sock *inet = NULL;
         int ret = 0;
         
         LOG_DBG("Creating SERVAL socket\n");
@@ -886,6 +888,17 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
         /* Initialize serval sock part of socket */
         serval_sock_init(sk);
         
+        /* Initialize inet part */
+        inet = inet_sk(sk);       
+	inet->uc_ttl	= -1; /* Let IP decide TTL */
+#if defined(OS_LINUX_KERNEL)
+	inet->mc_loop	= 1;
+	inet->mc_ttl	= 1;
+	inet->mc_all	= 1;
+	inet->mc_index	= 0;
+	inet->mc_list	= NULL;
+#endif
+
         if (sk->sk_prot->init) {
                 /* Call protocol specific init */
                 ret = sk->sk_prot->init(sk);

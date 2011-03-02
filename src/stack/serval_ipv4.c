@@ -21,8 +21,6 @@
 
 extern int serval_srv_rcv(struct sk_buff *);
 
-#define SERVAL_TTL_DEFAULT 250
-
 #if defined(OS_USER)
 static inline void ip_send_check(struct iphdr *iph)
 {
@@ -206,7 +204,7 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->tot_len = htons(skb->len);
         iph->id = 0;
         iph->frag_off = 0;
-        iph->ttl = SERVAL_TTL_DEFAULT;
+        iph->ttl = inet->uc_ttl < 0 ? SERVAL_DEFTTL : inet->uc_ttl;
         iph->protocol = skb->protocol;
         iph->saddr = saddr;
         iph->daddr = daddr;
