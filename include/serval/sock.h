@@ -12,6 +12,15 @@ static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
         return sk->sk_sleep;
 }
+
+static inline bool sk_rcvqueues_full(const struct sock *sk, 
+                                     const struct sk_buff *skb)
+{
+        unsigned int qsize = sk->sk_backlog.len + 
+                atomic_read(&sk->sk_rmem_alloc);
+         
+         return qsize + skb->truesize > sk->sk_rcvbuf;
+}
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,32)
 static inline struct net *sock_net(struct sock *sk)
