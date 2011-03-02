@@ -115,21 +115,14 @@ int log_vprintk(const char *levelstr, const char *func,
 {
 	int printed_len = 0;
 	int this_cpu;
+        unsigned long flags;
 	char *p;
 
 	preempt_disable();
-	/* This stops the holder of console_sem just where we want him */
 	this_cpu = smp_processor_id();
 
-	/*
-	 * Ouch, printk recursed into itself!
-	 */
-	if (unlikely(printk_cpu == this_cpu)) {
-		spin_lock_init(&logbuf_lock);
-	}
-
 	lockdep_off();
-	spin_lock(&logbuf_lock);
+	spin_lock_irqsave(&logbuf_lock, flags);
 	printk_cpu = this_cpu;
 
 	/* Emit the output into the temporary buffer */
@@ -196,10 +189,9 @@ int log_vprintk(const char *levelstr, const char *func,
 
 	wake_up_interruptible(&log_wait);
 
-	spin_unlock(&logbuf_lock);
-
+	spin_unlock_irqrestore(&logbuf_lock, flags);
 	lockdep_on();
-
 	preempt_enable();
+
 	return printed_len;
 }
