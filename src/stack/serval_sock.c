@@ -179,8 +179,6 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 
         sk->sk_hash = table->hashfn(table, sk);
 
-        LOG_DBG("hash=%lu\n", sk->sk_hash);
-
         slot = &table->hash[sk->sk_hash];
 
         /* Bottom halfs already disabled here */
