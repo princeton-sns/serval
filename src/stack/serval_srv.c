@@ -1284,13 +1284,28 @@ int serval_srv_rcv(struct sk_buff *skb)
                   Add to backlog and process in user context when
                   the user process releases its lock ownership.
                   
-                  Note, we do not use the regular sk_add_backlog()
-                  function here as it will reject backlogging if the
-                  receive queue is full. A full receive queue (for
-                  data) should not affect control packets.
+                  Note, for kernels >= 2.6.33 the sk_add_backlog()
+                  function adds the total allocated memory for the
+                  backlog to that of the receive buffer and rejects
+                  queuing in case the new total overreaches the
+                  socket's configured receive buffer size.
+
+                  This may not be the wanted behavior in case we are
+                  processing control packets in the backlog (i.e.,
+                  control packets can be dropped because the data
+                  receive buffer is full. This might not be a big deal
+                  though, as control packets are retransmitted.
                 */
-                __sk_add_backlog(sk, skb);
-                sk->sk_backlog.len += skb->truesize;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        bh_unlock_sock(sk);
+                        sock_put(sk);
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
         }
 
         bh_unlock_sock(sk);
