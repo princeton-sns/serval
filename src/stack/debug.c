@@ -13,7 +13,8 @@ static const char *log_level_str[] = {
 	[LOG_LEVEL_ERR] = "ERR",
         [LOG_LEVEL_WARN] = "WARN",
 	[LOG_LEVEL_INF] = "INF",
-	[LOG_LEVEL_DBG] = "DBG"
+	[LOG_LEVEL_DBG] = "DBG",
+        [LOG_LEVEL_PKT] = "PKT"
 };
 
 #if defined(OS_LINUX_KERNEL)
@@ -41,6 +42,7 @@ void logme(log_level_t level, const char *func, const char *format, ...)
                 va_end(ap);
         case LOG_LEVEL_DBG:
         case LOG_LEVEL_INF:
+        case LOG_LEVEL_PKT:
                 va_start(ap, format);
                 log_vprintk(log_level_str[level], func, format, ap);
                 va_end(ap);
@@ -54,6 +56,7 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 		switch (level) {
 		case LOG_LEVEL_DBG:
 		case LOG_LEVEL_INF:
+                case LOG_LEVEL_PKT:
 			s = stdout;
 			break;
 		case LOG_LEVEL_ERR:

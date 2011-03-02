@@ -612,6 +612,17 @@ static inline void __skb_insert(struct sk_buff *newsk,
 }
 
 /**
+ *	skb_queue_len	- get queue length
+ *	@list_: list to measure
+ *
+ *	Return the length of an &sk_buff queue.
+ */
+static inline uint32_t skb_queue_len(const struct sk_buff_head *list_)
+{
+	return list_->qlen;
+}
+
+/**
  *	__skb_queue_head_init - initialize non-spinlock portions of sk_buff_head
  *	@list: queue to initialize
  *

@@ -44,6 +44,23 @@ static int serval_srv_state_process(struct sock *sk,
 static int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                                    int clone_it, gfp_t gfp_mask);
 
+/* FIXME: should find a better way to distinguish between control
+ * packets and data */
+static inline int is_control_packet(struct sk_buff *skb)
+{
+        struct serval_hdr *sfh = 
+                (struct serval_hdr *)skb_transport_header(skb);
+
+        if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK)
+                return 1;
+        return 0;
+}
+
+static inline int is_data_packet(struct sk_buff *skb)
+{
+        return !is_control_packet(skb);
+}
+
 static inline int has_connection_extension(struct serval_hdr *sfh)
 {
         struct serval_connection_ext *conn_ext = 
@@ -54,14 +71,14 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
          * extension always directly follows the main Serval
          * header */
         if (hdr_len < sizeof(*sfh) + sizeof(*conn_ext)) {
-                LOG_ERR("No connection extension, hdr_len=%u\n", 
+                LOG_PKT("No connection extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (conn_ext->type != SERVAL_CONNECTION_EXT || 
             ntohs(conn_ext->length) != sizeof(*conn_ext)) {
-                LOG_ERR("No connection extension, bad extension type\n");
+                LOG_DBG("No connection extension, bad extension type\n");
                 return 0;
         }
 
@@ -75,14 +92,14 @@ static inline int has_service_extension(struct serval_hdr *sfh)
         unsigned int hdr_len = ntohs(sfh->length);
 
         if (hdr_len < sizeof(*sfh) + sizeof(*srv_ext)) {
-                LOG_ERR("No service extension, hdr_len=%u\n", 
+                LOG_PKT("No service extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (srv_ext->type != SERVAL_SERVICE_EXT || 
             ntohs(srv_ext->length) != sizeof(*srv_ext)) {
-                LOG_ERR("No service extension, bad extension type\n");
+                LOG_DBG("No service extension, bad extension type\n");
                 return 0;
         }
 
@@ -104,7 +121,7 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
                 ret = 1;
         }
         if (ret == 0) {
-                LOG_ERR("Seqno not in sequence received=%u next=%u."
+                LOG_PKT("Seqno not in sequence received=%u next=%u."
                         " Could be ACK though...\n",
                         seg_seq, ssk->rcv_seq.nxt);
         }
@@ -123,7 +140,7 @@ static inline int has_valid_connection_extension(struct sock *sk,
 
         if (memcmp(conn_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {
-                LOG_ERR("Connection extension has bad nonce\n");
+                LOG_PKT("Connection extension has bad nonce\n");
                 return 0;
         }
 
@@ -142,20 +159,20 @@ static inline int has_valid_control_extension(struct sock *sk,
          * extension always directly follows the main Serval
          * header */
         if (hdr_len < sizeof(*sfh) + sizeof(*ctrl_ext)) {
-                LOG_ERR("No control extension, hdr_len=%u\n", 
+                LOG_PKT("No control extension, hdr_len=%u\n", 
                         hdr_len);
                 return 0;
         }
         
         if (ctrl_ext->type != SERVAL_CONTROL_EXT ||
             ntohs(ctrl_ext->length) != sizeof(*ctrl_ext)) {
-                LOG_ERR("No control extension, bad extension type\n");
+                LOG_PKT("No control extension, bad extension type\n");
                 return 0;
         }
 
         if (memcmp(ctrl_ext->nonce, ssk->peer_nonce, 
                    SERVAL_NONCE_SIZE) != 0) {
-                LOG_ERR("Control extension has bad nonce\n");
+                LOG_PKT("Control extension has bad nonce\n");
                 return 0;
         }
 
@@ -166,12 +183,12 @@ static void serval_srv_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
 	skb_header_release(skb);
 	serval_srv_add_ctrl_queue_tail(sk, skb);
-        LOG_DBG("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
+        LOG_PKT("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
         /* Check if the skb became first in queue, in that case update
          * unacknowledged seqno. */
         if (skb == serval_srv_ctrl_queue_head(sk)) {
                 serval_sk(sk)->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
-                LOG_DBG("setting snd_una=%u\n",
+                LOG_PKT("setting snd_una=%u\n",
                         serval_sk(sk)->snd_seq.una);
         }
 }
@@ -189,9 +206,9 @@ static int serval_srv_write_xmit(struct sock *sk,
         unsigned int num = 0;
         int err = 0;
         
-        LOG_DBG("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
+        LOG_PKT("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
                 ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
-
+        
 	while ((skb = serval_srv_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                 
@@ -208,7 +225,7 @@ static int serval_srv_write_xmit(struct sock *sk,
                 num++;
         }
 
-        LOG_DBG("sent %u packets\n", num);
+        LOG_PKT("sent %u packets\n", num);
 
         return err;
 }
@@ -263,7 +280,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                skb != serval_srv_send_head(sk)) {
                 if (ackno == SERVAL_SKB_CB(skb)->seqno + 1) {
                         serval_srv_unlink_ctrl_queue(skb, sk);
-                        LOG_DBG("cleaned rtx queue seqno=%u\n", 
+                        LOG_PKT("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);
                         FREE_SKB(skb);
                         skb = serval_srv_ctrl_queue_head(sk);
@@ -275,7 +292,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                 }
         }
 
-        LOG_DBG("cleaned up %u packets from rtx queue\n", num);
+        LOG_PKT("cleaned up %u packets from rtx queue\n", num);
         
         /* Did we remove the first packet in the queue? */
         if (serval_srv_ctrl_queue_head(sk) != fskb) {
@@ -284,7 +301,7 @@ static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         }
 
         if (serval_srv_ctrl_queue_head(sk)) {
-                LOG_DBG("Setting retrans timer\n");
+                LOG_PKT("Setting retrans timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + msecs_to_jiffies(ssk->rto));
         }
@@ -298,7 +315,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         struct sk_buff *skb;
         struct service_id *srvid = &((struct sockaddr_sv *)uaddr)->sv_srvid;
         int err;
-
+        
         LOG_DBG("srvid=%s addr_len=%d\n", 
                 service_id_to_str(srvid), addr_len);
 
@@ -699,11 +716,11 @@ static int serval_srv_ack_process(struct sock *sk,
         if (ackno == serval_sk(sk)->snd_seq.una + 1) {
                 serval_srv_clean_rtx_queue(sk, ackno);
                 serval_sk(sk)->snd_seq.una++;
-                LOG_DBG("received valid ACK ackno=%u\n", 
+                LOG_PKT("received valid ACK ackno=%u\n", 
                         ackno);
                 err = 0;
         } else {
-                LOG_ERR("ackno %u out of sequence, expected %u\n",
+                LOG_PKT("ackno %u out of sequence, expected %u\n",
                         ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 done:
@@ -884,7 +901,6 @@ static int serval_srv_request_state_process(struct sock *sk,
         int err = 0;
                 
         if (!has_connection_extension(sfh)) {
-                LOG_ERR("No connection extension\n");
                 goto drop;
         }
         
@@ -958,7 +974,6 @@ static int serval_srv_respond_state_process(struct sock *sk,
         int err = 0;
 
         if (!has_valid_connection_extension(sk, sfh)) {
-                LOG_ERR("No connection extension\n");
                 goto drop;
         }
 
@@ -1163,8 +1178,8 @@ int serval_srv_do_rcv(struct sock *sk,
 
 void serval_srv_error_rcv(struct sk_buff *skb, u32 info)
 {
-        LOG_ERR("received ICMP error!\n");
-
+        LOG_PKT("received ICMP error!\n");
+        
         /* TODO: deal with ICMP errors, e.g., wake user and report. */
 }
 
@@ -1201,7 +1216,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        LOG_DBG("flowid (src,dst)=(%u,%u)\n",
+        LOG_PKT("flowid (src,dst)=(%u,%u)\n",
                 ntohl(sfh->src_flowid.s_id), 
                 ntohl(sfh->dst_flowid.s_id));
        
@@ -1243,7 +1258,7 @@ int serval_srv_rcv(struct sk_buff *skb)
                         srvid = &srv_ext->dst_srvid;
                 }
 
-                LOG_DBG("Demux on serviceID %s\n", 
+                LOG_PKT("Demux on serviceID %s\n", 
                         service_id_to_str(srvid));
 
                 sk = serval_sock_lookup_serviceid(srvid);
@@ -1254,30 +1269,43 @@ int serval_srv_rcv(struct sk_buff *skb)
                         goto drop;
                 }
         }
- 
+
+        /* Drop check if control queue is full here */
+        if (is_control_packet(skb) && 
+            serval_srv_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN)
+                        goto drop;
+
         bh_lock_sock_nested(sk);
 
         if (!sock_owned_by_user(sk)) {
                 err = serval_srv_do_rcv(sk, skb);
-        } 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-        else {
-                sk_add_backlog(sk, skb);
+        } else {
+                /*
+                  Add to backlog and process in user context when
+                  the user process releases its lock ownership.
+                  
+                  Note, we do not use the regular sk_add_backlog()
+                  function here as it will reject backlogging if the
+                  receive queue is full. A full receive queue (for
+                  data) should not affect control packets.
+                */
+                __sk_add_backlog(sk, skb);
+                sk->sk_backlog.len += skb->truesize;
         }
-#else
-        else if (unlikely(sk_add_backlog(sk, skb))) {
-                bh_unlock_sock(sk);
-                sock_put(sk);
-                goto drop;
-        }
-#endif
+
         bh_unlock_sock(sk);
         sock_put(sk);
 
-	return err;
+        /*
+          IP will resubmit packet if return value is less than
+          zero. Therefore, make sure we always return 0, even if we drop the
+          packet.
+        */
+
+	return 0;
 drop:
         FREE_SKB(skb);
-        return err;
+        return 0;
 }
 
 static int serval_srv_rexmit(struct sock *sk)
@@ -1461,9 +1489,13 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			skb = pskb_copy(skb, gfp_mask);
 		else
 			skb = skb_clone(skb, gfp_mask);
-		if (unlikely(!skb))
-			return -ENOBUFS;
-
+		if (unlikely(!skb)) {
+                        /* Shouldn't free the passed skb here, since
+                         * we were asked to clone it. That probably
+                         * means the original skb sits in a queue
+                         * somewhere, and freeing it would be bad. */
+                        return -ENOBUFS;
+                }
                 if (!skb->sk)
                         skb_serval_set_owner_w(skb, sk);
 	}
@@ -1581,12 +1613,11 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
                                 FREE_SKB(skb);
+                                err = -ENOBUFS;
 				break;
 			}
                         /* Cloned skb will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
-
-                        LOG_DBG("cskb->len=%u\n", cskb->len);
 		}
                 
 		/* Set the output device */

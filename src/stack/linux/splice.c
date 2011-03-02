@@ -1,4 +1,5 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#if defined(ENABLE_SPLICE)
 #include <linux/kernel.h>
 #include <linux/version.h>
 #include <linux/skbuff.h>
@@ -75,6 +76,33 @@ int generic_pipe_buf_confirm(struct pipe_inode_info *info,
 }
 
 #endif /* LINUX_VERSION_CODE */
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30))
+static void pipe_lock_nested(struct pipe_inode_info *pipe, int subclass)
+{
+	if (pipe->inode)
+		mutex_lock_nested(&pipe->inode->i_mutex, subclass);
+}
+
+void pipe_lock(struct pipe_inode_info *pipe)
+{
+	/*
+	 * pipe_lock() nests non-pipe inode locks (for writing to a file)
+	 */
+	pipe_lock_nested(pipe, I_MUTEX_PARENT);
+}
+
+void pipe_unlock(struct pipe_inode_info *pipe)
+{
+	if (pipe->inode)
+		mutex_unlock(&pipe->inode->i_mutex);
+}
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31))
+#define skb_walk_frags(skb, iter)       \
+        for (iter = skb_shinfo(skb)->frag_list; iter; iter = iter->next)
+#endif
 
 /* Drop the inode semaphore and wait for a pipe event, atomically */
 void pipe_wait(struct pipe_inode_info *pipe)
@@ -186,9 +214,13 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 		kill_fasync(&pipe->fasync_readers, SIGIO, POLL_IN);
 	}
 
-	while (page_nr < spd_pages)
-		spd->spd_release(spd, page_nr++);
-
+	while (page_nr < spd_pages) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25))
+		page_cache_release(spd->pages[page_nr++]);
+#else
+                spd->spd_release(spd, page_nr++);
+#endif
+        }
 	return ret;
 }
 
@@ -252,10 +284,12 @@ static const struct pipe_buf_operations sock_pipe_buf_ops = {
 	.get = sock_pipe_buf_get,
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 static void sock_spd_release(struct splice_pipe_desc *spd, unsigned int i)
 {
 	put_page(spd->pages[i]);
 }
+#endif
 
 static inline struct page *linear_to_page(struct page *page, unsigned int *len,
 					  unsigned int *offset,
@@ -420,7 +454,9 @@ int skb_splice_bits(struct sk_buff *skb, unsigned int offset,
 		.partial = partial,
 		.flags = flags,
 		.ops = &sock_pipe_buf_ops,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 		.spd_release = sock_spd_release,
+#endif
 	};
 	struct sk_buff *frag_iter;
 	struct sock *sk = skb->sk;
@@ -467,3 +503,5 @@ done:
 	splice_shrink_spd(pipe, &spd);
 	return ret;
 }
+
+#endif /* ENABLE_SPLICE */
