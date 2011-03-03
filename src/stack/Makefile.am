@@ -108,12 +108,13 @@ SERVAL_KERNEL_SRC = \
 	platform.c \
 	bst.c \
 	service.c \
+	ctrl_handler.c \
+	af_serval.c \
 	serval_sock.c \
 	serval_srv.c \
 	serval_ipv4.c \
 	serval_udp.c \
-	serval_tcp.c \
-	af_serval.c
+	serval_tcp.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \

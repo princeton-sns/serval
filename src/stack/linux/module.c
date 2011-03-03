@@ -42,7 +42,7 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(NULL, 0, dev, &dst, sizeof(dst), NULL, GFP_ATOMIC);
+                service_add(NULL, 0, &dst, sizeof(dst), dev, NULL, GFP_ATOMIC);
                 /*
                 dev_get_ipv4_netmask(dev, &mask);
                 

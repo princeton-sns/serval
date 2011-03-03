@@ -1493,7 +1493,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 {
         struct serval_sock *ssk = serval_sk(sk);
 	struct service_entry *se;
-	struct net_device *dev;
+	struct dest *dest;
         struct serval_hdr *sfh;
         uint8_t flags = 0;
         int hdr_len = sizeof(*sfh);
@@ -1590,35 +1590,35 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
         
         /* 
-           Send on all interfaces listed for this service.
+           Send to all destinations listed for this service.
         */
-	service_entry_dev_iterate_begin(se);
+	service_entry_dest_iterate_begin(se);
 	
-	dev = service_entry_dev_next(se);
+	dest = service_entry_dest_next(se);
 	
-        if (!dev) {
+        if (!dest) {
                 if (se->sk) {
                         LOG_INF("local service routing NOT implemented\n");
                 } else {
                         LOG_DBG("No device to transmit on!\n");
                 }
                 FREE_SKB(skb);
-                service_entry_dev_iterate_end(se);
+                service_entry_dest_iterate_end(se);
                 service_entry_put(se);
                 return -EHOSTUNREACH;
         }
 
-	while (dev) {
+	while (dest) {
 		struct sk_buff *cskb;
-		struct net_device *next_dev;
+		struct dest *next_dest;
 		
                 /* Remember the flow destination */
-		service_entry_dev_dst(se, &SERVAL_SKB_CB(skb)->addr,
-                                      sizeof(struct net_addr));
+		service_entry_dest_fill(se, &SERVAL_SKB_CB(skb)->addr,
+                                        sizeof(struct net_addr));
 
-		next_dev = service_entry_dev_next(se);
+		next_dest = service_entry_dest_next(se);
 		
-                if (next_dev == NULL) {
+                if (next_dest == NULL) {
 			cskb = skb;
 		} else {
                         /* Always be atomic here since we are holding
@@ -1636,17 +1636,18 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		}
                 
 		/* Set the output device */
-		skb_set_dev(cskb, dev);
+                if (dest->dev)
+                        skb_set_dev(cskb, dest->dev);
 
 		err = ssk->af_ops->queue_xmit(cskb);
                 
 		if (err < 0) {
 			LOG_ERR("xmit failed\n");
 		}
-		dev = next_dev;
+		dest = next_dest;
 	}
 	
-	service_entry_dev_iterate_end(se);
+	service_entry_dest_iterate_end(se);
 	service_entry_put(se);
 
 	return err;

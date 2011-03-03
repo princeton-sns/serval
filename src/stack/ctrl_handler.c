@@ -2,6 +2,7 @@
 #include <serval/debug.h>
 #include <serval/netdevice.h>
 #include <libstack/ctrlmsg.h>
+#include <service.h>
 #include "ctrl.h"
 
 extern int host_ctrl_mode;
@@ -45,9 +46,22 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
 
 static int ctrl_handle_set_service_msg(struct ctrlmsg *cm)
 {
-        LOG_DBG("\n");
-         
-        return 0;
+        struct ctrlmsg_service *cms = (struct ctrlmsg_service *)cm;
+#if defined(ENABLE_DEBUG)
+        char ipstr[20];
+        LOG_DBG("adding service [%s] -> %s\n",
+                service_id_to_str(&cms->srvid), 
+                inet_ntop(AF_INET, &cms->ipaddr, 
+                          ipstr, sizeof(ipstr)));
+#endif         
+        if (cms->prefix_bits == 0 || 
+            cms->prefix_bits > (sizeof(cms->srvid)*8)) {
+                cms->prefix_bits = sizeof(cms->srvid) * 8;
+        }
+
+        return service_add(&cms->srvid, cms->prefix_bits,
+                           &cms->ipaddr, sizeof(cms->ipaddr), 
+                           NULL, NULL, GFP_KERNEL);
 }
 
 ctrlmsg_handler_t handlers[] = {

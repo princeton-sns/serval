@@ -11,7 +11,8 @@ bin_PROGRAMS = \
 	udp_servern \
 	udp_client \
 	udp_clientn \
-	tcp_inet_client
+	tcp_inet_client \
+	addservice
 
 if OS_LINUX
 bin_PROGRAMS += \
@@ -25,6 +26,10 @@ translator_CPPFLAGS =-I$(top_srcdir)/include
 translator_LDFLAGS =-lpthread
 
 endif
+
+addservice_SOURCES = addservice.c
+addservice_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack
+addservice_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
 
 tcp_inet_client_SOURCES = tcp_inet_client.c
 

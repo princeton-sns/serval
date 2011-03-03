@@ -317,14 +317,14 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 rcu_read_unlock();
                 goto drop;
         } else {
-                /*
+#if defined(ENABLE_DEBUG)                
                 char src[18], dst[18];
-                LOG_DBG("Route found, src %s dst %s\n",
+                LOG_PKT("Route found - src %s dst %s\n",
                         inet_ntop(AF_INET, &rt->rt_src, 
                                   src, sizeof(src)),
                         inet_ntop(AF_INET, &rt->rt_dst, 
                                   dst, sizeof(dst)));
-                */
+#endif
                 sk_setup_caps(sk, &rt->u.dst);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))

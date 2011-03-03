@@ -17,10 +17,17 @@ struct service_entry {
 		struct dst_entry dst;
 	} u;
         struct bst_node *node;
-        struct list_head dev_list, *dev_pos;
+        struct list_head dest_list, *dest_pos;
         struct sock *sk;
-        rwlock_t devlock;
+        rwlock_t destlock;
         atomic_t refcnt;
+};
+
+struct dest {
+        struct list_head lh;
+        struct net_device *dev;
+        int dstlen;
+        unsigned char dst[]; /* Must be last */
 };
 
 typedef enum {
@@ -31,22 +38,24 @@ typedef enum {
 
 struct net_device *service_entry_get_dev(struct service_entry *se, 
                                          const char *ifname);
-int service_entry_remove_dev(struct service_entry *se, 
-                             const char *ifname);
-int service_entry_add_dev(struct service_entry *se, 
-                          struct net_device *dev,
-                          unsigned char *dst,
-                          int dstlen,
-                          gfp_t alloc);
-void service_entry_dev_iterate_begin(struct service_entry *se);
-void service_entry_dev_iterate_end(struct service_entry *se);
-struct net_device *service_entry_dev_next(struct service_entry *se);
-int service_entry_dev_dst(struct service_entry *se, void *dst, 
-                          int dstlen);
+int service_entry_remove_dest_by_dev(struct service_entry *se, 
+                                     const char *ifname);
+int service_entry_remove_dest(struct service_entry *se, 
+                              const void *dst, int dstlen);
+int service_entry_add_dest(struct service_entry *se, 
+                           const void *dst,
+                           int dstlen,
+                           struct net_device *dev,
+                           gfp_t alloc);
+void service_entry_dest_iterate_begin(struct service_entry *se);
+void service_entry_dest_iterate_end(struct service_entry *se);
+struct dest *service_entry_dest_next(struct service_entry *se);
+int service_entry_dest_fill(struct service_entry *se, void *dst, 
+                            int dstlen);
 
 int service_add(struct service_id *srvid, unsigned int prefix_bits,
-		struct net_device *dev, void *dst,
-                int dstlen, struct sock *sk, gfp_t alloc);
+		const void *dst, int dstlen, struct net_device *dev, 
+                struct sock *sk, gfp_t alloc);
 void service_del(struct service_id *srvid, unsigned int prefix_bits);
 int service_del_dev(const char *devname);
 struct service_entry *service_find_type(struct service_id *srvid, 
@@ -74,7 +83,8 @@ static inline struct service_entry *skb_service_entry(struct sk_buff *skb)
         return (struct service_entry *)skb->_skb_refdst;        
 }
 
-static inline void skb_set_service_entry(struct sk_buff *skb, struct service_entry *se)
+static inline void skb_set_service_entry(struct sk_buff *skb, 
+                                         struct service_entry *se)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
         skb->dst = (struct dst_entry *)se;

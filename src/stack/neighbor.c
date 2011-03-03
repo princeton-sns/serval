@@ -213,10 +213,9 @@ int neighbor_table_add(struct neighbor_table *tbl, struct net_addr *flw,
 
         ret = 1;
 
-
         write_lock_bh(&tbl->lock);
         neigh->node = bst_insert_prefix(&tbl->tree, &tbl->neigh_ops, 
-                                        neigh, flw, prefix_bits, alloc);
+                                        neigh, flw, prefix_bits, GFP_ATOMIC);
         write_unlock_bh(&tbl->lock);
         
         if (!neigh->node) {

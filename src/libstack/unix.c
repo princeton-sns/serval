@@ -77,7 +77,7 @@ static int unix_handle_init(struct event_handler *eh)
 			 * without error. */
 			LOG_DBG("unix control not supported, disabling\n");
 			event_unregister_handler(eh);
-                        return 0;
+                        return -1;
 		} else if (errno == ECONNREFUSED) {
 			/* Success, daemon is running */
 			LOG_DBG("connection refused\n");
@@ -102,7 +102,7 @@ error_sock:
 static void unix_handle_destroy(struct event_handler *eh)
 {
 	struct unix_handle *uh = (struct unix_handle *)eh->private;
-        LOG_DBG("closing sock\n");
+
 	if (uh->sock != -1) {
 		close(uh->sock);
 	}

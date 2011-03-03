@@ -4,6 +4,7 @@
 #include <netinet/serval.h>
 #if !defined(__KERNEL__)
 #include <net/if.h>
+#include <netinet/in.h>
 #endif
 
 enum ctrlmsg_type {
@@ -52,6 +53,8 @@ enum {
 struct ctrlmsg_service {
 	struct ctrlmsg cmh;
 	struct service_id srvid;
+	unsigned int prefix_bits;
+	struct in_addr ipaddr;
 	char ifname[IFNAMSIZ];
 };
 

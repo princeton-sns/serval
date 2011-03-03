@@ -245,7 +245,7 @@ void serval_sock_hash(struct sock *sk)
 
                 err = service_add(ssk->hash_key, 
                                   ssk->hash_key_len, 
-                                  NULL, NULL, 0, sk, GFP_ATOMIC);
+                                  NULL, 0, NULL, sk, GFP_ATOMIC);
                 if (err < 0) {
                         LOG_ERR("could not add service for listening demux\n");
                 } else {

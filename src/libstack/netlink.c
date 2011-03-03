@@ -45,7 +45,7 @@ static int netlink_handle_init(struct event_handler *eh)
 			 * without error. */
                         LOG_DBG("netlink not supported, disabling\n");
                         event_unregister_handler(eh);
-                        return 0;
+                        return -1;
                 }
 		LOG_ERR("netlink control failure: %s\n",
                         strerror(errno));

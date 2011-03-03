@@ -83,7 +83,14 @@ static int eventloop_signal_pending(struct event_handle *h)
                 LOG_ERR("poll error: %s\n", strerror(errno));
         }
 
-        return ret;
+        if (fds.revents & POLLHUP) {
+                LOG_DBG("HUP signal pending\n");
+        }
+        if (fds.revents & POLLIN) {
+                LOG_DBG("IN signal pending\n");
+        }
+
+        return ret > 0;
 }
 
 static int eventloop_signal_queue(struct event_handle *h)
@@ -104,15 +111,6 @@ static int eventloop_signal_queue(struct event_handle *h)
 static int eventloop_signal_exit(struct event_handle *h)
 {
 	char w = 'x';
-        int ret;
-        
-        ret = eventloop_signal_pending(h);
-        
-        if (ret == 1)
-                return 0;
-        else if (ret == -1)
-                return -1;
-
 	return write(h->pipefd[1], &w, 1);
 }
 
@@ -145,9 +143,10 @@ static int eventloop_dequeue_msg_xmit(struct event_handle *h)
                         if (ret == -1) {
                                 LOG_ERR("send failure for handler '%s' : %s\n",
                                         h->handlers[i]->name, strerror(errno));
+                        } else {
+                                n++;
                         }
                 }
-                n++;
                 free(me);
         }
         
@@ -194,7 +193,7 @@ void *eventloop_thread(void *arg)
 		struct pollfd fds[MAX_HANDLERS + 1];
                 unsigned int i;
 		int ret;
-
+                
 		fds[0].fd = h->pipefd[0];
 		fds[0].events = POLLHUP | POLLIN;
 		fds[0].revents = 0;
@@ -205,6 +204,7 @@ void *eventloop_thread(void *arg)
 			fds[i+1].revents = 0;
 		}
 		
+
 		ret = poll(fds, h->num_handlers + 1, -1);
 		
 		if (ret == -1) {
@@ -261,6 +261,7 @@ void event_register_handler(struct event_handler *eh)
 		LOG_ERR("Max num handlers reached\n");
 		return;
 	}
+
 	LOG_DBG("registering handler %s\n", eh->name);
 
 	ehandle.handlers[ehandle.num_handlers++] = eh;
@@ -272,15 +273,19 @@ void event_unregister_handler(struct event_handler *eh)
 
 	for (i = 0; i < MAX_HANDLERS; i++) {
 		if (found) {
-                        if (i > ehandle.num_handlers)
-                                ehandle.handlers[i-1] = NULL;
-                        else
+                        if (i > 0 && ehandle.handlers[i-1] == NULL && 
+                            ehandle.handlers[i]) {
                                 ehandle.handlers[i-1] = ehandle.handlers[i];
+                                ehandle.handlers[i] = NULL;
+                        }
 		} else if (ehandle.handlers[i] == eh) {
 			/* Call the handler's cleanup function */
 			ehandle.handlers[i]->cleanup(ehandle.handlers[i]);
-			found = 1;
                         ehandle.num_handlers--;
+                        LOG_DBG("unregistering handler %s\n", 
+                                ehandle.handlers[i]->name);
+                        ehandle.handlers[i] = NULL;
+			found = 1;
 		}
 	}
 }
@@ -288,18 +293,20 @@ void event_unregister_handler(struct event_handler *eh)
 int eventloop_init(void)
 {
 	int ret = 0;
-        unsigned int i = 0, num = ehandle.num_handlers;
+        unsigned int i = 0;
 
         /* Initialize handlers */
         /* TODO: call handler cleanup if init fails. But only for
          * those handlers that have run init */
-        for (i = 0; i < num; i++) {
+        while (i < ehandle.num_handlers) {
                 LOG_DBG("Initializing '%s' control\n", 
                         ehandle.handlers[i]->name);
                 ret = ehandle.handlers[i]->init(ehandle.handlers[i]);
 
                 if (ret < 0) {
                         LOG_ERR("handler init failed\n");
+                } else {
+                        i++;
                 }
         }
 
