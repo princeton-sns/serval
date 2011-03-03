@@ -209,7 +209,7 @@ int __service_entry_remove_dest(struct service_entry *se,
                         list_del(&de->lh);
                         dest_free(de);
                         return 1;
-                } 
+                }
         }
         return 0;
 }
@@ -541,8 +541,9 @@ int service_add(struct service_id *srvid, unsigned int prefix_bits,
                                  dst, dstlen, dev, sk, alloc);
 }
 
-void service_table_del(struct service_table *tbl, struct service_id *srvid, 
-                       unsigned int prefix_bits)
+static void service_table_del(struct service_table *tbl, 
+                              struct service_id *srvid, 
+                              unsigned int prefix_bits)
 {
         write_lock_bh(&tbl->lock);
         bst_remove_prefix(&tbl->tree, srvid, prefix_bits);
@@ -552,6 +553,39 @@ void service_table_del(struct service_table *tbl, struct service_id *srvid,
 void service_del(struct service_id *srvid, unsigned int prefix_bits)
 {
         return service_table_del(&srvtable, srvid, prefix_bits);
+}
+
+static void service_table_del_dest(struct service_table *tbl, 
+                                   struct service_id *srvid, 
+                                   unsigned int prefix_bits, 
+                                   const void *dst, int dstlen)
+{
+        struct bst_node *n;
+
+        if (!dst || dstlen == 0)
+                return service_table_del(tbl, srvid, prefix_bits);
+
+        write_lock_bh(&tbl->lock);
+        
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+
+        if (n) { 
+                write_lock_bh(&get_service(n)->destlock);
+                __service_entry_remove_dest(get_service(n), dst, dstlen);
+                write_unlock_bh(&get_service(n)->destlock);
+        
+                if (list_empty(&get_service(n)->dest_list))
+                        bst_node_remove(n);
+        }
+
+        write_unlock_bh(&tbl->lock);
+}
+
+void service_del_dest(struct service_id *srvid, unsigned int prefix_bits,
+                      const void *dst, int dstlen)
+{
+        return service_table_del_dest(&srvtable, srvid, prefix_bits, 
+                                      dst, dstlen);
 }
 
 static int del_dev_func(struct bst_node *n, void *arg)
@@ -575,8 +609,8 @@ static int del_dev_func(struct bst_node *n, void *arg)
         return ret;
 }
 
-static int service_table_del_dev(struct service_table *tbl, 
-                                 const char *devname)
+static int service_table_del_dev_all(struct service_table *tbl, 
+                                     const char *devname)
 {
         int ret = 0;
 
@@ -590,9 +624,57 @@ static int service_table_del_dev(struct service_table *tbl,
         return ret;
 }
 
-int service_del_dev(const char *devname)
+int service_del_dev_all(const char *devname)
 {
-        return service_table_del_dev(&srvtable, devname);
+        return service_table_del_dev_all(&srvtable, devname);
+}
+
+static int del_dest_func(struct bst_node *n, void *arg)
+{
+        struct service_entry *se = get_service(n);
+        struct _d {
+                const void *d_dst;
+                int d_len;
+        } *d = (struct _d *)arg;
+        int ret = 0, should_remove = 0;
+        
+        write_lock_bh(&se->destlock);
+        
+        ret = __service_entry_remove_dest(se, d->d_dst, d->d_len);
+
+        if (ret == 1 && list_empty(&se->dest_list))
+                should_remove = 1;
+
+        write_unlock_bh(&se->destlock);
+
+        if (should_remove)
+                bst_node_remove(n);
+        
+        return ret;
+}
+
+static int service_table_del_dest_all(struct service_table *tbl, 
+                                      const void *dst, int dstlen)
+{
+        int ret = 0;
+        struct {
+                const void *d_dst;
+                int d_len;
+        } d = { dst, dstlen };
+
+        write_lock_bh(&tbl->lock);
+
+        if (tbl->tree.root)
+                ret = bst_subtree_func(tbl->tree.root, del_dest_func, &d);
+
+        write_unlock_bh(&tbl->lock);
+
+        return ret;
+}
+
+int service_del_dest_all(const void *dst, int dstlen)
+{
+        return service_table_del_dest_all(&srvtable, dst, dstlen);
 }
 
 void __service_table_destroy(struct service_table *tbl)

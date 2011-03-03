@@ -13,11 +13,11 @@
 
 int main(int argc, char **argv)
 {
-	int ret = 0;
+	int ret = 0, delete = 0;
 	struct service_id srvid;
 	char *ptr;
 	unsigned short sid;
-	struct in_addr ipaddr;
+	struct in_addr ipaddr, *ip = NULL;
 
 	ret = libstack_init();
 
@@ -27,12 +27,18 @@ int main(int argc, char **argv)
 		goto fail_libstack;
 	}
 	
-	if (argc != 3) {
-		fprintf(stderr, "Usage: %s SERVICEID IPADDR\n",
+	if (argc < 3) {
+		fprintf(stderr, "Usage: %s [-d] SERVICEID IPADDR\n",
 			argv[0]);
 		ret = -1;
 		goto out;
 	}
+
+        if (strcmp(argv[1], "-d") == 0) {
+                delete = 1;
+                argc--;
+                argv++;
+        }
 
 	sid = strtoul(argv[1], &ptr, 10);
 
@@ -47,24 +53,32 @@ int main(int argc, char **argv)
 	memset(&srvid, 0, sizeof(srvid));
 	srvid.s_sid16[0] = ntohs(sid);
 	
-	ret = inet_pton(AF_INET, argv[2], &ipaddr);
+        if (argc == 3) {
+                ret = inet_pton(AF_INET, argv[2], &ipaddr);
+                
+                if (ret != 1) {
+                        fprintf(stderr, "bad IP address format: '%s'\n",
+                                argv[2]);
+                        ret = -1;
+                        goto out;
+                }
+                ip = &ipaddr;
+        }
 	
-	if (ret != 1) {
-		fprintf(stderr, "bad IP address format: '%s'\n",
-			argv[2]);
-		ret = -1;
-		goto out;
-	}
-	
-	printf("setting service %s\n",
-	       service_id_to_str(&srvid));
-
-	ret = libstack_set_service(&srvid, 0, &ipaddr);
-
+        if (delete) {
+                 printf("deleting service %s\n",
+                        service_id_to_str(&srvid));
+                
+                 ret = libstack_del_service(&srvid, 0, ip);
+        } else {
+                printf("adding service %s\n",
+                       service_id_to_str(&srvid));
+                
+                ret = libstack_add_service(&srvid, 0, &ipaddr);
+        }
 	if (ret < 0) {
-		fprintf(stderr, "could not set service\n");
+		fprintf(stderr, "could not add/delete service\n");
 	}
-        //sleep(2);
 out:
         libstack_fini();
 fail_libstack:

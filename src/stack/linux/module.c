@@ -77,7 +77,7 @@ static int serval_netdev_event(struct notifier_block *this,
 	case NETDEV_GOING_DOWN:
         {           
                 LOG_DBG("netdev GOING DOWN %s\n", dev->name);
-                service_del_dev(dev->name);
+                service_del_dev_all(dev->name);
                 // neighbor_del_dev(dev->name);
 		break;
         }

@@ -57,7 +57,10 @@ int service_add(struct service_id *srvid, unsigned int prefix_bits,
 		const void *dst, int dstlen, struct net_device *dev, 
                 struct sock *sk, gfp_t alloc);
 void service_del(struct service_id *srvid, unsigned int prefix_bits);
-int service_del_dev(const char *devname);
+void service_del_dest(struct service_id *srvid, unsigned int prefix_bits,
+                      const void *dst, int dstlen);
+int service_del_dest_all(const void *dst, int dstlen);
+int service_del_dev_all(const char *devname);
 struct service_entry *service_find_type(struct service_id *srvid, 
                                         service_entry_type_t type);
 

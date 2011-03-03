@@ -44,7 +44,7 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
         return ret;
 }
 
-static int ctrl_handle_set_service_msg(struct ctrlmsg *cm)
+static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cms = (struct ctrlmsg_service *)cm;
 #if defined(ENABLE_DEBUG)
@@ -64,11 +64,39 @@ static int ctrl_handle_set_service_msg(struct ctrlmsg *cm)
                            NULL, NULL, GFP_KERNEL);
 }
 
+static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
+{
+        struct ctrlmsg_service *cms = (struct ctrlmsg_service *)cm;
+        struct in_addr *ip = NULL;
+        uint32_t null_ip = 0;
+#if defined(ENABLE_DEBUG)
+        char ipstr[20];
+        LOG_DBG("deleting service [%s] -> %s\n",
+                service_id_to_str(&cms->srvid),
+                inet_ntop(AF_INET, &cms->ipaddr, 
+                          ipstr, sizeof(ipstr)));
+#endif         
+        if (cms->prefix_bits == 0 || 
+            cms->prefix_bits > (sizeof(cms->srvid)*8)) {
+                cms->prefix_bits = sizeof(cms->srvid) * 8;
+        }
+
+        if (memcmp(&cms->ipaddr, &null_ip, sizeof(cms->ipaddr)) != 0) {
+                ip = &cms->ipaddr;
+        }
+
+        service_del_dest(&cms->srvid, cms->prefix_bits,
+                         ip, ip ? sizeof(cms->ipaddr) : 0);
+
+        return 0;
+}
+
 ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         ctrl_handle_iface_conf_msg,
-        ctrl_handle_set_service_msg
+        ctrl_handle_add_service_msg,
+        ctrl_handle_del_service_msg
 };
