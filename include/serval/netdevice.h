@@ -21,6 +21,9 @@ static inline int dev_get_ipv4_addr(struct net_device *dev, void *addr)
         struct in_device *indev = in_dev_get(dev);
         int ret = 0;
 
+        if (!indev)
+                return -1;
+
         for_primary_ifa(indev) {
                 memcpy(addr, &ifa->ifa_address, 4);
                 ret = 1;
@@ -37,6 +40,9 @@ static inline int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
         struct in_device *indev = in_dev_get(dev);
         int ret = 0;
 
+        if (!indev)
+                return -1;
+
         for_primary_ifa(indev) {
                 memcpy(addr, &ifa->ifa_broadcast, 4);
                 ret = 1;
@@ -52,6 +58,9 @@ static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
 {
         struct in_device *indev = in_dev_get(dev);
         int ret = 0;
+
+        if (!indev)
+                return -1;
 
         for_primary_ifa(indev) {
                 memcpy(addr, &ifa->ifa_mask, 4);

@@ -32,29 +32,29 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
 {
         ssize_t rlen, wlen;
 
-         rlen = splice(from, NULL, pipefd[1], NULL, 
-                       INT_MAX, SPLICE_F_MOVE | SPLICE_F_MORE);
-         
-         if (rlen == -1) {
-                 fprintf(stderr, "splice1: %s\n",
-                         strerror(errno));
-                 return rlen;
-         } 
-         
-         /* printf("splice1 %zd bytes\n", rlen); */
-         
-         wlen = splice(pipefd[0], NULL, to, NULL,
-                       rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
-         
-         if (wlen == -1) {
-                 fprintf(stderr, "splice2: %s\n",
-                                strerror(errno));
-                 return wlen;
-         }
-         
-         /* printf("splice2 %zd bytes\n", wlen); */
-
-         return wlen;
+        rlen = splice(from, NULL, pipefd[1], NULL, 
+                      INT_MAX, SPLICE_F_MOVE | SPLICE_F_MORE);
+        
+        if (rlen == -1) {
+                fprintf(stderr, "splice1: %s\n",
+                        strerror(errno));
+                return rlen;
+        } 
+        
+        /* printf("splice1 %zd bytes\n", rlen); */
+        
+        wlen = splice(pipefd[0], NULL, to, NULL,
+                      rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
+        
+        if (wlen == -1) {
+                fprintf(stderr, "splice2: %s\n",
+                        strerror(errno));
+                return wlen;
+        }
+        
+        /* printf("splice2 %zd bytes\n", wlen); */
+        
+        return wlen;
 }
 
 static ssize_t legacy_to_serval(struct client *c)
@@ -278,6 +278,7 @@ int main(int argc, char **argv)
                 if (ret != 0) {
                         fprintf(stderr, "pthread_create: %s\n",
                                 strerror(errno));
+                        client_free(c);
                         break;
                 }
                 

@@ -18,7 +18,7 @@ MODULE_VERSION("0.1");
 /* Debug defined in debug.c */
 extern unsigned int debug;
 module_param(debug, uint, 0);
-MODULE_PARM_DESC(debug, "Set debug level 0-5 (0=off).");
+MODULE_PARM_DESC(debug, "Set debug level 0-6 (0=off).");
 
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
@@ -33,7 +33,7 @@ static int dev_configuration(struct net_device *dev)
         
         ret = dev_get_ipv4_broadcast(dev, &dst);
 
-        if (ret) {
+        if (ret == 1) {
 #if defined(ENABLE_DEBUG)
                 {
                         char buf[16];
@@ -57,7 +57,7 @@ static int dev_configuration(struct net_device *dev)
 }
 
 static int serval_netdev_event(struct notifier_block *this,
-                                 unsigned long event, void *ptr)
+                               unsigned long event, void *ptr)
 {
 	struct net_device *dev = (struct net_device *)ptr;
 
@@ -92,10 +92,12 @@ static int serval_netdev_event(struct notifier_block *this,
 }
 
 static int serval_inetaddr_event(struct notifier_block *this,
-                                   unsigned long event, void *ptr)
+                                 unsigned long event, void *ptr)
 {
-	struct net_device *dev = (struct net_device *)ptr;
 
+        struct in_ifaddr *ifa = (struct in_ifaddr *)ptr;
+        struct net_device *dev = ifa->ifa_dev->dev;
+                
         if (dev_net(dev) != &init_net)
                 return NOTIFY_DONE;
         
