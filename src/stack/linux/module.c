@@ -113,12 +113,12 @@ static int serval_inetaddr_event(struct notifier_block *this,
         }
 	case NETDEV_GOING_DOWN:
         {
-                LOG_DBG("inetdev GOING_DOWN %s\n", dev->name);
+                //LOG_DBG("inetdev GOING_DOWN %s\n", dev->name);
 		break;
         }
 	case NETDEV_DOWN:
                 LOG_DBG("inetdev DOWN\n");
-                //service_del_dev(dev->name);
+                service_del_dev_all(dev->name);
                 break;
 	default:
 		break;

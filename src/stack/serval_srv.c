@@ -928,8 +928,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         }
 
         /* Save device and peer flow id */
-        ssk->dev = skb->dev;
-        dev_hold(ssk->dev);
+        serval_sock_set_dev(sk, skb->dev);
         memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
@@ -970,7 +969,6 @@ static int serval_srv_respond_state_process(struct sock *sk,
                                             struct serval_hdr *sfh,
                                             struct sk_buff *skb)
 {
-        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
         if (!has_valid_connection_extension(sk, sfh)) {
@@ -990,8 +988,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 
                 /* Save device and peer flow id */
-                ssk->dev = skb->dev;
-                dev_hold(ssk->dev);
+                serval_sock_set_dev(sk, skb->dev);
                 memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
                        sizeof(inet_sk(sk)->inet_daddr));
         }

@@ -542,6 +542,19 @@ void serval_sock_destruct(struct sock *sk)
                 sk, atomic_read(&serval_nr_socks));
 }
 
+void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+        if (ssk->dev)
+                dev_put(ssk->dev);
+
+        if (dev) {
+                ssk->dev = dev;
+                dev_hold(dev);
+        }
+}
+
 const char *serval_sock_state_str(struct sock *sk)
 {
         if (sk->sk_state >= SERVAL_MAX_STATE) {

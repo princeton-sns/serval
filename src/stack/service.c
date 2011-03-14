@@ -488,11 +488,13 @@ static int service_table_add(struct service_table *tbl,
         if (n && bst_node_prefix_bits(n) >= prefix_bits) {
                 if (sk) {
                         ret = -EADDRINUSE;
+                        LOG_ERR("demux entry exists already\n");
                         goto out;
                 }
                 if (dst) {
                         if (get_service(n)->sk) {
                                 ret = -EADDRINUSE;
+                                LOG_ERR("entry exists already\n");
                                 goto out;
                         }
                         ret = __service_entry_add_dest(get_service(n), 
@@ -508,6 +510,7 @@ static int service_table_add(struct service_table *tbl,
         
         if (!se) {
                 ret = -ENOMEM;
+                LOG_ERR("could not allocate service entry\n");
                 goto out;
         }
         
@@ -516,6 +519,7 @@ static int service_table_add(struct service_table *tbl,
 
                 if (ret < 0) {
                         service_entry_free(se);
+                        LOG_ERR("could not add service entry dest\n");
                         ret = -ENOMEM;
                         goto out;
                 }
@@ -524,6 +528,7 @@ static int service_table_add(struct service_table *tbl,
                                      se, srvid, prefix_bits, GFP_ATOMIC);
                 
         if (!se->node) {
+                LOG_ERR("prefix insert failed\n");
                 service_entry_free(se);
                 ret = -ENOMEM;
         }
