@@ -84,6 +84,7 @@ serval_include_HEADERS = \
 
 serval_CPPFLAGS =-I$(SERVAL_INCLUDE_DIR) -I$(STACK_DIR)
 serval_LDFLAGS =-lpthread 
+serval_CFLAGS =-pg
 
 if OS_LINUX
 serval_LDFLAGS +=-lrt
