@@ -51,6 +51,9 @@ public class UDPServer {
                     ServalDatagramPacket rsp = 
                         new ServalDatagramPacket(b, b.length); 
                     sock.send(rsp);
+
+                    System.out.printf("Client %d sent \'%s\'\n",
+                                      id, msg);
                 } catch (SocketTimeoutException e) {
                     // Receive timeout, if set via setSoTimeout().
                     
@@ -60,7 +63,7 @@ public class UDPServer {
                 }
             }           
             sock.close();
-            System.out.println("Client " + id + " exits...");
+            System.out.println("Client " + id + " exits...\n");
         }             
 	}
 
@@ -77,7 +80,7 @@ public class UDPServer {
         
         while (true) {
             try {
-                (new Thread(new Client(serverSock.accept(), num++))).start();
+                (new Thread(new Client(serverSock.accept(), ++num))).start();
                 System.out.println("accepted client " + num);
             } catch (Exception e) {
                 System.err.println("ERROR: " + e.getMessage());

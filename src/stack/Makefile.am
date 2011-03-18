@@ -30,12 +30,12 @@ serval_SOURCES = \
 
 if OS_LINUX
 serval_SOURCES += \
-	userlevel/packet_linux.c
+	userlevel/packet_raw.c
 endif
 
 if OS_BSD
 serval_SOURCES += \
-	userlevel/packet_bpf.c
+	userlevel/packet_raw.c
 endif
 
 SERVAL_INCLUDE_DIR=$(top_builddir)/include
