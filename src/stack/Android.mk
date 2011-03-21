@@ -8,7 +8,6 @@ LOCAL_SRC_FILES := \
 	debug.c \
 	platform.c \
         bst.c \
-	neighbor.c \
         service.c \
 	ctrl_handler.c \
 	af_serval.c \
@@ -37,7 +36,6 @@ SERVAL_HDR = \
 	af_serval.h \
 	ctrl.h \
 	bst.h \
-	neighbor.h \
         service.h \
 	serval_sock.h \
 	serval_udp_sock.h \
