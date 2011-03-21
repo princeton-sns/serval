@@ -18,7 +18,9 @@
 #endif
 #else
 #include <netinet/ip.h>
+#if defined(OS_LINUX)
 #include <endian.h>
+#endif
 #endif
 
 atomic_t serval_nr_socks = ATOMIC_INIT(0);

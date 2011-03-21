@@ -425,10 +425,9 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
         err = wait_event_interruptible(*sk_sleep(c->sock->sk), 
                                        !list_empty(&ssk->accept_queue));
 
-        LOG_DBG("wait returned %d - %s\n", 
-                err, strerror(KERN_ERR(err)));
-         
         if (err < 0) {
+                LOG_ERR("wait returned %d - %s\n", 
+                        err, strerror(KERN_ERR(err)));
                 rsp.error = KERN_ERR(err);
                 goto out;
         }

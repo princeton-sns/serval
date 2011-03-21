@@ -6,7 +6,6 @@
 #include <netinet/ip.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netpacket/packet.h>
 #if !defined(OS_ANDROID)
 #include <net/ethernet.h> 
 #endif
@@ -29,7 +28,7 @@ static int packet_raw_init(struct net_device *dev)
                 return -1;
         }
 
-        /* Bind the packet socket to the device */
+        /* Bind the raw IP socket to the device */
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
 	dev_get_ipv4_addr(dev, &addr.sin_addr);
@@ -76,6 +75,8 @@ static void packet_raw_destroy(struct net_device *dev)
 static int packet_raw_recv(struct net_device *dev)
 {
 	struct sk_buff *skb = NULL;
+	struct sockaddr_in addr;
+        socklen_t addrlen = sizeof(addr);
 	int ret;
 
 	skb = alloc_skb(RCVLEN);
@@ -85,31 +86,33 @@ static int packet_raw_recv(struct net_device *dev)
 		return -1;
 	}
         
-	ret = recv(dev->fd, skb->data, RCVLEN, 0);
+	ret = recvfrom(dev->fd, skb->data, RCVLEN, 0, 
+                       (struct sockaddr *)&addr, &addrlen);
 	
 	if (ret == -1) {
-		LOG_ERR("recvfrom: %s\n", 
+		LOG_ERR("recv: %s\n", 
 			strerror(errno));
 		free_skb(skb);
 		return -1;
 	} else if (ret == 0) {
 		/* Should not happen */
+                LOG_ERR("recv return 0\n");
 		free_skb(skb);
 		return -1;
 	}
         
 
+        /* LOG_DBG("Received %d bytes IP packet\n", ret); */
+
         skb_put(skb, ret);
 	skb->dev = dev;
-	skb_reset_mac_header(skb);
-	//skb->pkt_type = lladdr.sll_pkttype;
+        /* Set network header offset */
+	skb_reset_network_header(skb);
+        /* skb->pkt_type = */
 	skb->protocol = IPPROTO_IP;
 
-	ret = serval_ipv4_rcv(skb);
-	
 	/* Packet should be freed by upper layers */
-
-	return ret;
+	return serval_ipv4_rcv(skb);
 }
 
 static int packet_raw_xmit(struct sk_buff *skb)
@@ -119,6 +122,7 @@ static int packet_raw_xmit(struct sk_buff *skb)
 	int err;
 
 	memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
 	memcpy(&addr.sin_addr, &iph->daddr, sizeof(iph->daddr));
 
 	if (!skb->dev) {
@@ -127,7 +131,10 @@ static int packet_raw_xmit(struct sk_buff *skb)
 		return -1;
 	}
 
-        /* LOG_DBG("sending message len=%u\n", skb->len); */
+        LOG_DBG("sending message len=%u iph=%p skb->data=%p\n", 
+                skb->len,
+                iph,
+                skb->data); 
 
 	err = sendto(skb->dev->fd, skb->data, skb->len, 0, 
 		     (struct sockaddr *)&addr, sizeof(addr));

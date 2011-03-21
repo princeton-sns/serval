@@ -207,7 +207,13 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
         iph->tos = inet->tos;
+#if defined(OS_USER) && defined(OS_BSD)
+        /* BSD/Mac OS X requires tot_len to be in host byte order when
+         * sending over IP raw socket */
+        iph->tot_len = skb->len;
+#else
         iph->tot_len = htons(skb->len);
+#endif
         iph->id = 0;
         iph->frag_off = 0;
         iph->ttl = inet->uc_ttl < 0 ? SERVAL_DEFTTL : inet->uc_ttl;
@@ -408,7 +414,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         }
         */
 
-        err = serval_ipv4_fill_in_hdr(sk, skb, 0,
+        err = serval_ipv4_fill_in_hdr(sk, skb, INADDR_ANY,
                                       SERVAL_SKB_CB(skb)->addr.net_ip.s_addr);
         
         if (err < 0) {

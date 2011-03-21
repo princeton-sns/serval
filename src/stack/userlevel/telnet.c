@@ -6,7 +6,6 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <service.h>
-#include <neighbor.h>
 
 #define TELNET_ADDR "127.0.0.1"
 #define TELNET_PORT 9999
@@ -44,6 +43,7 @@ static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
 	send(tc->sock, buf, ret, 0);	
 }
 
+/*
 static void cmd_neighbors_print(struct telnet_client *tc, char *buf, int buflen)
 {
 	int ret;
@@ -57,6 +57,7 @@ static void cmd_neighbors_print(struct telnet_client *tc, char *buf, int buflen)
 
 	send(tc->sock, buf, ret, 0);	
 }
+*/
 
 static void cmd_quit(struct telnet_client *tc, char *buf, int buflen)
 {
@@ -69,7 +70,7 @@ static struct command command_list[] = {
 	{ "help", "h", "print help (this info)", cmd_help },
 	{ "quit", "q", "quit telnet session", cmd_quit },
 	{ "exit", "e", "quit telnet session", cmd_quit },
-	{ "neighbors", "nt", "print neighbor table", cmd_neighbors_print },
+/*	{ "neighbors", "nt", "print neighbor table", cmd_neighbors_print }, */
 	{ "services", "st", "print service table", cmd_services_print },
 	{ NULL, NULL, NULL, NULL }
 };

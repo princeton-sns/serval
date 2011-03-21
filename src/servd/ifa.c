@@ -24,7 +24,6 @@ extern int servd_send_join(const char *ifname);
 
 static const char *blacklist[] = {
         "lo",
-        "vboxnet",
         NULL        
 };
 

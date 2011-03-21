@@ -15,7 +15,6 @@
 #endif
 #if defined(OS_USER)
 #include <signal.h>
-#include <neighbor.h>
 #endif
 #include <serval_request_sock.h>
 #include <service.h>
@@ -464,13 +463,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         LOG_DBG("SYN seqno=%u\n", ntohl(conn_ext->seqno));
 
-#if defined(OS_USER)
-        /* Cache neighbor */
-        neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
-                     skb->dev, eth_hdr(skb)->h_source, 
-                     ETH_ALEN, GFP_ATOMIC);
-#endif
-
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
 
@@ -913,12 +905,6 @@ static int serval_srv_request_state_process(struct sock *sk,
                 ntohl(conn_ext->seqno), 
                 ntohl(conn_ext->ackno));
 
-#if defined(OS_USER)
-        /* Cache neighbor */
-        neighbor_add((struct net_addr *)&ip_hdr(skb)->saddr, 32, 
-                     skb->dev, eth_hdr(skb)->h_source, 
-                     ETH_ALEN, GFP_ATOMIC);
-#endif
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
         /* Let user know we are connected. */

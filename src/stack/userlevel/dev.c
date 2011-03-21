@@ -23,7 +23,6 @@
 #include "packet.h"
 #include <input.h>
 #include <service.h>
-#include <neighbor.h>
 
 #define NETDEV_HASHBITS    8
 #define NETDEV_HASHENTRIES (1 << NETDEV_HASHBITS)
@@ -516,9 +515,6 @@ int netdev_populate_table(int sizeof_priv,
                        prefix_len++;
              
                 service_add(NULL, 0, &dev->ipv4.broadcast, 4, dev, NULL, 0);
-                neighbor_add((struct net_addr *)&dev->ipv4.broadcast, 
-                             prefix_len, 
-                             dev, dev->broadcast, dev->addr_len, 0);
                
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
@@ -535,9 +531,6 @@ int netdev_populate_table(int sizeof_priv,
         {
                 char buf[2000];
                 services_print(buf, 2000);
-                printf("%s\n", buf);
-
-                neighbors_print(buf, 2000);
                 printf("%s\n", buf);
         }
 #endif
@@ -790,7 +783,6 @@ void netdev_fini(void)
           	read_unlock(&dev_base_lock);       
                      
                 /*
-                  neighbor_del_dev(dev->name);
                   service_del_dev(dev->name);
                 */
 
