@@ -64,7 +64,11 @@ struct sockaddr_sv {
 };
 
 struct flow_id {
-        uint32_t s_id;
+        union {
+                uint8_t s_id8[4];
+                uint16_t s_id16[2];
+                uint32_t s_id;       
+        };
 };
 
 struct net_addr {

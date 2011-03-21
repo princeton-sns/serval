@@ -687,11 +687,8 @@ static void *client_thread(void *arg)
 		ret = select(nfds, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {
-			if (errno == EINTR) {
-				LOG_INF("client %u select interrupted\n", 
-					c->id);
-				continue;
-			}
+			if (errno == EINTR)
+                                continue;
 			/* Error */
 			LOG_ERR("client %u select error...\n",
 				c->id);

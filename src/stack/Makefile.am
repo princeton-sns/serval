@@ -6,8 +6,6 @@ serval_SOURCES = \
 	bst.c \
 	neighbor.c \
 	service.c \
-	input.c \
-	output.c \
 	ctrl_handler.c \
 	af_serval.c \
 	serval_sock.c \
@@ -17,6 +15,7 @@ serval_SOURCES = \
 	serval_tcp.c \
 	userlevel/dst.c \
 	userlevel/dev.c \
+	userlevel/packet_raw.c \
 	userlevel/sock.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
@@ -28,16 +27,6 @@ serval_SOURCES = \
 	userlevel/telnet.c \
 	userlevel/serval.c
 
-if OS_LINUX
-serval_SOURCES += \
-	userlevel/packet_linux.c
-endif
-
-if OS_BSD
-serval_SOURCES += \
-	userlevel/packet_bpf.c
-endif
-
 SERVAL_INCLUDE_DIR=$(top_builddir)/include
 STACK_DIR=$(top_builddir)/src/stack
 
@@ -47,8 +36,6 @@ SERVAL_HDR = \
 	bst.h \
 	neighbor.h \
 	service.h \
-	input.h \
-	output.h \
 	serval_sock.h \
 	serval_udp_sock.h \
 	serval_tcp_sock.h \
@@ -84,6 +71,7 @@ serval_include_HEADERS = \
 
 serval_CPPFLAGS =-I$(SERVAL_INCLUDE_DIR) -I$(STACK_DIR)
 serval_LDFLAGS =-lpthread 
+serval_CFLAGS =
 
 if OS_LINUX
 serval_LDFLAGS +=-lrt

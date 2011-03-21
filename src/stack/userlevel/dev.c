@@ -674,6 +674,9 @@ void *dev_thread(void *arg)
                 ret = poll(fds, 2, -1);
 
                 if (ret == -1) {
+                        if (errno == EINTR)
+                                continue;
+
                         LOG_ERR("poll error: %s\n", strerror(errno));
                         dev->should_exit = 1;
                 } else if (ret == 0) {
@@ -714,10 +717,14 @@ void *dev_thread(void *arg)
         return NULL;
 }
 
+#define DIRECT_TX 1
+
 int dev_queue_xmit(struct sk_buff *skb)
 {
         struct net_device *dev = skb->dev;
-
+#if defined(DIRECT_TX)
+        dev->pack_ops->xmit(skb);
+#else
         if (!dev || 
             !dev->pack_ops || 
             !dev->pack_ops->xmit) {
@@ -740,7 +747,7 @@ int dev_queue_xmit(struct sk_buff *skb)
                 dev_xmit(dev);
                 else */
         dev_signal(dev, SIGNAL_TXQUEUE);
-
+#endif
         return 0;
 }
 

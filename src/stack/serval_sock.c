@@ -11,8 +11,14 @@
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
+#if defined(__BIG_ENDIAN)
+#define __BYTE_ORDER __BIG_ENDIAN
+#elif defined(__LITTLE_ENDIAN)
+#define __BYTE_ORDER __LITTLE_ENDIAN
+#endif
 #else
 #include <netinet/ip.h>
+#include <endian.h>
 #endif
 
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
@@ -131,8 +137,13 @@ out:
 
 struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
         return serval_sock_lookup(&established_table, &init_net, 
-                                  flowid, sizeof(*flowid));
+                                  &flowid->s_id8[3], sizeof(flowid->s_id8[3]));
+#else
+        return serval_sock_lookup(&established_table, &init_net, 
+                                  &flowid->s_id8[0], sizeof(flowid->s_id8[0]));
+#endif
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
@@ -159,7 +170,7 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
                                              struct sock *sk)
 {
         return serval_hashfn(sock_net(sk), 
-                             &serval_sk(sk)->local_flowid,
+                             serval_sk(sk)->hash_key,
                              serval_sk(sk)->hash_key_len,
                              table->mask);
 }
@@ -180,7 +191,7 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
         sk->sk_hash = table->hashfn(table, sk);
 
         slot = &table->hash[sk->sk_hash];
-
+        
         /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
         slot->count++;
@@ -207,8 +218,13 @@ static void __serval_sock_hash(struct sock *sk)
             sk->sk_state == SERVAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
-                ssk->hash_key = &ssk->local_flowid;
-                ssk->hash_key_len = sizeof(ssk->local_flowid);
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+                ssk->hash_key = &ssk->local_flowid.s_id8[3];
+                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[3]);
+#else
+                ssk->hash_key = &ssk->local_flowid.s_id8[0];
+                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[0]);
+#endif
                 __serval_table_hash(&established_table, sk);
         } else { 
                 /* We use the service table for listening sockets. See

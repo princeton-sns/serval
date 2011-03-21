@@ -25,7 +25,7 @@ extern int serval_srv_rcv(struct sk_buff *);
 static inline void ip_send_check(struct iphdr *iph)
 {
         iph->check = 0;
-        iph->check = in_cksum(iph, iph->ihl << 2);
+        /* iph->check = in_cksum(iph, iph->ihl << 2); */
 }
 
 int serval_ipv4_rcv(struct sk_buff *skb)
@@ -97,7 +97,13 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         /* Calculate checksum */
         ip_send_check(ip_hdr(skb));
 
-        err = serval_output(skb);
+        err = dev_queue_xmit(skb);
+
+        if (err < 0) {
+		LOG_ERR("packet_xmit failed\n");
+	}
+        
+        //err = serval_output(skb);
 #endif
         return err;
 }
@@ -379,7 +385,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 
 	rcu_read_unlock();
 #else
-        struct net_addr saddr;
+        //struct net_addr saddr;
 
         /*
           FIXME: We should not rely on an outgoing interface here.
@@ -387,6 +393,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
           kernel. But, we currently do not have an IP routing table
           for userlevel.
          */
+        /*
         if (!skb->dev) {
                 LOG_ERR("no device set in skb!\n");
                 err = -ENODEV;
@@ -399,8 +406,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 err = -ENODEV;
                 goto drop;
         }
+        */
 
-        err = serval_ipv4_fill_in_hdr(sk, skb, saddr.net_ip.s_addr,
+        err = serval_ipv4_fill_in_hdr(sk, skb, 0,
                                       SERVAL_SKB_CB(skb)->addr.net_ip.s_addr);
         
         if (err < 0) {
