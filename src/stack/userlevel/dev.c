@@ -679,7 +679,7 @@ void *dev_thread(void *arg)
                 } else if (ret == 0) {
                         /* No timeout set, should not happen */
                 } else {
-                        if (fds[1].revents) {
+                        if (fds[1].revents & POLLIN) {
                                 enum signal s = dev_read_signal(dev);
 
                                 switch (s) {
@@ -696,9 +696,15 @@ void *dev_thread(void *arg)
                                 }
                         } else if (fds[1].revents & POLLERR) {
                                 LOG_ERR("signal error\n");
+                        } else if (fds[1].revents & POLLHUP) {
+                                LOG_DBG("POLLHUP on pipe\n");
                         }
-                        if (fds[0].revents) {
+                        if (fds[0].revents & POLLIN) {
                                 ret = dev->pack_ops->recv(dev);
+                        } else if (fds[0].revents & POLLHUP) {
+                                LOG_DBG("socket POLLHUP\n");
+                        } else if (fds[0].revents & POLLERR) {
+                                LOG_ERR("socket error\n");
                         }
                 }
         }

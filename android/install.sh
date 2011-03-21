@@ -56,7 +56,7 @@ LIB_FILES="libstack.so libserval.so libservalnet_jni.so"
 
 BIN_HOST_PREFIX=
 BIN_PATH_PREFIX="system/bin"
-BIN_FILES="servd udp_client udp_server"
+BIN_FILES="servd udp_client udp_server iwconfig"
 
 # Binaries exectuting with root permissions
 BIN_FILES_SU="serval"
@@ -80,10 +80,10 @@ function install_file()
 	local perm=$3
     fi
 
-    $ADB -s $dev push $src $dir/$file
-    #$ADB -s $dev push $src /sdcard/$file
-    #$ADB -s $dev shell su -c "dd if=/sdcard/$file of=$dir/$file"
-    #$ADB -s $dev shell rm -f /sdcard/$file
+    #$ADB -s $dev push $src $dir/$file
+    $ADB -s $dev push $src /sdcard/$file
+    $ADB -s $dev shell su -c "dd if=/sdcard/$file of=$dir/$file"
+    $ADB -s $dev shell rm /sdcard/$file
     $ADB -s $dev shell su -c "chmod $perm $dir/$file"
 }
 
