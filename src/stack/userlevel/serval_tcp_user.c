@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include "serval_tcp.h"
 
 /* tcp.c */
@@ -46,22 +47,12 @@ int sysctl_tcp_abc = 0;
 /* tcp_output.c */
 int sysctl_tcp_retrans_collapse = 1;
 
-/* People can turn this on to work with those rare, broken TCPs that
- * interpret the window field as a signed quantity.
- */
-int sysctl_tcp_workaround_signed_windows = 0;
-
 /* This limits the percentage of the congestion window which we
  * will allow a single TSO frame to consume.  Building TSO frames
  * which are too large can cause TCP streams to be bursty.
  */
-int sysctl_tcp_tso_win_divisor = 3;
-
 int sysctl_tcp_mtu_probing = 0;
 int sysctl_tcp_base_mss = 512;
-
-/* By default, RFC2861 behavior.  */
-int sysctl_tcp_slow_start_after_idle = 1;
 
 int sysctl_tcp_cookie_size = 0; /* TCP_COOKIE_MAX */
 

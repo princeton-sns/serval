@@ -42,6 +42,7 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 #include <serval/lock.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
 
 #if !defined(OS_LINUX)
 #define PACKET_HOST             0               /* To us.  */
@@ -59,8 +60,28 @@ struct sk_buff;
 struct dst_entry;
 typedef unsigned int sk_buff_data_t;
 
-#define FREE_SKB(skb) free_skb(skb)
-#define ALLOC_SKB(sz, prio) alloc_skb(sz)
+/* Don't change this without changing skb_csum_unnecessary! */
+#define CHECKSUM_NONE 0
+#define CHECKSUM_UNNECESSARY 1
+#define CHECKSUM_COMPLETE 2
+#define CHECKSUM_PARTIAL 3
+
+#define L1_CACHE_SHIFT		5
+#define L1_CACHE_BYTES		(1 << L1_CACHE_SHIFT)
+
+#define SMP_CACHE_BYTES L1_CACHE_BYTES
+
+#define SKB_DATA_ALIGN(X)	(((X) + (SMP_CACHE_BYTES - 1)) & \
+				 ~(SMP_CACHE_BYTES - 1))
+#define SKB_WITH_OVERHEAD(X)	\
+	((X) - SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#define SKB_MAX_ORDER(X, ORDER) \
+	SKB_WITH_OVERHEAD((PAGE_SIZE << (ORDER)) - (X))
+#define SKB_MAX_HEAD(X)		(SKB_MAX_ORDER((X), 0))
+#define SKB_MAX_ALLOC		(SKB_MAX_ORDER(0, 2))
+
+#define FREE_SKB(skb) kfree_skb(skb)
+#define ALLOC_SKB(sz, prio) alloc_skb(sz, 0)
 
 #define SKB_LINEAR_ASSERT(skb) BUG_ON(skb_is_nonlinear(skb))
 
@@ -72,8 +93,26 @@ struct sk_buff_head {
 	spinlock_t	lock;
 };
 
+/* To allow 64K frame to be packed as single skb without frag_list */
+#define MAX_SKB_FRAGS (65536/PAGE_SIZE + 2)
+
+typedef struct skb_frag_struct skb_frag_t;
+
+struct skb_frag_struct {
+	struct page *page;
+	uint32_t page_offset;
+	uint32_t size;
+};
+
 struct skb_shared_info {
+	unsigned short	nr_frags;
+	unsigned short	gso_size;
+	/* Warning: this field is not always filled in (UFO)! */
+	unsigned short	gso_segs;
+	unsigned short  gso_type;
+	struct sk_buff	*frag_list;
 	atomic_t	dataref;
+	skb_frag_t	frags[MAX_SKB_FRAGS];
 };
 
 #define skb_shinfo(SKB)	((struct skb_shared_info *)(skb_end_pointer(SKB)))
@@ -376,9 +415,21 @@ static inline int skb_dst_is_noref(const struct sk_buff *skb)
 	return (skb->_skb_refdst & SKB_DST_NOREF) && skb_dst(skb);
 }
 
-void __free_skb(struct sk_buff *skb);
-void free_skb(struct sk_buff *);
-struct sk_buff *alloc_skb(unsigned int size);
+void __kfree_skb(struct sk_buff *skb);
+void kfree_skb(struct sk_buff *);
+struct sk_buff *__alloc_skb(unsigned int size, int fclone, int node);
+
+static inline struct sk_buff *alloc_skb(unsigned int size,
+					gfp_t priority)
+{
+	return __alloc_skb(size, 0, -1);
+}
+
+static inline struct sk_buff *alloc_skb_fclone(unsigned int size,
+					       gfp_t priority)
+{
+	return __alloc_skb(size, 1, -1);
+}
 
 static inline void __skb_trim(struct sk_buff *skb, unsigned int len)
 {
@@ -819,8 +870,52 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 {
 	struct sk_buff *skb;
 	while ((skb = __skb_dequeue(list)) != NULL)
-		free_skb(skb);
+		kfree_skb(skb);
 }
+
+static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)
+{
+        /*
+	const int off = skb->len;
+
+	if (skb->ip_summed == CHECKSUM_NONE) {
+		int err = 0;
+
+		__wsum csum = csum_and_copy_from_user(from, skb_put(skb, copy),
+							    copy, 0, &err);
+		if (!err) {
+			skb->csum = csum_block_add(skb->csum, csum, off);
+			return 0;
+		}
+	} else if (!copy_from_user(skb_put(skb, copy), from, copy))
+		return 0;
+
+	__skb_trim(skb, off);
+        */
+	return -EFAULT;
+}
+
+#define skb_queue_walk(queue, skb)                                      \
+        for (skb = (queue)->next; (skb != (struct sk_buff *)(queue));	\
+             skb = skb->next)
+
+#define skb_queue_walk_safe(queue, skb, tmp)                            \
+        for (skb = (queue)->next, tmp = skb->next;			\
+             skb != (struct sk_buff *)(queue);				\
+             skb = tmp, tmp = skb->next)
+
+#define skb_queue_walk_from(queue, skb)                                 \
+        for (; (skb != (struct sk_buff *)(queue));                      \
+             skb = skb->next)
+
+#define skb_queue_walk_from_safe(queue, skb, tmp)                       \
+        for (tmp = skb->next;						\
+             skb != (struct sk_buff *)(queue);				\
+             skb = tmp, tmp = skb->next)
+
+#define skb_queue_reverse_walk(queue, skb)                              \
+        for (skb = (queue)->prev; (skb != (struct sk_buff *)(queue));	\
+             skb = skb->prev)
 
 struct sk_buff *sock_alloc_send_skb(struct sock *sk,
                                     unsigned long size,

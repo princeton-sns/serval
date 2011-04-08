@@ -11,6 +11,10 @@ bin_PROGRAMS = \
 	udp_servern \
 	udp_client \
 	udp_clientn \
+	tcp_client \
+	tcp_clientn \
+	tcp_server \
+	tcp_servern \
 	tcp_inet_client \
 	addservice
 
@@ -80,6 +84,25 @@ udp_client_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval
 udp_clientn_SOURCES = udp_client.c
 udp_clientn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
 udp_clientn_LDFLAGS =
+
+tcp_client_SOURCES = tcp_client.c common.c
+tcp_client_CPPFLAGS =-I$(top_srcdir)/include
+tcp_client_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval -lcrypto
+
+tcp_clientn_SOURCES = tcp_client.c common.c
+tcp_clientn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
+tcp_clientn_LDFLAGS =-lcrypto
+
+tcp_server_SOURCES = tcp_server.c common.c
+tcp_server_CPPFLAGS =-I$(top_srcdir)/include
+tcp_server_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval -lcrypto
+
+tcp_servern_SOURCES = tcp_server.c common.c
+tcp_servern_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
+tcp_servern_LDFLAGS =-lcrypto
+
+noinst_HEADERS = \
+	common.h
 
 clean-local:
 	rm -f *~

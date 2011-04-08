@@ -33,21 +33,21 @@ static void skb_release_all(struct sk_buff *skb)
 	skb_release_data(skb);
 }
 
-void __free_skb(struct sk_buff *skb)
+void __kfree_skb(struct sk_buff *skb)
 {
 	skb_release_all(skb);
 	free(skb);
 }
 
-void free_skb(struct sk_buff *skb)
+void kfree_skb(struct sk_buff *skb)
 {
 	if (likely(!atomic_dec_and_test(&skb->users)))
 		return;
 
-	__free_skb(skb);
+	__kfree_skb(skb);
 }
 
-struct sk_buff *alloc_skb(unsigned int size)
+struct sk_buff *__alloc_skb(unsigned int size, int fclone, int node)
 {
 	unsigned char *data;
 	struct sk_buff *skb;
@@ -203,7 +203,7 @@ struct sk_buff *skb_copy(const struct sk_buff *skb, gfp_t gfp_mask)
 	 */
 	struct sk_buff *n;
 
-	n = alloc_skb(skb->end + skb->data_len);
+	n = alloc_skb(skb->end + skb->data_len, gfp_mask);
 
 	if (!n)
 		return NULL;
@@ -242,7 +242,7 @@ struct sk_buff *pskb_copy(struct sk_buff *skb, gfp_t gfp_mask)
 	 */
 	struct sk_buff *n;
 
-	n = alloc_skb(skb->end);
+	n = alloc_skb(skb->end, gfp_mask);
 
 	if (!n)
 		goto out;
@@ -311,7 +311,7 @@ void skb_queue_purge(struct sk_buff_head *list)
 {
 	struct sk_buff *skb;
 	while ((skb = skb_dequeue(list)) != NULL)
-		free_skb(skb);
+		kfree_skb(skb);
 }
 
 /**

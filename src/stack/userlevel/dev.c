@@ -618,7 +618,7 @@ static inline void dev_queue_purge(struct net_device *dev)
 
 	while ((skb = skb_dequeue(&dev->tx_queue.q)) != NULL) {
 		LOG_DBG("Freeing skb %p\n", skb);
-		free_skb(skb);
+		kfree_skb(skb);
 	}
 }
 
@@ -638,7 +638,7 @@ int dev_xmit(struct net_device *dev)
                         }
                 } else {
                         LOG_ERR("No device set in skb\n");
-                        free_skb(skb);
+                        kfree_skb(skb);
                 }
         }
 
@@ -722,13 +722,13 @@ int dev_queue_xmit(struct sk_buff *skb)
             !dev->pack_ops || 
             !dev->pack_ops->xmit) {
                 LOG_ERR("No device or packet ops\n");
-                free_skb(skb);
+                kfree_skb(skb);
                 return -1;
         }
         
         if (dev->tx_queue_len == dev->tx_queue.q.qlen) {
                 LOG_ERR("Max tx_queue_len reached, dropping packet\n");
-                free_skb(skb);
+                kfree_skb(skb);
                 return 0;
         }
         

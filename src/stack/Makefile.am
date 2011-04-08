@@ -12,14 +12,19 @@ serval_SOURCES = \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \
+	serval_tcp_input.c \
+	serval_tcp_output.c \
+	serval_tcp_cong.c \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/packet_raw.c \
 	userlevel/sock.c \
+	userlevel/stream.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
 	userlevel/timer.c \
 	userlevel/wait.c \
+	userlevel/serval_tcp_user.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/ctrl.c \
@@ -39,6 +44,8 @@ SERVAL_HDR = \
 	serval_tcp_sock.h \
 	serval_ipv4.h \
 	serval_srv.h \
+	serval_tcp.h \
+	userlevel/serval_tcp_user.h \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
 	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \
@@ -90,6 +97,8 @@ SERVAL_KERNEL_SRC = \
 	linux/module.c \
 	linux/log.c \
 	linux/splice.c \
+	linux/user_dma.c \
+	linux/iovlock.c \
 	debug.c \
 	platform.c \
 	bst.c \
@@ -100,7 +109,10 @@ SERVAL_KERNEL_SRC = \
 	serval_srv.c \
 	serval_ipv4.c \
 	serval_udp.c \
-	serval_tcp.c
+	serval_tcp.c \
+	serval_tcp_input.c \
+	serval_tcp_output.c \
+	serval_tcp_cong.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \

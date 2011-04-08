@@ -173,6 +173,11 @@ struct serval_table {
 	unsigned int mask;
 };
 
+static inline int serval_sock_is_master(struct sock *sk)
+{
+        return 1;
+}
+
 int serval_sock_get_flowid(struct flow_id *sid);
 
 static inline unsigned int serval_hashfn(struct net *net, 

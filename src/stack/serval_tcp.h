@@ -131,6 +131,10 @@
 					 * minimal timewait lifetime.
 					 */
 
+
+/* serval_tcp_input.c */
+void serval_tcp_cwnd_application_limited(struct sock *sk);
+
 /* write queue abstraction */
 static inline void serval_tcp_write_queue_purge(struct sock *sk)
 {
@@ -354,7 +358,7 @@ extern int sysctl_tcp_mtu_probing;
 extern int sysctl_tcp_base_mss;
 extern int sysctl_tcp_workaround_signed_windows;
 extern int sysctl_tcp_slow_start_after_idle;
-extern int sysctl_tcp_max_ssthresh;
+extern int sysctl_serval_tcp_max_ssthresh;
 extern int sysctl_tcp_cookie_size;
 extern int sysctl_tcp_thin_linear_timeouts;
 extern int sysctl_tcp_thin_dupack;
@@ -386,6 +390,102 @@ static inline void serval_tcp_fast_path_check(struct sock *sk)
 		serval_tcp_fast_path_on(tp);
 }
 
+static inline void serval_tcp_set_ca_state(struct sock *sk, const u8 ca_state)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (tp->ca_ops->set_state)
+		tp->ca_ops->set_state(sk, ca_state);
+	tp->ca_state = ca_state;
+}
+
+static inline void serval_tcp_ca_event(struct sock *sk, 
+				       const enum tcp_ca_event event)
+{
+	const struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	
+	if (tp->ca_ops->cwnd_event)
+		tp->ca_ops->cwnd_event(sk, event);
+}
+
+static inline unsigned int serval_tcp_left_out(const struct serval_tcp_sock *tp)
+{
+	return tp->sacked_out + tp->lost_out;
+}
+
+/* This determines how many packets are "in the network" to the best
+ * of our knowledge.  In many cases it is conservative, but where
+ * detailed information is available from the receiver (via SACK
+ * blocks etc.) we can make more aggressive calculations.
+ *
+ * Use this for decisions involving congestion control, use just
+ * tp->packets_out to determine if the send queue is empty or not.
+ *
+ * Read this equation as:
+ *
+ *	"Packets sent once on transmission queue" MINUS
+ *	"Packets left network, but not honestly ACKed yet" PLUS
+ *	"Packets fast retransmitted"
+ */
+static inline 
+unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
+{
+	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
+}
+
+#define TCP_INFINITE_SSTHRESH	0x7fffffff
+
+static inline 
+int serval_tcp_in_initial_slowstart(const struct serval_tcp_sock *tp)
+{
+	return tp->snd_ssthresh >= TCP_INFINITE_SSTHRESH;
+}
+
+/* If cwnd > ssthresh, we may raise ssthresh to be half-way to cwnd.
+ * The exception is rate halving phase, when cwnd is decreasing towards
+ * ssthresh.
+ */
+static inline __u32 serval_tcp_current_ssthresh(const struct sock *sk)
+{
+	const struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	if ((1 << tp->ca_state) & (TCPF_CA_CWR | TCPF_CA_Recovery))
+		return tp->snd_ssthresh;
+	else
+		return max(tp->snd_ssthresh,
+			   ((tp->snd_cwnd >> 1) +
+			    (tp->snd_cwnd >> 2)));
+}
+
+void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh);
+__u32 serval_tcp_init_cwnd(struct serval_tcp_sock *tp, struct dst_entry *dst);
+
+/* Slow start with delack produces 3 packets of burst, so that
+ * it is safe "de facto".  This will be the default - same as
+ * the default reordering threshold - but if reordering increases,
+ * we must be able to allow cwnd to burst at least this much in order
+ * to not pull it back when holes are filled.
+ */
+static __inline__ __u32 serval_tcp_max_burst(const struct serval_tcp_sock *tp)
+{
+	return tp->reordering;
+}
+
+/* Returns end sequence number of the receiver's advertised window */
+static inline u32 serval_tcp_wnd_end(const struct serval_tcp_sock *tp)
+{
+	return tp->snd_una + tp->snd_wnd;
+}
+
+int serval_tcp_is_cwnd_limited(const struct sock *sk, u32 in_flight);
+
+static inline void serval_tcp_minshall_update(struct serval_tcp_sock *tp, 
+					      unsigned int mss,
+					      const struct sk_buff *skb)
+{
+	if (skb->len < mss)
+		tp->snd_sml = TCP_SKB_CB((struct sk_buff *)skb)->end_seq;
+}
+
 static inline void serval_tcp_check_probe_timer(struct sock *sk)
 {
 	/*
@@ -398,5 +498,37 @@ static inline void serval_tcp_check_probe_timer(struct sock *sk)
 					  icsk->icsk_rto, TCP_RTO_MAX);
 	*/
 }
+
+/* Prequeue for VJ style copy to user, combined with checksumming. */
+
+static inline void serval_tcp_prequeue_init(struct serval_tcp_sock *tp)
+{
+	tp->ucopy.task = NULL;
+	tp->ucopy.len = 0;
+	tp->ucopy.memory = 0;
+	skb_queue_head_init(&tp->ucopy.prequeue);
+#ifdef CONFIG_NET_DMA
+	tp->ucopy.dma_chan = NULL;
+	tp->ucopy.wakeup = 0;
+	tp->ucopy.pinned_list = NULL;
+	tp->ucopy.dma_cookie = 0;
+#endif
+}
+
+extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
+
+#if defined(OS_LINUX_KERNEL)
+#include <linux/tcp.h>
+#include <linux/ip.h>
+#endif
+
+#if defined(OS_USER)
+#include <netinet/ip.h>
+#if defined(OS_BSD)
+#include <serval/platform_tcpip.h>
+#else
+#include <netinet/tcp.h>
+#endif
+#endif /* OS_USER */
 
 #endif /* _SERVAL_TCP_H_ */

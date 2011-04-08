@@ -9,7 +9,7 @@
 
 int dst_discard(struct sk_buff *skb)
 {
-	free_skb(skb);
+	kfree_skb(skb);
 	return 0;
 }
 

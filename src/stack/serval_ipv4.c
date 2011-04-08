@@ -25,6 +25,7 @@ extern int serval_srv_rcv(struct sk_buff *);
 static inline void ip_send_check(struct iphdr *iph)
 {
         iph->check = 0;
+        /* Set by kernel if 0 */
         /* iph->check = in_cksum(iph, iph->ihl << 2); */
 }
 
