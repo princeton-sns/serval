@@ -354,7 +354,7 @@ void __wake_up_sync(wait_queue_head_t *q, unsigned int mode, int nr_exclusive)
         __wake_up_sync_key(q, mode, nr_exclusive, NULL);
 }
 
-int signal_pending(pthread_t thr)
+int signal_pending(struct task_struct *task)
 {
         int ret = 0;
         struct pollfd fds[2];

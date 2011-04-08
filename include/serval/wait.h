@@ -21,9 +21,13 @@ typedef int (*wait_queue_func_t)(wait_queue_t *wait,
 int default_wake_function(wait_queue_t *wait, unsigned mode, 
                           int flags, void *key);
 
+struct task_struct {
+        pthread_t thread;
+};
+
 struct __wait_queue {
 	unsigned int flags;
-	pthread_t private_data;
+	struct task_struct *private_data;
 	wait_queue_func_t func;
 	pthread_mutex_t lock;
     int pipefd[2];
@@ -37,7 +41,7 @@ struct __wait_queue_head {
 
 typedef struct __wait_queue_head wait_queue_head_t;
 
-#define current (pthread_self())
+#define current ((struct task_struct *)(pthread_self()))
 
 #define WQ_FLAG_EXCLUSIVE 0x1
 
@@ -157,7 +161,7 @@ static inline void __remove_wait_queue(wait_queue_head_t *head,
 #define MAX_SCHEDULE_TIMEOUT LONG_MAX
 #define ERESTARTSYS 200
 
-int signal_pending(pthread_t thr);
+int signal_pending(struct task_struct *task);
 
 signed long schedule_timeout(signed long timeo);
 #define schedule(timeo) schedule_timeout(MAX_SCHEDULE_TIMEOUT)

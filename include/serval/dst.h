@@ -12,6 +12,10 @@
 #if defined(OS_USER)
 #include <sys/types.h>
 
+#if defined(OS_LINUX)
+#include <linux/rtnetlink.h>
+#endif
+
 struct service_entry;
 struct sk_buff;
 
@@ -55,6 +59,8 @@ struct dst_entry {
 
 	struct  dst_ops	        *ops;
 
+	u32			metrics[RTAX_MAX];
+
 	atomic_t		__refcnt;	/* client references	*/
 	int			__use;
 	unsigned long		lastuse;
@@ -64,6 +70,12 @@ struct dst_entry {
 	};
 };
 
+
+static inline u32
+dst_metric(const struct dst_entry *dst, int metric)
+{
+	return dst->metrics[metric-1];
+}
 
 static inline void dst_hold(struct dst_entry * dst)
 {

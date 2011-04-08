@@ -44,9 +44,6 @@
 #error Wordsize not 32 or 64
 #endif
 
-typedef uint64_t u64;
-typedef uint32_t u32;
-
 static inline u64 hash_64(u64 val, unsigned int bits)
 {
 	u64 hash = val;

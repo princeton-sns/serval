@@ -64,7 +64,7 @@ void sk_stream_write_space(struct sock *sk)
  */
 int sk_stream_wait_connect(struct sock *sk, long *timeo_p)
 {
-	pthread_t tsk = pthread_self();
+	struct task_struct *tsk = current;
 	DEFINE_WAIT(wait);
 	int done;
 

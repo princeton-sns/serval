@@ -32,6 +32,10 @@ src/test/udp_client
 src/test/udp_clientn
 src/test/udp_server
 src/test/udp_servern
+src/test/tcp_client
+src/test/tcp_clientn
+src/test/tcp_server
+src/test/tcp_servern
 src/javasock/classes.list
 src/javasock/sources.list
 android/ServalChat/bin/

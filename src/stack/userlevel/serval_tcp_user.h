@@ -1,5 +1,8 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _SERVAL_TCP_USER_H_
 #define _SERVAL_TCP_USER_H_
+
+#include <netinet/tcp.h>
 
 /* Flags in tp->nonagle */
 #define TCP_NAGLE_OFF		1	/* Nagle's algo is disabled */
@@ -181,5 +184,52 @@ struct tcp_congestion_ops {
 #define TCP_CHECK_TIMER(sk) do { } while (0)
 
 extern int sysctl_tcp_adv_win_scale;
+
+#define TCPF_CA_Open	(1<<TCP_CA_Open)
+#define TCPF_CA_Disorder (1<<TCP_CA_Disorder)
+#define TCPF_CA_CWR	(1<<TCP_CA_CWR)
+#define TCPF_CA_Recovery (1<<TCP_CA_Recovery)
+#define TCPF_CA_Loss	(1<<TCP_CA_Loss)
+
+
+
+/* - key database */
+struct tcp_md5sig_key {
+	u8			*key;
+	u8			keylen;
+};
+
+/* empty to "strongly type" an otherwise void parameter.
+ */
+struct request_values {
+};
+
+/* Using SHA1 for now, define some constants.
+ */
+#define SHA_DIGEST_WORDS 5
+#define SHA_MESSAGE_BYTES (512 /*bits*/ / 8)
+#define COOKIE_DIGEST_WORDS (SHA_DIGEST_WORDS)
+#define COOKIE_MESSAGE_WORDS (SHA_MESSAGE_BYTES / 4)
+#define COOKIE_WORKSPACE_WORDS (COOKIE_DIGEST_WORDS + COOKIE_MESSAGE_WORDS)
+
+/**
+ *	struct tcp_extend_values - tcp_ipv?.c to tcp_output.c workspace.
+ *
+ *	As tcp_request_sock has already been extended in other places, the
+ *	only remaining method is to pass stack values along as function
+ *	parameters.  These parameters are not needed after sending SYNACK.
+ *
+ * @cookie_bakery:	cryptographic secret and message workspace.
+ *
+ * @cookie_plus:	bytes in authenticator/cookie option, copied from
+ *			struct tcp_options_received (above).
+ */
+struct tcp_extend_values {
+	struct request_values		rv;
+	u32				cookie_bakery[COOKIE_WORKSPACE_WORDS];
+	u8				cookie_plus:6,
+					cookie_out_never:1,
+					cookie_in_always:1;
+};
 
 #endif /* _SERVAL_TCP_USER_H_ */

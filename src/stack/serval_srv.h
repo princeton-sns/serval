@@ -5,6 +5,7 @@
 #include <serval/skbuff.h>
 #include <serval/sock.h>
 #include <netinet/serval.h>
+#include <serval_sock.h>
 
 int serval_srv_xmit_skb(struct sk_buff *skb);
 

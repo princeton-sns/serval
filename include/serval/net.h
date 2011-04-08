@@ -46,8 +46,13 @@ typedef enum {
 struct sock;
 struct net;
 
+struct fasync_struct {
+        int dummy;
+};
+
 struct socket_wq {
 	wait_queue_head_t	wait;
+	struct fasync_struct	*fasync_list;
 };
 
 struct socket {
@@ -137,6 +142,8 @@ struct net {
 };
 
 extern struct net init_net;
+
+#define net_ratelimit() 0
 
 #endif /* OS_LINUX_KERNEL */
 
