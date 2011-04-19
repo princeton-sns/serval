@@ -132,6 +132,12 @@
 					 */
 
 
+unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu);
+unsigned int serval_tcp_current_mss(struct sock *sk);
+
+void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
+				      int nonagle);
+
 /* serval_tcp_input.c */
 void serval_tcp_cwnd_application_limited(struct sock *sk);
 
@@ -263,12 +269,27 @@ static inline int serval_tcp_write_queue_empty(struct sock *sk)
 static inline void serval_tcp_push_pending_frames(struct sock *sk)
 {
 	if (serval_tcp_send_head(sk)) {
-		/*
-		struct tcp_sock *tp = tcp_sk(sk);
+		struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-		__tcp_push_pending_frames(sk, tcp_current_mss(sk), tp->nonagle);
-		*/
+		__serval_tcp_push_pending_frames(sk, serval_tcp_current_mss(sk), 
+						 tp->nonagle);
 	}
+}
+
+
+
+/* The length of constant payload data.  Note that s_data_desired is
+ * overloaded, depending on s_data_constant: either the length of constant
+ * data (returned here) or the limit on variable data.
+ */
+static inline int serval_tcp_s_data_size(const struct serval_tcp_sock *tp)
+{
+	/*
+	  return (tp->cookie_values != NULL && tp->cookie_values->s_data_constant)
+		? tp->cookie_values->s_data_desired
+		: 0;
+	*/
+	return 0;
 }
 
 void serval_tcp_rcv_space_adjust(struct sock *sk);

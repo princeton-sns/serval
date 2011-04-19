@@ -37,8 +37,9 @@ static int serval_udp_connection_request(struct sock *sk,
                                          struct sk_buff *skb);
 
 static void serval_udp_connection_respond_sock(struct sock *sk, 
-                                                struct sk_buff *skb,
-                                                struct sock *child,
+                                               struct sk_buff *skb,
+                                               struct request_sock *rsk,
+                                               struct sock *child,
                                                struct dst_entry *dst);
 
 static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
@@ -146,6 +147,7 @@ int serval_udp_connection_request(struct sock *sk, struct sk_buff *skb)
 
 void serval_udp_connection_respond_sock(struct sock *sk, 
                                         struct sk_buff *skb,
+                                        struct request_sock *rsk,
                                         struct sock *child,
                                         struct dst_entry *dst)
 {
@@ -720,6 +722,16 @@ ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
 }
 #endif /* ENABLE_SPLICE */
 
+static void serval_udp_request_sock_destructor(struct request_sock *rsk)
+{
+}
+
+struct request_sock_ops udp_request_sock_ops __read_mostly = {
+	.family		=	PF_INET,
+	.obj_size	=	sizeof(struct serval_request_sock),
+        .destructor     =       serval_udp_request_sock_destructor,
+};
+
 struct proto serval_udp_proto = {
 	.name			= "SERVAL_UDP",
 	.owner			= THIS_MODULE,
@@ -736,4 +748,5 @@ struct proto serval_udp_proto = {
         .unhash                 = serval_sock_unhash,
 	.max_header		= UDP_MAX_HDR,
 	.obj_size		= sizeof(struct serval_udp_sock),
+	.rsk_prot		= &udp_request_sock_ops,
 };

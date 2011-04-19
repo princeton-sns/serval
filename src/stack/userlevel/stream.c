@@ -160,10 +160,17 @@ int sk_stream_wait_memory(struct sock *sk, long *timeo_p)
 
 		set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
 		sk->sk_write_pending++;
+		
+		LOG_DBG("Wait event sk_stream_memory_free=%d\n", 
+			sk_stream_memory_free(sk));
+
 		sk_wait_event(sk, &current_timeo, sk->sk_err ||
 						  (sk->sk_shutdown & SEND_SHUTDOWN) ||
 						  (sk_stream_memory_free(sk) &&
 						  !vm_wait));
+
+		LOG_DBG("Wait event done\n");
+
 		sk->sk_write_pending--;
 
 		if (vm_wait) {

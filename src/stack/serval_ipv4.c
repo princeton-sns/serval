@@ -129,7 +129,7 @@ int serval_ip_route_output_flow(struct net *net, struct rtable **rp,
   new connection.
  */
 struct dst_entry *serval_ipv4_req_route(struct sock *sk,
-                                        struct serval_request_sock *rsk,
+                                        struct request_sock *rsk,
                                         int protocol,
                                         uint32_t saddr,
                                         uint32_t daddr)

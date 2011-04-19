@@ -25,7 +25,6 @@ static inline struct net *sock_net(struct sock *sk)
 
 #endif
 #if defined(OS_USER)
-#include <serval/platform.h>
 #include <serval/atomic.h>
 #include <serval/lock.h>
 #include <serval/dst.h>
@@ -44,6 +43,7 @@ static inline struct net *sock_net(struct sock *sk)
 
 struct sk_buff;
 struct proto;
+struct request_sock_ops;
 
 #define SOCK_SNDBUF_LOCK	1
 #define SOCK_RCVBUF_LOCK	2
@@ -186,6 +186,9 @@ struct proto {
 
 	int			max_header;
 	unsigned int		obj_size;
+
+	struct request_sock_ops	*rsk_prot;
+
 	char			name[32];
 	void			(*enter_memory_pressure)(struct sock *sk);
 	atomic_t		*memory_allocated;	/* Current allocated memory. */
@@ -339,6 +342,21 @@ static inline void sock_reset_flag(struct sock *sk, enum sock_flags flag)
 static inline int sock_flag(struct sock *sk, enum sock_flags flag)
 {
 	return sk->sk_flags & (0x1 << flag);
+}
+
+static inline void sk_acceptq_removed(struct sock *sk)
+{
+	sk->sk_ack_backlog--;
+}
+
+static inline void sk_acceptq_added(struct sock *sk)
+{
+	sk->sk_ack_backlog++;
+}
+
+static inline int sk_acceptq_is_full(struct sock *sk)
+{
+	return sk->sk_ack_backlog > sk->sk_max_ack_backlog;
 }
 
 static inline void sock_rps_record_flow(const struct sock *sk)

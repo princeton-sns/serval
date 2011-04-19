@@ -10,14 +10,13 @@
 #include <serval/inet_sock.h>
 #include <serval/net.h>
 #include <serval/timer.h>
+#include <serval/request_sock.h>
 #if defined(OS_USER)
 #include <string.h>
 #endif
 #if defined(OS_LINUX_KERNEL)
 #include <net/tcp_states.h>
 #endif
-
-struct serval_request_sock;
 
 enum serval_packet_type { 
         SERVAL_PKT_DATA = 1,
@@ -99,7 +98,9 @@ struct serval_sock_af_ops {
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
 	int	        (*conn_request)(struct sock *sk, struct sk_buff *skb);
-        void            (*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
+        void            (*conn_child_sock)(struct sock *sk, 
+                                           struct sk_buff *skb,
+                                           struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);

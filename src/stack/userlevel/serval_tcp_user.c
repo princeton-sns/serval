@@ -60,3 +60,27 @@ int sysctl_tcp_cookie_size = 0; /* TCP_COOKIE_MAX */
 
 int sysctl_tcp_tw_reuse = 0;
 int sysctl_tcp_low_latency = 0;
+
+void serval_tcp_init(void)
+{        
+        unsigned long limit;
+        int max_share;
+        
+        limit = 128UL;
+	limit = min(limit, INT_MAX * 4UL / 3 / 2);
+	sysctl_tcp_mem[0] = limit / 4 * 3;
+	sysctl_tcp_mem[1] = limit;
+	sysctl_tcp_mem[2] = sysctl_tcp_mem[0] * 2;
+
+	/* Set per-socket limits to no more than 1/128 the pressure threshold */
+	limit = ((unsigned long)sysctl_tcp_mem[1]) << (PAGE_SHIFT - 7);
+	max_share = min(4UL*1024*1024, limit);
+
+	sysctl_tcp_wmem[0] = SK_MEM_QUANTUM;
+	sysctl_tcp_wmem[1] = 16*1024;
+	sysctl_tcp_wmem[2] = max(64*1024, max_share);
+        
+	sysctl_tcp_rmem[0] = SK_MEM_QUANTUM;
+	sysctl_tcp_rmem[1] = 87380;
+	sysctl_tcp_rmem[2] = max(87380, max_share);
+}

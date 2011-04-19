@@ -231,6 +231,7 @@ static int client(const char *filepath, int handle_migration)
         
         fprintf(stderr, "Connected to service id %s\n", 
                 service_id_to_str(&srvaddr.sv_srvid));
+    
         sleep(2);
     
         ret = recv_file(sock, filepath, handle_migration, digest);
