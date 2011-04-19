@@ -1,5 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <serval/netdevice.h>
+#include <serval/debug.h>
 #include <serval_tcp.h>
 #if defined(OS_USER)
 #include <userlevel/serval_tcp_user.h>
@@ -305,6 +306,9 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 	if (skb->len > cur_mss)
 		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
 
+        LOG_DBG("skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
+                skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
+
 	return !after(end_seq, serval_tcp_wnd_end(tp));
 }
 
@@ -475,6 +479,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		*/
 	}
 
+        LOG_DBG("queue_xmit\n");
+
 	err = ssk->af_ops->queue_xmit(skb);
 
 	if (likely(err <= 0))
@@ -497,7 +503,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
  */
 static int serval_tcp_mtu_probe(struct sock *sk)
 {
-	return 0;
+        LOG_WARN("MTU probing not implemented!\n");
+	return 1;
 }
 
 static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now, 
@@ -513,13 +520,19 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 
 	if (!push_one) {
 		/* Do MTU probing. */
+                LOG_DBG("Doing MTU probing\n");
+
 		result = serval_tcp_mtu_probe(sk);
+
 		if (!result) {
+                        LOG_DBG("MTU probing result=%d\n", result);
 			return 0;
 		} else if (result > 0) {
 			sent_pkts = 1;
 		}
 	}
+
+        LOG_DBG("Checking send queue\n");
 
 	while ((skb = serval_tcp_send_head(sk))) {
 		unsigned int limit;
@@ -528,11 +541,16 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 		BUG_ON(!tso_segs);
 
 		cwnd_quota = serval_tcp_cwnd_test(tp, skb);
-		if (!cwnd_quota)
-			break;
 
-		if (unlikely(!serval_tcp_snd_wnd_test(tp, skb, mss_now)))
+		if (!cwnd_quota) {
+                        LOG_DBG("cwnd_quota=%d\n", cwnd_quota);
+                        break;
+                }
+
+		if (unlikely(!serval_tcp_snd_wnd_test(tp, skb, mss_now))) {
+                        LOG_DBG("tcp_snd_wnd_test failed!\n");
 			break;
+                }
 
 		/*
 		if (tso_segs == 1) {
@@ -557,6 +575,8 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			break;
 		*/
 		TCP_SKB_CB(skb)->when = tcp_time_stamp;
+
+                LOG_DBG("tcp_transmit_skb\n");
 
 		if (unlikely(serval_tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
@@ -594,7 +614,9 @@ void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 	 */
 	if (unlikely(sk->sk_state == TCP_CLOSE))
 		return;
-        
+
+        LOG_DBG("tcp_write_xmit\n");
+
 	if (serval_tcp_write_xmit(sk, cur_mss, nonagle, 0, GFP_ATOMIC))
 		serval_tcp_check_probe_timer(sk);
 }

@@ -8,6 +8,7 @@
 #include <serval/bitops.h>
 #include <netinet/serval.h>
 #include <serval_tcp_sock.h>
+#include <serval_tcp_request_sock.h>
 #include <serval_srv.h>
 #include <serval_ipv4.h>
 #include <serval_tcp.h>
@@ -35,11 +36,9 @@ static int serval_tcp_connection_request(struct sock *sk, struct sk_buff *skb)
 
 static void serval_tcp_connection_respond_sock(struct sock *sk, 
                                                struct sk_buff *skb,
+                                               struct request_sock *rsk,
                                                struct sock *child,
-                                               struct dst_entry *dst)
-{
-
-}
+                                               struct dst_entry *dst);
 
 /* 
    Receive from network
@@ -166,26 +165,25 @@ static inline int select_size(struct sock *sk, int sg)
 
 static inline void serval_tcp_mark_urg(struct serval_tcp_sock *tp, int flags)
 {
-        /*
 	if (flags & MSG_OOB)
-		tp->snd_up = tp->write_seq;
-        */
+		tp->snd_up = tp->write_seq;        
 }
 
 static inline void serval_tcp_push(struct sock *sk, int flags, int mss_now,
                                    int nonagle)
 {
 	if (serval_tcp_send_head(sk)) {
-                /*
-		struct tcp_sock *tp = tcp_sk(sk);
+		struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
 		if (!(flags & MSG_MORE) || forced_push(tp))
-			tcp_mark_push(tp, tcp_write_queue_tail(sk));
+			serval_tcp_mark_push(tp, serval_tcp_write_queue_tail(sk));
 
-		tcp_mark_urg(tp, flags);
-		__tcp_push_pending_frames(sk, mss_now,
-					  (flags & MSG_MORE) ? TCP_NAGLE_CORK : nonagle);
-                */
+		serval_tcp_mark_urg(tp, flags);
+
+                LOG_DBG("pushing pending frames\n");
+		__serval_tcp_push_pending_frames(sk, mss_now,
+                                                 (flags & MSG_MORE) ? 
+                                                 TCP_NAGLE_CORK : nonagle);
 	}
 }
 
@@ -233,6 +231,8 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	int sg, err, copied;
 	long timeo;
 
+        LOG_DBG("Sending tcp message\n");
+
 	lock_sock(sk);
 	TCP_CHECK_TIMER(sk);
 
@@ -245,7 +245,7 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
 			goto out_err;
 
 	/* This should be in poll */
-	//clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+	clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
 
 	mss_now = serval_tcp_send_mss(sk, &size_goal, flags);
 
@@ -419,11 +419,13 @@ wait_for_memory:
 			if (copied)
 				serval_tcp_push(sk, flags & ~MSG_MORE, 
                                                 mss_now, TCP_NAGLE_PUSH);
-
-			if ((err = sk_stream_wait_memory(sk, &timeo)) != 0)
+                        
+                        if ((err = sk_stream_wait_memory(sk, &timeo)) != 0)
 				goto do_error;
 
 			mss_now = serval_tcp_send_mss(sk, &size_goal, flags);
+
+                        LOG_DBG("mss_now=%d\n", mss_now);
 		}
 	}
 
@@ -449,6 +451,9 @@ do_error:
 		goto out;
 out_err:
 	err = sk_stream_error(sk, flags, err);
+
+        LOG_ERR("error=%d\n", err);
+
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
 	return err;
@@ -1002,10 +1007,69 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_child_sock = serval_tcp_connection_respond_sock,
 };
 
+/**
+   Called when a child sock is created in response to a successful
+   three-way handshake on the server side.
+ */
+void serval_tcp_connection_respond_sock(struct sock *sk, 
+                                        struct sk_buff *skb,
+                                        struct request_sock *rsk,
+                                        struct sock *child,
+                                        struct dst_entry *dst)
+{
+        struct serval_sock *new_ssk = serval_sk(sk);
+        struct serval_tcp_sock *new_tp = serval_tcp_sk(child);
+        struct serval_tcp_sock *old_tp = serval_tcp_sk(sk);
+        struct serval_tcp_request_sock *treq = serval_tcp_rsk(rsk);
+
+        LOG_DBG("Initializing new TCP respond sock\n");
+
+	serval_tcp_prequeue_init(new_tp);
+
+        child->sk_write_space = sk_stream_write_space;
+
+        new_tp->pred_flags = 0;
+        
+        new_tp->rcv_wup = new_tp->copied_seq =
+		new_tp->rcv_nxt = treq->rcv_isn + 1;
+
+        new_tp->snd_sml = new_tp->snd_una =
+		new_tp->snd_nxt = new_tp->snd_up =
+                treq->snt_isn + 1 + serval_tcp_s_data_size(old_tp);
+
+        new_tp->rto = TCP_TIMEOUT_INIT;
+	new_tp->mdev = TCP_TIMEOUT_INIT;
+        
+        new_tp->packets_out = 0;
+        new_tp->retrans_out = 0;
+        new_tp->sacked_out = 0;
+        new_tp->fackets_out = 0;
+        new_tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+
+	/* So many TCP implementations out there (incorrectly) count the
+         * initial SYN frame in their delayed-ACK and congestion control
+         * algorithms that we must have the following bandaid to talk
+         * efficiently to them.  -DaveM
+         */
+        new_tp->snd_cwnd = 2;
+        new_tp->snd_cwnd_cnt = 0;
+        new_tp->bytes_acked = 0;
+        
+        new_tp->frto_counter = 0;
+        // new_tp->frto_highmark = 0;
+
+        skb_queue_head_init(&new_tp->out_of_order_queue);
+
+	new_tp->ca_ops = &serval_tcp_init_congestion_ops;
+        new_ssk->af_ops = &serval_tcp_af_ops;
+}
+
 static int serval_tcp_init_sock(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+        LOG_DBG("Initializing new TCP sock\n");
 
         skb_queue_head_init(&tp->out_of_order_queue);
 	serval_tcp_prequeue_init(tp);
@@ -1040,16 +1104,32 @@ static int serval_tcp_init_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
 static int serval_tcp_destroy_sock(struct sock *sk)
 #else
-        static void serval_tcp_destroy_sock(struct sock *sk)
+static void serval_tcp_destroy_sock(struct sock *sk)
 #endif
 {
         struct serval_tcp_sock *tsk = serval_tcp_sk(sk);
    
+        LOG_DBG("destroying TCP sock\n");
+
+	/* Cleanup up the write buffer. */
+	serval_tcp_write_queue_purge(sk);
+
 	__skb_queue_purge(&tsk->out_of_order_queue);
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
         return 0;
 #endif
 }
+
+static void serval_tcp_request_sock_destructor(struct request_sock *rsk)
+{
+}
+
+struct request_sock_ops tcp_request_sock_ops __read_mostly = {
+	.family		=	PF_INET,
+	.obj_size	=	sizeof(struct serval_tcp_request_sock),
+        .destructor     =       serval_tcp_request_sock_destructor,
+};
 
 struct proto serval_tcp_proto = {
 	.name			= "SERVAL_TCP",
@@ -1077,4 +1157,5 @@ struct proto serval_tcp_proto = {
 #endif
 	.max_header		= MAX_SERVAL_TCP_HEADER,
 	.obj_size		= sizeof(struct serval_tcp_sock),
+	.rsk_prot		= &tcp_request_sock_ops,
 };

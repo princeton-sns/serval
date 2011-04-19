@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/time.h>
 #include <sys/socket.h>
@@ -125,7 +126,7 @@ static int send_file(int sock, const char *filepath,
         f = fopen(filepath, "r");
     
         if (!f) {
-                fprintf(stderr, "cannot open file %s : %s", 
+                fprintf(stderr, "cannot open file %s : %s\n", 
                         filepath, strerror(errno));
                 return EXIT_FAILURE;
         }

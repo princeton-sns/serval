@@ -5,6 +5,7 @@
 #include <serval/platform.h>
 #include <serval/list.h>
 #include <serval/sock.h>
+#include <serval/request_sock.h>
 #include <netinet/serval.h>
 #if defined(OS_USER)
 #include <string.h>
@@ -12,7 +13,7 @@
 #include "serval_sock.h"
 
 struct serval_request_sock {
-        struct sock *sk;
+        struct request_sock rsk;
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
@@ -25,40 +26,44 @@ struct serval_request_sock {
         struct list_head lh;
 };
 
-static inline struct serval_request_sock *serval_rsk_alloc(int alloc)
+static inline struct serval_request_sock *serval_rsk(struct request_sock *rsk)
 {
-        struct serval_request_sock *rsk;
+        return (struct serval_request_sock *)rsk;
+}
 
-        rsk = ZALLOC(sizeof(*rsk), alloc);
+static inline struct request_sock *
+serval_reqsk_alloc(const struct request_sock_ops *ops)
+{
+        struct request_sock *rsk;
+        struct serval_request_sock *srsk;
+
+        rsk = reqsk_alloc(ops);
 
         if (!rsk)
                 return NULL;
 
-        INIT_LIST_HEAD(&rsk->lh);
+        srsk = serval_rsk(rsk);
+
+        INIT_LIST_HEAD(&srsk->lh);
         
-        serval_sock_get_flowid(&rsk->local_flowid);
+        serval_sock_get_flowid(&srsk->local_flowid);
 
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(rsk->local_nonce, SERVAL_NONCE_SIZE);
-        get_random_bytes(&rsk->iss_seq, sizeof(rsk->iss_seq));
+        get_random_bytes(srsk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(&srsk->iss_seq, sizeof(srsk->iss_seq));
 #else
         {
                 unsigned int i;
-                unsigned char *seqno = (unsigned char *)&rsk->iss_seq;
+                unsigned char *seqno = (unsigned char *)&srsk->iss_seq;
                 for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
-                        rsk->local_nonce[i] = random() & 0xff;
+                        srsk->local_nonce[i] = random() & 0xff;
                 }
-                for (i = 0; i < sizeof(rsk->iss_seq); i++) {
+                for (i = 0; i < sizeof(srsk->iss_seq); i++) {
                         seqno[i] = random() & 0xff;
                 }
         }       
 #endif
         return rsk;
-}
-
-static inline void serval_rsk_free(struct serval_request_sock *rsk)
-{
-        FREE(rsk);
 }
 
 #endif /* _SERVAL_REQUEST_SOCK_H_ */

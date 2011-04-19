@@ -454,7 +454,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                               struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_request_sock *rsk;
+        struct request_sock *rsk;
+        struct serval_request_sock *srsk;
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
@@ -498,22 +499,24 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 goto drop;
         }
 
-        rsk = serval_rsk_alloc(GFP_ATOMIC);
+        rsk = serval_reqsk_alloc(sk->sk_prot->rsk_prot);
 
         if (!rsk) {
                 err = -ENOMEM;
                 goto drop;
         }
+        
+        srsk = serval_rsk(rsk);
 
         /* Copy fields in request packet into request sock */
-        memcpy(&rsk->peer_flowid, &sfh->src_flowid, 
+        memcpy(&srsk->peer_flowid, &sfh->src_flowid, 
                sizeof(sfh->src_flowid));
-        memcpy(&rsk->dst_addr, &ip_hdr(skb)->saddr,
-               sizeof(rsk->dst_addr));
-        memcpy(rsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
-        rsk->rcv_seq = ntohl(conn_ext->seqno);
+        memcpy(&srsk->dst_addr, &ip_hdr(skb)->saddr,
+               sizeof(srsk->dst_addr));
+        memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
+        srsk->rcv_seq = ntohl(conn_ext->seqno);
 
-        list_add(&rsk->lh, &ssk->syn_queue);
+        list_add(&srsk->lh, &ssk->syn_queue);
         
         /* Push back the Serval header again to make IP happy */
         skb_push(skb, hdr_len);
@@ -522,16 +525,16 @@ static int serval_srv_syn_rcv(struct sock *sk,
         /* Update info in packet */
         memcpy(&sfh->dst_flowid, &sfh->src_flowid, 
                sizeof(sfh->src_flowid));
-        memcpy(&sfh->src_flowid, &rsk->local_flowid, 
-               sizeof(rsk->local_flowid));
-        memcpy(&conn_ext->srvid, &rsk->peer_srvid,            
-               sizeof(rsk->peer_srvid));
+        memcpy(&sfh->src_flowid, &srsk->local_flowid, 
+               sizeof(srsk->local_flowid));
+        memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
+               sizeof(srsk->peer_srvid));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-        conn_ext->seqno = htonl(rsk->iss_seq);
-        conn_ext->ackno = htonl(rsk->rcv_seq + 1);
+        conn_ext->seqno = htonl(srsk->iss_seq);
+        conn_ext->ackno = htonl(srsk->rcv_seq + 1);
 
         /* Copy our nonce to connection extension */
-        memcpy(conn_ext->nonce, rsk->local_nonce, SERVAL_NONCE_SIZE);
+        memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
        
         sfh->flags = SVH_SYN | SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
@@ -584,7 +587,7 @@ drop:
 static struct sock *
 serval_srv_create_respond_sock(struct sock *sk, 
                                struct sk_buff *skb,
-                               struct serval_request_sock *req,
+                               struct request_sock *req,
                                struct dst_entry *dst)
 {
         struct sock *nsk;
@@ -596,7 +599,7 @@ serval_srv_create_respond_sock(struct sock *sk,
                 serval_sock_init(nsk);
 
                 /* Transport protocol specific init. */                
-                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, nsk, NULL);
+                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, req, nsk, NULL);
         }        
         
         return nsk;
@@ -619,37 +622,38 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                                     struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct serval_request_sock *rsk;
+        struct serval_request_sock *srsk;
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);
 
-        list_for_each_entry(rsk, &ssk->syn_queue, lh) {
-                if (memcmp(&rsk->local_flowid, &sfh->dst_flowid, 
-                           sizeof(rsk->local_flowid)) == 0) {
+        list_for_each_entry(srsk, &ssk->syn_queue, lh) {
+                if (memcmp(&srsk->local_flowid, &sfh->dst_flowid, 
+                           sizeof(srsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
+                        struct request_sock *rsk = &srsk->rsk;
 
-                        if (memcmp(rsk->peer_nonce, conn_ext->nonce, 
+                        if (memcmp(srsk->peer_nonce, conn_ext->nonce, 
                                    SERVAL_NONCE_SIZE) != 0) {
                                 LOG_ERR("Bad nonce\n");
                                 return NULL;
                         }
 
-                        if (ntohl(conn_ext->seqno) != rsk->rcv_seq + 1) {
+                        if (ntohl(conn_ext->seqno) != srsk->rcv_seq + 1) {
                                 LOG_ERR("Bad seqno received=%u expected=%u\n",
                                         ntohl(conn_ext->seqno), 
-                                        rsk->rcv_seq + 1);
+                                        srsk->rcv_seq + 1);
                                 return NULL;
                         }
-                        if (ntohl(conn_ext->ackno) != rsk->iss_seq + 1) {
+                        if (ntohl(conn_ext->ackno) != srsk->iss_seq + 1) {
                                 LOG_ERR("Bad ackno received=%u expected=%u\n",
                                         ntohl(conn_ext->ackno), 
-                                        rsk->iss_seq + 1);
+                                        srsk->iss_seq + 1);
                                 return NULL;
                         }
                         /* Move request sock to accept queue */
-                        list_del(&rsk->lh);
-                        list_add_tail(&rsk->lh, &ssk->accept_queue);
+                        list_del(&srsk->lh);
+                        list_add_tail(&srsk->lh, &ssk->accept_queue);
                         
                         nsk = serval_srv_create_respond_sock(sk, skb, 
                                                              rsk, NULL);
@@ -659,23 +663,23 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                         
                         nsk->sk_state = SERVAL_RESPOND;
                         nssk = serval_sk(nsk);
-                        memcpy(&nssk->local_flowid, &rsk->local_flowid, 
-                               sizeof(rsk->local_flowid));
-                        memcpy(&nssk->peer_flowid, &rsk->peer_flowid, 
-                               sizeof(rsk->peer_flowid));
-                        memcpy(&nssk->peer_srvid, &rsk->peer_srvid,
-                               sizeof(rsk->peer_srvid));
-                        memcpy(&inet_sk(sk)->inet_daddr, &rsk->dst_addr,
-                               sizeof(rsk->dst_addr));
-                        memcpy(nssk->local_nonce, rsk->local_nonce, 
+                        memcpy(&nssk->local_flowid, &srsk->local_flowid, 
+                               sizeof(srsk->local_flowid));
+                        memcpy(&nssk->peer_flowid, &srsk->peer_flowid, 
+                               sizeof(srsk->peer_flowid));
+                        memcpy(&nssk->peer_srvid, &srsk->peer_srvid,
+                               sizeof(srsk->peer_srvid));
+                        memcpy(&inet_sk(sk)->inet_daddr, &srsk->dst_addr,
+                               sizeof(srsk->dst_addr));
+                        memcpy(nssk->local_nonce, srsk->local_nonce, 
                                SERVAL_NONCE_SIZE);
-                        memcpy(nssk->peer_nonce, rsk->peer_nonce, 
+                        memcpy(nssk->peer_nonce, srsk->peer_nonce, 
                                SERVAL_NONCE_SIZE);
-                        nssk->snd_seq.iss = rsk->iss_seq;
-                        nssk->snd_seq.una = rsk->iss_seq;
-                        nssk->snd_seq.nxt = rsk->iss_seq + 1;
-                        nssk->rcv_seq.iss = rsk->rcv_seq;
-                        nssk->rcv_seq.nxt = rsk->rcv_seq + 1;
+                        nssk->snd_seq.iss = srsk->iss_seq;
+                        nssk->snd_seq.una = srsk->iss_seq;
+                        nssk->snd_seq.nxt = srsk->iss_seq + 1;
+                        nssk->rcv_seq.iss = srsk->rcv_seq;
+                        nssk->rcv_seq.nxt = srsk->rcv_seq + 1;
                         rsk->sk = nsk;
 
                         /* Hash the sock to make it available */

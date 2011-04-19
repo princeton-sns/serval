@@ -5,26 +5,34 @@
 #include <serval/platform.h>
 #include <serval/list.h>
 #include <serval/sock.h>
+#include <serval/request_sock.h>
 #include <netinet/serval.h>
 #if defined(OS_USER)
 #include <string.h>
 #endif
-#include "serval_request_sock.h"
+#include <serval_request_sock.h>
 
 struct serval_tcp_request_sock {
         struct serval_request_sock rsk;
+	__u32 snt_isn;
+	__u32 rcv_isn;
 };
+
+static inline struct serval_tcp_request_sock *serval_tcp_rsk(struct request_sock *rsk)
+{
+	return (struct serval_tcp_request_sock *)rsk;
+}
 
 static inline struct request_sock *
 serval_tcp_reqsk_alloc(const struct request_sock_ops *ops)
 {
-        struct serval_request_sock *srsk;
+        struct request_sock *rsk;
 
-        srsk = serval_rsk_alloc(ops);
+        rsk = serval_reqsk_alloc(ops);
 
-        if (!srsk)
+        if (!rsk)
                 return NULL;
-
+	
         return rsk;
 }
 

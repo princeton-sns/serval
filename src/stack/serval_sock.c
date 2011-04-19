@@ -483,6 +483,8 @@ void serval_sock_destroy(struct sock *sk)
 	if (sk->sk_prot->destroy)
 		sk->sk_prot->destroy(sk);
 
+	sk_stream_kill_queues(sk);
+
         LOG_DBG("SERVAL sock %p refcnt=%d tot_bytes_sent=%lu\n",
                 sk, atomic_read(&sk->sk_refcnt) - 1, 
                 serval_sk(sk)->tot_bytes_sent);
@@ -531,9 +533,18 @@ void serval_sock_destruct(struct sock *sk)
                 dev_put(ssk->dev);
 
 	if (sk->sk_type == SOCK_STREAM && 
-            sk->sk_state != SERVAL_CLOSED) {
-		LOG_ERR("Bad state %d %p\n",
-                        sk->sk_state, sk);
+            (sk->sk_state != SERVAL_CLOSED && 
+             sk->sk_state != 0)) {
+                /*
+                  Note: in user mode, a respond sock created as a
+                  result of accept() will replace an existing socket,
+                  causing it to be destroyed.
+
+                  See userlevel/client.c:client_handle_accept2_req_msg().
+                 */
+                
+		LOG_ERR("Bad state %s %p\n",
+                        serval_sock_state_str(sk), sk);
 		return;
 	}
 

@@ -16,6 +16,7 @@
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
+extern void serval_tcp_init(void);
 #endif /* OS_LINUX_KERNEL */
 
 /* Common includes */
@@ -66,27 +67,35 @@ static int serval_wait_state(struct sock *sk, int state,
 	while (1) {
                 if (outofstate) {
                         if (sk->sk_state != state) {
+                                /*
                                 LOG_DBG("outofstate: State is new=%s old=%s\n",
                                         serval_sock_state_str(sk),
                                         serval_state_str(state));
+                                */
                                 break;
                         }
                 } else if (sk->sk_state == state) {
-                        LOG_DBG("State is new=%s\n",
+                        /*
+                          LOG_DBG("State is new=%s\n",
                                 serval_sock_state_str(sk));
+                        */
                         break;
                 }
 		set_current_state(TASK_INTERRUPTIBLE);
 
 		if (!timeo) {
 			err = -EINPROGRESS;
-                        LOG_DBG("timeout 0 - EINPROGRESS\n");
+                        /*
+                          LOG_DBG("timeout 0 - EINPROGRESS\n");
+                        */
 			break;
 		}
 
 		if (signal_pending(current)) {
 			err = sock_intr_errno(timeo);
-                        LOG_DBG("Signal pending\n");
+                        /*
+                          LOG_DBG("Signal pending\n");
+                        */
 			break;
 		}
 
@@ -224,34 +233,37 @@ static int serval_listen_stop(struct sock *sk)
         /* Destroy queue of sockets that haven't completed three-way
          * handshake */
         while (1) {
-                struct serval_request_sock *rsk;
-
+                struct serval_request_sock *srsk;
+                
                 if (list_empty(&ssk->syn_queue))
                         break;
+                
+                srsk = list_first_entry(&ssk->syn_queue, 
+                                        struct serval_request_sock, lh);
+                
+                list_del(&srsk->lh);
 
-                rsk = list_first_entry(&ssk->syn_queue,
-                                       struct serval_request_sock, lh);
-                list_del(&rsk->lh);
                 LOG_DBG("deleting SYN queued request socket\n");
 
-                serval_rsk_free(rsk);
+                reqsk_free(&srsk->rsk);
                 sk->sk_ack_backlog--;
         }
         /* Destroy accept queue of sockets that completed three-way
            handshake (and send appropriate packets to other ends) */
         while (1) {
-                struct serval_request_sock *rsk;
+                struct serval_request_sock *srsk;
 
                 if (list_empty(&ssk->accept_queue))
                         break;
-
-                rsk = list_first_entry(&ssk->accept_queue,
-                                       struct serval_request_sock, lh);
-                list_del(&rsk->lh);
-
-                if (rsk->sk) {
-                        struct sock *child = rsk->sk;
-
+                
+                srsk = list_first_entry(&ssk->accept_queue, 
+                                        struct serval_request_sock, lh);
+                
+                list_del(&srsk->lh);
+                
+                if (srsk->rsk.sk) {
+                        struct sock *child = srsk->rsk.sk;
+                        
                         /* From inet_connection_sock */
                         local_bh_disable();
                         bh_lock_sock(child);
@@ -277,7 +289,7 @@ static int serval_listen_stop(struct sock *sk)
 
                         sock_put(child);
                 }
-                serval_rsk_free(rsk);
+                reqsk_free(&srsk->rsk);
                 sk->sk_ack_backlog--;
         }
 
@@ -330,22 +342,22 @@ struct sock *serval_accept_dequeue(struct sock *parent,
 {
 	struct sock *sk = NULL;
         struct serval_sock *pssk = serval_sk(parent);
-        struct serval_request_sock *rsk;
+        struct serval_request_sock *srsk;
 
         /* Parent sock is already locked... */
-        list_for_each_entry(rsk, &pssk->accept_queue, lh) {
-                if (!rsk->sk)
+        list_for_each_entry(srsk, &pssk->accept_queue, lh) {
+                if (!srsk->rsk.sk)
                         continue;
 
-                sk = rsk->sk;
-
+                sk = srsk->rsk.sk;
+               
                 if (newsock) {
                         sock_graft(sk, newsock);
                         newsock->state = SS_CONNECTED;
                 }
 
-                list_del(&rsk->lh);
-                serval_rsk_free(rsk);
+                list_del(&srsk->lh);
+                reqsk_free(&srsk->rsk);                
                 return sk;
         }
 
@@ -405,9 +417,7 @@ static int serval_accept(struct socket *sock, struct socket *newsock,
 		if (!timeo)
 			goto out;
 
-                LOG_DBG("waiting for an incoming connect request\n");
 		err = serval_wait_for_connect(sk, timeo);
-                LOG_DBG("wait for incoming connect returned err=%d\n", err);
 
 		if (err)
 			goto out;
@@ -944,6 +954,9 @@ int __init serval_init(void)
 {
         int err = 0;
 
+#if defined(OS_USER)
+        serval_tcp_init();
+#endif
         err = service_init();
 
         if (err < 0) {
@@ -968,8 +981,15 @@ int __init serval_init(void)
         err = proto_register(&serval_udp_proto, 1);
 
 	if (err != 0) {
-		LOG_CRIT("Cannot create serval_sock SLAB cache!\n");
-		goto fail_proto;
+		LOG_CRIT("Cannot register UDP proto\n");
+		goto fail_udp_proto;
+	}
+        
+        err = proto_register(&serval_tcp_proto, 1);
+
+	if (err != 0) {
+		LOG_CRIT("Cannot register TCP proto\n");
+		goto fail_tcp_proto;
 	}
 
         err = sock_register(&serval_family_ops);
@@ -983,8 +1003,10 @@ out:
 
 	sock_unregister(PF_SERVAL);
 fail_sock_register:
-	proto_unregister(&serval_udp_proto);
-fail_proto:
+	proto_unregister(&serval_tcp_proto);     
+fail_tcp_proto:
+	proto_unregister(&serval_udp_proto);     
+fail_udp_proto:
         packet_fini();
 fail_packet:
         serval_sock_tables_fini();
@@ -1002,6 +1024,7 @@ void __exit serval_fini(void)
 {
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
+	proto_unregister(&serval_tcp_proto);
         packet_fini();
         serval_sock_tables_fini();
         service_fini();

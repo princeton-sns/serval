@@ -3,6 +3,7 @@
 #define _SERVAL_TCP_USER_H_
 
 #include <netinet/tcp.h>
+#include <serval/request_sock.h>
 
 /* Flags in tp->nonagle */
 #define TCP_NAGLE_OFF		1	/* Nagle's algo is disabled */
@@ -197,11 +198,6 @@ extern int sysctl_tcp_adv_win_scale;
 struct tcp_md5sig_key {
 	u8			*key;
 	u8			keylen;
-};
-
-/* empty to "strongly type" an otherwise void parameter.
- */
-struct request_values {
 };
 
 /* Using SHA1 for now, define some constants.
