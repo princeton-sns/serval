@@ -1,0 +1,31 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#ifndef _SERVAL_TCP_REQUEST_SOCK_H_
+#define _SERVAL_TCP_REQUEST_SOCK_H_
+
+#include <serval/platform.h>
+#include <serval/list.h>
+#include <serval/sock.h>
+#include <netinet/serval.h>
+#if defined(OS_USER)
+#include <string.h>
+#endif
+#include "serval_request_sock.h"
+
+struct serval_tcp_request_sock {
+        struct serval_request_sock rsk;
+};
+
+static inline struct request_sock *
+serval_tcp_reqsk_alloc(const struct request_sock_ops *ops)
+{
+        struct serval_request_sock *srsk;
+
+        srsk = serval_rsk_alloc(ops);
+
+        if (!srsk)
+                return NULL;
+
+        return rsk;
+}
+
+#endif /* _SERVAL_TCP_REQUEST_SOCK_H_ */
