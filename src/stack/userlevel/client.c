@@ -554,6 +554,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         memset(&r, 0, sizeof(r));
         client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));
+        memset(&iov, 0, sizeof(iov));
+        memset(&saddr, 0, sizeof(saddr));
         mh.msg_name = &saddr;
         mh.msg_namelen = sizeof(saddr);
         mh.msg_iov = &iov;

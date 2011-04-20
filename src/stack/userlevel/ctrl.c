@@ -60,7 +60,7 @@ int ctrl_recvmsg(void)
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 {
 	struct msghdr *mh = (struct msghdr *)buf;
-	struct iovec iov = { (void *) msg, msg->len };
+	struct iovec iov = { msg, msg->len };
 	int ret;
 	
 	memset(mh, 0, sizeof(*mh));
