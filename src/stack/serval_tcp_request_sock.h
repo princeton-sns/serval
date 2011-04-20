@@ -18,7 +18,8 @@ struct serval_tcp_request_sock {
 	__u32 rcv_isn;
 };
 
-static inline struct serval_tcp_request_sock *serval_tcp_rsk(struct request_sock *rsk)
+static inline struct serval_tcp_request_sock *
+serval_tcp_rsk(struct request_sock *rsk)
 {
 	return (struct serval_tcp_request_sock *)rsk;
 }

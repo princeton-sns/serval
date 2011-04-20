@@ -680,6 +680,15 @@ static inline int sk_stream_memory_free(struct sock *sk)
 	return sk->sk_wmem_queued < sk->sk_sndbuf;
 }
 
+extern __u32 sysctl_wmem_max;
+extern __u32 sysctl_rmem_max;
+
+
+extern int sysctl_optmem_max;
+
+extern __u32 sysctl_wmem_default;
+extern __u32 sysctl_rmem_default;
+
 #endif /* OS_USER */
 
 #endif /* _SOCK_H_ */

@@ -12,6 +12,7 @@
 #include <userlevel/serval_tcp_user.h>
 #endif /* OS_USER */
 
+#include <serval_srv.h>
 
 /* TCP timestamps are only 32-bits, this causes a slight
  * complication on 64-bit systems since we store a snapshot
@@ -25,11 +26,15 @@
 #define EXTRA_HDR (20)
 
 /* payload + LL + IP + extra */
-#define MAX_SERVAL_TCP_HEADER (MAX_HEADER + 20 + EXTRA_HDR +        \
-                               sizeof(struct serval_hdr) +          \
-                               sizeof(struct serval_service_ext) +  \
+#define MAX_SERVAL_TCP_HEADER (MAX_SERVAL_HDR + \
                                sizeof(struct tcphdr))
 
+
+/*
+ * TCP general constants
+ */
+#define TCP_MSS_DEFAULT		 536U	/* IPv4 (RFC1122, RFC2581) */
+#define TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
 
 /* 
  * Never offer a window over 32767 without using window scaling. Some
@@ -131,9 +136,55 @@
 					 * minimal timewait lifetime.
 					 */
 
+/* Due to TSO, an SKB can be composed of multiple actual
+ * packets.  To keep these tracked properly, we use this.
+ */
+static inline int serval_tcp_skb_pcount(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_segs;
+}
+
+/* This is valid iff tcp_skb_pcount() > 1. */
+static inline int seravl_tcp_skb_mss(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_size;
+}
+
+int serval_tcp_build_syn(struct sock *sk, struct sk_buff *skb);
+
+void serval_tcp_initialize_rcv_mss(struct sock *sk);
+
+int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu);
+int serval_tcp_mss_to_mtu(struct sock *sk, int mss);
 
 unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu);
 unsigned int serval_tcp_current_mss(struct sock *sk);
+
+void serval_tcp_clear_retrans(struct serval_tcp_sock *tp);
+
+/* Bound MSS / TSO packet size with the half of the window */
+static inline int serval_tcp_bound_to_half_wnd(struct serval_tcp_sock *tp, 
+					       int pktsize)
+{
+	int cutoff;
+
+	/* When peer uses tiny windows, there is no use in packetizing
+	 * to sub-MSS pieces for the sake of SWS or making sure there
+	 * are enough packets in the pipe for fast recovery.
+	 *
+	 * On the other hand, for extremely large MSS devices, handling
+	 * smaller than MSS windows in this way does make sense.
+	 */
+	if (tp->max_window >= 512)
+		cutoff = (tp->max_window >> 1);
+	else
+		cutoff = tp->max_window;
+
+	if (cutoff && pktsize > cutoff)
+		return max_t(int, cutoff, 68U - tp->tcp_header_len);
+	else
+		return pktsize;
+}
 
 void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 				      int nonagle);
@@ -307,6 +358,12 @@ static inline u32 serval_tcp_receive_window(const struct serval_tcp_sock *tp)
 		win = 0;
 	return (u32) win;
 }
+
+/* Determine a window scaling and initial window to offer. */
+void serval_tcp_select_initial_window(int __space, __u32 mss,
+				      __u32 *rcv_wnd, __u32 *window_clamp,
+				      int wscale_ok, __u8 *rcv_wscale,
+				      __u32 init_rcv_wnd);
 
 /* Choose a new window, without checks for shrinking, and without
  * scaling applied to the result.  The caller does these things
@@ -518,6 +575,16 @@ static inline void serval_tcp_check_probe_timer(struct sock *sk)
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
 					  icsk->icsk_rto, TCP_RTO_MAX);
 	*/
+}
+
+static inline void serval_tcp_init_wl(struct serval_tcp_sock *tp, u32 seq)
+{
+	tp->snd_wl1 = seq;
+}
+
+static inline void serval_tcp_update_wl(struct serval_tcp_sock *tp, u32 seq)
+{
+	tp->snd_wl1 = seq;
 }
 
 /* Prequeue for VJ style copy to user, combined with checksumming. */

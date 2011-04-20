@@ -204,4 +204,11 @@ int serval_srv_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_srv_rexmit_timeout(unsigned long data);
 void serval_srv_timewait_timeout(unsigned long data);
 
+#define EXTRA_HDR_SIZE (20)
+#define IP_HDR_SIZE sizeof(struct iphdr)
+/* payload + LL + IP + extra */
+#define MAX_SERVAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
+                        sizeof(struct serval_hdr) +                 \
+                        sizeof(struct serval_connection_ext))
+
 #endif /* _SERVAL_SRV_H_ */

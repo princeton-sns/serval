@@ -29,11 +29,10 @@
 
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
-#define UDP_MAX_HDR (MAX_HEADER + 20 + EXTRA_HDR +      \
-                     sizeof(struct serval_hdr) +        \
-                     sizeof(struct serval_service_ext)) 
+#define MAX_SERVAL_UDP_HDR (MAX_SERVAL_HDR + sizeof(struct udphdr)) 
 
-static int serval_udp_connection_request(struct sock *sk, 
+static int serval_udp_connection_request(struct sock *sk,
+                                         struct request_sock *rsk,
                                          struct sk_buff *skb);
 
 static void serval_udp_connection_respond_sock(struct sock *sk, 
@@ -140,7 +139,9 @@ static void serval_udp_shutdown(struct sock *sk, int how)
         LOG_DBG("\n");
 }
 
-int serval_udp_connection_request(struct sock *sk, struct sk_buff *skb)
+int serval_udp_connection_request(struct sock *sk, 
+                                  struct request_sock *rsk,
+                                  struct sk_buff *skb)
 {
         return 0;
 }
@@ -219,7 +220,6 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 {
         int err;
         struct sk_buff *skb;
-        int ulen = len;
         struct service_id *srvid = NULL;
         struct net_addr *netaddr = NULL;
         int nonblock = msg->msg_flags & MSG_DONTWAIT;
@@ -271,8 +271,6 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
                 return -EDESTADDRREQ;
         }
 
-        ulen += sizeof(struct udphdr);
-
         lock_sock(sk);
 
 	timeo = sock_sndtimeo(sk, nonblock);
@@ -282,7 +280,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
                         goto out;
 
-        skb = sock_alloc_send_skb(sk, sk->sk_prot->max_header + ulen, 
+        skb = sock_alloc_send_skb(sk, sk->sk_prot->max_header + len, 
                                   nonblock, &err);
 
         if (!skb)
@@ -746,7 +744,7 @@ struct proto serval_udp_proto = {
 	.backlog_rcv		= serval_srv_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
-	.max_header		= UDP_MAX_HDR,
+	.max_header		= MAX_SERVAL_UDP_HDR,
 	.obj_size		= sizeof(struct serval_udp_sock),
 	.rsk_prot		= &udp_request_sock_ops,
 };
