@@ -65,12 +65,14 @@ struct sk_buff *__alloc_skb(unsigned int size, int fclone, int node)
 	if (!data)
 		goto nodata;
 
+        memset(data, 0, size + sizeof(struct skb_shared_info));
+
 	/*
 	 * Only clear those fields we need to clear, not those that we will
 	 * actually initialise below. Hence, don't put any more fields after
 	 * the tail pointer in struct sk_buff!
 	 */
-	memset(skb, 0, offsetof(struct sk_buff, tail));
+	//memset(skb, 0, offsetof(struct sk_buff, tail));
 	skb->truesize = size + sizeof(struct sk_buff);
 	atomic_set(&skb->users, 1);
 	skb->head = data;

@@ -75,9 +75,11 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 	ret = sendmsg(ctrl_sock, mh, 0);
 
 	if (ret == -1) {
-		LOG_ERR("sendmsg failure on ctrl sock %i: %s\n", ctrl_sock, strerror(errno));
+		LOG_ERR("sendmsg failure on ctrl sock %i: %s\n", 
+                        ctrl_sock, strerror(errno));
 	} else {
-		LOG_DBG("sent msg(%i) of %d bytes\n", msg->type, ret, ctrl_sock);
+		LOG_DBG("sent msg(%i) of %d bytes\n", 
+                        msg->type, ret, ctrl_sock);
                 ret = 0;
 	}
 

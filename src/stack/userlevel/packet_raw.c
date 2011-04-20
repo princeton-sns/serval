@@ -100,8 +100,6 @@ static int packet_raw_recv(struct net_device *dev)
 		kfree_skb(skb);
 		return -1;
 	}
-        
-
         /* LOG_DBG("Received %d bytes IP packet\n", ret); */
 
         skb_put(skb, ret);

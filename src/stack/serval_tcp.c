@@ -81,6 +81,8 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 ntohl(tcph->seq),
                 ntohl(tcph->ack_seq));
 
+        FREE_SKB(skb);
+
         return err;
 }
 

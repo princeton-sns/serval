@@ -183,6 +183,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         /* Notify the service daemon */
         if (!host_ctrl_mode) {
                 struct ctrlmsg_register cm;
+                memset(&cm, 0, sizeof(cm));
                 cm.cmh.type = CTRLMSG_TYPE_REGISTER;
                 cm.cmh.len = sizeof(cm);
                 cm.sv_flags = svaddr->sv_flags;
