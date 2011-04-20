@@ -25,13 +25,6 @@
 #include <serval_request_sock.h>
 #include <service.h>
 
-#define EXTRA_HDR_SIZE (20)
-#define IP_HDR_SIZE
-/* payload + LL + IP + extra */
-#define SERVAL_MAX_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE +     \
-                        sizeof(struct serval_hdr) +                     \
-                        sizeof(struct serval_connection_ext))
-
 extern int serval_tcp_rcv(struct sk_buff *);
 extern int serval_udp_rcv(struct sk_buff *);
 extern atomic_t serval_nr_socks;
@@ -334,15 +327,15 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
 	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;
         
-        skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
+        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!skb)
                 return -ENOMEM;
         
-        skb_reserve(skb, SERVAL_MAX_HDR);
+        skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
         skb->protocol = 0;
-        
+
         memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
@@ -352,6 +345,15 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
 
         LOG_DBG("Sending SYN seqno=%u\n",
                 SERVAL_SKB_CB(skb)->seqno);
+
+        if (ssk->af_ops->build_syn) {
+                err = ssk->af_ops->build_syn(sk, skb);
+
+                if (err < 0) {
+                        LOG_ERR("Transport protocol returned error\n");
+                        return err;
+                }
+        }
 
         err = serval_srv_queue_and_push(sk, skb);
         
@@ -390,14 +392,14 @@ void serval_srv_close(struct sock *sk, long timeout)
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
                 for (;;) {
-                        skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
+                        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
                         
                         if (skb)
                                 break;
                         yield();
                 }
                 
-                skb_reserve(skb, SERVAL_MAX_HDR);
+                skb_reserve(skb, sk->sk_prot->max_header);
                 skb_serval_set_owner_w(skb, sk);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
@@ -424,12 +426,12 @@ static int serval_srv_send_close_ack(struct sock *sk, struct serval_hdr *sfh,
 
         LOG_DBG("Sending Close ACK\n");
 
-        skb = ALLOC_SKB(SERVAL_MAX_HDR, GFP_ATOMIC);
+        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
                         
         if (!skb)
                 return -ENOMEM;
         
-        skb_reserve(skb, SERVAL_MAX_HDR);
+        skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
         memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
@@ -480,11 +482,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
 
-        /* Call upper protocol handler */
-        err = ssk->af_ops->conn_request(sk, skb);
-        
-        if (err < 0)
-                goto drop;
 
         /* Try to figure out the source address for the incoming
          * interface so that we can use it in our reply.  
@@ -505,7 +502,14 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 err = -ENOMEM;
                 goto drop;
         }
+
+        /* Call upper protocol handler */
+        err = ssk->af_ops->conn_request(sk, rsk, skb);
         
+        if (err < 0) {
+                reqsk_free(rsk);
+                goto drop;
+        }
         srsk = serval_rsk(rsk);
 
         /* Copy fields in request packet into request sock */

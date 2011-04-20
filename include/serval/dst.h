@@ -70,11 +70,16 @@ struct dst_entry {
 	};
 };
 
-
 static inline u32
 dst_metric(const struct dst_entry *dst, int metric)
 {
 	return dst->metrics[metric-1];
+}
+
+static inline u32 dst_mtu(const struct dst_entry *dst)
+{
+	u32 mtu = dst_metric(dst, RTAX_MTU);
+	return mtu;
 }
 
 static inline void dst_hold(struct dst_entry * dst)

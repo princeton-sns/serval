@@ -29,8 +29,37 @@ static void serval_tcp_shutdown(struct sock *sk, int how)
         
 }
 
-static int serval_tcp_connection_request(struct sock *sk, struct sk_buff *skb)
+static inline __u32 serval_tcp_init_sequence(struct sk_buff *skb)
 {
+        __u32 isn;
+
+#if defined(OS_LINUX_KERNEL)
+        get_random_bytes(&isn, sizeof(isn));
+#else
+        {
+                unsigned int i;
+                unsigned char *seqno = (unsigned char *)&isn;
+              
+                for (i = 0; i < sizeof(isn); i++) {
+                        seqno[i] = random() & 0xff;
+                }
+        }       
+#endif
+        return isn;
+}
+
+static int serval_tcp_connection_request(struct sock *sk, 
+                                         struct request_sock *rsk,
+                                         struct sk_buff *skb)
+{
+        //struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        struct serval_tcp_request_sock *trsk = serval_tcp_rsk(rsk);
+        struct tcphdr *tcph = tcp_hdr(skb);
+
+        LOG_DBG("TCP SYN received seq=%u\n", ntohl(tcph->seq));
+        
+        trsk->snt_isn = serval_tcp_init_sequence(skb);
+
         return 0;
 }
 
@@ -46,30 +75,17 @@ static void serval_tcp_connection_respond_sock(struct sock *sk,
 static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct tcphdr *tcph = tcp_hdr(skb);
-        struct flow_id *flowid = (struct flow_id *)&tcph->dest;
         int err = 0;
         
-        LOG_DBG("tcp packet seq=%lu ack=%lu\n",  
+        LOG_DBG("TCP packet seq=%lu ack=%lu\n",  
                 ntohl(tcph->seq),
                 ntohl(tcph->ack_seq));
-
-        sk = serval_sock_lookup_flowid(flowid);
-        
-        if (!sk) {
-                LOG_ERR("No matching serval sock\n");
-                FREE_SKB(skb);
-        }
 
         return err;
 }
 
 static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
                                               int large_allowed)
-{
-        return 40;
-}
-
-unsigned int serval_tcp_current_mss(struct sock *sk)
 {
         return 40;
 }
@@ -118,6 +134,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 		__kfree_skb(skb);
 	} else {
 		sk->sk_prot->enter_memory_pressure(sk);
+                /* FIXME */
 		/* sk_stream_moderate_sndbuf(sk); */
 	}
 	return NULL;
@@ -579,7 +596,6 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied)
         */
 }
 
-
 static void tcp_prequeue_process(struct sock *sk)
 {
 	struct sk_buff *skb;
@@ -1003,6 +1019,7 @@ recv_urg:
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_tcp_rcv,
+        .build_syn = serval_tcp_build_syn,
         .conn_request = serval_tcp_connection_request,
         .conn_child_sock = serval_tcp_connection_respond_sock,
 };

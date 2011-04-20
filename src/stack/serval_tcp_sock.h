@@ -86,7 +86,6 @@ struct serval_tcp_sock {
 	u32 mdev_max;	/* maximal mdev for the last rtt period	*/
 	u32 rttvar;		/* smoothed mdev_max			*/
 	u32 rtt_seq;	/* sequence number to update rttvar	*/
-	__u32 rto;
 
 	u32 packets_out;	/* Packets which are "in flight"	*/
 	u32 retrans_out;	/* Retransmitted packets out		*/
@@ -164,6 +163,7 @@ struct serval_tcp_sock {
 	__u8			  syn_retries;
 	__u8			  probes_out;
 	__u16			  ext_hdr_len;
+	__u32                     rto;
 
 	struct {
 		__u8		  pending;	 /* ACK is pending			   */

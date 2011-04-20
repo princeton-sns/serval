@@ -12,6 +12,45 @@
 
 int sysctl_tcp_moderate_rcvbuf __read_mostly = 1;
 int sysctl_tcp_abc __read_mostly;
+
+static void serval_tcp_clear_retrans_partial(struct serval_tcp_sock *tp)
+{
+	tp->retrans_out = 0;
+	tp->lost_out = 0;
+
+	tp->undo_marker = 0;
+	tp->undo_retrans = 0;
+}
+
+void serval_tcp_clear_retrans(struct serval_tcp_sock *tp)
+{
+	serval_tcp_clear_retrans_partial(tp);
+
+	tp->fackets_out = 0;
+	tp->sacked_out = 0;
+}
+
+/* Initialize RCV_MSS value.
+ * RCV_MSS is an our guess about MSS used by the peer.
+ * We haven't any direct information about the MSS.
+ * It's better to underestimate the RCV_MSS rather than overestimate.
+ * Overestimations make us ACKing less frequently than needed.
+ * Underestimations are more easy to detect and fix by tcp_measure_rcv_mss().
+ */
+void serval_tcp_initialize_rcv_mss(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	unsigned int hint = min_t(unsigned int, tp->advmss, tp->mss_cache);
+
+	hint = min(hint, tp->rcv_wnd / 2);
+	hint = min(hint, TCP_MSS_DEFAULT);
+	hint = max(hint, TCP_MIN_MSS);
+
+	tp->tp_ack.rcv_mss = hint;
+
+        LOG_DBG("rcv_mss=%u\n", hint);
+}
+
 /*
 
  * This function should be called every time data is copied to user space.

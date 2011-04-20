@@ -96,8 +96,11 @@ struct serval_sock_af_ops {
 	int	        (*queue_xmit)(struct sk_buff *skb);
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
+        int             (*build_syn)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
-	int	        (*conn_request)(struct sock *sk, struct sk_buff *skb);
+	int	        (*conn_request)(struct sock *sk, 
+                                        struct request_sock *rsk, 
+                                        struct sk_buff *skb);
         void            (*conn_child_sock)(struct sock *sk, 
                                            struct sk_buff *skb,
                                            struct request_sock *rsk,
