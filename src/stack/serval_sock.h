@@ -7,6 +7,7 @@
 #include <serval/lock.h>
 #include <serval/hash.h>
 #include <serval/sock.h>
+#include <serval/dst.h>
 #include <serval/inet_sock.h>
 #include <serval/net.h>
 #include <serval/timer.h>
@@ -96,7 +97,12 @@ struct serval_sock_af_ops {
 	int	        (*queue_xmit)(struct sk_buff *skb);
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
-        int             (*build_syn)(struct sock *sk, struct sk_buff *skb);
+        int             (*conn_build_syn)(struct sock *sk, struct sk_buff *skb);
+        int             (*conn_build_synack)(struct sock *sk,
+                                             struct dst_entry *dst,
+                                             struct request_sock *rsk,
+                                             struct sk_buff *skb);
+        int             (*conn_build_ack)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
 	int	        (*conn_request)(struct sock *sk, 
                                         struct request_sock *rsk, 
@@ -106,6 +112,7 @@ struct serval_sock_af_ops {
                                            struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
+        int             (*conn_ack)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
 };
@@ -282,5 +289,7 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb, struct sock *sk)
 	skb->destructor = serval_sock_rfree;
 }
 
+struct dst_entry *serval_sock_route_req(struct sock *sk,
+                                        const struct request_sock *req);
 
 #endif /* _SERVAL_SOCK_H */

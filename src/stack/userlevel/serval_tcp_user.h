@@ -182,6 +182,27 @@ struct tcp_congestion_ops {
 	struct module 	*owner;
 };
 
+struct tcp_options_received {
+/*	PAWS/RTTM data	*/
+	long	ts_recent_stamp;/* Time we stored ts_recent (for aging) */
+	u32	ts_recent;	/* Time stamp to echo next		*/
+	u32	rcv_tsval;	/* Time stamp value             	*/
+	u32	rcv_tsecr;	/* Time stamp echo reply        	*/
+	u16 	saw_tstamp : 1,	/* Saw TIMESTAMP on last packet		*/
+		tstamp_ok : 1,	/* TIMESTAMP seen on SYN packet		*/
+		dsack : 1,	/* D-SACK is scheduled			*/
+		wscale_ok : 1,	/* Wscale seen on SYN packet		*/
+		sack_ok : 4,	/* SACK seen on SYN packet		*/
+		snd_wscale : 4,	/* Window scaling received from sender	*/
+		rcv_wscale : 4;	/* Window scaling to send to receiver	*/
+	u8	cookie_plus:6,	/* bytes in authenticator/cookie option	*/
+		cookie_out_never:1,
+		cookie_in_always:1;
+	u8	num_sacks;	/* Number of SACK blocks		*/
+	u16	user_mss;	/* mss requested by user in ioctl	*/
+	u16	mss_clamp;	/* Maximal mss, negotiated at connection setup */
+};
+
 #define TCP_CHECK_TIMER(sk) do { } while (0)
 
 extern int sysctl_tcp_adv_win_scale;

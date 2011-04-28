@@ -346,8 +346,8 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         LOG_DBG("Sending SYN seqno=%u\n",
                 SERVAL_SKB_CB(skb)->seqno);
 
-        if (ssk->af_ops->build_syn) {
-                err = ssk->af_ops->build_syn(sk, skb);
+        if (ssk->af_ops->conn_build_syn) {
+                err = ssk->af_ops->conn_build_syn(sk, skb);
 
                 if (err < 0) {
                         LOG_ERR("Transport protocol returned error\n");
@@ -462,6 +462,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 (struct serval_connection_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
         struct net_addr saddr;
+        struct dst_entry *dst = NULL;
         int err = 0;
         
         /* Cache this service. FIXME, need to garbage this entry at
@@ -504,27 +505,58 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
 
         /* Call upper protocol handler */
-        err = ssk->af_ops->conn_request(sk, rsk, skb);
-        
-        if (err < 0) {
-                reqsk_free(rsk);
-                goto drop;
+        if (ssk->af_ops->conn_request) {
+                err = ssk->af_ops->conn_request(sk, rsk, skb);
+                
+                if (err < 0) {
+                        reqsk_free(rsk);
+                        goto drop;
+                }
         }
-        srsk = serval_rsk(rsk);
+          /* Need to drop dst since this packet is routed for
+         * input. Otherwise, kernel IP stack will be confused when
+         * transmitting this packet. */
+        skb_dst_drop(skb);
+#if defined(OS_LINUX_KERNEL)
+        {
+                /*
+                  For kernel, we need to route this packet and
+                  associate a dst_entry with the skb for it to be
+                  accepted by the kernel IP stack.
+                 */
+                dst = serval_ipv4_req_route(sk, rsk, skb->protocol,
+                                            saddr.net_ip.s_addr,
+                                            ip_hdr(skb)->saddr);
 
+                if (!dst) {
+                        LOG_ERR("SYN-ACK not routable\n");
+                        goto drop;
+                }
+        }
+#endif /* OS_LINUX_KERNEL */
+
+        srsk = serval_rsk(rsk);
+        
+        if (ssk->af_ops->conn_build_synack) {
+                err = ssk->af_ops->conn_build_synack(sk, dst, rsk, skb);
+                
+                if (err < 0) {
+                        reqsk_free(rsk);
+                        goto drop_and_release;
+                }
+        }
+        
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &sfh->src_flowid, 
                sizeof(sfh->src_flowid));
-        memcpy(&srsk->dst_addr, &ip_hdr(skb)->saddr,
-               sizeof(srsk->dst_addr));
+        memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
+               sizeof(inet_rsk(rsk)->rmt_addr));
+        memcpy(&inet_rsk(rsk)->loc_addr, &ip_hdr(skb)->daddr,
+               sizeof(inet_rsk(rsk)->loc_addr));
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ntohl(conn_ext->seqno);
 
         list_add(&srsk->lh, &ssk->syn_queue);
-        
-        /* Push back the Serval header again to make IP happy */
-        skb_push(skb, hdr_len);
-        skb_reset_transport_header(skb);
         
         /* Update info in packet */
         memcpy(&sfh->dst_flowid, &sfh->src_flowid, 
@@ -543,31 +575,11 @@ static int serval_srv_syn_rcv(struct sock *sk,
         sfh->flags = SVH_SYN | SVH_ACK;
         skb->protocol = IPPROTO_SERVAL;
 
-        /* Need to drop dst since this packet is routed for
-         * input. Otherwise, kernel IP stack will be confused when
-         * transmitting this packet. */
-        skb_dst_drop(skb);
-#if defined(OS_LINUX_KERNEL)
-        {
-                /*
-                  For kernel, we need to route this packet and
-                  associate a dst_entry with the skb for it to be
-                  accepted by the kernel IP stack.
-                */
-                struct dst_entry *dst;
-
-                dst = serval_ipv4_req_route(sk, rsk, skb->protocol,
-                                            saddr.net_ip.s_addr,
-                                            ip_hdr(skb)->saddr);
-
-                if (!dst) {
-                        LOG_ERR("SYN-ACK not routable\n");
-                        goto drop;
-                }
-
-                skb_dst_set(skb, dst);
-        }
-#endif /* OS_LINUX_KERNEL */
+        /* Push back the Serval header again to make IP happy */
+        skb_push(skb, hdr_len);
+        skb_reset_transport_header(skb);
+              
+        skb_dst_set(skb, dst);
 
         LOG_DBG("Sending SYNACK seqno=%u ackno=%u\n",
                 ntohl(conn_ext->seqno),
@@ -580,6 +592,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                                              ip_hdr(skb)->saddr, NULL);
 done:        
         return err;
+drop_and_release:
+        dst_release(dst);
 drop:
         FREE_SKB(skb);
         goto done;
@@ -635,7 +649,8 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                            sizeof(srsk->local_flowid)) == 0) {
                         struct sock *nsk;
                         struct serval_sock *nssk;
-                        struct request_sock *rsk = &srsk->rsk;
+                        struct request_sock *rsk = &srsk->rsk.req;
+                        struct inet_request_sock *irsk = &srsk->rsk;
 
                         if (memcmp(srsk->peer_nonce, conn_ext->nonce, 
                                    SERVAL_NONCE_SIZE) != 0) {
@@ -673,8 +688,8 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                sizeof(srsk->peer_flowid));
                         memcpy(&nssk->peer_srvid, &srsk->peer_srvid,
                                sizeof(srsk->peer_srvid));
-                        memcpy(&inet_sk(sk)->inet_daddr, &srsk->dst_addr,
-                               sizeof(srsk->dst_addr));
+                        memcpy(&inet_sk(sk)->inet_daddr, &irsk->rmt_addr,
+                               sizeof(inet_sk(sk)->inet_daddr));
                         memcpy(nssk->local_nonce, srsk->local_nonce, 
                                SERVAL_NONCE_SIZE);
                         memcpy(nssk->peer_nonce, srsk->peer_nonce, 
@@ -984,7 +999,10 @@ static int serval_srv_respond_state_process(struct sock *sk,
 
         /* Process ACK */
         if (serval_srv_ack_process(sk, sfh, skb) == 0) {
-                
+                if (serval_sk(sk)->af_ops->conn_ack) {
+                        if (serval_sk(sk)->af_ops->conn_ack(sk, skb) != 0)
+                                goto drop;
+                }
                 /* Valid ACK */
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
                 

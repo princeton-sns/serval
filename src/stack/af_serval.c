@@ -246,7 +246,7 @@ static int serval_listen_stop(struct sock *sk)
 
                 LOG_DBG("deleting SYN queued request socket\n");
 
-                reqsk_free(&srsk->rsk);
+                reqsk_free(&srsk->rsk.req);
                 sk->sk_ack_backlog--;
         }
         /* Destroy accept queue of sockets that completed three-way
@@ -261,9 +261,9 @@ static int serval_listen_stop(struct sock *sk)
                                         struct serval_request_sock, lh);
                 
                 list_del(&srsk->lh);
-                
-                if (srsk->rsk.sk) {
-                        struct sock *child = srsk->rsk.sk;
+
+                if (srsk->rsk.req.sk) {
+                        struct sock *child = srsk->rsk.req.sk;
                         
                         /* From inet_connection_sock */
                         local_bh_disable();
@@ -290,7 +290,7 @@ static int serval_listen_stop(struct sock *sk)
 
                         sock_put(child);
                 }
-                reqsk_free(&srsk->rsk);
+                reqsk_free(&srsk->rsk.req);
                 sk->sk_ack_backlog--;
         }
 
@@ -347,10 +347,10 @@ struct sock *serval_accept_dequeue(struct sock *parent,
 
         /* Parent sock is already locked... */
         list_for_each_entry(srsk, &pssk->accept_queue, lh) {
-                if (!srsk->rsk.sk)
+                if (!srsk->rsk.req.sk)
                         continue;
 
-                sk = srsk->rsk.sk;
+                sk = srsk->rsk.req.sk;
                
                 if (newsock) {
                         sock_graft(sk, newsock);
@@ -358,7 +358,7 @@ struct sock *serval_accept_dequeue(struct sock *parent,
                 }
 
                 list_del(&srsk->lh);
-                reqsk_free(&srsk->rsk);                
+                reqsk_free(&srsk->rsk.req);                
                 return sk;
         }
 

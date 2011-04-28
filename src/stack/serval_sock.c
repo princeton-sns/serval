@@ -11,6 +11,7 @@
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
+#include <net/route.h>
 #if defined(__BIG_ENDIAN)
 #define __BYTE_ORDER __BIG_ENDIAN
 #elif defined(__LITTLE_ENDIAN)
@@ -621,6 +622,49 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
         sk->sk_state = new_state;
 
         return new_state;
+}
+
+struct dst_entry *serval_sock_route_req(struct sock *sk,
+                                        const struct request_sock *req)
+{
+#if defined(OS_LINUX_KERNEL)
+	struct rtable *rt;
+	const struct inet_request_sock *ireq = inet_rsk(req);
+	//struct ip_options *opt = inet_rsk(req)->opt;
+	struct flowi fl = { .oif = sk->sk_bound_dev_if,
+			    .mark = sk->sk_mark,
+			    .nl_u = { .ip4_u =
+				      { .daddr = ireq->rmt_addr,
+					.saddr = ireq->loc_addr,
+					.tos = 0 /*RT_CONN_FLAGS(sk)*/ } },
+			    .proto = sk->sk_protocol,
+			    .flags = inet_sk_flowi_flags(sk),
+			    .uli_u = { .ports =
+				       { .sport = 0,
+					 .dport = 0 } } };
+	struct net *net = sock_net(sk);
+
+	security_req_classify_flow(req, &fl);
+	if (ip_route_output_flow(net, &rt, &fl, sk, 0))
+		goto no_route;
+        /*
+	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
+		goto route_err;
+        */
+	return &rt->u.dst;
+/*
+route_err:
+*/
+	ip_rt_put(rt);
+
+  no_route:
+/*
+	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
+*/
+	return NULL;
+#else
+        return NULL;
+#endif
 }
 
 /* 

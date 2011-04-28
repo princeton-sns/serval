@@ -8,6 +8,11 @@
 #include <userlevel/serval_tcp_user.h>
 #endif
 
+/* From net/core/sock.c */
+int sysctl_serval_wmem_max __read_mostly = 32767;
+int sysctl_serval_rmem_max __read_mostly = 32767;
+int sysctl_serval_tcp_window_scaling __read_mostly = 1;
+
 int sysctl_tcp_tso_win_divisor __read_mostly = 3;
 
 /* People can turn this on to work with those rare, broken TCPs that
@@ -218,7 +223,7 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 		/* Set window scaling on max possible window
 		 * See RFC1323 for an explanation of the limit to 14
 		 */
-		space = max_t(u32, sysctl_tcp_rmem[2], sysctl_rmem_max);
+		space = max_t(u32, sysctl_tcp_rmem[2], sysctl_serval_rmem_max);
 		space = min_t(u32, space, *window_clamp);
 		while (space > 65535 && (*rcv_wscale) < 14) {
 			space >>= 1;
@@ -981,7 +986,7 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
  */
 static void serval_tcp_connect_init(struct sock *sk)
 {
-	struct dst_entry *dst = __sk_dst_get(sk);
+	//struct dst_entry *dst = __sk_dst_get(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	__u8 rcv_wscale;
         //unsigned int initrwnd = dst_metric(dst, RTAX_INITRWND);
@@ -1012,7 +1017,7 @@ static void serval_tcp_connect_init(struct sock *sk)
                                          tp->advmss - (tp->rx_opt.ts_recent_stamp ? tp->tcp_header_len - sizeof(struct tcphdr) : 0),
                                          &tp->rcv_wnd,
                                          &tp->window_clamp,
-                                         sysctl_tcp_window_scaling,
+                                         sysctl_serval_tcp_window_scaling,
                                          &rcv_wscale,
                                          initrwnd);
 
@@ -1042,47 +1047,86 @@ static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
 	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0;
-	/*
-          TCP_SKB_CB(skb)->flags = flags;
+	
+        /*
+        TCP_SKB_CB(skb)->flags = flags;
 	TCP_SKB_CB(skb)->sacked = 0;
         */
-
 	skb_shinfo(skb)->gso_segs = 1;
 	skb_shinfo(skb)->gso_size = 0;
 	skb_shinfo(skb)->gso_type = 0;
-
+        
         /*
 	TCP_SKB_CB(skb)->seq = seq;
 	if (flags & (TCPCB_FLAG_SYN | TCPCB_FLAG_FIN))
 		seq++;
-      
 	TCP_SKB_CB(skb)->end_seq = seq;
         */
 }
 
-int serval_tcp_build_syn(struct sock *sk, struct sk_buff *skb)
+
+static int serval_tcp_build_header(struct sock *sk, 
+                                   struct sk_buff *skb,
+                                   u32 seq)
 {
-        struct serval_sock *ssk = serval_sk(sk);
+        struct tcphdr *tcph = tcp_hdr(skb);
+	struct serval_tcp_sock *tp;
+	struct tcp_skb_cb *tcb;
+	unsigned tcp_options_size = 0, tcp_header_size;
+        
+        LOG_DBG("TCP build SYNACK\n");
+
+        tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
+
+	tp = serval_tcp_sk(sk);
+
+	tcph->seq	       	= htonl(seq);
+	tcph->ack_seq		= htonl(tp->rcv_nxt);
+	*(((__be16 *)tcph) + 6)	= htons(((tcp_header_size >> 2) << 12) |
+					tcb->flags);
+        if (0 /*unlikely(tcb->flags & TCPCB_FLAG_SYN) */) {
+		/* RFC1323: The window in SYN & SYN/ACK segments
+		 * is never scaled.
+		 */
+		tcph->window	= htons(min(tp->rcv_wnd, 65535U));
+	} else {
+		tcph->window	= htons(serval_tcp_select_window(sk));
+	}
+	tcph->check		= 0;
+	tcph->urg_ptr		= 0;
+
+        return 0;
+}
+
+int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
+{
+        //struct serval_sock *ssk = serval_sk(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         unsigned int tcp_header_size = sizeof(struct tcphdr);
-        struct tcphdr *tcph;
+        struct tcphdr *th;
         u8 flags = TCPCB_FLAG_SYN;
 
-        tcph = (struct tcphdr *)skb_push(skb, tcp_header_size);
+        th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
-        if (!tcph) {
+        if (!th) {
                 FREE_SKB(skb);
                 return -ENOMEM;
         }
+
+        if (!tp->write_seq)
+                tp->write_seq = serval_tcp_random_sequence_number();
+
         serval_tcp_connect_init(sk);
+
+	tp->rx_opt.mss_clamp = TCP_MSS_DEFAULT;
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq, flags);
-	tcph->source		= 0;
-	tcph->dest		= 0;
-	tcph->seq		= tp->write_seq++;
-	tcph->ack_seq		= htonl(tp->rcv_nxt);
-	*(((__be16 *)tcph) + 6)	= htons(((tcp_header_size >> 2) << 12) |
+	th->source		= htons(1);
+	th->dest		= htons(2);
+	th->seq		= htonl(tp->write_seq++);
+	th->ack_seq		= htonl(tp->rcv_nxt);
+	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
                                         flags);
                 
 	tp->packets_out += serval_tcp_skb_pcount(skb);
@@ -1090,5 +1134,71 @@ int serval_tcp_build_syn(struct sock *sk, struct sk_buff *skb)
 	tp->snd_nxt = tp->write_seq;
 	tp->pushed_seq = tp->write_seq;
 
+        LOG_DBG("TCP sending SYN seq=%u ackno=%u\n",
+                ntohl(th->seq), ntohl(th->ack_seq));
+
+        return 0;
+}
+
+int serval_tcp_connection_build_synack(struct sock *sk,
+                                       struct dst_entry *dst,
+                                       struct request_sock *req, 
+                                       struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        struct inet_request_sock *ireq = inet_rsk(req);
+	unsigned tcp_header_size;
+	struct tcphdr *th;
+        int mss;
+
+	mss = TCP_MSS_DEFAULT; //dst_metric(dst, RTAX_ADVMSS);
+
+	if (req->rcv_wnd == 0) { /* ignored for retransmitted syns */
+		__u8 rcv_wscale;
+		/* Set this up on the first call only */
+		req->window_clamp = tp->window_clamp ? : 
+                        TCP_MSS_DEFAULT /*dst_metric(dst, RTAX_WINDOW) */;
+                
+		/* tcp_full_space because it is guaranteed to be the
+                 * first packet */
+		serval_tcp_select_initial_window(serval_tcp_full_space(sk),
+                                                 mss
+                                                 /* - (tp->tstamp_ok ? TCPOLEN_TSTAMP_ALIGNED : 0) */,
+                                                 &req->rcv_wnd,
+                                                 &req->window_clamp,
+                                                 ireq->wscale_ok,
+                                                 &rcv_wscale,
+                                                 /* dst_metric(dst, RTAX_INITRWND) */ 1460);
+		ireq->rcv_wscale = rcv_wscale;
+	}
+
+	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
+                                    TCPCB_FLAG_SYN | TCPCB_FLAG_ACK);
+
+        tcp_header_size = sizeof(*th);
+	th = tcp_hdr(skb);
+	memset(th, 0, sizeof(struct tcphdr));
+	th->syn = 1;
+	th->ack = 1;
+	//TCP_ECN_make_synack(req, th);
+	th->source = 0;
+	th->dest = 0;
+
+        th->seq = htonl(serval_tcp_rsk(req)->snt_isn);
+	th->ack_seq = htonl(serval_tcp_rsk(req)->rcv_isn + 1);
+
+	/* RFC1323: The window in SYN & SYN/ACK segments is never scaled. */
+	th->window = htons(min(req->rcv_wnd, 65535U));
+        th->doff = (tcp_header_size >> 2);
+
+        LOG_DBG("TCP sending SYNACK seq=%u ackno=%u\n",
+                ntohl(th->seq), ntohl(th->ack_seq));
+
+        return 0;
+}
+
+int serval_tcp_connection_build_ack(struct sock *sk, 
+                                    struct sk_buff *skb)
+{
         return 0;
 }
