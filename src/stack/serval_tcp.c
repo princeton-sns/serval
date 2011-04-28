@@ -29,9 +29,9 @@ static void serval_tcp_shutdown(struct sock *sk, int how)
         
 }
 
-static inline __u32 serval_tcp_init_sequence(struct sk_buff *skb)
+__u32 serval_tcp_random_sequence_number(void)
 {
-        __u32 isn;
+   __u32 isn;
 
 #if defined(OS_LINUX_KERNEL)
         get_random_bytes(&isn, sizeof(isn));
@@ -48,16 +48,70 @@ static inline __u32 serval_tcp_init_sequence(struct sk_buff *skb)
         return isn;
 }
 
+static inline __u32 serval_tcp_init_sequence(struct sk_buff *skb)
+{
+        return serval_tcp_random_sequence_number();
+}
+
+static inline void serval_tcp_openreq_init(struct request_sock *req,
+                                           struct tcp_options_received *rx_opt,
+                                           struct sk_buff *skb)
+{
+	struct inet_request_sock *ireq = inet_rsk(req);
+
+	req->rcv_wnd = 0;		/* So that tcp_send_synack() knows! */
+	req->cookie_ts = 0;
+	serval_tcp_rsk(req)->rcv_isn = tcp_hdr(skb)->seq;
+
+	req->mss = rx_opt->mss_clamp;
+	req->ts_recent = rx_opt->saw_tstamp ? rx_opt->rcv_tsval : 0;
+	ireq->tstamp_ok = rx_opt->tstamp_ok;
+	ireq->sack_ok = rx_opt->sack_ok;
+	ireq->snd_wscale = rx_opt->snd_wscale;
+	ireq->wscale_ok = rx_opt->wscale_ok;
+      
+	ireq->tstamp_ok = rx_opt->tstamp_ok;
+	ireq->sack_ok = rx_opt->sack_ok;
+	ireq->snd_wscale = rx_opt->snd_wscale;
+	ireq->wscale_ok = rx_opt->wscale_ok;
+	ireq->acked = 0;
+	ireq->ecn_ok = 0;
+	ireq->rmt_port = tcp_hdr(skb)->source;
+	ireq->loc_port = tcp_hdr(skb)->dest;
+}
+
+
 static int serval_tcp_connection_request(struct sock *sk, 
-                                         struct request_sock *rsk,
+                                         struct request_sock *req,
                                          struct sk_buff *skb)
 {
-        //struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        struct serval_tcp_request_sock *trsk = serval_tcp_rsk(rsk);
-        struct tcphdr *tcph = tcp_hdr(skb);
-
-        LOG_DBG("TCP SYN received seq=%u\n", ntohl(tcph->seq));
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        struct serval_tcp_request_sock *trsk = serval_tcp_rsk(req);
+        struct tcphdr *th;
+	struct tcp_options_received tmp_opt;
         
+        if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
+                LOG_ERR("No TCP header?\n");
+                FREE_SKB(skb);
+                return -1;
+        }
+
+        th = tcp_hdr(skb);
+
+        LOG_DBG("TCP SYN seq=%u src=%u dst=%u skb->len=%u\n", 
+                ntohl(th->seq),
+                ntohs(th->source),
+                ntohs(th->dest),
+                skb->len);
+
+        memset(&tmp_opt, 0, sizeof(tmp_opt));
+	serval_tcp_clear_options(&tmp_opt);
+	tmp_opt.mss_clamp = TCP_MSS_DEFAULT;
+	tmp_opt.user_mss  = tp->rx_opt.user_mss;
+	//tcp_parse_options(skb, &tmp_opt, &hash_location, 0);
+
+        serval_tcp_openreq_init(req, &tmp_opt, skb);
+
         trsk->snt_isn = serval_tcp_init_sequence(skb);
 
         return 0;
@@ -1018,12 +1072,32 @@ recv_urg:
 	goto out;
 }
 
+static int serval_tcp_connection_ack(struct sock *sk, struct sk_buff *skb)
+{
+        struct tcphdr *th;
+ 
+        if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
+                LOG_ERR("No TCP header?\n");
+                FREE_SKB(skb);
+                return -1;
+        }
+
+        th = tcp_hdr(skb);
+
+        LOG_DBG("TCP ACK ackno=%u\n", ntohl(th->ack_seq));
+
+        return 0;
+}
+
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_tcp_rcv,
-        .build_syn = serval_tcp_build_syn,
+        .conn_build_syn = serval_tcp_connection_build_syn,
+        .conn_build_synack = serval_tcp_connection_build_synack,
+        .conn_build_ack = serval_tcp_connection_build_ack,
         .conn_request = serval_tcp_connection_request,
         .conn_child_sock = serval_tcp_connection_respond_sock,
+        .conn_ack = serval_tcp_connection_ack,
 };
 
 /**

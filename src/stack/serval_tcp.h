@@ -136,6 +136,8 @@
 					 * minimal timewait lifetime.
 					 */
 
+__u32 serval_tcp_random_sequence_number(void);
+
 /* Due to TSO, an SKB can be composed of multiple actual
  * packets.  To keep these tracked properly, we use this.
  */
@@ -150,7 +152,13 @@ static inline int seravl_tcp_skb_mss(const struct sk_buff *skb)
 	return skb_shinfo(skb)->gso_size;
 }
 
-int serval_tcp_build_syn(struct sock *sk, struct sk_buff *skb);
+int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb);
+int serval_tcp_connection_build_synack(struct sock *sk,
+				       struct dst_entry *dst,
+                                       struct request_sock *rsk, 
+                                       struct sk_buff *skb);
+int serval_tcp_connection_build_ack(struct sock *sk,
+				    struct sk_buff *skb);
 
 void serval_tcp_initialize_rcv_mss(struct sock *sk);
 
@@ -161,6 +169,13 @@ unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu);
 unsigned int serval_tcp_current_mss(struct sock *sk);
 
 void serval_tcp_clear_retrans(struct serval_tcp_sock *tp);
+
+static inline void serval_tcp_clear_options(struct tcp_options_received *rx_opt)
+{
+	rx_opt->tstamp_ok = rx_opt->sack_ok = 0;
+	rx_opt->wscale_ok = rx_opt->snd_wscale = 0;
+	rx_opt->cookie_plus = 0;
+}
 
 /* Bound MSS / TSO packet size with the half of the window */
 static inline int serval_tcp_bound_to_half_wnd(struct serval_tcp_sock *tp, 

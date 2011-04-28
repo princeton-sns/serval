@@ -13,11 +13,10 @@
 #include "serval_sock.h"
 
 struct serval_request_sock {
-        struct request_sock rsk;
+        struct inet_request_sock rsk;
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
-        struct net_addr dst_addr;
         uint32_t rcv_seq;
         uint32_t iss_seq;
         uint8_t local_nonce[SERVAL_NONCE_SIZE];
