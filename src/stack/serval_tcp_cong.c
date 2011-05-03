@@ -21,7 +21,7 @@ int serval_tcp_is_cwnd_limited(const struct sock *sk, u32 in_flight)
 
 	left = tp->snd_cwnd - in_flight;
 	if (sk_can_gso(sk) &&
-	    left * sysctl_tcp_tso_win_divisor < tp->snd_cwnd &&
+	    left * sysctl_serval_tcp_tso_win_divisor < tp->snd_cwnd &&
 	    left * tp->mss_cache < sk->sk_gso_max_size)
 		return 1;
 	return left <= serval_tcp_max_burst(tp);
@@ -45,7 +45,7 @@ void serval_tcp_slow_start(struct serval_tcp_sock *tp)
 	 * previously unacknowledged bytes ACKed by each incoming
 	 * acknowledgment, provided the increase is not more than L
 	 */
-	if (sysctl_tcp_abc && tp->bytes_acked < tp->mss_cache)
+	if (sysctl_serval_tcp_abc && tp->bytes_acked < tp->mss_cache)
 		return;
 
 	if (sysctl_serval_tcp_max_ssthresh > 0 && 
@@ -57,7 +57,7 @@ void serval_tcp_slow_start(struct serval_tcp_sock *tp)
 	/* RFC3465: ABC
 	 * We MAY increase by 2 if discovered delayed ack
 	 */
-	if (sysctl_tcp_abc > 1 && tp->bytes_acked >= 2*tp->mss_cache)
+	if (sysctl_serval_tcp_abc > 1 && tp->bytes_acked >= 2*tp->mss_cache)
 		cnt <<= 1;
 	tp->bytes_acked = 0;
 
@@ -100,7 +100,7 @@ void serval_tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 		serval_tcp_slow_start(tp);
 
 	/* In dangerous area, increase slowly. */
-	else if (sysctl_tcp_abc) {
+	else if (sysctl_serval_tcp_abc) {
 		/* RFC3465: Appropriate Byte Count
 		 * increase once for each full cwnd acked
 		 */

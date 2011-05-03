@@ -13,15 +13,15 @@ int sysctl_serval_wmem_max __read_mostly = 32767;
 int sysctl_serval_rmem_max __read_mostly = 32767;
 int sysctl_serval_tcp_window_scaling __read_mostly = 1;
 
-int sysctl_tcp_tso_win_divisor __read_mostly = 3;
+int sysctl_serval_tcp_tso_win_divisor __read_mostly = 3;
 
 /* People can turn this on to work with those rare, broken TCPs that
  * interpret the window field as a signed quantity.
  */
-int sysctl_tcp_workaround_signed_windows __read_mostly = 0;
+int sysctl_serval_tcp_workaround_signed_windows __read_mostly = 0;
 
 /* By default, RFC2861 behavior.  */
-int sysctl_tcp_slow_start_after_idle __read_mostly = 1;
+int sysctl_serval_tcp_slow_start_after_idle __read_mostly = 1;
 
 #define OPTION_SACK_ADVERTISE	(1 << 0)
 #define OPTION_TS		(1 << 1)
@@ -126,7 +126,7 @@ static void serval_tcp_event_data_sent(struct serval_tcp_sock *tp,
 {
 	const u32 now = tcp_time_stamp;
 
-	if (sysctl_tcp_slow_start_after_idle &&
+	if (sysctl_serval_tcp_slow_start_after_idle &&
 	    (!tp->packets_out && (s32)(now - tp->lsndtime) > tp->rto))
 		serval_tcp_cwnd_restart(sk, __sk_dst_get(sk));
 
@@ -213,7 +213,7 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 	 * which we interpret as a sign the remote TCP is not
 	 * misinterpreting the window field as a signed quantity.
 	 */
-	if (sysctl_tcp_workaround_signed_windows)
+	if (sysctl_serval_tcp_workaround_signed_windows)
 		(*rcv_wnd) = min(space, MAX_TCP_WINDOW);
 	else
 		(*rcv_wnd) = space;
@@ -284,7 +284,7 @@ static u16 serval_tcp_select_window(struct sock *sk)
 	/* Make sure we do not exceed the maximum possible
 	 * scaled window.
 	 */
-	if (!tp->rx_opt.rcv_wscale && sysctl_tcp_workaround_signed_windows)
+	if (!tp->rx_opt.rcv_wscale && sysctl_serval_tcp_workaround_signed_windows)
 		new_win = min(new_win, MAX_TCP_WINDOW);
 	else
 		new_win = min(new_win, (65535U << tp->rx_opt.rcv_wscale));
@@ -314,7 +314,7 @@ static void serval_tcp_cwnd_validate(struct sock *sk)
 		if (tp->packets_out > tp->snd_cwnd_used)
 			tp->snd_cwnd_used = tp->packets_out;
 
-		if (sysctl_tcp_slow_start_after_idle &&
+		if (sysctl_serval_tcp_slow_start_after_idle &&
 		    (s32)(tcp_time_stamp - tp->snd_cwnd_stamp) >= tp->rto)
 			serval_tcp_cwnd_application_limited(sk);
 	}
@@ -366,7 +366,7 @@ static inline unsigned int serval_tcp_cwnd_test(struct serval_tcp_sock *tp,
 	u32 in_flight, cwnd;
 
 	/* Don't be strict about the congestion window for the final FIN.  */
-	if ((TCP_SKB_CB(skb)->flags & TCPCB_FLAG_FIN) &&
+	if ((TCP_SKB_CB(skb)->flags & TCPH_FIN) &&
 	    tcp_skb_pcount(skb) == 1)
 		return 1;
 
@@ -484,7 +484,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
 
-	if (unlikely(tcb->flags & TCPCB_FLAG_SYN))
+	if (unlikely(tcb->flags & TCPH_SYN))
 		tcp_options_size = serval_tcp_syn_options(sk, skb, &opts, &md5);
 	else
 		tcp_options_size = serval_tcp_established_options(sk, skb, 
@@ -509,7 +509,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					tcb->flags);
 
-	if (unlikely(tcb->flags & TCPCB_FLAG_SYN)) {
+	if (unlikely(tcb->flags & TCPH_SYN)) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
 		 */
@@ -534,7 +534,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	//tcp_options_write((__be32 *)(th + 1), tp, &opts);
 	
 	/*
-	if (likely((tcb->flags & TCPCB_FLAG_SYN) == 0))
+	if (likely((tcb->flags & TCPH_SYN) == 0))
 		TCP_ECN_send(sk, skb, tcp_header_size);
 	*/
 #ifdef CONFIG_TCP_MD5SIG_DISABLED
@@ -548,7 +548,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	ssk->af_ops->send_check(sk, skb);
 
-	if (likely(tcb->flags & TCPCB_FLAG_ACK))
+	if (likely(tcb->flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, tcp_skb_pcount(skb));
 
 	if (skb->len != tcp_header_size)
@@ -792,7 +792,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	if (free_space < (full_space >> 1)) {
 		tp->tp_ack.quick = 0;
 
-		if (tcp_memory_pressure)
+		if (serval_tcp_memory_pressure)
 			tp->rcv_ssthresh = min(tp->rcv_ssthresh,
 					       4U * tp->advmss);
 
@@ -1058,7 +1058,7 @@ static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
         
         /*
 	TCP_SKB_CB(skb)->seq = seq;
-	if (flags & (TCPCB_FLAG_SYN | TCPCB_FLAG_FIN))
+	if (flags & (TCPH_SYN | TCPH_FIN))
 		seq++;
 	TCP_SKB_CB(skb)->end_seq = seq;
         */
@@ -1084,7 +1084,7 @@ static int serval_tcp_build_header(struct sock *sk,
 	tcph->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)tcph) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					tcb->flags);
-        if (0 /*unlikely(tcb->flags & TCPCB_FLAG_SYN) */) {
+        if (0 /*unlikely(tcb->flags & TCPH_SYN) */) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
 		 */
@@ -1104,7 +1104,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         unsigned int tcp_header_size = sizeof(struct tcphdr);
         struct tcphdr *th;
-        u8 flags = TCPCB_FLAG_SYN;
+        u8 flags = TCPH_SYN;
 
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
@@ -1173,7 +1173,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	}
 
 	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
-                                    TCPCB_FLAG_SYN | TCPCB_FLAG_ACK);
+                                    TCPH_SYN | TCPH_ACK);
 
         tcp_header_size = sizeof(*th);
 	th = tcp_hdr(skb);

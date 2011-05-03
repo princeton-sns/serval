@@ -18,6 +18,26 @@
 #define ENABLE_PAGE 1
 #endif
 
+int sysctl_serval_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
+
+int sysctl_serval_tcp_low_latency __read_mostly = 0;
+
+/*
+int sysctl_serval_tcp_mem[3];
+int sysctl_serval_tcp_wmem[3];
+int sysctl_serval_tcp_rmem[3];
+*/
+
+atomic_t serval_tcp_memory_allocated;	/* Current allocated memory. */
+
+/*
+ * Pressure flag: try to collapse.
+ * Technical note: it is used by multiple contexts non atomically.
+ * All the __sk_mem_schedule() is of this nature: accounting
+ * is strict, actions are advisory and have some latency.
+ */
+int serval_tcp_memory_pressure;
+
 static int serval_tcp_disconnect(struct sock *sk, int flags)
 {
         return 0;
@@ -159,7 +179,7 @@ static int serval_tcp_send_mss(struct sock *sk, int *size_goal, int flags)
 static inline void serval_tcp_mark_push(struct serval_tcp_sock *tp, 
                                  struct sk_buff *skb)
 {
-	TCP_SKB_CB(skb)->flags |= TCPCB_FLAG_PSH;
+	TCP_SKB_CB(skb)->flags |= TCPH_PSH;
 	tp->pushed_seq = tp->write_seq;
 }
 
@@ -203,7 +223,7 @@ static inline void skb_entail(struct sock *sk, struct sk_buff *skb)
 
 	skb->csum    = 0;
 	tcb->seq     = tcb->end_seq = tp->write_seq;
-	tcb->flags   = TCPCB_FLAG_ACK;
+	tcb->flags   = TCPH_ACK;
 	tcb->sacked  = 0;
 	skb_header_release(skb);
 	serval_tcp_add_write_queue_tail(sk, skb);
@@ -463,7 +483,7 @@ new_segment:
 			}
 
 			if (!copied)
-				TCP_SKB_CB(skb)->flags &= ~TCPCB_FLAG_PSH;
+				TCP_SKB_CB(skb)->flags &= ~TCPH_PSH;
 
 			tp->write_seq += copy;
 			TCP_SKB_CB(skb)->end_seq += copy;
@@ -721,7 +741,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			available = TCP_SKB_CB(skb)->seq + skb->len - (*seq);
 		if ((available < target) &&
 		    (len > sysctl_tcp_dma_copybreak) && !(flags & MSG_PEEK) &&
-		    !sysctl_tcp_low_latency &&
+		    !sysctl_serval_tcp_low_latency &&
 		    dma_find_channel(DMA_MEMCPY)) {
 			preempt_enable_no_resched();
 			tp->ucopy.pinned_list =
@@ -820,7 +840,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 		serval_tcp_cleanup_rbuf(sk, copied);
 
-		if (!sysctl_tcp_low_latency && tp->ucopy.task == user_recv) {
+		if (!sysctl_serval_tcp_low_latency && tp->ucopy.task == user_recv) {
 			/* Install new reader */
 			if (!user_recv && !(flags & (MSG_TRUNC | MSG_PEEK))) {
 				user_recv = current;
@@ -1242,8 +1262,8 @@ struct proto serval_tcp_proto = {
 	/* .enter_memory_pressure	= tcp_enter_memory_pressure, */
 	.sockets_allocated	= &tcp_sockets_allocated,
 	.orphan_count		= &tcp_orphan_count,
-	.memory_allocated	= &tcp_memory_allocated,
-	.memory_pressure	= &tcp_memory_pressure,
+	.memory_allocated	= &serval_tcp_memory_allocated,
+	.memory_pressure	= &serval_tcp_memory_pressure,
 	.sysctl_mem		= sysctl_tcp_mem,
 	.sysctl_wmem		= sysctl_tcp_wmem,
 	.sysctl_rmem		= sysctl_tcp_rmem,

@@ -10,8 +10,9 @@
 #include <serval_tcp_sock.h>
 #include <serval_tcp.h>
 
-int sysctl_tcp_moderate_rcvbuf __read_mostly = 1;
-int sysctl_tcp_abc __read_mostly;
+int sysctl_serval_tcp_moderate_rcvbuf __read_mostly = 1;
+int sysctl_serval_tcp_abc __read_mostly;
+int sysctl_serval_tcp_adv_win_scale __read_mostly = 2;
 
 static void serval_tcp_clear_retrans_partial(struct serval_tcp_sock *tp)
 {
@@ -78,7 +79,7 @@ void serval_tcp_rcv_space_adjust(struct sock *sk)
 
 		tp->rcvq_space.space = space;
 
-		if (sysctl_tcp_moderate_rcvbuf &&
+		if (sysctl_serval_tcp_moderate_rcvbuf &&
 		    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK)) {
 			int new_clamp = space;
 

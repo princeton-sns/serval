@@ -19,12 +19,6 @@
 #include <netinet/if_ether.h>
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-#define route_dst(rt) &(rt)->u.dst
-#else
-#define route_dst(rt) &(rt)->dst
-#endif /* LINUX_VERSION_CODE */
-
 extern int serval_srv_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
