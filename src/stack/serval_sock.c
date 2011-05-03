@@ -651,7 +651,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
         */
-	return &rt->u.dst;
+	return route_dst(rt);
 /*
 route_err:
 */

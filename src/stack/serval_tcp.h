@@ -136,7 +136,73 @@
 					 * minimal timewait lifetime.
 					 */
 
+
+#define serval_tcp_flag_byte(th) (((u_int8_t *)th)[13])
+
+#define TCPH_FIN 0x01
+#define TCPH_SYN 0x02
+#define TCPH_RST 0x04
+#define TCPH_PSH 0x08
+#define TCPH_ACK 0x10
+#define TCPH_URG 0x20
+#define TCPH_ECE 0x40
+#define TCPH_CWR 0x80
+
 __u32 serval_tcp_random_sequence_number(void);
+
+
+
+/* sysctl variables for tcp */
+extern int sysctl_serval_tcp_timestamps;
+extern int sysctl_serval_tcp_window_scaling;
+extern int sysctl_serval_tcp_sack;
+extern int sysctl_serval_tcp_fin_timeout;
+extern int sysctl_serval_tcp_keepalive_time;
+extern int sysctl_serval_tcp_keepalive_probes;
+extern int sysctl_serval_tcp_keepalive_intvl;
+extern int sysctl_serval_tcp_syn_retries;
+extern int sysctl_serval_tcp_synack_retries;
+extern int sysctl_serval_tcp_retries1;
+extern int sysctl_serval_tcp_retries2;
+extern int sysctl_serval_tcp_orphan_retries;
+extern int sysctl_serval_tcp_syncookies;
+extern int sysctl_serval_tcp_retrans_collapse;
+extern int sysctl_serval_tcp_stdurg;
+extern int sysctl_serval_tcp_rfc1337;
+extern int sysctl_serval_tcp_abort_on_overflow;
+extern int sysctl_serval_tcp_max_orphans;
+extern int sysctl_serval_tcp_fack;
+extern int sysctl_serval_tcp_reordering;
+extern int sysctl_serval_tcp_ecn;
+extern int sysctl_serval_tcp_dsack;
+extern int sysctl_serval_tcp_app_win;
+extern int sysctl_serval_tcp_adv_win_scale;
+extern int sysctl_serval_tcp_tw_reuse;
+extern int sysctl_serval_tcp_frto;
+extern int sysctl_serval_tcp_frto_response;
+extern int sysctl_serval_tcp_low_latency;
+//extern int sysctl_serval_tcp_dma_copybreak;
+extern int sysctl_serval_tcp_nometrics_save;
+extern int sysctl_serval_tcp_moderate_rcvbuf;
+extern int sysctl_serval_tcp_tso_win_divisor;
+extern int sysctl_serval_tcp_abc;
+extern int sysctl_serval_tcp_mtu_probing;
+extern int sysctl_serval_tcp_base_mss;
+extern int sysctl_serval_tcp_workaround_signed_windows;
+extern int sysctl_serval_tcp_slow_start_after_idle;
+extern int sysctl_serval_tcp_max_ssthresh;
+extern int sysctl_serval_tcp_cookie_size;
+extern int sysctl_serval_tcp_thin_linear_timeouts;
+extern int sysctl_serval_tcp_thin_dupack;
+
+extern atomic_t serval_tcp_memory_allocated;
+extern int serval_tcp_memory_pressure;
+
+#if defined(OS_USER)
+extern int sysctl_tcp_mem[3];
+extern int sysctl_tcp_wmem[3];
+extern int sysctl_tcp_rmem[3];
+#endif
 
 /* Due to TSO, an SKB can be composed of multiple actual
  * packets.  To keep these tracked properly, we use this.
@@ -392,9 +458,9 @@ void serval_tcp_push_one(struct sock *sk, unsigned int mss_now);
 
 static inline int serval_tcp_win_from_space(int space)
 {
-	return sysctl_tcp_adv_win_scale<=0 ?
-		(space>>(-sysctl_tcp_adv_win_scale)) :
-		space - (space>>sysctl_tcp_adv_win_scale);
+	return sysctl_serval_tcp_adv_win_scale<=0 ?
+		(space>>(-sysctl_serval_tcp_adv_win_scale)) :
+		space - (space>>sysctl_serval_tcp_adv_win_scale);
 }
 
 /* Note: caller must be prepared to deal with negative returns */ 
@@ -408,56 +474,6 @@ static inline int serval_tcp_full_space(const struct sock *sk)
 {
 	return serval_tcp_win_from_space(sk->sk_rcvbuf); 
 }
-
-
-/* sysctl variables for tcp */
-extern int sysctl_tcp_timestamps;
-extern int sysctl_tcp_window_scaling;
-extern int sysctl_tcp_sack;
-extern int sysctl_tcp_fin_timeout;
-extern int sysctl_tcp_keepalive_time;
-extern int sysctl_tcp_keepalive_probes;
-extern int sysctl_tcp_keepalive_intvl;
-extern int sysctl_tcp_syn_retries;
-extern int sysctl_tcp_synack_retries;
-extern int sysctl_tcp_retries1;
-extern int sysctl_tcp_retries2;
-extern int sysctl_tcp_orphan_retries;
-extern int sysctl_tcp_syncookies;
-extern int sysctl_tcp_retrans_collapse;
-extern int sysctl_tcp_stdurg;
-extern int sysctl_tcp_rfc1337;
-extern int sysctl_tcp_abort_on_overflow;
-extern int sysctl_tcp_max_orphans;
-extern int sysctl_tcp_fack;
-extern int sysctl_tcp_reordering;
-extern int sysctl_tcp_ecn;
-extern int sysctl_tcp_dsack;
-extern int sysctl_tcp_mem[3];
-extern int sysctl_tcp_wmem[3];
-extern int sysctl_tcp_rmem[3];
-extern int sysctl_tcp_app_win;
-extern int sysctl_tcp_adv_win_scale;
-extern int sysctl_tcp_tw_reuse;
-extern int sysctl_tcp_frto;
-extern int sysctl_tcp_frto_response;
-extern int sysctl_tcp_low_latency;
-extern int sysctl_tcp_dma_copybreak;
-extern int sysctl_tcp_nometrics_save;
-extern int sysctl_tcp_moderate_rcvbuf;
-extern int sysctl_tcp_tso_win_divisor;
-extern int sysctl_tcp_abc;
-extern int sysctl_tcp_mtu_probing;
-extern int sysctl_tcp_base_mss;
-extern int sysctl_tcp_workaround_signed_windows;
-extern int sysctl_tcp_slow_start_after_idle;
-extern int sysctl_serval_tcp_max_ssthresh;
-extern int sysctl_tcp_cookie_size;
-extern int sysctl_tcp_thin_linear_timeouts;
-extern int sysctl_tcp_thin_dupack;
-
-extern atomic_t tcp_memory_allocated;
-extern int tcp_memory_pressure;
 
 static inline void __serval_tcp_fast_path_on(struct serval_tcp_sock *tp, 
 					     u32 snd_wnd)
