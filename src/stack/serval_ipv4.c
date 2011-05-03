@@ -19,6 +19,12 @@
 #include <netinet/if_ether.h>
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+#define route_dst(rt) &(rt)->u.dst
+#else
+#define route_dst(rt) &(rt)->dst
+#endif /* LINUX_VERSION_CODE */
+
 extern int serval_srv_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
@@ -165,7 +171,7 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 		goto no_route;
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
-	return &rt->u.dst;
+	return route_dst(rt);
 
 route_err:
 	ip_rt_put(rt);
@@ -338,12 +344,12 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                         inet_ntop(AF_INET, &rt->rt_dst, 
                                   dst, sizeof(dst)));
 #endif
-                sk_setup_caps(sk, &rt->u.dst);
+                sk_setup_caps(sk, route_dst(rt));
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
-                skb_dst_set(skb, dst_clone(&rt->u.dst));
+                skb_dst_set(skb, dst_clone(route_dst(rt));
 #else
-                skb_dst_set_noref(skb, &rt->u.dst);
+                skb_dst_set_noref(skb, route_dst(rt));
 #endif
         }
 
@@ -358,11 +364,11 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 	skb_reset_network_header(skb);
 	iph = ip_hdr(skb);
 	*((__be16 *)iph) = htons((4 << 12) | (5 << 8) | (inet->tos & 0xff));
-	if (ip_dont_fragment(sk, &rt->u.dst) && !skb->local_df)
+	if (ip_dont_fragment(sk, route_dst(rt)) && !skb->local_df)
 		iph->frag_off = htons(IP_DF);
 	else
 		iph->frag_off = 0;
-	iph->ttl      = ip_select_ttl(inet, &rt->u.dst);
+	iph->ttl      = ip_select_ttl(inet, route_dst(rt));
 	iph->protocol = skb->protocol;
 	iph->saddr    = rt->rt_src;
 	iph->daddr    = rt->rt_dst;
@@ -380,7 +386,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 */
 	}
         
-        ip_select_ident_more(iph, &rt->u.dst, sk,
+        ip_select_ident_more(iph, route_dst(rt), sk,
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 
 	skb->priority = sk->sk_priority;
