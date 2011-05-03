@@ -61,7 +61,7 @@ static inline void serval_tcp_openreq_init(struct request_sock *req,
 
 	req->rcv_wnd = 0;		/* So that tcp_send_synack() knows! */
 	req->cookie_ts = 0;
-	serval_tcp_rsk(req)->rcv_isn = tcp_hdr(skb)->seq;
+	serval_tcp_rsk(req)->rcv_isn = ntohl(tcp_hdr(skb)->seq);
 
 	req->mss = rx_opt->mss_clamp;
 	req->ts_recent = rx_opt->saw_tstamp ? rx_opt->rcv_tsval : 0;
@@ -98,7 +98,7 @@ static int serval_tcp_connection_request(struct sock *sk,
 
         th = tcp_hdr(skb);
 
-        LOG_DBG("TCP SYN seq=%u src=%u dst=%u skb->len=%u\n", 
+        LOG_DBG("TCP SYN received seq=%u src=%u dst=%u skb->len=%u\n", 
                 ntohl(th->seq),
                 ntohs(th->source),
                 ntohs(th->dest),
