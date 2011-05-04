@@ -172,7 +172,7 @@ extern int sysctl_serval_tcp_rfc1337;
 extern int sysctl_serval_tcp_abort_on_overflow;
 extern int sysctl_serval_tcp_max_orphans;
 extern int sysctl_serval_tcp_fack;
-extern int sysctl_serval_tcp_reordering;
+extern int sysctl_tcp_reordering;
 extern int sysctl_serval_tcp_ecn;
 extern int sysctl_serval_tcp_dsack;
 extern int sysctl_serval_tcp_app_win;
@@ -204,6 +204,20 @@ extern int sysctl_tcp_wmem[3];
 extern int sysctl_tcp_rmem[3];
 #endif
 
+
+/* Compute the actual rto_min value */
+static inline u32 serval_tcp_rto_min(struct sock *sk)
+{
+	u32 rto_min = TCP_RTO_MIN;
+#if defined(OS_LINUX_KERNEL)
+	struct dst_entry *dst = __sk_dst_get(sk);
+	if (dst && dst_metric_locked(dst, RTAX_RTO_MIN))
+		rto_min = dst_metric_rtt(dst, RTAX_RTO_MIN);
+#endif
+	return rto_min;
+}
+
+
 /* Due to TSO, an SKB can be composed of multiple actual
  * packets.  To keep these tracked properly, we use this.
  */
@@ -213,10 +227,13 @@ static inline int serval_tcp_skb_pcount(const struct sk_buff *skb)
 }
 
 /* This is valid iff tcp_skb_pcount() > 1. */
-static inline int seravl_tcp_skb_mss(const struct sk_buff *skb)
+static inline int serval_tcp_skb_mss(const struct sk_buff *skb)
 {
 	return skb_shinfo(skb)->gso_size;
 }
+
+int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb);
+int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb);
 
 int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb);
 int serval_tcp_connection_build_synack(struct sock *sk,
@@ -565,6 +582,20 @@ static inline __u32 serval_tcp_current_ssthresh(const struct sock *sk)
 			    (tp->snd_cwnd >> 2)));
 }
 
+void serval_tcp_mtup_init(struct sock *sk);
+
+
+static inline void serval_tcp_bound_rto(const struct sock *sk)
+{
+	if (serval_tcp_sk(sk)->rto > TCP_RTO_MAX)
+		serval_tcp_sk(sk)->rto = TCP_RTO_MAX;
+}
+
+static inline u32 __serval_tcp_set_rto(const struct serval_tcp_sock *tp)
+{
+	return (tp->srtt >> 3) + tp->rttvar;
+}
+
 void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh);
 __u32 serval_tcp_init_cwnd(struct serval_tcp_sock *tp, struct dst_entry *dst);
 
@@ -634,6 +665,7 @@ static inline void serval_tcp_prequeue_init(struct serval_tcp_sock *tp)
 #endif
 }
 
+extern void serval_tcp_init_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 
 #if defined(OS_LINUX_KERNEL)

@@ -384,6 +384,7 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 					  unsigned int cur_mss)
 {
 	u32 end_seq = TCP_SKB_CB(skb)->end_seq;
+        int ret;
 
 	if (skb->len > cur_mss)
 		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
@@ -391,7 +392,11 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
         LOG_DBG("skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
                 skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
 
-	return !after(end_seq, serval_tcp_wnd_end(tp));
+	ret = !after(end_seq, serval_tcp_wnd_end(tp));
+
+        LOG_DBG("ret=%d\n", ret);
+
+        return ret;
 }
 
 /* This checks if the data bearing packet SKB (usually tcp_send_head(sk))
@@ -786,6 +791,8 @@ u32 __serval_tcp_select_window(struct sock *sk)
 			       serval_tcp_full_space(sk));
 	int window;
 
+        LOG_DBG("tp->tp_ack.rcv_mss=%u\n", tp->tp_ack.rcv_mss);
+
 	if (mss > full_space)
 		mss = full_space;
 
@@ -826,6 +833,10 @@ u32 __serval_tcp_select_window(struct sock *sk)
 		 * We also don't do any window rounding when the free space
 		 * is too small.
 		 */
+
+                LOG_DBG("window=%u free_space=%u mss=%u\n",
+                        window, free_space, mss);
+
 		if (window <= free_space - mss || window > free_space)
 			window = (free_space / mss) * mss;
 		else if (mss == full_space &&

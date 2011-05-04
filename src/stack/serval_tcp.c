@@ -324,7 +324,7 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	int sg, err, copied;
 	long timeo;
 
-        LOG_DBG("Sending tcp message\n");
+        LOG_DBG("Sending tcp message, len=%zu\n", len);
 
 	lock_sock(sk);
 	TCP_CHECK_TIMER(sk);
@@ -381,6 +381,9 @@ new_segment:
 				if (!sk_stream_memory_free(sk))
 					goto wait_for_sndbuf;
 
+                                LOG_DBG("Allocating skb size=%d\n", 
+                                        select_size(sk, sg));
+
 				skb = sk_stream_alloc_skb(sk,
 							  select_size(sk, sg),
 							  sk->sk_allocation);
@@ -404,11 +407,14 @@ new_segment:
 
 			/* Where to copy to? */
 			if (skb_tailroom(skb) > 0) {
+                                LOG_DBG("Add data\n");
 				/* We have some space in skb head. Superb! */
 				if (copy > skb_tailroom(skb))
 					copy = skb_tailroom(skb);
-				if ((err = skb_add_data(skb, from, copy)) != 0)
+				if ((err = skb_add_data(skb, from, copy)) != 0) {
+                                        LOG_ERR("skb_add_data() failed!\n");
 					goto do_fault;
+                                }
 			} else {
 #if defined(ENABLE_PAGE)
 				int merge = 0;
@@ -480,6 +486,7 @@ new_segment:
 
 				TCP_OFF(sk) = off + copy;
 #endif /* ENABLE_PAGE */
+                                LOG_DBG("No tailroom in skb, add page\n");
 			}
 
 			if (!copied)
@@ -1092,23 +1099,6 @@ recv_urg:
 	goto out;
 }
 
-static int serval_tcp_connection_ack(struct sock *sk, struct sk_buff *skb)
-{
-        struct tcphdr *th;
- 
-        if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
-                LOG_ERR("No TCP header?\n");
-                FREE_SKB(skb);
-                return -1;
-        }
-
-        th = tcp_hdr(skb);
-
-        LOG_DBG("TCP ACK ackno=%u\n", ntohl(th->ack_seq));
-
-        return 0;
-}
-
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_tcp_rcv,
@@ -1116,8 +1106,9 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
         .conn_request = serval_tcp_connection_request,
+        .request_state_process = serval_tcp_syn_sent_state_process,
+        .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_connection_respond_sock,
-        .conn_ack = serval_tcp_connection_ack,
 };
 
 /**
@@ -1189,7 +1180,22 @@ static int serval_tcp_init_sock(struct sock *sk)
 
         tp->rto = TCP_TIMEOUT_INIT;
 	tp->mdev = TCP_TIMEOUT_INIT;
-        
+        	/* So many TCP implementations out there (incorrectly) count the
+	 * initial SYN frame in their delayed-ACK and congestion control
+	 * algorithms that we must have the following bandaid to talk
+	 * efficiently to them.  -DaveM
+	 */
+	tp->snd_cwnd = 2;
+
+	/* See draft-stevens-tcpca-spec-01 for discussion of the
+	 * initialization of these values.
+	 */
+	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+	tp->snd_cwnd_clamp = ~0;
+	tp->mss_cache = TCP_MSS_DEFAULT;
+
+	tp->reordering = sysctl_tcp_reordering;
+
 	/* So many TCP implementations out there (incorrectly) count the
 	 * initial SYN frame in their delayed-ACK and congestion control
 	 * algorithms that we must have the following bandaid to talk

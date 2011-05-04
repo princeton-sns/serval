@@ -107,12 +107,15 @@ struct serval_sock_af_ops {
 	int	        (*conn_request)(struct sock *sk, 
                                         struct request_sock *rsk, 
                                         struct sk_buff *skb);
+	int	        (*request_state_process)(struct sock *sk, 
+                                                 struct sk_buff *skb);
+	int	        (*respond_state_process)(struct sock *sk, 
+                                                 struct sk_buff *skb);
         void            (*conn_child_sock)(struct sock *sk, 
                                            struct sk_buff *skb,
                                            struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
-        int             (*conn_ack)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
 };

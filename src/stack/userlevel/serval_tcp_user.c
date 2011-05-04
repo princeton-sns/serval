@@ -12,11 +12,9 @@ int sysctl_tcp_rmem[3];
 int sysctl_serval_tcp_timestamps = 1;
 int sysctl_serval_tcp_sack = 1;
 int sysctl_serval_tcp_fack = 1;
-int sysctl_serval_tcp_reordering = TCP_FASTRETRANS_THRESH;
+int sysctl_tcp_reordering = TCP_FASTRETRANS_THRESH;
 int sysctl_serval_tcp_ecn = 2;
 int sysctl_serval_tcp_dsack = 1;
-int sysctl_serval_tcp_app_win = 31;
-
 #define NR_FILE 1 /* TODO: set appropriate value */
 
 int sysctl_serval_tcp_stdurg = 0;
