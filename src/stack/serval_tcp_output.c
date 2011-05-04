@@ -466,6 +466,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct tcphdr *th;
 	int err;
 
+        LOG_DBG("Transmitting TCP packet len=%u\n", skb->len);
+
 	BUG_ON(!skb || !tcp_skb_pcount(skb));
 
 	/* If congestion control is doing timestamping, we must
@@ -799,7 +801,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	if (free_space < (full_space >> 1)) {
 		tp->tp_ack.quick = 0;
 
-		if (serval_tcp_memory_pressure)
+		if (tcp_memory_pressure)
 			tp->rcv_ssthresh = min(tp->rcv_ssthresh,
 					       4U * tp->advmss);
 
