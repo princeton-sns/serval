@@ -8,6 +8,20 @@
 
 int sysctl_serval_tcp_max_ssthresh = 0;
 
+/* Assign choice of congestion control. */
+void serval_tcp_init_congestion_control(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	
+	/* if no choice made yet assign the current value set as default */
+        tp->ca_ops = &serval_tcp_init_congestion_ops;
+
+	if (tp->ca_ops->init)
+		tp->ca_ops->init(sk);
+}
+
+
+
 /* RFC2861 Check whether we are limited by application or congestion window
  * This is the inverse of cwnd check in tcp_tso_should_defer
  */
