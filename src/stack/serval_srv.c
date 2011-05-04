@@ -928,8 +928,6 @@ static int serval_srv_request_state_process(struct sock *sk,
                 ntohl(conn_ext->seqno), 
                 ntohl(conn_ext->ackno));
 
-        serval_sock_set_state(sk, SERVAL_CONNECTED);
-        
         /* Let user know we are connected. */
 	if (!sock_flag(sk, SOCK_DEAD)) {
                 sk->sk_state_change(sk);
@@ -953,6 +951,20 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Process any ACK */
         serval_srv_ack_process(sk, sfh, skb);
         
+        /* Let transport know about response */
+
+        if (ssk->af_ops->request_state_process) {
+                err = ssk->af_ops->request_state_process(sk, skb);
+
+                if (err < 0) {
+                        LOG_ERR("Transport drops packet\n");
+                        goto error;
+                }
+        }
+        
+        /* Move to connected state */
+        serval_sock_set_state(sk, SERVAL_CONNECTED);
+        
         /* Update control block */
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
         memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
@@ -971,6 +983,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         return err;
 drop:
         FREE_SKB(skb);
+error:
         return err;
 }
 
@@ -986,14 +999,16 @@ static int serval_srv_respond_state_process(struct sock *sk,
 
         /* Process ACK */
         if (serval_srv_ack_process(sk, sfh, skb) == 0) {
-                if (serval_sk(sk)->af_ops->conn_ack) {
-                        if (serval_sk(sk)->af_ops->conn_ack(sk, skb) != 0)
-                                goto drop;
-                }
+                struct serval_sock *ssk = serval_sk(sk);
+                LOG_DBG("\n");
+
                 /* Valid ACK */
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
                 
-                LOG_DBG("\n");
+                if (ssk->af_ops->respond_state_process) {
+                        if (ssk->af_ops->respond_state_process(sk, skb) != 0)
+                                goto drop;
+                }
                 
                 /* Let user know */
                 sk->sk_state_change(sk);

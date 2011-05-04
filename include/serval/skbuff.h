@@ -875,9 +875,9 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 
 static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)
 {
-        /*
 	const int off = skb->len;
 
+        /*
 	if (skb->ip_summed == CHECKSUM_NONE) {
 		int err = 0;
 
@@ -889,9 +889,14 @@ static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)
 		}
 	} else if (!copy_from_user(skb_put(skb, copy), from, copy))
 		return 0;
+        */
+        
+        memcpy(skb_put(skb, copy), from, copy);
+        
+        return 0;
 
 	__skb_trim(skb, off);
-        */
+
 	return -EFAULT;
 }
 
