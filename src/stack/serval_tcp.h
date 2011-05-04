@@ -195,10 +195,16 @@ extern int sysctl_serval_tcp_cookie_size;
 extern int sysctl_serval_tcp_thin_linear_timeouts;
 extern int sysctl_serval_tcp_thin_dupack;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 extern atomic_t serval_tcp_memory_allocated;
-extern int serval_tcp_memory_pressure;
+#else
+extern atomic_long_t serval_tcp_memory_allocated;
+#endif
+
+extern int tcp_memory_pressure;
 
 #if defined(OS_USER)
+extern void tcp_enter_memory_pressure(struct sock *sk);
 extern int sysctl_tcp_mem[3];
 extern int sysctl_tcp_wmem[3];
 extern int sysctl_tcp_rmem[3];

@@ -28,15 +28,11 @@ int sysctl_serval_tcp_wmem[3];
 int sysctl_serval_tcp_rmem[3];
 */
 
-atomic_t serval_tcp_memory_allocated;	/* Current allocated memory. */
-
-/*
- * Pressure flag: try to collapse.
- * Technical note: it is used by multiple contexts non atomically.
- * All the __sk_mem_schedule() is of this nature: accounting
- * is strict, actions are advisory and have some latency.
- */
-int serval_tcp_memory_pressure;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+atomic_t serval_tcp_memory_allocated __read_mostly;
+#else
+atomic_long_t serval_tcp_memory_allocated  __read_mostly;
+#endif
 
 static int serval_tcp_disconnect(struct sock *sk, int flags)
 {
@@ -1258,15 +1254,15 @@ struct proto serval_tcp_proto = {
 	.backlog_rcv		= serval_srv_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
-#if defined(OS_LINUX_KERNEL)
-	/* .enter_memory_pressure	= tcp_enter_memory_pressure, */
-	.sockets_allocated	= &tcp_sockets_allocated,
-	.orphan_count		= &tcp_orphan_count,
+	.enter_memory_pressure	= tcp_enter_memory_pressure,
+	.memory_pressure	= &tcp_memory_pressure,
 	.memory_allocated	= &serval_tcp_memory_allocated,
-	.memory_pressure	= &serval_tcp_memory_pressure,
 	.sysctl_mem		= sysctl_tcp_mem,
 	.sysctl_wmem		= sysctl_tcp_wmem,
 	.sysctl_rmem		= sysctl_tcp_rmem,
+#if defined(OS_LINUX_KERNEL)
+	.sockets_allocated	= &tcp_sockets_allocated,
+	.orphan_count		= &tcp_orphan_count,
 #endif
 	.max_header		= MAX_SERVAL_TCP_HEADER,
 	.obj_size		= sizeof(struct serval_tcp_sock),

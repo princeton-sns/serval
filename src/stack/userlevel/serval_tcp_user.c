@@ -46,6 +46,16 @@ int sysctl_serval_tcp_cookie_size = 0; /* TCP_COOKIE_MAX */
 
 int sysctl_serval_tcp_tw_reuse = 0;
 
+int tcp_memory_pressure;
+
+void tcp_enter_memory_pressure(struct sock *sk)
+{
+	if (!tcp_memory_pressure) {
+		//NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPMEMORYPRESSURES);
+		tcp_memory_pressure = 1;
+	}
+}
+
 void serval_tcp_init(void)
 {        
         unsigned long limit;
