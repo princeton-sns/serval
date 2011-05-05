@@ -266,6 +266,86 @@ out:
 }
 
 /**
+ *	pskb_expand_head - reallocate header of &sk_buff
+ *	@skb: buffer to reallocate
+ *	@nhead: room to add at head
+ *	@ntail: room to add at tail
+ *	@gfp_mask: allocation priority
+ *
+ *	Expands (or creates identical copy, if &nhead and &ntail are zero)
+ *	header of skb. &sk_buff itself is not changed. &sk_buff MUST have
+ *	reference count of 1. Returns zero in the case of success or error,
+ *	if expansion failed. In the last case, &sk_buff is not changed.
+ *
+ *	All the pointers pointing into skb header may change and must be
+ *	reloaded after call to this function.
+ */
+
+int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
+		     gfp_t gfp_mask)
+{
+//	int i;
+	u8 *data;
+	int size = nhead + skb->end + ntail;
+	long off;
+
+	BUG_ON(nhead < 0);
+
+        
+	if (skb_shared(skb)) {
+		LOG_ERR("skb cannot be shared!\n");
+                exit(-1);
+        }
+        
+	size = SKB_DATA_ALIGN(size);
+
+	data = malloc(size + sizeof(struct skb_shared_info));
+
+	if (!data)
+		goto nodata;
+
+	/* Copy only real data... and, alas, header. This should be
+	 * optimized for the cases when header is void. */
+	memcpy(data + nhead, skb->head, skb->tail);
+	memcpy(data + size, skb_end_pointer(skb),
+	       sizeof(struct skb_shared_info));
+
+/*
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+		get_page(skb_shinfo(skb)->frags[i].page);
+
+	if (skb_has_frags(skb))
+		skb_clone_fraglist(skb);
+*/
+	skb_release_data(skb);
+
+	off = (data + nhead) - skb->head;
+
+	skb->head     = data;
+	skb->data    += off;
+	skb->end      = size;
+	off           = nhead;
+
+	/* {transport,network,mac}_header and tail are relative to skb->head */
+	skb->tail	      += off;
+	skb->transport_header += off;
+	skb->network_header   += off;
+	if (skb_mac_header_was_set(skb))
+		skb->mac_header += off;
+	/* Only adjust this if it actually is csum_start rather than csum */
+	if (skb->ip_summed == CHECKSUM_PARTIAL)
+		skb->csum_start += nhead;
+	skb->cloned   = 0;
+	skb->hdr_len  = 0;
+	skb->nohdr    = 0;
+	atomic_set(&skb_shinfo(skb)->dataref, 1);
+	return 0;
+
+nodata:
+	return -ENOMEM;
+}
+
+/**
  *	skb_dequeue - remove from the head of the queue
  *	@list: list to dequeue from
  *
