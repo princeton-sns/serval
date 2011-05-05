@@ -179,6 +179,7 @@ static inline unsigned char *skb_end_pointer(const struct sk_buff *skb)
 {
 	return skb->head + skb->end;
 }
+
 static inline unsigned char *skb_tail_pointer(const struct sk_buff *skb)
 {
 	return skb->head + skb->tail;
@@ -302,6 +303,9 @@ extern struct sk_buff *skb_copy(const struct sk_buff *skb,
 extern struct sk_buff *pskb_copy(struct sk_buff *skb,
 				 gfp_t gfp_mask);
 
+extern int pskb_expand_head(struct sk_buff *skb,
+                            int nhead, int ntail,
+                            gfp_t gfp_mask);
 /**
  *	skb_cloned - is the buffer a clone
  *	@skb: buffer to check

@@ -849,6 +849,67 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	return window;
 }
 
+/* This is similar to __pskb_pull_head() (it will go to core/skbuff.c
+ * eventually). The difference is that pulled data not copied, but
+ * immediately discarded.
+ */
+static void __pskb_trim_head(struct sk_buff *skb, int len)
+{
+#if defined(OS_LINUX_KERNEL)
+	int i, k, eat;
+
+	eat = len;
+	k = 0;
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		if (skb_shinfo(skb)->frags[i].size <= eat) {
+			put_page(skb_shinfo(skb)->frags[i].page);
+			eat -= skb_shinfo(skb)->frags[i].size;
+		} else {
+			skb_shinfo(skb)->frags[k] = skb_shinfo(skb)->frags[i];
+			if (eat) {
+				skb_shinfo(skb)->frags[k].page_offset += eat;
+				skb_shinfo(skb)->frags[k].size -= eat;
+				eat = 0;
+			}
+			k++;
+		}
+	}
+	skb_shinfo(skb)->nr_frags = k;
+#endif
+	skb_reset_tail_pointer(skb);
+	skb->data_len -= len;
+	skb->len = skb->data_len;
+}
+
+/* Remove acked data from a packet in the transmit queue. */
+int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
+{
+	if (skb_cloned(skb) && pskb_expand_head(skb, 0, 0, GFP_ATOMIC))
+		return -ENOMEM;
+
+	/* If len == headlen, we avoid __skb_pull to preserve alignment. */
+	if (unlikely(len < skb_headlen(skb)))
+		__skb_pull(skb, len);
+	else
+		__pskb_trim_head(skb, len - skb_headlen(skb));
+
+	TCP_SKB_CB(skb)->seq += len;
+	skb->ip_summed = CHECKSUM_PARTIAL;
+
+	skb->truesize	     -= len;
+	sk->sk_wmem_queued   -= len;
+	sk_mem_uncharge(sk, len);
+	sock_set_flag(sk, SOCK_QUEUE_SHRUNK);
+
+	/* Any change of skb->len requires recalculation of tso
+	 * factor and mss.
+	 */
+	if (serval_tcp_skb_pcount(skb) > 1)
+		serval_tcp_set_skb_tso_segs(sk, skb, 
+                                            serval_tcp_current_mss(sk));
+
+	return 0;
+}
 
 /* Calculate MSS. Not accounting for SACKs here.  */
 int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
