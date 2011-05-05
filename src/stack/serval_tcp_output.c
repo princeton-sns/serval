@@ -39,6 +39,24 @@ struct tcp_out_options {
 	__u8 *hash_location;	/* temporary pointer, overloaded */
 };
 
+
+/* SND.NXT, if window was not shrunk.
+ * If window has been shrunk, what should we make? It is not clear at all.
+ * Using SND.UNA we will fail to open window, SND.NXT is out of window. :-(
+ * Anything in between SND.UNA...SND.UNA+SND.WND also can be already
+ * invalid. OK, let's make this for now:
+ */
+static inline __u32 serval_tcp_acceptable_seq(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (!before(serval_tcp_wnd_end(tp), tp->snd_nxt))
+		return tp->snd_nxt;
+	else
+		return serval_tcp_wnd_end(tp);
+}
+
+
 static inline int serval_tcp_urg_mode(const struct serval_tcp_sock *tp)
 {
 	return tp->snd_una != tp->snd_up;
@@ -1122,20 +1140,19 @@ static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0;
 	
-        /*
         TCP_SKB_CB(skb)->flags = flags;
 	TCP_SKB_CB(skb)->sacked = 0;
-        */
+
 	skb_shinfo(skb)->gso_segs = 1;
 	skb_shinfo(skb)->gso_size = 0;
 	skb_shinfo(skb)->gso_type = 0;
-        
-        /*
+
 	TCP_SKB_CB(skb)->seq = seq;
+
 	if (flags & (TCPH_SYN | TCPH_FIN))
 		seq++;
+
 	TCP_SKB_CB(skb)->end_seq = seq;
-        */
 }
 
 
@@ -1143,7 +1160,7 @@ static int serval_tcp_build_header(struct sock *sk,
                                    struct sk_buff *skb,
                                    u32 seq)
 {
-        struct tcphdr *tcph = tcp_hdr(skb);
+        struct tcphdr *th = tcp_hdr(skb);
 	struct serval_tcp_sock *tp;
 	struct tcp_skb_cb *tcb;
 	unsigned tcp_options_size = 0, tcp_header_size;
@@ -1154,20 +1171,20 @@ static int serval_tcp_build_header(struct sock *sk,
 
 	tp = serval_tcp_sk(sk);
 
-	tcph->seq	       	= htonl(seq);
-	tcph->ack_seq		= htonl(tp->rcv_nxt);
-	*(((__be16 *)tcph) + 6)	= htons(((tcp_header_size >> 2) << 12) |
+	th->seq	       	= htonl(seq);
+	th->ack_seq		= htonl(tp->rcv_nxt);
+	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					tcb->flags);
         if (0 /*unlikely(tcb->flags & TCPH_SYN) */) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
 		 */
-		tcph->window	= htons(min(tp->rcv_wnd, 65535U));
+		th->window	= htons(min(tp->rcv_wnd, 65535U));
 	} else {
-		tcph->window	= htons(serval_tcp_select_window(sk));
+		th->window	= htons(serval_tcp_select_window(sk));
 	}
-	tcph->check		= 0;
-	tcph->urg_ptr		= 0;
+	th->check		= 0;
+	th->urg_ptr		= 0;
 
         return 0;
 }
@@ -1196,9 +1213,10 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq, flags);
+        th->syn = 1;
 	th->source		= htons(1);
 	th->dest		= htons(2);
-	th->seq		= htonl(tp->write_seq++);
+	th->seq		        = htonl(tp->write_seq++);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
                                         flags);
@@ -1225,6 +1243,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	struct tcphdr *th;
         int mss;
 
+        th = (struct tcphdr *)skb_push(skb, sizeof(*th));
+
 	mss = TCP_MSS_DEFAULT; //dst_metric(dst, RTAX_ADVMSS);
 
 	if (req->rcv_wnd == 0) { /* ignored for retransmitted syns */
@@ -1246,8 +1266,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 		ireq->rcv_wscale = rcv_wscale;
 	}
 
-	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
-                                    TCPH_SYN | TCPH_ACK);
+	//serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
+        //                          TCPH_SYN | TCPH_ACK);
 
         tcp_header_size = sizeof(*th);
 	th = tcp_hdr(skb);
@@ -1274,5 +1294,26 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 int serval_tcp_connection_build_ack(struct sock *sk, 
                                     struct sk_buff *skb)
 {
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        unsigned int tcp_header_size = sizeof(struct tcphdr);
+        struct tcphdr *th;
+
+        th = (struct tcphdr *)skb_push(skb, tcp_header_size);
+
+        if (!th) {
+                FREE_SKB(skb);
+                return -ENOMEM;
+        }
+
+	/* serval_tcp_init_nondata_skb(buff, 
+                                    serval_tcp_acceptable_seq(sk), TCPH_ACK);
+        */
+
+        th->ack = 1;
+	th->source = 0;
+	th->dest = 0;
+        th->seq = htonl(serval_tcp_acceptable_seq(sk));
+	th->ack_seq = htonl(tp->rcv_nxt);
+
         return 0;
 }

@@ -1123,6 +1123,8 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 serval_tcp_initialize_rcv_mss(sk);
                 serval_tcp_init_buffer_space(sk);
                 serval_tcp_fast_path_on(tp);
+        } else {
+                LOG_WARN("No ACK flag in packet!\n");
         }
         return 0;
 }
@@ -1135,6 +1137,8 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
         u32 seq = ntohl(th->seq);
 
         if (th->ack) {
+                LOG_DBG("ACK received\n");
+
 		/* rfc793:
 		 * "If the state is SYN-SENT then
 		 *    first check the ACK bit
@@ -1149,6 +1153,8 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		if (ntohl(th->ack_seq) != tp->snd_nxt)
 			goto reset_and_undo;
 
+		tp->snd_wl1 = seq;
+		serval_tcp_ack(sk, skb, FLAG_SLOWPATH);
 
 		/* Ok.. it's good. Set up sequence numbers and
 		 * move to established.

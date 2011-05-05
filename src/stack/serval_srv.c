@@ -336,6 +336,16 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         skb_serval_set_owner_w(skb, sk);
         skb->protocol = 0;
 
+        /* Ask transport to fill in */
+        if (ssk->af_ops->conn_build_syn) {
+                err = ssk->af_ops->conn_build_syn(sk, skb);
+
+                if (err < 0) {
+                        LOG_ERR("Transport protocol returned error\n");
+                        return err;
+                }
+        }
+
         memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
@@ -345,15 +355,6 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
 
         LOG_DBG("Sending SYN seqno=%u\n",
                 SERVAL_SKB_CB(skb)->seqno);
-
-        if (ssk->af_ops->conn_build_syn) {
-                err = ssk->af_ops->conn_build_syn(sk, skb);
-
-                if (err < 0) {
-                        LOG_ERR("Transport protocol returned error\n");
-                        return err;
-                }
-        }
 
         err = serval_srv_queue_and_push(sk, skb);
         
@@ -463,6 +464,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
         struct net_addr saddr;
         struct dst_entry *dst = NULL;
+        struct sk_buff *rskb;
         int err = 0;
         
         /* Cache this service. FIXME, need to garbage this entry at
@@ -504,48 +506,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 goto drop;
         }
 
-        /* Call upper protocol handler */
-        if (ssk->af_ops->conn_request) {
-                err = ssk->af_ops->conn_request(sk, rsk, skb);
-                
-                if (err < 0) {
-                        reqsk_free(rsk);
-                        goto drop;
-                }
-        }
-          /* Need to drop dst since this packet is routed for
-         * input. Otherwise, kernel IP stack will be confused when
-         * transmitting this packet. */
-        skb_dst_drop(skb);
-#if defined(OS_LINUX_KERNEL)
-        {
-                /*
-                  For kernel, we need to route this packet and
-                  associate a dst_entry with the skb for it to be
-                  accepted by the kernel IP stack.
-                 */
-                dst = serval_ipv4_req_route(sk, rsk, skb->protocol,
-                                            saddr.net_ip.s_addr,
-                                            ip_hdr(skb)->saddr);
-
-                if (!dst) {
-                        LOG_ERR("SYN-ACK not routable\n");
-                        goto drop;
-                }
-        }
-#endif /* OS_LINUX_KERNEL */
-
         srsk = serval_rsk(rsk);
-        
-        if (ssk->af_ops->conn_build_synack) {
-                err = ssk->af_ops->conn_build_synack(sk, dst, rsk, skb);
-                
-                if (err < 0) {
-                        reqsk_free(rsk);
-                        goto drop_and_release;
-                }
-        }
-        
+
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &sfh->src_flowid, 
                sizeof(sfh->src_flowid));
@@ -558,28 +520,91 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         list_add(&srsk->lh, &ssk->syn_queue);
         
+
+        /* Call upper transport protocol handler */
+        if (ssk->af_ops->conn_request) {
+                err = ssk->af_ops->conn_request(sk, rsk, skb);
+                
+                if (err < 0) {
+                        reqsk_free(rsk);
+                        goto drop;
+                }
+        }
+       
+        
+        /* Allocate SYN-ACK reply */
+        rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+
+        if (!rskb) {
+                err = -ENOMEM;
+                goto drop;
+        }
+        
+        skb_reserve(rskb, sk->sk_prot->max_header);
+        skb_serval_set_owner_w(rskb, sk);
+        rskb->protocol = 0;
+
+#if defined(OS_LINUX_KERNEL)
+        {
+                /*
+                  For kernel, we need to route this packet and
+                  associate a dst_entry with the skb for it to be
+                  accepted by the kernel IP stack.
+                 */
+                dst = serval_ipv4_req_route(sk, rsk, rskb->protocol,
+                                            saddr.net_ip.s_addr,
+                                            ip_hdr(skb)->saddr);
+
+                if (!dst) {
+                        LOG_ERR("SYN-ACK not routable\n");
+                        goto drop;
+                }
+        }
+#endif /* OS_LINUX_KERNEL */
+
+        /* Let transport chip in */
+        if (ssk->af_ops->conn_build_synack) {
+                err = ssk->af_ops->conn_build_synack(sk, dst, rsk, rskb);
+                
+                if (err < 0) {
+                        reqsk_free(rsk);
+                        goto drop_and_release;
+                }
+        }
+
+        rskb->protocol = IPPROTO_SERVAL;
+        conn_ext = (struct serval_connection_ext *)
+                skb_push(rskb, sizeof(*conn_ext));
+        conn_ext->type = SERVAL_CONNECTION_EXT;
+        conn_ext->length = htons(sizeof(*conn_ext));
+        conn_ext->flags = 0;
+        conn_ext->seqno = htonl(srsk->iss_seq);
+        conn_ext->ackno = htonl(srsk->rcv_seq + 1);
+        memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
+               sizeof(SERVAL_SKB_CB(skb)->srvid));
+        /* Copy our nonce to connection extension */
+        memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
+        
+        /* Add Serval header */
+        sfh = (struct serval_hdr *)skb_push(rskb, sizeof(*sfh));
+        sfh->flags = SVH_SYN | SVH_ACK;
+        sfh->protocol = rskb->protocol;
+        sfh->length = htons(sizeof(*sfh) + sizeof(*conn_ext));
+
         /* Update info in packet */
-        memcpy(&sfh->dst_flowid, &sfh->src_flowid, 
-               sizeof(sfh->src_flowid));
+        memcpy(&sfh->dst_flowid, &srsk->peer_flowid, 
+               sizeof(sfh->dst_flowid));
         memcpy(&sfh->src_flowid, &srsk->local_flowid, 
                sizeof(srsk->local_flowid));
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-        conn_ext->seqno = htonl(srsk->iss_seq);
-        conn_ext->ackno = htonl(srsk->rcv_seq + 1);
-
-        /* Copy our nonce to connection extension */
-        memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
-       
-        sfh->flags = SVH_SYN | SVH_ACK;
-        skb->protocol = IPPROTO_SERVAL;
+        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_SYNACK;
 
         /* Push back the Serval header again to make IP happy */
-        skb_push(skb, hdr_len);
-        skb_reset_transport_header(skb);
+        skb_push(rskb, hdr_len);
+        skb_reset_transport_header(rskb);
               
-        skb_dst_set(skb, dst);
+        skb_dst_set(rskb, dst);
 
         LOG_DBG("Sending SYNACK seqno=%u ackno=%u\n",
                 ntohl(conn_ext->seqno),
@@ -587,15 +612,18 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 
         /* Cannot use serval_srv_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
-        err = serval_ipv4_build_and_send_pkt(skb, sk, 
+        err = serval_ipv4_build_and_send_pkt(rskb, sk, 
                                              saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
+
 done:        
+        /* Free the SYN */
+        FREE_SKB(skb);
+
         return err;
 drop_and_release:
         dst_release(dst);
 drop:
-        FREE_SKB(skb);
         goto done;
 }
 
@@ -925,7 +953,8 @@ static int serval_srv_request_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_connection_ext *conn_ext = 
-                (struct serval_connection_ext *)(sfh + 1);        
+                (struct serval_connection_ext *)(sfh + 1);
+        struct sk_buff *rskb;       
         int err = 0;
                 
         if (!has_connection_extension(sfh)) {
@@ -965,7 +994,6 @@ static int serval_srv_request_state_process(struct sock *sk,
         serval_srv_ack_process(sk, sfh, skb);
         
         /* Let transport know about response */
-
         if (ssk->af_ops->request_state_process) {
                 err = ssk->af_ops->request_state_process(sk, skb);
 
@@ -974,27 +1002,48 @@ static int serval_srv_request_state_process(struct sock *sk,
                         goto error;
                 }
         }
-        
+
         /* Move to connected state */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
+        /* Allocate ACK */
+        rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+
+        if (!rskb) {
+                err = -ENOMEM;
+                goto drop;
+        }
+        
+        skb_reserve(rskb, sk->sk_prot->max_header);
+        skb_serval_set_owner_w(rskb, sk);
+        rskb->protocol = 0;
+
+        /* Ask transport to fill in*/
+        if (ssk->af_ops->conn_build_ack) {
+                err = ssk->af_ops->conn_build_ack(sk, rskb);
+
+                if (err < 0) {
+                        LOG_ERR("Transport drops packet on building ACK\n");
+                        goto drop;
+                }
+        }
+        
         /* Update control block */
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_ACK;
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid, 
+        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_ACK;
+        memcpy(&SERVAL_SKB_CB(rskb)->srvid, &ssk->peer_srvid, 
                sizeof(ssk->peer_srvid));
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+        memcpy(&SERVAL_SKB_CB(rskb)->addr, &inet_sk(sk)->inet_daddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
         /* Do not increase sequence number for pure ACK */
-        SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
-        skb->protocol = IPPROTO_SERVAL;
-        skb_serval_set_owner_w(skb, sk);
+        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
+        rskb->protocol = IPPROTO_SERVAL;
+        skb_serval_set_owner_w(rskb, sk);
 
         /* Xmit, do not queue ACK */
-        err = serval_srv_transmit_skb(sk, skb, 0, GFP_ATOMIC);
-                
-        return err;
-drop:
+        err = serval_srv_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
+
+drop:                
         FREE_SKB(skb);
 error:
         return err;
