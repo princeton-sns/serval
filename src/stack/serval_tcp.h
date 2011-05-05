@@ -492,30 +492,6 @@ static inline int serval_tcp_full_space(const struct sock *sk)
 	return serval_tcp_win_from_space(sk->sk_rcvbuf); 
 }
 
-static inline void __serval_tcp_fast_path_on(struct serval_tcp_sock *tp, 
-					     u32 snd_wnd)
-{
-	tp->pred_flags = htonl((tp->tcp_header_len << 26) |
-			       ntohl(TCP_FLAG_ACK) |
-			       snd_wnd);
-}
-
-static inline void serval_tcp_fast_path_on(struct serval_tcp_sock *tp)
-{
-	__serval_tcp_fast_path_on(tp, tp->snd_wnd >> tp->rx_opt.snd_wscale);
-}
-
-static inline void serval_tcp_fast_path_check(struct sock *sk)
-{
-	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-
-	if (skb_queue_empty(&tp->out_of_order_queue) &&
-	    tp->rcv_wnd &&
-	    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf &&
-	    !tp->urg_data)
-		serval_tcp_fast_path_on(tp);
-}
-
 static inline void serval_tcp_set_ca_state(struct sock *sk, const u8 ca_state)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
@@ -532,31 +508,6 @@ static inline void serval_tcp_ca_event(struct sock *sk,
 	
 	if (tp->ca_ops->cwnd_event)
 		tp->ca_ops->cwnd_event(sk, event);
-}
-
-static inline unsigned int serval_tcp_left_out(const struct serval_tcp_sock *tp)
-{
-	return tp->sacked_out + tp->lost_out;
-}
-
-/* This determines how many packets are "in the network" to the best
- * of our knowledge.  In many cases it is conservative, but where
- * detailed information is available from the receiver (via SACK
- * blocks etc.) we can make more aggressive calculations.
- *
- * Use this for decisions involving congestion control, use just
- * tp->packets_out to determine if the send queue is empty or not.
- *
- * Read this equation as:
- *
- *	"Packets sent once on transmission queue" MINUS
- *	"Packets left network, but not honestly ACKed yet" PLUS
- *	"Packets fast retransmitted"
- */
-static inline 
-unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
-{
-	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
@@ -595,6 +546,31 @@ static inline u32 __serval_tcp_set_rto(const struct serval_tcp_sock *tp)
 {
 	return (tp->srtt >> 3) + tp->rttvar;
 }
+
+static inline void __serval_tcp_fast_path_on(struct serval_tcp_sock *tp, 
+					     u32 snd_wnd)
+{
+	tp->pred_flags = htonl((tp->tcp_header_len << 26) |
+			       ntohl(TCP_FLAG_ACK) |
+			       snd_wnd);
+}
+
+static inline void serval_tcp_fast_path_on(struct serval_tcp_sock *tp)
+{
+	__serval_tcp_fast_path_on(tp, tp->snd_wnd >> tp->rx_opt.snd_wscale);
+}
+
+static inline void serval_tcp_fast_path_check(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (skb_queue_empty(&tp->out_of_order_queue) &&
+	    tp->rcv_wnd &&
+	    atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf &&
+	    !tp->urg_data)
+		serval_tcp_fast_path_on(tp);
+}
+
 
 void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh);
 __u32 serval_tcp_init_cwnd(struct serval_tcp_sock *tp, struct dst_entry *dst);
@@ -667,6 +643,65 @@ static inline void serval_tcp_prequeue_init(struct serval_tcp_sock *tp)
 
 extern void serval_tcp_init_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
+
+int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
+
+
+/* These functions determine how the current flow behaves in respect of SACK
+ * handling. SACK is negotiated with the peer, and therefore it can vary
+ * between different flows.
+ *
+ * tcp_is_sack - SACK enabled
+ * tcp_is_reno - No SACK
+ * tcp_is_fack - FACK enabled, implies SACK enabled
+ */
+static inline int serval_tcp_is_sack(const struct serval_tcp_sock *tp)
+{
+	return tp->rx_opt.sack_ok;
+}
+
+static inline int serval_tcp_is_reno(const struct serval_tcp_sock *tp)
+{
+	return !serval_tcp_is_sack(tp);
+}
+
+static inline int serval_tcp_is_fack(const struct serval_tcp_sock *tp)
+{
+	return tp->rx_opt.sack_ok & 2;
+}
+
+
+static inline unsigned int serval_tcp_left_out(const struct serval_tcp_sock *tp)
+{
+	return tp->sacked_out + tp->lost_out;
+}
+
+
+/* Use define here intentionally to get WARN_ON location shown at the
+ * caller */
+#define serval_tcp_verify_left_out(tp) \
+	WARN_ON(serval_tcp_left_out(tp) > tp->packets_out)
+
+
+/* This determines how many packets are "in the network" to the best
+ * of our knowledge.  In many cases it is conservative, but where
+ * detailed information is available from the receiver (via SACK
+ * blocks etc.) we can make more aggressive calculations.
+ *
+ * Use this for decisions involving congestion control, use just
+ * tp->packets_out to determine if the send queue is empty or not.
+ *
+ * Read this equation as:
+ *
+ *	"Packets sent once on transmission queue" MINUS
+ *	"Packets left network, but not honestly ACKed yet" PLUS
+ *	"Packets fast retransmitted"
+ */
+static inline 
+unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
+{
+	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
+}
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/tcp.h>
