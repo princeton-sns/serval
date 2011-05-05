@@ -1062,6 +1062,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         struct tcphdr *th;
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         u32 ack_seq, seq;
+        int err = 0;
 
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header?\n");
@@ -1081,10 +1082,14 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 #endif
      
 	if (th->ack) {
+                LOG_DBG("ACK received!\n");
+
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
 
-                if (!acceptable)
+                if (!acceptable) {
+                        LOG_WARN("ACK is not acceptable.\n");
                         return 1;
+                }
                 
                 LOG_DBG("ACK is acceptable!\n");
 
@@ -1125,8 +1130,10 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 serval_tcp_fast_path_on(tp);
         } else {
                 LOG_WARN("No ACK flag in packet!\n");
+                err = 1;
         }
-        return 0;
+
+        return err;
 }
 
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
