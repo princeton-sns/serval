@@ -340,7 +340,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
-        LOG_DBG("Sending SYN seqno=%u\n",
+        LOG_DBG("Sending REQUEST seqno=%u\n",
                 SERVAL_SKB_CB(skb)->seqno);
 
         err = serval_srv_queue_and_push(sk, skb);
@@ -466,7 +466,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         }
         */
 
-        LOG_DBG("SYN seqno=%u\n", ntohl(conn_ext->seqno));
+        LOG_DBG("REQUEST seqno=%u\n", ntohl(conn_ext->seqno));
 
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
@@ -516,7 +516,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 }
         }
         
-        /* Allocate SYN-ACK reply */
+        /* Allocate RESPONSE reply */
         rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!rskb) {
@@ -540,7 +540,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                                             ip_hdr(skb)->saddr);
 
                 if (!dst) {
-                        LOG_ERR("SYN-ACK not routable\n");
+                        LOG_ERR("RESPONSE not routable\n");
                         goto drop;
                 }
         }
@@ -589,9 +589,10 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         rskb->dev = skb->dev;
 
-        LOG_DBG("Sending SYNACK seqno=%u ackno=%u\n",
+        LOG_DBG("Sending RESPONSE seqno=%u ackno=%u skb->len=%u\n",
                 ntohl(conn_ext->seqno),
-                ntohl(conn_ext->ackno));
+                ntohl(conn_ext->ackno),
+                skb->len);
                 
         /* Cannot use serval_srv_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
@@ -600,7 +601,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                                              ip_hdr(skb)->saddr, NULL);
         
 done:        
-        /* Free the SYN */
+        /* Free the REQUEST */
         FREE_SKB(skb);
 
         return err;
@@ -612,7 +613,8 @@ drop:
 
 /*
   Create new child socket in RESPOND state. This happens as a result
-  of a LISTEN:ing socket receiving an ACK in response to a SYNACK.  */
+  of a LISTEN:ing socket receiving an ACK in response to a SYNACK
+  response.  */
 static struct sock *
 serval_srv_create_respond_sock(struct sock *sk, 
                                struct sk_buff *skb,
@@ -945,13 +947,15 @@ static int serval_srv_request_state_process(struct sock *sk,
         }
         
         if (!(sfh->flags & SVH_SYN && sfh->flags & SVH_ACK)) {
-                LOG_ERR("packet is not a SYNACK\n");
+                LOG_ERR("packet is not a RESPONSE\n");
                 goto drop;
         }
 
-        LOG_DBG("Got SYNACK seqno=%u ackno=%u\n",
+        LOG_DBG("Got RESPONSE seqno=%u ackno=%u TCP off=%u hdrlen=%u\n",
                 ntohl(conn_ext->seqno), 
-                ntohl(conn_ext->ackno));
+                ntohl(conn_ext->ackno),
+                skb_transport_header(skb) - (unsigned char *)sfh,
+                sizeof(*sfh) + sizeof(*conn_ext));
 
         /* Let user know we are connected. */
 	if (!sock_flag(sk, SOCK_DEAD)) {
@@ -1655,7 +1659,8 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                SERVICE_ENTRY_GLOBAL);
 	
 	if (!se) {
-		LOG_INF("service lookup failed\n");
+		LOG_INF("service lookup failed for [%s]\n",
+                        service_id_to_str(&SERVAL_SKB_CB(skb)->srvid));
                 FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
