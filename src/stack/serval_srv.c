@@ -448,7 +448,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
         struct serval_request_sock *srsk;
         struct serval_connection_ext *conn_ext = 
                 (struct serval_connection_ext *)(sfh + 1);
-        unsigned int hdr_len = ntohs(sfh->length);
         struct net_addr saddr;
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
@@ -507,7 +506,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
 
         list_add(&srsk->lh, &ssk->syn_queue);
         
-
         /* Call upper transport protocol handler */
         if (ssk->af_ops->conn_request) {
                 err = ssk->af_ops->conn_request(sk, rsk, skb);
@@ -517,7 +515,6 @@ static int serval_srv_syn_rcv(struct sock *sk,
                         goto drop;
                 }
         }
-       
         
         /* Allocate SYN-ACK reply */
         rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
@@ -586,12 +583,11 @@ static int serval_srv_syn_rcv(struct sock *sk,
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-
-        /* Push back the Serval header again to make IP happy */
-        skb_push(rskb, hdr_len);
-        skb_reset_transport_header(rskb);
-              
+      
+        skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
+
+        rskb->dev = skb->dev;
 
         LOG_DBG("Sending SYNACK seqno=%u ackno=%u\n",
                 ntohl(conn_ext->seqno),
@@ -602,7 +598,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
                                              saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
-
+        
 done:        
         /* Free the SYN */
         FREE_SKB(skb);
@@ -1051,13 +1047,15 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 struct serval_sock *ssk = serval_sk(sk);
                 LOG_DBG("\n");
 
+                if (ssk->af_ops->respond_state_process) {
+                        if (ssk->af_ops->respond_state_process(sk, skb) != 0) {
+                                LOG_WARN("Dropping ACK\n");
+                                goto drop;
+                        }
+                }
+
                 /* Valid ACK */
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
-                
-                if (ssk->af_ops->respond_state_process) {
-                        if (ssk->af_ops->respond_state_process(sk, skb) != 0)
-                                goto drop;
-                }
                 
                 /* Let user know */
                 sk->sk_state_change(sk);
