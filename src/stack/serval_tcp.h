@@ -703,6 +703,19 @@ unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
 	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
+static inline char *sprintf_tcphdr(const struct tcphdr *th)
+{
+	static char buf[100];
+	int len;
+
+	len = snprintf(buf, sizeof(buf) - 1, 
+		       "[SYN=%d ACK=%d seq=%u ackno=%u window=%u]", 
+		       th->syn, th->ack, ntohl(th->seq), 
+		       ntohl(th->ack_seq), ntohs(th->window));
+
+	return buf;       
+}
+
 #if defined(OS_LINUX_KERNEL)
 #include <linux/tcp.h>
 #include <linux/ip.h>

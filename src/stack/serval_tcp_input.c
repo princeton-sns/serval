@@ -1074,7 +1074,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         ack_seq = ntohl(th->ack_seq);
         seq = ntohl(th->seq);
 
-        LOG_DBG("TCP ACK seq=%u ackno=%u\n", seq, ack_seq);
+        LOG_DBG("expecting ACK %s\n", sprintf_tcphdr(th));
 
 	tp->copied_seq = tp->rcv_nxt;
 #if defined(OS_LINUX_KERNEL)
@@ -1143,6 +1143,8 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 	int saved_clamp = tp->rx_opt.mss_clamp;
         u32 seq = ntohl(th->seq);
 
+        LOG_DBG("expecting SYN-ACK %s\n", sprintf_tcphdr(th));
+
         if (th->ack) {
                 LOG_DBG("ACK received\n");
 
@@ -1157,14 +1159,16 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		 *  We do not send data with SYN, so that RFC-correct
 		 *  test reduces to:
 		 */
-		if (ntohl(th->ack_seq) != tp->snd_nxt)
-			goto reset_and_undo;
+		if (ntohl(th->ack_seq) != tp->snd_nxt) {
+                        LOG_WARN("Unexpected ACK ack_seq=%u snd_next=%u\n",
+                                 ntohl(th->ack_seq), tp->snd_nxt);
+                        goto reset_and_undo;
+                }
 
 		tp->snd_wl1 = seq;
 		serval_tcp_ack(sk, skb, FLAG_SLOWPATH);
 
-		/* Ok.. it's good. Set up sequence numbers and
-		 * move to established.
+		/* Ok.. it's good. Set up sequence numbers.
 		 */
 		tp->rcv_nxt = seq + 1;
 		tp->rcv_wup = seq + 1;
@@ -1206,6 +1210,8 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		 * is initialized. */
 		tp->copied_seq = tp->rcv_nxt;
 
+        } else {
+                LOG_INF("No ACK in TCP message received in SYN-SENT state\n");
         }
         
         return 0;
