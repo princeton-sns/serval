@@ -1123,7 +1123,8 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
         struct serval_tcp_request_sock *treq = serval_tcp_rsk(rsk);
 
-        LOG_DBG("Initializing new TCP respond sock\n");
+        LOG_DBG("New TCP sock based on pkt %s\n", 
+                tcphdr_to_str(tcp_hdr(skb)));
 
 	newtp->pred_flags = 0;
 
@@ -1196,13 +1197,16 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
                 newtp->rx_opt.snd_wscale = ireq->snd_wscale;
                 newtp->rx_opt.rcv_wscale = ireq->rcv_wscale;
         } else {
+                LOG_DBG("No TCP window scaling!\n");
                 newtp->rx_opt.snd_wscale = newtp->rx_opt.rcv_wscale = 0;
                 newtp->window_clamp = min(newtp->window_clamp, 65535U);
         }
         newtp->snd_wnd = (ntohs(tcp_hdr(skb)->window) <<
                           newtp->rx_opt.snd_wscale);
-        newtp->max_window = newtp->snd_wnd;
 
+        newtp->max_window = newtp->snd_wnd;
+        
+        LOG_DBG("snd_wnd=%u\n", newtp->snd_wnd);
                 
         if (0 /*newtp->rx_opt.tstamp_ok */) {
                 /*
