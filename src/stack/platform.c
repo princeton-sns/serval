@@ -102,6 +102,52 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size)
 
 #if defined(OS_USER)
 
+/* From http://groups.google.com/group/comp.lang.c/msg/52820a5d19679089 */
+/***********************************************/
+/* Locate the position of the highest bit set. */
+/* A binary search is used.  The result is an  */
+/* approximation of log2(n) [the integer part] */
+/***********************************************/
+int ilog2(unsigned long n)
+{
+        int i = (-1);
+        /* Is there a bit on in the high word? */
+        /* Else, all the high bits are already zero. */
+        if (n & 0xffff0000) {
+                i += 16;                /* Update our search position */
+                n >>= 16;               /* Shift out lower (irrelevant) bits */
+        }
+        /* Is there a bit on in the high byte of the current word? */
+        /* Else, all the high bits are already zero. */
+        if (n & 0xff00) {
+                i += 8;                 /* Update our search position */
+                n >>= 8;                /* Shift out lower (irrelevant) bits */
+        }
+        /* Is there a bit on in the current nybble? */
+        /* Else, all the high bits are already zero. */
+        if (n & 0xf0) {
+                i += 4;                 /* Update our search position */
+                n >>= 4;                /* Shift out lower (irrelevant) bits */
+        }
+        /* Is there a bit on in the high 2 bits of the current nybble? */
+        /* 0xc is 1100 in binary... */
+        /* Else, all the high bits are already zero. */
+        if (n & 0xc) {
+                i += 2;                 /* Update our search position */
+                n >>= 2;                /* Shift out lower (irrelevant) bits */
+        }
+        /* Is the 2nd bit on? [ 0x2 is 0010 in binary...] */
+        /* Else, all the 2nd bit is already zero. */
+        if (n & 0x2) {
+                i++;                    /* Update our search position */
+                n >>= 1;                /* Shift out lower (irrelevant) bit */
+        }
+        /* Is the lowest bit set? */
+        if (n)
+                i++;                    /* Update our search position */
+        return i;
+}
+
 int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
 {
         if (!memcpy(iov->iov_base, from, len)) 
