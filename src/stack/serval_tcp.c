@@ -1112,16 +1112,16 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
  */
 void serval_tcp_connection_respond_sock(struct sock *sk, 
                                         struct sk_buff *skb,
-                                        struct request_sock *rsk,
+                                        struct request_sock *req,
                                         struct sock *newsk,
                                         struct dst_entry *dst)
 {
         //struct serval_sock *new_ssk = serval_sk(newsk);
         //struct inet_sock *newinet = inet_sk(newsk);
-        struct inet_request_sock *ireq = inet_rsk(rsk);
+        struct inet_request_sock *ireq = inet_rsk(req);
         struct serval_tcp_sock *newtp = serval_tcp_sk(newsk);
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
-        struct serval_tcp_request_sock *treq = serval_tcp_rsk(rsk);
+        struct serval_tcp_request_sock *treq = serval_tcp_rsk(req);
 
         LOG_DBG("New TCP sock based on pkt %s\n", 
                 tcphdr_to_str(tcp_hdr(skb)));
@@ -1188,9 +1188,13 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
           tcp_enable_fack(newtp);
           }
         */
-        newtp->window_clamp = treq->window_clamp;
-        newtp->rcv_ssthresh = treq->rcv_wnd;
-        newtp->rcv_wnd = treq->rcv_wnd;
+
+        LOG_DBG("req->window_clamp=%u\n",
+                req->window_clamp);
+
+        newtp->window_clamp = req->window_clamp;
+        newtp->rcv_ssthresh = req->rcv_wnd;
+        newtp->rcv_wnd = req->rcv_wnd;
         newtp->rx_opt.wscale_ok = treq->wscale_ok;
 
         if (newtp->rx_opt.wscale_ok) {
@@ -1206,7 +1210,7 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 
         newtp->max_window = newtp->snd_wnd;
         
-        LOG_DBG("snd_wnd=%u\n", newtp->snd_wnd);
+        LOG_DBG("snd_wnd=%u rcv_wnd=%u\n", newtp->snd_wnd, newtp->rcv_wnd);
                 
         if (0 /*newtp->rx_opt.tstamp_ok */) {
                 /*
@@ -1319,7 +1323,7 @@ static void serval_tcp_destroy_sock(struct sock *sk)
 #endif
 }
 
-static void serval_tcp_request_sock_destructor(struct request_sock *rsk)
+static void serval_tcp_request_sock_destructor(struct request_sock *req)
 {
 }
 

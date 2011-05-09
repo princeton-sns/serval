@@ -262,19 +262,12 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
                    char buf[256];
                    LOG_DBG("ip dump %s\n", ipv4_hdr_dump(iph, buf, 256));
                 */
-                if(skb->dev) {
-                    LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
-                            skb->dev->name,
-                            inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                            inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                            skb->len, iph_len, iph->ihl);
-                }
-                else {
-                    LOG_DBG("%s->%s tot_len=%u iph_len=[%u %u]\n",
-                            inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                            inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                            skb->len, iph_len, iph->ihl);
-                }
+
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
+                        skb->dev ? skb->dev->name : "no dev",
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph_len, iph->ihl);
         }
 #endif
         
