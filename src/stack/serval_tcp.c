@@ -1228,8 +1228,13 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 	//newinet->inet_id = newtp->write_seq ^ jiffies;
 
 	serval_tcp_mtup_init(newsk);
-	serval_tcp_sync_mss(newsk, dst_mtu(dst));
+#if defined(OS_LINUX_KERNEL)
+        serval_tcp_sync_mss(newsk, dst_mtu(dst));
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
+#else
+        serval_tcp_sync_mss(newsk, TCP_MSS_DEFAULT);
+	newtp->advmss = TCP_MSS_DEFAULT;
+#endif
 
 	if (serval_tcp_sk(sk)->rx_opt.user_mss &&
 	    serval_tcp_sk(sk)->rx_opt.user_mss < newtp->advmss)
