@@ -596,17 +596,25 @@ static int serval_srv_syn_rcv(struct sock *sk,
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-      
+     
+        {
+                char buf[900];                
+                LOG_DBG("Hex: %s\n", hexdump(rskb->data, rskb->len, buf, 900));
+        }
         skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
 
         rskb->dev = skb->dev;
 
-        LOG_DBG("Sending RESPONSE seqno=%u ackno=%u skb->len=%u\n",
+        LOG_DBG("Sending RESPONSE seqno=%u ackno=%u rskb->len=%u\n",
                 ntohl(conn_ext->seqno),
                 ntohl(conn_ext->ackno),
-                skb->len);
+                rskb->len);
                 
+        {
+                char buf[900];                
+                LOG_DBG("Hex: %s\n", hexdump(rskb->data, rskb->len, buf, 900));
+        }
         /* Cannot use serval_srv_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 

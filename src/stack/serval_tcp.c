@@ -203,6 +203,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 			skb_reserve(skb, skb_tailroom(skb) - size);
 			return skb;
 		}
+                LOG_ERR("sk_wmem_schedule=0\n");
 		__kfree_skb(skb);
 	} else {
 		sk->sk_prot->enter_memory_pressure(sk);
@@ -520,8 +521,6 @@ wait_for_memory:
 				goto do_error;
 
 			mss_now = serval_tcp_send_mss(sk, &size_goal, flags);
-
-                        LOG_DBG("mss_now=%d\n", mss_now);
 		}
 	}
 

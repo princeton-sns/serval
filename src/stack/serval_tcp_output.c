@@ -404,11 +404,11 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 	u32 end_seq = TCP_SKB_CB(skb)->end_seq;
         int ret;
 
-	if (skb->len > cur_mss)
-		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
-
         LOG_DBG("skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
                 skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
+
+	if (skb->len > cur_mss)
+		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
 
 	ret = !after(end_seq, serval_tcp_wnd_end(tp));
 
@@ -811,7 +811,10 @@ u32 __serval_tcp_select_window(struct sock *sk)
 			       serval_tcp_full_space(sk));
 	int window;
 
-        LOG_DBG("tp->tp_ack.rcv_mss=%u\n", tp->tp_ack.rcv_mss);
+        LOG_DBG("tp->tp_ack.rcv_mss=%u window_clamp=%d tcp_full_space=%d\n", 
+                tp->tp_ack.rcv_mss, 
+                tp->window_clamp, 
+                serval_tcp_full_space(sk));
 
 	if (mss > full_space)
 		mss = full_space;
@@ -1266,11 +1269,10 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 		ireq->rcv_wscale = rcv_wscale;
 	}
 
-	//serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
-        //                          TCPH_SYN | TCPH_ACK);
+	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
+                                     TCPH_SYN | TCPH_ACK);
 
         tcp_header_size = sizeof(*th);
-	th = tcp_hdr(skb);
 	memset(th, 0, sizeof(struct tcphdr));
 	th->syn = 1;
 	th->ack = 1;

@@ -554,15 +554,14 @@ void sk_common_release(struct sock *sk);
 int __sk_mem_schedule(struct sock *sk, int size, int kind);
 void __sk_mem_reclaim(struct sock *sk);
 
-#define SK_MEM_QUANTUM ((int)1)
-#define SK_MEM_QUANTUM_SHIFT 0 /* ilog2(SK_MEM_QUANTUM) */
+#define SK_MEM_QUANTUM ((int)PAGE_SIZE)
+#define SK_MEM_QUANTUM_SHIFT ilog2(SK_MEM_QUANTUM)
 #define SK_MEM_SEND	0
 #define SK_MEM_RECV	1
 
 static inline int sk_mem_pages(int amt)
 {
 	return (amt + SK_MEM_QUANTUM - 1) >> SK_MEM_QUANTUM_SHIFT;
-        //return amt * SK_MEM_QUANTUM;
 }
 
 static inline int sk_has_account(struct sock *sk)

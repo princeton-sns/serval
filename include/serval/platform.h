@@ -103,7 +103,9 @@ typedef int8_t s8;
 typedef int8_t __s8;
 
 #define PAGE_SHIFT      12
-#define PAGE_SIZE       (1 << PAGE_SHIFT)
+#define PAGE_SIZE       (1 << PAGE_SHIFT) /* 4096 bytes */
+
+int ilog2(unsigned long n);
 
 #define LINUX_VERSION_CODE 132643 /* corresponds to 2.6.35 */
 #define KERNEL_VERSION(a,b,c) (((a) << 16) + ((b) << 8) + (c))
