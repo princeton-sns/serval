@@ -1210,6 +1210,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 
         } else {
                 LOG_INF("No ACK in TCP message received in SYN-SENT state\n");
+                goto reset_and_undo;
         }
         
         return 0;
