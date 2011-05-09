@@ -1316,6 +1316,16 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	th->dest = 0;
         th->seq = htonl(serval_tcp_acceptable_seq(sk));
 	th->ack_seq = htonl(tp->rcv_nxt);
+        if (0 /*unlikely(tcb->flags & TCPH_SYN) */) {
+		/* RFC1323: The window in SYN & SYN/ACK segments
+		 * is never scaled.
+		 */
+		th->window	= htons(min(tp->rcv_wnd, 65535U));
+	} else {
+		th->window	= htons(serval_tcp_select_window(sk));
+	}
+	th->check		= 0;
+	th->urg_ptr		= 0;
 
         return 0;
 }

@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _SERVAL_TCP_H_
 #define _SERVAL_TCP_H_
 
@@ -574,6 +575,9 @@ static __inline__ __u32 serval_tcp_max_burst(const struct serval_tcp_sock *tp)
 /* Returns end sequence number of the receiver's advertised window */
 static inline u32 serval_tcp_wnd_end(const struct serval_tcp_sock *tp)
 {
+        LOG_DBG("snd_una=%u snd_wnd=%u\n",
+                tp->snd_una, tp->snd_wnd);
+
 	return tp->snd_una + tp->snd_wnd;
 }
 
