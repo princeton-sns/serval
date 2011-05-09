@@ -17,11 +17,10 @@ struct serval_request_sock {
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
-        uint32_t rcv_seq;
-        uint32_t iss_seq;
-        uint8_t local_nonce[SERVAL_NONCE_SIZE];
-        uint8_t peer_nonce[SERVAL_NONCE_SIZE];
-        unsigned char flags;
+        u32 rcv_seq;
+        u32 iss_seq;
+        u8 local_nonce[SERVAL_NONCE_SIZE];
+        u8 peer_nonce[SERVAL_NONCE_SIZE];
         struct list_head lh;
 };
 

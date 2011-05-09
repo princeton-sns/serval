@@ -1113,54 +1113,129 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
 void serval_tcp_connection_respond_sock(struct sock *sk, 
                                         struct sk_buff *skb,
                                         struct request_sock *rsk,
-                                        struct sock *child,
+                                        struct sock *newsk,
                                         struct dst_entry *dst)
 {
-        struct serval_sock *new_ssk = serval_sk(sk);
-        struct serval_tcp_sock *new_tp = serval_tcp_sk(child);
-        struct serval_tcp_sock *old_tp = serval_tcp_sk(sk);
+        //struct serval_sock *new_ssk = serval_sk(newsk);
+        //struct inet_sock *newinet = inet_sk(newsk);
+        struct inet_request_sock *ireq = inet_rsk(rsk);
+        struct serval_tcp_sock *newtp = serval_tcp_sk(newsk);
+        struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
         struct serval_tcp_request_sock *treq = serval_tcp_rsk(rsk);
 
         LOG_DBG("Initializing new TCP respond sock\n");
 
-	serval_tcp_prequeue_init(new_tp);
+	newtp->pred_flags = 0;
 
-        child->sk_write_space = sk_stream_write_space;
+        newtp->rcv_wup = newtp->copied_seq =
+		newtp->rcv_nxt = treq->rcv_isn + 1;
 
-        new_tp->pred_flags = 0;
-        
-        new_tp->rcv_wup = new_tp->copied_seq =
-		new_tp->rcv_nxt = treq->rcv_isn + 1;
+        newtp->snd_sml = newtp->snd_una =
+		newtp->snd_nxt = newtp->snd_up =
+                treq->snt_isn + 1 + serval_tcp_s_data_size(oldtp);
 
-        new_tp->snd_sml = new_tp->snd_una =
-		new_tp->snd_nxt = new_tp->snd_up =
-                treq->snt_isn + 1 + serval_tcp_s_data_size(old_tp);
+        serval_tcp_prequeue_init(newtp);
 
-        new_tp->rto = TCP_TIMEOUT_INIT;
-	new_tp->mdev = TCP_TIMEOUT_INIT;
-        
-        new_tp->packets_out = 0;
-        new_tp->retrans_out = 0;
-        new_tp->sacked_out = 0;
-        new_tp->fackets_out = 0;
-        new_tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+        serval_tcp_init_wl(newtp, treq->rcv_isn);
 
-	/* So many TCP implementations out there (incorrectly) count the
+        newtp->srtt = 0;
+        newtp->mdev = TCP_TIMEOUT_INIT;
+        newtp->rto = TCP_TIMEOUT_INIT;
+
+        newtp->packets_out = 0;
+        newtp->retrans_out = 0;
+        newtp->sacked_out = 0;
+        newtp->fackets_out = 0;
+        newtp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+
+        /* So many TCP implementations out there (incorrectly) count the
          * initial SYN frame in their delayed-ACK and congestion control
          * algorithms that we must have the following bandaid to talk
          * efficiently to them.  -DaveM
          */
-        new_tp->snd_cwnd = 2;
-        new_tp->snd_cwnd_cnt = 0;
-        new_tp->bytes_acked = 0;
-        
-        new_tp->frto_counter = 0;
-        // new_tp->frto_highmark = 0;
+        newtp->snd_cwnd = 2;
+        newtp->snd_cwnd_cnt = 0;
+        newtp->bytes_acked = 0;
 
-        skb_queue_head_init(&new_tp->out_of_order_queue);
+        newtp->frto_counter = 0;
+        newtp->frto_highmark = 0;
 
-	new_tp->ca_ops = &serval_tcp_init_congestion_ops;
-        new_ssk->af_ops = &serval_tcp_af_ops;
+        newtp->ca_ops = &serval_tcp_init_congestion_ops;
+
+        serval_tcp_set_ca_state(newsk, TCP_CA_Open);
+        //tcp_init_xmit_timers(newsk);
+        skb_queue_head_init(&newtp->out_of_order_queue);
+        newtp->write_seq = newtp->pushed_seq =
+                treq->snt_isn + 1 + serval_tcp_s_data_size(oldtp);
+
+        newtp->rx_opt.saw_tstamp = 0;
+
+        newtp->rx_opt.dsack = 0;
+        newtp->rx_opt.num_sacks = 0;
+
+        newtp->urg_data = 0;
+
+        /*
+          if (sock_flag(newsk, SOCK_KEEPOPEN))
+          inet_csk_reset_keepalive_timer(newsk,
+          keepalive_time_when(newtp));
+        */
+        newtp->rx_opt.tstamp_ok = ireq->tstamp_ok;
+        /*
+          if ((newtp->rx_opt.sack_ok = ireq->sack_ok) != 0) {
+          if (sysctl_tcp_fack)
+          tcp_enable_fack(newtp);
+          }
+        */
+        newtp->window_clamp = treq->window_clamp;
+        newtp->rcv_ssthresh = treq->rcv_wnd;
+        newtp->rcv_wnd = treq->rcv_wnd;
+        newtp->rx_opt.wscale_ok = treq->wscale_ok;
+
+        if (newtp->rx_opt.wscale_ok) {
+                newtp->rx_opt.snd_wscale = ireq->snd_wscale;
+                newtp->rx_opt.rcv_wscale = ireq->rcv_wscale;
+        } else {
+                newtp->rx_opt.snd_wscale = newtp->rx_opt.rcv_wscale = 0;
+                newtp->window_clamp = min(newtp->window_clamp, 65535U);
+        }
+        newtp->snd_wnd = (ntohs(tcp_hdr(skb)->window) <<
+                          newtp->rx_opt.snd_wscale);
+        newtp->max_window = newtp->snd_wnd;
+
+                
+        if (0 /*newtp->rx_opt.tstamp_ok */) {
+                /*
+                  newtp->rx_opt.ts_recent = req->ts_recent;
+                  newtp->rx_opt.ts_recent_stamp = get_seconds();
+                  newtp->tcp_header_len = sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
+                */
+        } else {
+                newtp->rx_opt.ts_recent_stamp = 0;
+                newtp->tcp_header_len = sizeof(struct tcphdr);
+        }
+/*
+  if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
+  newicsk->icsk_ack.last_seg_size = skb->len - newtp->tcp_header_len;
+*/
+        newtp->rx_opt.mss_clamp = treq->mss;
+
+////
+
+	//newsk->sk_gso_type = SKB_GSO_TCPV4;
+	sk_setup_caps(newsk, dst);
+	
+	//newinet->inet_id = newtp->write_seq ^ jiffies;
+
+	serval_tcp_mtup_init(newsk);
+	serval_tcp_sync_mss(newsk, dst_mtu(dst));
+	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
+
+	if (serval_tcp_sk(sk)->rx_opt.user_mss &&
+	    serval_tcp_sk(sk)->rx_opt.user_mss < newtp->advmss)
+		newtp->advmss = serval_tcp_sk(sk)->rx_opt.user_mss;
+
+	serval_tcp_initialize_rcv_mss(newsk);
 }
 
 static int serval_tcp_init_sock(struct sock *sk)

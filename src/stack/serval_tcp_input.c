@@ -1074,7 +1074,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         ack_seq = ntohl(th->ack_seq);
         seq = ntohl(th->seq);
 
-        LOG_DBG("expecting ACK %s\n", sprintf_tcphdr(th));
+        LOG_DBG("expecting ACK %s\n", tcphdr_to_str(th));
 
 	tp->copied_seq = tp->rcv_nxt;
 #if defined(OS_LINUX_KERNEL)
@@ -1082,8 +1082,6 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 #endif
      
 	if (th->ack) {
-                LOG_DBG("ACK received!\n");
-
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
 
                 if (!acceptable) {
@@ -1143,7 +1141,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 	int saved_clamp = tp->rx_opt.mss_clamp;
         u32 seq = ntohl(th->seq);
 
-        LOG_DBG("expecting SYN-ACK %s\n", sprintf_tcphdr(th));
+        LOG_DBG("expecting SYN-ACK %s\n", tcphdr_to_str(th));
 
         if (th->ack) {
                 LOG_DBG("ACK received\n");
