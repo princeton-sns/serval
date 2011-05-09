@@ -8,6 +8,23 @@
 
 struct tcp_congestion_ops;
 
+/* for TCP_COOKIE_TRANSACTIONS (TCPCT) socket option */
+#define TCP_COOKIE_MIN		 8		/*  64-bits */
+#define TCP_COOKIE_MAX		16		/* 128-bits */
+#define TCP_COOKIE_PAIR_SIZE	(2*TCP_COOKIE_MAX)
+
+struct serval_tcp_cookie_values {
+	u8		cookie_pair[TCP_COOKIE_PAIR_SIZE];
+	u8		cookie_pair_size;
+	u8		cookie_desired;
+	u16		s_data_desired:11,
+			s_data_constant:1,
+			s_data_in:1,
+			s_data_out:1,
+			s_data_unused:2;
+	u8		s_data_payload[0];
+};
+
 struct serval_tcp_options_received {
 /*	PAWS/RTTM data	*/
 	long	ts_recent_stamp;/* Time we stored ts_recent (for aging) */
@@ -190,6 +207,8 @@ struct serval_tcp_sock {
 		int		  probe_size;
 	} tp_mtup;
 
+
+	struct serval_tcp_cookie_values  *cookie_values;
 };
 
 static inline struct serval_tcp_sock *serval_tcp_sk(const struct sock *sk)

@@ -433,12 +433,9 @@ static inline void serval_tcp_push_pending_frames(struct sock *sk)
  */
 static inline int serval_tcp_s_data_size(const struct serval_tcp_sock *tp)
 {
-	/*
-	  return (tp->cookie_values != NULL && tp->cookie_values->s_data_constant)
+	return (tp->cookie_values != NULL && tp->cookie_values->s_data_constant)
 		? tp->cookie_values->s_data_desired
 		: 0;
-	*/
-	return 0;
 }
 
 void serval_tcp_rcv_space_adjust(struct sock *sk);
@@ -490,24 +487,6 @@ static inline int serval_tcp_space(const struct sock *sk)
 static inline int serval_tcp_full_space(const struct sock *sk)
 {
 	return serval_tcp_win_from_space(sk->sk_rcvbuf); 
-}
-
-static inline void serval_tcp_set_ca_state(struct sock *sk, const u8 ca_state)
-{
-	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-
-	if (tp->ca_ops->set_state)
-		tp->ca_ops->set_state(sk, ca_state);
-	tp->ca_state = ca_state;
-}
-
-static inline void serval_tcp_ca_event(struct sock *sk, 
-				       const enum tcp_ca_event event)
-{
-	const struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	
-	if (tp->ca_ops->cwnd_event)
-		tp->ca_ops->cwnd_event(sk, event);
 }
 
 #define TCP_INFINITE_SSTHRESH	0x7fffffff
@@ -647,6 +626,23 @@ extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
 
 
+static inline void serval_tcp_set_ca_state(struct sock *sk, const u8 ca_state)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (tp->ca_ops->set_state)
+		tp->ca_ops->set_state(sk, ca_state);
+	tp->ca_state = ca_state;
+}
+
+static inline void serval_tcp_ca_event(struct sock *sk, 
+				       const enum tcp_ca_event event)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (tp->ca_ops->cwnd_event)
+		tp->ca_ops->cwnd_event(sk, event);
+}
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary
  * between different flows.
@@ -703,7 +699,7 @@ unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
 	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
-static inline char *sprintf_tcphdr(const struct tcphdr *th)
+static inline char *tcphdr_to_str(const struct tcphdr *th)
 {
 	static char buf[100];
 	int len;

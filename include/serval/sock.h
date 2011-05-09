@@ -534,12 +534,20 @@ static inline struct dst_entry *sk_dst_get(struct sock *sk)
 	return dst;
 }
 
-void sk_common_release(struct sock *sk);
-
 static inline int sk_can_gso(const struct sock *sk)
 {
-	return 0;
+	return 0; //net_gso_ok(sk->sk_route_caps, sk->sk_gso_type);
 }
+
+extern void sk_setup_caps(struct sock *sk, struct dst_entry *dst);
+
+static inline void sk_nocaps_add(struct sock *sk, int flags)
+{
+	sk->sk_route_nocaps |= flags;
+	sk->sk_route_caps &= ~flags;
+}
+void sk_common_release(struct sock *sk);
+
 /*
  * Functions for memory accounting
  */

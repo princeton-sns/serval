@@ -184,6 +184,25 @@ static void sock_net_set(struct sock *sk, struct net *net)
 	sk->sk_net = net;
 }
 
+void sk_setup_caps(struct sock *sk, struct dst_entry *dst)
+{
+        /*
+	__sk_dst_set(sk, dst);
+	sk->sk_route_caps = dst->dev->features;
+	if (sk->sk_route_caps & NETIF_F_GSO)
+		sk->sk_route_caps |= NETIF_F_GSO_SOFTWARE;
+	sk->sk_route_caps &= ~sk->sk_route_nocaps;
+	if (sk_can_gso(sk)) {
+		if (dst->header_len) {
+			sk->sk_route_caps &= ~NETIF_F_GSO_MASK;
+		} else {
+			sk->sk_route_caps |= NETIF_F_SG | NETIF_F_HW_CSUM;
+			sk->sk_gso_max_size = dst->dev->gso_max_size;
+		}
+	}
+        */
+}
+
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot)
 {
@@ -711,3 +730,4 @@ void release_sock(struct sock *sk)
         sk->sk_lock.owned = 0;
         spin_unlock(&sk->sk_lock.slock);
 }
+
