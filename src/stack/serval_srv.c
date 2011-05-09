@@ -677,6 +677,7 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                         struct serval_sock *nssk;
                         struct request_sock *rsk = &srsk->rsk.req;
                         struct inet_request_sock *irsk = &srsk->rsk;
+                        struct inet_sock *newinet;
 
                         if (memcmp(srsk->peer_nonce, conn_ext->nonce, 
                                    SERVAL_NONCE_SIZE) != 0) {
@@ -705,17 +706,23 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                         
                         if (!nsk)
                                 return NULL;
-                        
-                        nsk->sk_state = SERVAL_RESPOND;
+
+                        newinet = inet_sk(nsk);
                         nssk = serval_sk(nsk);
+
+                        nsk->sk_state = SERVAL_RESPOND;
+
                         memcpy(&nssk->local_flowid, &srsk->local_flowid, 
                                sizeof(srsk->local_flowid));
                         memcpy(&nssk->peer_flowid, &srsk->peer_flowid, 
                                sizeof(srsk->peer_flowid));
                         memcpy(&nssk->peer_srvid, &srsk->peer_srvid,
                                sizeof(srsk->peer_srvid));
-                        memcpy(&inet_sk(sk)->inet_daddr, &irsk->rmt_addr,
-                               sizeof(inet_sk(sk)->inet_daddr));
+                        memcpy(&newinet->inet_daddr, &irsk->rmt_addr,
+                               sizeof(newinet->inet_daddr));              
+                        //newinet->mc_index = inet_iif(skb);
+                        //newinet->mc_ttl	= ip_hdr(skb)->ttl;
+
                         memcpy(nssk->local_nonce, srsk->local_nonce, 
                                SERVAL_NONCE_SIZE);
                         memcpy(nssk->peer_nonce, srsk->peer_nonce, 
@@ -990,10 +997,20 @@ static int serval_srv_request_state_process(struct sock *sk,
         /* Update expected rcv sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
 
-        /* Process any ACK */
+        /* Process potential ACK 
+
+           TODO: should probably reject this packet if the ACK is
+           invalid.
+         */
         serval_srv_ack_process(sk, sfh, skb);
+        {
+                char buf[900];
+                
+                LOG_DBG("Hex: %s\n", 
+                        hexdump(sfh, ntohs(sfh->length) + 20, buf, 900));
+        } 
         
-        /* Let transport know about response */
+        /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {
                 err = ssk->af_ops->request_state_process(sk, skb);
 
