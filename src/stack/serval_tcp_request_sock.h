@@ -17,12 +17,10 @@ struct serval_tcp_request_sock {
 	__u32 snt_isn;
 	__u32 rcv_isn;
         u16 mss;
-	u32 window_clamp;	/* Maximal window to advertise		*/
         u16
 		wscale_ok : 1,	/* Wscale seen on SYN packet		*/
 		snd_wscale : 4,	/* Window scaling received from sender	*/
 		rcv_wscale : 4;	/* Window scaling to send to receiver	*/
- 	u32 rcv_wnd;  /* Current receiver window */
 };
 
 static inline struct serval_tcp_request_sock *

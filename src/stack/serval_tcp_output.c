@@ -214,6 +214,7 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 {
 	unsigned int space = (__space < 0 ? 0 : __space);
 
+        LOG_DBG("1. space=%u mss=%u rcv_wnd=%u window_clamp=%u init_rcv_wnd=%u\n", space, mss, *rcv_wnd, *window_clamp, init_rcv_wnd);
 	/* If no clamp set the clamp to the max possible scaled window */
 	if (*window_clamp == 0)
 		(*window_clamp) = (65535 << 14);
@@ -271,6 +272,8 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 
 	/* Set the clamp no higher than max representable value */
 	(*window_clamp) = min(65535U << (*rcv_wscale), *window_clamp);
+        
+        LOG_DBG("2. space=%u mss=%u rcv_wnd=%u window_clamp=%u init_rcv_wnd=%u\n", space, mss, *rcv_wnd, *window_clamp, init_rcv_wnd);
 }
 
 
@@ -571,7 +574,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 #endif
 
-	ssk->af_ops->send_check(sk, skb);
+        if (ssk->af_ops->send_check)
+                ssk->af_ops->send_check(sk, skb);
 
 	if (likely(tcb->flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, tcp_skb_pcount(skb));
@@ -588,7 +592,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         LOG_DBG("queue_xmit\n");
 
-	err = ssk->af_ops->queue_xmit(skb);
+	err = serval_srv_xmit_skb(skb);
+        //ssk->af_ops->queue_xmit(skb);
 
 	if (likely(err <= 0))
 		return err;
@@ -811,9 +816,11 @@ u32 __serval_tcp_select_window(struct sock *sk)
 			       serval_tcp_full_space(sk));
 	int window;
 
-        LOG_DBG("tp->tp_ack.rcv_mss=%u window_clamp=%d tcp_full_space=%d\n", 
+        LOG_DBG("tp->tp_ack.rcv_mss=%u window_clamp=%d "
+                "free_space=%d tcp_full_space=%d\n", 
                 tp->tp_ack.rcv_mss, 
-                tp->window_clamp, 
+                tp->window_clamp,
+                free_space,
                 serval_tcp_full_space(sk));
 
 	if (mss > full_space)
@@ -833,6 +840,8 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	if (free_space > tp->rcv_ssthresh)
 		free_space = tp->rcv_ssthresh;
 
+        LOG_DBG("free_space=%d\n", free_space);
+
 	/* Don't do rounding if we are using window scaling, since the
 	 * scaled window will not line up with the MSS boundary anyway.
 	 */
@@ -844,7 +853,8 @@ u32 __serval_tcp_select_window(struct sock *sk)
 		 * Import case: prevent zero window announcement if
 		 * 1<<rcv_wscale > mss.
 		 */
-		if (((window >> tp->rx_opt.rcv_wscale) << tp->rx_opt.rcv_wscale) != window)
+		if (((window >> tp->rx_opt.rcv_wscale) << 
+                     tp->rx_opt.rcv_wscale) != window)
 			window = (((window >> tp->rx_opt.rcv_wscale) + 1)
 				  << tp->rx_opt.rcv_wscale);
 	} else {
@@ -1250,11 +1260,17 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
 	mss = TCP_MSS_DEFAULT; //dst_metric(dst, RTAX_ADVMSS);
 
+        LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
+                req->window_clamp, tp->window_clamp);
+
 	if (req->rcv_wnd == 0) { /* ignored for retransmitted syns */
 		__u8 rcv_wscale;
 		/* Set this up on the first call only */
-		req->window_clamp = tp->window_clamp ? : 
-                        TCP_MSS_DEFAULT /*dst_metric(dst, RTAX_WINDOW) */;
+
+		//req->window_clamp = tp->window_clamp ? : 
+                //      TCP_MSS_DEFAULT /*dst_metric(dst, RTAX_WINDOW) */;
+                
+                req->window_clamp = TCP_MSS_DEFAULT;
 
 		/* tcp_full_space because it is guaranteed to be the
                  * first packet */
@@ -1289,6 +1305,9 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
         LOG_DBG("TCP sending SYNACK seq=%u ackno=%u\n",
                 ntohl(th->seq), ntohl(th->ack_seq));
+
+        LOG_DBG("2. req->window_clamp=%u tp->window_clamp=%u\n",
+                req->window_clamp, tp->window_clamp);
 
         return 0;
 }
