@@ -223,4 +223,85 @@ static inline struct serval_tcp_sock *serval_tcp_sk(const struct sock *sk)
 #define TCP_URG_READ	0x0400
 
 
+
+#define STSK_TIME_RETRANS	1	/* Retransmit timer */
+#define STSK_TIME_DACK		2	/* Delayed ack timer */
+#define STSK_TIME_PROBE0	3	/* Zero window probe timer */
+#define STSK_TIME_KEEPOPEN	4	/* Keepalive timer */
+
+
+enum serval_tcp_sk_ack_state_t {
+	STSK_ACK_SCHED	= 1,
+	STSK_ACK_TIMER  = 2,
+	STSK_ACK_PUSHED = 4,
+	STSK_ACK_PUSHED2 = 8
+};
+
+extern void serval_tsk_init_xmit_timers(struct sock *sk,
+                                        void (*retransmit_handler)(unsigned long),
+                                        void (*delack_handler)(unsigned long),
+                                        void (*keepalive_handler)(unsigned long));
+extern void serval_tsk_clear_xmit_timers(struct sock *sk);
+
+static inline void serval_tsk_schedule_ack(struct sock *sk)
+{
+	serval_tcp_sk(sk)->tp_ack.pending |= STSK_ACK_SCHED;
+}
+
+static inline int serval_tsk_ack_scheduled(const struct sock *sk)
+{
+	return serval_tcp_sk(sk)->tp_ack.pending & STSK_ACK_SCHED;
+}
+
+static inline void serval_tsk_delack_init(struct sock *sk)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	memset(&tp->tp_ack, 0, sizeof(tp->tp_ack));
+}
+
+extern void serval_tsk_delete_keepalive_timer(struct sock *sk);
+extern void serval_tsk_reset_keepalive_timer(struct sock *sk, unsigned long timeout);
+
+static inline void serval_tsk_clear_xmit_timer(struct sock *sk, const int what)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	
+	if (what == STSK_TIME_RETRANS || what == STSK_TIME_PROBE0) {
+		tp->pending = 0;
+#ifdef INET_CSK_CLEAR_TIMERS
+		sk_stop_timer(sk, &tp->retransmit_timer);
+#endif
+	} else if (what == STSK_TIME_DACK) {
+                tp->tp_ack.blocked = tp->tp_ack.pending = 0;
+#ifdef INET_CSK_CLEAR_TIMERS
+		sk_stop_timer(sk, &tp->delack_timer);
+#endif
+	}
+}
+
+/*
+ *	Reset the retransmission timer
+ */
+static inline void serval_tsk_reset_xmit_timer(struct sock *sk, const int what,
+                                               unsigned long when,
+                                               const unsigned long max_when)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (when > max_when) {
+		when = max_when;
+	}
+
+	if (what == STSK_TIME_RETRANS || what == STSK_TIME_PROBE0) {
+		tp->pending = what;
+		tp->timeout = jiffies + when;
+		sk_reset_timer(sk, &tp->retransmit_timer, tp->timeout);
+	} else if (what == STSK_TIME_DACK) {
+		tp->tp_ack.pending |= STSK_ACK_TIMER;
+		tp->tp_ack.timeout = jiffies + when;
+		sk_reset_timer(sk, &tp->delack_timer, tp->tp_ack.timeout);
+	}
+}
+
+
 #endif /* _SERVAL_TCP_SOCK_H */

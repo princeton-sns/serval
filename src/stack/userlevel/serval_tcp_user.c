@@ -9,7 +9,6 @@ int sysctl_tcp_rmem[3];
 
 /* tcp_input.c */
 
-int sysctl_serval_tcp_timestamps = 1;
 int sysctl_serval_tcp_sack = 1;
 int sysctl_serval_tcp_fack = 1;
 int sysctl_tcp_reordering = TCP_FASTRETRANS_THRESH;
