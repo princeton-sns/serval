@@ -1336,3 +1336,92 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 
         return 0;
 }
+
+/* Send out a delayed ack, the caller does the policy checking
+ * to see if we should even be here.  See tcp_input.c:tcp_ack_snd_check()
+ * for details.
+ */
+void serval_tcp_send_delayed_ack(struct sock *sk)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	int ato = tp->tp_ack.ato;
+	unsigned long timeout;
+
+	if (ato > TCP_DELACK_MIN) {
+		int max_ato = HZ / 2;
+
+		if (tp->tp_ack.pingpong ||
+		    (tp->tp_ack.pending & STSK_ACK_PUSHED))
+			max_ato = TCP_DELACK_MAX;
+
+		/* Slow path, intersegment interval is "high". */
+
+		/* If some rtt estimate is known, use it to bound delayed ack.
+		 * Do not use inet_csk(sk)->icsk_rto here, use results of rtt measurements
+		 * directly.
+		 */
+		if (tp->srtt) {
+			int rtt = max(tp->srtt >> 3, TCP_DELACK_MIN);
+
+			if (rtt < max_ato)
+				max_ato = rtt;
+		}
+
+		ato = min(ato, max_ato);
+	}
+
+	/* Stay within the limit we were given */
+	timeout = jiffies + ato;
+
+	/* Use new timeout only if there wasn't a older one earlier. */
+	if (tp->tp_ack.pending & STSK_ACK_TIMER) {
+		/* If delack timer was blocked or is about to expire,
+		 * send ACK now.
+		 */
+		if (tp->tp_ack.blocked ||
+		    time_before_eq(tp->tp_ack.timeout, jiffies + (ato >> 2))) {
+			serval_tcp_send_ack(sk);
+			return;
+		}
+
+		if (!time_before(timeout, tp->tp_ack.timeout))
+			timeout = tp->tp_ack.timeout;
+	}
+	tp->tp_ack.pending |= STSK_ACK_SCHED | STSK_ACK_TIMER;
+	tp->tp_ack.timeout = timeout;
+	sk_reset_timer(sk, &tp->delack_timer, timeout);
+}
+
+/* This routine sends an ack and also updates the window. */
+void serval_tcp_send_ack(struct sock *sk)
+{
+	struct sk_buff *buff;
+
+	/* If we have been reset, we may not send again. */
+	if (sk->sk_state == TCP_CLOSE)
+		return;
+
+	/* We are not putting this on the write queue, so
+	 * tcp_transmit_skb() will set the ownership to this
+	 * sock.
+	 */
+	buff = alloc_skb(MAX_SERVAL_TCP_HEADER, GFP_ATOMIC);
+
+	if (buff == NULL) {
+		serval_tsk_schedule_ack(sk);
+		serval_tcp_sk(sk)->tp_ack.ato = TCP_ATO_MIN;
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_DACK,
+                                            TCP_DELACK_MAX, TCP_RTO_MAX);
+		return;
+	}
+
+	/* Reserve space for headers and prepare control bits. */
+	skb_reserve(buff, MAX_SERVAL_TCP_HEADER);
+	serval_tcp_init_nondata_skb(buff, 
+                                    serval_tcp_acceptable_seq(sk), 
+                                    TCPCB_FLAG_ACK);
+
+	/* Send it off, this clears delayed acks for us. */
+	TCP_SKB_CB(buff)->when = tcp_time_stamp;
+	serval_tcp_transmit_skb(sk, buff, 0, GFP_ATOMIC);
+}

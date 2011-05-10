@@ -137,6 +137,43 @@
 					 * minimal timewait lifetime.
 					 */
 
+/*
+ *	TCP option
+ */
+ 
+#define TCPOPT_NOP		1	/* Padding */
+#define TCPOPT_EOL		0	/* End of options */
+#define TCPOPT_MSS		2	/* Segment size negotiating */
+#define TCPOPT_WINDOW		3	/* Window scaling */
+#define TCPOPT_SACK_PERM        4       /* SACK Permitted */
+#define TCPOPT_SACK             5       /* SACK Block */
+#define TCPOPT_TIMESTAMP	8	/* Better RTT estimations/PAWS */
+#define TCPOPT_MD5SIG		19	/* MD5 Signature (RFC2385) */
+#define TCPOPT_COOKIE		253	/* Cookie extension (experimental) */
+
+/*
+ *     TCP option lengths
+ */
+
+#define TCPOLEN_MSS            4
+#define TCPOLEN_WINDOW         3
+#define TCPOLEN_SACK_PERM      2
+#define TCPOLEN_TIMESTAMP      10
+#define TCPOLEN_MD5SIG         18
+#define TCPOLEN_COOKIE_BASE    2	/* Cookie-less header extension */
+#define TCPOLEN_COOKIE_PAIR    3	/* Cookie pair header extension */
+#define TCPOLEN_COOKIE_MIN     (TCPOLEN_COOKIE_BASE+TCP_COOKIE_MIN)
+#define TCPOLEN_COOKIE_MAX     (TCPOLEN_COOKIE_BASE+TCP_COOKIE_MAX)
+
+/* But this is what stacks really send out. */
+#define TCPOLEN_TSTAMP_ALIGNED		12
+#define TCPOLEN_WSCALE_ALIGNED		4
+#define TCPOLEN_SACKPERM_ALIGNED	4
+#define TCPOLEN_SACK_BASE		2
+#define TCPOLEN_SACK_BASE_ALIGNED	4
+#define TCPOLEN_SACK_PERBLOCK		8
+#define TCPOLEN_MD5SIG_ALIGNED		20
+#define TCPOLEN_MSS_ALIGNED		4
 
 #define serval_tcp_flag_byte(th) (((u_int8_t *)th)[13])
 
@@ -239,6 +276,42 @@ static inline int serval_tcp_skb_mss(const struct sk_buff *skb)
 	return skb_shinfo(skb)->gso_size;
 }
 
+static inline int 
+serval_tcp_paws_check(const struct serval_tcp_options_received *rx_opt, 
+                      int paws_win)
+{
+	if ((s32)(rx_opt->ts_recent - rx_opt->rcv_tsval) <= paws_win)
+		return 1;
+	if (unlikely(get_seconds() >= rx_opt->ts_recent_stamp + TCP_PAWS_24DAYS))
+		return 1;
+
+	return 0;
+}
+
+static inline int 
+serval_tcp_paws_reject(const struct serval_tcp_options_received *rx_opt,
+                       int rst)
+{
+	if (serval_tcp_paws_check(rx_opt, 0))
+		return 0;
+
+	/* RST segments are not recommended to carry timestamp,
+	   and, if they do, it is recommended to ignore PAWS because
+	   "their cleanup function should take precedence over timestamps."
+	   Certainly, it is mistake. It is necessary to understand the reasons
+	   of this constraint to relax it: if peer reboots, clock may go
+	   out-of-sync and half-open connections will not be reset.
+	   Actually, the problem would be not existing if all
+	   the implementations followed draft about maintaining clock
+	   via reboots. Linux-2.2 DOES NOT!
+
+	   However, we can relax time bounds for RST segments to MSL.
+	 */
+	if (rst && get_seconds() >= rx_opt->ts_recent_stamp + TCP_PAWS_MSL)
+		return 0;
+	return 1;
+}
+
 int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb);
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb);
 
@@ -260,7 +333,8 @@ unsigned int serval_tcp_current_mss(struct sock *sk);
 
 void serval_tcp_clear_retrans(struct serval_tcp_sock *tp);
 
-static inline void serval_tcp_clear_options(struct tcp_options_received *rx_opt)
+static inline void 
+serval_tcp_clear_options(struct serval_tcp_options_received *rx_opt)
 {
 	rx_opt->tstamp_ok = rx_opt->sack_ok = 0;
 	rx_opt->wscale_ok = rx_opt->snd_wscale = 0;
@@ -575,9 +649,6 @@ static __inline__ __u32 serval_tcp_max_burst(const struct serval_tcp_sock *tp)
 /* Returns end sequence number of the receiver's advertised window */
 static inline u32 serval_tcp_wnd_end(const struct serval_tcp_sock *tp)
 {
-        LOG_DBG("snd_una=%u snd_wnd=%u\n",
-                tp->snd_una, tp->snd_wnd);
-
 	return tp->snd_una + tp->snd_wnd;
 }
 
@@ -653,6 +724,12 @@ static inline void serval_tcp_ca_event(struct sock *sk,
 	if (tp->ca_ops->cwnd_event)
 		tp->ca_ops->cwnd_event(sk, event);
 }
+
+void serval_tcp_done(struct sock *sk);
+
+void serval_tcp_send_delayed_ack(struct sock *sk);
+void serval_tcp_send_ack(struct sock *sk);
+
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary
  * between different flows.
@@ -709,6 +786,8 @@ unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
 	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
+void serval_tcp_cleanup_rbuf(struct sock *sk, int copied);
+
 static inline char *tcphdr_to_str(const struct tcphdr *th)
 {
 	static char buf[100];
@@ -721,6 +800,22 @@ static inline char *tcphdr_to_str(const struct tcphdr *th)
 
 	return buf;       
 }
+
+int serval_tcp_rcv_established(struct sock *sk, 
+                               struct sk_buff *skb,
+                               struct tcphdr *th, 
+                               unsigned len);
+/*
+ *	The union cast uses a gcc extension to avoid aliasing problems
+ *  (union is compatible to any of its members)
+ *  This means this part of the code is -fstrict-aliasing safe now.
+ */
+union serval_tcp_word_hdr { 
+	struct tcphdr hdr;
+	__be32 		  words[5];
+}; 
+
+#define serval_tcp_flag_word(tp) ( ((union serval_tcp_word_hdr *)(tp))->words [3]) 
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/tcp.h>

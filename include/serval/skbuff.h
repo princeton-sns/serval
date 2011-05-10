@@ -957,10 +957,19 @@ static inline struct iphdr *ipip_hdr(const struct sk_buff *skb)
 	return (struct iphdr *)skb_transport_header(skb);
 }
 
+static inline int skb_csum_unnecessary(const struct sk_buff *skb)
+{
+	return skb->ip_summed & CHECKSUM_UNNECESSARY;
+}
+
 int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int offset, struct iovec *to,
                             int size);
 
+
+int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
+                                     int hlen,
+                                     struct iovec *iov);
 
 int skb_copy_datagram_from_iovec(struct sk_buff *skb,
                                  int offset,
@@ -968,6 +977,9 @@ int skb_copy_datagram_from_iovec(struct sk_buff *skb,
                                  int from_offset,
                                  int len);
 
+
+int skb_copy_bits(const struct sk_buff *skb, int offset,
+                  void *to, int len);
 
 struct udphdr;
 

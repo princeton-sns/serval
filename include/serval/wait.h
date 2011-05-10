@@ -158,6 +158,7 @@ static inline void __remove_wait_queue(wait_queue_head_t *head,
 }
 
 #define set_current_state(x)
+#define __set_current_state(x)
 #define MAX_SCHEDULE_TIMEOUT LONG_MAX
 #define ERESTARTSYS 200
 

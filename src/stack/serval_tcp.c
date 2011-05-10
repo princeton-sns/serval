@@ -70,7 +70,7 @@ static inline __u32 serval_tcp_init_sequence(struct sk_buff *skb)
 }
 
 static inline void serval_tcp_openreq_init(struct request_sock *req,
-                                           struct tcp_options_received *rx_opt,
+                                           struct serval_tcp_options_received *rx_opt,
                                            struct sk_buff *skb)
 {
 	struct inet_request_sock *ireq = inet_rsk(req);
@@ -104,7 +104,7 @@ static int serval_tcp_connection_request(struct sock *sk,
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct serval_tcp_request_sock *trsk = serval_tcp_rsk(req);
         struct tcphdr *th;
-	struct tcp_options_received tmp_opt;
+	struct serval_tcp_options_received tmp_opt;
         
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header?\n");
@@ -151,9 +151,41 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 ntohl(tcph->seq),
                 ntohl(tcph->ack_seq));
 
+        if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
+		//sock_rps_save_rxhash(sk, skb->rxhash);
+		//TCP_CHECK_TIMER(sk);
+		if (serval_tcp_rcv_established(sk, skb, tcp_hdr(skb), skb->len)) {
+			//rsk = sk;
+                        err = -1;
+			goto reset;
+		}
+		///TCP_CHECK_TIMER(sk);
+		return 0;
+	}
+
+reset:
+        LOG_WARN("Should handle rcv in non-established state\n");
         FREE_SKB(skb);
 
         return err;
+}
+
+void serval_tcp_done(struct sock *sk)
+{
+        /*
+	if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_RECV)
+		TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_ATTEMPTFAILS);
+	//tcp_set_state(sk, TCP_CLOSE);
+	serval_tcp_clear_xmit_timers(sk);
+
+	sk->sk_shutdown = SHUTDOWN_MASK;
+
+	if (!sock_flag(sk, SOCK_DEAD))
+		sk->sk_state_change(sk);
+	else
+		inet_csk_destroy_sock(sk);
+        */
+        LOG_WARN("NOT implemented!\n");
 }
 
 static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,

@@ -535,6 +535,235 @@ fault:
         return -EFAULT;
 }
 
+
+static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
+				      u8 __user *to, int len,
+				      __wsum *csump)
+{
+	int start = skb_headlen(skb);
+	int copy = start - offset;
+        //int i;
+	//struct sk_buff *frag_iter;
+	int pos = 0;
+
+	/* Copy header. */
+	if (copy > 0) {
+		int err = 0;
+		if (copy > len)
+			copy = len;
+                memcpy(to, skb->data + offset, copy);
+                *csump = 0;
+                
+		/*
+                 *csump = csum_and_copy_to_user(skb->data + offset, to, copy,
+                 *csump, &err);
+                 */
+		if (err)
+			goto fault;
+		if ((len -= copy) == 0)
+			return 0;
+		offset += copy;
+		to += copy;
+		pos = copy;
+	}
+/*
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + skb_shinfo(skb)->frags[i].size;
+		if ((copy = end - offset) > 0) {
+			__wsum csum2;
+			int err = 0;
+			u8  *vaddr;
+			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
+			struct page *page = frag->page;
+
+			if (copy > len)
+				copy = len;
+			vaddr = kmap(page);
+			csum2 = csum_and_copy_to_user(vaddr +
+							frag->page_offset +
+							offset - start,
+						      to, copy, 0, &err);
+			kunmap(page);
+			if (err)
+				goto fault;
+			*csump = csum_block_add(*csump, csum2, pos);
+			if (!(len -= copy))
+				return 0;
+			offset += copy;
+			to += copy;
+			pos += copy;
+		}
+		start = end;
+	}
+
+	skb_walk_frags(skb, frag_iter) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + frag_iter->len;
+		if ((copy = end - offset) > 0) {
+			__wsum csum2 = 0;
+			if (copy > len)
+				copy = len;
+			if (skb_copy_and_csum_datagram(frag_iter,
+						       offset - start,
+						       to, copy,
+						       &csum2))
+				goto fault;
+			*csump = csum_block_add(*csump, csum2, pos);
+			if ((len -= copy) == 0)
+				return 0;
+			offset += copy;
+			to += copy;
+			pos += copy;
+		}
+		start = end;
+	}
+*/
+	if (!len)
+		return 0;
+
+fault:
+	return -EFAULT;
+}
+
+/**
+ *	skb_copy_and_csum_datagram_iovec - Copy and checkum skb to user iovec.
+ *	@skb: skbuff
+ *	@hlen: hardware length
+ *	@iov: io vector
+ *
+ *	Caller _must_ check that skb will fit to this iovec.
+ *
+ *	Returns: 0       - success.
+ *		 -EINVAL - checksum failure.
+ *		 -EFAULT - fault during copy. Beware, in this case iovec
+ *			   can be modified!
+ */
+int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
+				     int hlen, struct iovec *iov)
+{
+	__wsum csum = 0;
+	int chunk = skb->len - hlen;
+
+	if (!chunk)
+		return 0;
+
+	/* Skip filled elements.
+	 * Pretty silly, look at memcpy_toiovec, though 8)
+	 */
+	while (!iov->iov_len)
+		iov++;
+
+	if (iov->iov_len < chunk) {
+                /*
+		if (__skb_checksum_complete(skb))
+			goto csum_error;
+                */
+		if (skb_copy_datagram_iovec(skb, hlen, iov, chunk))
+			goto fault;
+	} else {
+		//csum = csum_partial(skb->data, hlen, skb->csum);
+
+		if (skb_copy_and_csum_datagram(skb, hlen, iov->iov_base,
+					       chunk, &csum))
+			goto fault;
+                /*
+		if (csum_fold(csum))
+			goto csum_error;
+		if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE))
+			netdev_rx_csum_fault(skb->dev);
+                */
+		iov->iov_len -= chunk;
+		iov->iov_base += chunk;
+	}
+	return 0;
+//csum_error:
+	return -EINVAL;
+fault:
+	return -EFAULT;
+}
+
+
+/* Copy some data bits from skb to kernel buffer. */
+int skb_copy_bits(const struct sk_buff *skb, int offset, void *to, int len)
+{
+	int start = skb_headlen(skb);
+	struct sk_buff *frag_iter;
+	int i, copy;
+
+	if (offset > (int)skb->len - len)
+		goto fault;
+
+	/* Copy header. */
+	if ((copy = start - offset) > 0) {
+		if (copy > len)
+			copy = len;
+                memcpy(to, skb->data + offset, copy);
+		//skb_copy_from_linear_data_offset(skb, offset, to, copy);
+		if ((len -= copy) == 0)
+			return 0;
+		offset += copy;
+		to     += copy;
+	}
+        /*
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + skb_shinfo(skb)->frags[i].size;
+		if ((copy = end - offset) > 0) {
+			u8 *vaddr;
+
+			if (copy > len)
+				copy = len;
+
+			vaddr = kmap_skb_frag(&skb_shinfo(skb)->frags[i]);
+			memcpy(to,
+			       vaddr + skb_shinfo(skb)->frags[i].page_offset+
+			       offset - start, copy);
+			kunmap_skb_frag(vaddr);
+
+			if ((len -= copy) == 0)
+				return 0;
+			offset += copy;
+			to     += copy;
+		}
+		start = end;
+	}
+
+	skb_walk_frags(skb, frag_iter) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + frag_iter->len;
+		if ((copy = end - offset) > 0) {
+			if (copy > len)
+				copy = len;
+			if (skb_copy_bits(frag_iter, offset - start, to, copy))
+				goto fault;
+			if ((len -= copy) == 0)
+				return 0;
+			offset += copy;
+			to     += copy;
+		}
+		start = end;
+	}
+        */
+	if (!len)
+		return 0;
+
+fault:
+	return -EFAULT;
+}
+
 static void skb_over_panic(struct sk_buff *skb, int sz, void *here)
 {
 	LOG_CRIT("skb_over_panic: text:%p len:%d put:%d head:%p "
