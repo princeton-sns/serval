@@ -754,6 +754,48 @@ static inline void serval_tcp_prequeue_init(struct serval_tcp_sock *tp)
 #endif
 }
 
+
+/* Packet is added to VJ-style prequeue for processing in process
+ * context, if a reader task is waiting. Apparently, this exciting
+ * idea (VJ's mail "Re: query about TCP header on tcp-ip" of 07 Sep 93)
+ * failed somewhere. Latency? Burstiness? Well, at least now we will
+ * see, why it failed. 8)8)				  --ANK
+ *
+ * NOTE: is this not too big to inline?
+ */
+static inline int serval_tcp_prequeue(struct sock *sk, struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (sysctl_serval_tcp_low_latency || !tp->ucopy.task)
+		return 0;
+
+	__skb_queue_tail(&tp->ucopy.prequeue, skb);
+	tp->ucopy.memory += skb->truesize;
+	if (tp->ucopy.memory > sk->sk_rcvbuf) {
+		struct sk_buff *skb1;
+
+		BUG_ON(sock_owned_by_user(sk));
+
+		while ((skb1 = __skb_dequeue(&tp->ucopy.prequeue)) != NULL) {
+			sk_backlog_rcv(sk, skb1);
+			//NET_INC_STATS_BH(sock_net(sk),
+			//		 LINUX_MIB_TCPPREQUEUEDROPPED);
+		}
+
+		tp->ucopy.memory = 0;
+	} else if (skb_queue_len(&tp->ucopy.prequeue) == 1) {
+		wake_up_interruptible_sync_poll(sk_sleep(sk),
+					   POLLIN | POLLRDNORM | POLLRDBAND);
+		if (!serval_tsk_ack_scheduled(sk))
+			serval_tsk_reset_xmit_timer(sk, STSK_TIME_DACK,
+                                                    (3 * serval_tcp_rto_min(sk)) / 4,
+                                                    TCP_RTO_MAX);
+	}
+	return 1;
+}
+
+
 extern void serval_tcp_init_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 

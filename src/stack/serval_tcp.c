@@ -139,35 +139,99 @@ static void serval_tcp_connection_respond_sock(struct sock *sk,
                                                struct sock *child,
                                                struct dst_entry *dst);
 
-/* 
-   Receive from network
-*/
-static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
+static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
-        struct tcphdr *tcph = tcp_hdr(skb);
         int err = 0;
-        
-        LOG_DBG("TCP packet seq=%lu ack=%lu\n",  
-                ntohl(tcph->seq),
-                ntohl(tcph->ack_seq));
 
         if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		//sock_rps_save_rxhash(sk, skb->rxhash);
-		//TCP_CHECK_TIMER(sk);
-		if (serval_tcp_rcv_established(sk, skb, tcp_hdr(skb), skb->len)) {
+		TCP_CHECK_TIMER(sk);
+
+                LOG_DBG("Established state receive\n");
+              
+		if (serval_tcp_rcv_established(sk, skb, 
+                                               tcp_hdr(skb), skb->len)) {
 			//rsk = sk;
                         err = -1;
 			goto reset;
 		}
-		///TCP_CHECK_TIMER(sk);
+		TCP_CHECK_TIMER(sk);
 		return 0;
 	}
 
 reset:
         LOG_WARN("Should handle rcv in non-established state\n");
         FREE_SKB(skb);
-
         return err;
+}
+
+/* 
+   Receive from network
+*/
+static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
+{
+        struct tcphdr *th;
+        struct iphdr *iph;
+
+        int err = 0;
+        
+#if defined(OS_LINUX_KERNEL)
+	if (skb->pkt_type != PACKET_HOST)
+		goto discard_it;
+#endif
+
+	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
+		goto discard_it;
+
+	th = tcp_hdr(skb);
+
+	if (th->doff < sizeof(struct tcphdr) / 4)
+		goto bad_packet;
+
+	if (!pskb_may_pull(skb, th->doff * 4))
+		goto discard_it;
+
+	iph = ip_hdr(skb);
+
+	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
+	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
+				    skb->len - th->doff * 4);
+	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
+	TCP_SKB_CB(skb)->when	 = 0;
+	TCP_SKB_CB(skb)->flags	 = iph->tos;
+	TCP_SKB_CB(skb)->sacked	 = 0;
+
+        LOG_DBG("TCP %s end_seq=%u doff=%u\n",
+                tcphdr_to_str(th),
+                TCP_SKB_CB(skb)->end_seq,
+                th->doff * 4);
+
+	if (!sock_owned_by_user(sk)) {
+#ifdef CONFIG_NET_DMA        
+                struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+		if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
+			tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
+		if (tp->ucopy.dma_chan)
+			err = serval_tcp_do_rcv(sk, skb);
+		else
+#endif
+		{
+			if (!serval_tcp_prequeue(sk, skb))
+				err = serval_tcp_do_rcv(sk, skb);
+		}
+	} else {
+                LOG_WARN("Socket is owned by user! Shouldn't happen here!!!\n");
+		goto discard_it;
+	}
+        
+        return err;
+bad_packet:
+        LOG_ERR("Bad packet\n");
+discard_it:
+        LOG_ERR("Discarding TCP packet\n");
+        FREE_SKB(skb);
+
+        return 0;
 }
 
 void serval_tcp_done(struct sock *sk)

@@ -1969,7 +1969,8 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_DBG("Queuing incoming data packet skb->len=%u\n", skb->len);
+        LOG_DBG("Queueing incoming data packet skb->len=%u doff=%u\n", 
+                skb->len, th->doff * 4);
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
 		goto drop;
@@ -2489,7 +2490,7 @@ static void serval_tcp_send_dupack(struct sock *sk, struct sk_buff *skb)
 static inline int serval_tcp_sequence(struct serval_tcp_sock *tp, 
                                       u32 seq, u32 end_seq)
 {
-	return	!before(end_seq, tp->rcv_wup) &&
+	return !before(end_seq, tp->rcv_wup) &&
 		!after(seq, tp->rcv_nxt + serval_tcp_receive_window(tp));
 }
 
@@ -2576,6 +2577,9 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		 */
 		if (!th->rst)
 			serval_tcp_send_dupack(sk, skb);
+
+                LOG_DBG("Bad sequence number seq=%u end_seq=%u rcv_nxt=%u rcv_wnd=%u\n", TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt, tp->rcv_wnd);
+                        
 		goto discard;
 	}
 
@@ -2605,6 +2609,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	return 1;
 
 discard:
+        LOG_ERR("Discarding packet\n");
 	__kfree_skb(skb);
 	return 0;
 }
@@ -2712,10 +2717,14 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	 *	PSH flag is ignored.
 	 */
 
+        LOG_DBG("Packet %s\n", tcphdr_to_str(th));
+
 	if ((serval_tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
 	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
 		int tcp_header_len = tp->tcp_header_len;
+                
+                LOG_DBG("Fast path?\n");
 
 		/* Timestamp header prediction: tcp_header_len
 		 * is automatically equal to th->doff*4 due to pred_flags
@@ -2858,14 +2867,17 @@ slow_path:
 	if (len < (th->doff << 2) || serval_tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
+        LOG_DBG("Slow path!\n");
 	/*
 	 *	Standard slow path.
 	 */
 
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
+
 	if (res <= 0)
 		return -res;
 
+        LOG_DBG("Packet valid!\n");
 step5:
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
 		goto discard;
@@ -2876,6 +2888,8 @@ step5:
 	//serval_tcp_urg(sk, skb, th);
 
 	/* step 7: process the segment text */
+        LOG_DBG("Queueing packet\n");
+
 	serval_tcp_data_queue(sk, skb);
 
 	serval_tcp_data_snd_check(sk);
@@ -2884,8 +2898,9 @@ step5:
 
 csum_error:
 	//TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
-
+        LOG_ERR("Checksum error!\n");
 discard:
+        LOG_ERR("Discarding skb\n");
 	__kfree_skb(skb);
 	return 0;
 }
