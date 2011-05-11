@@ -149,6 +149,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_rcvtimeo		=	MAX_SCHEDULE_TIMEOUT;
 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
 
+        spin_lock_init(&sk->sk_dst_lock);
         rwlock_init(&sk->sk_callback_lock);
 	atomic_set(&sk->sk_refcnt, 1);
 	atomic_set(&sk->sk_drops, 0);
@@ -257,7 +258,7 @@ struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
                 skb_queue_head_init(&newsk->sk_error_queue);
                 skb_queue_head_init(&newsk->sk_write_queue);
                 
-                //spin_lock_init(&newsk->sk_dst_lock);
+                spin_lock_init(&newsk->sk_dst_lock);
                 rwlock_init(&newsk->sk_callback_lock);
                 /*
                   lockdep_set_class_and_name(&newsk->sk_callback_lock,
@@ -569,6 +570,11 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)
 {
         return 0;
+}
+
+void sk_reset_txq(struct sock *sk)
+{
+	sk_tx_queue_clear(sk);
 }
 
 /*

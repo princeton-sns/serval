@@ -12,9 +12,11 @@ serval_SOURCES = \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \
+	serval_tcp_sock.c \
 	serval_tcp_input.c \
 	serval_tcp_output.c \
 	serval_tcp_cong.c \
+	serval_tcp_timer.c \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/packet_raw.c \
@@ -110,6 +112,7 @@ SERVAL_KERNEL_SRC = \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \
+	serval_tcp_sock.c \
 	serval_tcp_input.c \
 	serval_tcp_output.c \
 	serval_tcp_cong.c

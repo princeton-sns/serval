@@ -1196,7 +1196,7 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
         newtp->ca_ops = &serval_tcp_init_congestion_ops;
 
         serval_tcp_set_ca_state(newsk, TCP_CA_Open);
-        //tcp_init_xmit_timers(newsk);
+        serval_tcp_init_xmit_timers(newsk);
         skb_queue_head_init(&newtp->out_of_order_queue);
         newtp->write_seq = newtp->pushed_seq =
                 treq->snt_isn + 1 + serval_tcp_s_data_size(oldtp);
@@ -1309,7 +1309,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 	tp->snd_cwnd_clamp = ~0;
 	tp->mss_cache = TCP_MSS_DEFAULT;
 
-	tp->reordering = sysctl_tcp_reordering;
+	tp->reordering = sysctl_serval_tcp_reordering;
 
 	/* So many TCP implementations out there (incorrectly) count the
 	 * initial SYN frame in their delayed-ACK and congestion control

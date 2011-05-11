@@ -13,12 +13,17 @@
 #include <asm/unaligned.h>
 #include <net/netdma.h>
 #endif
+#if defined(OS_USER)
+#define NR_FILE 1 /* TODO: set appropriate value */
+#endif
 
 int sysctl_serval_tcp_timestamps __read_mostly = 0;
+int sysctl_serval_tcp_reordering __read_mostly = TCP_FASTRETRANS_THRESH;
 int sysctl_serval_tcp_moderate_rcvbuf __read_mostly = 1;
 int sysctl_serval_tcp_abc __read_mostly;
 int sysctl_serval_tcp_adv_win_scale __read_mostly = 2;
 int sysctl_serval_tcp_app_win __read_mostly = 31;
+int sysctl_serval_tcp_max_orphans __read_mostly = NR_FILE;
 
 #define FLAG_DATA		0x01 /* Incoming frame contained data.		*/
 #define FLAG_WIN_UPDATE		0x02 /* Incoming ACK was a window update.	*/
@@ -301,6 +306,68 @@ void serval_tcp_clear_retrans(struct serval_tcp_sock *tp)
 
 	tp->fackets_out = 0;
 	tp->sacked_out = 0;
+}
+
+/* Enter Loss state. If "how" is not zero, forget all SACK information
+ * and reset tags completely, otherwise preserve SACKs. If receiver
+ * dropped its ofo queue, we will know this due to reneging detection.
+ */
+void serval_tcp_enter_loss(struct sock *sk, int how)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb;
+
+	/* Reduce ssthresh if it has not yet been made inside this window. */
+	if (tp->ca_state <= TCP_CA_Disorder || tp->snd_una == tp->high_seq ||
+	    (tp->ca_state == TCP_CA_Loss && !tp->retransmits)) {
+		tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
+		tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
+		serval_tcp_ca_event(sk, CA_EVENT_LOSS);
+	}
+	tp->snd_cwnd	   = 1;
+	tp->snd_cwnd_cnt   = 0;
+	tp->snd_cwnd_stamp = tcp_time_stamp;
+
+	tp->bytes_acked = 0;
+	serval_tcp_clear_retrans_partial(tp);
+
+	/*
+          if (serval_tcp_is_reno(tp))
+		serval_tcp_reset_reno_sack(tp);
+        */
+	if (!how) {
+		/* Push undo marker, if it was plain RTO and nothing
+		 * was retransmitted. */
+		tp->undo_marker = tp->snd_una;
+	} else {
+		tp->sacked_out = 0;
+		tp->fackets_out = 0;
+	}
+	serval_tcp_clear_all_retrans_hints(tp);
+
+	serval_tcp_for_write_queue(skb, sk) {
+		if (skb == serval_tcp_send_head(sk))
+			break;
+
+		if (TCP_SKB_CB(skb)->sacked & TCPCB_RETRANS)
+			tp->undo_marker = 0;
+		TCP_SKB_CB(skb)->sacked &= (~TCPCB_TAGBITS)|TCPCB_SACKED_ACKED;
+		if (!(TCP_SKB_CB(skb)->sacked&TCPCB_SACKED_ACKED) || how) {
+			TCP_SKB_CB(skb)->sacked &= ~TCPCB_SACKED_ACKED;
+			TCP_SKB_CB(skb)->sacked |= TCPCB_LOST;
+			tp->lost_out += serval_tcp_skb_pcount(skb);
+			tp->retransmit_high = TCP_SKB_CB(skb)->end_seq;
+		}
+	}
+	serval_tcp_verify_left_out(tp);
+
+	tp->reordering = min_t(unsigned int, tp->reordering,
+			       sysctl_serval_tcp_reordering);
+	serval_tcp_set_ca_state(sk, TCP_CA_Loss);
+	tp->high_seq = tp->snd_nxt;
+	//TCP_ECN_queue_cwr(tp);
+	/* Abort F-RTO algorithm if one is in progress */
+	tp->frto_counter = 0;
 }
 
 /* Initialize RCV_MSS value.

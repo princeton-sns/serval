@@ -175,6 +175,10 @@
 #define TCPOLEN_MD5SIG_ALIGNED		20
 #define TCPOLEN_MSS_ALIGNED		4
 
+
+/* TCP thin-stream limits */
+#define TCP_THIN_LINEAR_RETRIES 6       /* After 6 linear retries, do exp. backoff */
+
 #define serval_tcp_flag_byte(th) (((u_int8_t *)th)[13])
 
 #define TCPH_FIN 0x01
@@ -210,7 +214,7 @@ extern int sysctl_serval_tcp_rfc1337;
 extern int sysctl_serval_tcp_abort_on_overflow;
 extern int sysctl_serval_tcp_max_orphans;
 extern int sysctl_serval_tcp_fack;
-extern int sysctl_tcp_reordering;
+extern int sysctl_serval_tcp_reordering;
 extern int sysctl_serval_tcp_ecn;
 extern int sysctl_serval_tcp_dsack;
 extern int sysctl_serval_tcp_app_win;
@@ -248,6 +252,25 @@ extern int sysctl_tcp_wmem[3];
 extern int sysctl_tcp_rmem[3];
 #endif
 
+
+static inline int serval_tcp_too_many_orphans(struct sock *sk, int shift)
+{
+#if defined(OS_LINUX_KERNEL)
+	struct percpu_counter *ocp = sk->sk_prot->orphan_count;
+	int orphans = percpu_counter_read_positive(ocp);
+
+	if (orphans << shift > sysctl_serval_tcp_max_orphans) {
+		orphans = percpu_counter_sum_positive(ocp);
+		if (orphans << shift > sysctl_serval_tcp_max_orphans)
+			return 1;
+	}
+
+	if (sk->sk_wmem_queued > SOCK_MIN_SNDBUF &&
+	    atomic_read(&tcp_memory_allocated) > sysctl_tcp_mem[2])
+		return 1;
+#endif
+	return 0;
+}
 
 /* Compute the actual rto_min value */
 static inline u32 serval_tcp_rto_min(struct sock *sk)
@@ -331,6 +354,17 @@ int serval_tcp_mss_to_mtu(struct sock *sk, int mss);
 unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu);
 unsigned int serval_tcp_current_mss(struct sock *sk);
 
+
+static inline int serval_tcp_use_frto(struct sock *sk) 
+{
+        return 0;
+}
+
+static inline void serval_tcp_enter_frto(struct sock *sk)
+{
+}
+
+void serval_tcp_enter_loss(struct sock *sk, int how);
 void serval_tcp_clear_retrans(struct serval_tcp_sock *tp);
 
 static inline void 
@@ -371,6 +405,21 @@ void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 /* serval_tcp_input.c */
 void serval_tcp_cwnd_application_limited(struct sock *sk);
 
+/* from STCP */
+static inline void 
+serval_tcp_clear_retrans_hints_partial(struct serval_tcp_sock *tp)
+{
+	tp->lost_skb_hint = NULL;
+	tp->scoreboard_skb_hint = NULL;
+}
+
+static inline void 
+serval_tcp_clear_all_retrans_hints(struct serval_tcp_sock *tp)
+{
+	serval_tcp_clear_retrans_hints_partial(tp);
+	tp->retransmit_skb_hint = NULL;
+}
+
 /* write queue abstraction */
 static inline void serval_tcp_write_queue_purge(struct sock *sk)
 {
@@ -379,7 +428,7 @@ static inline void serval_tcp_write_queue_purge(struct sock *sk)
 	while ((skb = __skb_dequeue(&sk->sk_write_queue)) != NULL)
 		sk_wmem_free_skb(sk, skb);
 	sk_mem_reclaim(sk);
-	//serval_tcp_clear_all_retrans_hints(tcp_sk(sk));
+	serval_tcp_clear_all_retrans_hints(serval_tcp_sk(sk));
 }
 
 static inline struct sk_buff *serval_tcp_write_queue_head(struct sock *sk)
@@ -501,7 +550,8 @@ static inline void serval_tcp_push_pending_frames(struct sock *sk)
 	if (serval_tcp_send_head(sk)) {
 		struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-		__serval_tcp_push_pending_frames(sk, serval_tcp_current_mss(sk), 
+		__serval_tcp_push_pending_frames(sk, 
+                                                 serval_tcp_current_mss(sk), 
 						 tp->nonagle);
 	}
 }
@@ -549,6 +599,11 @@ u32 __serval_tcp_select_window(struct sock *sk);
 
 void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
                                       int nonagle);
+
+extern int serval_tcp_retransmit_skb(struct sock *, struct sk_buff *);
+extern void serval_tcp_retransmit_timer(struct sock *sk);
+extern void serval_tcp_xmit_retransmit_queue(struct sock *);
+
 void serval_tcp_push_one(struct sock *sk, unsigned int mss_now);
 
 static inline int serval_tcp_win_from_space(int space)
@@ -570,13 +625,6 @@ static inline int serval_tcp_full_space(const struct sock *sk)
 	return serval_tcp_win_from_space(sk->sk_rcvbuf); 
 }
 
-#define TCP_INFINITE_SSTHRESH	0x7fffffff
-
-static inline 
-int serval_tcp_in_initial_slowstart(const struct serval_tcp_sock *tp)
-{
-	return tp->snd_ssthresh >= TCP_INFINITE_SSTHRESH;
-}
 
 /* If cwnd > ssthresh, we may raise ssthresh to be half-way to cwnd.
  * The exception is rate halving phase, when cwnd is decreasing towards
@@ -727,6 +775,7 @@ static inline void serval_tcp_ca_event(struct sock *sk,
 
 void serval_tcp_done(struct sock *sk);
 
+void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority);
 void serval_tcp_send_delayed_ack(struct sock *sk);
 void serval_tcp_send_ack(struct sock *sk);
 
@@ -786,6 +835,23 @@ unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
 	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
+#define TCP_INFINITE_SSTHRESH	0x7fffffff
+
+static inline 
+int serval_tcp_in_initial_slowstart(const struct serval_tcp_sock *tp)
+{
+	return tp->snd_ssthresh >= TCP_INFINITE_SSTHRESH;
+}
+
+
+/* Determines whether this is a thin stream (which may suffer from
+ * increased latency). Used to trigger latency-reducing mechanisms.
+ */
+static inline unsigned int serval_tcp_stream_is_thin(struct serval_tcp_sock *tp)
+{
+	return tp->packets_out < 4 && !serval_tcp_in_initial_slowstart(tp);
+}
+
 void serval_tcp_cleanup_rbuf(struct sock *sk, int copied);
 
 static inline char *tcphdr_to_str(const struct tcphdr *th)
@@ -816,6 +882,9 @@ union serval_tcp_word_hdr {
 }; 
 
 #define serval_tcp_flag_word(tp) ( ((union serval_tcp_word_hdr *)(tp))->words [3]) 
+
+
+void serval_tcp_init_xmit_timers(struct sock *sk);
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/tcp.h>

@@ -102,6 +102,7 @@ struct sock {
                 struct sk_buff *tail;
                 int len;
         } sk_backlog;
+	spinlock_t		sk_dst_lock;
 	atomic_t		sk_rmem_alloc;
 	atomic_t		sk_wmem_alloc;
 	atomic_t		sk_omem_alloc;
@@ -532,6 +533,60 @@ static inline struct dst_entry *sk_dst_get(struct sock *sk)
 		dst_hold(dst);
 
 	return dst;
+}
+
+extern void sk_reset_txq(struct sock *sk);
+
+static inline void dst_negative_advice(struct sock *sk)
+{
+	struct dst_entry *ndst, *dst = __sk_dst_get(sk);
+
+	if (dst && dst->ops->negative_advice) {
+		ndst = dst->ops->negative_advice(dst);
+
+		if (ndst != dst) {
+			sk->sk_dst_cache = ndst;
+			sk_reset_txq(sk);
+		}
+	}
+}
+
+
+static inline void
+__sk_dst_set(struct sock *sk, struct dst_entry *dst)
+{
+	struct dst_entry *old_dst;
+
+	sk_tx_queue_clear(sk);
+	/*
+	 * This can be called while sk is owned by the caller only,
+	 * with no state that can be checked in a rcu_dereference_check() cond
+	 */
+	old_dst = sk->sk_dst_cache;
+        sk->sk_dst_cache = dst;
+	dst_release(old_dst);
+}
+
+static inline void
+sk_dst_set(struct sock *sk, struct dst_entry *dst)
+{
+	spin_lock(&sk->sk_dst_lock);
+	__sk_dst_set(sk, dst);
+	spin_unlock(&sk->sk_dst_lock);
+}
+
+static inline void
+__sk_dst_reset(struct sock *sk)
+{
+	__sk_dst_set(sk, NULL);
+}
+
+static inline void
+sk_dst_reset(struct sock *sk)
+{
+	spin_lock(&sk->sk_dst_lock);
+	__sk_dst_reset(sk);
+	spin_unlock(&sk->sk_dst_lock);
 }
 
 static inline int sk_can_gso(const struct sock *sk)

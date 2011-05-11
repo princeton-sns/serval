@@ -8,6 +8,16 @@
 #include <userlevel/serval_tcp_user.h>
 #endif
 
+/* People can turn this off for buggy TCP's found in printers etc. */
+int sysctl_serval_tcp_retrans_collapse __read_mostly = 0;
+int sysctl_serval_tcp_mtu_probing __read_mostly = 0;
+
+/* This limits the percentage of the congestion window which we
+ * will allow a single TSO frame to consume.  Building TSO frames
+ * which are too large can cause TCP streams to be bursty.
+ */
+int sysctl_serval_tcp_base_mss __read_mostly = 512;
+
 /* From net/core/sock.c */
 int sysctl_serval_wmem_max __read_mostly = 32767;
 int sysctl_serval_rmem_max __read_mostly = 32767;
@@ -461,6 +471,61 @@ static void serval_tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 	sk_mem_charge(sk, skb->truesize);
 }
 
+/* Constructs common control bits of non-data skb. If SYN/FIN is present,
+ * auto increment end seqno.
+ */
+static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
+{
+	skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->csum = 0;
+	
+        TCP_SKB_CB(skb)->flags = flags;
+	TCP_SKB_CB(skb)->sacked = 0;
+
+	skb_shinfo(skb)->gso_segs = 1;
+	skb_shinfo(skb)->gso_size = 0;
+	skb_shinfo(skb)->gso_type = 0;
+
+	TCP_SKB_CB(skb)->seq = seq;
+
+	if (flags & (TCPH_SYN | TCPH_FIN))
+		seq++;
+
+	TCP_SKB_CB(skb)->end_seq = seq;
+}
+
+
+/* Pcount in the middle of the write queue got changed, we need to do various
+ * tweaks to fix counters
+ */
+static void serval_tcp_adjust_pcount(struct sock *sk, 
+                                     struct sk_buff *skb, int decr)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	tp->packets_out -= decr;
+
+	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
+		tp->sacked_out -= decr;
+	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_RETRANS)
+		tp->retrans_out -= decr;
+	if (TCP_SKB_CB(skb)->sacked & TCPCB_LOST)
+		tp->lost_out -= decr;
+
+	/* Reno case is special. Sigh... */
+	if (serval_tcp_is_reno(tp) && decr > 0)
+		tp->sacked_out -= min_t(u32, tp->sacked_out, decr);
+
+	//serval_tcp_adjust_fackets_out(sk, skb, decr);
+
+        /*
+	if (tp->lost_skb_hint &&
+	    before(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(tp->lost_skb_hint)->seq) &&
+	    (serval_tcp_is_fack(tp) || (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)))
+		tp->lost_cnt_hint -= decr;
+        */
+	serval_tcp_verify_left_out(tp);
+}
 
 
 /* This routine actually transmits TCP packets queued in by
@@ -603,6 +668,226 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	return net_xmit_eval(err);
 }
 
+
+/* Collapses two adjacent SKB's during retransmission. */
+static void serval_tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *next_skb = serval_tcp_write_queue_next(sk, skb);
+	int skb_size, next_skb_size;
+
+	skb_size = skb->len;
+	next_skb_size = next_skb->len;
+
+	BUG_ON(serval_tcp_skb_pcount(skb) != 1 || 
+               serval_tcp_skb_pcount(next_skb) != 1);
+
+	//serval_tcp_highest_sack_combine(sk, next_skb, skb);
+
+	serval_tcp_unlink_write_queue(next_skb, sk);
+
+	skb_copy_from_linear_data(next_skb, skb_put(skb, next_skb_size),
+				  next_skb_size);
+
+	if (next_skb->ip_summed == CHECKSUM_PARTIAL)
+		skb->ip_summed = CHECKSUM_PARTIAL;
+
+#if defined(OS_LINUX_KERNEL)
+	if (skb->ip_summed != CHECKSUM_PARTIAL)
+		skb->csum = csum_block_add(skb->csum, next_skb->csum, skb_size);
+#endif
+	/* Update sequence range on original skb. */
+	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(next_skb)->end_seq;
+
+	/* Merge over control information. This moves PSH/FIN etc. over */
+	TCP_SKB_CB(skb)->flags |= TCP_SKB_CB(next_skb)->flags;
+
+	/* All done, get rid of second SKB and account for it so
+	 * packet counting does not break.
+	 */
+	TCP_SKB_CB(skb)->sacked |= TCP_SKB_CB(next_skb)->sacked & 
+                TCPCB_EVER_RETRANS;
+
+	/* changed transmit queue under us so clear hints */
+	serval_tcp_clear_retrans_hints_partial(tp);
+	if (next_skb == tp->retransmit_skb_hint)
+		tp->retransmit_skb_hint = skb;
+        
+	serval_tcp_adjust_pcount(sk, next_skb, tcp_skb_pcount(next_skb));
+
+	sk_wmem_free_skb(sk, next_skb);
+}
+
+/* Check if coalescing SKBs is legal. */
+static int serval_tcp_can_collapse(struct sock *sk, struct sk_buff *skb)
+{
+	if (serval_tcp_skb_pcount(skb) > 1)
+		return 0;
+	/* TODO: SACK collapsing could be used to remove this condition */
+	if (skb_shinfo(skb)->nr_frags != 0)
+		return 0;
+	if (skb_cloned(skb))
+		return 0;
+	if (skb == serval_tcp_send_head(sk))
+		return 0;
+	/* Some heurestics for collapsing over SACK'd could be invented */
+	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
+		return 0;
+
+	return 1;
+}
+
+
+/* Collapse packets in the retransmit queue to make to create
+ * less packets on the wire. This is only done on retransmission.
+ */
+static void serval_tcp_retrans_try_collapse(struct sock *sk, 
+                                            struct sk_buff *to,
+                                            int space)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb = to, *tmp;
+	int first = 1;
+
+	if (!sysctl_serval_tcp_retrans_collapse)
+		return;
+
+	if (TCP_SKB_CB(skb)->flags & TCPCB_FLAG_SYN)
+		return;
+
+	serval_tcp_for_write_queue_from_safe(skb, tmp, sk) {
+		if (!serval_tcp_can_collapse(sk, skb))
+			break;
+
+		space -= skb->len;
+
+		if (first) {
+			first = 0;
+			continue;
+		}
+
+		if (space < 0)
+			break;
+		/* Punt if not enough space exists in the first SKB for
+		 * the data in the second
+		 */
+		if (skb->len > skb_tailroom(to))
+			break;
+
+		if (after(TCP_SKB_CB(skb)->end_seq, serval_tcp_wnd_end(tp)))
+			break;
+
+		serval_tcp_collapse_retrans(sk, to);
+	}
+}
+
+/* This retransmits one SKB.  Policy decisions and retransmit queue
+ * state updates are done by the caller.  Returns non-zero if an
+ * error occurred which prevented the send.
+ */
+int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	unsigned int cur_mss;
+	int err;
+
+	/* Inconslusive MTU probe */
+	if (tp->tp_mtup.probe_size) {
+		tp->tp_mtup.probe_size = 0;
+	}
+
+	/* Do not sent more than we queued. 1/4 is reserved for possible
+	 * copying overhead: fragmentation, tunneling, mangling etc.
+	 */
+	if (atomic_read(&sk->sk_wmem_alloc) >
+	    min(sk->sk_wmem_queued + (sk->sk_wmem_queued >> 2), sk->sk_sndbuf))
+		return -EAGAIN;
+
+	if (before(TCP_SKB_CB(skb)->seq, tp->snd_una)) {
+		if (before(TCP_SKB_CB(skb)->end_seq, tp->snd_una))
+			BUG();
+		if (serval_tcp_trim_head(sk, skb, 
+                                         tp->snd_una - TCP_SKB_CB(skb)->seq))
+			return -ENOMEM;
+	}
+       
+	//if (tp->af_ops->rebuild_header(sk))
+	//	return -EHOSTUNREACH; /* Routing failure or similar. */
+        
+	cur_mss = serval_tcp_current_mss(sk);
+
+	/* If receiver has shrunk his window, and skb is out of
+	 * new window, do not retransmit it. The exception is the
+	 * case, when window is shrunk to zero. In this case
+	 * our retransmit serves as a zero window probe.
+	 */
+	if (!before(TCP_SKB_CB(skb)->seq, serval_tcp_wnd_end(tp)) &&
+	    TCP_SKB_CB(skb)->seq != tp->snd_una)
+		return -EAGAIN;
+
+	if (skb->len > cur_mss) {
+                LOG_WARN("TCP fragmentation not implemented!\n");
+                return -ENOMEM;
+		//if (serval_tcp_fragment(sk, skb, cur_mss, cur_mss))
+		//	return -ENOMEM; /* We'll try again later. */
+	} else {
+		int oldpcount = tcp_skb_pcount(skb);
+
+		if (unlikely(oldpcount > 1)) {
+			serval_tcp_init_tso_segs(sk, skb, cur_mss);
+			serval_tcp_adjust_pcount(sk, skb, oldpcount - tcp_skb_pcount(skb));
+		}
+	}
+
+	serval_tcp_retrans_try_collapse(sk, skb, cur_mss);
+
+	/* Some Solaris stacks overoptimize and ignore the FIN on a
+	 * retransmit when old data is attached.  So strip it off
+	 * since it is cheap to do so and saves bytes on the network.
+	 */
+	if (skb->len > 0 &&
+	    (TCP_SKB_CB(skb)->flags & TCPCB_FLAG_FIN) &&
+	    tp->snd_una == (TCP_SKB_CB(skb)->end_seq - 1)) {
+		if (!pskb_trim(skb, 0)) {
+			/* Reuse, even though it does some unnecessary work */
+			serval_tcp_init_nondata_skb(skb, 
+                                                    TCP_SKB_CB(skb)->end_seq - 1,
+					     TCP_SKB_CB(skb)->flags);
+			skb->ip_summed = CHECKSUM_NONE;
+		}
+	}
+
+	/* Make a copy, if the first transmission SKB clone we made
+	 * is still in somebody's hands, else make a clone.
+	 */
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
+
+	err = serval_tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
+
+	if (err == 0) {
+		/* Update global TCP statistics. */
+		//TCP_INC_STATS(sock_net(sk), TCP_MIB_RETRANSSEGS);
+
+		tp->total_retrans++;
+
+                if (!tp->retrans_out)
+			tp->lost_retrans_low = tp->snd_nxt;
+		TCP_SKB_CB(skb)->sacked |= TCPCB_RETRANS;
+		tp->retrans_out += tcp_skb_pcount(skb);
+
+		/* Save stamp of the first retransmit. */
+		if (!tp->retrans_stamp)
+			tp->retrans_stamp = TCP_SKB_CB(skb)->when;
+
+		tp->undo_retrans++;
+
+		/* snd_nxt is stored to detect loss of retransmitted segment,
+		 * see tcp_input.c tcp_sacktag_write_queue().
+		 */
+		TCP_SKB_CB(skb)->ack_seq = tp->snd_nxt;
+	}
+	return err;
+}
 
 /* Create a new MTU probe if we are ready.
  * MTU probe is regularly attempting to increase the path MTU by
@@ -1145,29 +1430,6 @@ static void serval_tcp_connect_init(struct sock *sk)
 	serval_tcp_clear_retrans(tp);       
 }
 
-/* Constructs common control bits of non-data skb. If SYN/FIN is present,
- * auto increment end seqno.
- */
-static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
-{
-	skb->ip_summed = CHECKSUM_PARTIAL;
-	skb->csum = 0;
-	
-        TCP_SKB_CB(skb)->flags = flags;
-	TCP_SKB_CB(skb)->sacked = 0;
-
-	skb_shinfo(skb)->gso_segs = 1;
-	skb_shinfo(skb)->gso_size = 0;
-	skb_shinfo(skb)->gso_type = 0;
-
-	TCP_SKB_CB(skb)->seq = seq;
-
-	if (flags & (TCPH_SYN | TCPH_FIN))
-		seq++;
-
-	TCP_SKB_CB(skb)->end_seq = seq;
-}
-
 
 static int serval_tcp_build_header(struct sock *sk, 
                                    struct sk_buff *skb,
@@ -1335,6 +1597,38 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	th->urg_ptr = 0;
 
         return 0;
+}
+
+
+/* We get here when a process closes a file descriptor (either due to
+ * an explicit close() or as a byproduct of exit()'ing) and there
+ * was unread data in the receive queue.  This behavior is recommended
+ * by RFC 2525, section 2.17.  -DaveM
+ */
+void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority)
+{
+	struct sk_buff *skb;
+
+	/* NOTE: No TCP options attached and we never retransmit this. */
+	skb = alloc_skb(MAX_SERVAL_TCP_HEADER, priority);
+	if (!skb) {
+		//NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
+		return;
+	}
+
+	/* Reserve space for headers and prepare control bits. */
+	skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
+	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk),
+                                    TCPCB_FLAG_ACK | TCPCB_FLAG_RST);
+	/* Send it off. */
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
+
+        serval_tcp_transmit_skb(sk, skb, 0, priority);
+        /*
+	if (tcp_transmit_skb(sk, skb, 0, priority))
+		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
+        */
+	//TCP_INC_STATS(sock_net(sk), TCP_MIB_OUTRSTS);
 }
 
 /* Send out a delayed ack, the caller does the policy checking
