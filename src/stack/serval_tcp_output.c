@@ -552,8 +552,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct tcphdr *th;
 	int err;
 
-        LOG_DBG("Transmitting TCP packet len=%u\n", skb->len);
-
 	BUG_ON(!skb || !tcp_skb_pcount(skb));
 
 	/* If congestion control is doing timestamping, we must
@@ -612,6 +610,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 	th->check		= 0;
 	th->urg_ptr		= 0;
+
+        LOG_DBG("Transmitting TCP packet %s\n", tcphdr_to_str(th));
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
 	if (unlikely(serval_tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {
