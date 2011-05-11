@@ -138,6 +138,14 @@ struct serval_tcp_sock {
 	u32	tso_deferred;
 	u32	bytes_acked;	/* Appropriate Byte Counting - RFC3465 */
 
+	/* from STCP, retrans queue hinting */
+	struct sk_buff* lost_skb_hint;
+	struct sk_buff *scoreboard_skb_hint;
+	struct sk_buff *retransmit_skb_hint;
+
+	int     lost_cnt_hint;
+	u32     retransmit_high;	/* L-bits may be on up to this seqno */
+	u32	lost_retrans_low;	/* Sent seq after any rxmit (lowest) */
 
 	u32	prior_ssthresh; /* ssthresh saved at recovery start	*/
 	u32	high_seq;	/* snd_nxt at onset of congestion	*/
@@ -237,11 +245,12 @@ enum serval_tcp_sk_ack_state_t {
 	STSK_ACK_PUSHED2 = 8
 };
 
-extern void serval_tsk_init_xmit_timers(struct sock *sk,
-                                        void (*retransmit_handler)(unsigned long),
-                                        void (*delack_handler)(unsigned long),
-                                        void (*keepalive_handler)(unsigned long));
-extern void serval_tsk_clear_xmit_timers(struct sock *sk);
+void serval_tsk_init_xmit_timers(struct sock *sk,
+                                 void (*retransmit_handler)(unsigned long),
+                                 void (*delack_handler)(unsigned long),
+                                 void (*keepalive_handler)(unsigned long));
+
+void serval_tsk_clear_xmit_timers(struct sock *sk);
 
 static inline void serval_tsk_schedule_ack(struct sock *sk)
 {
@@ -259,8 +268,8 @@ static inline void serval_tsk_delack_init(struct sock *sk)
 	memset(&tp->tp_ack, 0, sizeof(tp->tp_ack));
 }
 
-extern void serval_tsk_delete_keepalive_timer(struct sock *sk);
-extern void serval_tsk_reset_keepalive_timer(struct sock *sk, unsigned long timeout);
+void serval_tsk_delete_keepalive_timer(struct sock *sk);
+void serval_tsk_reset_keepalive_timer(struct sock *sk, unsigned long timeout);
 
 static inline void serval_tsk_clear_xmit_timer(struct sock *sk, const int what)
 {
