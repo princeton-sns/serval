@@ -7,7 +7,6 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/tcp.h>
-#include <linux/atomic.h>
 #endif
 
 #if defined(OS_USER)

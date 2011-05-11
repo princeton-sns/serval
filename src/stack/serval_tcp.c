@@ -240,6 +240,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	} else {
 		sk->sk_prot->enter_memory_pressure(sk);
                 /* FIXME */
+                LOG_WARN("Implement sk_stream_moderate_sndbuf()\n");
 		/* sk_stream_moderate_sndbuf(sk); */
 	}
 	return NULL;
@@ -655,15 +656,12 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied)
 	     tp->copied_seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt);
         */
 #endif
-
-#if 0
-	if (inet_csk_ack_scheduled(sk)) {
-		const struct inet_connection_sock *icsk = inet_csk(sk);
+	if (serval_tsk_ack_scheduled(sk)) {
 		   /* Delayed ACKs frequently hit locked sockets during bulk
 		    * receive. */
-		if (icsk->icsk_ack.blocked ||
+		if (tp->tp_ack.blocked ||
 		    /* Once-per-two-segments ACK was not sent by tcp_input.c */
-		    tp->rcv_nxt - tp->rcv_wup > icsk->icsk_ack.rcv_mss ||
+		    tp->rcv_nxt - tp->rcv_wup > tp->tp_ack.rcv_mss ||
 		    /*
 		     * If this read emptied read buffer, we send ACK, if
 		     * connection is not bidirectional, user drained
@@ -671,13 +669,12 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied)
 		     * in queue.
 		     */
 		    (copied > 0 &&
-		     ((icsk->icsk_ack.pending & ICSK_ACK_PUSHED2) ||
-		      ((icsk->icsk_ack.pending & ICSK_ACK_PUSHED) &&
-		       !icsk->icsk_ack.pingpong)) &&
+		     ((tp->tp_ack.pending & STSK_ACK_PUSHED2) ||
+		      ((tp->tp_ack.pending & STSK_ACK_PUSHED) &&
+		       !tp->tp_ack.pingpong)) &&
 		      !atomic_read(&sk->sk_rmem_alloc)))
 			time_to_ack = 1;
 	}
-#endif
 	/* We send an ACK if we can now advertise a non-zero window
 	 * which has been raised "significantly".
 	 *
@@ -700,13 +697,12 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied)
 				time_to_ack = 1;
 		}
 	}
-        /*
+
 	if (time_to_ack)
 		serval_tcp_send_ack(sk);
-        */
 }
 
-static void tcp_prequeue_process(struct sock *sk)
+static void serval_tcp_prequeue_process(struct sock *sk)
 {
 	struct sk_buff *skb;
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
@@ -952,7 +948,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			if (tp->rcv_nxt == tp->copied_seq &&
 			    !skb_queue_empty(&tp->ucopy.prequeue)) {
 do_prequeue:
-				tcp_prequeue_process(sk);
+				serval_tcp_prequeue_process(sk);
 
 				if ((chunk = len - tp->ucopy.len) != 0) {
                                         /*
@@ -1079,7 +1075,7 @@ skip_copy:
 
 			tp->ucopy.len = copied > 0 ? len : 0;
 
-			tcp_prequeue_process(sk);
+			serval_tcp_prequeue_process(sk);
 
 			if (copied > 0 && (chunk = len - tp->ucopy.len) != 0) {
 				/*

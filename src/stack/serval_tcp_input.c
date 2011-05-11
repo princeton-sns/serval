@@ -1969,6 +1969,8 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
+        LOG_DBG("Queuing incoming data packet skb->len=%u\n", skb->len);
+
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
 		goto drop;
 
@@ -1993,6 +1995,8 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 		    sock_owned_by_user(sk) && !tp->urg_data) {
 			int chunk = min_t(unsigned int, skb->len,
 					  tp->ucopy.len);
+
+                        LOG_DBG("Set current task running\n");
 
 			__set_current_state(TASK_RUNNING);
 
@@ -2038,8 +2042,10 @@ queue_and_out:
 
 		if (eaten > 0)
 			__kfree_skb(skb);
-		else if (!sock_flag(sk, SOCK_DEAD))
+		else if (!sock_flag(sk, SOCK_DEAD)) {
+                        LOG_DBG("Signal data ready!\n");
 			sk->sk_data_ready(sk, 0);
+                }
 		return;
 	}
 
