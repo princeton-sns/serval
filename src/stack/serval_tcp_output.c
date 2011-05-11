@@ -752,7 +752,7 @@ static void serval_tcp_retrans_try_collapse(struct sock *sk,
 	if (!sysctl_serval_tcp_retrans_collapse)
 		return;
 
-	if (TCP_SKB_CB(skb)->flags & TCPCB_FLAG_SYN)
+	if (TCP_SKB_CB(skb)->flags & TCPH_SYN)
 		return;
 
 	serval_tcp_for_write_queue_from_safe(skb, tmp, sk) {
@@ -846,7 +846,7 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 	 * since it is cheap to do so and saves bytes on the network.
 	 */
 	if (skb->len > 0 &&
-	    (TCP_SKB_CB(skb)->flags & TCPCB_FLAG_FIN) &&
+	    (TCP_SKB_CB(skb)->flags & TCPH_FIN) &&
 	    tp->snd_una == (TCP_SKB_CB(skb)->end_seq - 1)) {
 		if (!pskb_trim(skb, 0)) {
 			/* Reuse, even though it does some unnecessary work */
@@ -1621,7 +1621,7 @@ void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority)
 	/* Reserve space for headers and prepare control bits. */
 	skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
 	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk),
-                                    TCPCB_FLAG_ACK | TCPCB_FLAG_RST);
+                                    TCPH_ACK | TCPH_RST);
 	/* Send it off. */
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 
@@ -1715,7 +1715,7 @@ void serval_tcp_send_ack(struct sock *sk)
 	skb_reserve(buff, MAX_SERVAL_TCP_HEADER);
 	serval_tcp_init_nondata_skb(buff, 
                                     serval_tcp_acceptable_seq(sk), 
-                                    TCPCB_FLAG_ACK);
+                                    TCPH_ACK);
 
 	/* Send it off, this clears delayed acks for us. */
 	TCP_SKB_CB(buff)->when = tcp_time_stamp;

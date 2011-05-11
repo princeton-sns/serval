@@ -252,7 +252,12 @@ static void serval_tcp_clamp_window(struct sock *sk)
 	if (sk->sk_rcvbuf < sysctl_tcp_rmem[2] &&
 	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK) &&
 	    !tcp_memory_pressure &&
-	    atomic_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+	    atomic_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+#else
+	    atomic_long_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+#endif
+) {
 		sk->sk_rcvbuf = min(atomic_read(&sk->sk_rmem_alloc),
 				    sysctl_tcp_rmem[2]);
 	}
@@ -1584,8 +1589,13 @@ static int serval_tcp_should_expand_sndbuf(struct sock *sk)
 		return 0;
 
 	/* If we are under soft global TCP memory pressure, do not expand.  */
-	if (atomic_read(&serval_tcp_memory_allocated) >= 
-            sysctl_tcp_mem[0])
+	if (           
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+            atomic_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+#else
+            atomic_long_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+#endif
+            )
 		return 0;
 
 	/* If we filled the congestion window, do not expand.  */
