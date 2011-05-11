@@ -7,6 +7,7 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/tcp.h>
+#include <linux/atomic.h>
 #endif
 
 #if defined(OS_USER)
@@ -266,7 +267,12 @@ static inline int serval_tcp_too_many_orphans(struct sock *sk, int shift)
 	}
 
 	if (sk->sk_wmem_queued > SOCK_MIN_SNDBUF &&
-	    atomic_read(&tcp_memory_allocated) > sysctl_tcp_mem[2])
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+	    atomic_read(&serval_tcp_memory_allocated) > sysctl_tcp_mem[2]
+#else
+	    atomic_long_read(&serval_tcp_memory_allocated) > sysctl_tcp_mem[2]
+#endif
+            )
 		return 1;
 #endif
 	return 0;

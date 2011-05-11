@@ -154,7 +154,7 @@ static int retransmits_timed_out(struct sock *sk,
 static int serval_tcp_write_timeout(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	int retry_until;
+	int retry_until = 0;
 	int do_reset, syn_set = 0;
 
 	if (!((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))) {
