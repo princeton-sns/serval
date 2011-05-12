@@ -26,6 +26,7 @@
 struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
+static char *progname = NULL;
 
 extern int telnet_init(void);
 extern void telnet_fini(void);
@@ -370,6 +371,89 @@ out_close_pipe:
 
 extern void dev_list_add(const char *name);
 
+#define PID_FILE "/tmp/serval.pid"
+
+static int write_pid_file(void)
+{
+        FILE *f;
+
+        f = fopen(PID_FILE, "w");
+        
+        if (!f) {
+                fprintf(stderr, "Could not write PID file to %s : %s\n",
+                        PID_FILE, strerror(errno));
+                return -1;
+        }
+
+        fprintf(f, "%u\n", getpid());
+
+        fclose(f);
+
+        return 0;
+}
+
+#define BUFLEN 256
+
+enum {
+        SERVAL_NOT_RUNNING = 0,
+        SERVAL_RUNNING,
+        SERVAL_BAD_PID,
+        SERVAL_CRASHED,
+};
+
+static int check_pid_file(void)
+{
+        FILE *f;
+        pid_t pid;
+        int res = SERVAL_NOT_RUNNING;
+        char buf[BUFLEN];
+
+        f = fopen(PID_FILE, "r");
+        
+        if (!f) {
+                switch (errno) {
+                case ENOENT:
+                        /* File probably doesn't exist */
+                        return SERVAL_NOT_RUNNING;
+                case EACCES:
+                case EPERM:
+                        /* Probably not owner and lack permissions */
+                        return SERVAL_RUNNING;
+                case EISDIR:
+                default:
+                        fprintf(stderr, "Pid file error: %s\n",
+                                strerror(errno));
+                }
+                return SERVAL_BAD_PID;
+        }
+        
+        if (fscanf(f, "%u", (unsigned *)&pid) == 0) {
+                fprintf(stderr, "Could not read PID file %s\n",
+                        PID_FILE);
+                return SERVAL_BAD_PID;
+        }
+        
+        LOG_DBG("Pid is %u\n", pid);
+
+        fclose(f);
+
+#if defined(OS_LINUX)
+        snprintf(buf, BUFLEN, "/proc/%d/cmdline", pid);
+
+        res = SERVAL_CRASHED;
+
+        f = fopen(buf, "r");
+
+        if (f) {
+                size_t nitems = fread(buf, 1, BUFLEN, f);
+                if (nitems && strstr(buf, progname) != NULL) 
+                        res = SERVAL_RUNNING;
+                fclose(f);
+        }
+#endif
+        return res;
+}
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -377,12 +461,37 @@ int main(int argc, char **argv)
 	int ret;
         struct timeval now;
         
+        progname = basename(argv[0]);
+
+        ret = check_pid_file();
+
+        if (ret == SERVAL_RUNNING) {
+                LOG_ERR("A Serval instance is already running!\n");
+                return -1;
+        } else if (ret == SERVAL_CRASHED) {
+                LOG_DBG("A previous Serval instance seems to have crashed!\n");
+                unlink(PID_FILE);
+
+                /* Cleanup old stuff from crashed instance */
+                unlink(SERVAL_STACK_CTRL_PATH);
+                unlink(SERVAL_SERVD_CTRL_PATH);
+                unlink(TCP_SERVER_PATH);
+                unlink(UDP_SERVER_PATH);
+        }
+
+        if (write_pid_file() != 0) {
+                LOG_ERR("Could not write PID file!\n");
+                return -1;
+        }
+	
 	if (getuid() != 0 && geteuid() != 0) {
-		fprintf(stderr, "%s must run as uid=0 (root)\n",
-			basename(argv[0]));
+		LOG_ERR("%s must run as uid=0 (root)\n", progname);
 			return -1;
 	}
-	
+
+        if (write_pid_file() != 0)
+                return -1;
+
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         
@@ -442,35 +551,33 @@ int main(int argc, char **argv)
 	ret = serval_init();
 
 	if (ret == -1) {
-		LOG_ERR("Could not initialize af_serval\n");
-                netdev_fini();
-		return -1;
+		LOG_ERR("Could not initialize af_serval\n");   
+                goto cleanup_pid;
 	}
 	
 	ret = ctrl_init();
 	
 	if (ret == -1) {
-		LOG_ERR("Could not initialize ctrl socket\n");
-                netdev_fini();
-		serval_fini();
-		return -1;
+		LOG_ERR("Could not initialize ctrl socket\n");   
+                goto cleanup_serval;
 	}
 	
         ret = telnet_init();
 
         if (ret == -1) {
 		LOG_ERR("Could not initialize telnet server\n");
-                ctrl_fini();
-                netdev_fini();
-		serval_fini();
-		return -1;
+                goto cleanup_ctrl;
 	}
 
 	ret = server_run();
 
         telnet_fini();
+ cleanup_ctrl:
 	ctrl_fini();
+ cleanup_serval:
 	serval_fini();
+ cleanup_pid:
+        unlink(PID_FILE);
 
 	return ret;
 }

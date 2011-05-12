@@ -117,7 +117,7 @@ int ctrl_init(void)
 		goto out_unbind;
 	}
 	/* Now set the address to point to scafd */
-	strcpy(unaddr.sun_path, SERVAL_SCAFD_CTRL_PATH);
+	strcpy(unaddr.sun_path, SERVAL_SERVD_CTRL_PATH);
 out:
 	return ret;
 out_unbind:
