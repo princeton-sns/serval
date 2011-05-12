@@ -283,8 +283,13 @@ static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 {
 	int ttl = inet->uc_ttl;
 
-	if (ttl < 0)
+	if (ttl < 0) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 		ttl = dst_metric(dst, RTAX_HOPLIMIT);
+#else
+		ttl = ip4_dst_hoplimit(dst);
+#endif
+        }
 	return ttl;
 }
 #endif
