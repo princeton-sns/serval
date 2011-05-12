@@ -1018,7 +1018,6 @@ void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 		serval_tcp_check_probe_timer(sk);
 }
 
-
 /* Send _single_ skb sitting at the send head. This function requires
  * true push pending frames to setup probe timer etc.
  */
@@ -1026,12 +1025,14 @@ void serval_tcp_push_one(struct sock *sk, unsigned int mss_now)
 {
 	struct sk_buff *skb = serval_tcp_send_head(sk);
 
+        LOG_DBG("skb=%p skb->len=%u mss_now=%u\n",
+                skb, skb ? skb->len : 0, mss_now);
+
 	BUG_ON(!skb || skb->len < mss_now);
 
 	serval_tcp_write_xmit(sk, mss_now, 
 			      TCP_NAGLE_PUSH, 1, sk->sk_allocation);
 }
-
 
 /* This function returns the amount that we can raise the
  * usable window based on the following constraints
@@ -1237,7 +1238,7 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	   It is MMS_S - sizeof(tcphdr) of rfc1122
 	 */
 	///mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
-	mss_now = pmtu - MAX_SERVAL_HDR - sizeof(struct tcphdr);
+	mss_now = pmtu - SERVAL_NET_HEADER_LEN - sizeof(struct tcphdr);
 
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
@@ -1268,10 +1269,10 @@ int serval_tcp_mss_to_mtu(struct sock *sk, int mss)
 	      icsk->icsk_ext_hdr_len +
 	      icsk->icsk_af_ops->net_header_len;
         */
-
+        
 	mtu = mss +
-	      tp->tcp_header_len +
-                MAX_SERVAL_HDR;
+                tp->tcp_header_len +
+                SERVAL_NET_HEADER_LEN;
 
         
 	return mtu;
@@ -1312,19 +1313,20 @@ unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int mss_now;
 
-        /*
-	if (icsk->icsk_mtup.search_high > pmtu)
-		icsk->icsk_mtup.search_high = pmtu;
-        */
+	if (tp->tp_mtup.search_high > pmtu)
+		tp->tp_mtup.search_high = pmtu;
+
 	mss_now = serval_tcp_mtu_to_mss(sk, pmtu);
 	mss_now = serval_tcp_bound_to_half_wnd(tp, mss_now);
 
 	/* And store cached results */
-        /*
-	icsk->icsk_pmtu_cookie = pmtu;
-	if (icsk->icsk_mtup.enabled)
-		mss_now = min(mss_now, tcp_mtu_to_mss(sk, icsk->icsk_mtup.search_low));
-        */
+	tp->pmtu_cookie = pmtu;
+
+	if (tp->tp_mtup.enabled)
+		mss_now = min(mss_now, 
+                              serval_tcp_mtu_to_mss(sk, 
+                                                    tp->tp_mtup.search_low));
+
 	tp->mss_cache = mss_now;
 
 	return mss_now;
@@ -1346,12 +1348,8 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
 
 	if (dst) {
 		u32 mtu = dst_mtu(dst);
-                /*
-		if (mtu != inet_csk(sk)->icsk_pmtu_cookie)
-			mss_now = tcp_sync_mss(sk, mtu);
-                */
-
-                mss_now = serval_tcp_sync_mss(sk, mtu);
+		if (mtu != tp->pmtu_cookie)
+			mss_now = serval_tcp_sync_mss(sk, mtu);
 	}
 
 	header_len = serval_tcp_established_options(sk, NULL, &opts, &md5) +
