@@ -151,7 +151,6 @@ static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
               
 		if (serval_tcp_rcv_established(sk, skb, 
                                                tcp_hdr(skb), skb->len)) {
-			//rsk = sk;
                         err = -1;
 			goto reset;
 		}

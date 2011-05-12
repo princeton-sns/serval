@@ -694,8 +694,9 @@ fault:
 int skb_copy_bits(const struct sk_buff *skb, int offset, void *to, int len)
 {
 	int start = skb_headlen(skb);
-	struct sk_buff *frag_iter;
-	int i, copy;
+	//struct sk_buff *frag_iter;
+	//int i;
+        int copy;
 
 	if (offset > (int)skb->len - len)
 		goto fault;

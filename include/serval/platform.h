@@ -344,7 +344,7 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 #if defined(ENABLE_DEBUG)
 #include <assert.h>
 #ifndef BUG_ON
-#define BUG_ON(x) assert(!x)
+#define BUG_ON(x) assert(!(x))
 #endif 
 #else
 #ifndef BUG_ON
