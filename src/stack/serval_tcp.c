@@ -254,7 +254,31 @@ void serval_tcp_done(struct sock *sk)
 static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
                                               int large_allowed)
 {
-        return 40;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	u32 xmit_size_goal, old_size_goal;
+
+	xmit_size_goal = mss_now;
+
+	if (large_allowed && sk_can_gso(sk)) {
+		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
+				  SERVAL_NET_HEADER_LEN -
+				  tp->tcp_header_len);
+
+		xmit_size_goal = serval_tcp_bound_to_half_wnd(tp, xmit_size_goal);
+
+		/* We try hard to avoid divides here */
+		old_size_goal = tp->xmit_size_goal_segs * mss_now;
+
+		if (likely(old_size_goal <= xmit_size_goal &&
+			   old_size_goal + mss_now > xmit_size_goal)) {
+			xmit_size_goal = old_size_goal;
+		} else {
+			tp->xmit_size_goal_segs = xmit_size_goal / mss_now;
+			xmit_size_goal = tp->xmit_size_goal_segs * mss_now;
+		}
+	}
+
+	return max(xmit_size_goal, mss_now);
 }
 
 static int serval_tcp_send_mss(struct sock *sk, int *size_goal, int flags)
@@ -494,16 +518,22 @@ new_segment:
 				max = size_goal;
 			}
 
+                        LOG_DBG("copy=%u seglen=%u\n",
+                                copy, seglen);
+
 			/* Try to append data to the end of skb. */
 			if (copy > seglen)
 				copy = seglen;
 
 			/* Where to copy to? */
 			if (skb_tailroom(skb) > 0) {
-                                LOG_DBG("Add data\n");
 				/* We have some space in skb head. Superb! */
 				if (copy > skb_tailroom(skb))
 					copy = skb_tailroom(skb);
+
+                                LOG_DBG("Add data tailroom=%u copy=%u\n", 
+                                        skb_tailroom(skb), copy);
+                                
 				if ((err = skb_add_data(skb, from, copy)) != 0) {
                                         LOG_ERR("skb_add_data() failed!\n");
 					goto do_fault;
@@ -597,6 +627,8 @@ new_segment:
 			if (skb->len < max || (flags & MSG_OOB))
 				continue;
 
+                        LOG_DBG("skb->len=%u max=%u\n", skb->len, max);
+
 			if (forced_push(tp)) {
 				serval_tcp_mark_push(tp, skb);
 				__serval_tcp_push_pending_frames(sk, 
@@ -625,6 +657,9 @@ out:
 		serval_tcp_push(sk, flags, mss_now, tp->nonagle);
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
+
+        LOG_DBG("Total copied=%u\n", copied);
+
 	return copied;
 
 do_fault:

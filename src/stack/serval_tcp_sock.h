@@ -51,6 +51,7 @@ struct serval_tcp_sock {
 	/* NOTE: serval_sock has to be the first member */
 	struct serval_sock sk;
 	u16	tcp_header_len;	/* Bytes of tcp header to send		*/
+	u16	xmit_size_goal_segs; /* Goal for segmenting output packets */
         struct sk_buff_head out_of_order_queue;
 
 	__be32	pred_flags;
