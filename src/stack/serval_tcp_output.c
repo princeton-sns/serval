@@ -1240,6 +1240,9 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	///mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
 	mss_now = pmtu - SERVAL_NET_HEADER_LEN - sizeof(struct tcphdr);
 
+        LOG_DBG("pmtu=%d mss_now=%u mss_clamp=%u\n", 
+                pmtu, mss_now, tp->rx_opt.mss_clamp);
+
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
 		mss_now = tp->rx_opt.mss_clamp;
@@ -1261,7 +1264,6 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 int serval_tcp_mss_to_mtu(struct sock *sk, int mss)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	//struct inet_connection_sock *icsk = inet_csk(sk);
 	int mtu;
         /*
 	mtu = mss +
@@ -1273,7 +1275,7 @@ int serval_tcp_mss_to_mtu(struct sock *sk, int mss)
 	mtu = mss +
                 tp->tcp_header_len +
                 SERVAL_NET_HEADER_LEN;
-
+        
         
 	return mtu;
 }
@@ -1317,17 +1319,28 @@ unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu)
 		tp->tp_mtup.search_high = pmtu;
 
 	mss_now = serval_tcp_mtu_to_mss(sk, pmtu);
+        
+
+        LOG_DBG("serval_tcp_mtu_to_mss=%u\n", mss_now);
+
 	mss_now = serval_tcp_bound_to_half_wnd(tp, mss_now);
+
+        LOG_DBG("serval_tcp_bound_to_half_wnd=%u\n", mss_now);
 
 	/* And store cached results */
 	tp->pmtu_cookie = pmtu;
 
-	if (tp->tp_mtup.enabled)
+	if (tp->tp_mtup.enabled) {
 		mss_now = min(mss_now, 
                               serval_tcp_mtu_to_mss(sk, 
                                                     tp->tp_mtup.search_low));
+                
+                LOG_DBG("min=%u\n", mss_now);
+        }
 
 	tp->mss_cache = mss_now;
+
+        LOG_DBG("pmtu=%u mss_now=%u\n", pmtu, mss_now);
 
 	return mss_now;
 }

@@ -129,11 +129,12 @@ int ctrl_init(void)
 	}
 	/* Now set the address to point to scafd */
 
-	if(stackid <= 0) {
-	    strcpy(unaddr.sun_path, SERVAL_SCAFD_CTRL_PATH);
-    }
-    else {
-        sprintf(unaddr.sun_path, "/tmp/serval-libstack-ctrl-%i.sock", stackid);
+
+	if (stackid <= 0) {
+                strcpy(unaddr.sun_path, SERVAL_SERVD_CTRL_PATH);
+    } else {
+                sprintf(unaddr.sun_path, 
+                        "/tmp/serval-libstack-ctrl-%i.sock", stackid);
     }
 
 out:

@@ -189,10 +189,10 @@ struct ctrlmsg_service {
 
 #if defined(OS_ANDROID)
 #define SERVAL_STACK_CTRL_PATH "/data/local/tmp/serval-stack-ctrl.sock"
-#define SERVAL_SCAFD_CTRL_PATH "/data/local/tmp/serval-libstack-ctrl.sock"
+#define SERVAL_SERVD_CTRL_PATH "/data/local/tmp/serval-libstack-ctrl.sock"
 #else
 #define SERVAL_STACK_CTRL_PATH "/tmp/serval-stack-ctrl.sock"
-#define SERVAL_SCAFD_CTRL_PATH "/tmp/serval-libstack-ctrl.sock"
+#define SERVAL_SERVD_CTRL_PATH "/tmp/serval-libstack-ctrl.sock"
 #endif
 
 #endif /* LIBSTACK_CTRLMSG_H */
