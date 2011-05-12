@@ -1969,8 +1969,8 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_DBG("Queueing incoming data packet skb->len=%u doff=%u\n", 
-                skb->len, th->doff * 4);
+        LOG_DBG("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
+                skb->len, skb->data_len, th->doff * 4);
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
 		goto drop;
@@ -2016,7 +2016,8 @@ queue_and_out:
 			if (eaten < 0 &&
 			    serval_tcp_try_rmem_schedule(sk, skb->truesize))
 				goto drop;
-
+                        
+                        LOG_DBG("Queueing in order segement\n");
 			skb_set_owner_r(skb, sk);
 			__skb_queue_tail(&sk->sk_receive_queue, skb);
 		}
@@ -2041,9 +2042,10 @@ queue_and_out:
 #endif
 		serval_tcp_fast_path_check(sk);
 
-		if (eaten > 0)
+		if (eaten > 0) {
+                        LOG_DBG("skb eaten\n");
 			__kfree_skb(skb);
-		else if (!sock_flag(sk, SOCK_DEAD)) {
+                } else if (!sock_flag(sk, SOCK_DEAD)) {
                         LOG_DBG("Signal data ready!\n");
 			sk->sk_data_ready(sk, 0);
                 }
@@ -2057,9 +2059,11 @@ queue_and_out:
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, 
                                      TCP_SKB_CB(skb)->end_seq);
 out_of_window:
+                LOG_DBG("Segment out of window!\n");
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
 drop:
+                LOG_DBG("Dropping segment!\n");
 		__kfree_skb(skb);
 		return;
 	}
@@ -2073,7 +2077,7 @@ drop:
 
 	if (before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
 		/* Partial packet, seq < rcv_next < end_seq */
-		LOG_DBG("partial packet: rcv_next %X seq %X - %X\n",
+		LOG_DBG("partial segment: rcv_next %X seq %X - %X\n",
                         tp->rcv_nxt, TCP_SKB_CB(skb)->seq,
                         TCP_SKB_CB(skb)->end_seq);
                 
@@ -2103,18 +2107,21 @@ drop:
 	if (!skb_peek(&tp->out_of_order_queue)) {
 #if defined(ENABLE_TCP_SACK)
 		/* Initial out of order segment, build 1 SACK. */
-		if (tcp_is_sack(tp)) {
+		if (serval_tcp_is_sack(tp)) {
 			tp->rx_opt.num_sacks = 1;
 			tp->selective_acks[0].start_seq = TCP_SKB_CB(skb)->seq;
 			tp->selective_acks[0].end_seq =
 						TCP_SKB_CB(skb)->end_seq;
 		}
 #endif
+                LOG_DBG("Segment put first in OFO queue\n");
 		__skb_queue_head(&tp->out_of_order_queue, skb);
 	} else {
 		struct sk_buff *skb1 = skb_peek_tail(&tp->out_of_order_queue);
 		u32 seq = TCP_SKB_CB(skb)->seq;
 		u32 end_seq = TCP_SKB_CB(skb)->end_seq;
+
+                LOG_DBG("Packet put in OFO queue\n");
 
 		if (seq == TCP_SKB_CB(skb1)->end_seq) {
 			__skb_queue_after(&tp->out_of_order_queue, skb1, skb);
@@ -2193,10 +2200,11 @@ drop:
 
         add_sack:;
 #if defined(ENABLE_TCP_SACK)
-		if (tcp_is_sack(tp))
-			tcp_sack_new_ofo_skb(sk, seq, end_seq);
+		if (serval_tcp_is_sack(tp))
+			serval_tcp_sack_new_ofo_skb(sk, seq, end_seq);
 #endif
 	}
+        LOG_DBG("data queueing done\n");
 }
 
 static struct sk_buff *serval_tcp_collapse_one(struct sock *sk, 
@@ -2733,6 +2741,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 
 		/* Check timestamp */
 		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
+                        LOG_DBG("TCP has timestamp\n");
+
 			/* No? Slow path! */
 			if (!serval_tcp_parse_aligned_timestamp(tp, th))
 				goto slow_path;
@@ -2763,6 +2773,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				/* We know that such packets are checksummed
 				 * on entry.
 				 */
+                                LOG_DBG("Bulk data transfer sender!\n");
 				serval_tcp_ack(sk, skb, 0);
 				__kfree_skb(skb);
 				serval_tcp_data_snd_check(sk);
@@ -2778,7 +2789,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			if (tp->copied_seq == tp->rcv_nxt &&
 			    len - tcp_header_len <= tp->ucopy.len) {
 #ifdef CONFIG_NET_DMA
-				if (serval_tcp_dma_try_early_copy(sk, skb, tcp_header_len)) {
+				if (serval_tcp_dma_try_early_copy(sk, skb, tcp_header_len)) {                                        
 					copied_early = 1;
 					eaten = 1;
 				}
@@ -2831,16 +2842,24 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPHPHITS);
 
 				/* Bulk data transfer: receiver */
+                                LOG_DBG("Bulk data transfer receiver\n");
 				__skb_pull(skb, tcp_header_len);
 				__skb_queue_tail(&sk->sk_receive_queue, skb);
 				skb_set_owner_r(skb, sk);
 				tp->rcv_nxt = TCP_SKB_CB(skb)->end_seq;
 			}
 
+                        LOG_DBG("Data received eaten=%d copied_early=%d\n",
+                                eaten, copied_early);
+
 			serval_tcp_event_data_recv(sk, skb);
+
+                        LOG_DBG("event_data_recv called\n");
 
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
+                                LOG_DBG("one small jumplet!\n");
+
 				serval_tcp_ack(sk, skb, FLAG_DATA);
 				serval_tcp_data_snd_check(sk);
 				if (!serval_tsk_ack_scheduled(sk))
@@ -2855,19 +2874,26 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				__skb_queue_tail(&sk->sk_async_wait_queue, skb);
 			else
 #endif
-			if (eaten)
-				__kfree_skb(skb);
-			else
-				sk->sk_data_ready(sk, 0);
+                        {
+                                if (eaten) {
+                                        LOG_DBG("skb eaten\n");
+                                        __kfree_skb(skb);
+                                } else {
+                                        LOG_DBG("notify data ready\n");
+                                        sk->sk_data_ready(sk, 0);
+                                }
+                        }
 			return 0;
 		}
 	}
 
 slow_path:
+
+        LOG_DBG("Slow path!\n");
+
 	if (len < (th->doff << 2) || serval_tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
-        LOG_DBG("Slow path!\n");
 	/*
 	 *	Standard slow path.
 	 */
