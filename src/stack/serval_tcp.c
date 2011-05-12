@@ -1303,21 +1303,20 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
         
         LOG_DBG("snd_wnd=%u rcv_wnd=%u\n", newtp->snd_wnd, newtp->rcv_wnd);
                 
-        if (0 /*newtp->rx_opt.tstamp_ok */) {
-                /*
+        if (newtp->rx_opt.tstamp_ok ) {
                   newtp->rx_opt.ts_recent = req->ts_recent;
                   newtp->rx_opt.ts_recent_stamp = get_seconds();
                   newtp->tcp_header_len = sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
-                */
         } else {
                 newtp->rx_opt.ts_recent_stamp = 0;
                 newtp->tcp_header_len = sizeof(struct tcphdr);
         }
-/*
-  if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
-  newicsk->icsk_ack.last_seg_size = skb->len - newtp->tcp_header_len;
-*/
-        newtp->rx_opt.mss_clamp = treq->mss;
+        
+        if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
+                newtp->tp_ack.last_seg_size = skb->len - newtp->tcp_header_len;
+
+        
+        newtp->rx_opt.mss_clamp = req->mss;
 
 ////
 
