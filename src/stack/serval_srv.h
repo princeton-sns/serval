@@ -211,4 +211,7 @@ void serval_srv_timewait_timeout(unsigned long data);
                         sizeof(struct serval_hdr) +                 \
                         sizeof(struct serval_connection_ext))
 
+#define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +                   \
+                               sizeof(struct serval_hdr) +              \
+                               sizeof(struct serval_connection_ext))
 #endif /* _SERVAL_SRV_H_ */
