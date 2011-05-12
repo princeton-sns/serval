@@ -325,13 +325,6 @@ static inline void put_unaligned_be64(u64 val, void *p)
 	 ((long)(a) - (long)(b) >= 0))
 #define time_before_eq(a,b)	time_after_eq(b,a)
 
-#define BUG()                                                           \
-        ({                                                              \
-                fprintf(stderr, "%s bug in code, exiting!\n",           \
-                        __func__);                                      \
-                exit(-1);                                               \
-        })
-
 #if !defined(HAVE_PPOLL)
 #include <poll.h>
 #include <sys/select.h>
@@ -344,7 +337,12 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 #if defined(ENABLE_DEBUG)
 #include <assert.h>
 #ifndef BUG_ON
-#define BUG_ON(x) assert(!(x))
+#define BUG() do {                                                      \
+                fprintf(stderr, "BUG: failure at %s:%d/%s()!\n",        \
+                        __FILE__, __LINE__, __func__);                  \
+                exit(-1);                                               \
+        } while (0)
+#define BUG_ON(condition) do { if (unlikely(condition)) BUG(); } while(0)
 #endif 
 #else
 #ifndef BUG_ON
