@@ -20,544 +20,1048 @@
         get_service(bst_find_longest_prefix(tbl->tree, prefix, bits))
 
 struct service_table {
-        struct bst tree;
-        struct bst_node_ops srv_ops;
-        rwlock_t lock;
-};
-
-struct dev_entry {        
-        struct list_head lh;
-        struct net_device *dev;
-        int dstlen;
-        unsigned char dst[]; /* Must be last */
+    struct bst tree;
+    struct bst_node_ops srv_ops;
+    int instances;
+    atomic_t bytes_resolved;
+    atomic_t packets_resolved;
+    atomic_t bytes_dropped;
+    atomic_t packets_dropped;
+    rwlock_t lock;
 };
 
 static int service_entry_init(struct bst_node *n);
 static void service_entry_destroy(struct bst_node *n);
 
 /*
-static void dst_entry_destroy(struct dst_entry *dst)
-{
-        service_entry_put((struct service_entry *)dst);
-}
+ static void dest_destroy(struct dest *dst)
+ {
+ service_entry_put((struct service_entry *)dst);
+ }
 
-static struct dst_ops service_dst_ops = {
-	.family =		AF_SERVAL,
-	.protocol =		cpu_to_be16(ETH_P_IP),
-        .destroy =              dst_entry_destroy
-};
-*/
+ static struct dst_ops service_dst_ops = {
+ .family =		AF_SERVAL,
+ .protocol =		cpu_to_be16(ETH_P_IP),
+ .destroy =              dest_destroy
+ };
+ */
 static struct service_table srvtable;
 
-static struct dev_entry *dev_entry_create(struct net_device *dev, 
-                                          unsigned char *dst,
-                                          int dstlen,
-                                          gfp_t alloc)
-{
-        struct dev_entry *de;
+static struct dest *dest_create(const void *dst, int dstlen, const void* dest_out, uint32_t weight,
+        gfp_t alloc) {
+    struct dest *de;
 
-        de = (struct dev_entry *)MALLOC(sizeof(*de) + dstlen, alloc);
+    if(dstlen == 0 && dest_out == NULL) {
+        return NULL;
+    }
 
-        if (!de)
-                return NULL;
+    de = (struct dest *) MALLOC(sizeof(*de) + dstlen, alloc);
 
-        memset(de, 0, sizeof(*de) + dstlen);
+    if(!de)
+        return NULL;
 
-        de->dev = dev;
-        dev_hold(dev);
-        de->dstlen = dstlen;
-        memcpy(de->dst, dst, dstlen);
-        INIT_LIST_HEAD(&de->lh);
-        
-        return de;
-}
+    memset(de, 0, sizeof(*de) + dstlen);
+    de->weight = weight;
+    de->dstlen = dstlen;
 
-static void dev_entry_free(struct dev_entry *de)
-{
-        dev_put(de->dev);
-        FREE(de);
-}
-
-
-/*
-static void __service_entry_remove_dev_entry(struct service_entry *se, 
-                                                struct dev_entry *de)
-{
-        struct dev_entry *de;
-        
-        write_lock(&se->devlock);
-        list_del(&de->lh);
-        write_unlock(&se->devlock);
-}
-*/
-
-static struct net_device *__service_entry_get_dev(struct service_entry *se, 
-                                                  const char *ifname)
-{
-        struct dev_entry *de;
-        struct net_device *dev = NULL;
-
-        list_for_each_entry(de, &se->dev_list, lh) {
-                if (strcmp(de->dev->name, ifname) == 0) {
-                        dev = de->dev;
-                        break;
-                } 
+    if(dstlen > 0) {
+        if(dest_out != NULL) {
+            de->dest_out.dev = (struct net_device*) dest_out;
+            dev_hold(de->dest_out.dev);
         }
+        memcpy(de->dst, dst, dstlen);
+    } else {
+        de->dest_out.sk = (struct sock*) dest_out;
+        sock_hold(de->dest_out.sk);
+    }
 
-        return dev;
+    INIT_LIST_HEAD(&de->lh);
+
+    return de;
+}
+
+static void dest_free(struct dest *de) {
+    if(!is_sock_dest(de) && de->dest_out.dev)
+        dev_put(de->dest_out.dev);
+    FREE(de);
+}
+
+static struct dest_set *dset_create(uint16_t flags, uint32_t priority, gfp_t alloc) {
+    struct dest_set *dset;
+
+    dset = (struct dest_set *) MALLOC(sizeof(*dset), alloc);
+
+    if(!dset)
+        return NULL;
+
+    memset(dset, 0, sizeof(*dset));
+    dset->flags = flags;
+    dset->priority = priority;
+
+    INIT_LIST_HEAD(&dset->ds);
+    INIT_LIST_HEAD(&dset->dest_list);
+
+    return dset;
+}
+
+static void dset_free(struct dest_set *dset) {
+    FREE(dset);
+}
+/*
+ static void __service_entry_remove_dest(struct service_entry *se,
+ struct dest *de)
+ {
+ struct dest *de;
+
+ write_lock(&se->destlock);
+ list_del(&de->lh);
+ write_unlock(&se->destlock);
+ }
+ */
+
+static struct dest *__service_entry_get_dev(struct service_entry *se, const char *ifname) {
+    struct dest *de;
+    //struct net_device *dev = NULL;
+    struct dest_set* dset = NULL;
+
+    list_for_each_entry(dset, &se->dest_set, ds) {
+        list_for_each_entry(de, &dset->dest_list, lh) {
+            if(!is_sock_dest(de) && de->dest_out.dev && strcmp(de->dest_out.dev->name, ifname) == 0) {
+                return de;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+static struct dest * __service_entry_get_dest(struct service_entry *se, const void *dst,
+        int dstlen, struct dest_set** dset_p) {
+    struct dest *de = NULL;
+    struct dest_set* dset = NULL;
+
+    list_for_each_entry(dset, &se->dest_set, ds) {
+        list_for_each_entry(de, &dset->dest_list, lh) {
+            if((is_sock_dest(de) && dstlen == 0) || (!is_sock_dest(de) && memcmp(de->dst, dst,
+                    dstlen) == 0)) {
+                if(dset_p)
+                    *dset_p = dset;
+                return de;
+            }
+        }
+    }
+
+    return NULL;
 }
 
 /* 
-   The returned net_device will have an increased reference count, so
-   a put is necessary following a successful call to this
-   function.  
-*/
-struct net_device *service_entry_get_dev(struct service_entry *se, 
-                                         const char *ifname)
-{
-        struct net_device *dev = NULL;
+ The returned net_device will have an increased reference count, so
+ a put is necessary following a successful call to this
+ function.
+ */
+struct net_device *service_entry_get_dev(struct service_entry *se, const char *ifname) {
+    struct dest *de = NULL;
 
-        read_lock(&se->devlock);
-        
-        dev = __service_entry_get_dev(se, ifname);
+    read_lock(&se->destlock);
 
-        if (dev)
-                dev_hold(dev);
+    de = __service_entry_get_dev(se, ifname);
 
-        read_unlock(&se->devlock);
+    if(de)
+        dev_hold(de->dest_out.dev);
 
-        return dev;
+    read_unlock(&se->destlock);
+
+    return de ? de->dest_out.dev : NULL;
 }
 
+static void dset_add_dest(struct dest_set* dset, struct dest* de) {
+    list_add_tail(&de->lh, &dset->dest_list);
+    dset->normalizer += de->weight;
+    dset->count++;
+}
 
-static int __service_entry_add_dev(struct service_entry *se, 
-                                   struct net_device *dev, 
-                                   unsigned char *dst,
-                                   int dstlen,
-                                   gfp_t alloc)
-{
-        struct dev_entry *de;
+static void service_entry_insert_dset(struct service_entry *se, struct dest_set* dset) {
 
-        if (__service_entry_get_dev(se, dev->name))
-                return 0;
+    struct dest_set* pos = NULL;
+    list_for_each_entry(pos, &se->dest_set, ds) {
+        if(pos->priority < dset->priority) {
+            list_add_tail(&dset->ds, &pos->ds);
+            return;
+        }
+    }
+    list_add_tail(&dset->ds, &se->dest_set);
+}
 
-        de = dev_entry_create(dev, dst, dstlen, alloc);
+static struct dest_set* __service_entry_get_dset(struct service_entry *se, uint32_t priority) {
+    struct dest_set* pos = NULL;
 
-        if (!de)
+    list_for_each_entry(pos, &se->dest_set, ds) {
+        if(pos->priority == priority) {
+            return pos;
+        }
+    }
+
+    return NULL;
+}
+
+static int __service_entry_add_dest(struct service_entry *se, uint16_t flags, uint32_t priority,
+        uint32_t weight, const void *dst, int dstlen, const void *dest_out, gfp_t alloc) {
+    struct dest_set* dset = NULL;
+    struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+
+    if(de) {
+        if(is_sock_dest(de)) {
+            return -EADDRINUSE;
+        }
+        return 0;
+    }
+
+    //struct dest_set* dset = __service_entry_get_dset(se, priority);
+
+    if(!dset) {
+        dset = dset_create(flags, priority, alloc);
+
+        if(!dset)
+            return -ENOMEM;
+
+        service_entry_insert_dset(se, dset);
+    }
+
+    de = dest_create(dst, dstlen, dest_out, weight, alloc);
+
+    if(!de)
+        return -ENOMEM;
+
+    dset_add_dest(dset, de);
+    se->count++;
+    return 1;
+}
+
+int service_entry_add_dest(struct service_entry *se, uint16_t flags, uint32_t priority,
+        uint32_t weight, const void *dst, int dstlen, const void *dest_out, gfp_t alloc) {
+    int ret = 0;
+
+    write_lock(&se->destlock);
+    ret = __service_entry_add_dest(se, flags, priority, weight, dst, dstlen, dest_out, GFP_ATOMIC);
+    write_unlock(&se->destlock);
+
+    return ret;
+}
+
+static void dset_remove_dest(struct dest_set* dset, struct dest* de) {
+    dset->normalizer -= de->weight;
+    list_del(&de->lh);
+    dset->count--;
+}
+
+static int __service_entry_modify_dest(struct service_entry *se, uint16_t flags, uint32_t priority,
+        uint32_t weight, const void *dst, int dstlen, const void *dest_out, gfp_t alloc) {
+    struct dest_set* dset = NULL;
+    struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+
+    if(!de) {
+        return 0;
+    }
+
+    if(dset->priority != priority) {
+        struct dest_set* ndset = NULL;
+        ndset = __service_entry_get_dset(se, priority);
+        if(!ndset) {
+            ndset = dset_create(flags, priority, alloc);
+
+            if(!ndset)
                 return -ENOMEM;
 
-        list_add_tail(&de->lh, &se->dev_list);
-
-        return 1;
-}
-
-int service_entry_add_dev(struct service_entry *se, 
-                          struct net_device *dev,
-                          unsigned char *dst,
-                          int dstlen,
-                          gfp_t alloc)
-{
-        int ret = 0;
-        
-        write_lock(&se->devlock);
-        ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
-        write_unlock(&se->devlock);
-
-        return ret;
-}
-
-int __service_entry_remove_dev(struct service_entry *se, 
-                               const char *ifname)
-{
-        struct dev_entry *de;
-
-        list_for_each_entry(de, &se->dev_list, lh) {
-                if (strcmp(de->dev->name, ifname) == 0) {
-                        list_del(&de->lh);
-                        dev_entry_free(de);
-                        return 1;
-                } 
-        }
-        return 0;
-}
-
-int service_entry_remove_dev(struct service_entry *se, 
-                             const char *ifname)
-{        
-        int ret;
-        write_lock(&se->devlock);
-        ret = __service_entry_remove_dev(se, ifname);
-        write_unlock(&se->devlock);
-        return ret;
-}
-
-static struct service_entry *service_entry_create(struct sock *sk, gfp_t alloc)
-{
-        struct service_entry *se;
-    
-        se = (struct service_entry *)MALLOC(sizeof(*se), alloc);
-        
-        if (!se)
-                return NULL;
-
-        memset(se, 0, sizeof(*se));
-        INIT_LIST_HEAD(&se->dev_list);
-        rwlock_init(&se->devlock);
-        atomic_set(&se->refcnt, 1);
-        se->dev_pos = NULL;
-
-        if (sk) {
-                se->sk = sk;
-                sock_hold(sk);
+            service_entry_insert_dset(se, ndset);
         }
 
-        return se;
-}
+        dset_remove_dest(dset, de);
 
-int service_entry_init(struct bst_node *n)
-{
-         return 0;
-}
-
-void __service_entry_free(struct service_entry *se)
-{
-        while (1) {
-                struct dev_entry *de;
-                
-                if (list_empty(&se->dev_list))
-                        break;
-                
-                de = list_first_entry(&se->dev_list, struct dev_entry, lh);
-                list_del(&de->lh);
-                dev_entry_free(de);
+        if(dset->count == 0) {
+            list_del(&dset->ds);
+            dset_free(dset);
         }
 
-        if (se->sk)
-                sock_put(se->sk);
+        dset_add_dest(ndset, de);
+    }
 
-        rwlock_destroy(&se->devlock);
+    dset->flags = flags;
+    de->weight = weight;
 
-        FREE(se);
+    return 1;
 }
 
-void service_entry_hold(struct service_entry *se)
-{
-        atomic_inc(&se->refcnt);
+int service_entry_modify_dest(struct service_entry *se, uint16_t flags, uint32_t priority,
+        uint32_t weight, const void *dst, int dstlen, const void *dest_out) {
+    int ret = 0;
+
+    write_lock(&se->destlock);
+    ret = __service_entry_modify_dest(se, flags, priority, weight, dst, dstlen, dest_out,
+            GFP_ATOMIC);
+    write_unlock(&se->destlock);
+
+    return ret;
 }
 
-void service_entry_put(struct service_entry *se)
-{
-        if (atomic_dec_and_test(&se->refcnt))
-		__service_entry_free(se);
+
+static void __service_entry_inc_dest_stats(struct service_entry *se, const void* dst, int dstlen, int packets, int bytes) {
+    struct dest_set* dset = NULL;
+    struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+
+    if(!de) {
+        return;
+    }
+
+    if(packets > 0) {
+        atomic_add(packets, &de->packets_resolved);
+        atomic_add(bytes, &de->bytes_resolved);
+
+        atomic_add(packets, &se->packets_resolved);
+        atomic_add(bytes, &se->bytes_resolved);
+
+        atomic_add(packets, &srvtable.packets_resolved);
+        atomic_add(bytes, &srvtable.bytes_resolved);
+    }
+    else {
+        atomic_add(-packets, &de->packets_dropped);
+        atomic_add(-bytes, &de->bytes_dropped);
+
+        atomic_add(-packets, &se->packets_dropped);
+        atomic_add(-bytes, &se->bytes_dropped);
+
+        atomic_add(-packets, &srvtable.packets_dropped);
+        atomic_add(-bytes, &srvtable.bytes_dropped);
+    }
+
+}
+void service_entry_inc_dest_stats(struct service_entry *se, const void* dst, int dstlen, int packets, int bytes) {
+    /*using a read lock since we are atomically updating stats and not modifying the dset/dest itself*/
+    read_lock(&se->destlock);
+    __service_entry_inc_dest_stats(se, dst, dstlen, packets, bytes);
+    read_unlock(&se->destlock);
 }
 
-static void service_entry_free(struct service_entry *se)
-{
-        service_entry_put(se);
-}
+int __service_entry_remove_dest_by_dev(struct service_entry *se, const char *ifname) {
+    struct dest *de;
+    struct dest *dtemp = NULL;
+    struct dest_set* dset = NULL;
+    struct dest_set* dsetemp = NULL;
 
-void service_entry_destroy(struct bst_node *n)
-{
-        service_entry_put(get_service(n));
-}
+    list_for_each_entry_safe(dset, dsetemp, &se->dest_set, ds) {
+        list_for_each_entry_safe(de, dtemp, &dset->dest_list, lh) {
+            if(!is_sock_dest(de) && de->dest_out.dev && strcmp(de->dest_out.dev->name, ifname) == 0) {
+                dset_remove_dest(dset, de);
+                dest_free(de);
 
-void service_entry_dev_iterate_begin(struct service_entry *se)
-{
-        read_lock_bh(&se->devlock);
-        se->dev_pos = &se->dev_list;
-}
-
-void service_entry_dev_iterate_end(struct service_entry *se)
-{
-        se->dev_pos = NULL;
-        read_unlock_bh(&se->devlock);
-}
-
-/* 
-   Calls to this function must be preceeded by a call to
-   service_entry_dev_iterate_begin() and followed by
-   service_entry_dev_iterate_end(). 
-*/
-struct net_device *service_entry_dev_next(struct service_entry *se)
-{
-        se->dev_pos = se->dev_pos->next;
-
-        if (se->dev_pos == &se->dev_list)
-                return NULL;
-
-        return container_of(se->dev_pos, struct dev_entry, lh)->dev;
-}
-
-/* Returns the device default destination during iteration of device
- * list */
-int service_entry_dev_dst(struct service_entry *se, void *dst, int dstlen)
-{
-        struct dev_entry *de;
-
-        if (!se->dev_pos)
-                return -1;
-        
-        de = container_of(se->dev_pos, struct dev_entry, lh);
-        
-        if (!dst || dstlen < de->dstlen)
-                return de->dstlen;
-
-        memcpy(dst, de->dst, de->dstlen);
-       
-        return 0;
-}
-
-static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
-{
-#define PREFIX_BUFLEN (sizeof(struct service_id)*2+4)
-        char prefix[PREFIX_BUFLEN];
-        struct service_entry *se = get_service(n);
-        struct dev_entry *de;
-        char dststr[18]; /* Currently sufficient for IPv4 */
-        int len = 0;
-
-        read_lock_bh(&se->devlock);
-
-        bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
-        
-        len += snprintf(buf + len, buflen - len, "%-64s %-6u %-4u ",
-                        prefix, bst_node_prefix_bits(n), 
-                        se->sk ? 1 : 0);
-
-        list_for_each_entry(de, &se->dev_list, lh) {
-                len += snprintf(buf + len, buflen - len, "[%-5s %s] ",
-                                de->dev->name,
-                                inet_ntop(AF_INET, de->dst, dststr, 18));
-        }
-
-        /* remove last whitespace */
-        len--;
-        len += snprintf(buf + len, buflen - len, "\n");
-
-        read_unlock_bh(&se->devlock);
-
-        return len;
-}
-
-int service_entry_print(struct service_entry *se, char *buf, int buflen)
-{
-        return __service_entry_print(se->node, buf, buflen);
-}
-
-static int service_table_print(struct service_table *tbl, char *buf, int buflen)
-{
-        int ret;
-
-        /* print header */
-        ret = snprintf(buf, buflen, "%-64s %-6s %-4s [iface dst]\n", 
-                       "prefix", "bits", "sock");
-
-        read_lock_bh(&tbl->lock);
-        ret += bst_print(&tbl->tree, buf + ret, buflen - ret);
-        read_unlock_bh(&tbl->lock);
-        return ret;
-}
-
-int services_print(char *buf, int buflen)
-{
-        return service_table_print(&srvtable, buf, buflen);
-}
-
-static struct service_entry *service_table_find(struct service_table *tbl, 
-                                                struct service_id *srvid)
-{
-        struct service_entry *se = NULL;
-        struct bst_node *n;
-
-        if (!srvid)
-                return NULL;
-
-        read_lock_bh(&tbl->lock);
-        
-        n = bst_find_longest_prefix(&tbl->tree, srvid, sizeof(*srvid) * 8);
-
-        if (n) {
-                se = get_service(n);
-                service_entry_hold(se);
-        }
-
-        read_unlock_bh(&tbl->lock);
-
-        return se;
-}
-
-struct service_entry *service_find(struct service_id *srvid)
-{
-        return service_table_find(&srvtable, srvid);
-}
-
-static int service_table_add(struct service_table *tbl, struct service_id *srvid, 
-                             unsigned int prefix_bits, struct net_device *dev,
-                             unsigned char *dst, int dstlen, struct sock *sk,
-                             gfp_t alloc)
-{
-        struct service_entry *se;
-        struct bst_node *n;
-        int ret = 0;
-
-        write_lock_bh(&tbl->lock);
-        
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
-
-        if (n && bst_node_prefix_bits(n) >= prefix_bits) {
-                if (sk) {
-                        ret = -EADDRINUSE;
-                        goto out;
+                if(dset->count == 0) {
+                    list_del(&dset->ds);
+                    dset_free(dset);
                 }
-                if (dst) {
-                        if (get_service(n)->sk) {
-                                ret =  -EADDRINUSE;
-                                goto out;
-                        }
-                        ret = __service_entry_add_dev(get_service(n), 
-                                                      dev,
-                                                      dst,
-                                                      dstlen,
-                                                      alloc);
+                se->count--;
+            }
+        }
+    }
+
+    return 0;
+}
+
+int service_entry_remove_dest_by_dev(struct service_entry *se, const char *ifname) {
+    int ret;
+    write_lock(&se->destlock);
+    ret = __service_entry_remove_dest_by_dev(se, ifname);
+    write_unlock(&se->destlock);
+    return ret;
+}
+
+int __service_entry_remove_dest(struct service_entry *se, const void *dst, int dstlen,
+        struct dest_stats* dstats) {
+    struct dest *de;
+    struct dest_set* dset = NULL;
+
+    list_for_each_entry(dset, &se->dest_set, ds) {
+        list_for_each_entry(de, &dset->dest_list, lh) {
+            if((is_sock_dest(de) && dstlen == 0) || (!is_sock_dest(de) && memcmp(de->dst, dst,
+                    dstlen) == 0)) {
+                dset_remove_dest(dset, de);
+
+                if(dstats) {
+                    dstats->packets_resolved = atomic_read(&de->packets_resolved);
+                    dstats->bytes_resolved = atomic_read(&de->bytes_resolved);
+                    dstats->packets_dropped = atomic_read(&de->packets_dropped);
+                    dstats->bytes_dropped = atomic_read(&de->bytes_dropped);
+
                 }
-                goto out;
-        }
-        
-        se = service_entry_create(sk, alloc);
-        
-        if (!se) {
-                ret = -ENOMEM;
-                goto out;
-        }
-        
-        if (dst) {
-                ret = __service_entry_add_dev(se, dev, dst, dstlen, alloc);
 
-                if (ret < 0) {
-                        service_entry_free(se);
-                        ret = -ENOMEM;
-                        goto out;
+                dest_free(de);
+                if(dset->count == 0) {
+                    list_del(&dset->ds);
+                    dset_free(dset);
                 }
+                se->count--;
+                return 1;
+            }
         }
-        se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
-                                     se, srvid, prefix_bits, alloc);
-                
-        if (!se->node) {
-                service_entry_free(se);
-                ret = -ENOMEM;
+    }
+    return 0;
+}
+
+int service_entry_remove_dest(struct service_entry *se, const void *dst, int dstlen,
+        struct dest_stats* dstats) {
+    int ret;
+    write_lock(&se->destlock);
+    ret = __service_entry_remove_dest(se, dst, dstlen, dstats);
+    write_unlock(&se->destlock);
+    return ret;
+}
+
+//static struct service_entry *service_entry_create(struct sock *sk, gfp_t alloc)
+static struct service_entry *service_entry_create(gfp_t alloc) {
+    struct service_entry *se;
+
+    se = (struct service_entry *) MALLOC(sizeof(*se), alloc);
+
+    if(!se)
+        return NULL;
+
+    memset(se, 0, sizeof(*se));
+
+    INIT_LIST_HEAD(&se->dest_set);
+    rwlock_init(&se->destlock);
+    atomic_set(&se->refcnt, 1);
+    //se->dest_pos = NULL;
+
+    //        if (sk) {
+    //                se->sk = sk;
+    //                sock_hold(sk);
+    //        } else {
+    //                se->sk = NULL;
+    //        }
+
+    return se;
+}
+
+int service_entry_init(struct bst_node *n) {
+    return 0;
+}
+
+void __service_entry_free(struct service_entry *se) {
+    while(1) {
+        struct dest *de;
+        struct dest *temp;
+        struct dest_set *dset;
+        if(list_empty(&se->dest_set))
+            break;
+
+        dset = list_first_entry(&se->dest_set, struct dest_set, ds);
+
+        list_for_each_entry_safe(de, temp, &dset->dest_list, lh) {
+            if(is_sock_dest(de) && de->dest_out.sk) {
+                sock_put(de->dest_out.sk);
+            } else if(!is_sock_dest(de) && de->dest_out.dev) {
+                dev_put(de->dest_out.dev);
+            }
+            list_del(&de->lh);
+            dest_free(de);
         }
-out:  
-        write_unlock_bh(&tbl->lock);
 
-        return ret;
+        list_del(&dset->ds);
+        dset_free(dset);
+    }
+
+    rwlock_destroy(&se->destlock);
+    FREE(se);
 }
 
-int service_add(struct service_id *srvid, unsigned int prefix_bits, 
-                struct net_device *dev, void *dst, 
-                int dstlen, struct sock *sk, gfp_t alloc)
-{
-        return service_table_add(&srvtable, srvid, prefix_bits, 
-                                 dev, dst, dstlen, sk, alloc);
+void service_entry_hold(struct service_entry *se) {
+    atomic_inc(&se->refcnt);
 }
 
-void service_table_del(struct service_table *tbl, struct service_id *srvid, 
-                       unsigned int prefix_bits)
-{
-        write_lock_bh(&tbl->lock);
-        bst_remove_prefix(&tbl->tree, srvid, prefix_bits);
-        write_unlock_bh(&tbl->lock);
+void service_entry_put(struct service_entry *se) {
+    if(atomic_dec_and_test(&se->refcnt))
+        __service_entry_free(se);
 }
 
-void service_del(struct service_id *srvid, unsigned int prefix_bits)
-{
-        return service_table_del(&srvtable, srvid, prefix_bits);
+static void service_entry_free(struct service_entry *se) {
+    service_entry_put(se);
 }
 
-static int del_dev_func(struct bst_node *n, void *arg)
-{
-        struct service_entry *se = get_service(n);
-        char *devname = (char *)arg;
-        int ret = 0, should_remove = 0;
-        
-        write_lock_bh(&se->devlock);
-        
-        ret = __service_entry_remove_dev(se, devname);
+void service_entry_destroy(struct bst_node *n) {
+    struct service_entry* se = get_service(n);
 
-        if (ret == 1 && list_empty(&se->dev_list))
-                should_remove = 1;
-
-        write_unlock_bh(&se->devlock);
-
-        if (should_remove)
-                bst_node_remove(n);
-        
-        return ret;
+    /* TODO - necessary for full dest del */
+    srvtable.instances -= se->count;
+    service_entry_put(get_service(n));
 }
 
-static int service_table_del_dev(struct service_table *tbl, const char *devname)
-{
-        int ret = 0;
+void service_resolution_iter_init(struct service_resolution_iter* iter, struct service_entry *se,
+        int all) {
+    /* lock the se, take the top priority entry and determine the extent of iteration*/
+    struct dest_set* dset;
+    int sumweight = 0;
+    struct dest* dst = NULL;
 
-        write_lock_bh(&tbl->lock);
+    memset(iter, 0, sizeof(*iter));
+    iter->entry = se;
+    read_lock_bh(&se->destlock);
 
-        if (tbl->tree.root)
-                ret = bst_subtree_func(tbl->tree.root, del_dev_func, 
-                                       (void *)devname);
-        write_unlock_bh(&tbl->lock);
+    if(se->count == 0) {
+        return;
+    }
 
-        return ret;
-}
+    dset = list_first_entry(&se->dest_set, struct dest_set, ds);
 
-int service_del_dev(const char *devname)
-{
-        return service_table_del_dev(&srvtable, devname);
-}
+    if(dset == NULL) {
+        return;
+    }
 
-void __service_table_destroy(struct service_table *tbl)
-{
-        bst_destroy(&tbl->tree);
-}
-
-void service_table_destroy(struct service_table *tbl)
-{
-        write_lock_bh(&tbl->lock);
-        __service_table_destroy(tbl);
-        write_unlock_bh(&tbl->lock);
-}
-
-void service_table_init(struct service_table *tbl)
-{
-        bst_init(&tbl->tree);
-        tbl->srv_ops.init = service_entry_init;
-        tbl->srv_ops.destroy = service_entry_destroy;
-        tbl->srv_ops.print = __service_entry_print;
-        rwlock_init(&tbl->lock);
-}
-/*
-#if defined(OS_USER)
-struct kmem_cache kmem_cachep = {
-        .size = sizeof(struct service_entry)
-};
-#endif
-*/
-int __init service_init(void)
-{
-/*
+    if(all || (dset->flags & SVSF_MULTICAST)) {
+        iter->dest_pos = dset->dest_list.next;
+        iter->destset = dset;
+    } else {
+        /*round robin or sample*/
+        uint32_t sample = 0;
 #if defined(OS_LINUX_KERNEL)
-        service_dst_ops.kmem_cachep =
-		kmem_cache_create("service_dst_cache", 
-                                  sizeof(struct service_entry), 0,
-				  SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
-#else        
-        service_dst_ops.kmem_cachep = &kmem_cachep;
-#endif
-*/
-        service_table_init(&srvtable);
+        get_random_bytes(&sample, sizeof(sample));
+        sample = (uint32_t) ((float) sample / 0xFFFFFFFF * dset->normalizer);
+#else
 
-        return 0;
+        sample = (uint32_t) ((float) rand() / RAND_MAX * dset->normalizer);
+#endif
+
+        list_for_each_entry(dst, &dset->dest_list, lh) {
+            sumweight += dst->weight;
+            if(sample <= sumweight) {
+                iter->dest_pos = &dst->lh;
+                iter->destset = NULL;
+                return;
+            }
+        }
+        if(dst) {
+            iter->dest_pos = &dst->lh;
+            iter->destset = NULL;
+        }
+    }
 }
 
-void __exit service_fini(void)
-{
-        service_table_destroy(&srvtable);
+void service_resolution_iter_destroy(struct service_resolution_iter* iter) {
+
+    iter->dest_pos = NULL;
+    iter->destset = NULL;
+    read_unlock_bh(&iter->entry->destlock);
+}
+struct dest *service_resolution_iter_next(struct service_resolution_iter* iter) {
+    struct dest* dst = NULL;
+
+    iter->last_pos = iter->dest_pos;
+    if(iter->dest_pos == NULL) {
+        return NULL;
+    }
+
+    dst = list_entry(iter->dest_pos, struct dest, lh);
+
+    if(iter->destset) {
+        if(iter->dest_pos == &iter->destset->dest_list) {
+            dst = NULL;
+        } else {
+            iter->dest_pos = dst->lh.next;
+        }
+    } else {
+        iter->dest_pos = NULL;
+    }
+
+    return dst;
+}
+
+void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, int packets, int bytes) {
+    struct dest* dst = NULL;
+    if(iter == NULL) {
+        return;
+    }
+
+    if(packets > 0) {
+        if(iter->last_pos == NULL) {
+            return;
+        }
+        dst = list_entry(iter->last_pos, struct dest, lh);
+
+        atomic_add(packets, &dst->packets_resolved);
+        atomic_add(bytes, &dst->bytes_resolved);
+
+        atomic_add(packets, &iter->entry->packets_resolved);
+        atomic_add(bytes, &iter->entry->bytes_resolved);
+
+        atomic_add(packets, &srvtable.packets_resolved);
+        atomic_add(bytes, &srvtable.bytes_resolved);
+    }
+    else {
+        if(iter->last_pos != NULL) {
+            dst = list_entry(iter->last_pos, struct dest, lh);
+            atomic_add(-packets, &dst->packets_dropped);
+            atomic_add(-bytes, &dst->bytes_dropped);
+        }
+
+        atomic_add(-packets, &iter->entry->packets_dropped);
+        atomic_add(-bytes, &iter->entry->bytes_dropped);
+
+        atomic_add(-packets, &srvtable.packets_dropped);
+        atomic_add(-bytes, &srvtable.bytes_dropped);
+    }
+}
+
+//void service_entry_dest_iterate_begin(struct service_entry *se)
+//{
+//        read_lock_bh(&se->destlock);
+//        se->dest_pos = &se->dest_list;
+//}
+//
+//void service_entry_dest_iterate_end(struct service_entry *se)
+//{
+//        se->dest_pos = NULL;
+//        read_unlock_bh(&se->destlock);
+//}
+//
+///*
+//   Calls to this function must be preceeded by a call to
+//   service_entry_dest_iterate_begin() and followed by
+//   service_entry_dest_iterate_end().
+//*/
+//struct dest *service_entry_dest_next(struct service_entry *se)
+//{
+//        se->dest_pos = se->dest_pos->next;
+//
+//        if (se->dest_pos == &se->dest_list)
+//                return NULL;
+//
+//        return container_of(se->dest_pos, struct dest, lh);
+//}
+//
+///* Fills in the destination during iteration of destination list */
+//int service_entry_dest_fill(struct service_entry *se, void *dst, int dstlen)
+//{
+//        struct dest *de;
+//
+//        if (!se->dest_pos)
+//                return -1;
+//
+//        de = container_of(se->dest_pos, struct dest, lh);
+//
+//        if (!dst || dstlen < de->dstlen)
+//                return de->dstlen;
+//
+//        memcpy(dst, de->dst, de->dstlen);
+//
+//        return 0;
+//}
+
+static int __service_entry_print(struct bst_node *n, char *buf, int buflen) {
+#define PREFIX_BUFLEN (sizeof(struct service_id)*2+4)
+    char prefix[PREFIX_BUFLEN];
+    struct service_entry *se = get_service(n);
+    struct dest_set *dset;
+    struct dest *de;
+    char dststr[18]; /* Currently sufficient for IPv4 */
+    int len = 0;
+    unsigned int bits = 0;
+
+    read_lock_bh(&se->destlock);
+
+    bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
+
+    bits = bst_node_prefix_bits(n);
+
+    list_for_each_entry(dset, &se->dest_set, ds) {
+        list_for_each_entry(de, &dset->dest_list, lh) {
+            len += snprintf(buf + len, buflen - len, "%-64s %-6u %-6u %-6u %-6u ", prefix, bits,
+                    dset->flags, dset->priority, de->weight);
+
+            if(is_sock_dest(de) && de->dest_out.sk) {
+                len += snprintf(buf + len, buflen - len, " %-20s\n", de->dest_out.sk ? "sock"
+                        : "NULL");
+            } else if(!is_sock_dest(de) && de->dest_out.dev) {
+                len += snprintf(buf + len, buflen - len, "%-5s %s\n",
+                        de->dest_out.dev ? de->dest_out.dev->name : "any", inet_ntop(AF_INET,
+                                de->dest_out.dev, dststr, 18));
+            }
+        }
+    }
+
+    read_unlock_bh(&se->destlock);
+
+    return len;
+}
+
+int service_entry_print(struct service_entry *se, char *buf, int buflen) {
+    return __service_entry_print(se->node, buf, buflen);
+}
+
+static int service_table_print(struct service_table *tbl, char *buf, int buflen) {
+    int ret;
+
+    /* print header */
+    //        ret = snprintf(buf, buflen, "%-64s %-6s %-4s [iface dst]\n",
+    //                       "prefix", "bits", "sock");
+    ret = snprintf(buf, buflen, "%-64s %-6s %-6s %-6s %-6s %-20s\n", "prefix", "bits", "flags",
+            "priority", "weight", "dest out");
+
+    read_lock_bh(&tbl->lock);
+    ret += bst_print(&tbl->tree, buf + ret, buflen - ret);
+    read_unlock_bh(&tbl->lock);
+    return ret;
+}
+
+int services_print(char *buf, int buflen) {
+    return service_table_print(&srvtable, buf, buflen);
+}
+
+static struct service_entry *service_table_find(struct service_table *tbl,
+        struct service_id *srvid, int prefix) {
+    struct service_entry *se = NULL;
+    struct bst_node *n;
+
+    if(!srvid)
+        return NULL;
+
+    read_lock_bh(&tbl->lock);
+
+    n = bst_find_longest_prefix(&tbl->tree, srvid, prefix);
+
+    if(n) {
+        se = get_service(n);
+        service_entry_hold(se);
+    }
+
+    read_unlock_bh(&tbl->lock);
+    return se;
+}
+
+static struct sock* service_table_find_sock(struct service_table *tbl, struct service_id *srvid,
+        int prefix) {
+    struct service_entry *se = NULL;
+    struct bst_node *n;
+    struct sock* sk = NULL;
+    struct dest* dst = NULL;
+
+    if(!srvid)
+        return NULL;
+
+    read_lock_bh(&tbl->lock);
+
+    n = bst_find_longest_prefix(&tbl->tree, srvid, prefix);
+
+    if(n) {
+        se = get_service(n);
+        //service_entry_hold(se);
+
+        dst = __service_entry_get_dest(se, NULL, 0, NULL);
+
+        if(dst) {
+            sock_hold(dst->dest_out.sk);
+            sk = dst->dest_out.sk;
+        }
+    }
+
+    read_unlock_bh(&tbl->lock);
+
+    return sk;
+}
+
+static void service_table_get_stats(struct service_table *tbl, struct table_stats* tstats) {
+
+    read_lock_bh(&tbl->lock);
+    tstats->instances = tbl->instances;
+    tstats->bytes_resolved = atomic_read(&tbl->bytes_resolved);
+    tstats->packets_resolved = atomic_read(&tbl->packets_resolved);
+    tstats->bytes_dropped = atomic_read(&tbl->bytes_dropped);
+    tstats->packets_dropped = atomic_read(&tbl->packets_dropped);
+    read_lock_bh(&tbl->lock);
+
+}
+void service_get_stats(struct table_stats* tstats) {
+    return service_table_get_stats(&srvtable, tstats);
+}
+struct service_entry *service_find(struct service_id *srvid, int prefix) {
+    return service_table_find(&srvtable, srvid, prefix);
+}
+
+struct sock *service_find_sock(struct service_id *srvid, int prefix) {
+    return service_table_find_sock(&srvtable, srvid, prefix);
+}
+
+static int service_table_modify(struct service_table *tbl, struct service_id *srvid,
+        uint16_t prefix_bits, uint16_t flags, uint32_t priority, uint32_t weight, const void *dst,
+        int dstlen, const void *dest_out) {
+    //struct service_entry *se;
+    struct bst_node *n;
+    int ret = 0;
+
+    read_lock_bh(&tbl->lock);
+
+    n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+
+    if(n && bst_node_prefix_bits(n) >= prefix_bits) {
+        if(dst || dstlen == 0) {
+            ret = __service_entry_modify_dest(get_service(n), flags, priority, weight, dst, dstlen,
+                    dest_out, GFP_ATOMIC);
+        }
+        goto out;
+    }
+
+    ret = -EINVAL;
+
+    out: read_unlock_bh(&tbl->lock);
+
+    return ret;
+}
+int service_modify(struct service_id *srvid, uint16_t prefix_bits, uint16_t flags,
+        uint32_t priority, uint32_t weight, const void *dst, int dstlen, const void* dest_out) {
+    return service_table_modify(&srvtable, srvid, prefix_bits, flags, priority, weight, dst,
+            dstlen, dest_out);
+}
+
+static int service_table_add(struct service_table *tbl, struct service_id *srvid,
+        uint16_t prefix_bits, uint16_t flags, uint32_t priority, uint32_t weight, const void *dst,
+        int dstlen, const void *dest_out, gfp_t alloc) {
+    struct service_entry *se;
+    struct bst_node *n;
+    int ret = 0;
+
+    write_lock_bh(&tbl->lock);
+
+    n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+
+    if(n && bst_node_prefix_bits(n) >= prefix_bits) {
+        if(dst || dstlen == 0) {
+            ret = __service_entry_add_dest(get_service(n), flags, priority, weight, dst, dstlen,
+                    dest_out, GFP_ATOMIC);
+
+        }
+        goto out;
+    }
+
+    se = service_entry_create(GFP_ATOMIC);
+
+    if(!se) {
+        ret = -ENOMEM;
+        goto out;
+    }
+
+    if(dest_out) {
+        ret = __service_entry_add_dest(se, flags, priority, weight, dst, dstlen, dest_out,
+                GFP_ATOMIC);
+
+        if(ret < 0) {
+            service_entry_free(se);
+            ret = -ENOMEM;
+            goto out;
+        }
+    }
+
+    se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, se, srvid, prefix_bits, GFP_ATOMIC);
+
+    if(!se->node) {
+        service_entry_free(se);
+        ret = -ENOMEM;
+    }
+    out: if(ret > 0) {
+        tbl->instances++;
+    }
+    write_unlock_bh(&tbl->lock);
+
+    return ret;
+}
+
+void service_inc_stats(int packets, int bytes) {
+    /*only for drops*/
+    if(packets < 0) {
+        atomic_add(-packets, &srvtable.packets_dropped);
+        atomic_add(-bytes, &srvtable.bytes_dropped);
+    }
+}
+
+
+int service_add(struct service_id *srvid, uint16_t prefix_bits, uint16_t flags, uint32_t priority,
+        uint32_t weight, const void *dst, int dstlen, const void* dest_out, gfp_t alloc) {
+    return service_table_add(&srvtable, srvid, prefix_bits, flags, priority, weight, dst, dstlen,
+            dest_out, alloc);
+}
+
+static void service_table_del(struct service_table *tbl, struct service_id *srvid,
+        uint16_t prefix_bits) {
+    write_lock_bh(&tbl->lock);
+    bst_remove_prefix(&tbl->tree, srvid, prefix_bits);
+    write_unlock_bh(&tbl->lock);
+}
+
+void service_del(struct service_id *srvid, uint16_t prefix_bits) {
+    return service_table_del(&srvtable, srvid, prefix_bits);
+}
+
+static void service_table_del_dest(struct service_table *tbl, struct service_id *srvid,
+        uint16_t prefix_bits, const void *dst, int dstlen, struct dest_stats* stats) {
+    struct bst_node *n;
+    int ret = 0;
+    //if (!dst || dstlen == 0)
+    //return service_table_del(tbl, srvid, prefix_bits);
+
+    write_lock_bh(&tbl->lock);
+
+    n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+
+    if(n) {
+        write_lock_bh(&get_service(n)->destlock);
+        ret = __service_entry_remove_dest(get_service(n), dst, dstlen, stats);
+        if(ret > 0) {
+            tbl->instances--;
+        }
+        write_unlock_bh(&get_service(n)->destlock);
+        /* there could be a race condition with add here.. TODO*/
+        if(list_empty(&get_service(n)->dest_set))
+            bst_node_remove(n);
+    }
+
+    write_unlock_bh(&tbl->lock);
+}
+
+void service_del_dest(struct service_id *srvid, uint16_t prefix_bits, const void *dst, int dstlen,
+        struct dest_stats* stats) {
+    return service_table_del_dest(&srvtable, srvid, prefix_bits, dst, dstlen, stats);
+}
+
+static int del_dev_func(struct bst_node *n, void *arg) {
+    struct service_entry *se = get_service(n);
+    char *devname = (char *) arg;
+    int ret = 0, should_remove = 0;
+
+    write_lock_bh(&se->destlock);
+
+    ret = __service_entry_remove_dest_by_dev(se, devname);
+
+    if(ret == 1 && list_empty(&se->dest_set))
+        should_remove = 1;
+
+    write_unlock_bh(&se->destlock);
+
+    if(ret == 1) {
+        /* TODO - global reference kludge - assume the write lock is already acquired*/
+        srvtable.instances--;
+    }
+
+    if(should_remove)
+        bst_node_remove(n);
+
+    return ret;
+}
+
+static int service_table_del_dev_all(struct service_table *tbl, const char *devname) {
+    int ret = 0;
+
+    write_lock_bh(&tbl->lock);
+
+    if(tbl->tree.root)
+        ret = bst_subtree_func(tbl->tree.root, del_dev_func, (void *) devname);
+    write_unlock_bh(&tbl->lock);
+
+    return ret;
+}
+
+int service_del_dev_all(const char *devname) {
+    return service_table_del_dev_all(&srvtable, devname);
+}
+
+static int del_dest_func(struct bst_node *n, void *arg) {
+    struct service_entry *se = get_service(n);
+    struct _d {
+        const void *d_dst;
+        int d_len;
+    }*d = (struct _d *) arg;
+    int ret = 0, should_remove = 0;
+
+    write_lock_bh(&se->destlock);
+
+    ret = __service_entry_remove_dest(se, d->d_dst, d->d_len, NULL);
+
+    if(ret == 1 && list_empty(&se->dest_set))
+        should_remove = 1;
+
+    write_unlock_bh(&se->destlock);
+
+    if(ret == 1) {
+        /* TODO - global reference kludge - assume the write lock is already acquired*/
+        srvtable.instances--;
+    }
+
+    if(should_remove)
+        bst_node_remove(n);
+
+    return ret;
+}
+
+static int service_table_del_dest_all(struct service_table *tbl, const void *dst, int dstlen) {
+    int ret = 0;
+    struct {
+        const void *d_dst;
+        int d_len;
+    } d = { dst, dstlen };
+
+    write_lock_bh(&tbl->lock);
+
+    if(tbl->tree.root)
+        ret = bst_subtree_func(tbl->tree.root, del_dest_func, &d);
+
+    write_unlock_bh(&tbl->lock);
+
+    return ret;
+}
+
+int service_del_dest_all(const void *dst, int dstlen) {
+    return service_table_del_dest_all(&srvtable, dst, dstlen);
+}
+
+void __service_table_destroy(struct service_table *tbl) {
+    bst_destroy(&tbl->tree);
+}
+
+void service_table_destroy(struct service_table *tbl) {
+    write_lock_bh(&tbl->lock);
+    __service_table_destroy(tbl);
+    write_unlock_bh(&tbl->lock);
+}
+
+void service_table_init(struct service_table *tbl) {
+    bst_init(&tbl->tree);
+    tbl->srv_ops.init = service_entry_init;
+    tbl->srv_ops.destroy = service_entry_destroy;
+    tbl->srv_ops.print = __service_entry_print;
+    tbl->instances = 0;
+    atomic_set(&tbl->packets_resolved, 0);
+    atomic_set(&tbl->bytes_resolved, 0);
+    atomic_set(&tbl->packets_dropped, 0);
+    atomic_set(&tbl->bytes_dropped, 0);
+    rwlock_init(&tbl->lock);
+}
+/*
+ #if defined(OS_USER)
+ struct kmem_cache kmem_cachep = {
+ .size = sizeof(struct service_entry)
+ };
+ #endif
+ */
+int __init service_init(void) {
+    /*
+     #if defined(OS_LINUX_KERNEL)
+     service_dst_ops.kmem_cachep =
+     kmem_cache_create("service_dst_cache",
+     sizeof(struct service_entry), 0,
+     SLAB_HWCACHE_ALIGN|SLAB_PANIC, NULL);
+     #else
+     service_dst_ops.kmem_cachep = &kmem_cachep;
+     #endif
+     */
+    service_table_init(&srvtable);
+
+    return 0;
+}
+
+void __exit service_fini(void) {
+    service_table_destroy(&srvtable);
 }

@@ -22,6 +22,9 @@ int libstack_configure_interface(const char *ifname,
 {
 	struct ctrlmsg_iface_conf cm;
 
+        if (ifname)
+                return -1;
+
         memset(&cm, 0, sizeof(cm));
 	cm.cmh.type = CTRLMSG_TYPE_IFACE_CONF;
 	cm.cmh.len = sizeof(cm);
@@ -33,15 +36,44 @@ int libstack_configure_interface(const char *ifname,
 	return event_sendmsg(&cm, cm.cmh.len);
 }
 
-int libstack_set_service(struct service_id *srvid, const char *ifname)
+int libstack_add_service(const struct service_id *srvid,
+                         unsigned int prefix_bits,
+                         const struct in_addr *ipaddr)
 {
         struct ctrlmsg_service cm;
 
+        if (!srvid)
+                return -1;
+
         memset(&cm, 0, sizeof(cm));
-        cm.cmh.type = CTRLMSG_TYPE_SET_SERVICE;
+        cm.cmh.type = CTRLMSG_TYPE_ADD_SERVICE;
         cm.cmh.len = sizeof(cm);
+        cm.prefix_bits = prefix_bits > 255 ? 255 : prefix_bits;
         memcpy(&cm.srvid, srvid, sizeof(*srvid));
-	strncpy(cm.ifname, ifname, IFNAMSIZ - 1);
+        memcpy(&cm.ipaddr, ipaddr, sizeof(*ipaddr));
+	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
+        
+        return event_sendmsg(&cm, cm.cmh.len);
+}
+
+int libstack_del_service(const struct service_id *srvid,
+                         unsigned int prefix_bits,
+                         const struct in_addr *ipaddr)
+{
+        struct ctrlmsg_service cm;
+
+        if (!srvid)
+                return -1;
+
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
+        cm.cmh.len = sizeof(cm);
+        cm.prefix_bits = prefix_bits > 255 ? 255 : prefix_bits;
+        memcpy(&cm.srvid, srvid, sizeof(*srvid));
+        if (ipaddr) {
+                memcpy(&cm.ipaddr, ipaddr, sizeof(*ipaddr));
+        }
+	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
         
         return event_sendmsg(&cm, cm.cmh.len);
 }
@@ -50,6 +82,10 @@ int libstack_register_callbacks(struct libstack_callbacks *calls)
 {
 	if (callbacks) {
                 LOG_ERR("Failed: callbacks already set\n");
+                return -1;
+        }
+        if (!calls) {
+                LOG_ERR("Bad argument.\n");
                 return -1;
         }
         LOG_DBG("registered callbacks\n");
@@ -75,10 +111,11 @@ int libstack_init(void)
 
 void libstack_fini(void) 
 {
+	eventloop_fini();
+
 #if defined(OS_LINUX)
         netlink_fini();
 #endif
         unix_fini();
 
-	eventloop_fini();
 }

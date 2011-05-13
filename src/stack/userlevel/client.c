@@ -60,16 +60,26 @@ static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 	return 0;
 }
 
-static int client_handle_bind_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_connect_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_listen_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_accept_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_send_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_recv_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_close_req_msg(struct client *c, struct client_msg *msg);
-static int client_handle_clear_data_msg(struct client *c, struct client_msg *msg);
-static int client_handle_have_data_msg(struct client *c, struct client_msg *msg);
+static int client_handle_bind_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_connect_req_msg(struct client *c, 
+                                         struct client_msg *msg);
+static int client_handle_listen_req_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_accept_req_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_accept2_req_msg(struct client *c, 
+                                         struct client_msg *msg);
+static int client_handle_send_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_recv_req_msg(struct client *c, 
+                                      struct client_msg *msg);
+static int client_handle_close_req_msg(struct client *c, 
+                                       struct client_msg *msg);
+static int client_handle_clear_data_msg(struct client *c, 
+                                        struct client_msg *msg);
+static int client_handle_have_data_msg(struct client *c, 
+                                       struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
 	dummy_msg_handler,
@@ -321,6 +331,8 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
         memset(&saddr, 0, sizeof(saddr));
         saddr.sv_family = AF_SERVAL;
+        saddr.sv_flags = req->flags;
+        saddr.sv_prefix_bits = req->prefix;
         memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
@@ -343,7 +355,8 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
 int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
 {
-	struct client_msg_connect_req *req = (struct client_msg_connect_req *)msg;
+	struct client_msg_connect_req *req = 
+                (struct client_msg_connect_req *)msg;
 	struct client_msg_connect_rsp rsp;
         struct sockaddr_sv addr;
         int err;
@@ -414,8 +427,9 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
         err = wait_event_interruptible(*sk_sleep(c->sock->sk), 
                                        !list_empty(&ssk->accept_queue));
 
-        LOG_DBG("wait returned %d\n", err);
-        
+        LOG_DBG("wait returned %d - %s\n", 
+                err, strerror(KERN_ERR(err)));
+         
         if (err < 0) {
                 rsp.error = KERN_ERR(err);
                 goto out;
@@ -489,16 +503,26 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-        struct sockaddr_sv saddr;
+        struct {
+                struct sockaddr_sv sv;
+                struct sockaddr_in in;
+        } addr;
+        socklen_t addrlen = sizeof(addr.sv);
         int ret;
 
-        memset(&saddr, 0, sizeof(saddr));
-        saddr.sv_family = AF_SERVAL;
-        memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
-
+        memset(&addr, 0, sizeof(addr));
+        addr.sv.sv_family = AF_SERVAL;
+        memcpy(&addr.sv.sv_srvid, &req->srvid, sizeof(req->srvid));
+        addr.in.sin_family = AF_INET;
+        
+        if (req->ipaddr != 0) {
+                memcpy(&addr.in.sin_addr, &req->ipaddr, 
+                       sizeof(req->ipaddr));
+                addrlen = sizeof(addr);
+        }
         memset(&mh, 0, sizeof(mh));
-        mh.msg_name = &saddr;
-        mh.msg_namelen = sizeof(saddr);
+        mh.msg_name = &addr;
+        mh.msg_namelen = addrlen;
         mh.msg_iov = &iov;
         mh.msg_iovlen = 1;
         

@@ -458,7 +458,13 @@ int netdev_populate_table(int sizeof_priv,
                 if (ifr->ifr_flags & IFF_UP)
                         dev->flags |= IFF_UP;
 
-                /* Save ip configuration */
+                /* Get and save ip configuration */
+                if (ioctl(fd, SIOCGIFADDR, ifr) == -1) {
+                        LOG_ERR("SIOCGIFADDR: %s\n",
+                                strerror(errno));
+                        free_netdev(dev);
+                        goto out;
+                }
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                                 
@@ -471,15 +477,7 @@ int netdev_populate_table(int sizeof_priv,
 
                 memcpy(&dev->ipv4.broadcast, 
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
-#if defined(ENABLE_DEBUG)
-                {
-                        char ip[18], broad[18];
-                        LOG_DBG("ip %s - %s\n",
-                                inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
-                                inet_ntop(AF_INET, &dev->ipv4.broadcast, broad, 18));
 
-                }       
-#endif       
                 if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
                         LOG_ERR("SIOCGIFNETMASK: %s\n",
                                 strerror(errno));
@@ -490,9 +488,22 @@ int netdev_populate_table(int sizeof_priv,
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_netmask)->sin_addr, 4);
 #else
-                LOG_WARN("CHECK that netmask is really returned here\n");
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char ip[18], broad[18], netmask[18];
+                        LOG_DBG("%s %s/%s/%s\n",
+                                dev->name,
+                                inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
+                                inet_ntop(AF_INET, &dev->ipv4.broadcast, 
+                                          broad, 18),
+                                inet_ntop(AF_INET, &dev->ipv4.netmask,
+                                          netmask, sizeof(netmask)));
+
+                }       
+#endif       
 #endif
                 ret = register_netdev(dev);
 
@@ -504,7 +515,7 @@ int netdev_populate_table(int sizeof_priv,
                 while (dev->ipv4.netmask & (0x1 << prefix_len))
                        prefix_len++;
              
-                service_add(NULL, 0, dev, &dev->ipv4.broadcast, 4, NULL, 0);
+                service_add(NULL, 0, 0, BROADCAST_SERVICE_DEFAULT_PRIORITY, BROADCAST_SERVICE_DEFAULT_WEIGHT, &dev->ipv4.broadcast, 4, dev, 0);
                 neighbor_add((struct net_addr *)&dev->ipv4.broadcast, 
                              prefix_len, 
                              dev, dev->broadcast, dev->addr_len, 0);
@@ -512,8 +523,8 @@ int netdev_populate_table(int sizeof_priv,
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
                 if (ret != 0) {
-                        LOG_ERR("dev thread failure: %s\n",
-                                strerror(errno));
+                    LOG_ERR("dev thread failure: %s\n",
+                        strerror(errno));
                         unregister_netdev(dev);
                         free_netdev(dev);
                         goto out;
@@ -608,6 +619,16 @@ enum signal dev_read_signal(struct net_device *dev)
         return (enum signal)s;
 }
 
+static inline void dev_queue_purge(struct net_device *dev)
+{
+	struct sk_buff *skb;
+
+	while ((skb = skb_dequeue(&dev->tx_queue.q)) != NULL) {
+		LOG_DBG("Freeing skb %p\n", skb);
+		free_skb(skb);
+	}
+}
+
 int dev_xmit(struct net_device *dev)
 {
         int n = 0;
@@ -682,6 +703,8 @@ void *dev_thread(void *arg)
                 }
         }
 
+        dev_queue_purge(dev);
+
         return NULL;
 }
 
@@ -692,13 +715,14 @@ int dev_queue_xmit(struct sk_buff *skb)
         if (!dev || 
             !dev->pack_ops || 
             !dev->pack_ops->xmit) {
+                LOG_ERR("No device or packet ops\n");
                 free_skb(skb);
                 return -1;
         }
         
         if (dev->tx_queue_len == dev->tx_queue.q.qlen) {
-                free_skb(skb);
                 LOG_ERR("Max tx_queue_len reached, dropping packet\n");
+                free_skb(skb);
                 return 0;
         }
         
@@ -760,7 +784,11 @@ void netdev_fini(void)
                 unregister_netdev(dev);
 
                 dev_signal(dev, SIGNAL_EXIT);
-                
+
+                /* Queue should be purged already, but just to make
+                 * sure. */
+                dev_queue_purge(dev);
+
                 LOG_DBG("joining with device thread %s\n",
                         dev->name);
 

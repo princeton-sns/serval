@@ -94,26 +94,27 @@ KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
 TARGETS = serval.ko
 
-SERVAL_KERNEL_HDR =
+SERVAL_KERNEL_HDR = \
+	linux/log.h
 
 SERVAL_KERNEL_SRC = \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
 	linux/module.c \
+	linux/log.c \
+	linux/splice.c \
 	debug.c \
 	platform.c \
 	bst.c \
-	neighbor.c \
 	service.c \
-	input.c \
-	output.c \
+	ctrl_handler.c \
+	af_serval.c \
 	serval_sock.c \
 	serval_srv.c \
 	serval_ipv4.c \
 	serval_udp.c \
-	serval_tcp.c \
-	af_serval.c
+	serval_tcp.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \

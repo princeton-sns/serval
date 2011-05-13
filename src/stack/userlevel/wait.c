@@ -45,8 +45,8 @@ void destroy_wait(wait_queue_t *w)
                 close(w->pipefd[1]);
 }
 
-int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
-			  void *key)
+int default_wake_function(wait_queue_t *curr, unsigned mode, 
+                          int wake_flags, void *key)
 {
         char w = 'w';
         if (curr->pipefd[1] == -1) {
@@ -65,7 +65,8 @@ int default_wake_function(wait_queue_t *curr, unsigned mode, int wake_flags,
  */
 long schedule_timeout(long timeo)
 {        
-        wait_queue_head_t *q = (wait_queue_head_t *)pthread_getspecific(wq_key);
+        wait_queue_head_t *q = 
+                (wait_queue_head_t *)pthread_getspecific(wq_key);
         wait_queue_t *w = (wait_queue_t *)pthread_getspecific(w_key);
         struct client *c = client_get_current();
         struct timespec now = { 0, 0 }, later = { 0, 0 };
@@ -77,14 +78,8 @@ long schedule_timeout(long timeo)
                 return timeo;
         }
 
-#if defined(OS_LINUX)
-        if (clock_gettime(CLOCK, &now) == -1) {
-                LOG_ERR("clock_gettime failed!!\n");
-                return timeo;
-        }
-#else
-#warning "Must implement clock_gettime()!"
-#endif
+        gettime(&now);
+
         fds[0].fd = w->pipefd[0];
         fds[0].events = POLLERR | POLLIN;
         fds[1].fd = client_get_signalfd(c);
@@ -95,9 +90,8 @@ long schedule_timeout(long timeo)
         if (timeo == MAX_SCHEDULE_TIMEOUT) {
                 ret = ppoll(fds, 3, NULL, NULL);
         } else {
-                struct timespec timeout;
-                timeout.tv_sec = timeo / 1000000;
-                timeout.tv_nsec = (timeo - (timeout.tv_sec * 1000000)) * 1000;
+                struct timespec timeout = { 0, 0 };
+                timespec_add_nsec(&timeout, jiffies_to_nsecs(timeo));
                 ret = ppoll(fds, 3, &timeout, NULL);
         }
         
@@ -111,14 +105,7 @@ long schedule_timeout(long timeo)
                   timeout. Not sure how ppoll works. In any case, this
                   is not portable.
                  */
-#if defined(OS_LINUX)
-                if (clock_gettime(CLOCK, &later) == -1) {
-                        LOG_ERR("clock_gettime failed!!\n");
-                        return timeo;
-                }
-#else
-#warning "Must implement clock_gettime()!"
-#endif
+                gettime(&later);
                 
                 timespec_sub(&later, &now);
 
@@ -126,7 +113,7 @@ long schedule_timeout(long timeo)
                     (later.tv_sec == 0 && (later.tv_nsec < 999)))
                         timeo = 0;
                 else {
-                        timeo = later.tv_sec * 1000000 + later.tv_nsec / 1000;
+                        timeo = timespec_to_jiffies(&later);
                 }
         }
 
@@ -179,7 +166,8 @@ void __add_wait_queue_tail(wait_queue_head_t *head,
 	list_add_tail(&new->thread_list, &head->thread_list);
 }
 
-int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *key)
+int autoremove_wake_function(wait_queue_t *wait, unsigned mode, 
+                             int sync, void *key)
 {
 	int ret = default_wake_function(wait, mode, sync, key);
 
@@ -198,7 +186,8 @@ void prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state)
 	pthread_mutex_unlock(&q->lock);
 }
 
-void prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, int state)
+void prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, 
+                               int state)
 {
 	wait->flags |= WQ_FLAG_EXCLUSIVE;
 	pthread_mutex_lock(&q->lock);
@@ -216,6 +205,7 @@ void finish_wait(wait_queue_head_t *q, wait_queue_t *wait)
 		list_del_init(&wait->thread_list);
                 pthread_mutex_unlock(&q->lock);
 	}
+        destroy_wait(wait);
 }
 
 void add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait)

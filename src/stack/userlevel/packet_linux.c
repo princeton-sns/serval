@@ -11,7 +11,7 @@
 #include "packet.h"
 #include <input.h>
 
-#define RCVLEN 2000 /* Should be more than enough for normal MTUs */
+#define RCVLEN 1500 /* Should be more than enough for normal MTUs */
 #define get_priv(dev) ((struct packet_linux_priv *)dev_get_priv(dev))
 
 static int packet_linux_init(struct net_device *dev)
@@ -82,11 +82,11 @@ static int packet_linux_recv(struct net_device *dev)
 	switch (lladdr.sll_pkttype) {
 	case PACKET_HOST:
 	case PACKET_BROADCAST:
+	case PACKET_LOOPBACK:
 	case PACKET_MULTICAST:
 		break;
 	case PACKET_OUTGOING:
 	case PACKET_OTHERHOST:
-	case PACKET_LOOPBACK:
 	default:
 		free_skb(skb);
 		return -1;              
@@ -112,9 +112,10 @@ static int packet_linux_recv(struct net_device *dev)
         case INPUT_NO_PROT:
         case INPUT_DROP:
         case INPUT_DELIVER:
-        default:
                 //LOG_DBG("Deleting skb\n");
                 free_skb(skb);
+        default:
+                break;
 	}
 
 	return 0;
@@ -126,6 +127,7 @@ static int packet_linux_xmit(struct sk_buff *skb)
 	int err;
 
 	if (!skb->dev) {
+                LOG_ERR("No device set in skb\n");
 		free_skb(skb);
 		return -1;
 	}

@@ -19,6 +19,9 @@
 #if defined(OS_LINUX)
 #include "rtnl.h"
 #endif
+#if defined(OS_BSD)
+#include "ifa.h"
+#endif
 #include "timer.h"
 
 static int ctrlsock = -1; /* socket to communicate with controller */
@@ -133,7 +136,7 @@ static void servd_register_service(struct service_id *srvid)
         if (!srvid)
                 return;
 
-	LOG_DBG("serviceId=%s\n", service_id_to_str(srvid));
+	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
 
         ret = servd_sendto(ctrlsock, &data, sizeof(data), 0, 
 			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
@@ -154,7 +157,7 @@ int ctrlsock_read(int sock)
                              (struct sockaddr *)&addr, &addrlen);
 
         if (ret > 0) {
-                printf("received message from service id %s\n",
+                printf("received message from serviceID %s\n",
                        service_id_to_str(&addr.sv_srvid));
         }
 
@@ -255,6 +258,13 @@ int main(int argc, char **argv)
                 } 
         }
 
+        ret = timer_list_init();
+
+        if (ret == -1) {
+                LOG_ERR("timer_list_init failure\n");
+                return -1;
+        }
+
 	/* Set controller service id */
 	memset(&ctrlid, 0, sizeof(ctrlid));
 	ctrlid.sv_family = AF_SERVAL;
@@ -273,13 +283,13 @@ int main(int argc, char **argv)
 			if (ctrlsock == -1) {
 				LOG_ERR("controller socket: %s\n",
 					strerror_sv(errno));
-				return -1;
+				goto fail_ctrlsock;
 			}
                         break;
                 default:
 			LOG_ERR("controller socket (native): %s\n",
 				strerror(errno));
-                        return -1;
+                        goto fail_ctrlsock;
                 }
 	} else {
 		native = 1;
@@ -314,22 +324,36 @@ int main(int argc, char **argv)
         if (ret < 0) {
                 LOG_ERR("Could not netlink request: %s\n",
                         strerror(errno));
+                rtnl_close(&nlh);
                 goto fail_netlink;
+        }
+#endif
+
+#if defined(OS_BSD)
+        ret = ifaddrs_init();
+
+        if (ret < 0) {
+                LOG_ERR("Could not discover interfaces\n");
+                goto fail_ifaddrs;
         }
 #endif
 #define MAX(x,y) (x > y ? x : y)
 
         while (!should_exit) {
-                int nfds = 0;
-                struct timeval timeout, *t = NULL;
+                int maxfd = 0;
+                struct timeval timeout = { 0, 0 }, *t = NULL;
 
                 FD_ZERO(&readfds);
+
+                FD_SET(timer_list_get_signal(), &readfds);
+                maxfd = MAX(timer_list_get_signal(), maxfd);
+
 #if defined(OS_LINUX)
                 FD_SET(nlh.fd, &readfds);
-		nfds = MAX(nlh.fd, nfds);
+		maxfd = MAX(nlh.fd, maxfd);
 #endif
                 FD_SET(p[0], &readfds);               
-                nfds = MAX(p[0], nfds);
+                maxfd = MAX(p[0], maxfd);
                 /*
                 FD_SET(ctrlsock, &readfds);               
                 nfds = MAX(ctrlsock, nfds);
@@ -337,19 +361,22 @@ int main(int argc, char **argv)
                 if (timer_next_timeout_timeval(&timeout))
                         t = &timeout;
 
-                ret = select(nfds + 1, &readfds, NULL, NULL, t);
+                ret = select(maxfd + 1, &readfds, NULL, NULL, t);
 
                 if (ret == 0) {
-                        LOG_DBG("timer timeout!\n");
                         ret = timer_handle_timeout();
                 } else if (ret == -1) {
 			if (errno == EINTR) {
 				should_exit = 1;
 			} else {
-				LOG_ERR("select error: %s\n", 
+				LOG_ERR("select: %s\n", 
 					strerror(errno));
+                                should_exit = 1;
 			}
                 } else {
+                        if (FD_ISSET(timer_list_get_signal(), &readfds)) {
+                                /* Just reschedule timeout */
+                        }
 #if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
                                 LOG_DBG("netlink readable\n");
@@ -374,8 +401,10 @@ int main(int argc, char **argv)
 
 	LOG_DBG("servd exits\n");
 
-        timer_list_destroy();
-
+#if defined(OS_BSD)
+        ifaddrs_fini();
+fail_ifaddrs:
+#endif
 #if defined(OS_LINUX)
 	rtnl_close(&nlh);
 fail_netlink:
@@ -387,6 +416,8 @@ fail_libstack:
 	close(p[1]);
 fail_pipe:
 	close_ctrlsock(ctrlsock);
+fail_ctrlsock:
+        timer_list_fini();
 
 	LOG_DBG("done\n");
 

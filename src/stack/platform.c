@@ -10,6 +10,39 @@
 #include <errno.h>
 #endif
 
+/* Taken from Click */
+uint16_t in_cksum(const void *data, size_t len)
+{
+        int nleft = len;
+        const uint16_t *w = (const uint16_t *)data;
+        uint32_t sum = 0;
+        uint16_t answer = 0;
+        
+        /*
+         * Our algorithm is simple, using a 32 bit accumulator (sum), we add
+         * sequential 16 bit words to it, and at the end, fold back all the
+         * carry bits from the top 16 bits into the lower 16 bits.
+         */
+        while (nleft > 1)  {
+                sum += *w++;
+                nleft -= 2;
+        }
+        
+        /* mop up an odd byte, if necessary */
+        if (nleft == 1) {
+                *(unsigned char *)(&answer) = *(const unsigned char *)w ;
+                sum += answer;
+        }
+        
+        /* add back carry outs from top 16 bits to low 16 bits */
+        sum = (sum & 0xffff) + (sum >> 16);
+        sum += (sum >> 16);
+        /* guaranteed now that the lower 16 bits of sum are correct */
+        
+        answer = ~sum;              /* truncate to 16 bits */
+        return answer;
+}
+
 const char *mac_ntop(const void *src, char *dst, size_t size)
 {	
 	const char *mac = (const char *)src;
@@ -115,7 +148,8 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 #include <poll.h>
 #include <signal.h>
 
-int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *set)
+int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, 
+          sigset_t *set)
 {
         int to = 0;
         sigset_t oldset;

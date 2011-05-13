@@ -143,9 +143,6 @@ SVSockLib::basic_checks(int soc, const struct sockaddr *addr,
                         socklen_t addr_len, bool check_local,
                         sv_err_t &err)
 {
-  //
-  // todo: test if scafd is reachable
-  //
   if (addr_len < (socklen_t)sizeof(struct sockaddr_sv) || !addr) {
     err =  EINVAL;
     lerr("bad address length");
@@ -207,7 +204,7 @@ int
 SVSockLib::query_scafd_bind(const struct sockaddr_sv *sv_addr,
                             const Cli &cli, sv_err_t &err)
 {
-  BindReq breq(sv_addr->sv_srvid);
+  BindReq breq(sv_addr->sv_srvid, sv_addr->sv_flags, sv_addr->sv_prefix_bits);
   if (breq.write_to_stream_soc(cli.fd(), err) < 0)
     return SERVAL_SOCKET_ERROR;
   breq.print("bind:app:tx");
@@ -715,8 +712,8 @@ int
 SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
 {
   if (cli->fd() >= 0)
-    if (close(cli->fd()) < 0) {
-      lerr("error closing fd %d", cli->fd());
+    if (::close(cli->fd()) < 0) {
+      //lerr("error closing fd %d", cli->fd());
       err = ESFINTERNAL;
       return SERVAL_SOCKET_ERROR;
     }
@@ -829,6 +826,7 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
                      const struct sockaddr *dst_addr, socklen_t addr_len, 
                      sv_err_t &err)
 {
+  uint32_t ipaddr = 0;
   Cli &cli = get_cli(soc, err);
 
   info("cli %s", cli.is_null() ? "null" : cli.s());
@@ -840,6 +838,12 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
   const sv_srvid_t *remote_obj_id;
   remote_obj_id = &((const struct sockaddr_sv *)dst_addr)->sv_srvid;
   
+  if (addr_len == sizeof(struct sockaddr_sv) + sizeof(struct sockaddr_in)) {
+    struct sockaddr_in *saddr = 
+      (struct sockaddr_in *)(((char *)dst_addr) + sizeof(struct sockaddr_sv));
+    if (saddr->sin_family == AF_INET)
+      memcpy(&ipaddr, &saddr->sin_addr, sizeof(ipaddr));
+  }
   info("sendto_sv: remote_obj_id %s", oid_to_str(remote_obj_id));
   if (check_state_for_sendto(cli, err) < 0)
     return SERVAL_SOCKET_ERROR;
@@ -861,7 +865,8 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
   
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_sendto(*remote_obj_id, buffer, length, flags, cli, err) < 0) {
+  if (query_scafd_sendto(*remote_obj_id, ipaddr, 
+                         buffer, length, flags, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -961,10 +966,11 @@ SVSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
 
 int
 SVSockLib::query_scafd_sendto(const sv_srvid_t& dst_obj_id,
+                              uint32_t ipaddr,
                               const void *buffer, size_t length, int flags,
                               Cli &cli, sv_err_t &err)
 {
-  SendReq sreq(dst_obj_id, (unsigned char *)buffer, length, flags);
+  SendReq sreq(dst_obj_id, ipaddr, (unsigned char *)buffer, length, flags);
   if (sreq.write_to_stream_soc(cli.fd(), err) < 0)
     return SERVAL_SOCKET_ERROR;
   return 0;

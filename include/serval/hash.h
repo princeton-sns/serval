@@ -19,14 +19,13 @@
 #if defined(__KERNEL__) && defined(__linux__)
 #include <linux/hash.h>
 #else
+#include <stdint.h>
 
-#include <sys/types.h>
-
-#if defined(__APPLE__)
-#ifdef __LP64__
-#define __SIZEOF_LONG__ 8
-#else
-#define __SIZEOF_LONG__ 4
+#if defined(__BIONIC__)
+#if __SIZEOF_LONG__ == 8
+#define __WORDSIZE 64
+#elif __SIZEOF_LONG__ == 4
+#define __WORDSIZE 32
 #endif
 #endif
 
@@ -35,10 +34,10 @@
 /*  2^63 + 2^61 - 2^57 + 2^54 - 2^51 - 2^18 + 1 */
 #define GOLDEN_RATIO_PRIME_64 0x9e37fffffffc0001UL
 
-#if __SIZEOF_LONG__ == 4
+#if __WORDSIZE == 32
 #define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_32
 #define hash_long(val, bits) hash_32(val, bits)
-#elif __SIZEOF_LONG__ == 8
+#elif __WORDSIZE == 64
 #define hash_long(val, bits) hash_64(val, bits)
 #define GOLDEN_RATIO_PRIME GOLDEN_RATIO_PRIME_64
 #else

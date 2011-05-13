@@ -52,7 +52,7 @@ read
 pushd $SCRIPT_DIR
 
 LIB_PATH_PREFIX="system/lib"
-LIB_FILES="libstack.so libserval.so libserval_javasock_jni.so"
+LIB_FILES="libstack.so libserval.so libservalnet_jni.so"
 
 BIN_HOST_PREFIX=
 BIN_PATH_PREFIX="system/bin"

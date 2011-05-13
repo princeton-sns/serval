@@ -48,6 +48,7 @@ void server(void)
   
         if (bind_sv(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
                 fprintf(stderr, "error binding socket: %s", strerror(errno));
+                close_sv(sock);
                 exit(EXIT_FAILURE);
         }
         fprintf(stdout, "server: bound to object id %d\n", ECHO_OBJECT_ID);
@@ -107,6 +108,8 @@ void server(void)
                 close_sv(fd);
                 fprintf(stderr, "Server listening for NEW connections\n");
         } while (1);
+        close_sv(sock);
+
         exit(EXIT_SUCCESS);
 }
 

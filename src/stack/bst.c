@@ -1,6 +1,7 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <serval/platform.h>
 #include <serval/debug.h>
+#include <serval/list.h>
 #if defined(OS_USER)
 #include <stdlib.h>
 #include <string.h>
@@ -37,9 +38,11 @@ struct bst_node {
         struct bst *tree;
 	struct bst_node *parent, *left, *right;
         struct bst_node_ops *ops;
+        struct list_head lh; /* Used for printing trees non-recursively */
 	unsigned char flags;
         void *private;
-	unsigned int prefix_bits; 
+	unsigned int prefix_bits;
+        unsigned int prefix_size;
 	unsigned char prefix[0];
 };
 
@@ -91,6 +94,60 @@ int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)
         return len;
 }
 
+static void stack_push(struct list_head *stack, struct bst_node *n)
+{
+        list_add(&n->lh, stack);
+}
+
+static struct bst_node *stack_pop(struct list_head *stack)
+{
+        struct bst_node *n;
+
+        if (list_empty(stack))
+                return NULL;
+
+        n = list_first_entry(stack, struct bst_node, lh);
+        list_del(&n->lh);
+
+        return n;
+}
+
+int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
+{
+       struct list_head stack;
+       int len = 0;
+
+        if (buflen <= 0)
+                return len;
+
+       INIT_LIST_HEAD(&stack);
+
+       stack_push(&stack, n);
+       
+       while (!list_empty(&stack)) {
+               n = stack_pop(&stack);
+               if (n) {
+                       if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                               if (n->ops && n->ops->print) {
+                                       len += n->ops->print(n, buf + len, 
+                                                            buflen - len);
+                               }
+                       }
+                       if (n->right)
+                               stack_push(&stack, n->right);
+
+                       if (n->left)
+                               stack_push(&stack, n->left);
+               }
+       }
+       return len;
+}
+
+/*
+  Print using recursing. Cannot use this in kernel due to limited
+  stack space. Must instead use the non-recursive version above that
+  implements its own stack.
+ */
 int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
 {
         int len = 0;
@@ -119,59 +176,78 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
         return len;
 }
 
+static
 struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                                               struct bst_node **prev,
                                               void *prefix,
-                                              unsigned int prefix_bits)
+                                              unsigned int prefix_bits,
+                                              int (*match)(struct bst_node *))
 {
         if (!n)
                 return NULL;
 
-        /* Keep track of the previous active node */
-        if (bst_node_flag(n, BST_FLAG_ACTIVE))
-                *prev = n;
-
-	if (n->prefix_bits == prefix_bits)
-		goto out;
-	
-        if (prefix_bits == 0) {
-                /* must be the root node */
-                goto out;
+        while (1) {
+                /* Keep track of the previous matching node */
+                if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                        if (!match || (match && match(n))) {
+                                *prev = n;
+                        }
+                }
+                
+                if (n->prefix_bits == prefix_bits)
+                        break;
+                
+                if (prefix_bits == 0) {
+                        /* must be the root node */
+                        break;
+                }
+                
+                /* check if next bit is zero or one and, based on that, go
+                 * left or right */
+                /*
+                LOG_DBG("checking byte %u, bits=%u\n",
+                        PREFIX_BYTE(n->prefix_bits), n->prefix_bits);
+                */
+                if (CHECK_BIT(prefix, n->prefix_bits)) {
+                        if (n->right) {
+                                n = n->right;
+                        } else {
+                                break;
+                        }
+                } else {
+                        if (n->left) {
+                                n = n->left;
+                        } else {
+                                break;
+                        }
+                }
         }
+        return n;
+}
+
+struct bst_node *bst_find_longest_prefix_match(struct bst *tree, 
+                                               void *prefix,
+                                               unsigned int prefix_bits,
+                                               int (*match)(struct bst_node *))
+{
+        struct bst_node *n, *prev = NULL;
         
-	/* check if next bit is zero or one and, based on that, go
-	 * left or right */
-	if (CHECK_BIT(prefix, n->prefix_bits)) {
-		if (n->right) {
-			return bst_node_find_longest_prefix(n->right,
-                                                            prev,
-                                                            prefix, 
-                                                            prefix_bits);
-		}
-	} else {
-		if (n->left) {
-			return bst_node_find_longest_prefix(n->left,
-                                                            prev,
-                                                            prefix, 
-                                                            prefix_bits);
-		}
-	}
-out:
-	return n;
+        n = bst_node_find_longest_prefix(tree->root, 
+                                         &prev, prefix, 
+                                         prefix_bits, match);
+
+        if (n && (!bst_node_flag(n, BST_FLAG_ACTIVE) || 
+                  (match && !match(n))))
+                return prev;
+        
+        return n;
 }
 
 struct bst_node *bst_find_longest_prefix(struct bst *tree, 
                                          void *prefix,
                                          unsigned int prefix_bits)
 {
-        struct bst_node *n, *prev = NULL;
-        
-        n = bst_node_find_longest_prefix(tree->root, &prev, prefix, prefix_bits);
-
-        if (n && !bst_node_flag(n, BST_FLAG_ACTIVE))
-                return prev;
-        
-        return n;
+        return bst_find_longest_prefix_match(tree, prefix, prefix_bits, NULL);
 }
 
 /*
@@ -211,43 +287,61 @@ static void __bst_node_destroy(struct bst_node *n)
         }
 }
 
-static void __bst_node_remove_recursive(struct bst_node *n)
+static void __bst_node_remove(struct bst_node *n)
 {
-        struct bst_node *parent = n->parent;
-       
-        __bst_node_destroy(n);
+        while (1) {
+                struct bst_node *parent = n->parent;
 
-        /* Node still has children, so do not free it and recurse up
-         * the tree. */
-       	if (n->left || n->right)
-		return;
-
-        /* Call recursively to remove all parents up the tree until
-         * hitting the first which is still active or have a remaining
-         * child */
-        if (parent != n && !bst_node_flag(parent, BST_FLAG_ACTIVE)) {
-                __bst_node_free(n);
-                __bst_node_remove_recursive(parent);
-        } else {
-                __bst_node_free(n);
+                __bst_node_destroy(n);
+                
+                /* Node still has children, so only "destroy" it but
+                 * do not free it */
+                if (n->left || n->right)
+                        break;
+                
+                /* Call recursively to remove all parents up the tree until
+                 * hitting the first which is still active or have a remaining
+                 * child */
+                if (parent != n && !bst_node_flag(parent, BST_FLAG_ACTIVE)) {
+                        __bst_node_free(n);
+                        n = parent;
+                } else {
+                        __bst_node_free(n);
+                        break;
+                }
         }
 }
 
 void bst_node_remove(struct bst_node *n)
 {
-	__bst_node_remove_recursive(n);
+	__bst_node_remove(n);
 }
 
 /* Destroy a sub-tree by recursing down the children */
 static void __bst_destroy_subtree(struct bst_node *n)
 {
-        if (n->left)
-                __bst_destroy_subtree(n->left);
-        if (n->right)
-                __bst_destroy_subtree(n->right);
+        struct bst_node *root = n;
 
-        __bst_node_destroy(n);
-        __bst_node_free(n);
+        while (1) {                
+                if (n == root && !n->left && !n->right) {
+                         __bst_node_destroy(n);
+                         __bst_node_free(n);
+                        break;
+                }
+
+                if (!n->right) {
+                        if (!n->left) {
+                                struct bst_node *parent = n->parent;
+                                __bst_node_destroy(n);
+                                __bst_node_free(n);
+                                n = parent;
+                        } else {
+                                n->right = n->left;
+                                n->left = NULL;
+                        }
+                } else 
+                        n = n->right;
+        }
 }
 
 /* Apply function to subtree */
@@ -323,6 +417,69 @@ static int bst_node_init(struct bst_node *n,
         return 0;
 }
 
+static struct bst_node *bst_create_node(struct bst_node *parent,
+                                        struct bst_node_ops *ops,
+                                        void *private,
+                                        void *prefix, 
+                                        unsigned int prefix_size,
+                                        unsigned int prefix_bits,
+                                        gfp_t alloc)
+{
+        struct bst_node *n;
+
+	n = (struct bst_node *)MALLOC(sizeof(*n) + prefix_size, alloc);
+	
+	if (!n)
+		return NULL;
+	
+	memset(n, 0, sizeof(*n) + prefix_size);
+
+	if (CHECK_BIT(prefix, parent->prefix_bits)) {
+		parent->right = n;
+	} else {
+		parent->left = n;
+	}
+
+        n->tree = parent->tree;
+	n->left = NULL;
+	n->right = NULL;
+	n->parent = parent;
+	n->flags = 0;
+        n->prefix_size = prefix_size;
+	n->prefix_bits = parent->prefix_bits + 1;
+	memcpy(n->prefix, prefix, n->prefix_size);
+        INIT_LIST_HEAD(&n->lh);
+        
+        if (bst_node_init(n, ops, private) == -1) {
+                FREE(n);
+                return NULL;
+        }
+        
+	/* 
+	   Compute a mask that zeros out the extra bits that we might
+	   have copied in the last byte of the prefix.
+	*/
+	
+	if (n->prefix_bits % 8) {
+                unsigned char endmask = 0;
+                unsigned int i;
+
+		for (i = 0; i < n->prefix_bits % 8; i++) {
+			endmask |= (0x1 << (7-i));
+		}
+		
+		n->prefix[n->prefix_size-1] &= endmask;
+	}
+    
+        return n;
+}
+
+/*
+  Note for kernel: Recursive functions can easily exhaust the stack
+  space in the kernel (which seems to be limited to 4k). Therefore,
+  avoid implementing inserts by doing recursive callse to
+  bst_node_new().
+ */
 static struct bst_node *bst_node_new(struct bst_node *parent,
                                      struct bst_node_ops *ops,
                                      void *private,
@@ -330,54 +487,41 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
 				     unsigned int prefix_bits,
                                      gfp_t alloc)
 {
-	struct bst_node *n;
-	unsigned long prefix_sz = PREFIX_SIZE(parent->prefix_bits + 1);
-	unsigned long sz = sizeof(*n) + prefix_sz;
-	unsigned char endmask = 0;
-	unsigned int i;
 
-	n = (struct bst_node *)MALLOC(sz, alloc);
-	
-	if (!n)
-		return NULL;
-	
-	memset(n, 0, sz);
-	
-	if (CHECK_BIT(prefix, parent->prefix_bits)) {
-		parent->right = n;
-	} else {
-		parent->left = n;
-	}
-        n->tree = parent->tree;
-	n->left = NULL;
-	n->right = NULL;
-	n->parent = parent;
-	n->flags = 0;
-	n->prefix_bits = parent->prefix_bits + 1;
-	memcpy(n->prefix, prefix, prefix_sz);
-
-        if (bst_node_init(n, ops, private) == -1) {
-                FREE(n);
-                return NULL;
+        struct bst_node *n;
+        
+        while (1) {
+                n =  bst_create_node(parent,
+                                     ops,
+                                     private,
+                                     prefix,
+                                     PREFIX_SIZE(parent->prefix_bits + 1),
+                                     prefix_bits,
+                                     alloc);
+                
+                if (!n) {
+                        LOG_ERR("Memory allocation failed\n");
+                        break;
+                }
+                
+                if (CHECK_BIT(prefix, parent->prefix_bits)) {
+                        parent->right = n;
+                        
+                        if (parent->prefix_bits + 1 != prefix_bits)
+                                parent = parent->right;
+                        else 
+                                break;
+                } else {
+                        parent->left = n;
+                        
+                        if (parent->prefix_bits + 1 != prefix_bits)
+                                parent = parent->left;
+                        else
+                                break;
+                }
         }
-	/* 
-	   Compute a mask that zeros out the extra bits that we might
-	   have copied in the last byte of the prefix.
-	*/
-	
-	if (n->prefix_bits % 8) {
-		for (i = 0; i < n->prefix_bits % 8; i++) {
-			endmask |= (0x1 << (7-i));
-		}
-		
-		n->prefix[prefix_sz-1] &= endmask;
-	}
-    
-	if (parent->prefix_bits + 1 != prefix_bits)
-		return bst_node_new(n, ops, private, prefix, 
-                                    prefix_bits, alloc);
-			 
-	return n;
+
+        return n;
 }
 
 struct bst_node *bst_node_insert_prefix(struct bst_node *root, 
@@ -388,7 +532,8 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 {
 	struct bst_node *n, *prev = NULL;
         
-	n = bst_node_find_longest_prefix(root, &prev, prefix, prefix_bits);	
+	n = bst_node_find_longest_prefix(root, &prev, prefix, 
+                                         prefix_bits, NULL);	
 	
 	/*
           printf("found %p %p %p %p %u %u\n", 
@@ -456,7 +601,7 @@ void bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
 
         n = bst_find_longest_prefix(tree, prefix, prefix_bits);
         
-        if (n) {
+        if (n && n->prefix_bits == prefix_bits) {
                 bst_remove_node(tree, n);
         }
 }
@@ -466,7 +611,7 @@ int bst_print(struct bst *tree, char *buf, int buflen)
         if (!tree || tree->entries == 0)
                 return 0;
 
-        return bst_node_print_recursive(tree->root, buf, buflen);
+        return bst_node_print_nonrecursive(tree->root, buf, buflen);
 }
 
 static int bst_node_init_default(struct bst_node *n)

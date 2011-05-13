@@ -10,7 +10,13 @@ int libstack_configure_interface(const char *ifname,
                                  const struct net_addr *ipaddr,
 				 unsigned short flags);
 
-int libstack_set_service(struct service_id *srvid, const char *ifname);
+int libstack_add_service(const struct service_id *srvid, 
+                         unsigned int prefix_bits,
+                         const struct in_addr *ipaddr);
+
+int libstack_del_service(const struct service_id *srvid, 
+                         unsigned int prefix_bits,
+                         const struct in_addr *ipaddr);
 int libstack_init(void);
 void libstack_fini(void);
 

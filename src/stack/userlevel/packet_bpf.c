@@ -100,6 +100,18 @@ static int packet_bpf_init(struct net_device *dev)
                 goto fail_ioctl;
         }
         
+        /* Capture only incoming packets (e.g., not our own outgoing
+         * ones). */
+        i = 0;
+
+        ret = ioctl(dev->fd, BIOCSSEESENT, &i);
+        
+        if (ret == -1) {
+                LOG_ERR("bpf BIOCSSEESENT ioctl: %s\n", 
+                        strerror(errno));
+                goto fail_ioctl;
+        }
+        
         priv->buf = (unsigned char *)malloc(priv->buflen);
 
         if (!priv->buf) {
@@ -190,8 +202,9 @@ static int packet_bpf_recv(struct net_device *dev)
                         break;
                 case INPUT_NO_PROT:
                 case INPUT_DROP:
-                default:
                         free_skb(skb);
+                        break;
+                default:
                         break;
                 }
                 /* Move to next packet */

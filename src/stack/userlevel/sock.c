@@ -8,9 +8,12 @@
 #include <serval/net.h>
 #include <serval/bitops.h>
 #include <pthread.h>
+#include <serval_sock.h>
 
-#define RCV_BUF_DEFAULT 1000
-#define SND_BUF_DEFAULT 1000
+#define _SK_MEM_PACKETS		256
+#define _SK_MEM_OVERHEAD	(sizeof(struct sk_buff) + 256)
+#define SK_WMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
+#define SK_RMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
 
 LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
@@ -113,8 +116,8 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_send_head	=	NULL;
 	init_timer(&sk->sk_timer);
 	sk->sk_net              =       &init_net;
-	sk->sk_rcvbuf		=	RCV_BUF_DEFAULT;
-	sk->sk_sndbuf		=       SND_BUF_DEFAULT;
+	sk->sk_rcvbuf		=	SK_RMEM_MAX;
+	sk->sk_sndbuf		=       SK_WMEM_MAX;
 	sk->sk_state		=	0;
 	sk_set_socket(sk, sock);
 	sock_set_flag(sk, SOCK_ZAPPED);
@@ -355,7 +358,9 @@ void proto_unregister(struct proto *prot)
 	write_unlock(&proto_list_lock);
 }
 
-
+/* 
+   Wait for data in receive queue, return 1 if data exists, else 0.
+ */
 int sk_wait_data(struct sock *sk, long *timeo)
 {
         int rc;
@@ -367,6 +372,25 @@ int sk_wait_data(struct sock *sk, long *timeo)
         clear_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
         finish_wait(sk_sleep(sk), &wait);
         return rc;
+}
+
+/**
+ *	__sk_reclaim - reclaim memory_allocated
+ *	@sk: socket
+ */
+void __sk_mem_reclaim(struct sock *sk)
+{
+        /*
+	struct proto *prot = sk->sk_prot;
+
+          atomic_sub(sk->sk_forward_alloc >> SK_MEM_QUANTUM_SHIFT,
+          prot->memory_allocated);
+          sk->sk_forward_alloc &= SK_MEM_QUANTUM - 1;
+          
+	if (prot->memory_pressure && *prot->memory_pressure &&
+        (atomic_read(prot->memory_allocated) < prot->sysctl_mem[0]))
+        *prot->memory_pressure = 0;
+        */
 }
 
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
@@ -384,7 +408,51 @@ void sk_stop_timer(struct sock *sk, struct timer_list* timer)
 
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 {
-        return 0;
+	int skb_len;
+	struct sk_buff_head *list = &sk->sk_receive_queue;
+
+	/* Cast sk->rcvbuf to unsigned... It's pointless, but reduces
+	   number of warnings when compiling with -W --ANK
+	 */
+	if (atomic_read(&sk->sk_rmem_alloc) + skb->truesize >=
+	    (unsigned)sk->sk_rcvbuf) {
+		atomic_inc(&sk->sk_drops);
+		return -ENOMEM;
+	}
+
+        /*
+	err = sk_filter(sk, skb);
+	if (err)
+		return err;
+        
+	if (!sk_rmem_schedule(sk, skb->truesize)) {
+		atomic_inc(&sk->sk_drops);
+		return -ENOBUFS;
+	}
+        */
+
+	skb->dev = NULL;
+	skb_set_owner_r(skb, sk);
+
+	/* Cache the SKB length before we tack it onto the receive
+	 * queue.  Once it is added it no longer belongs to us and
+	 * may be freed by other threads of control pulling packets
+	 * from the queue.
+	 */
+	skb_len = skb->len;
+
+	/* we escape from rcu protected region, make sure we dont leak
+	 * a norefcounted dst
+	 */
+	/* skb_dst_force(skb); */
+
+	skb->dropcount = atomic_read(&sk->sk_drops);
+	__skb_queue_tail(list, skb);
+
+	if (!sock_flag(sk, SOCK_DEAD))
+		sk->sk_data_ready(sk, skb_len);
+
+	return 0;
 }
 
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)
@@ -552,4 +620,51 @@ void release_sock(struct sock *sk)
         
         sk->sk_lock.owned = 0;
         spin_unlock(&sk->sk_lock.slock);
+}
+
+/* From net/core/stream.c */
+/**
+ * sk_stream_wait_connect - Wait for a socket to get into the connected state
+ * @sk: sock to wait on
+ * @timeo_p: for how long to wait
+ *
+ * Must be called with the socket locked.
+ */
+int sk_stream_wait_connect(struct sock *sk, long *timeo_p)
+{
+	int done, err = 0;
+	DEFINE_WAIT(wait);
+
+	do {
+		err = sock_error(sk);
+		if (err)
+                        break;
+		if ((1 << sk->sk_state) & 
+                    ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+			err = -EPIPE;
+                        break;
+                }
+		if (!*timeo_p) {
+			err = -EAGAIN;
+                        break;
+                }
+		if (signal_pending(current)) {
+			err = sock_intr_errno(*timeo_p);
+                        break;
+                }
+
+		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
+		sk->sk_write_pending++;
+		done = sk_wait_event(sk, timeo_p,
+				     !sk->sk_err &&
+				     !((1 << sk->sk_state) &
+				       ~(SERVALF_CONNECTED | 
+                                         SERVALF_CLOSEWAIT)));
+		finish_wait(sk_sleep(sk), &wait);
+		sk->sk_write_pending--;
+	} while (!done);
+        
+        UNDEFINE_WAIT(&wait);
+
+	return err;
 }

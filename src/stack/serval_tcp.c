@@ -25,10 +25,9 @@
 static int serval_sock_is_valid_conn_state(int state)
 {
         return (state == SERVAL_CONNECTED ||
-                state == TCP_FINWAIT1 ||
-                state == TCP_FINWAIT2 ||
-                state == TCP_SIMCLOSE ||
-                state == TCP_LASTACK ||
+                state == SERVAL_FINWAIT1 ||
+                state == SERVAL_FINWAIT2 ||
+                state == SERVAL_LASTACK ||
                 state == SERVAL_CLOSEWAIT);
 }
 
@@ -100,7 +99,8 @@ int serval_tcp_rcv(struct sk_buff *skb)
         return err;
 }
 
-static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
+static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, 
+                              struct msghdr *msg,
                               size_t len)
 {
         int ret = -ENOMEM;
@@ -127,7 +127,8 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr
                 
                 LOG_DBG("af_serval: in RECONNECT. Waiting...\n");
 
-                ret = wait_event_interruptible(*sk_sleep(sk), sk->sk_state != SERVAL_RECONNECT);
+                ret = wait_event_interruptible(*sk_sleep(sk), 
+                                               sk->sk_state != SERVAL_RECONNECT);
                 
                 /* Check if we were interrupted */
                 if (ret != 0) {
@@ -323,5 +324,6 @@ struct proto serval_tcp_proto = {
 	.backlog_rcv		= serval_srv_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
+	/* .max_header		= TCP_MAX_HEADER, */
 	.obj_size		= sizeof(struct serval_tcp_sock),
 };

@@ -1,0 +1,6 @@
+Serval Java bindings
+====================
+
+To run test applications, run e.g.,
+
+LD_LIBRARY_PATH=<SOURCE_PATH>/src/javasock/jni/.libs/ java -classpath <SOURCE_PATH>src/javasock/serval-javasock.jar serval.test.UDPClient

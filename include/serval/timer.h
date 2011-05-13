@@ -10,8 +10,6 @@
 #include <serval/list.h>
 #include <time.h>
 
-#define CLOCK CLOCK_THREAD_CPUTIME_ID
-
 /* #define PER_THREAD_TIMER_LIST 0 */
 
 struct timer_list {	
@@ -68,42 +66,73 @@ static inline void setup_timer(struct timer_list *timer,
 	timer->data = data;
 }
 
-/* convenience functions (from RTLinux) */
-#define NSECS_PER_SEC 1000000000L
+int gettime(struct timespec *ts);
+unsigned long gettime_jiffies(void);
+#define jiffies gettime_jiffies()
 
-#define timespec_normalize(t) {\
-	if ((t)->tv_nsec >= NSECS_PER_SEC) { \
-		(t)->tv_nsec -= NSECS_PER_SEC; \
-		(t)->tv_sec++; \
-	} else if ((t)->tv_nsec < 0) { \
-		(t)->tv_nsec += NSECS_PER_SEC; \
-		(t)->tv_sec--; \
-	} \
+/* Timer interrupt frequency (based on common kernel value) */
+#define HZ (100)
+#define TICKS_PER_SEC  1000000000L
+#define TICKS_PER_NSEC 1L
+#define TICKS_PER_HZ   10000000L
+#define NSECS_PER_SEC  1000000000L
+#define USECS_PER_SEC  1000000L
+#define MSECS_PER_SEC  1000L
+
+#define secs_to_jiffies(s) (s * HZ)
+#define msecs_to_jiffies(ms) (ms / 10)
+#define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
+#define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
+#define timespec_to_jiffies(ts)                 \
+        (secs_to_jiffies((ts)->tv_sec) +        \
+         nsecs_to_jiffies((ts)->tv_nsec))
+#define jiffies_to_secs(j) (j / HZ)
+
+static inline uint64_t jiffies_to_nsecs(unsigned long j)
+{
+        uint64_t ns = j;
+        
+        return (ns * TICKS_PER_HZ);
 }
+/* convenience functions (from RTLinux) */
 
-#define timespec_add_nsec(t1, nsec) do { \
-	(t1)->tv_nsec += nsec;  \
-	timespec_normalize(t1);\
-} while (0)
+#define timespec_normalize(t) {                         \
+                if ((t)->tv_nsec >= NSECS_PER_SEC) {    \
+                        (t)->tv_nsec -= NSECS_PER_SEC;  \
+                        (t)->tv_sec++;                  \
+                } else if ((t)->tv_nsec < 0) {          \
+                        (t)->tv_nsec += NSECS_PER_SEC;  \
+                        (t)->tv_sec--;                  \
+                }                                       \
+        }
 
-#define timespec_add(t1, t2) do { \
-	(t1)->tv_nsec += (t2)->tv_nsec;  \
-	(t1)->tv_sec += (t2)->tv_sec; \
-	timespec_normalize(t1);\
-} while (0)
- 
-#define timespec_sub(t1, t2) do { \
-	(t1)->tv_nsec -= (t2)->tv_nsec;  \
-	(t1)->tv_sec -= (t2)->tv_sec; \
-	timespec_normalize(t1);\
-} while (0)
+#define timespec_add_nsec(t1, nsec) do {                                \
+                (t1)->tv_sec += nsec / NSECS_PER_SEC;                   \
+                (t1)->tv_nsec += nsec % NSECS_PER_SEC;                  \
+                timespec_normalize(t1);                                 \
+        } while (0)
+
+#define timespec_add(t1, t2) do {               \
+                (t1)->tv_nsec += (t2)->tv_nsec; \
+                (t1)->tv_sec += (t2)->tv_sec;   \
+                timespec_normalize(t1);         \
+        } while (0)
+
+#define timespec_sub(t1, t2) do {               \
+                (t1)->tv_nsec -= (t2)->tv_nsec; \
+                (t1)->tv_sec -= (t2)->tv_sec;   \
+                timespec_normalize(t1);         \
+        } while (0)
 
 #define timespec_nz(t) ((t)->tv_sec != 0 || (t)->tv_nsec != 0)
-#define timespec_lt(t1, t2) ((t1)->tv_sec < (t2)->tv_sec || ((t1)->tv_sec == (t2)->tv_sec && (t1)->tv_nsec < (t2)->tv_nsec))
+#define timespec_lt(t1, t2) ((t1)->tv_sec < (t2)->tv_sec || \
+                             ((t1)->tv_sec == (t2)->tv_sec && \
+                              (t1)->tv_nsec < (t2)->tv_nsec))
 #define timespec_gt(t1, t2) (timespec_lt(t2, t1))
 #define timespec_ge(t1, t2) (!timespec_lt(t1, t2))
 #define timespec_le(t1, t2) (!timespec_gt(t1, t2))
-#define timespec_eq(t1, t2) ((t1)->tv_sec == (t2)->tv_sec && (t1)->tv_nsec == (t2)->tv_nsec)
+#define timespec_eq(t1, t2) ((t1)->tv_sec == (t2)->tv_sec && \
+                             (t1)->tv_nsec == (t2)->tv_nsec)
 
 #endif /* OS_LINUX_KERNEL */
 

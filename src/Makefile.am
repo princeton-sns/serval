@@ -2,12 +2,9 @@ SUBDIRS = \
 	stack \
 	libstack \
 	libserval \
-	servd
+	servd \
+	test
 
 if JAVA_BINDINGS
 SUBDIRS += javasock
-endif
-
-if OS_LINUX
-SUBDIRS += test
 endif

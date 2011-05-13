@@ -157,7 +157,7 @@ static struct telnet_client *telnet_new_client_handle(int sock)
 static void telnet_client_handle(struct telnet_client *tc)
 {
 	ssize_t ret;
-#define BUFLEN 1024
+#define BUFLEN 4048
 	char buf[BUFLEN];
 	char ctrlc[5] = { 0xff, 0xf4, 0xff, 0xfd, 0x06 };
 	int i = 0;

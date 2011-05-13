@@ -9,7 +9,7 @@
 #define FREE_SKB(skb) kfree_skb(skb)
 #define ALLOC_SKB(sz, prio) alloc_skb(sz, prio)
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,26))
 static inline struct net *dev_net(const struct net_device *dev)
 {
 #ifdef CONFIG_NET_NS
@@ -20,6 +20,20 @@ static inline struct net *dev_net(const struct net_device *dev)
 }
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31))
+static inline void skb_dst_drop(struct sk_buff *skb)
+{
+        if (skb->dst)
+                dst_release(skb->dst);
+        skb->dst = 0UL;
+}
+
+static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
+{
+        skb->dst = dst;
+}
+#endif
+
 #endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
@@ -27,7 +41,7 @@ static inline struct net *dev_net(const struct net_device *dev)
 #include <serval/atomic.h>
 #include <serval/lock.h>
 #include <stdint.h>
-
+#include <string.h>
 
 #if !defined(OS_LINUX)
 #define PACKET_HOST             0               /* To us.  */
@@ -244,6 +258,10 @@ static inline struct sk_buff *skb_get(struct sk_buff *skb)
 
 extern struct sk_buff *skb_clone(struct sk_buff *skb,
 				 gfp_t priority);
+extern struct sk_buff *skb_copy(const struct sk_buff *skb,
+				gfp_t priority);
+extern struct sk_buff *pskb_copy(struct sk_buff *skb,
+				 gfp_t gfp_mask);
 
 /**
  *	skb_cloned - is the buffer a clone
@@ -552,6 +570,36 @@ static inline int skb_network_offset(const struct sk_buff *skb)
 	return skb_network_header(skb) - skb->data;
 }
 
+
+static inline void skb_copy_from_linear_data(const struct sk_buff *skb,
+					     void *to,
+					     const unsigned int len)
+{
+	memcpy(to, skb->data, len);
+}
+
+static inline void skb_copy_from_linear_data_offset(const struct sk_buff *skb,
+						    const int offset, void *to,
+						    const unsigned int len)
+{
+	memcpy(to, skb->data + offset, len);
+}
+
+static inline void skb_copy_to_linear_data(struct sk_buff *skb,
+					   const void *from,
+					   const unsigned int len)
+{
+	memcpy(skb->data, from, len);
+}
+
+static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
+						  const int offset,
+						  const void *from,
+						  const unsigned int len)
+{
+	memcpy(skb->data + offset, from, len);
+}
+
 void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list);
 static inline void __skb_insert(struct sk_buff *newsk,
 				struct sk_buff *prev, struct sk_buff *next,
@@ -561,6 +609,17 @@ static inline void __skb_insert(struct sk_buff *newsk,
 	newsk->prev = prev;
 	next->prev  = prev->next = newsk;
 	list->qlen++;
+}
+
+/**
+ *	skb_queue_len	- get queue length
+ *	@list_: list to measure
+ *
+ *	Return the length of an &sk_buff queue.
+ */
+static inline uint32_t skb_queue_len(const struct sk_buff_head *list_)
+{
+	return list_->qlen;
 }
 
 /**

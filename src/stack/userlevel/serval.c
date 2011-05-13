@@ -27,8 +27,10 @@ struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
 
+extern int loopback_init(void);
 extern int telnet_init(void);
 extern void telnet_fini(void);
+extern unsigned int debug;
 
 #define MAX(x, y) (x >= y ? x : y)
 
@@ -38,8 +40,9 @@ void signal_handler(int sig)
         should_exit = 1;       
 }
 
+#define GARBAGE_INTERVAL (jiffies + secs_to_jiffies(10))
 static void garbage_collect_clients(unsigned long data);
-static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 10000000, 0);
+static DEFINE_TIMER(garbage_timer, garbage_collect_clients, 0, 0);
 
 static int daemonize(void)
 {
@@ -117,7 +120,7 @@ void garbage_collect_clients(unsigned long data)
         client_list_unlock(&client_list);
 
 	/* Schedule us again */
-	add_timer(&garbage_timer);
+	mod_timer(&garbage_timer, GARBAGE_INTERVAL);
 }
 
 #define NUM_SERVER_SOCKS 2
@@ -206,7 +209,7 @@ static int server_run(void)
 
 	LOG_DBG("Server starting\n");
 	/* Add garbage collection timer */
-	add_timer(&garbage_timer);
+	mod_timer(&garbage_timer, GARBAGE_INTERVAL);
 
 	while (!should_exit) {
 		fd_set readfds;
@@ -408,7 +411,22 @@ int main(int argc, char **argv)
 		} else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
-		}
+		} else if (strcmp(argv[0], "-dl") == 0 ||
+                           strcmp(argv[0], "-l") == 0 ||
+                           strcmp(argv[0], "--debug-level") == 0) {
+                        char *p = NULL;
+                        unsigned int d = strtoul(argv[1], &p, 10);
+                        
+                        if (*argv[1] != '\0' && *p == '\0') {
+                                argv++;
+                                argc--;
+                                LOG_DBG("Setting debug to %u\n", d);
+                                debug = d;
+                        } else {
+                                fprintf(stderr, "Invalid debug setting %s\n",
+                                        argv[1]);
+                        }
+		} 
 		argc--;
 		argv++;
 	}	
@@ -430,6 +448,15 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
+    ret = loopback_init();
+
+    if (ret == -1) {
+        LOG_ERR("Could not initialize IP loopback\n");
+                netdev_fini();
+        return -1;
+    }
+
+
 	ret = ctrl_init();
 	
 	if (ret == -1) {

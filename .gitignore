@@ -17,8 +17,13 @@ src/servd/servd
 src/stack/Kbuild
 src/stack/serval
 src/test/nltest
+src/test/translator
+src/test/tcp_inet_client
+src/test/addservice
 src/test/send_udp_packet
 src/test/send_udp_packetn
+src/test/recv_udp_packet
+src/test/recv_udp_packetn
 src/test/bindtest
 src/test/bindtestn
 src/test/listentest
@@ -28,9 +33,9 @@ src/test/udp_clientn
 src/test/udp_server
 src/test/udp_servern
 src/javasock/classes.list
+src/javasock/sources.list
 android/ServalChat/bin/
 android/ServalChat/gen/
-android/ServalChat/src/
 stamp-h1
 #
 Makefile.in

@@ -15,24 +15,60 @@ struct timer_internal {
 
 struct timer_list_head {
 	unsigned long num_timers;
+        struct timespec start_time;
 	struct list_head head;
 	pthread_mutex_t lock;
         int signal[2];
 };
 
 #if !defined(PER_THREAD_TIMER_LIST)
+#define CLOCK CLOCK_REALTIME
 static struct timer_list_head timer_list = {
         .num_timers = 0,
+        .start_time = { 0, 0 },
         .head = { &timer_list.head, &timer_list.head },
         .lock = PTHREAD_MUTEX_INITIALIZER,
         .signal = { -1, -1 },
 };
 #else
+#define CLOCK CLOCK_THREAD_CPUTIME_ID
 static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 #endif
 
-#define CLOCK CLOCK_THREAD_CPUTIME_ID
+
+int gettime(struct timespec *ts)
+{
+        int err = 0;
+
+#if defined(OS_LINUX)
+        err = clock_gettime(CLOCK, ts);
+
+	if (err == -1) {
+		LOG_ERR("clock_gettime failed: %s\n", 
+                        strerror(errno));
+	}
+#else
+        struct timeval now;
+
+        gettimeofday(&now, NULL);
+
+        ts->tv_sec = now.tv_sec;
+        ts->tv_nsec = now.tv_usec * 1000;
+#endif
+        return err;
+}
+
+/* This function gives a jiffies style time value indicating the
+ * number of 10s of milliseconds since Serval was started */
+unsigned long gettime_jiffies(void)
+{
+        struct timespec now;
+        gettime(&now);
+        timespec_sub(&now, &timer_list.start_time);
+        
+        return timespec_to_jiffies(&now);
+}
 
 static inline int timer_list_lock(struct timer_list_head *tlh)
 {
@@ -54,6 +90,7 @@ static void timer_list_head_destructor(void *arg)
 							 struct timer_list, 
 							 entry);
 		list_del(&tl->entry);
+                tl->entry.next = NULL;
 	}
 
 	pthread_mutex_destroy(&tlh->lock);
@@ -126,7 +163,7 @@ int timer_list_signal_lower(void)
 	return __timer_list_signal_lower(timer_list_get());
 }
 
-static int timer_list_signal_add_timer(struct timer_list_head *tlh)
+static int timer_list_signal_timer_change(struct timer_list_head *tlh)
 {
         char w = 'w';
         
@@ -160,15 +197,7 @@ int timer_list_get_next_timeout(struct timespec *timeout, int signal[2])
 
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
 
-#if defined(OS_LINUX)
-	if (clock_gettime(CLOCK, &now) == -1) {
-		LOG_ERR("clock_gettime failed: %s\n", strerror(errno));
-		timer_list_unlock(tlh);
-		return -1;
-	}
-#else
-#warning "Must implement clock_gettime()!"
-#endif
+        gettime(&now);
 	memcpy(timeout, &timer->expires_abs, sizeof(*timeout));
 	timespec_sub(timeout, &now);
 	timer_list_unlock(tlh);
@@ -192,6 +221,7 @@ int timer_list_handle_timeout(void)
 	timer = list_first_entry(&tlh->head, struct timer_list, entry);
 	
 	list_del(&timer->entry);
+        timer->entry.next = NULL;
 
 	timer_list_unlock(tlh);
 
@@ -237,6 +267,8 @@ int timer_list_per_thread_init()
 	memset(tlh, 0, sizeof(*tlh));
 	INIT_LIST_HEAD(&tlh->head);
 	tlh->num_timers = 0;
+        gettime(&tlh->start_time);
+
 	/* Make mutex recursive */
 #if RECURSIVE_MUTEX
         { 
@@ -250,6 +282,20 @@ int timer_list_per_thread_init()
         pthread_mutex_init(&tlh->lock, NULL);
 #endif
 	return 1;
+}
+#else
+/* !PER_THREAD */
+
+#if defined(__GNUC__) || defined(__BIONIC__)
+/* Make this function be auto-called on load */
+__attribute__((constructor))
+#else
+#warning "timer_list_init() will not be auto called on load!"
+#endif
+void timer_list_init(void)
+{
+        LOG_DBG("timer list was initialized\n");
+        gettime(&timer_list.start_time);
 }
 #endif
 
@@ -268,45 +314,62 @@ void add_timer(struct timer_list *timer)
 int del_timer(struct timer_list *timer)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
-	
+	int signal_change = 0;
+
 	if (!tlh)
 		return -1;
 	
+	if (timer->entry.prev == &tlh->head) {
+                /* Entry is first in queue, must signal change */
+                signal_change = 1;
+        } 
+
+        list_del(&timer->entry);
+        timer->entry.next = NULL;
+
 	timer_list_unlock(tlh);
 
-	return 0;
+        if (signal_change) 
+                timer_list_signal_timer_change(tlh);
+
+	return 1;
 }
 
 int mod_timer(struct timer_list *timer, unsigned long expires)
 {
 	struct timer_list_head *tlh = timer_list_get_locked();
-	struct timespec usecs;
+        unsigned long delta;
+        int ret = 0;
 
 	if (!tlh)
 		return -1;
-	
-	if (timer_pending(timer))
+
+        if (timer_pending(timer) && 
+            timer->expires == expires) {
+                timer_list_unlock(tlh);
+                return 1;
+        }
+
+	if (timer_pending(timer)) {
 		list_del(&timer->entry);
+                ret = 1;
+        }
 
-#if defined(OS_LINUX)
-	if (clock_gettime(CLOCK, &timer->expires_abs) == -1) {
-		LOG_ERR("clock_gettime failed: %s\n", strerror(errno));
-		timer_list_unlock(tlh);
-		return -1;
-	}
-#else
-#warning "Must implement clock_gettime()!"
-#endif	
-
-	/* Set timeout, both relative and absolute. */
-	usecs.tv_sec = expires / 1000000;
-	usecs.tv_nsec = (long)(expires - (usecs.tv_sec * 1000000)) * 1000;
+        gettime(&timer->expires_abs);
 	timer->expires = expires;
-	timespec_add(&timer->expires_abs, &usecs);
-
+        delta = expires - jiffies;
+	timespec_add_nsec(&timer->expires_abs, 
+                          jiffies_to_nsecs(delta)); 
+        /*
+        LOG_DBG("timer[expires=%lu delta=%lu"
+                " tv_sec=%ld tv_nsec=%ld]\n",
+                expires, delta,
+                timer->expires_abs.tv_sec, 
+                timer->expires_abs.tv_nsec);
+        */
 	if (list_empty(&tlh->head)) {
 		list_add(&timer->entry, &tlh->head);
-                timer_list_signal_add_timer(tlh);
+                timer_list_signal_timer_change(tlh);
 	} else {
 		unsigned int num = 0;
 		struct timer_list *tl;
@@ -323,13 +386,13 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
 		if (timer->entry.prev == &tlh->head) {
                         /* Inserted first in queue, so we must signal
                          * that the timeout has changed. */
-                        timer_list_signal_add_timer(tlh);
+                        timer_list_signal_timer_change(tlh);
                 } 
 	}
 	
 	timer_list_unlock(tlh);
 
-	return 0;
+	return ret;
 }
 
 int mod_timer_pending(struct timer_list *timer, unsigned long expires)

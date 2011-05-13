@@ -24,14 +24,14 @@
 //
 
 BindReq::BindReq()
-        :Message(BIND_REQ)
+        : Message(BIND_REQ), _flags(0), _prefix(0)
 {
     memset(&_obj_id, 0, sizeof(_obj_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindReq::BindReq(const sv_srvid_t& obj_id)
-        :Message(BIND_REQ)
+BindReq::BindReq(const sv_srvid_t& obj_id, uint8_t flags, uint8_t prefix)
+        : Message(BIND_REQ), _flags(flags), _prefix(prefix)
 {
     memcpy(&_obj_id, &obj_id, sizeof(obj_id));
     set_pld_len_v(serial_pld_len());
@@ -46,13 +46,15 @@ BindReq::check_type() const
 uint16_t
 BindReq::serial_pld_len() const
 {
-    return sizeof(_obj_id);
+    return sizeof(_obj_id) + 2;
 }
 
 int
 BindReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
+    p += serial_write(_flags, p);
+    p += serial_write(_prefix, p);
     p += serial_write(_obj_id, p);
     return p - buf;
 }
@@ -61,7 +63,9 @@ int
 BindReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
-    p += serial_read(&_obj_id, p);
+    p += serial_read(&_flags, p);
+    p += serial_read(&_prefix, p);
+	p += serial_read(&_obj_id, p);
     return p - buf;
 }
 
@@ -69,7 +73,7 @@ void
 BindReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s", label, oid_to_str(&_obj_id));
+    info("%s: flags=%i prefix=%i obj_id=%s", label, _flags, _prefix, oid_to_str(&_obj_id));
 }
 
 //

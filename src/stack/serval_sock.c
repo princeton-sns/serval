@@ -24,23 +24,21 @@ static struct serval_table listen_table;
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        "UNDEFINED",
-        "CLOSED",
-        "REQUEST",
-        "RESPOND",
-        "CONNECTED",
-        "CLOSING",
-        "TIMEWAIT",
-        "MIGRATE",
-        "RECONNECT",
-        "RRESPOND",
-        "LISTEN",
-        "CLOSEWAIT",
-        /* TCP only */
-        "FINWAIT1",
-        "FINWAIT2",
-        "LASTACK",
-        "SIMCLOSE"  
+        [ SERVAL_INIT ]      = "INIT",
+        [ SERVAL_CONNECTED ] = "CONNECTED",
+        [ SERVAL_REQUEST ]   = "REQUEST",
+        [ SERVAL_RESPOND ]   = "RESPOND",
+        [ SERVAL_FINWAIT1 ]  = "FINWAIT1",
+        [ SERVAL_FINWAIT2 ]  = "FINWAIT2",
+        [ SERVAL_TIMEWAIT ]  = "TIMEWAIT",
+        [ SERVAL_CLOSED ]    = "CLOSED",
+        [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
+        [ SERVAL_LASTACK ]   = "LASTACK",
+        [ SERVAL_LISTEN ]    = "LISTEN",
+        [ SERVAL_CLOSING ]   = "CLOSING",
+        [ SERVAL_MIGRATE ]   = "MIGRATE",
+        [ SERVAL_RECONNECT ] = "RECONNECT",
+        [ SERVAL_RRESPOND ]  = "RRESPOND"
 };
 
 static void serval_sock_destruct(struct sock *sk);
@@ -143,17 +141,10 @@ struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
            return serval_sock_lookup(&listen_table, &init_net, 
                                   srvid, SERVICE_KEY_LEN);
         */
-        struct service_entry *se = service_find(srvid);
+//        struct service_entry *se = service_find_type(srvid,
+//                                                     SERVICE_ENTRY_LOCAL);
 
-        if (!se)
-                return NULL;
-
-        if (se->sk)
-                sock_hold(se->sk);
-
-        service_entry_put(se);
-
-        return se->sk;
+        return service_find_sock(srvid, sizeof(*srvid) * 8);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,
@@ -180,10 +171,9 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 
         sk->sk_hash = table->hashfn(table, sk);
 
-        LOG_DBG("hash=%lu\n", sk->sk_hash);
-
         slot = &table->hash[sk->sk_hash];
 
+        /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
         slot->count++;
         hlist_add_head(&sk->sk_node, &slot->head);
@@ -199,67 +189,98 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 
 static void __serval_sock_hash(struct sock *sk)
 {
-        if (!hlist_unhashed(&sk->sk_node)) {
+        struct serval_sock *ssk = serval_sk(sk);
+ 
+       if (!hlist_unhashed(&sk->sk_node)) {
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         
-        if (sk->sk_state == SERVAL_LISTEN) {
-                int err = 0;
-
-                LOG_DBG("adding socket %p based on service id %s\n",
-                        sk, service_id_to_str(&serval_sk(sk)->local_srvid));
-                serval_sk(sk)->hash_key = &serval_sk(sk)->local_srvid;
-                serval_sk(sk)->hash_key_len = serval_sk(sk)->srvid_prefix_bits;
+        if (sk->sk_state == SERVAL_REQUEST ||
+            sk->sk_state == SERVAL_RESPOND) {
+                LOG_DBG("hashing socket %p based on socket id %s\n",
+                        sk, flow_id_to_str(&ssk->local_flowid));
+                ssk->hash_key = &ssk->local_flowid;
+                ssk->hash_key_len = sizeof(ssk->local_flowid);
+                __serval_table_hash(&established_table, sk);
+        } else { 
+                /* We use the service table for listening sockets. See
+                 * serval_sock_hash() */
                 /* __serval_table_hash(&listen_table, sk); */
 
-                err = service_add(&serval_sk(sk)->local_srvid, 
-                                  serval_sk(sk)->srvid_prefix_bits == 0 ? 
-                                  sizeof(serval_sk(sk)->local_srvid) * 8: 
-                                  serval_sk(sk)->srvid_prefix_bits, 
-                                  NULL, NULL, 0, sk, GFP_ATOMIC);
-                
-                if (err < 0) {
-                        LOG_ERR("could not add service for listening demux\n");
-                }
-
-        } else { 
-                LOG_DBG("hashing socket %p based on socket id %s\n",
-                        sk, flow_id_to_str(&serval_sk(sk)->local_flowid));
-                serval_sk(sk)->hash_key = &serval_sk(sk)->local_flowid;
-                serval_sk(sk)->hash_key_len = 
-                        sizeof(serval_sk(sk)->local_flowid);
-                __serval_table_hash(&established_table, sk);
         }
 }
 
 void serval_sock_hash(struct sock *sk)
 {
-        if (sk->sk_state != SERVAL_CLOSED) {
+        struct serval_sock *ssk = serval_sk(sk);
+        
+        /* Do not hash if closed or already hashed */
+        if (sk->sk_state == SERVAL_CLOSED ||
+            ssk->hash_key_len > 0)
+                return;
+
+        if (sk->sk_state == SERVAL_REQUEST ||
+            sk->sk_state == SERVAL_RESPOND) {
 		local_bh_disable();
 		__serval_sock_hash(sk);
 		local_bh_enable();
+        } else {
+                int err = 0;
+                
+                LOG_DBG("adding socket %p based on service id %s\n",
+                        sk, service_id_to_str(&ssk->local_srvid));
+
+                ssk->hash_key = &ssk->local_srvid;
+                ssk->hash_key_len = ssk->srvid_prefix_bits == 0 ? 
+                        sizeof(ssk->local_srvid) * 8: 
+                        ssk->srvid_prefix_bits;
+
+                err = service_add(ssk->hash_key, 
+                                  ssk->hash_key_len, ssk->srvid_flags, LOCAL_SERVICE_DEFAULT_PRIORITY, LOCAL_SERVICE_DEFAULT_WEIGHT,
+                                  NULL, 0, sk, GFP_ATOMIC);
+                if (err < 0) {
+                    #if defined(OS_LINUX_KERNEL)
+                        LOG_ERR("could not add service for listening demux\n");
+                    #else
+                        LOG_ERR("could not add service for listening demux: %s\n", strerror(-err));
+                    #endif
+                } else {
+#if defined(OS_LINUX_KERNEL)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
+                        sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
+#else
+                        sock_prot_inc_use(sk->sk_prot);
+#endif
+#endif
+                }
 	}
 }
 
 void serval_sock_unhash(struct sock *sk)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct net *net = sock_net(sk);
         spinlock_t *lock;
 
-        LOG_DBG("unhashing socket %p\n", sk);
+        if (ssk->hash_key_len == 0)
+                return;
 
-        /* grab correct lock */
-        if (sk->sk_state == SERVAL_LISTEN) {
+        ssk->hash_key_len = 0;
+                
+        if (sk->sk_state == SERVAL_LISTEN ||
+            sk->sk_state == SERVAL_INIT) {
                 /*
                 lock = &listen_table.hashslot(&listen_table, net, 
-                                              &serval_sk(sk)->local_srvid, 
-                                              serval_sk(sk)->hash_key_len)->lock;
+                                              &ssk->local_srvid, 
+                                              ssk->hash_key_len)->lock;
                 */
-                service_del(&serval_sk(sk)->local_srvid,
-                            serval_sk(sk)->srvid_prefix_bits == 0 ?
-                            sizeof(serval_sk(sk)->local_srvid) * 8 :
-                            serval_sk(sk)->srvid_prefix_bits);
-                
+                                
+                LOG_DBG("removing socket %p from service table\n", sk);
+
+                service_del_dest(&ssk->local_srvid,
+                            ssk->srvid_prefix_bits == 0 ?
+                            sizeof(ssk->local_srvid) * 8 :
+                            ssk->srvid_prefix_bits, NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
@@ -269,9 +290,10 @@ void serval_sock_unhash(struct sock *sk)
 #endif
                 return;
         } else {
+                LOG_DBG("unhashing socket %p\n", sk);
                 lock = &established_table.hashslot(&established_table,
-                                                   net, &serval_sk(sk)->local_flowid, 
-                                                   serval_sk(sk)->hash_key_len)->lock;
+                                                   net, &ssk->local_flowid, 
+                                                   ssk->hash_key_len)->lock;
         }
         
 	spin_lock_bh(lock);
@@ -332,7 +354,7 @@ int __serval_assign_flowid(struct sock *sk)
 
 int serval_sock_get_flowid(struct flow_id *sid)
 {
-        sid->s_id = htons(atomic_inc_return(&serval_flow_id));
+        sid->s_id = htonl(atomic_inc_return(&serval_flow_id));
 
         return 0;
 }
@@ -342,7 +364,6 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                              struct proto *prot)
 {
         struct sock *sk;
-        struct serval_sock *ssk;
 
         sk = sk_alloc(net, PF_SERVAL, priority, prot);
 
@@ -354,7 +375,7 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
 	sk->sk_protocol	= protocol;
 	sk->sk_destruct	= serval_sock_destruct;
         sk->sk_backlog_rcv = sk->sk_prot->backlog_rcv;
-        
+
         /* Only assign socket id here in case we have a user
          * socket. If socket is NULL, then it means this socket is a
          * child socket from a LISTENing socket, and it will be
@@ -365,21 +386,6 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
                 return NULL;
         }
 
-        ssk = serval_sk(sk);
-#if defined(OS_LINUX_KERNEL)
-        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
-#else
-        {
-                unsigned int i;
-                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
-                        ssk->local_nonce[i] = random() & 0xff;
-                }
-        }       
-#endif
-        {
-                char buf[200];
-                LOG_DBG("nonce is %s\n", hexdump(ssk->local_nonce, 8, buf, 200));
-        }
         atomic_inc(&serval_nr_socks);
                 
         LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
@@ -388,21 +394,56 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
         return sk;
 }
 
-
 void serval_sock_init(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+
         sk->sk_state = 0;
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
         setup_timer(&ssk->retransmit_timer, 
                     serval_srv_rexmit_timeout,
                     (unsigned long)sk);
+
+        setup_timer(&ssk->tw_timer, 
+                    serval_srv_timewait_timeout,
+                    (unsigned long)sk);
+
+        serval_srv_init_ctrl_queue(sk);
+
+#if defined(OS_LINUX_KERNEL)
+        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(&ssk->snd_seq.iss, sizeof(ssk->snd_seq.iss));
+#else
+        {
+                unsigned int i;
+                unsigned char *seqno = (unsigned char *)&ssk->snd_seq.iss;
+                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                        ssk->local_nonce[i] = random() & 0xff;
+                }
+                for (i = 0; i < sizeof(ssk->snd_seq.iss); i++) {
+                        seqno[i] = random() & 0xff;
+                }
+        }       
+#endif
+        ssk->hash_key = NULL;
+        ssk->hash_key_len = 0;
+        ssk->rcv_seq.nxt = 0;        
+        ssk->snd_seq.una = 0;
+        ssk->snd_seq.nxt = 0;
+        /* Default to stop-and-wait behavior */
+        ssk->rcv_seq.wnd = 1;
+        ssk->snd_seq.wnd = 1;
+        ssk->srtt = 0;
+        ssk->rto = SERVAL_INITIAL_RTO;
 }
 
 void serval_sock_destroy(struct sock *sk)
 {
-        /* struct serval_sock *ssk = serval_sk(sk); */
+        struct serval_sock *ssk = serval_sk(sk);
+
+        LOG_DBG("Destroying Serval sock %p\n", sk);
+        
 	WARN_ON(sk->sk_state != SERVAL_CLOSED);
 
 	/* It cannot be in hash table! */
@@ -412,6 +453,14 @@ void serval_sock_destroy(struct sock *sk)
 		LOG_WARN("Attempt to release alive inet socket %p\n", sk);
 		return;
 	}
+
+        /* Stop timers */
+        LOG_DBG("Stopping timers\n");
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+        sk_stop_timer(sk, &ssk->tw_timer);
+        
+        /* Clean control queue */
+        serval_srv_ctrl_queue_purge(sk);
 
 	if (sk->sk_prot->destroy)
 		sk->sk_prot->destroy(sk);
@@ -428,16 +477,24 @@ void serval_sock_destroy(struct sock *sk)
 	sock_put(sk);
 }
 
+static void serval_sock_clear_xmit_timers(struct sock *sk)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        sk_stop_timer(sk, &ssk->retransmit_timer);        
+}
+
 void serval_sock_done(struct sock *sk)
 {
 	serval_sock_set_state(sk, SERVAL_CLOSED);
-
+	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
-	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_state_change(sk);
-	else
-		serval_sock_destroy(sk);
+        /* If there is still a user around, notify it. Otherwise,
+         * destroy the socket now. */
+	if (!sock_flag(sk, SOCK_DEAD)) 
+                sk->sk_state_change(sk); 
+        else
+                serval_sock_destroy(sk); 
 }
 
 /* Destructor, called when refcount hits zero */
@@ -445,12 +502,15 @@ void serval_sock_destruct(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
+        /* Purge queues */
         __skb_queue_purge(&sk->sk_receive_queue);
         __skb_queue_purge(&sk->sk_error_queue);
 
-        if (ssk->dev) {
+        /* Clean control queue */
+        serval_srv_ctrl_queue_purge(sk);
+
+        if (ssk->dev)
                 dev_put(ssk->dev);
-        }
 
 	if (sk->sk_type == SOCK_STREAM && 
             sk->sk_state != SERVAL_CLOSED) {
@@ -460,7 +520,7 @@ void serval_sock_destruct(struct sock *sk)
 	}
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
-		LOG_DBG("Attempt to release alive serval socket: %p\n", sk);
+		LOG_WARN("Attempt to release alive serval socket: %p\n", sk);
 		return;
 	}
 
@@ -478,21 +538,63 @@ void serval_sock_destruct(struct sock *sk)
                 sk, atomic_read(&serval_nr_socks));
 }
 
-int serval_sock_set_state(struct sock *sk, int new_state)
+const char *serval_sock_state_str(struct sock *sk)
 {
-        /* TODO: state transition checks */
-        
-        if (new_state < SERVAL_SOCK_STATE_MIN ||
-            new_state > SERVAL_SOCK_STATE_MAX) {
+        if (sk->sk_state >= SERVAL_MAX_STATE) {
+                LOG_ERR("invalid state\n");
+                return sock_state_str[0];
+        }
+        return sock_state_str[sk->sk_state];
+}
+
+const char *serval_state_str(unsigned int state)
+{
+        if (state >= SERVAL_MAX_STATE) {
+                LOG_ERR("invalid state\n");
+                return sock_state_str[0];
+        }
+        return sock_state_str[state];
+}
+
+int serval_sock_set_state(struct sock *sk, unsigned int new_state)
+{ 
+        if (new_state == SERVAL_MIN_STATE ||
+            new_state >= SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
-
+        
         LOG_DBG("%s -> %s\n",
                 sock_state_str[sk->sk_state],
                 sock_state_str[new_state]);
+        
+        switch (new_state) {
+        case SERVAL_CLOSED:
+                sk->sk_prot->unhash(sk);
+                break;
+        default:
+                break;
+        }
 
         sk->sk_state = new_state;
 
         return new_state;
+}
+
+/* 
+   These functions are equivalent to the sock_wfree() and sock_rfree()
+   of sock.c. However, these can be used as destructors for an skb to
+   free up associated sock state and bindings, specific to Serval and
+   control packets, when an skb is free'd.
+
+   These will be pointed to by skb->destructor and set by
+   skb_serval_set_owner_w() and skb_serval_set_owner_r().
+ */
+void serval_sock_wfree(struct sk_buff *skb)
+{
+        sock_put(skb->sk);
+}
+
+void serval_sock_rfree(struct sk_buff *skb)
+{
 }

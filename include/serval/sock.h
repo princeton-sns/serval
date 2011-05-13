@@ -48,6 +48,9 @@ struct proto;
 #define RCV_SHUTDOWN	1
 #define SEND_SHUTDOWN	2
 
+#define PAGE_SHIFT      12
+#define PAGE_SIZE       (1 << PAGE_SHIFT)
+
 typedef struct {
         pthread_mutex_t slock;
         int owned;
@@ -82,7 +85,6 @@ struct sock {
 #define sk_bound_dev_if __sk_common.skc_bound_dev_if
 #define sk_prot __sk_common.skc_prot
 #define sk_net __sk_common.skc_net
-        gfp_t                   sk_allocation;
         unsigned int		sk_shutdown  : 2,
 				sk_no_check  : 2,
 				sk_userlocks : 4,
@@ -106,6 +108,8 @@ struct sock {
 	struct sk_buff_head	sk_receive_queue;
 	struct sk_buff_head	sk_write_queue;
         int			sk_wmem_queued;
+	int			sk_forward_alloc;
+	gfp_t			sk_allocation;
 	int			sk_write_pending;
 	unsigned long 		sk_flags;
 	unsigned long	        sk_lingertime;
@@ -119,7 +123,7 @@ struct sock {
 	struct timer_list	sk_timer;
 	struct socket		*sk_socket;
 	struct sk_buff		*sk_send_head;
-
+	uint32_t		sk_mark;
         void (*sk_destruct)(struct sock *sk);
 	void (*sk_state_change)(struct sock *sk);
 	void (*sk_data_ready)(struct sock *sk, int bytes);
@@ -171,9 +175,11 @@ struct proto {
 	void			(*unhash)(struct sock *sk);
 	int			(*get_port)(struct sock *sk, unsigned short snum);
 
+	int			max_header;
 	unsigned int		obj_size;
 	char			name[32];
-
+        void			(*enter_memory_pressure)(struct sock *sk);
+	atomic_t		*memory_allocated;	/* Current allocated memory. */
 	struct list_head	node;
 };
 
@@ -209,6 +215,7 @@ enum sock_flags {
 	SOCK_ZAPPED,
 	SOCK_USE_WRITE_QUEUE, /* whether to call sk->sk_write_space in sock_wfree */
         SOCK_FASYNC,
+        SOCK_QUEUE_SHRUNK,
 };
 
 #define sock_net(s) ((s)->sk_net)
@@ -297,9 +304,26 @@ static inline int sock_flag(struct sock *sk, enum sock_flags flag)
 	return sk->sk_flags & (0x1 << flag);
 }
 
+static inline void sock_rps_record_flow(const struct sock *sk)
+{
+}
+
+static inline void sock_rps_reset_flow(const struct sock *sk)
+{
+}
+
+static inline void sock_rps_save_rxhash(struct sock *sk, uint32_t rxhash)
+{
+}
+
 static inline int sock_error(struct sock *sk)
 {
-        return 0;
+        int err;
+	if (likely(!sk->sk_err))
+		return 0;
+	err = sk->sk_err;
+        sk->sk_err = 0;
+	return -err;
 }
 
 static inline int sock_intr_errno(long timeo)
@@ -363,6 +387,10 @@ void sk_free(struct sock *sk);
 static inline void sock_hold(struct sock *sk)
 {
         atomic_inc(&sk->sk_refcnt);
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n",
+               __func__, sk, atomic_read(&sk->sk_refcnt));
+#endif
 }
 
 /* 
@@ -371,11 +399,19 @@ static inline void sock_hold(struct sock *sk)
  */
 static inline void __sock_put(struct sock *sk)
 {
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n", 
+               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
+#endif
 	atomic_dec(&sk->sk_refcnt);
 }
 
 static inline void sock_put(struct sock *sk)
 {
+#if defined(SOCK_REFCNT_DEBUG)
+        printf("%s %p refcnt=%u\n", 
+               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
+#endif
         if (atomic_dec_and_test(&sk->sk_refcnt))
                 sk_free(sk);
 }
@@ -418,6 +454,84 @@ static inline void sock_graft(struct sock *sk, struct socket *parent)
 
 void sk_common_release(struct sock *sk);
 
+/*
+ * Functions for memory accounting
+ */
+extern int __sk_mem_schedule(struct sock *sk, int size, int kind);
+extern void __sk_mem_reclaim(struct sock *sk);
+
+#define SK_MEM_QUANTUM ((int)PAGE_SIZE)
+/* #define SK_MEM_QUANTUM_SHIFT ilog2(SK_MEM_QUANTUM) */
+#define SK_MEM_SEND	0
+#define SK_MEM_RECV	1
+
+/*
+static inline int sk_mem_pages(int amt)
+{
+	return (amt + SK_MEM_QUANTUM - 1) >> SK_MEM_QUANTUM_SHIFT;
+}
+*/
+
+static inline int sk_has_account(struct sock *sk)
+{
+	/* return true if protocol supports memory accounting */
+	return !!sk->sk_prot->memory_allocated;
+}
+
+static inline int sk_wmem_schedule(struct sock *sk, int size)
+{
+	if (!sk_has_account(sk))
+		return 1;
+	return size <= sk->sk_forward_alloc ||
+		__sk_mem_schedule(sk, size, SK_MEM_SEND);
+}
+
+static inline int sk_rmem_schedule(struct sock *sk, int size)
+{
+	if (!sk_has_account(sk))
+		return 1;
+	return size <= sk->sk_forward_alloc ||
+		__sk_mem_schedule(sk, size, SK_MEM_RECV);
+}
+
+static inline void sk_mem_reclaim(struct sock *sk)
+{
+	if (!sk_has_account(sk))
+		return;
+	if (sk->sk_forward_alloc >= SK_MEM_QUANTUM)
+		__sk_mem_reclaim(sk);
+}
+
+static inline void sk_mem_reclaim_partial(struct sock *sk)
+{
+	if (!sk_has_account(sk))
+		return;
+	if (sk->sk_forward_alloc > SK_MEM_QUANTUM)
+		__sk_mem_reclaim(sk);
+}
+
+static inline void sk_mem_charge(struct sock *sk, int size)
+{
+	if (!sk_has_account(sk))
+		return;
+	sk->sk_forward_alloc -= size;
+}
+
+static inline void sk_mem_uncharge(struct sock *sk, int size)
+{
+	if (!sk_has_account(sk))
+		return;
+	sk->sk_forward_alloc += size;
+}
+
+static inline void sk_wmem_free_skb(struct sock *sk, struct sk_buff *skb)
+{
+	sock_set_flag(sk, SOCK_QUEUE_SHRUNK);
+	sk->sk_wmem_queued -= skb->truesize;
+	sk_mem_uncharge(sk, skb->truesize);
+	__free_skb(skb);
+}
+
 /* Used by processes to "lock" a socket state, so that
  * interrupts and bottom half handlers won't change it
  * from under us. It essentially blocks any incoming
@@ -451,7 +565,6 @@ static inline int sk_rcvqueues_full(const struct sock *sk,
                                     const struct sk_buff *skb)
 {
         unsigned int qsize = sk->sk_backlog.len + atomic_read(&sk->sk_rmem_alloc);
-
         return qsize + skb->truesize > (unsigned int)sk->sk_rcvbuf;
 }
 
@@ -470,6 +583,8 @@ static inline int sk_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 {
         return sk->sk_backlog_rcv(sk, skb);
 }
+
+int sk_stream_wait_connect(struct sock *sk, long *timeo_p);
 
 #endif /* OS_USER */
 

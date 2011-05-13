@@ -32,7 +32,10 @@ void timer_del(struct timer *t);
 int timer_next_timeout(unsigned long *timeout);
 int timer_next_timeout_timeval(struct timeval *timeout);
 int timer_handle_timeout(void);
+int timer_list_get_signal(void);
 void timer_list_destroy(void);
+int timer_list_init(void);
+void timer_list_fini(void);
 
 #define timer_new() timer_new_callback(NULL, NULL)
 #define timer_set_secs(t, s) { (t)->expires = s * 1000000L; }
@@ -46,6 +49,6 @@ void timer_list_destroy(void);
                 ret = timer_add(t); \
                 ret; })
 #define timer_scheduled(t) !list_empty(&t->lh)
-#define timer_destroy(t) { if ((t)->destruct) (t)->destruct(t); }
+#define timer_destroy(t) { timer_del(t); if ((t)->destruct) (t)->destruct(t); }
 
 #endif /* _TIMER_H_ */

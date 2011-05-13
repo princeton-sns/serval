@@ -2,7 +2,8 @@ LOCAL_PATH := $(my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
-	edu_princeton_cs_sns_serval_ServalDatagramSocket.c
+	JNIHelp.c \
+	serval_platform_ServalNetworkStack.c
 
 LOCAL_C_INCLUDES += \
 	$(JNI_H_INCLUDE) \
@@ -18,6 +19,6 @@ LOCAL_PRELINK_MODULE := false
 
 LOCAL_LDLIBS :=
 
-LOCAL_MODULE := libserval_javasock_jni
+LOCAL_MODULE := libservalnet_jni
 
 include $(BUILD_SHARED_LIBRARY)

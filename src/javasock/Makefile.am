@@ -1,4 +1,4 @@
-SUBDIRS = java/edu/princeton/cs/sns/serval jni
+SUBDIRS = java jni
 JARFILE = serval-javasock.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)

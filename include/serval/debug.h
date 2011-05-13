@@ -22,11 +22,13 @@
 #endif /* OS_LINUX_KERNEL */
 
 typedef enum {
-	LOG_LEVEL_INF = 0,
-	LOG_LEVEL_DBG,
-	LOG_LEVEL_WARN,
+	LOG_LEVEL_CRIT = 1,
 	LOG_LEVEL_ERR,
-	LOG_LEVEL_CRIT,
+	LOG_LEVEL_WARN,
+	LOG_LEVEL_INF,
+	LOG_LEVEL_DBG,
+        LOG_LEVEL_PKT /* For logging output that happens for every
+                         incoming or outgoing packet */
 } log_level_t;
 
 void logme(log_level_t level, const char *func, const char *format, ...);
@@ -36,16 +38,18 @@ void logme(log_level_t level, const char *func, const char *format, ...);
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
-#define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
+#define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
+#define LOG_PKT(fmt, ...) logme(LOG_LEVEL_PKT, __func__, fmt, ##__VA_ARGS__)
 
 #else
 
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
-#define LOG_DBG(fmt, ...)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
+#define LOG_DBG(fmt, ...)
+#define LOG_PKT(fmt, ...)
 
 #endif /* ENABLE_DEBUG */
 

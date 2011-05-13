@@ -7,6 +7,7 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/wait.h>
 #define UNDEFINE_WAIT(name)
+#define UNDECLARE_WAITQUEUE(name)
 #else
 #include <serval/list.h>
 #include <pthread.h>
@@ -50,7 +51,10 @@ typedef struct __wait_queue_head wait_queue_head_t;
         .thread_list	= { &(name).thread_list, &(name).thread_list } }
 
 #define DECLARE_WAITQUEUE(name, tsk)					\
-	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk)
+	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk);         \
+        init_wait(&name)
+
+#define UNDECLARE_WAITQUEUE(name) destroy_wait(name)
 
 #define __WAIT_QUEUE_HEAD_INITIALIZER(name) {				\
 	.lock		= PTHREAD_MUTEX_INITIALIZER,		        \
@@ -102,10 +106,14 @@ void __wake_up_sync(wait_queue_head_t *q, unsigned int mode, int nr);
 #define wake_up_all(x)			__wake_up(x, TASK_NORMAL, 0, NULL)
 #define wake_up_locked(x)		__wake_up_locked((x), TASK_NORMAL)
 
-#define wake_up_interruptible(x)	__wake_up(x, TASK_INTERRUPTIBLE, 1, NULL)
-#define wake_up_interruptible_nr(x, nr)	__wake_up(x, TASK_INTERRUPTIBLE, nr, NULL)
-#define wake_up_interruptible_all(x)	__wake_up(x, TASK_INTERRUPTIBLE, 0, NULL)
-#define wake_up_interruptible_sync(x)	__wake_up_sync((x), TASK_INTERRUPTIBLE, 1)
+#define wake_up_interruptible(x)                        \
+        __wake_up(x, TASK_INTERRUPTIBLE, 1, NULL)
+#define wake_up_interruptible_nr(x, nr)                 \
+        __wake_up(x, TASK_INTERRUPTIBLE, nr, NULL)
+#define wake_up_interruptible_all(x)                    \
+        __wake_up(x, TASK_INTERRUPTIBLE, 0, NULL)
+#define wake_up_interruptible_sync(x)                   \
+        __wake_up_sync((x), TASK_INTERRUPTIBLE, 1)
 
 #define wake_up_poll(x, m)\
         __wake_up(x, TASK_NORMAL, 1, (void *) (m))
@@ -152,8 +160,6 @@ void add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait);
 void add_wait_queue_exclusive(wait_queue_head_t *q, wait_queue_t *wait);
 void remove_wait_queue(wait_queue_head_t *q, wait_queue_t *wait);
 
-#define msecs_to_jiffies(ms) (ms * 1000)
-
 #define wait_event_timeout(wq, condition, timeout)			\
 ({									\
 	long __ret = timeout;						\
@@ -178,7 +184,7 @@ do {									\
 		break;							\
 	}								\
 	finish_wait(&wq, &__wait);					\
-        UNDEFINE_WAIT(&__wait);                                          \
+        UNDEFINE_WAIT(&__wait);                                         \
 } while (0)
 
 #define wait_event_interruptible(wq, condition)				\
@@ -207,7 +213,7 @@ do {									\
 		break;							\
 	}								\
 	finish_wait(&wq, &__wait);					\
-        UNDEFINE_WAIT(&__wait);                                          \
+        UNDEFINE_WAIT(&__wait);                                         \
 } while (0)
 
 #define wait_event_interruptible_timeout(wq, condition, timeout)	\

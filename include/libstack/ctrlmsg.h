@@ -4,29 +4,25 @@
 #include <netinet/serval.h>
 #if !defined(__KERNEL__)
 #include <net/if.h>
+#include <netinet/in.h>
 #endif
 
 enum ctrlmsg_type {
-    //CTRLMSG_TYPE_JOIN = 0,
-    //CTRLMSG_TYPE_LEAVE,
-    //to-userspace messages
-    CTRLMSG_TYPE_REGISTER = 0,
-    CTRLMSG_TYPE_UNREGISTER = 1,
-    CTRLMSG_TYPE_RESOLVE = 2,
 
-    //to-kernel messages
-    CTRLMSG_TYPE_IFACE_CONF = 100,
-    CTRLMSG_TYPE_SET_SERVICE = 101,
+    CTRLMSG_TYPE_JOIN = 0,
+    CTRLMSG_TYPE_LEAVE = 1,
+    CTRLMSG_TYPE_REGISTER = 2,
+    CTRLMSG_TYPE_UNREGISTER = 3,
+    CTRLMSG_TYPE_RESOLVE = 4,
 
-    CTRLMSG_TYPE_GET_RESOLUTION = 102,
-    CTRLMSG_TYPE_ADD_RESOLUTION = 103,
-    CTRLMSG_TYPE_REM_RESOLUTION = 104,
-    CTRLMSG_TYPE_MOD_RESOLUTION = 105,
-
-    //some sort of stat query? ack?
-    //CTRLMSG_TYPE__RESOLUTION = 106,
-
-    CTRLMSG_TYPE_UNKNOWN = 1000
+    CTRLMSG_TYPE_IFACE_CONF = 5,
+    CTRLMSG_TYPE_ADD_SERVICE = 6,
+    CTRLMSG_TYPE_DEL_SERVICE = 7,
+    CTRLMSG_TYPE_MOD_SERVICE = 8,
+    CTRLMSG_TYPE_GET_SERVICE = 9,
+    CTRLMSG_TYPE_SERVICE_STATS = 10,
+    CTRLMSG_TYPE_SET_TRANSIT = 11,
+    CTRLMSG_TYPE_UNKNOWN = 1000,
 };
 
 /* this should simply use sv_instance_addr
@@ -43,8 +39,8 @@ struct service_resolution {
     uint32_t priority; /* Priority level of flow entry. */
     uint32_t weight;
 
-    uint16_t idle_timeout; /* Idle time before discarding (seconds). */
-    uint16_t hard_timeout; /* Max time before discarding (seconds). */
+    uint32_t idle_timeout; /* Idle time before discarding (seconds). */
+    uint32_t hard_timeout; /* Max time before discarding (seconds). */
 
     //if address is zero'd out, then resolve "up" to the user-space process
 };
@@ -55,8 +51,25 @@ struct service_resolution_stat {
     uint32_t duration_nsec;
     uint32_t packets_resolved;
     uint32_t bytes_resolved;
+    uint32_t packets_dropped;
+    uint32_t bytes_dropped;
     uint32_t tokens_consumed;
-}
+};
+
+enum sv_stack_capabilities {
+    SVSTK_TRANSIT = 1 << 0, /*Can perform resolution/redireciton - if not set, then the SR is terminal for non-specified prefixes*/
+
+};
+
+struct service_stat {
+    uint32_t capabilities;
+    uint32_t services;
+    uint32_t instances;
+    uint32_t packets_resolved;
+    uint32_t bytes_resolved;
+    uint32_t bytes_dropped;
+    uint32_t packets_dropped;
+};
 
 struct ctrlmsg {
     unsigned char type;
@@ -84,9 +97,9 @@ struct ctrlmsg_resolve {
     uint8_t src_flags;
     uint8_t src_prefix_bits;
     struct service_id src_srvid;
+    struct net_addr src_address;
 
     /* address? */
-
     uint8_t dst_flags;
     uint8_t dst_prefix_bits;
     struct service_id dst_srvid;
@@ -94,7 +107,7 @@ struct ctrlmsg_resolve {
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 
-struct ctrlmsg_get_resolution {
+struct ctrlmsg_get_service {
     struct ctrlmsg cmh;
     uint32_t xid;
     uint8_t sv_flags;
@@ -102,20 +115,35 @@ struct ctrlmsg_get_resolution {
     struct service_id srvid;
 };
 
-struct ctrlmsg_add_resolution {
+struct ctrlmsg_resolution {
     struct ctrlmsg cmh;
     uint32_t xid;
     struct service_resolution resolution[0];
 };
 
-#define CTRLMSG_GET_RESOLUTION_SIZE (sizeof(struct ctrlmsg_get_resolution))
-#define CTRLMSG_ADD_RESOLUTION_SIZE (sizeof(struct ctrlmsg_add_resolution))
-#define CTRLMSG_REM_RESOLUTION_SIZE (sizeof(struct ctrlmsg_get_resolution))
-#define CTRLMSG_MOD_RESOLUTION_SIZE (sizeof(struct ctrlmsg_add_resolution))
+#define CTRLMSG_GET_SERVICE_SIZE (sizeof(struct ctrlmsg_get_service))
+#define CTRLMSG_ADD_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
+#define CTRLMSG_REM_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
+#define CTRLMSG_MOD_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
 
-#define NUM_RESOLUTIONS(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution)
+#define CTRL_NUM_SERVICES(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution)
 
-#define NUM_STAT_RESOLUTIONS(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution_stat)
+#define CTRL_NUM_STAT_SERVICES(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution_stat)
+
+struct ctrlmsg_stats {
+    struct ctrlmsg cmh;
+    uint32_t xid;
+    struct service_stat stats;
+};
+
+#define CTRLMSG_STATS_SIZE (sizeof(struct ctrlmsg_stats))
+
+struct ctrlmsg_set_transit {
+    struct ctrlmsg cmh;
+    int transit;
+};
+
+#define CTRLMSG_SET_TRANSIT_SIZE (sizeof(struct ctrlmsg_set_transit))
 
 #define IFFLAG_UP 0x1
 #define IFFLAG_HOST_CTRL_MODE 0x2
@@ -136,6 +164,8 @@ enum {
 struct ctrlmsg_service {
     struct ctrlmsg cmh;
     struct service_id srvid;
+    unsigned int prefix_bits;
+    struct in_addr ipaddr;
     char ifname[IFNAMSIZ];
 };
 
