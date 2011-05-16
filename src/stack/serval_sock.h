@@ -130,7 +130,8 @@ struct serval_sock {
         struct client           *client;
 #endif
         struct net_device       *dev; /* TX device for connected flows */
-        unsigned char           flags;
+        u8      close_received : 1,
+                flags : 7;
         void                    *hash_key;
         unsigned int            hash_key_len;  /* Keylen in bytes */
         unsigned short          srvid_prefix_bits;

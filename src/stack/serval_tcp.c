@@ -251,6 +251,14 @@ void serval_tcp_done(struct sock *sk)
         LOG_WARN("NOT implemented!\n");
 }
 
+static int serval_tcp_connection_close_request(struct sock *sk,
+                                               struct sk_buff *skb)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+        return tp->fin_recvd;
+}
+
 static int serval_tcp_connection_close(struct sock *sk)
 {
         struct sk_buff *skb;
@@ -1252,6 +1260,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_fin = serval_tcp_connection_build_fin,
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
+        .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_connection_respond_sock,
