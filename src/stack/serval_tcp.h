@@ -350,6 +350,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
                                        struct sk_buff *skb);
 int serval_tcp_connection_build_ack(struct sock *sk,
 				    struct sk_buff *skb);
+int serval_tcp_connection_build_fin(struct sock *sk, 
+                                    struct sk_buff *skb);
 
 void serval_tcp_initialize_rcv_mss(struct sock *sk);
 
@@ -825,6 +827,7 @@ void serval_tcp_done(struct sock *sk);
 void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority);
 void serval_tcp_send_delayed_ack(struct sock *sk);
 void serval_tcp_send_ack(struct sock *sk);
+void serval_tcp_send_fin(struct sock *sk);
 
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary

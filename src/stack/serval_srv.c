@@ -384,7 +384,15 @@ void serval_srv_close(struct sock *sk, long timeout)
         if (sk->sk_state == SERVAL_CONNECTED ||
             sk->sk_state == SERVAL_RESPOND ||
             sk->sk_state == SERVAL_CLOSEWAIT) {
-                                
+                struct serval_sock *ssk = serval_sk(sk);
+                
+                if (ssk->af_ops->conn_close) {
+                        err = ssk->af_ops->conn_close(sk);
+
+                        if (err != 0) {
+                                LOG_ERR("Transport error %d\n", err);
+                        }
+                }
                 if (sk->sk_state == SERVAL_CLOSEWAIT) {
                         serval_sock_set_state(sk, SERVAL_LASTACK);
                 } else {
@@ -796,15 +804,16 @@ done:
         return err;
 }
 
-static int serval_srv_rcv_fin(struct sock *sk, struct serval_hdr *sfh,
-                              struct sk_buff *skb)
+static int serval_srv_rcv_close_req(struct sock *sk, 
+                                    struct serval_hdr *sfh,
+                                    struct sk_buff *skb)
 {
-        int err = 0;
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_control_ext *ctrl_ext = 
                 (struct serval_control_ext *)(sfh + 1);
+        int err = 0;
 
-        LOG_DBG("received FIN\n");
+        LOG_DBG("received CLOSE REQUEST\n");
         
         if (!has_valid_control_extension(sk, sfh)) {
                 LOG_DBG("Bad control extension\n");
@@ -823,7 +832,7 @@ static int serval_srv_rcv_fin(struct sock *sk, struct serval_hdr *sfh,
                 case SERVAL_RESPOND:
                 case SERVAL_CONNECTED:
                         serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                        sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+                        //sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                         break;
                 case SERVAL_CLOSING:
                         break;
@@ -851,6 +860,25 @@ static int serval_srv_rcv_fin(struct sock *sk, struct serval_hdr *sfh,
         return err;
 }
 
+int serval_srv_rcv_transport_fin(struct sock *sk,
+                                 struct sk_buff *skb)
+{
+        int err = 0;
+        
+        switch (sk->sk_state) {
+        case SERVAL_CLOSEWAIT:
+                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+                break;
+        case SERVAL_FINWAIT1:
+                /* Simultaneous close */
+                serval_sock_set_state(sk, SERVAL_CLOSING);
+        default:
+                break;
+        }
+        
+        return err;
+}
+
 static int serval_srv_connected_state_process(struct sock *sk, 
                                               struct serval_hdr *sfh,
                                               struct sk_buff *skb)
@@ -860,7 +888,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_rcv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_close_req(sk, sfh, skb);
 
                 if (err == 0) {
                         /* Valid FIN means valid ctrl header that may
@@ -1122,7 +1150,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_rcv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_close_req(sk, sfh, skb);
 
                 if (err == 0) {
                         /* Both FIN and ACK */
@@ -1155,7 +1183,7 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
         
         if (sfh->flags & SVH_FIN) {
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                err = serval_srv_rcv_fin(sk, sfh, skb);
+                err = serval_srv_rcv_close_req(sk, sfh, skb);
 
                 if (err == 0) {
                         serval_srv_timewait(sk, SERVAL_TIMEWAIT);

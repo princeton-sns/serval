@@ -1837,8 +1837,11 @@ static void serval_tcp_fin(struct sk_buff *skb,
 
 	serval_tsk_schedule_ack(sk);
 
-	sk->sk_shutdown |= RCV_SHUTDOWN;
-	sock_set_flag(sk, SOCK_DONE);
+	/*sk->sk_shutdown |= RCV_SHUTDOWN;
+          sock_set_flag(sk, SOCK_DONE);
+        */
+
+        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
 
 	switch (sk->sk_state) {
 	case TCP_SYN_RECV:
@@ -1880,6 +1883,10 @@ static void serval_tcp_fin(struct sk_buff *skb,
 		break;
 	}
 
+        /* Tell service access layer this stream is closed at other
+         * end */
+        serval_srv_rcv_transport_fin(sk, skb);
+
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.
 	 */
@@ -1889,7 +1896,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 		tcp_sack_reset(&tp->rx_opt);
 #endif
 	sk_mem_reclaim(sk);
-
+#if 0
 	if (!sock_flag(sk, SOCK_DEAD)) {
 		sk->sk_state_change(sk);
 
@@ -1900,6 +1907,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 		else
 			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 	}
+#endif
 }
 
 /* This one checks to see if we can put data from the
