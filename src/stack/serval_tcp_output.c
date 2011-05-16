@@ -1387,27 +1387,43 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
  */
 static void serval_tcp_connect_init(struct sock *sk)
 {
-	//struct dst_entry *dst = __sk_dst_get(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	__u8 rcv_wscale;
-        //unsigned int initrwnd = dst_metric(dst, RTAX_INITRWND);
+#if defined(OS_LINUX_KERNEL)
+	struct dst_entry *dst = __sk_dst_get(sk);
+        unsigned int initrwnd = dst_metric(dst, RTAX_INITRWND);
+#else
         unsigned int initrwnd = 65535;
-
+#endif
         tp->tcp_header_len = sizeof(struct tcphdr);
  
 	if (tp->rx_opt.user_mss)
 		tp->rx_opt.mss_clamp = tp->rx_opt.user_mss;
 	tp->max_window = 0;
 	serval_tcp_mtup_init(sk);
-	//serval_tcp_sync_mss(sk, dst_mtu(dst));
-        serval_tcp_sync_mss(sk, 1500);
 
+#if defined(OS_LINUX_KERNEL)
+	serval_tcp_sync_mss(sk, dst_mtu(dst));
+#else
+        serval_tcp_sync_mss(sk, 1500);
+#endif
 	if (!tp->window_clamp) {
-		//tp->window_clamp = dst_metric(dst, RTAX_WINDOW);
+#if defined(OS_LINUX_KERNEL)
+		tp->window_clamp = dst_metric(dst, RTAX_WINDOW);
+#else
                 tp->window_clamp = 65535;
+#endif
         }
-	//tp->advmss = dst_metric(dst, RTAX_ADVMSS);
+
+#if defined(OS_LINUX_KERNEL)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+	tp->advmss = dst_metric(dst, RTAX_ADVMSS);
+#else
+	tp->advmss = dst_metric_advmss(dst);
+#endif
+#else
         tp->advmss = TCP_MSS_DEFAULT;
+#endif
 
 	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
 		tp->advmss = tp->rx_opt.user_mss;
@@ -1531,8 +1547,15 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
         th = (struct tcphdr *)skb_push(skb, sizeof(*th));
 
-	mss = TCP_MSS_DEFAULT; //dst_metric(dst, RTAX_ADVMSS);
-
+#if defined(OS_LINUX_KERNEL)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+	mss = dst_metric(dst, RTAX_ADVMSS);
+#else
+	mss = dst_metric_advmss(dst);
+#endif
+#else
+	mss = TCP_MSS_DEFAULT; 
+#endif
         LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
 
@@ -1540,21 +1563,30 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 		__u8 rcv_wscale;
 		/* Set this up on the first call only */
 
-		//req->window_clamp = tp->window_clamp ? : 
-                //      TCP_MSS_DEFAULT /*dst_metric(dst, RTAX_WINDOW) */;
-                
+#if defined(OS_LINUX_KERNEL)
+		req->window_clamp = tp->window_clamp ? : dst_metric(dst, RTAX_WINDOW);
+#else
                 req->window_clamp = TCP_MSS_DEFAULT;
-
+#endif
 		/* tcp_full_space because it is guaranteed to be the
                  * first packet */
 		serval_tcp_select_initial_window(serval_tcp_full_space(sk),
                                                  mss
-                                                 /* - (tp->tstamp_ok ? TCPOLEN_TSTAMP_ALIGNED : 0) */,
+#if defined(OS_LINUX_KERNEL)
+                                                 - (ireq->tstamp_ok ? TCPOLEN_TSTAMP_ALIGNED : 0)
+#endif
+                                                 ,
                                                  &req->rcv_wnd,
                                                  &req->window_clamp,
                                                  ireq->wscale_ok,
                                                  &rcv_wscale,
-                                                 /* dst_metric(dst, RTAX_INITRWND) */ 1460);
+
+#if defined(OS_LINUX_KERNEL)
+                                                 dst_metric(dst, RTAX_INITRWND)
+#else
+                                                 1460
+#endif
+                                                 );
 		ireq->rcv_wscale = rcv_wscale;
 	}
 
