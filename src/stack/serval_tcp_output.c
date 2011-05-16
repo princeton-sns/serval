@@ -1612,6 +1612,33 @@ int serval_tcp_connection_build_ack(struct sock *sk,
         return 0;
 }
 
+int serval_tcp_connection_build_fin(struct sock *sk, 
+                                    struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        unsigned int tcp_header_size = sizeof(struct tcphdr);
+        struct tcphdr *th;
+
+        th = (struct tcphdr *)skb_push(skb, tcp_header_size);
+
+        if (!th) {
+                FREE_SKB(skb);
+                return -ENOMEM;
+        }
+
+        memset(th, 0, sizeof(*th));
+        th->fin = 0;
+	th->source = 0;
+	th->dest = 0;
+        th->seq = htonl(serval_tcp_acceptable_seq(sk));
+	th->ack_seq = htonl(tp->rcv_nxt);
+        th->window = htons(serval_tcp_select_window(sk));	
+	th->check = 0;
+	th->urg_ptr = 0;
+
+        return 0;
+}
+
 
 /* We get here when a process closes a file descriptor (either due to
  * an explicit close() or as a byproduct of exit()'ing) and there
@@ -1698,6 +1725,47 @@ void serval_tcp_send_delayed_ack(struct sock *sk)
 	tp->tp_ack.timeout = timeout;
 	sk_reset_timer(sk, &tp->delack_timer, timeout);
 }
+
+
+/* Send a fin.  The caller locks the socket for us.  This cannot be
+ * allowed to fail queueing a FIN frame under any circumstances.
+ */
+void serval_tcp_send_fin(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb = serval_tcp_write_queue_tail(sk);
+	int mss_now;
+
+	/* Optimization, tack on the FIN if we have a queue of
+	 * unsent frames.  But be careful about outgoing SACKS
+	 * and IP options.
+	 */
+	mss_now = serval_tcp_current_mss(sk);
+
+	if (serval_tcp_send_head(sk) != NULL) {
+		TCP_SKB_CB(skb)->flags |= TCPH_FIN;
+		TCP_SKB_CB(skb)->end_seq++;
+		tp->write_seq++;
+	} else {
+		/* Socket is locked, keep trying until memory is available. */
+		for (;;) {
+			skb = alloc_skb_fclone(MAX_SERVAL_TCP_HEADER,
+					       sk->sk_allocation);
+			if (skb)
+				break;
+			yield();
+		}
+
+		/* Reserve space for headers and prepare control bits. */
+		skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
+		/* FIN eats a sequence byte, write_seq advanced by tcp_queue_skb(). */
+		serval_tcp_init_nondata_skb(skb, tp->write_seq,
+                                            TCPH_ACK | TCPH_FIN);
+		serval_tcp_queue_skb(sk, skb);
+	}
+	__serval_tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_OFF);
+}
+
 
 /* This routine sends an ack and also updates the window. */
 void serval_tcp_send_ack(struct sock *sk)

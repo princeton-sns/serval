@@ -251,6 +251,29 @@ void serval_tcp_done(struct sock *sk)
         LOG_WARN("NOT implemented!\n");
 }
 
+static int serval_tcp_connection_close(struct sock *sk)
+{
+        struct sk_buff *skb;
+	int data_was_unread = 0;
+        
+	/*  We need to flush the recv. buffs.  We do this only on the
+	 *  descriptor close, not protocol-sourced closes, because the
+	 *  reader process may not have drained the data yet!
+	 */
+	while ((skb = __skb_dequeue(&sk->sk_receive_queue)) != NULL) {
+		u32 len = TCP_SKB_CB(skb)->end_seq - TCP_SKB_CB(skb)->seq -
+			  tcp_hdr(skb)->fin;
+		data_was_unread += len;
+		__kfree_skb(skb);
+	}
+
+	sk_mem_reclaim(sk);
+
+        serval_tcp_send_fin(sk);
+
+        return 0;
+}
+
 static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
                                               int large_allowed)
 {
@@ -1226,7 +1249,9 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
+        .conn_build_fin = serval_tcp_connection_build_fin,
         .conn_request = serval_tcp_connection_request,
+        .conn_close = serval_tcp_connection_close,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_connection_respond_sock,
