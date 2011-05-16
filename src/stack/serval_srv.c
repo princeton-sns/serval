@@ -808,39 +808,52 @@ static int serval_srv_rcv_close_req(struct sock *sk,
         }
         
         if (has_valid_seqno(ntohl(ctrl_ext->seqno), ssk)) {
-                sk->sk_shutdown |= SEND_SHUTDOWN;
-                sock_set_flag(sk, SOCK_DONE);
-                serval_sk(sk)->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;
-                
-                switch (sk->sk_state) {
-                case SERVAL_REQUEST:
-                        /* FIXME: check correct processing here in
-                         * REQUEST state. */
-                case SERVAL_RESPOND:
-                case SERVAL_CONNECTED:
-                        serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                        //sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
-                        break;
-                case SERVAL_CLOSING:
-                        break;
-                case SERVAL_CLOSEWAIT:
-                        /* Must be retransmitted FIN */
-                        
-                        /* FIXME: is this the right place for async
-                                 * wake? */
-                        //sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
-                        break;
-                case SERVAL_FINWAIT1:
-                        /* Simultaneous close */
-                        serval_sock_set_state(sk, SERVAL_CLOSING);
-                default:
-                        break;
-                }
+                ssk->rcv_seq.nxt = ntohl(ctrl_ext->seqno) + 1;                
+                ssk->close_received = 1;
 
                 /* Give transport a chance to chip in */ 
-                if (ssk->af_ops->close_request)
+                if (ssk->af_ops->close_request) {
                         err = ssk->af_ops->close_request(sk, skb);
+                } else {
+                        /* If transport has no close_request function, assume 1 */
+                        err = 1;
+                }
+
                 
+                /* FIXME: This is a HACK! If close_request
+                 * returns 1, the transport is ready to tell
+                 * the user that the other end closed. */
+                if (err == 1) {
+                        sk->sk_shutdown |= SEND_SHUTDOWN;
+                        sock_set_flag(sk, SOCK_DONE);
+
+                        switch (sk->sk_state) {
+                        case SERVAL_REQUEST:
+                                /* FIXME: check correct processing here in
+                                 * REQUEST state. */
+                        case SERVAL_RESPOND:
+                        case SERVAL_CONNECTED:
+                                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+                                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+                                break;
+                        case SERVAL_CLOSING:
+                                break;
+                        case SERVAL_CLOSEWAIT:
+                                /* Must be retransmitted FIN */
+                                
+                                /* FIXME: is this the right place for async
+                                 * wake? */
+                                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+                                break;
+                        case SERVAL_FINWAIT1:
+                                /* Simultaneous close */
+                                serval_sock_set_state(sk, SERVAL_CLOSING);
+                        default:
+                                break;
+                        }
+                } else {
+                        LOG_DBG("Transport not ready to close\n");
+                }
                 err = serval_srv_send_close_ack(sk, sfh, skb);
         }
         
@@ -851,9 +864,33 @@ int serval_srv_rcv_transport_fin(struct sock *sk,
                                  struct sk_buff *skb)
 {
         int err = 0;
+        struct serval_sock *ssk = serval_sk(sk);
+
+        if (!ssk->close_received)
+                return 0;
+        
+        if (sock_flag(sk, SOCK_DONE))
+                return 0;
+
+        sk->sk_shutdown |= SEND_SHUTDOWN;
+        sock_set_flag(sk, SOCK_DONE);
         
         switch (sk->sk_state) {
+        case SERVAL_REQUEST:
+                /* FIXME: check correct processing here in
+                 * REQUEST state. */
+        case SERVAL_RESPOND:
+        case SERVAL_CONNECTED:
+                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+                break;
+        case SERVAL_CLOSING:
+                break;
         case SERVAL_CLOSEWAIT:
+                /* Must be retransmitted FIN */
+                                
+                /* FIXME: is this the right place for async
+                 * wake? */
                 sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                 break;
         case SERVAL_FINWAIT1:

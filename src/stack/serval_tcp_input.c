@@ -1883,6 +1883,8 @@ static void serval_tcp_fin(struct sk_buff *skb,
 		break;
 	}
 
+        tp->fin_recvd = 1;
+
         /* Tell service access layer this stream is closed at other
          * end */
         serval_srv_rcv_transport_fin(sk, skb);
@@ -2743,8 +2745,6 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
 		int tcp_header_len = tp->tcp_header_len;
                 
-                LOG_DBG("Fast path?\n");
-
 		/* Timestamp header prediction: tcp_header_len
 		 * is automatically equal to th->doff*4 due to pred_flags
 		 * match.
@@ -2784,8 +2784,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				/* We know that such packets are checksummed
 				 * on entry.
 				 */
-                                LOG_DBG("Bulk data transfer sender!\n");
-				serval_tcp_ack(sk, skb, 0);
+                                serval_tcp_ack(sk, skb, 0);
 				__kfree_skb(skb);
 				serval_tcp_data_snd_check(sk);
 				return 0;
@@ -2853,8 +2852,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPHPHITS);
 
 				/* Bulk data transfer: receiver */
-                                LOG_DBG("Bulk data transfer receiver\n");
-				__skb_pull(skb, tcp_header_len);
+                                __skb_pull(skb, tcp_header_len);
 				__skb_queue_tail(&sk->sk_receive_queue, skb);
 				skb_set_owner_r(skb, sk);
 				tp->rcv_nxt = TCP_SKB_CB(skb)->end_seq;
@@ -2865,12 +2863,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 
 			serval_tcp_event_data_recv(sk, skb);
 
-                        LOG_DBG("event_data_recv called\n");
-
 			if (TCP_SKB_CB(skb)->ack_seq != tp->snd_una) {
 				/* Well, only one small jumplet in fast path... */
-                                LOG_DBG("one small jumplet!\n");
-
 				serval_tcp_ack(sk, skb, FLAG_DATA);
 				serval_tcp_data_snd_check(sk);
 				if (!serval_tsk_ack_scheduled(sk))
@@ -2887,10 +2881,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 #endif
                         {
                                 if (eaten) {
-                                        LOG_DBG("skb eaten\n");
                                         __kfree_skb(skb);
                                 } else {
-                                        LOG_DBG("notify data ready\n");
                                         sk->sk_data_ready(sk, 0);
                                 }
                         }
@@ -2899,9 +2891,6 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	}
 
 slow_path:
-
-        LOG_DBG("Slow path!\n");
-
 	if (len < (th->doff << 2) || serval_tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
@@ -2914,7 +2903,6 @@ slow_path:
 	if (res <= 0)
 		return -res;
 
-        LOG_DBG("Packet valid!\n");
 step5:
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
 		goto discard;
@@ -2925,7 +2913,7 @@ step5:
 	//serval_tcp_urg(sk, skb, th);
 
 	/* step 7: process the segment text */
-        LOG_DBG("Queueing packet\n");
+        LOG_DBG("Queueing packet, skb->len=%u\n", skb->len);
 
 	serval_tcp_data_queue(sk, skb);
 

@@ -96,7 +96,8 @@ struct serval_tcp_sock {
 	u32	frto_highmark;	/* snd_nxt when RTO occurred */
 	u16	advmss;		/* Advertised MSS			*/
 	u8	frto_counter;	/* Number of new acks after RTO */
-	u8 nonagle     : 4,/* Disable Nagle algorithm?             */
+	u8 nonagle     : 3,/* Disable Nagle algorithm? */
+                fin_recvd : 1,
 		thin_lto    : 1,/* Use linear timeouts for thin streams */
 		thin_dupack : 1,/* Fast retransmit on first dupack      */
 		unused      : 2;

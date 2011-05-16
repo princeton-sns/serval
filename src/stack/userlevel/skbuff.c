@@ -495,6 +495,8 @@ int skb_copy_datagram_iovec(const struct sk_buff *skb,
         if (copy > 0) {
                 if (copy > len)
                         copy = len;
+
+                LOG_DBG("copying %d data to iovec\n", copy);
                 if (memcpy_toiovec(to, skb->data + offset, copy))
                         goto fault;
                 if ((len -= copy) == 0)
