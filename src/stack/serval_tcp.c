@@ -156,7 +156,13 @@ static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 		}
 		TCP_CHECK_TIMER(sk);
 		return 0;
+	} 
+
+	TCP_CHECK_TIMER(sk);
+	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
+		goto reset;
 	}
+	TCP_CHECK_TIMER(sk);
 
 reset:
         LOG_WARN("Should handle rcv in non-established state\n");

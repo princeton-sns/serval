@@ -916,6 +916,8 @@ static inline char *tcphdr_to_str(const struct tcphdr *th)
 
 	return buf;       
 }
+int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
+                                 struct tcphdr *th, unsigned len);
 
 int serval_tcp_rcv_established(struct sock *sk, 
                                struct sk_buff *skb,
