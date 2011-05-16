@@ -2684,6 +2684,143 @@ static inline int serval_tcp_checksum_complete_user(struct sock *sk,
 
 
 /*
+ *	This function implements the receiving procedure of RFC 793 for
+ *	all states except ESTABLISHED and TIME_WAIT.
+ *	It's called from both tcp_v4_rcv and tcp_v6_rcv and should be
+ *	address independent.
+ */
+
+int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
+                                 struct tcphdr *th, unsigned len)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	int queued = 0;
+	int res;
+
+	tp->rx_opt.saw_tstamp = 0;
+
+	switch (sk->sk_state) {
+	case TCP_CLOSE:
+	case TCP_LISTEN:
+        case TCP_SYN_SENT:
+		goto discard;
+        }
+
+	res = serval_tcp_validate_incoming(sk, skb, th, 0);
+
+	if (res <= 0)
+		return -res;
+
+	/* step 5: check the ACK field */
+	if (th->ack) {
+		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
+
+		switch (sk->sk_state) {
+		case TCP_FIN_WAIT1:
+			if (tp->snd_una == tp->write_seq) {
+#if defined(OS_LINUX_KERNEL)
+				dst_confirm(__sk_dst_get(sk));
+#endif
+#if 0
+				if (!sock_flag(sk, SOCK_DEAD))
+					/* Wake up lingering close() */
+					sk->sk_state_change(sk);
+				else {
+					int tmo;
+
+					if (tp->linger2 < 0 ||
+					    (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
+					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
+						serval_tcp_done(sk);
+						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
+						return 1;
+					}
+
+					tmo = serval_tcp_fin_time(sk);
+
+					if (tmo > TCP_TIMEWAIT_LEN) {
+						serval_tsk_reset_keepalive_timer(sk, tmo - TCP_TIMEWAIT_LEN);
+					} else if (th->fin || sock_owned_by_user(sk)) {
+						/* Bad case. We could lose such FIN otherwise.
+						 * It is not a big problem, but it looks confusing
+						 * and not so rare event. We still can lose it now,
+						 * if it spins in bh_lock_sock(), but it is really
+						 * marginal case.
+						 */
+						serval_tsk_reset_keepalive_timer(sk, tmo);
+					} else {
+						serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
+						goto discard;
+					}
+				}
+#endif /* 0 */
+			}
+			break;
+#if 0
+		case TCP_CLOSING:
+			if (tp->snd_una == tp->write_seq) {
+				serval_tcp_time_wait(sk, TCP_TIME_WAIT, 0);
+				goto discard;
+			}
+			break;
+
+		case TCP_LAST_ACK:
+			if (tp->snd_una == tp->write_seq) {
+				tcp_update_metrics(sk);
+				tcp_done(sk);
+				goto discard;
+			}
+			break;
+#endif
+		}
+	} else
+		goto discard;
+
+	/* step 6: check the URG bit */
+	//serval_tcp_urg(sk, skb, th);
+
+	/* step 7: process the segment text */
+	switch (sk->sk_state) {
+	case TCP_CLOSE_WAIT:
+	case TCP_CLOSING:
+	case TCP_LAST_ACK:
+		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt))
+			break;
+	case TCP_FIN_WAIT1:
+	case TCP_FIN_WAIT2:
+		/* RFC 793 says to queue data in these states,
+		 * RFC 1122 says we MUST send a reset.
+		 * BSD 4.4 also does reset.
+		 */
+		if (sk->sk_shutdown & RCV_SHUTDOWN) {
+			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
+			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
+				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
+				serval_tcp_reset(sk);
+				return 1;
+			}
+		}
+		/* Fall through */
+	case TCP_ESTABLISHED:
+		serval_tcp_data_queue(sk, skb);
+		queued = 1;
+		break;
+	}
+
+	/* tcp_data could move socket to TIME-WAIT */
+	if (sk->sk_state != TCP_CLOSE) {
+		serval_tcp_data_snd_check(sk);
+		serval_tcp_ack_snd_check(sk);
+	}
+
+	if (!queued) {
+discard:
+		__kfree_skb(skb);
+	}
+	return 0;
+}
+
+/*
  *	TCP receive function for the ESTABLISHED state.
  *
  *	It is split into a fast path and a slow path. The fast path is

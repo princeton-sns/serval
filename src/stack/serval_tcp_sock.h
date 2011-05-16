@@ -159,7 +159,8 @@ struct serval_tcp_sock {
 	u32	total_retrans;	/* Total retransmits for entire connection */
 
 	u32 urg_seq;	/* Seq of received urgent pointer */
-        
+        int linger2;
+
  	struct timer_list	  retransmit_timer;
  	struct timer_list	  delack_timer;
 	unsigned long		  timeout;
