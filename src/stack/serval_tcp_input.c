@@ -2733,6 +2733,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
 						serval_tcp_done(sk);
 						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
+                                                LOG_DBG("TCP Done!\n");
 						return 1;
 					}
 
@@ -2797,6 +2798,9 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
 				serval_tcp_reset(sk);
+                                LOG_DBG("Sent reset!\n");
+                                /* FIXME: free_skb here, or handle in
+                                   calling func? */
 				return 1;
 			}
 		}

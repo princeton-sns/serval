@@ -159,6 +159,7 @@ static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 	} 
 
 	TCP_CHECK_TIMER(sk);
+
 	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
                 err = -1;
 		goto reset;
