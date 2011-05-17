@@ -108,7 +108,6 @@ static int serval_tcp_connection_request(struct sock *sk,
         
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header?\n");
-                FREE_SKB(skb);
                 return -1;
         }
 
@@ -142,7 +141,7 @@ static void serval_tcp_connection_respond_sock(struct sock *sk,
 static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
         int err = 0;
-
+        
         if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		//sock_rps_save_rxhash(sk, skb->rxhash);
 		TCP_CHECK_TIMER(sk);
@@ -165,9 +164,10 @@ static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 	}
 	TCP_CHECK_TIMER(sk);
 
+        return 0;
 reset:
-        LOG_WARN("Should handle RESET in non-established state\n");
-        //FREE_SKB(skb);
+        //LOG_WARN("Should handle RESET in non-established state\n");
+        __kfree_skb(skb);
         return err;
 }
 

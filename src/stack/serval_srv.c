@@ -327,8 +327,9 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         if (ssk->af_ops->conn_build_syn) {
                 err = ssk->af_ops->conn_build_syn(sk, skb);
 
-                if (err < 0) {
+                if (err) {
                         LOG_ERR("Transport protocol returned error\n");
+                        FREE_SKB(skb);
                         return err;
                 }
         }
@@ -518,7 +519,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         if (ssk->af_ops->conn_request) {
                 err = ssk->af_ops->conn_request(sk, rsk, skb);
                 
-                if (err < 0) {
+                if (err) {
                         reqsk_free(rsk);
                         goto drop;
                 }
@@ -558,7 +559,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
         if (ssk->af_ops->conn_build_synack) {
                 err = ssk->af_ops->conn_build_synack(sk, dst, rsk, rskb);
                 
-                if (err < 0) {
+                if (err) {
                         reqsk_free(rsk);
                         goto drop_and_release;
                 }
@@ -1074,7 +1075,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         if (ssk->af_ops->request_state_process) {
                 err = ssk->af_ops->request_state_process(sk, skb);
 
-                if (err < 0) {
+                if (err) {
                         LOG_ERR("Transport drops packet\n");
                         goto error;
                 }
@@ -1099,7 +1100,7 @@ static int serval_srv_request_state_process(struct sock *sk,
         if (ssk->af_ops->conn_build_ack) {
                 err = ssk->af_ops->conn_build_ack(sk, rskb);
 
-                if (err < 0) {
+                if (err) {
                         LOG_ERR("Transport drops packet on building ACK\n");
                         goto drop;
                 }
@@ -1132,9 +1133,8 @@ static int serval_srv_respond_state_process(struct sock *sk,
 {
         int err = 0;
 
-        if (!has_valid_connection_extension(sk, sfh)) {
+        if (!has_valid_connection_extension(sk, sfh))
                 goto drop;
-        }
 
         /* Process ACK */
         if (serval_srv_ack_process(sk, sfh, skb) == 0) {
@@ -1142,9 +1142,9 @@ static int serval_srv_respond_state_process(struct sock *sk,
                 LOG_DBG("\n");
 
                 if (ssk->af_ops->respond_state_process) {
-                        if (ssk->af_ops->respond_state_process(sk, skb) != 0) {
-                                LOG_WARN("Dropping ACK\n");
-                                goto drop;
+                        if (ssk->af_ops->respond_state_process(sk, skb)) {
+                                LOG_WARN("Transport drops ACK\n");
+                                goto error;
                         }
                 }
 
@@ -1162,7 +1162,7 @@ static int serval_srv_respond_state_process(struct sock *sk,
         }
 drop:
         FREE_SKB(skb);
-
+error:
         return err;
 }
 
