@@ -1170,6 +1170,7 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                                              struct serval_hdr *sfh, 
                                              struct sk_buff *skb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err;
         
         if (sfh->flags & SVH_FIN) {
@@ -1194,8 +1195,17 @@ static int serval_srv_finwait1_state_process(struct sock *sk,
                 }
         }
 
-        FREE_SKB(skb);
+        /* Set the received service id */
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
+               sizeof(ssk->peer_srvid));
+        /* Set receive IP */
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
+               sizeof(ip_hdr(skb)->saddr));
         
+        err = ssk->af_ops->receive(sk, skb);
+
+        //FREE_SKB(skb);
+                
         return err;
 }
 
@@ -1203,6 +1213,7 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
                                              struct serval_hdr *sfh, 
                                              struct sk_buff *skb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
         if (sfh->flags & SVH_FIN) {
@@ -1214,8 +1225,17 @@ static int serval_srv_finwait2_state_process(struct sock *sk,
                 }
         }
 
-        FREE_SKB(skb);
+        /* Set the received service id */
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
+               sizeof(ssk->peer_srvid));
+        /* Set receive IP */
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
+               sizeof(ip_hdr(skb)->saddr));
+        
+        err = ssk->af_ops->receive(sk, skb);
 
+        //FREE_SKB(skb);
+        
         return err;
 }
 
@@ -1223,6 +1243,7 @@ static int serval_srv_closing_state_process(struct sock *sk,
                                             struct serval_hdr *sfh, 
                                             struct sk_buff *skb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
         err = serval_srv_ack_process(sk, sfh, skb);
@@ -1232,7 +1253,16 @@ static int serval_srv_closing_state_process(struct sock *sk,
                 serval_srv_timewait(sk, SERVAL_TIMEWAIT);
         }
 
-        FREE_SKB(skb);
+        /* Set the received service id */
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
+               sizeof(ssk->peer_srvid));
+        /* Set receive IP */
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
+               sizeof(ip_hdr(skb)->saddr));
+        
+        err = ssk->af_ops->receive(sk, skb);
+
+        //FREE_SKB(skb);
 
         return err;
 }
@@ -1241,6 +1271,7 @@ static int serval_srv_lastack_state_process(struct sock *sk,
                                             struct serval_hdr *sfh, 
                                             struct sk_buff *skb)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
         err = serval_srv_ack_process(sk, sfh, skb);
@@ -1250,7 +1281,16 @@ static int serval_srv_lastack_state_process(struct sock *sk,
                 serval_sock_done(sk);
         }
 
-        FREE_SKB(skb);
+        /* Set the received service id */
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
+               sizeof(ssk->peer_srvid));
+        /* Set receive IP */
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
+               sizeof(ip_hdr(skb)->saddr));
+        
+        err = ssk->af_ops->receive(sk, skb);
+
+        //FREE_SKB(skb);
 
         return err;
 }
