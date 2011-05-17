@@ -392,7 +392,7 @@ static void print_help()
 {
         printf("Usage: %s [-hfmbs]\n", progname);
         printf("-h, --help              - Print this information.\n"
-               "-f, --file FILE         - Write data to FILE.\n"
+               "-f, --file FILE         - Read data from FILE.\n"
                "-m, --migrate BYTE      - Migrate at every sent data byte BYTE.\n"
                "-b, --buffer BYTES      - Generate BYTES bytes random data using a memory buffer.\n"
                "-s, --seed SEED         - Set PRNG seed to SEED.\n");    
