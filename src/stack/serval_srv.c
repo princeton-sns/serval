@@ -1773,9 +1773,13 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
-
+        
         /* If we are connected, transmit immediately */
-	if (sk->sk_state == SERVAL_CONNECTED)
+        if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 
+                                   SERVALF_FINWAIT1 | 
+                                   SERVALF_FINWAIT2 | 
+                                   SERVALF_CLOSING | 
+                                   SERVALF_CLOSEWAIT))
 		return serval_srv_do_xmit(skb);
         
 	/* Unresolved packet, use service id to resolve IP, unless IP
