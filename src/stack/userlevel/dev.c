@@ -64,7 +64,7 @@ void dev_list_destroy(void)
                         break;
 
                 de = list_first_entry(&dev_list, struct dev_entry, lh);
-                list_del(&de->lh);
+                list_del(&de->lh);                
                 free(de);
         }
 }
@@ -815,6 +815,7 @@ void netdev_fini(void)
                 } else {
                         LOG_DBG("join successful\n");
                 }
+                LOG_DBG("%s refcnt=%d\n", dev->name, atomic_read(&dev->refcnt));
                 dev_put(dev);
         }
         
