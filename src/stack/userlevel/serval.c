@@ -273,7 +273,7 @@ static int server_run(void)
 				LOG_INF("select interrupted\n");
 				continue;
 			}
-			LOG_ERR("select error...\n");
+			LOG_ERR("select error : %s\n", strerror(errno));
 			break;                                        
 		} else if (ret == 0) {
 			/* Timeout, handle timers */
