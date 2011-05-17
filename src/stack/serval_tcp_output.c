@@ -1501,10 +1501,8 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
-        if (!th) {
-                FREE_SKB(skb);
-                return -ENOMEM;
-        }
+        if (!th)
+                return -1;
 
         if (!tp->write_seq)
                 tp->write_seq = serval_tcp_random_sequence_number();
@@ -1546,6 +1544,9 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         int mss;
 
         th = (struct tcphdr *)skb_push(skb, sizeof(*th));
+
+        if (!th)
+                return -1;
 
 #if defined(OS_LINUX_KERNEL)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
@@ -1625,10 +1626,8 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
-        if (!th) {
-                FREE_SKB(skb);
-                return -ENOMEM;
-        }
+        if (!th)
+                return -1;
 
         memset(th, 0, sizeof(*th));
         th->ack = 1;
@@ -1652,10 +1651,8 @@ int serval_tcp_connection_build_fin(struct sock *sk,
 
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
-        if (!th) {
-                FREE_SKB(skb);
-                return -ENOMEM;
-        }
+        if (!th)
+                return -1;
 
         memset(th, 0, sizeof(*th));
         th->fin = 0;

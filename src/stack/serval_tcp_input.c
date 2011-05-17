@@ -2709,7 +2709,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	res = serval_tcp_validate_incoming(sk, skb, th, 0);
 
 	if (res <= 0)
-		return -res;
+                return -res;
 
 	/* step 5: check the ACK field */
 	if (th->ack) {
@@ -3079,11 +3079,12 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         u32 ack_seq, seq;
         int err = 0;
+        int queued = 0;
 
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header?\n");
-                FREE_SKB(skb);
-                return -1;
+                __kfree_skb(skb);
+                return 0;
         }
 
         th = tcp_hdr(skb);
@@ -3102,7 +3103,8 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 
                 if (!acceptable) {
                         LOG_WARN("ACK is not acceptable.\n");
-                        return 1;
+                        __kfree_skb(skb);
+                        return 0;
                 }
                 
                 LOG_DBG("ACK is acceptable!\n");
@@ -3145,6 +3147,10 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         } else {
                 LOG_WARN("No ACK flag in packet!\n");
                 err = 1;
+        }
+
+        if (!queued) {
+                __kfree_skb(skb);
         }
 
         return err;
