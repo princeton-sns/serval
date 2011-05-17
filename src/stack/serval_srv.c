@@ -1357,6 +1357,8 @@ int serval_srv_state_process(struct sock *sk,
                 err = serval_srv_lastack_state_process(sk, sfh, skb);
                 break;
         case SERVAL_TIMEWAIT:
+                LOG_DBG("Socket in TIMEWAIT, dropping packet\n");
+                goto drop;
         default:
                 LOG_ERR("bad socket state %u\n", sk->sk_state);
                 goto drop;
