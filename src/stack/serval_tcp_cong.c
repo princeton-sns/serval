@@ -20,6 +20,17 @@ void serval_tcp_init_congestion_control(struct sock *sk)
 		tp->ca_ops->init(sk);
 }
 
+/* Manage refcounts on socket close. */
+void serval_tcp_cleanup_congestion_control(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (tp->ca_ops->release)
+		tp->ca_ops->release(sk);
+
+	//module_put(tp->ca_ops->owner);
+}
+
 
 
 /* RFC2861 Check whether we are limited by application or congestion window

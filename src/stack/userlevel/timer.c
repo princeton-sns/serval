@@ -226,9 +226,9 @@ int timer_list_handle_timeout(void)
 	timer_list_unlock(tlh);
 
 	/* Call timer function, passing the data */
-        if (timer->function)
+        if (timer->function) {
                 timer->function(timer->data); 
-        else {
+        } else {
                 LOG_WARN("timer function is NULL\n");
         }
         
@@ -294,7 +294,6 @@ __attribute__((constructor))
 #endif
 void timer_list_init(void)
 {
-        LOG_DBG("timer list was initialized\n");
         gettime(&timer_list.start_time);
 }
 #endif
@@ -389,7 +388,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
                         timer_list_signal_timer_change(tlh);
                 } 
 	}
-	
+       
 	timer_list_unlock(tlh);
 
 	return ret;

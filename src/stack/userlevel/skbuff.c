@@ -8,6 +8,10 @@
 #include <serval/netdevice.h>
 #include <serval/dst.h>
 
+atomic_t num_skb_alloc = ATOMIC_INIT(0);
+atomic_t num_skb_clone = ATOMIC_INIT(0);
+atomic_t num_skb_free = ATOMIC_INIT(0);
+
 static void skb_release_head_state(struct sk_buff *skb)
 {
 	/* Release state associated with head */
@@ -35,16 +39,24 @@ static void skb_release_all(struct sk_buff *skb)
 
 void __kfree_skb(struct sk_buff *skb)
 {
-        LOG_DBG("Free skb %p\n", skb);
+#if defined(SKB_REFCNT_DEBUG)
+        printf("skb %p users=%d -- freeing\n",
+               skb, atomic_read(&skb->users));
+#endif
 	skb_release_all(skb);
 	free(skb);
+        atomic_inc(&num_skb_free);
 }
 
 void kfree_skb(struct sk_buff *skb)
 {
-	if (likely(!atomic_dec_and_test(&skb->users)))
-		return;
-
+	if (likely(!atomic_dec_and_test(&skb->users))) {
+#if defined(SKB_REFCNT_DEBUG)
+                printf("skb %p users=%d -- NOT freeing\n",
+                       skb, atomic_read(&skb->users));
+#endif
+                return;
+        }
 	__kfree_skb(skb);
 }
 
@@ -88,6 +100,10 @@ struct sk_buff *__alloc_skb(unsigned int size, int fclone, int node)
 	memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
 
 	atomic_set(&shinfo->dataref, 1);
+#if defined(SKB_REFCNT_DEBUG)
+        printf("allocating skb %p\n", skb);
+#endif
+        atomic_inc(&num_skb_alloc);
 
 	return skb;
 nodata:
@@ -143,6 +159,9 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	atomic_inc(&(skb_shinfo(skb)->dataref));
 	skb->cloned = 1;
 
+        //atomic_inc(&num_skb_alloc);
+        atomic_inc(&num_skb_clone);
+
 	return n;
 #undef C
 }
@@ -153,9 +172,13 @@ struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
 	struct sk_buff *n;
 
         n = (struct sk_buff *)malloc(sizeof(*n));
-
+        
         if (!n)
                 return NULL;
+
+#if defined(SKB_REFCNT_DEBUG)
+        printf("cloning skb %p clone %p\n", skb, n);
+#endif
         /*
 	n = skb + 1;
 	if (skb->fclone == SKB_FCLONE_ORIG &&
