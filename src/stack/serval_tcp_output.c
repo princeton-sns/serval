@@ -1457,7 +1457,6 @@ static void serval_tcp_connect_init(struct sock *sk)
 	serval_tcp_clear_retrans(tp);       
 }
 
-
 static int serval_tcp_build_header(struct sock *sk, 
                                    struct sk_buff *skb,
                                    u32 seq)
@@ -1666,7 +1665,6 @@ int serval_tcp_connection_build_fin(struct sock *sk,
 
         return 0;
 }
-
 
 /* We get here when a process closes a file descriptor (either due to
  * an explicit close() or as a byproduct of exit()'ing) and there
