@@ -54,6 +54,8 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 #define PACKET_FASTROUTE        6
 #endif /* !OS_LINUX */
 
+//#define SKB_REFCNT_DEBUG 1
+
 struct net_device;
 struct sock;
 struct sk_buff;
@@ -279,6 +281,10 @@ static inline struct sk_buff *skb_queue_prev(const struct sk_buff_head *list,
 static inline struct sk_buff *skb_get(struct sk_buff *skb)
 {
 	atomic_inc(&skb->users);
+#if defined(SKB_REFCNT_DEBUG)
+        printf("Increasing skb %p users to %d\n", 
+               skb, atomic_read(&skb->users));
+#endif
 	return skb;
 }
 

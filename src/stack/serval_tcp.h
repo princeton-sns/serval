@@ -799,6 +799,7 @@ static inline int serval_tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 
 
 extern void serval_tcp_init_congestion_control(struct sock *sk);
+void serval_tcp_cleanup_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
@@ -829,6 +830,11 @@ void serval_tcp_send_delayed_ack(struct sock *sk);
 void serval_tcp_send_ack(struct sock *sk);
 void serval_tcp_send_fin(struct sock *sk);
 
+void serval_tcp_init_xmit_timers(struct sock *);
+static inline void serval_tcp_clear_xmit_timers(struct sock *sk)
+{
+	serval_tsk_clear_xmit_timers(sk);
+}
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary
  * between different flows.
@@ -935,8 +941,6 @@ union serval_tcp_word_hdr {
 
 #define serval_tcp_flag_word(tp) ( ((union serval_tcp_word_hdr *)(tp))->words [3]) 
 
-
-void serval_tcp_init_xmit_timers(struct sock *sk);
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/tcp.h>

@@ -54,6 +54,8 @@ struct request_sock_ops;
 #define RCV_SHUTDOWN	1
 #define SEND_SHUTDOWN	2
 
+//#define SOCK_REFCNT_DEBUG 1
+
 typedef struct {
         pthread_mutex_t slock;
         int owned;
@@ -437,37 +439,55 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
 void sk_free(struct sock *sk);
 
-static inline void sock_hold(struct sock *sk)
+static inline void sock_hold_real(struct sock *sk)
 {
         atomic_inc(&sk->sk_refcnt);
-#if defined(SOCK_REFCNT_DEBUG)
-        printf("%s %p refcnt=%u\n",
-               __func__, sk, atomic_read(&sk->sk_refcnt));
-#endif
 }
+
+#if defined(SOCK_REFCNT_DEBUG)
+#define sock_hold(sk) do {                                              \
+                sock_hold_real(sk);                                     \
+                printf("%s:%d/%s() sock_hold: %p refcnt=%u\n",          \
+                       __FILE__, __LINE__, __func__,                    \
+                       sk, atomic_read(&sk->sk_refcnt));                \
+        } while (0)                                            
+#else
+#define sock_hold(sk) sock_hold_real(sk)
+#endif
 
 /* 
    Ungrab socket in the context, which assumes that socket refcnt
    cannot hit zero, f.e. it is true in context of any socketcall.
  */
-static inline void __sock_put(struct sock *sk)
+static inline void __sock_put_real(struct sock *sk)
 {
-#if defined(SOCK_REFCNT_DEBUG)
-        printf("%s %p refcnt=%u\n", 
-               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
-#endif
 	atomic_dec(&sk->sk_refcnt);
 }
 
-static inline void sock_put(struct sock *sk)
+static inline void sock_put_real(struct sock *sk)
 {
-#if defined(SOCK_REFCNT_DEBUG)
-        printf("%s %p refcnt=%u\n", 
-               __func__, sk, atomic_read(&sk->sk_refcnt) - 1);
-#endif
         if (atomic_dec_and_test(&sk->sk_refcnt))
                 sk_free(sk);
 }
+
+#if defined(SOCK_REFCNT_DEBUG)
+#define __sock_put(sk) do {                                     \
+                printf("%s:%d/%s() __sock_put %p refcnt=%u\n",  \
+                       __FILE__, __LINE__, __func__,            \
+                       sk, atomic_read(&sk->sk_refcnt) - 1);    \
+                __sock_put_real(sk);                            \
+        } while (0)
+
+#define sock_put(sk) do {                                       \
+                printf("%s:%d/%s() %p sock_put refcnt=%u\n",    \
+                       __FILE__, __LINE__, __func__,            \
+                       sk, atomic_read(&sk->sk_refcnt) - 1);    \
+                sock_put_real(sk);                              \
+        } while (0)
+#else
+#define __sock_put(sk) __sock_put_real(sk)
+#define sock_put(sk) sock_put_real(sk)
+#endif
 
 void lock_sock(struct sock *sk);
 
