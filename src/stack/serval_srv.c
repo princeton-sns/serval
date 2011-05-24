@@ -563,6 +563,8 @@ static int serval_srv_syn_rcv(struct sock *sk,
                         reqsk_free(rsk);
                         goto drop_and_release;
                 }
+        } else {
+                LOG_DBG("Transport has no SYNACK callback\n");
         }
 
         rskb->protocol = IPPROTO_SERVAL;
@@ -816,10 +818,10 @@ static int serval_srv_rcv_close_req(struct sock *sk,
                 if (ssk->af_ops->close_request) {
                         err = ssk->af_ops->close_request(sk, skb);
                 } else {
-                        /* If transport has no close_request function, assume 1 */
+                        /* If transport has no close_request function,
+                           assume 1 */
                         err = 1;
                 }
-
                 
                 /* FIXME: This is a HACK! If close_request
                  * returns 1, the transport is ready to tell
@@ -916,7 +918,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
                 err = serval_srv_rcv_close_req(sk, sfh, skb);
 
                 if (err == 0) {
-                        /* Valid FIN means valid ctrl header that may
+                        /* Valid FIN means valid header that may
                            contain ACK */
                         serval_srv_ack_process(sk, sfh, skb);
                         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;

@@ -232,6 +232,9 @@ static int server_run(void)
 		ret = timer_list_get_next_timeout(&timeout, 
                                                   timer_list_signal);
 
+                if (timeout.tv_sec < 0)
+                        goto handle_timeout;
+
 		if (ret == -1) {
 			/* Timer list error. Exit? */
 			break;
@@ -246,7 +249,8 @@ static int server_run(void)
 			      NULL, NULL, to, &orig_sigset);		
 #else
 		{
-			/* Emulate pselect behavior */
+			/* Emulate pselect behavior. Potential
+                           problem: these calls are not atomic. */
 			struct timeval tv, *t = NULL;
 			sigset_t old_set;
 
@@ -272,10 +276,18 @@ static int server_run(void)
 			if (errno == EINTR) {
 				LOG_INF("select interrupted\n");
 				continue;
-			}
-			LOG_ERR("select error : %s\n", strerror(errno));
+			} else if (errno == EINVAL) {
+                                LOG_ERR("Ivalid timeout or negative ndfs\n");
+                                LOG_ERR("Timeout is %ld %ld\n", 
+                                        to->tv_sec, to->tv_nsec);
+                        }
+                       
+			LOG_ERR("select : %s\n", 
+                                strerror(errno));
+                        LOG_ERR("Exiting due to error!!!\n");
 			break;                                        
 		} else if (ret == 0) {
+                handle_timeout:
 			/* Timeout, handle timers */
 			timer_list_handle_timeout();
 			continue;

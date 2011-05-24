@@ -35,6 +35,7 @@ static void skb_release_all(struct sk_buff *skb)
 
 void __kfree_skb(struct sk_buff *skb)
 {
+        LOG_DBG("Free skb %p\n", skb);
 	skb_release_all(skb);
 	free(skb);
 }

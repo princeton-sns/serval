@@ -187,8 +187,10 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 		goto discard_it;
 #endif
 
-	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
-		goto discard_it;
+	if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
+                LOG_DBG("No TCP header\n");
+                goto discard_it;
+        }
 
 	th = tcp_hdr(skb);
 
@@ -236,7 +238,7 @@ bad_packet:
         LOG_ERR("Bad packet\n");
 discard_it:
         LOG_ERR("Discarding TCP packet\n");
-        FREE_SKB(skb);
+        kfree_skb(skb);
 
         return 0;
 }
