@@ -321,8 +321,40 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
         
         skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
-        skb->protocol = 0;
+        skb->protocol = IPPROTO_SERVAL;
 
+#if 0
+        if (has_dst_ip) {
+                nexthop = daddr = usin->sin_addr.s_addr;
+                if (inet->opt && inet->opt->srr) {
+                        if (!daddr)
+                                return -EINVAL;
+                        nexthop = inet->opt->faddr;
+                }
+
+                tmp = ip_route_connect(&rt, nexthop, inet->inet_saddr,
+                                       RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
+                                       IPPROTO_TCP,
+                                       inet->inet_sport, usin->sin_port, sk, 1);
+                if (tmp < 0) {
+                        if (tmp == -ENETUNREACH)
+			IP_INC_STATS_BH(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
+                        return tmp;
+                }
+                
+                if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
+                        ip_rt_put(rt);
+		return -ENETUNREACH;
+                }
+                
+                if (!inet->opt || !inet->opt->srr)
+                        daddr = rt->rt_dst;
+                
+                if (!inet->inet_saddr)
+                        inet->inet_saddr = rt->rt_src;
+                inet->inet_rcv_saddr = inet->inet_saddr;
+        }
+#endif
         /* Ask transport to fill in */
         if (ssk->af_ops->conn_build_syn) {
                 err = ssk->af_ops->conn_build_syn(sk, skb);
@@ -334,15 +366,16 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
                 }
         }
 
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
+        memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(struct service_id));
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
         ssk->snd_seq.nxt = ssk->snd_seq.iss + 1;
         memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
-        LOG_DBG("Sending REQUEST seqno=%u\n",
-                SERVAL_SKB_CB(skb)->seqno);
+        LOG_DBG("Sending REQUEST seqno=%u srvid=%s\n",
+                SERVAL_SKB_CB(skb)->seqno, 
+                service_id_to_str(&SERVAL_SKB_CB(skb)->srvid));
 
         err = serval_srv_queue_and_push(sk, skb);
         
@@ -374,6 +407,9 @@ void serval_srv_close(struct sock *sk, long timeout)
             sk->sk_state == SERVAL_CLOSEWAIT) {
                 struct serval_sock *ssk = serval_sk(sk);
                 
+                if (ssk->close_received)
+                        serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+
                 if (ssk->af_ops->conn_close) {
                         err = ssk->af_ops->conn_close(sk);
 
@@ -381,6 +417,7 @@ void serval_srv_close(struct sock *sk, long timeout)
                                 LOG_ERR("Transport error %d\n", err);
                         }
                 }
+
                 if (sk->sk_state == SERVAL_CLOSEWAIT) {
                         serval_sock_set_state(sk, SERVAL_LASTACK);
                 } else {
@@ -607,6 +644,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 LOG_DBG("Hex: %s\n", hexdump(rskb->data, rskb->len, buf, 900));
         }
         //skb_reset_transport_header(rskb);      
+
         skb_dst_set(rskb, dst);
 
         rskb->dev = skb->dev;
@@ -954,6 +992,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_DATA) {
+                LOG_DBG("Data packet\n");
                 /* Set the received service id */
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
                        sizeof(ssk->peer_srvid));
@@ -963,6 +1002,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
+                LOG_DBG("Not a data packet\n");
                 FREE_SKB(skb);
         }
         return err;
@@ -1671,6 +1711,11 @@ static inline int serval_srv_add_conn_ext(struct sock *sk,
         memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
                sizeof(SERVAL_SKB_CB(skb)->srvid));
         memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        /*
+        LOG_DBG("Connection extension srvid=%s sz=%zu\n",
+                service_id_to_str(&conn_ext->srvid),
+                sizeof(SERVAL_SKB_CB(skb)->srvid));
+        */
         return sizeof(*conn_ext);
 }
 
@@ -1761,7 +1806,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 flags |= SVH_ACK;
         case SERVAL_PKT_CONN_SYN:
                 flags |= SVH_SYN;
-                hdr_len += serval_srv_add_conn_ext(sk, skb, 0);
+                hdr_len += serval_srv_add_conn_ext(sk, skb, 0);               
                 break;
         case SERVAL_PKT_CONN_ACK:
                 flags |= SVH_ACK;
@@ -1795,6 +1840,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
+        skb_reset_transport_header(skb);
         
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 

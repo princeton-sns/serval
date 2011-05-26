@@ -35,11 +35,11 @@ static int serval_udp_connection_request(struct sock *sk,
                                          struct request_sock *rsk,
                                          struct sk_buff *skb);
 
-static void serval_udp_connection_respond_sock(struct sock *sk, 
-                                               struct sk_buff *skb,
-                                               struct request_sock *rsk,
-                                               struct sock *child,
-                                               struct dst_entry *dst);
+static int serval_udp_connection_respond_sock(struct sock *sk, 
+                                              struct sk_buff *skb,
+                                              struct request_sock *rsk,
+                                              struct sock *child,
+                                              struct dst_entry *dst);
 
 static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
 
@@ -146,12 +146,13 @@ int serval_udp_connection_request(struct sock *sk,
         return 0;
 }
 
-void serval_udp_connection_respond_sock(struct sock *sk, 
-                                        struct sk_buff *skb,
-                                        struct request_sock *rsk,
-                                        struct sock *child,
-                                        struct dst_entry *dst)
+int serval_udp_connection_respond_sock(struct sock *sk, 
+                                       struct sk_buff *skb,
+                                       struct request_sock *rsk,
+                                       struct sock *child,
+                                       struct dst_entry *dst)
 {
+        return 0;
 }
 
 /* 
