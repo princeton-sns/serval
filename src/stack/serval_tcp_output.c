@@ -476,8 +476,12 @@ static void serval_tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
  */
 static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
-	skb->ip_summed = CHECKSUM_PARTIAL;
-	skb->csum = 0;
+        /* Tells hardware to compute checksum or not. */
+	skb->ip_summed = CHECKSUM_NONE;
+	//skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->csum = 0; /* For outgoing packets, this is the offset
+                        * (starting at the end of IP I guess) where to
+                        * put the hardware computed checksum */
 	
         TCP_SKB_CB(skb)->flags = flags;
 	TCP_SKB_CB(skb)->sacked = 0;
@@ -656,6 +660,9 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	}
 
         LOG_DBG("queue_xmit\n");
+
+        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
+               sizeof(inet_sk(sk)->inet_daddr));
 
 	err = serval_srv_xmit_skb(skb);
         //ssk->af_ops->queue_xmit(skb);
@@ -1389,12 +1396,9 @@ static void serval_tcp_connect_init(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	__u8 rcv_wscale;
-#if defined(OS_LINUX_KERNEL)
 	struct dst_entry *dst = __sk_dst_get(sk);
-        unsigned int initrwnd = dst_metric(dst, RTAX_INITRWND);
-#else
-        unsigned int initrwnd = 65535;
-#endif
+        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_INITRWND) : 655356;
+
         tp->tcp_header_len = sizeof(struct tcphdr);
  
 	if (tp->rx_opt.user_mss)
@@ -1402,27 +1406,18 @@ static void serval_tcp_connect_init(struct sock *sk)
 	tp->max_window = 0;
 	serval_tcp_mtup_init(sk);
 
-#if defined(OS_LINUX_KERNEL)
-	serval_tcp_sync_mss(sk, dst_mtu(dst));
-#else
-        serval_tcp_sync_mss(sk, 1500);
-#endif
-	if (!tp->window_clamp) {
-#if defined(OS_LINUX_KERNEL)
-		tp->window_clamp = dst_metric(dst, RTAX_WINDOW);
-#else
-                tp->window_clamp = 65535;
-#endif
-        }
+        if (dst) 
+                serval_tcp_sync_mss(sk, dst_mtu(dst));
+        else
+                serval_tcp_sync_mss(sk, 1500);
 
-#if defined(OS_LINUX_KERNEL)
+	if (!tp->window_clamp)
+		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 65535;
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	tp->advmss = dst_metric(dst, RTAX_ADVMSS);
+	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : TCP_MSS_DEFAULT;
 #else
-	tp->advmss = dst_metric_advmss(dst);
-#endif
-#else
-        tp->advmss = TCP_MSS_DEFAULT;
+	tp->advmss = dst ? dst_metric_advmss(dst) : TCP_MSS_DEFAULT;
 #endif
 
 	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
@@ -1503,6 +1498,8 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         if (!th)
                 return -1;
 
+        skb_reset_transport_header(skb);
+
         if (!tp->write_seq)
                 tp->write_seq = serval_tcp_random_sequence_number();
 
@@ -1512,6 +1509,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq, flags);
+
         th->syn = 1;
 	th->source		= htons(1);
 	th->dest		= htons(2);
@@ -1546,6 +1544,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
         if (!th)
                 return -1;
+
+        skb_reset_transport_header(skb);
 
 #if defined(OS_LINUX_KERNEL)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
@@ -1628,6 +1628,7 @@ int serval_tcp_connection_build_ack(struct sock *sk,
         if (!th)
                 return -1;
 
+        skb_reset_transport_header(skb);
         memset(th, 0, sizeof(*th));
         th->ack = 1;
 	th->source = 0;
@@ -1653,6 +1654,7 @@ int serval_tcp_connection_build_fin(struct sock *sk,
         if (!th)
                 return -1;
 
+        skb_reset_transport_header(skb);
         memset(th, 0, sizeof(*th));
         th->fin = 0;
 	th->source = 0;
