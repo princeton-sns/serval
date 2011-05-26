@@ -1444,7 +1444,11 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
 	serval_tcp_mtup_init(newsk);
 #if defined(OS_LINUX_KERNEL)
         serval_tcp_sync_mss(newsk, dst_mtu(dst));
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
+#else
+        newtp->advmss = dst_metric_advmss(dst);
+#endif
 #else
         serval_tcp_sync_mss(newsk, TCP_MSS_DEFAULT);
 	newtp->advmss = TCP_MSS_DEFAULT;

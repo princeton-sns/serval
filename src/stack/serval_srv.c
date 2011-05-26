@@ -606,7 +606,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                 char buf[900];                
                 LOG_DBG("Hex: %s\n", hexdump(rskb->data, rskb->len, buf, 900));
         }
-        skb_reset_transport_header(rskb);      
+        //skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
 
         rskb->dev = skb->dev;
