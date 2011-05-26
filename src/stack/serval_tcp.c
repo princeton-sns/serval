@@ -162,11 +162,11 @@ static int serval_tcp_connection_request(struct sock *sk,
         return 0;
 }
 
-static void serval_tcp_connection_respond_sock(struct sock *sk, 
-                                               struct sk_buff *skb,
-                                               struct request_sock *rsk,
-                                               struct sock *child,
-                                               struct dst_entry *dst);
+static int serval_tcp_connection_respond_sock(struct sock *sk, 
+                                              struct sk_buff *skb,
+                                              struct request_sock *rsk,
+                                              struct sock *child,
+                                              struct dst_entry *dst);
 
 static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -1312,11 +1312,11 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
    Called when a child sock is created in response to a successful
    three-way handshake on the server side.
  */
-void serval_tcp_connection_respond_sock(struct sock *sk, 
-                                        struct sk_buff *skb,
-                                        struct request_sock *req,
-                                        struct sock *newsk,
-                                        struct dst_entry *dst)
+int serval_tcp_connection_respond_sock(struct sock *sk, 
+                                       struct sk_buff *skb,
+                                       struct request_sock *req,
+                                       struct sock *newsk,
+                                       struct dst_entry *dst)
 {
         //struct serval_sock *new_ssk = serval_sk(newsk);
         //struct inet_sock *newinet = inet_sk(newsk);
@@ -1338,7 +1338,7 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 	newtp->pred_flags = 0;
 
         newtp->rcv_wup = newtp->copied_seq =
-		newtp->rcv_nxt = treq->rcv_isn + 1;
+                newtp->rcv_nxt = treq->rcv_isn + 1;
 
         newtp->snd_sml = newtp->snd_una =
 		newtp->snd_nxt = newtp->snd_up =
@@ -1397,10 +1397,6 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
           tcp_enable_fack(newtp);
           }
         */
-
-        LOG_DBG("req->window_clamp=%u\n",
-                req->window_clamp);
-
         newtp->window_clamp = req->window_clamp;
         newtp->rcv_ssthresh = req->rcv_wnd;
         newtp->rcv_wnd = req->rcv_wnd;
@@ -1419,12 +1415,16 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 
         newtp->max_window = newtp->snd_wnd;
         
-        LOG_DBG("snd_wnd=%u rcv_wnd=%u\n", newtp->snd_wnd, newtp->rcv_wnd);
+        LOG_DBG("snd_wnd=%u rcv_wnd=%u rcv_nxt=%u snd_nxt=%u snt_isn\n", 
+                newtp->snd_wnd, newtp->rcv_wnd, 
+                newtp->rcv_nxt, newtp->snd_nxt, 
+                treq->snt_isn);
                 
         if (newtp->rx_opt.tstamp_ok ) {
                   newtp->rx_opt.ts_recent = req->ts_recent;
                   newtp->rx_opt.ts_recent_stamp = get_seconds();
-                  newtp->tcp_header_len = sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
+                  newtp->tcp_header_len = sizeof(struct tcphdr) + 
+                          TCPOLEN_TSTAMP_ALIGNED;
         } else {
                 newtp->rx_opt.ts_recent_stamp = 0;
                 newtp->tcp_header_len = sizeof(struct tcphdr);
@@ -1435,8 +1435,6 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 
         
         newtp->rx_opt.mss_clamp = req->mss;
-
-////
 
 	//newsk->sk_gso_type = SKB_GSO_TCPV4;
 	sk_setup_caps(newsk, dst);
@@ -1458,11 +1456,11 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 
 	serval_tcp_initialize_rcv_mss(newsk);
 
-        return;
+        return 0;
 #if defined(OS_LINUX_KERNEL)
 exit:
         dst_release(dst);
-        return;
+        return -1;
 #endif
 }
 

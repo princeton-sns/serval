@@ -521,11 +521,18 @@ static int serval_srv_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
                sizeof(inet_rsk(rsk)->rmt_addr));
-        memcpy(&inet_rsk(rsk)->loc_addr, &ip_hdr(skb)->daddr,
+        memcpy(&inet_rsk(rsk)->loc_addr, &saddr,
                sizeof(inet_rsk(rsk)->loc_addr));
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ntohl(conn_ext->seqno);
-
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("rmt_addr=%s loc_addr=%s\n",
+                        inet_ntop(AF_INET, &inet_rsk(rsk)->rmt_addr, 
+                                  rmtstr, 18),
+                        inet_ntop(AF_INET, &inet_rsk(rsk)->loc_addr, 
+                                  locstr, 18));
+        }
         list_add(&srsk->lh, &ssk->syn_queue);
         
         /* Call upper transport protocol handler */
@@ -658,11 +665,21 @@ serval_srv_create_respond_sock(struct sock *sk,
         nsk = sk_clone(sk, GFP_ATOMIC);
 
         if (nsk) {
+                int ret;
+
                 atomic_inc(&serval_nr_socks);
                 serval_sock_init(nsk);
 
                 /* Transport protocol specific init. */                
-                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, req, nsk, dst);
+                ret = serval_sk(sk)->af_ops->conn_child_sock(sk, skb, 
+                                                             req, nsk, dst);
+
+                if (ret < 0) {
+                        LOG_ERR("Transport child sock init failed\n");
+                        sock_set_flag(nsk, SOCK_DEAD);
+                        sk_free(nsk);
+                        nsk = NULL;
+                }
         }        
         
         return nsk;
@@ -716,15 +733,16 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                         srsk->iss_seq + 1);
                                 return NULL;
                         }
-                        /* Move request sock to accept queue */
-                        list_del(&srsk->lh);
-                        list_add_tail(&srsk->lh, &ssk->accept_queue);
                         
                         nsk = serval_srv_create_respond_sock(sk, skb, 
                                                              rsk, NULL);
                         
                         if (!nsk)
                                 return NULL;
+
+                        /* Move request sock to accept queue */
+                        list_del(&srsk->lh);
+                        list_add_tail(&srsk->lh, &ssk->accept_queue);
 
                         newinet = inet_sk(nsk);
                         nssk = serval_sk(nsk);
