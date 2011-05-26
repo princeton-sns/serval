@@ -466,6 +466,10 @@ static int check_pid_file(void)
         return res;
 }
 
+extern atomic_t num_skb_alloc;
+extern atomic_t num_skb_free;
+extern atomic_t num_skb_clone;
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -590,6 +594,10 @@ int main(int argc, char **argv)
 	serval_fini();
  cleanup_pid:
         unlink(PID_FILE);
+
+        LOG_DBG("num_skb_alloc=%u\n", atomic_read(&num_skb_alloc));
+        LOG_DBG("num_skb_clone=%u\n", atomic_read(&num_skb_clone));
+        LOG_DBG("num_skb_free=%u\n", atomic_read(&num_skb_free));
 
 	return ret;
 }

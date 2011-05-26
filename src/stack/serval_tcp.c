@@ -36,7 +36,37 @@ atomic_long_t serval_tcp_memory_allocated  __read_mostly;
 
 static int serval_tcp_disconnect(struct sock *sk, int flags)
 {
-        return 0;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        int err = 0;
+
+	serval_tcp_clear_xmit_timers(sk);
+	__skb_queue_purge(&sk->sk_receive_queue);
+	serval_tcp_write_queue_purge(sk);
+	__skb_queue_purge(&tp->out_of_order_queue);
+#ifdef CONFIG_NET_DMA
+	__skb_queue_purge(&sk->sk_async_wait_queue);
+#endif
+        tp->srtt = 0;
+	if ((tp->write_seq += tp->max_window + 2) == 0)
+		tp->write_seq = 1;
+	tp->backoff = 0;
+	tp->snd_cwnd = 2;
+	tp->probes_out = 0;
+	tp->packets_out = 0;
+	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+	tp->snd_cwnd_cnt = 0;
+	tp->bytes_acked = 0;
+	tp->window_clamp = 0;
+	serval_tcp_set_ca_state(sk, TCP_CA_Open);
+	serval_tcp_clear_retrans(tp);
+	serval_tsk_delack_init(sk);
+	serval_tcp_init_send_head(sk);
+	memset(&tp->rx_opt, 0, sizeof(tp->rx_opt));
+	__sk_dst_reset(sk);
+
+	sk->sk_error_report(sk);
+
+        return err;
 }
 
 static void serval_tcp_shutdown(struct sock *sk, int how)
@@ -249,15 +279,17 @@ void serval_tcp_done(struct sock *sk)
 	if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_RECV)
 		TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_ATTEMPTFAILS);
 	//tcp_set_state(sk, TCP_CLOSE);
-	serval_tcp_clear_xmit_timers(sk);
 
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_state_change(sk);
 	else
-		inet_csk_destroy_sock(sk);
+		serval_sock_destroy(sk);
         */
+
+	serval_tcp_clear_xmit_timers(sk);
+
         LOG_WARN("NOT implemented!\n");
 }
 
@@ -1428,6 +1460,7 @@ static int serval_tcp_init_sock(struct sock *sk)
         LOG_DBG("Initializing new TCP sock\n");
 
         skb_queue_head_init(&tp->out_of_order_queue);
+	serval_tcp_init_xmit_timers(sk);
 	serval_tcp_prequeue_init(tp);
 
         tp->rto = TCP_TIMEOUT_INIT;
@@ -1478,14 +1511,35 @@ static int serval_tcp_destroy_sock(struct sock *sk)
 static void serval_tcp_destroy_sock(struct sock *sk)
 #endif
 {
-        struct serval_tcp_sock *tsk = serval_tcp_sk(sk);
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
    
         LOG_DBG("destroying TCP sock\n");
+
+	serval_tcp_clear_xmit_timers(sk);
+
+	serval_tcp_cleanup_congestion_control(sk);
 
 	/* Cleanup up the write buffer. */
 	serval_tcp_write_queue_purge(sk);
 
-	__skb_queue_purge(&tsk->out_of_order_queue);
+	__skb_queue_purge(&tp->out_of_order_queue);
+
+#ifdef CONFIG_NET_DMA
+	/* Cleans up our sk_async_wait_queue */
+	__skb_queue_purge(&sk->sk_async_wait_queue);
+#endif
+        
+	/* Clean prequeue, it must be empty really */
+	__skb_queue_purge(&tp->ucopy.prequeue);
+
+#if defined(OS_LINUX_KERNEL)
+	if (sk->sk_sndmsg_page) {
+		__free_page(sk->sk_sndmsg_page);
+		sk->sk_sndmsg_page = NULL;
+	}
+#endif
+        
+	//percpu_counter_dec(&tcp_sockets_allocated);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
         return 0;

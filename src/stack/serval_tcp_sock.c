@@ -38,5 +38,6 @@ void serval_tsk_delete_keepalive_timer(struct sock *sk)
 
 void serval_tsk_reset_keepalive_timer(struct sock *sk, unsigned long len)
 {
+        LOG_DBG("resetting timer\n");
 	sk_reset_timer(sk, &sk->sk_timer, jiffies + len);
 }

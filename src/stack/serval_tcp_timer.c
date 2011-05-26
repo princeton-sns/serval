@@ -192,6 +192,8 @@ static void serval_tcp_delack_timer(unsigned long data)
 	struct sock *sk = (struct sock *)data;
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
+        LOG_DBG("timeout\n");
+
 	bh_lock_sock(sk);
 	if (sock_owned_by_user(sk)) {
 		/* Try again later. */
@@ -301,6 +303,8 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 
 	if (!tp->packets_out)
 		goto out;
+
+        LOG_DBG("timeout\n");
 
 	//WARN_ON(serval_tcp_write_queue_empty(sk));
 
@@ -419,6 +423,8 @@ static void serval_tcp_write_timer(unsigned long data)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int event;
 
+        LOG_DBG("timeout\n");
+
 	bh_lock_sock(sk);
 	if (sock_owned_by_user(sk)) {
 		/* Try again later */
@@ -458,6 +464,8 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 {
 	struct sock *sk = (struct sock *) data;
 	//struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        
+        LOG_DBG("timeout\n");
 
 	/* Only process if socket is not in use. */
 	bh_lock_sock(sk);

@@ -64,7 +64,7 @@ static void sock_def_wakeup(struct sock *sk)
                 wake_up_interruptible_all(&wq->wait);
         read_unlock(&sk->sk_callback_lock);
 }
-/*
+
 static void sock_def_error_report(struct sock *sk)
 {
         struct socket_wq *wq = sk->sk_wq;
@@ -75,7 +75,7 @@ static void sock_def_error_report(struct sock *sk)
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_ERR);
         read_unlock(&sk->sk_callback_lock);
 }
-*/
+
 static void sock_def_readable(struct sock *sk, int bytes)
 {
         struct socket_wq *wq = sk->sk_wq;
@@ -141,6 +141,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_state_change	=	sock_def_wakeup;
 	sk->sk_data_ready	=	sock_def_readable;
 	sk->sk_write_space	=	sock_def_write_space;
+	sk->sk_error_report	=	sock_def_error_report;
 	sk->sk_destruct		=	sock_def_destruct;
 	sk->sk_backlog_rcv	=	sock_def_backlog_rcv;
 	sk->sk_write_pending	=	0;
@@ -149,6 +150,13 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 
         spin_lock_init(&sk->sk_dst_lock);
         rwlock_init(&sk->sk_callback_lock);
+#if defined(OS_LINUX_KERNEL)
+	/*
+	 * Before updating sk_refcnt, we must commit prior changes to memory
+	 * (Documentation/RCU/rculist_nulls.txt for details)
+	 */
+	smp_wmb();
+#endif
 	atomic_set(&sk->sk_refcnt, 1);
 	atomic_set(&sk->sk_drops, 0);
 }
