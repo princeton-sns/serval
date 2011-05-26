@@ -647,7 +647,7 @@ serval_srv_create_respond_sock(struct sock *sk,
                 serval_sock_init(nsk);
 
                 /* Transport protocol specific init. */                
-                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, req, nsk, NULL);
+                serval_sk(sk)->af_ops->conn_child_sock(sk, skb, req, nsk, dst);
         }        
         
         return nsk;

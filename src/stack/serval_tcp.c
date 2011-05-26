@@ -1323,8 +1323,15 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
         struct serval_tcp_request_sock *treq = serval_tcp_rsk(req);
 
+
         LOG_DBG("New TCP sock based on pkt %s\n", 
                 tcphdr_to_str(tcp_hdr(skb)));
+
+#if defined(OS_LINUX_KERNEL)
+        /* Must make sure we have a route */
+	if (!dst && (dst = serval_sock_route_req(sk, req)) == NULL)
+		goto exit;
+#endif
 
 	newtp->pred_flags = 0;
 
@@ -1448,6 +1455,13 @@ void serval_tcp_connection_respond_sock(struct sock *sk,
 		newtp->advmss = serval_tcp_sk(sk)->rx_opt.user_mss;
 
 	serval_tcp_initialize_rcv_mss(newsk);
+
+        return;
+#if defined(OS_LINUX_KERNEL)
+exit:
+        dst_release(dst);
+        return;
+#endif
 }
 
 static int serval_tcp_init_sock(struct sock *sk)
