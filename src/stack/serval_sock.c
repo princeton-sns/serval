@@ -635,7 +635,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 	struct rtable *rt;
 	const struct inet_request_sock *ireq = inet_rsk(req);
 	//struct ip_options *opt = inet_rsk(req)->opt;
-	struct flowi fl = { .oif = sk->sk_bound_dev_if,
+	struct flowi fl = { .oif = 0, //sk->sk_bound_dev_if,
 			    .mark = sk->sk_mark,
 			    .nl_u = { .ip4_u =
 				      { .daddr = ireq->rmt_addr,
@@ -648,7 +648,15 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 					 .dport = 0 } } };
 	struct net *net = sock_net(sk);
 
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
+                        inet_ntop(AF_INET, &ireq->rmt_addr, rmtstr, 18),
+                        inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
+                        sk->sk_protocol);
+        }
 	security_req_classify_flow(req, &fl);
+
 	if (ip_route_output_flow(net, &rt, &fl, sk, 0))
 		goto no_route;
         /*

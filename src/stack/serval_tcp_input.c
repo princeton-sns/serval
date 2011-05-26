@@ -1415,6 +1415,8 @@ no_queue:
 	return 1;
 
 invalid_ack:
+        LOG_DBG("invalid ACK %u after %u:%u\n", 
+                ack, tp->snd_una, tp->snd_nxt);
 	//SOCK_DEBUG(sk, "Ack %u after %u:%u\n", ack, tp->snd_una, tp->snd_nxt);
 	return -1;
 
@@ -1426,6 +1428,8 @@ old_ack:
 			tcp_try_keep_open(sk);
 	}
         */
+        LOG_DBG("old ACK %u before %u:%u\n", 
+                ack, tp->snd_una, tp->snd_nxt);
 
 	//SOCK_DEBUG(sk, "Ack %u before %u:%u\n", ack, tp->snd_una, tp->snd_nxt);
 	return 0;
@@ -2714,7 +2718,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	/* step 5: check the ACK field */
 	if (th->ack) {
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
-
+                
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
