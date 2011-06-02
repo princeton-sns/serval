@@ -304,8 +304,6 @@ static inline void serval_tsk_reset_xmit_timer(struct sock *sk, const int what,
 		when = max_when;
 	}
 
-        LOG_DBG("resetting timer\n");
-
 	if (what == STSK_TIME_RETRANS || what == STSK_TIME_PROBE0) {
 		tp->pending = what;
 		tp->timeout = jiffies + when;

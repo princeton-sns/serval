@@ -52,7 +52,7 @@ int client(void) {
 	struct sockaddr_sv cliaddr;
 	struct sockaddr_sv srvaddr;
 	int n;
-	unsigned N = 512;
+	unsigned N = 2000;
 	char sbuf[N], rbuf[N + 1];
 
 	bzero(&cliaddr, sizeof(cliaddr));

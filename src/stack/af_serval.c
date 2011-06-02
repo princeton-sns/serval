@@ -499,7 +499,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 serval_sock_set_state(sk, SERVAL_REQUEST);
 
                 sk->sk_prot->hash(sk);
-
+                
                 err = sk->sk_prot->connect(sk, addr, alen);
 
 		if (err < 0)

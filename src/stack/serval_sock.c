@@ -686,6 +686,7 @@ route_err:
  */
 void serval_sock_wfree(struct sk_buff *skb)
 {
+        LOG_DBG("Freeing serval pkt\n");
         sock_put(skb->sk);
 }
 
