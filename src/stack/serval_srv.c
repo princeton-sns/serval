@@ -344,7 +344,7 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
                 
                 if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
                         ip_rt_put(rt);
-		return -ENETUNREACH;
+                        return -ENETUNREACH;
                 }
                 
                 if (!inet->opt || !inet->opt->srr)
@@ -353,8 +353,17 @@ int serval_srv_connect(struct sock *sk, struct sockaddr *uaddr,
                 if (!inet->inet_saddr)
                         inet->inet_saddr = rt->rt_src;
                 inet->inet_rcv_saddr = inet->inet_saddr;
+
+                
+                /* OK, now commit destination to socket.  */
+                //sk->sk_gso_type = SKB_GSO_TCPV4;
+                sk->sk_gso_type = 0;
+                sk_setup_caps(sk, &rt->dst);
         }
 #endif
+        /* Disable segmentation offload */
+        sk->sk_gso_type = 0;
+
         /* Ask transport to fill in */
         if (ssk->af_ops->conn_build_syn) {
                 err = ssk->af_ops->conn_build_syn(sk, skb);

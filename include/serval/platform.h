@@ -99,6 +99,8 @@ typedef uint8_t u8;
 typedef uint8_t __u8;
 typedef int8_t s8;
 typedef int8_t __s8;
+typedef __u32 __wsum;
+typedef __u16 __sum16;
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT) /* 4096 bytes */
@@ -203,6 +205,12 @@ static inline void yield(void) {}
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
+
+/*
+  Checksum functions (from Linux kernel, see platform.c) 
+*/
+__sum16 ip_fast_csum(const void *iph, unsigned int ihl);
+__wsum csum_partial(const void *buff, int len, __wsum wsum);
 
 int memcpy_toiovec(struct iovec *iov, unsigned char *kdata, int len);
 int memcpy_fromiovec(unsigned char *kdata, struct iovec *iov, int len);
