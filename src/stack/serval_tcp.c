@@ -402,6 +402,9 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
+                LOG_DBG("Allocated skb size=%u skb->truesize=%u\n",
+                        size + sk->sk_prot->max_header, skb->truesize);
+                
                 skb_serval_tcp_set_owner(skb, sk);
 
 		if (sk_wmem_schedule(sk, skb->truesize)) {
@@ -601,8 +604,9 @@ new_segment:
 				/*
 				 * Check whether we can use HW checksum.
 				 */
-				if (sk->sk_route_caps & NETIF_F_ALL_CSUM)
-					skb->ip_summed = CHECKSUM_PARTIAL;
+				//if (sk->sk_route_caps & NETIF_F_ALL_CSUM)
+				//	skb->ip_summed = CHECKSUM_PARTIAL;
+                                skb->ip_summed = CHECKSUM_NONE;
 
 				skb_entail(sk, skb);
 				copy = size_goal;

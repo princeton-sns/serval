@@ -133,6 +133,7 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         
         //err = serval_output(skb);
 #endif
+
         return err;
 }
 
@@ -312,7 +313,7 @@ static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 	int ttl = inet->uc_ttl;
 
 	if (ttl < 0) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 		ttl = dst_metric(dst, RTAX_HOPLIMIT);
 #else
 		ttl = ip4_dst_hoplimit(dst);
@@ -365,7 +366,8 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         } else {
 #if defined(ENABLE_DEBUG)                
                 char src[18], dst[18];
-                LOG_PKT("Route found - src %s dst %s\n",
+                LOG_PKT("Route found skb->len=%u - src %s dst %s\n",
+                        skb->len,
                         inet_ntop(AF_INET, &rt->rt_src, 
                                   src, sizeof(src)),
                         inet_ntop(AF_INET, &rt->rt_dst, 
