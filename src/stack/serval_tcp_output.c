@@ -119,11 +119,11 @@ static void serval_tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 	if (tp->frto_counter == 2)
 		tp->frto_counter = 3;
 
-	tp->packets_out += tcp_skb_pcount(skb);
+	tp->packets_out += serval_tcp_skb_pcount(skb);
 	/*
 	if (!prior_packets)
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-					  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
+					  inet_csk(sk)->icsk_rto, SERVAL_TCP_RTO_MAX);
 	*/
 }
 
@@ -178,7 +178,7 @@ static inline void serval_tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
 static void serval_tcp_set_skb_tso_segs(struct sock *sk, struct sk_buff *skb,
 					unsigned int mss_now)
 {
-	if (skb->len <= mss_now || !sk_can_gso(sk) ||
+	if (1 /* Disable */ || skb->len <= mss_now || !sk_can_gso(sk) ||
 	    skb->ip_summed == CHECKSUM_NONE) {
 		/* Avoid the costly divide in the normal
 		 * non-TSO case.
@@ -200,11 +200,13 @@ static void serval_tcp_set_skb_tso_segs(struct sock *sk, struct sk_buff *skb,
 static int serval_tcp_init_tso_segs(struct sock *sk, struct sk_buff *skb,
 				    unsigned int mss_now)
 {
-	int tso_segs = tcp_skb_pcount(skb);
+	int tso_segs = serval_tcp_skb_pcount(skb);
+
+        LOG_DBG("tso_segs=%d\n", tso_segs);
 
 	if (!tso_segs || (tso_segs > 1 && tcp_skb_mss(skb) != mss_now)) {
 		serval_tcp_set_skb_tso_segs(sk, skb, mss_now);
-		tso_segs = tcp_skb_pcount(skb);
+		tso_segs = serval_tcp_skb_pcount(skb);
 	}
 	return tso_segs;
 }
@@ -398,7 +400,7 @@ static inline unsigned int serval_tcp_cwnd_test(struct serval_tcp_sock *tp,
 
 	/* Don't be strict about the congestion window for the final FIN.  */
 	if ((TCP_SKB_CB(skb)->flags & TCPH_FIN) &&
-	    tcp_skb_pcount(skb) == 1)
+	    serval_tcp_skb_pcount(skb) == 1)
 		return 1;
 
 	in_flight = serval_tcp_packets_in_flight(tp);
@@ -443,7 +445,7 @@ static unsigned int serval_tcp_snd_test(struct sock *sk, struct sk_buff *skb,
 	serval_tcp_init_tso_segs(sk, skb, cur_mss);
 
 	/*
-	if (!tcp_nagle_test(tp, skb, cur_mss, nonagle))
+	if (!serval_tcp_nagle_test(tp, skb, cur_mss, nonagle))
 		return 0;
 	*/
 
@@ -556,7 +558,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct tcphdr *th;
 	int err;
 
-	BUG_ON(!skb || !tcp_skb_pcount(skb));
+	BUG_ON(!skb || !serval_tcp_skb_pcount(skb));
 
 	/* If congestion control is doing timestamping, we must
 	 * take such a timestamp before we potentially clone/copy.
@@ -647,7 +649,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 ssk->af_ops->send_check(sk, skb);
 
 	if (likely(tcb->flags & TCPH_ACK))
-		serval_tcp_event_ack_sent(sk, tcp_skb_pcount(skb));
+		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
 
 	if (skb->len != tcp_header_size)
 		serval_tcp_event_data_sent(tp, skb, sk);
@@ -655,15 +657,23 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq) {
 		/*
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
-			      tcp_skb_pcount(skb));
+                serval_tcp_skb_pcount(skb));
 		*/
 	}
-
-        LOG_DBG("queue_xmit\n");
 
         memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
                sizeof(inet_sk(sk)->inet_daddr));
 
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("queue_xmit gso_size=%u dst=%s\n",
+                        inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr, 
+                                  rmtstr, 18), skb_shinfo(skb)->gso_size);
+
+                skb_shinfo(skb)->gso_size = 0;
+                skb->csum = CHECKSUM_NONE;
+                
+        }
 	err = serval_srv_xmit_skb(skb);
         //ssk->af_ops->queue_xmit(skb);
 
@@ -720,7 +730,7 @@ static void serval_tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	if (next_skb == tp->retransmit_skb_hint)
 		tp->retransmit_skb_hint = skb;
         
-	serval_tcp_adjust_pcount(sk, next_skb, tcp_skb_pcount(next_skb));
+	serval_tcp_adjust_pcount(sk, next_skb, serval_tcp_skb_pcount(next_skb));
 
 	sk_wmem_free_skb(sk, next_skb);
 }
@@ -838,11 +848,11 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 		//if (serval_tcp_fragment(sk, skb, cur_mss, cur_mss))
 		//	return -ENOMEM; /* We'll try again later. */
 	} else {
-		int oldpcount = tcp_skb_pcount(skb);
+		int oldpcount = serval_tcp_skb_pcount(skb);
 
 		if (unlikely(oldpcount > 1)) {
 			serval_tcp_init_tso_segs(sk, skb, cur_mss);
-			serval_tcp_adjust_pcount(sk, skb, oldpcount - tcp_skb_pcount(skb));
+			serval_tcp_adjust_pcount(sk, skb, oldpcount - serval_tcp_skb_pcount(skb));
 		}
 	}
 
@@ -880,7 +890,7 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
                 if (!tp->retrans_out)
 			tp->lost_retrans_low = tp->snd_nxt;
 		TCP_SKB_CB(skb)->sacked |= TCPCB_RETRANS;
-		tp->retrans_out += tcp_skb_pcount(skb);
+		tp->retrans_out += serval_tcp_skb_pcount(skb);
 
 		/* Save stamp of the first retransmit. */
 		if (!tp->retrans_stamp)
@@ -956,17 +966,19 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			break;
                 }
 
-		/*
+                LOG_DBG("tso_segs=%u\n", tso_segs);
+
+                /*
 		if (tso_segs == 1) {
-			if (unlikely(!tcp_nagle_test(tp, skb, mss_now,
-						     (tcp_skb_is_last(sk, skb) ?
-						      nonagle : TCP_NAGLE_PUSH))))
+			if (unlikely(!serval_tcp_nagle_test(tp, skb, mss_now,
+                                                            (serval_tcp_skb_is_last(sk, skb) ?
+                                                             nonagle : TCP_NAGLE_PUSH))))
 				break;
 		} else {
-			if (!push_one && tcp_tso_should_defer(sk, skb))
+			if (!push_one && serval_tcp_tso_should_defer(sk, skb))
 				break;
 		}
-		*/
+                */
 
 		limit = mss_now;
 		if (tso_segs > 1 && !serval_tcp_urg_mode(tp))
@@ -1415,9 +1427,9 @@ static void serval_tcp_connect_init(struct sock *sk)
 		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 65535;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : TCP_MSS_DEFAULT;
+	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_TCP_MSS_DEFAULT;
 #else
-	tp->advmss = dst ? dst_metric_advmss(dst) : TCP_MSS_DEFAULT;
+	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_TCP_MSS_DEFAULT;
 #endif
 
 	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
@@ -1447,7 +1459,7 @@ static void serval_tcp_connect_init(struct sock *sk)
 	tp->rcv_wup = 0;
 	tp->copied_seq = 0;
 
-        tp->rto = TCP_TIMEOUT_INIT;
+        tp->rto = SERVAL_TCP_TIMEOUT_INIT;
 	tp->retransmits = 0;
 	serval_tcp_clear_retrans(tp);       
 }
@@ -1505,7 +1517,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
         serval_tcp_connect_init(sk);
 
-	tp->rx_opt.mss_clamp = TCP_MSS_DEFAULT;
+	tp->rx_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq, flags);
@@ -1554,7 +1566,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	mss = dst_metric_advmss(dst);
 #endif
 #else
-	mss = TCP_MSS_DEFAULT; 
+	mss = SERVAL_TCP_MSS_DEFAULT; 
 #endif
         LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
@@ -1566,7 +1578,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
 		req->window_clamp = tp->window_clamp ? : dst_metric(dst, RTAX_WINDOW);
 #else
-                req->window_clamp = TCP_MSS_DEFAULT;
+                req->window_clamp = SERVAL_TCP_MSS_DEFAULT;
 #endif
 		/* tcp_full_space because it is guaranteed to be the
                  * first packet */
@@ -1815,7 +1827,7 @@ void serval_tcp_send_ack(struct sock *sk)
 		serval_tsk_schedule_ack(sk);
 		serval_tcp_sk(sk)->tp_ack.ato = TCP_ATO_MIN;
 		serval_tsk_reset_xmit_timer(sk, STSK_TIME_DACK,
-                                            TCP_DELACK_MAX, TCP_RTO_MAX);
+                                            TCP_DELACK_MAX, SERVAL_TCP_RTO_MAX);
 		return;
 	}
 

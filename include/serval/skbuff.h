@@ -987,6 +987,9 @@ int skb_copy_datagram_from_iovec(struct sk_buff *skb,
 int skb_copy_bits(const struct sk_buff *skb, int offset,
                   void *to, int len);
 
+__wsum skb_checksum(const struct sk_buff *skb, int offset,
+                    int len, __wsum csum);
+
 struct udphdr;
 
 static inline struct udphdr *udp_hdr(const struct sk_buff *skb)

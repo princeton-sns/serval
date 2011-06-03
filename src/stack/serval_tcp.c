@@ -53,7 +53,7 @@ static int serval_tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_cwnd = 2;
 	tp->probes_out = 0;
 	tp->packets_out = 0;
-	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+	tp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_cnt = 0;
 	tp->bytes_acked = 0;
 	tp->window_clamp = 0;
@@ -151,7 +151,7 @@ static int serval_tcp_connection_request(struct sock *sk,
 
         memset(&tmp_opt, 0, sizeof(tmp_opt));
 	serval_tcp_clear_options(&tmp_opt);
-	tmp_opt.mss_clamp = TCP_MSS_DEFAULT;
+	tmp_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 	tmp_opt.user_mss  = tp->rx_opt.user_mss;
 	//tcp_parse_options(skb, &tmp_opt, &hash_location, 0);
 
@@ -376,6 +376,21 @@ static inline int forced_push(struct serval_tcp_sock *tp)
 	return after(tp->write_seq, tp->pushed_seq + (tp->max_window >> 1));
 }
 
+void serval_tcp_skb_free(struct sk_buff *skb)
+{
+        LOG_DBG("Freeing skb data packet, skb->len=%u\n", skb->len);
+}
+
+static inline void skb_serval_tcp_set_owner(struct sk_buff *skb, 
+                                            struct sock *sk)
+{
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = serval_tcp_skb_free;
+        /* Guarantees the socket is not free'd for in-flight packets */
+        //sock_hold(sk);
+}
+
 /* From net/ipv4/tcp.c */
 struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 {
@@ -387,6 +402,8 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
+                skb_serval_tcp_set_owner(skb, sk);
+
 		if (sk_wmem_schedule(sk, skb->truesize)) {
 			/*
 			 * Make sure that we have exactly size bytes
@@ -541,6 +558,7 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
 		goto out_err;
 
+        /* Check scatter/gather I/O capability */
 	sg = sk->sk_route_caps & NETIF_F_SG;
 
 	while (--iovlen >= 0) {
@@ -1325,7 +1343,6 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
         struct serval_tcp_request_sock *treq = serval_tcp_rsk(req);
 
-
         LOG_DBG("New TCP sock based on pkt %s\n", 
                 tcphdr_to_str(tcp_hdr(skb)));
 
@@ -1349,14 +1366,14 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
         serval_tcp_init_wl(newtp, treq->rcv_isn);
 
         newtp->srtt = 0;
-        newtp->mdev = TCP_TIMEOUT_INIT;
-        newtp->rto = TCP_TIMEOUT_INIT;
+        newtp->mdev = SERVAL_TCP_TIMEOUT_INIT;
+        newtp->rto = SERVAL_TCP_TIMEOUT_INIT;
 
         newtp->packets_out = 0;
         newtp->retrans_out = 0;
         newtp->sacked_out = 0;
         newtp->fackets_out = 0;
-        newtp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+        newtp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 
         /* So many TCP implementations out there (incorrectly) count the
          * initial SYN frame in their delayed-ACK and congestion control
@@ -1430,13 +1447,13 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
                 newtp->tcp_header_len = sizeof(struct tcphdr);
         }
         
-        if (skb->len >= TCP_MSS_DEFAULT + newtp->tcp_header_len)
+        if (skb->len >= SERVAL_TCP_MSS_DEFAULT + newtp->tcp_header_len)
                 newtp->tp_ack.last_seg_size = skb->len - newtp->tcp_header_len;
 
         
         newtp->rx_opt.mss_clamp = req->mss;
 
-	//newsk->sk_gso_type = SKB_GSO_TCPV4;
+	newsk->sk_gso_type = 0; //SKB_GSO_TCPV4;
 	sk_setup_caps(newsk, dst);
 	
 	//newinet->inet_id = newtp->write_seq ^ jiffies;
@@ -1444,10 +1461,14 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
 	serval_tcp_mtup_init(newsk);
 #if defined(OS_LINUX_KERNEL)
         serval_tcp_sync_mss(newsk, dst_mtu(dst));
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
 #else
-        serval_tcp_sync_mss(newsk, TCP_MSS_DEFAULT);
-	newtp->advmss = TCP_MSS_DEFAULT;
+        newtp->advmss = dst_metric_advmss(dst);
+#endif
+#else
+        serval_tcp_sync_mss(newsk, SERVAL_TCP_MSS_DEFAULT);
+	newtp->advmss = SERVAL_TCP_MSS_DEFAULT;
 #endif
 
 	if (serval_tcp_sk(sk)->rx_opt.user_mss &&
@@ -1475,8 +1496,8 @@ static int serval_tcp_init_sock(struct sock *sk)
 	serval_tcp_init_xmit_timers(sk);
 	serval_tcp_prequeue_init(tp);
 
-        tp->rto = TCP_TIMEOUT_INIT;
-	tp->mdev = TCP_TIMEOUT_INIT;
+        tp->rto = SERVAL_TCP_TIMEOUT_INIT;
+	tp->mdev = SERVAL_TCP_TIMEOUT_INIT;
         	/* So many TCP implementations out there (incorrectly) count the
 	 * initial SYN frame in their delayed-ACK and congestion control
 	 * algorithms that we must have the following bandaid to talk
@@ -1487,9 +1508,9 @@ static int serval_tcp_init_sock(struct sock *sk)
 	/* See draft-stevens-tcpca-spec-01 for discussion of the
 	 * initialization of these values.
 	 */
-	tp->snd_ssthresh = TCP_INFINITE_SSTHRESH;
+	tp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
-	tp->mss_cache = TCP_MSS_DEFAULT;
+	tp->mss_cache = SERVAL_TCP_MSS_DEFAULT;
 
 	tp->reordering = sysctl_serval_tcp_reordering;
 

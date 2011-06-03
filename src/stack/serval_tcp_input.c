@@ -18,7 +18,7 @@
 #endif
 
 int sysctl_serval_tcp_timestamps __read_mostly = 0;
-int sysctl_serval_tcp_reordering __read_mostly = TCP_FASTRETRANS_THRESH;
+int sysctl_serval_tcp_reordering __read_mostly = SERVAL_TCP_FASTRETRANS_THRESH;
 int sysctl_serval_tcp_moderate_rcvbuf __read_mostly = 1;
 int sysctl_serval_tcp_abc __read_mostly;
 int sysctl_serval_tcp_adv_win_scale __read_mostly = 2;
@@ -75,13 +75,13 @@ static void serval_tcp_measure_rcv_mss(struct sock *sk,
 		 * "len" is invariant segment length, including TCP header.
 		 */
 		len += skb->data - skb_transport_header(skb);
-		if (len >= TCP_MSS_DEFAULT + sizeof(struct tcphdr) ||
+		if (len >= SERVAL_TCP_MSS_DEFAULT + sizeof(struct tcphdr) ||
 		    /* If PSH is not set, packet should be
 		     * full sized, provided peer TCP is not badly broken.
 		     * This observation (if it is correct 8)) allows
 		     * to handle super-low mtu links fairly.
 		     */
-		    (len >= TCP_MIN_MSS + sizeof(struct tcphdr) &&
+		    (len >= SERVAL_TCP_MIN_MSS + sizeof(struct tcphdr) &&
 		     !(serval_tcp_flag_word(tcp_hdr(skb)) & TCP_REMNANT))) {
 			/* Subtract also invariant (if peer is RFC compliant),
 			 * tcp header plus fixed timestamp option length.
@@ -391,8 +391,8 @@ void serval_tcp_initialize_rcv_mss(struct sock *sk)
                 tp->advmss, tp->mss_cache, tp->rcv_wnd/2, hint);
 
 	hint = min(hint, tp->rcv_wnd / 2);
-	hint = min(hint, TCP_MSS_DEFAULT);
-	hint = max(hint, TCP_MIN_MSS);
+	hint = min(hint, SERVAL_TCP_MSS_DEFAULT);
+	hint = max(hint, SERVAL_TCP_MIN_MSS);
 
 	tp->tp_ack.rcv_mss = hint;
 
@@ -817,7 +817,7 @@ static void serval_tcp_init_metrics(struct sock *sk)
 	if (dst_metric(dst, RTAX_RTT) == 0)
 		goto reset;
 
-	if (!tp->srtt && dst_metric_rtt(dst, RTAX_RTT) < (TCP_TIMEOUT_INIT << 3))
+	if (!tp->srtt && dst_metric_rtt(dst, RTAX_RTT) < (SERVAL_TCP_TIMEOUT_INIT << 3))
 		goto reset;
 
 	/* Initial rtt is determined from SYN,SYN-ACK.
@@ -845,7 +845,7 @@ static void serval_tcp_init_metrics(struct sock *sk)
 #endif
 	serval_tcp_set_rto(sk);
 
-	if (tp->rto < TCP_TIMEOUT_INIT && !tp->rx_opt.saw_tstamp)
+	if (tp->rto < SERVAL_TCP_TIMEOUT_INIT && !tp->rx_opt.saw_tstamp)
 		goto reset;
 
 cwnd:
@@ -860,8 +860,8 @@ reset:
 	 */
 	if (!tp->rx_opt.saw_tstamp && tp->srtt) {
 		tp->srtt = 0;
-		tp->mdev = tp->mdev_max = tp->rttvar = TCP_TIMEOUT_INIT;
-		tp->rto = TCP_TIMEOUT_INIT;
+		tp->mdev = tp->mdev_max = tp->rttvar = SERVAL_TCP_TIMEOUT_INIT;
+		tp->rto = SERVAL_TCP_TIMEOUT_INIT;
 	}
 	goto cwnd;
 }

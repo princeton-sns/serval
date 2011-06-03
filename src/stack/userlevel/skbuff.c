@@ -790,6 +790,27 @@ fault:
 	return -EFAULT;
 }
 
+__wsum skb_checksum(const struct sk_buff *skb, int offset,
+                    int len, __wsum csum)
+{
+	int start = skb_headlen(skb);
+	int i, copy = start - offset;
+	struct sk_buff *frag_iter;
+	int pos = 0;
+
+	/* Checksum header. */
+	if (copy > 0) {
+		if (copy > len)
+			copy = len;
+		csum = csum_partial(skb->data + offset, copy, csum);
+		if ((len -= copy) == 0)
+			return csum;
+		offset += copy;
+		pos	= copy;
+	}
+        return csum;
+}
+
 static void skb_over_panic(struct sk_buff *skb, int sz, void *here)
 {
 	LOG_CRIT("skb_over_panic: text:%p len:%d put:%d head:%p "

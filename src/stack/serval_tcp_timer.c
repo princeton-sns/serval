@@ -52,7 +52,7 @@ static int serval_tcp_out_of_resources(struct sock *sk, int do_reset)
 
 	/* If peer does not open window for long time, or did not transmit
 	 * anything for long time, penalize it. */
-	if ((s32)(tcp_time_stamp - tp->lsndtime) > 2*TCP_RTO_MAX || !do_reset)
+	if ((s32)(tcp_time_stamp - tp->lsndtime) > 2*SERVAL_TCP_RTO_MAX || !do_reset)
 		shift++;
 
 	/* If some dubious ICMP arrived, penalize even more. */
@@ -129,7 +129,7 @@ static int retransmits_timed_out(struct sock *sk,
 {
 	unsigned int timeout, linear_backoff_thresh;
 	unsigned int start_ts;
-	unsigned int rto_base = syn_set ? TCP_TIMEOUT_INIT : TCP_RTO_MIN;
+	unsigned int rto_base = syn_set ? SERVAL_TCP_TIMEOUT_INIT : SERVAL_TCP_RTO_MIN;
 	
 	if (!serval_tcp_sk(sk)->retransmits)
 		return 0;
@@ -139,13 +139,13 @@ static int retransmits_timed_out(struct sock *sk,
 	else
 		start_ts = serval_tcp_sk(sk)->retrans_stamp;
 
-	linear_backoff_thresh = ilog2(TCP_RTO_MAX/rto_base);
+	linear_backoff_thresh = ilog2(SERVAL_TCP_RTO_MAX/rto_base);
 
 	if (boundary <= linear_backoff_thresh)
 		timeout = ((2 << boundary) - 1) * rto_base;
 	else
 		timeout = ((2 << linear_backoff_thresh) - 1) * rto_base +
-			  (boundary - linear_backoff_thresh) * TCP_RTO_MAX;
+			  (boundary - linear_backoff_thresh) * SERVAL_TCP_RTO_MAX;
 
 	return (tcp_time_stamp - start_ts) >= timeout;
 }
@@ -168,7 +168,7 @@ static int serval_tcp_write_timeout(struct sock *sk)
 		retry_until = sysctl_serval_tcp_retries2;
 
 		if (sock_flag(sk, SOCK_DEAD)) {
-			const int alive = (tp->rto < TCP_RTO_MAX);
+			const int alive = (tp->rto < SERVAL_TCP_RTO_MAX);
 
 			retry_until = serval_tcp_orphan_retries(sk, alive);
 			do_reset = alive ||
@@ -277,7 +277,7 @@ static void serval_tcp_probe_timer(struct sock *sk)
 	max_probes = sysctl_serval_tcp_retries2;
 
 	if (sock_flag(sk, SOCK_DEAD)) {
-		const int alive = ((tp->rto << tp->backoff) < TCP_RTO_MAX);
+		const int alive = ((tp->rto << tp->backoff) < SERVAL_TCP_RTO_MAX);
 
 		max_probes = serval_tcp_orphan_retries(sk, alive);
 
@@ -316,7 +316,7 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 		 * we cannot allow such beasts to hang infinitely.
 		 */
 
-		if (tcp_time_stamp - tp->rcv_tstamp > TCP_RTO_MAX) {
+		if (tcp_time_stamp - tp->rcv_tstamp > SERVAL_TCP_RTO_MAX) {
 			serval_tcp_write_err(sk);
 			goto out;
 		}
@@ -367,7 +367,7 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 			tp->retransmits = 1;
 		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
 					    min(tp->rto, TCP_RESOURCE_PROBE_INTERVAL),
-					    TCP_RTO_MAX);
+					    SERVAL_TCP_RTO_MAX);
 		goto out;
 	}
 
@@ -404,13 +404,13 @@ out_reset_timer:
 	    serval_tcp_stream_is_thin(tp) &&
 	    tp->retransmits <= TCP_THIN_LINEAR_RETRIES) {
 		tp->backoff = 0;
-		tp->rto = min(__serval_tcp_set_rto(tp), TCP_RTO_MAX);
+		tp->rto = min(__serval_tcp_set_rto(tp), SERVAL_TCP_RTO_MAX);
 	} else {
 		/* Use normal (exponential) backoff */
-		tp->rto = min(tp->rto << 1, TCP_RTO_MAX);
+		tp->rto = min(tp->rto << 1, SERVAL_TCP_RTO_MAX);
 	}
 	serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS, 
-				    tp->rto, TCP_RTO_MAX);
+				    tp->rto, SERVAL_TCP_RTO_MAX);
 	if (retransmits_timed_out(sk, sysctl_serval_tcp_retries1 + 1, 0))
 		__sk_dst_reset(sk);
 

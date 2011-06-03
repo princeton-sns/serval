@@ -34,8 +34,9 @@
 /*
  * TCP general constants
  */
-#define TCP_MSS_DEFAULT	  524U	/* IPv4 (RFC1122, RFC2581) adjusted for serval_hdr */
-#define TCP_MSS_DESIRED	  1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
+
+#define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
+#define SERVAL_TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
 
 /* 
  * Never offer a window over 32767 without using window scaling. Some
@@ -44,13 +45,13 @@
 #define MAX_TCP_WINDOW		32767U
 
 /* Minimal accepted MSS. It is (60+60+8) - (20+20). */
-#define TCP_MIN_MSS		88U
+#define SERVAL_TCP_MIN_MSS		88U
 
 /* The least MTU to use for probing */
-#define TCP_BASE_MSS		512
+#define SERVAL_TCP_BASE_MSS		512
 
 /* After receiving this amount of duplicate ACKs fast retransmit starts. */
-#define TCP_FASTRETRANS_THRESH 3
+#define SERVAL_TCP_FASTRETRANS_THRESH 3
 
 /* Maximal reordering. */
 #define TCP_MAX_REORDERING	127
@@ -106,9 +107,9 @@
 #define TCP_DELACK_MIN	4U
 #define TCP_ATO_MIN	4U
 #endif
-#define TCP_RTO_MAX	((unsigned)(120*HZ))
-#define TCP_RTO_MIN	((unsigned)(HZ/5))
-#define TCP_TIMEOUT_INIT ((unsigned)(3*HZ))	/* RFC 1122 initial RTO value	*/
+#define SERVAL_TCP_RTO_MAX	((unsigned)(120*HZ))
+#define SERVAL_TCP_RTO_MIN	((unsigned)(HZ/5))
+#define SERVAL_TCP_TIMEOUT_INIT ((unsigned)(3*HZ))	/* RFC 1122 initial RTO value	*/
 
 #define TCP_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
 					                 * for local resources.
@@ -280,7 +281,7 @@ static inline int serval_tcp_too_many_orphans(struct sock *sk, int shift)
 /* Compute the actual rto_min value */
 static inline u32 serval_tcp_rto_min(struct sock *sk)
 {
-	u32 rto_min = TCP_RTO_MIN;
+	u32 rto_min = SERVAL_TCP_RTO_MIN;
 #if defined(OS_LINUX_KERNEL)
 	struct dst_entry *dst = __sk_dst_get(sk);
 	if (dst && dst_metric_locked(dst, RTAX_RTO_MIN))
@@ -653,8 +654,8 @@ void serval_tcp_mtup_init(struct sock *sk);
 
 static inline void serval_tcp_bound_rto(const struct sock *sk)
 {
-	if (serval_tcp_sk(sk)->rto > TCP_RTO_MAX)
-		serval_tcp_sk(sk)->rto = TCP_RTO_MAX;
+	if (serval_tcp_sk(sk)->rto > SERVAL_TCP_RTO_MAX)
+		serval_tcp_sk(sk)->rto = SERVAL_TCP_RTO_MAX;
 }
 
 static inline u32 __serval_tcp_set_rto(const struct serval_tcp_sock *tp)
@@ -726,7 +727,7 @@ static inline void serval_tcp_check_probe_timer(struct sock *sk)
 
 	if (!tp->packets_out && !icsk->icsk_pending)
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
-					  icsk->icsk_rto, TCP_RTO_MAX);
+					  icsk->icsk_rto, SERVAL_TCP_RTO_MAX);
 	*/
 }
 
@@ -803,7 +804,7 @@ static inline int serval_tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 		if (!serval_tsk_ack_scheduled(sk))
 			serval_tsk_reset_xmit_timer(sk, STSK_TIME_DACK,
                                                     (3 * serval_tcp_rto_min(sk)) / 4,
-                                                    TCP_RTO_MAX);
+                                                    SERVAL_TCP_RTO_MAX);
 	}
 	return 1;
 }
@@ -902,12 +903,12 @@ unsigned int serval_tcp_packets_in_flight(const struct serval_tcp_sock *tp)
 	return tp->packets_out - serval_tcp_left_out(tp) + tp->retrans_out;
 }
 
-#define TCP_INFINITE_SSTHRESH	0x7fffffff
+#define SERVAL_TCP_INFINITE_SSTHRESH	0x7fffffff
 
 static inline 
 int serval_tcp_in_initial_slowstart(const struct serval_tcp_sock *tp)
 {
-	return tp->snd_ssthresh >= TCP_INFINITE_SSTHRESH;
+	return tp->snd_ssthresh >= SERVAL_TCP_INFINITE_SSTHRESH;
 }
 
 

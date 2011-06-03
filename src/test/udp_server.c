@@ -70,7 +70,7 @@ void server(void)
         
                 int k = 0;
                 do {
-                        unsigned N = 512;
+                        unsigned N = 2000;
                         char buf[N];
                         int n;
       
