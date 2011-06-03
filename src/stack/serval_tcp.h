@@ -740,6 +740,17 @@ static inline void serval_tcp_update_wl(struct serval_tcp_sock *tp, u32 seq)
 	tp->snd_wl1 = seq;
 }
 
+
+static inline __sum16 __serval_tcp_checksum_complete(struct sk_buff *skb)
+{
+	return 0; /* FIXME: __skb_checksum_complete(skb); */
+}
+
+static inline int serval_tcp_checksum_complete(struct sk_buff *skb)
+{
+	return 0; /* FIXME: !skb_csum_unnecessary(skb) &&
+                    __tcp_checksum_complete(skb); */
+}
 /* Prequeue for VJ style copy to user, combined with checksumming. */
 
 static inline void serval_tcp_prequeue_init(struct serval_tcp_sock *tp)
