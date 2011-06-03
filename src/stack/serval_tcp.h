@@ -925,12 +925,10 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied);
 static inline char *tcphdr_to_str(const struct tcphdr *th)
 {
 	static char buf[100];
-	int len;
-
-	len = snprintf(buf, sizeof(buf) - 1, 
-		       "[SYN=%d ACK=%d FIN=%d seq=%u ackno=%u window=%u]", 
-		       th->syn, th->ack, th->fin, ntohl(th->seq), 
-		       ntohl(th->ack_seq), ntohs(th->window));
+        snprintf(buf, sizeof(buf) - 1, 
+                 "[SYN=%d ACK=%d FIN=%d seq=%u ackno=%u window=%u]", 
+                 th->syn, th->ack, th->fin, ntohl(th->seq), 
+                 ntohl(th->ack_seq), ntohs(th->window));
 
 	return buf;       
 }
