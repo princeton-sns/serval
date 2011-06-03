@@ -2667,15 +2667,15 @@ static __sum16 __serval_tcp_checksum_complete_user(struct sock *sk,
                                                    struct sk_buff *skb)
 {
 	__sum16 result = 0;
-#if defined(OS_LINUX_KERNEL)
+
 	if (sock_owned_by_user(sk)) {
 		local_bh_enable();
-		result = __tcp_checksum_complete(skb);
+		result = __serval_tcp_checksum_complete(skb);
 		local_bh_disable();
 	} else {
-		result = __tcp_checksum_complete(skb);
+		result = __serval_tcp_checksum_complete(skb);
 	}
-#endif
+
 	return result;
 }
 
