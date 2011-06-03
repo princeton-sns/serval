@@ -190,7 +190,7 @@ static void test_service_table() {
             assert(longest >= -1);
         }
 
-        assert(service_table_add_service_reference(&table, ref) == 0);
+        assert(service_table_add_service_reference(&table, ref) > 0);
 
         //print_trie(&trie);
 
@@ -416,7 +416,7 @@ static void test_service_table() {
     for(i = 0; i < UNIQUE_SERVICE_REFERENCES; i++) {
         /* no default */
         ref = &references[i];
-        assert(service_table_add_service_reference(&table, ref) == 0);
+        assert(service_table_add_service_reference(&table, ref) > 0);
 
         assert(service_table_find_service_reference(&table, ref->instance.service.sv_flags,
                 ref->instance.service.sv_prefix_bits, &ref->instance.service.sv_srvid,

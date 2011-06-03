@@ -28,9 +28,11 @@ class RecvRsp : public Message {
 
     unsigned char *nsbuf()             { return _nsbuf; }
     const sv_srvid_t& src_obj_id() const        { return _src_obj_id; }
+    const uint32_t& src_ipaddr() const {return _ipaddr;}
 
   private:
     sv_srvid_t _src_obj_id;
+    uint32_t _ipaddr;
     unsigned char *_nsbuf;
     uint16_t _nonserial_len;
     int _flags;

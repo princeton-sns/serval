@@ -17,48 +17,42 @@
 
 typedef struct sv_message_channel_callback {
     void* target;
-
-    int (*recv_message)(void* target, const void* message, size_t length);
+    int (*recv_message)(struct sv_message_channel_callback* cb, const void* message, size_t length);
 } message_channel_callback;
 
 struct sv_message_channel {
-    /*message_channel_callback callback;*/
+    enum component_state state;
 };
-
-struct sv_message_channel_interface {
-    int (*initialize)(void* target);
-    void (*start)(void* target);
-    void (*stop)(void* target);
-    int (*finalize)(void* target);
-
-    const struct sockaddr* (*get_local_address)(void* target, int* len);
-    /* primarily meant for serval message channels - change the peer address */
-    void (*set_peer_address)(void* target, struct sockaddr* addr, size_t len);
-    const struct sockaddr* (*get_peer_address)(void* target, int* len);
-    int (*get_max_message_size)(void* target);
-
-    /* for request/response callback handling */
-    int (*register_callback)(void* target, message_channel_callback* cb);
-    int (*unregister_callback)(void* target, message_channel_callback* cb);
-    int (*get_callback_count)(void* target);
-
-    int (*send_message)(void* target, void* message, size_t length);
-    int (*send_message_iov)(void* target, struct iovec* iov, size_t veclen, size_t length);
-    /* for direct message - local loop - receipt and debug */
-    int (*recv_message)(void* target, const void* message, size_t length);
-};
-
-/* perhaps this should just have direct function pointer references
- * though, it would cost extra space vs. the single pointer to a staticly
- * defined interface struct.
- * caller/owner is responsible for allocating and destroying this wrapper struct
- * including the target?
- */
+struct sv_message_channel_interface;
 typedef struct {
     //atomic_t ref_count;
-    void* target;
+    struct sv_message_channel channel;
     struct sv_message_channel_interface* interface;
 } message_channel;
+
+struct sv_message_channel_interface {
+    int (*initialize)(message_channel* channel);
+    void (*start)(message_channel* channel);
+    void (*stop)(message_channel* channel);
+    int (*finalize)(message_channel* channel);
+
+    const struct sockaddr* (*get_local_address)(message_channel* channel, int* len);
+    /* primarily meant for serval message channels - change the peer address */
+    void (*set_peer_address)(message_channel* channel, struct sockaddr* addr, size_t len);
+    const struct sockaddr* (*get_peer_address)(message_channel* channel, int* len);
+    int (*get_max_message_size)(message_channel* channel);
+
+    /* for request/response callback handling */
+    int (*register_callback)(message_channel* channel, message_channel_callback* cb);
+    int (*unregister_callback)(message_channel* channel, message_channel_callback* cb);
+    int (*get_callback_count)(message_channel* channel);
+
+    int (*send_message)(message_channel* channel, void* message, size_t length);
+    int (*send_message_iov)(message_channel* channel, struct iovec* iov, size_t veclen, size_t length);
+    /* for direct message - local loop - receipt and debug */
+    int (*recv_message)(message_channel* channel, const void* message, size_t length);
+};
+
 
 //int message_channel_incref(message_channel* channel);
 //int message_channel_decref(message_channel* channel);

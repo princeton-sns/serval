@@ -45,15 +45,60 @@ void destroy_wait(wait_queue_t *w)
                 close(w->pipefd[1]);
 }
 
+enum wait_signal wait_signal_lower(int fd)
+{
+    ssize_t sz;
+    //int ret = 0;
+    /*char r = 'r';*/
+    uint8_t sig = 0;
+
+    do {
+        sz = read(fd, &sig, 1);
+
+        /*if (sz == 1)
+            ret = 1; */
+    } while (sz == 0);
+
+    return (enum wait_signal) (sz == -1 ? -1 : sig);
+}
 int default_wake_function(wait_queue_t *curr, unsigned mode, 
                           int wake_flags, void *key)
 {
-        char w = 'w';
+    //char w = 'w';
+
+    int pflags = (int) key;
+    uint8_t sig = WAIT_READ_DATA & 0xFF;
+    int ret = 0;
+
+    if(pflags & POLLIN) {
+        sig = WAIT_READ_DATA;
+        /*LOG_DBG("Waking up wait queue pipefd %i with read sig %u\n", curr->pipefd[0], sig);*/
         if (curr->pipefd[1] == -1) {
-                LOG_ERR("pipefd[1] == -1\n");
-                return -1;
+            LOG_ERR("pipefd[1] == -1\n");
+            return -1;
         }
-	return write(curr->pipefd[1], &w, 1);
+        ret = write(curr->pipefd[1], &sig, 1);
+
+        if(ret < 0) {
+            LOG_ERR("Could not write out signal to pipe: %u\n", curr->pipefd[1]);
+        }
+    }
+
+    if(pflags & POLLOUT) {
+        sig = WAIT_WRITE_DATA;
+        /*LOG_DBG("Waking up wait queue pipefd %i with write sig %u\n", curr->pipefd[0], sig);*/
+        if (curr->pipefd[1] == -1) {
+            LOG_ERR("pipefd[1] == -1\n");
+            return -1;
+        }
+        ret = write(curr->pipefd[1], &sig, 1);
+
+        if(ret < 0) {
+            LOG_ERR("Could not write in signal to pipe: %u\n", curr->pipefd[1]);
+        }
+    }
+
+	return ret;
 }
 
 /* 

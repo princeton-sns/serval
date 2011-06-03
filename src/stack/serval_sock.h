@@ -181,12 +181,7 @@ static inline unsigned int serval_hashfn(struct net *net,
                                          size_t keylen,
                                          unsigned int mask)
 {
-        unsigned int num = 0, i;
-        unsigned char *key_num = (unsigned char *)key;
-        for (i = 0; i < keylen; i++) {
-                num += key_num[i];
-        }
-	return num & mask;
+	return *((unsigned int *)key) & mask;
 }
 
 static inline unsigned int serval_hashfn_listen(struct net *net, 
@@ -250,6 +245,7 @@ void serval_sock_init(struct sock *sk);
 void serval_sock_destroy(struct sock *sk);
 void serval_sock_done(struct sock *sk);
 
+void serval_sock_set_dev(struct sock *sk, struct net_device *dev);
 const char *serval_sock_state_str(struct sock *sk);
 const char *serval_state_str(unsigned int state);
 int serval_sock_set_state(struct sock *sk, unsigned int state);

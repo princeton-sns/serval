@@ -19,77 +19,85 @@
 #include "task.h"
 #include "message_channel_base.h"
 
-int base_message_channel_initialize(void* target) {
-    assert(target);
-    struct base_message_channel* channel = (struct base_message_channel*) target;
-    channel->buffer = (char*) malloc(channel->buffer_len);
-    bzero(channel->buffer, channel->buffer_len);
+int base_message_channel_initialize(message_channel* channel) {
+    assert(channel);
+    if(!is_created(channel->channel.state)) {
+        return -1;
+    }
+    struct sv_message_channel_base* base = (struct sv_message_channel_base*) channel;
+    base->buffer = (char*) malloc(base->buffer_len);
+    bzero(base->buffer, base->buffer_len);
+    channel->channel.state = COMP_INITIALIZED;
     return 0;
 }
 
-int base_message_channel_finalize(void* target) {
-    assert(target);
-    struct base_message_channel* channel = (struct base_message_channel*) target;
+int base_message_channel_finalize(message_channel* channel) {
+    assert(channel);
+    struct sv_message_channel_base* base = (struct sv_message_channel_base*) channel;
 
-    if(atomic_read(&channel->running)) {
+    if(atomic_read(&base->running)) {
         base_message_channel_stop(channel);
     }
 
-    if(channel->buffer) {
-        free(channel->buffer);
-        channel->buffer = NULL;
+    if(base->buffer) {
+        free(base->buffer);
+        base->buffer = NULL;
     }
 
-    if(channel->sock > 0) {
-        close(channel->sock);
-        channel->sock = -1;
+    if(base->sock > 0) {
+        close(base->sock);
+        base->sock = -1;
     }
 
+    channel->channel.state = COMP_CREATED;
     return 0;
 }
 
-void base_message_channel_start(void* target) {
-    assert(target);
-    struct base_message_channel* channel = (struct base_message_channel *) target;
+void base_message_channel_start(message_channel* channel) {
+    assert(channel);
+    struct sv_message_channel_base* base = (struct sv_message_channel_base *) channel;
 
-    atomic_set(&channel->running, 1);
+    atomic_set(&base->running, 1);
+    channel->channel.state = COMP_STARTED;
 }
 
-void base_message_channel_stop(void* target) {
-    assert(target);
-    struct base_message_channel* channel = (struct base_message_channel *) target;
+void base_message_channel_stop(message_channel* channel) {
+    assert(channel);
+    if(!is_started(channel->channel.state)) {
+        return;
+    }
+    struct sv_message_channel_base* base = (struct sv_message_channel_base *) channel;
 
-    if(atomic_read(&channel->running)) {
-        atomic_set(&channel->running, 0);
-        task_unblock(channel->sock, FD_ALL);
-        task_remove(channel->recv_task);
+    if(atomic_read(&base->running)) {
+        atomic_set(&base->running, 0);
+        task_unblock(base->sock, FD_ALL);
+        task_remove(base->recv_task);
     }
 }
 
-int base_message_channel_register_callback(void* target, message_channel_callback* cb) {
-    assert(target);
+int base_message_channel_register_callback(message_channel* channel, message_channel_callback* cb) {
+    assert(channel);
     assert(cb);
-    struct base_message_channel* channel = (struct base_message_channel *) target;
-    if(channel->callback.target) {
+    struct sv_message_channel_base* base = (struct sv_message_channel_base *) channel;
+    if(base->callback.target) {
         return -1;
     }
-    channel->callback = *cb;
+    base->callback = *cb;
     return 0;
 }
-int base_message_channel_unregister_callback(void* target, message_channel_callback* cb) {
-    assert(target);
+int base_message_channel_unregister_callback(message_channel* channel, message_channel_callback* cb) {
+    assert(channel);
     assert(cb);
-    struct base_message_channel* channel = (struct base_message_channel *) target;
-    if(channel->callback.target == cb->target) {
-        channel->callback.target = NULL;
-        channel->callback.recv_message = NULL;
+    struct sv_message_channel_base* base = (struct sv_message_channel_base *) channel;
+    if(base->callback.target == cb->target) {
+        base->callback.target = NULL;
+        base->callback.recv_message = NULL;
         return 0;
     }
     return -1;
 }
-int base_message_channel_get_callback_count(void* target) {
-    assert(target);
-    struct base_message_channel* channel = (struct base_message_channel *) target;
-    return channel->callback.target == NULL ? 0 : 1;
+int base_message_channel_get_callback_count(message_channel* channel) {
+    assert(channel);
+    struct sv_message_channel_base* base = (struct sv_message_channel_base *) channel;
+    return base->callback.target == NULL ? 0 : 1;
 }
-

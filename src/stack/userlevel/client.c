@@ -4,6 +4,7 @@
 #include <serval/timer.h>
 #include <serval/wait.h>
 #include <serval/net.h>
+#include <serval/bitops.h>
 #include <serval_sock.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -27,6 +28,7 @@ struct client {
         struct socket *sock;
         struct client *parent;
 	unsigned int id;
+	int has_data;
 	int pipefd[2];
 	int should_exit;
         pthread_t thr;
@@ -54,7 +56,7 @@ typedef int (*msg_handler_t)(struct client *, struct client_msg *);
 
 static int dummy_msg_handler(struct client *c, struct client_msg *msg)
 {
-	LOG_DBG("Client %u handling message type %s\n", 
+	LOG_DBG("Client %u handling dummy message type %s\n",
 		c->id, client_msg_to_typestr(msg));
 
 	return 0;
@@ -155,19 +157,19 @@ struct client *client_create(client_type_t type,
 	
 	c->type = type;
 	c->state = CLIENT_STATE_NOT_RUNNING;
+	c->has_data = 0;
 	c->fd = sock;
 
-        err = sock_create(PF_SERVAL, 
-                          client_type_to_prot_type(type), 
-                          0, &c->sock);
-        if (err < 0) {
-                LOG_ERR("Could not create socket: %s\n", KERN_STRERROR(err));
-                free(c);
-                return NULL;                        
-        }
+    err = sock_create(PF_SERVAL,
+                      client_type_to_prot_type(type),
+                      0, &c->sock);
+    if (err < 0) {
+            LOG_ERR("Could not create socket: %s\n", KERN_STRERROR(err));
+            free(c);
+            return NULL;
+    }
 
-        c->id = id;
-	LOG_DBG("client %p id is %u\n", c, c->id);
+    c->id = id;
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));
 
@@ -181,9 +183,9 @@ struct client *client_create(client_type_t type,
 		return NULL;
 	}
 
-        /* Set non-blocking so that we can lower signal without
-         * blocking */
-        fcntl(c->pipefd[0], F_SETFL, O_NONBLOCK);
+    /* Set non-blocking so that we can lower signal without
+     * blocking */
+    fcntl(c->pipefd[0], F_SETFL, O_NONBLOCK);
 
 	/* Init a timer for test purposes. */
 	c->timer.function = dummy_timer_callback;
@@ -191,8 +193,8 @@ struct client *client_create(client_type_t type,
 	c->timer.data = (unsigned long)c;
 
 	INIT_LIST_HEAD(&c->link);
-        pthread_mutex_init(&c->lock, NULL);
-        atomic_set(&c->refcnt, 1);
+    pthread_mutex_init(&c->lock, NULL);
+    atomic_set(&c->refcnt, 1);
 
 	return c;
 }
@@ -289,33 +291,35 @@ int client_signal_pending(struct client *c)
         return ret;
 }
 
-int client_signal_raise(struct client *c)
+int client_signal_raise(struct client *c, enum client_signal s)
 {
-	char w = 'w';
-
-	return write(c->pipefd[1], &w, 1);
+	/*char w = 'w';
+	return write(c->pipefd[1], &w, 1); */
+    uint8_t sig = s & 0xff;
+    return write(c->pipefd[1], &sig, 1);
 }
 
 int client_signal_exit(struct client *c)
 {
 	c->should_exit = 1;
-	return client_signal_raise(c);
+	return client_signal_raise(c, CLIENT_EXIT);
 }
 
-int client_signal_lower(struct client *c)
+enum client_signal client_signal_lower(int fd)
 {
 	ssize_t sz;
-	int ret = 0;
-	char r = 'r';
+	//int ret = 0;
+	/*char r = 'r';*/
+	uint8_t sig = 0;
 
 	do {
-		sz = read(c->pipefd[0], &r, 1);
+		sz = read(fd, &sig, 1);
 
-		if (sz == 1)
-			ret = 1;
-	} while (sz > 0);
+		/*if (sz == 1)
+			ret = 1; */
+	} while (sz == 0);
 
-	return sz == -1 ? -1 : ret;
+	return (enum client_signal) (sz == -1 ? -1 : sig);
 }
 
 int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
@@ -326,7 +330,7 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
         struct sockaddr_sv saddr;
 	int ret;
         
-	LOG_DBG("bind request for service id %s\n", 
+	LOG_DBG("Client %u bind request for service id %s\n", c->id,
 		service_id_to_str(&req->srvid));	
 
         memset(&saddr, 0, sizeof(saddr));
@@ -361,7 +365,7 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
         struct sockaddr_sv addr;
         int err;
 
-	LOG_DBG("connect request for service id %s\n", 
+	LOG_DBG("Client %u connect request for service id %s\n", c->id,
 		service_id_to_str(&req->srvid));
 
         memset(&addr, 0, sizeof(addr));
@@ -388,7 +392,7 @@ int client_handle_listen_req_msg(struct client *c, struct client_msg *msg)
         struct client_msg_listen_rsp rsp;
 	int err;
 
-	LOG_DBG("listen request, backlog=%u\n", req->backlog);
+	LOG_DBG("Client %u listen request, backlog=%u\n", c->id, req->backlog);
         
         err = c->sock->ops->listen(c->sock, req->backlog); 
 
@@ -421,16 +425,15 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
         
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT_RSP);
         
-        LOG_DBG("waiting for incoming request wqh=%p\n",
+        LOG_DBG("Client %u waiting for incoming request sleep=%p\n", c->id,
                 sk_sleep(c->sock->sk));
         
         err = wait_event_interruptible(*sk_sleep(c->sock->sk), 
                                        !list_empty(&ssk->accept_queue));
 
-        LOG_DBG("wait returned %d - %s\n", 
-                err, strerror(KERN_ERR(err)));
-         
         if (err < 0) {
+                LOG_ERR("wait returned %d - %s\n", 
+                        err, strerror(KERN_ERR(err)));
                 rsp.error = KERN_ERR(err);
                 goto out;
         }
@@ -460,7 +463,7 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
         struct sock *psk;
 	int err, flags = 0;
 
-	LOG_DBG("accept2 request service id=%s\n",
+	LOG_DBG("Client %u accept2 request service id=%s\n", c->id,
                 service_id_to_str(&req->srvid));
 
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT2_RSP);
@@ -499,45 +502,47 @@ out:
 int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_send_req *req = (struct client_msg_send_req *)msg;
-        DEFINE_CLIENT_RESPONSE(rsp, MSG_SEND_RSP);
-        struct socket *sock = c->sock;
-        struct msghdr mh;
-        struct iovec iov;
-        struct {
-                struct sockaddr_sv sv;
-                struct sockaddr_in in;
-        } addr;
-        socklen_t addrlen = sizeof(addr.sv);
-        int ret;
+    DEFINE_CLIENT_RESPONSE(rsp, MSG_SEND_RSP);
+    struct socket *sock = c->sock;
+    struct msghdr mh;
+    struct iovec iov;
+    struct {
+            struct sockaddr_sv sv;
+            struct sockaddr_in in;
+    } addr;
+    socklen_t addrlen = sizeof(addr.sv);
+    int ret;
 
-        memset(&addr, 0, sizeof(addr));
-        addr.sv.sv_family = AF_SERVAL;
-        memcpy(&addr.sv.sv_srvid, &req->srvid, sizeof(req->srvid));
-        addr.in.sin_family = AF_INET;
-        
-        if (req->ipaddr != 0) {
-                memcpy(&addr.in.sin_addr, &req->ipaddr, 
-                       sizeof(req->ipaddr));
-                addrlen = sizeof(addr);
-        }
-        memset(&mh, 0, sizeof(mh));
-        mh.msg_name = &addr;
-        mh.msg_namelen = addrlen;
-        mh.msg_iov = &iov;
-        mh.msg_iovlen = 1;
-        
-        iov.iov_base = req->data;
-        iov.iov_len = req->data_len;
+    memset(&addr, 0, sizeof(addr));
+    addr.sv.sv_family = AF_SERVAL;
+    memcpy(&addr.sv.sv_srvid, &req->srvid, sizeof(req->srvid));
+    addr.in.sin_family = AF_INET;
 
-	LOG_DBG("data_len=%u\n", req->data_len);
+    if (req->ipaddr != 0) {
+        memcpy(&addr.in.sin_addr, &req->ipaddr,
+               sizeof(req->ipaddr));
+        addrlen = sizeof(addr);
+    }
+    memset(&mh, 0, sizeof(mh));
+    mh.msg_name = &addr;
+    mh.msg_namelen = addrlen;
+    mh.msg_iov = &iov;
+    mh.msg_iovlen = 1;
+
+    iov.iov_base = req->data;
+    iov.iov_len = req->data_len;
+
+    struct in_addr ip;
+    ip.s_addr = req->ipaddr;
+	LOG_DBG("Client %u data_len=%u dest: %s @ %s\n", c->id, req->data_len, service_id_to_str(&req->srvid), inet_ntoa(ip));
         
-        ret = sock->ops->sendmsg(NULL, sock, &mh, req->data_len);
-        
-        if (ret < 0) {
-                rsp.error = KERN_ERR(ret);
-                LOG_ERR("sendmsg: %s\n", KERN_STRERROR(ret));
-        }
-        
+    ret = sock->ops->sendmsg(NULL, sock, &mh, req->data_len);
+
+    if (ret < 0) {
+            rsp.error = KERN_ERR(ret);
+            LOG_ERR("sendmsg: %s\n", KERN_STRERROR(ret));
+    }
+
 	return client_msg_write(c->fd, &rsp.msghdr);
 }
 
@@ -551,10 +556,16 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-        struct sockaddr_sv saddr;
+
+        struct {
+            struct sockaddr_sv serv;
+            struct sockaddr_in addr;
+        } saddr;
+
         int ret;
 
         memset(&r, 0, sizeof(r));
+        memset(&saddr, 0, sizeof(saddr));
         client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));
         mh.msg_name = &saddr;
@@ -565,21 +576,22 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         iov.iov_base = r.data;
         iov.iov_len = req->data_len;
 
-	LOG_DBG("data_len=%u flags=%u\n", req->data_len, req->flags);
+        LOG_DBG("Client %u data_len=%u flags=%u\n", c->id, req->data_len, req->flags);
         
         ret = sock->ops->recvmsg(NULL, sock, &mh, req->data_len, req->flags);
         
         if (ret < 0) {
-                r.rsp.error = KERN_ERR(ret);
-                LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
+            r.rsp.error = KERN_ERR(ret);
+            LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
         } else {
-                memcpy(&r.rsp.srvid, &saddr.sv_srvid, sizeof(saddr.sv_srvid));
-                r.rsp.data_len = ret;
-                r.rsp.msghdr.payload_length += ret;
-                r.data[ret] = '\0';
+            memcpy(&r.rsp.srvid, &saddr.serv.sv_srvid, sizeof(saddr.serv.sv_srvid));
+            r.rsp.ipaddr = saddr.addr.sin_addr.s_addr;
+            r.rsp.data_len = ret;
+            r.rsp.msghdr.payload_length += ret;
+            r.data[ret] = '\0';
         }
         
-	ret = client_msg_write(c->fd, &r.rsp.msghdr);
+        ret = client_msg_write(c->fd, &r.rsp.msghdr);
         
         return ret;
 }
@@ -589,8 +601,7 @@ int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
         DEFINE_CLIENT_RESPONSE(rsp, MSG_CLOSE_RSP);
         int ret;
         
-        LOG_DBG("\n");
-
+        LOG_DBG("Client %u closing socket %i\n", c->id, c->sock);
         ret = c->sock->ops->release(c->sock);
 
         if (ret < 0) {
@@ -600,19 +611,37 @@ int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
 
         }
 
-        return client_msg_write(c->fd, &rsp.msghdr);
+        client_msg_write(c->fd, &rsp.msghdr);
+
+        return 0;
 }
 
 int client_handle_clear_data_msg(struct client *c, struct client_msg *msg)
 {
-        LOG_DBG("\n");
-        return 0;
+    LOG_DBG("Client %u clearing has data: %i\n", c->id, c->has_data);
+    c->has_data = 0;
+    /* TODO - kludge to prevent client_thread from thinking no response data was written and should close */
+    return 1;
 }
+
 
 int client_handle_have_data_msg(struct client *c, struct client_msg *msg)
 {
-        LOG_DBG("\n");
-        return 0;
+    LOG_DBG("Client %u sent have data msg...error\n", c->id);
+    return 0;
+}
+
+int client_send_have_data_msg(struct client *c)
+{
+    struct client_msg_have_data hd;
+    int ret = 0;
+
+    LOG_DBG("Client %u sending have data msg to application\n", c->id);
+    memset(&hd, 0, sizeof(hd));
+    client_msg_hdr_init(&hd.msghdr, MSG_HAVE_DATA);
+    ret = client_msg_write(c->fd, &hd.msghdr);
+
+    return 0;
 }
 
 static int client_handle_msg(struct client *c)
@@ -654,6 +683,7 @@ static void *client_thread(void *arg)
 	struct sigaction action;
 	struct client *c = (struct client *)arg;
 	int ret;
+    DEFINE_WAIT(wait);
 
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -664,7 +694,7 @@ static void *client_thread(void *arg)
 	ret = pthread_setspecific(client_key, c);
 
 	if (ret != 0) {
-                LOG_ERR("Could not set client key\n");
+        LOG_ERR("Could not set client key\n");
 		return NULL;
 	}
 
@@ -677,7 +707,9 @@ static void *client_thread(void *arg)
 	while (!c->should_exit) {
 		fd_set readfds;
 		int nfds;
-		
+		enum client_signal csig;
+		enum wait_signal wsig;
+
 		FD_ZERO(&readfds);
 		FD_SET(c->pipefd[0], &readfds);
 
@@ -686,14 +718,42 @@ static void *client_thread(void *arg)
 
 		nfds = MAX(c->fd, c->pipefd[0]) + 1;
 
+		if(!c->has_data) {
+            /*wait for a data signal on the pipe
+             */
+		    lock_sock(c->sock->sk);
+
+		    /*TODO prevent bh from triggering writeable notifications all the time:
+		     * let the wait flags dictate the interest notification sets
+		     */
+		    if(skb_peek(&c->sock->sk->sk_receive_queue)) {
+		        /* data exists on the queue already */
+		        release_sock(c->sock->sk);
+		        c->has_data = 1;
+		        client_send_have_data_msg(c);
+		    }
+		    else {
+                /* prepare_to_wait(sk_sleep(c->sock->sk), &wait, TASK_INTERRUPTIBLE); */
+		        /* LOG_DBG("Adding wait queue fd %i to the client %u fd set\n", wait.pipefd[0], c->id); */
+                wait.flags &= ~WQ_FLAG_EXCLUSIVE;
+                pthread_mutex_lock(&sk_sleep(c->sock->sk)->lock);
+                if (list_empty(&wait.thread_list))
+                    list_add(&wait.thread_list, &sk_sleep(c->sock->sk)->thread_list);
+                pthread_mutex_unlock(&sk_sleep(c->sock->sk)->lock);
+
+                set_bit(SOCK_ASYNC_WAITDATA, &c->sock->sk->sk_socket->flags);
+                release_sock(c->sock->sk);
+
+                FD_SET(wait.pipefd[0], &readfds);
+                nfds = MAX(nfds, wait.pipefd[0] + 1);
+		    }
+		}
+
 		ret = select(nfds, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {
-			if (errno == EINTR) {
-				LOG_INF("client %u select interrupted\n", 
-					c->id);
-				continue;
-			}
+			if (errno == EINTR)
+                                continue;
 			/* Error */
 			LOG_ERR("client %u select error...\n",
 				c->id);
@@ -701,17 +761,67 @@ static void *client_thread(void *arg)
 			break;
 		} else if (ret == 0) {
 			/* Timeout */
-			LOG_DBG("Client %u timeout\n", c->id);
+			/* LOG_DBG("Client %u timeout\n", c->id);*/
 		} else {
+		    /* LOG_DBG("Is wait queue fd set: %i, has data: %i\n", FD_ISSET(wait.pipefd[0], &readfds), c->has_data);*/
+
 			if (FD_ISSET(c->pipefd[0], &readfds)) {
-				/* Signal received, probably exit */
-				LOG_DBG("Client %u exit signal\n", c->id);
-                                c->should_exit = 1;
-                                continue;
+			    /* Signal received - determine message type
+			     * exit or data ready
+			     */
+			    csig = client_signal_lower(c->pipefd[0]);
+
+				/*LOG_DBG("Client %u signal received: %u\n", c->id, sig); */
+
+				if(csig < 0) {
+				    continue;
+				}
+
+				switch(csig) {
+				    case CLIENT_EXIT:
+				        c->should_exit = 1;
+				        break;
+				}
+
+                continue;
 			}
+
+			if (!c->has_data && FD_ISSET(wait.pipefd[0], &readfds)) {
+
+			    wsig = wait_signal_lower(wait.pipefd[0]);
+
+			    /* LOG_DBG("Client %u wait queue signal received: %u\n", c->id, sig); */
+
+                if(wsig < 0) {
+                    continue;
+                }
+
+			    switch(wsig) {
+			        case WAIT_READ_DATA:
+                        lock_sock(c->sock->sk);
+                        clear_bit(SOCK_ASYNC_WAITDATA, &c->sock->sk->sk_socket->flags);
+                        /* Don't destroy the wait until the end
+                         * finish_wait(sk_sleep(c->sock->sk), &wait); */
+
+                        if (!list_empty(&wait.thread_list)) {
+                            pthread_mutex_lock(&sk_sleep(c->sock->sk)->lock);
+                            list_del_init(&wait.thread_list);
+                            pthread_mutex_unlock(&sk_sleep(c->sock->sk)->lock);
+                        }
+
+                        release_sock(c->sock->sk);
+                        c->has_data = 1;
+                        client_send_have_data_msg(c);
+                        break;
+			        case WAIT_WRITE_DATA:
+			            /* ignore socket writable*/
+			            break;
+                }
+			}
+
 			if (FD_ISSET(c->fd, &readfds)) {
 				/* Socket readable */
-				LOG_DBG("Client %u socket readable\n", c->id);
+				/* LOG_DBG("Client %u socket %i readable\n", c->id, c->fd); */
 				ret = client_handle_msg(c);
 
 				if (ret == 0) {
@@ -723,7 +833,8 @@ static void *client_thread(void *arg)
 		}
 	}
 
-	LOG_DBG("Client %u exits\n", c->id);
+    destroy_wait(&wait);
+	LOG_DBG("Client %u exiting\n", c->id);
 	client_close(c);
 	c->state = CLIENT_STATE_GARBAGE;
 

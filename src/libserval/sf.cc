@@ -133,6 +133,31 @@ recv_sv(int soc, void *buffer, size_t length, int flags)
   return n;
 }
 
+ssize_t
+sendmsg_sv(int soc, const struct msghdr *message, int flags)
+{
+  sv_err_t err;
+  int n = sock.sendmsg_sv(soc, message, flags, err);
+
+  if (n == SERVAL_SOCKET_ERROR) {
+    errno = err.v;
+    return -1;
+  }
+
+  return n;
+}
+
+ssize_t
+recvmsg_sv(int soc, struct msghdr *message, int flags)
+{
+  sv_err_t err;
+  int n = sock.recvmsg_sv(soc, message, flags, err);
+  if (n == SERVAL_SOCKET_ERROR) {
+    errno = err.v;
+    return -1;
+  }
+  return n;
+}
 
 ssize_t 
 sendto_sv(int soc, const void *buffer, size_t length, int flags,

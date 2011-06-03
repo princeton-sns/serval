@@ -21,7 +21,7 @@ enum ctrlmsg_type {
     CTRLMSG_TYPE_MOD_SERVICE = 8,
     CTRLMSG_TYPE_GET_SERVICE = 9,
     CTRLMSG_TYPE_SERVICE_STATS = 10,
-    CTRLMSG_TYPE_SET_TRANSIT = 11,
+    CTRLMSG_TYPE_CAPABILITIES = 11,
     CTRLMSG_TYPE_UNKNOWN = 1000,
 };
 
@@ -35,6 +35,7 @@ struct service_resolution {
     uint8_t sv_flags;
     struct service_id srvid;
     struct net_addr address;
+    int if_index;
 
     uint32_t priority; /* Priority level of flow entry. */
     uint32_t weight;
@@ -90,6 +91,10 @@ struct ctrlmsg_register {
 #define CTRLMSG_REGISTER_SIZE (sizeof(struct ctrlmsg_register))
 #define CTRLMSG_UNREGISTER_SIZE (sizeof(struct ctrlmsg_register))
 
+/* resolution up call for service router process to resolve
+ * the response should be a ctrlmsg with a resolution and either
+ * a buffer (skb) ID or the packet data
+ */
 struct ctrlmsg_resolve {
     struct ctrlmsg cmh;
     uint32_t xid;
@@ -107,6 +112,9 @@ struct ctrlmsg_resolve {
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 
+/* resolution lookup for a service id (prefix), returns all
+ * matching resolutions
+ */
 struct ctrlmsg_get_service {
     struct ctrlmsg cmh;
     uint32_t xid;
@@ -126,9 +134,11 @@ struct ctrlmsg_resolution {
 #define CTRLMSG_REM_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
 #define CTRLMSG_MOD_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
 
-#define CTRL_NUM_SERVICES(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution)
+#define CTRL_NUM_SERVICES(ctrlmsg, size) ((size - sizeof(*ctrlmsg)) % sizeof(struct service_resolution) == 0 ? \
+        (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution) : 0)
 
-#define CTRL_NUM_STAT_SERVICES(ctrlmsg, size) (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution_stat)
+#define CTRL_NUM_STAT_SERVICES(ctrlmsg, size) ((size - sizeof(*ctrlmsg)) %  sizeof(struct service_resolution_stat) == 0 ? \
+        (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution_stat) : 0)
 
 struct ctrlmsg_stats {
     struct ctrlmsg cmh;
@@ -138,12 +148,12 @@ struct ctrlmsg_stats {
 
 #define CTRLMSG_STATS_SIZE (sizeof(struct ctrlmsg_stats))
 
-struct ctrlmsg_set_transit {
+struct ctrlmsg_capabilities {
     struct ctrlmsg cmh;
-    int transit;
+    int capabilities;
 };
 
-#define CTRLMSG_SET_TRANSIT_SIZE (sizeof(struct ctrlmsg_set_transit))
+#define CTRLMSG_CAPABILITIES_SIZE (sizeof(struct ctrlmsg_capabilities))
 
 #define IFFLAG_UP 0x1
 #define IFFLAG_HOST_CTRL_MODE 0x2

@@ -10,14 +10,60 @@
 #include "stdlib.h"
 
 struct sockaddr_sv service_router_prefix = {
-    .sv_family = AF_SERVAL,
-    .sv_flags = 0,
-    .sv_prefix_bits = 16,
-    .sv_srvid.srv_un.un_id8 = {219,219,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0}
-};
+        .sv_family = AF_SERVAL,
+        .sv_flags = 0,
+        .sv_prefix_bits = 16,
+        .sv_srvid.srv_un.un_id8 = {
+                219,
+                219,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0 } };
 
-void message_barrier_default_cb(struct message_barrier* barrier, uint16_t type, const void* message,
-        size_t len) {
+void init_message_barrier(struct message_barrier* barrier,
+        void* priv_data, uint16_t type, barrier_handler sh,
+        barrier_handler fh, callback_trigger cbt) {
+    barrier->private = priv_data;
+    barrier->type = type;
+    //barrier->barrier_cond = clientres->message_cond;
+    //barrier->barrier_mutex = clientres->message_mutex;
+    task_mutex_init(&barrier->barrier_mutex);
+    task_cond_init(&barrier->barrier_cond);
+    barrier->success_handler = sh;
+    barrier->failure_handler = fh;
+    barrier->trigger = cbt;
+}
+
+
+void message_barrier_default_cb(struct message_barrier* barrier, uint16_t type,
+        const void* message, size_t len) {
 
     /*perhaps not the best way to indicate asynchrony */
     atomic_dec(&barrier->message_count);
@@ -31,21 +77,19 @@ void message_barrier_default_cb(struct message_barrier* barrier, uint16_t type, 
         barrier->failure_handler(barrier, message, len);
     }
 
-    if(atomic_read(&barrier->message_count) == 0) {
-        if(barrier->callback == NULL) {
-            /* TODO - may be necessary to notify on any message decrement - for windowed rpc*/
-            task_mutex_lock(&barrier->barrier_mutex);
-            task_cond_notify_all(&barrier->barrier_cond);
-            task_mutex_unlock(&barrier->barrier_mutex);
-        }
-        else {
-            barrier->trigger(barrier);
+    if(barrier->callback == NULL) {
+        /* synchronized notification*/
+        task_mutex_lock(&barrier->barrier_mutex);
+        task_cond_notify_all(&barrier->barrier_cond);
+        task_mutex_unlock(&barrier->barrier_mutex);
+    } else if(atomic_read(&barrier->message_count) == 0) {
+        /* pure async notification */
+        barrier->trigger(barrier);
 
-            /* free up the cruft - these must be heap allocated*/
-            //TODO?free(barrier->callback);
-            free(barrier->linger_data);
-            free(barrier);
-        }
+        /* free up the cruft - these must be heap allocated*/
+        //TODO?free(barrier->callback);
+        free(barrier->linger_data);
+        free(barrier);
     }
 }
 

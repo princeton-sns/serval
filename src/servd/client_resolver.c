@@ -15,9 +15,9 @@
 #include "service_util.h"
 #include "debug.h"
 
-extern int create_resolver_rpc(struct sockaddr_sv* local, struct sv_instance_addr* remote,
-        uint16_t rpc_max_retry, uint16_t request_timeout, resolver_message_callback* cb,
-        resolver_rpc* messaging);
+extern resolver_rpc* create_resolver_rpc(struct sockaddr_sv* local,
+        struct sv_instance_addr* remote, uint16_t rpc_max_retry, uint16_t request_timeout,
+        resolver_message_callback* cb);
 
 struct sv_client_resolver {
     struct sv_base_service_resolver resolver;
@@ -27,7 +27,7 @@ struct sv_client_resolver {
     uint32_t uptime;
     task_mutex message_mutex;
     task_cond message_cond;
-    resolver_rpc messaging;
+    resolver_rpc* messaging;
 //resolver_message_callback callback;
 };
 
@@ -63,73 +63,83 @@ struct reg_data {
     uint32_t ttl;
 };
 
-static int client_initialize(void* resolver);
-static void client_stop(void*resolver);
-static void client_start(void*resolver);
+static int client_initialize(service_resolver* resolver);
+static void client_stop(service_resolver* resolver);
+static void client_start(service_resolver* resolver);
 
-static int client_finalize(void* resolver);
+static int client_finalize(service_resolver* resolver);
 
-static int client_peer_discovered(void* resolver, service_resolver* peer, uint16_t type);
-static int client_peer_disappeared(void* resolver, service_resolver* peer, uint16_t type);
+//static message_channel* client_get_channel(service_resolver* resolver);
+static void client_set_address(service_resolver* resolver, struct sockaddr* saddr, size_t len);
 
-static int client_register_services(void* resolver, service_resolver* peer,
+static int
+        client_peer_discovered(service_resolver* resolver, service_resolver* peer, uint16_t type);
+static int client_peer_disappeared(service_resolver* resolver, service_resolver* peer,
+        uint16_t type);
+
+static int client_register_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl);
-static int client_register_services_async(void* resolver, service_resolver* peer,
+static int client_register_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl,
         service_resolver_callback* callback);
 
-static int client_unregister_services(void* resolver, service_resolver* peer,
+static int client_unregister_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address);
-static int client_unregister_services_async(void* resolver, service_resolver* peer,
+static int client_unregister_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address,
         service_resolver_callback* callback);
 
-static int client_query_services(void* resolver, service_resolver* peer,
+static int client_query_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc);
-static int client_query_services_async(void* resolver, service_resolver* peer,
+static int client_query_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, service_resolver_callback* callback);
 
-static int client_get_service_updates(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc*, size_t num_svc, stat_response* responses);
-static int client_get_service_updates_async(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc*, size_t num_svc, stat_response* responses,
+static int client_get_service_updates(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc*, size_t num_svc, stat_response* responses);
+static int client_get_service_updates_async(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc*, size_t num_svc, stat_response* responses,
         service_resolver_callback* callback);
 
-static int client_update_services(void* resolver, service_resolver* peer, uint16_t type,
-        stat_response* responses);
+static int client_update_services(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, stat_response* responses);
 
-static int client_resolve_service(void* resolver, service_resolver* peer,
+static int client_resolve_service(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address);
 static int
-client_resolve_service_async(void* resolver, service_resolver* peer, struct service_desc* service,
-        struct net_addr* address, service_resolver_callback* callback);
+        client_resolve_service_async(service_resolver* resolver, service_resolver* peer,
+                struct service_desc* service, struct net_addr* address,
+                service_resolver_callback* callback);
 
-static int client_poke_resolver(void* resolver, service_resolver* peer, uint32_t count);
-static int client_poke_resolver_async(void* resolver, service_resolver* peer, uint32_t count,
-        service_resolver_callback* callback);
+static int client_poke_resolver(service_resolver* resolver, service_resolver* peer, uint32_t count);
+static int client_poke_resolver_async(service_resolver* resolver, service_resolver* peer,
+        uint32_t count, service_resolver_callback* callback);
 
-static void client_incref(void*resolver);
-static void client_decref(void*resolver);
+static void client_incref(service_resolver* resolver);
+static void client_decref(service_resolver* resolver);
 
-static service_resolver* client_get_peer(void* resolver, struct service_id* peer_id) {
+static service_resolver* client_get_peer(service_resolver* resolver, struct service_id* peer_id) {
     return NULL;
 }
 
-static int client_has_peer(void* resolver, struct service_id* peer_id) {
+static int client_has_peer(service_resolver* resolver, struct service_id* peer_id) {
     return FALSE;
 }
-static int client_get_peer_count(void* resolver) {
+static int client_get_peer_count(service_resolver* resolver) {
     return 0;
 }
 
+static void client_clear_peers(service_resolver* resolver) {
+
+}
+
 /* locking required? */
-static uint32_t client_get_uptime(void*resolver) {
+static uint32_t client_get_uptime(service_resolver* resolver) {
     assert(resolver);
     struct sv_client_resolver* cres = (struct sv_client_resolver*) resolver;
     return cres->uptime;
 }
 
-static void client_set_uptime(void*resolver, uint32_t uptime) {
+static void client_set_uptime(service_resolver* resolver, uint32_t uptime) {
     assert(resolver);
     struct sv_client_resolver* cres = (struct sv_client_resolver*) resolver;
     cres->uptime = uptime;
@@ -143,12 +153,14 @@ static struct sv_resolver_interface client_resolver_interface = {
         .finalize = client_finalize,
         .incref = client_incref,
         .decref = client_decref,
-
+        .set_address = client_set_address,
+        .set_capabilities = base_set_capabilities,
         .get_uptime = client_get_uptime,
         .set_uptime = client_set_uptime,
         .get_peer = client_get_peer,
         .has_peer = client_has_peer,
         .get_peer_count = client_get_peer_count,
+        .clear_peers = client_clear_peers,
         .peer_discovered = client_peer_discovered,
         .peer_disappeared = client_peer_disappeared,
         .register_services = client_register_services,
@@ -184,7 +196,7 @@ static void client_trigger_default_callback(struct message_barrier* barrier) {
     assert(barrier);
     if(barrier->callback) {
         service_resolver_callback* cb = (service_resolver_callback*) barrier->callback;
-        cb->service_resolver_cb(cb->target, -barrier->status, NULL);
+        cb->service_resolver_cb(cb, -barrier->status, NULL);
     }
 }
 
@@ -233,8 +245,7 @@ static void client_trigger_query_callback(struct message_barrier* barrier) {
     if(barrier->callback) {
         service_resolver_callback* cb = (service_resolver_callback*) barrier->callback;
         struct query_response_barrier* qbarrier = (struct query_response_barrier*) barrier;
-
-        cb->service_resolver_cb(cb->target, qbarrier->num_svc, qbarrier->services);
+        cb->service_resolver_cb(cb, qbarrier->num_svc, qbarrier->services);
     }
 }
 
@@ -256,8 +267,7 @@ static void client_trigger_resolution_callback(struct message_barrier* barrier) 
         service_resolver_callback* cb = (service_resolver_callback*) barrier->callback;
         struct resolution_response_barrier* rbarrier =
                 (struct resolution_response_barrier*) barrier;
-
-        cb->service_resolver_cb(cb->target, -barrier->status, &rbarrier->address);
+        cb->service_resolver_cb(cb, -barrier->status, &rbarrier->address);
     }
 }
 
@@ -316,17 +326,16 @@ static void client_trigger_update_callback(struct message_barrier* barrier) {
     if(barrier->callback) {
         service_resolver_callback* cb = (service_resolver_callback*) barrier->callback;
         struct update_response_barrier* ubarrier = (struct update_response_barrier*) barrier;
-
-        cb->service_resolver_cb(cb->target, barrier->successes, &ubarrier->response);
+        cb->service_resolver_cb(cb, barrier->successes, &ubarrier->response);
     }
 }
 
-static void resolver_message_default_cb(void* target, uint16_t type,
+static void resolver_message_default_cb(resolver_message_callback* cb, uint16_t type,
         struct sv_control_header* message, size_t len, struct sv_instance_addr* remote) {
-    assert(target);
-    struct message_barrier* barrier = (struct message_barrier*) target;
+    assert(cb);
+    struct message_barrier* barrier = (struct message_barrier*) cb->target;
 
-    ((struct sv_client_resolver*) barrier->private)->resolver.resolver.last_access
+    ((struct sv_client_resolver*) barrier->private)->resolver.resolver.resolver.last_access
             = get_current_time_ms();
 
     message_barrier_default_cb(barrier, type, message, len);
@@ -356,79 +365,77 @@ static void init_update_request(struct sv_control_header* message, void* data) {
     rmessage->flags = htons(udata->flags);
 }
 
-static void init_message_barrier(struct message_barrier* barrier,
-        struct sv_client_resolver* clientres, uint16_t type, barrier_handler sh,
-        barrier_handler fh, callback_trigger cbt) {
-    //barrier->private = clientres;
-    barrier->type = type;
-    barrier->barrier_cond = clientres->message_cond;
-    barrier->barrier_mutex = clientres->message_mutex;
-    barrier->success_handler = sh;
-    barrier->failure_handler = fh;
-    barrier->trigger = cbt;
-}
-
-int create_client_service_resolver(struct sockaddr_sv* local, struct sv_instance_addr* remote,
-        uint32_t uptime, uint32_t capabilities, uint32_t capacity, uint8_t relation,
-        service_resolver* resolver) {
+service_resolver* create_client_service_resolver(struct sockaddr_sv* local,
+        struct sv_instance_addr* remote, uint32_t uptime, uint32_t capabilities, uint32_t capacity,
+        uint8_t relation) {
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) malloc(sizeof(*clientres));
 
     if(clientres == NULL) {
         LOG_ERR("Could not allocate memory for client service resolver");
-        return -1;
+        return NULL;
     }
 
     bzero(clientres, sizeof(*clientres));
 
-    create_base_resolver(&clientres->resolver);
+    init_base_resolver(&clientres->resolver);
 
-    memcpy(&clientres->resolver.resolver.resolver_id, &remote->service, sizeof(struct sockaddr_sv));
+    memcpy(&clientres->resolver.resolver.resolver.resolver_id, &remote->service,
+            sizeof(struct sockaddr_sv));
 
     /*first address specified */
     clientres->uptime = uptime;
-    clientres->resolver.resolver.capabilities = capabilities;
-    clientres->resolver.resolver.capacity = capacity;
-    clientres->resolver.resolver.relation = relation;
+    clientres->resolver.resolver.resolver.capabilities = capabilities;
+    clientres->resolver.resolver.resolver.capacity = capacity;
+    clientres->resolver.resolver.resolver.relation = relation;
 
-    if(create_resolver_rpc(local, remote, RPC_MAX_RETRY, CLIENT_REQUEST_TIMEOUT, NULL,
-            &clientres->messaging)) {
-        return -1;
+    if(!(clientres->messaging = create_resolver_rpc(local, remote, RPC_MAX_RETRY,
+            CLIENT_REQUEST_TIMEOUT, NULL))) {
+        return NULL;
     }
 
-    resolver->target = clientres;
-    resolver->interface = &client_resolver_interface;
+    clientres->resolver.resolver.interface = &client_resolver_interface;
 
-    return 0;
+    return &clientres->resolver.resolver;
 }
 
-static int client_initialize(void* resolver) {
+static int client_initialize(service_resolver* resolver) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
     int retval = base_resolver_initialize(resolver);
+    if(retval) {
+        return retval;
+    }
     task_mutex_init(&clientres->message_mutex);
     task_cond_init(&clientres->message_cond);
 
-    retval = clientres->messaging.interface->initialize(clientres->messaging.target);
-
+    retval = clientres->messaging->interface->initialize(clientres->messaging);
     return retval;
 }
 
-static void client_start(void*resolver) {
+static void client_start(service_resolver* resolver) {
     assert(resolver);
-
+    if(resolver->resolver.state < INITIALIZED) {
+        return;
+    }
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
-    clientres->messaging.interface->start(clientres->messaging.target);
+    clientres->messaging->interface->start(clientres->messaging);
+
+    resolver->resolver.state = ACTIVE;
 }
 
-static void client_stop(void*resolver) {
+static void client_stop(service_resolver* resolver) {
     assert(resolver);
+    if(resolver->resolver.state < ACTIVE) {
+        return;
+    }
 
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
-    clientres->messaging.interface->stop(clientres->messaging.target);
+    clientres->messaging->interface->stop(clientres->messaging);
+    resolver->resolver.state = DISCOVERED;
 }
 
-static int client_finalize(void* resolver) {
+static int client_finalize(service_resolver* resolver) {
     assert(resolver);
 
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
@@ -437,27 +444,46 @@ static int client_finalize(void* resolver) {
     task_mutex_destroy(&clientres->message_mutex);
     task_cond_destroy(&clientres->message_cond);
 
-    retval = clientres->messaging.interface->finalize(clientres->messaging.target);
+    if(clientres->messaging) {
+        retval = clientres->messaging->interface->finalize(clientres->messaging);
+        free(clientres->messaging);
+        clientres->messaging = NULL;
+    }
     return retval;
 
 }
 
-static void client_incref(void*resolver) {
+static void client_incref(service_resolver* resolver) {
     assert(resolver);
     base_resolver_incref(resolver);
 
 }
-static void client_decref(void*resolver) {
+static void client_decref(service_resolver* resolver) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
-    if(atomic_dec_and_test(&clientres->resolver.resolver.ref_count)) {
-        client_finalize(resolver);
+    if(atomic_dec_and_test(&clientres->resolver.ref_count)) {
+        resolver->interface->finalize(resolver);
         free(resolver);
     }
 }
 
-static int client_peer_discovered(void* resolver, service_resolver* peer, uint16_t flags) {
+static void client_set_address(service_resolver* resolver, struct sockaddr* saddr, size_t len) {
+    assert(resolver);
+    struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
+    clientres->messaging->resolver.channel->interface->set_peer_address(
+            clientres->messaging->resolver.channel, saddr, len);
+    base_resolver_set_address(resolver, saddr, len);
+}
+
+resolver_rpc* client_get_messaging(service_resolver* resolver) {
+    assert(resolver);
+    struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
+    return clientres->messaging;
+}
+
+static int client_peer_discovered(service_resolver* resolver, service_resolver* peer,
+        uint16_t flags) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
@@ -467,7 +493,7 @@ static int client_peer_discovered(void* resolver, service_resolver* peer, uint16
     int retval = 0;
 
     /* lock the peer for accessing service_desc? TODO */
-    int count = resolver_get_service_desc_count(peer->target);
+    int count = resolver_get_service_desc_count(peer);
 
     /* TODO lots of mem copying here of service descriptions - would be nice to use io vecs*/
     int len = sizeof(*dmessage) + count * sizeof(struct service_desc);
@@ -485,11 +511,11 @@ static int client_peer_discovered(void* resolver, service_resolver* peer, uint16
 
     /* accessor functions? */
     dmessage->flags = htons(flags);
-    dmessage->capabilities = htonl(((struct sv_service_resolver*) peer->target)->capabilities);
-    dmessage->capacity = htonl(((struct sv_service_resolver*) peer->target)->capacity);
-    dmessage->uptime = htonl(peer->interface->get_uptime(peer->target));
+    dmessage->capabilities = htonl(peer->resolver.capabilities);
+    dmessage->capacity = htonl(peer->resolver.capacity);
+    dmessage->uptime = htonl(peer->interface->get_uptime(peer));
 
-    LOG_DBG("Sending discovery message with %i service descs to remote resolver(%s): %s\n",count, service_id_to_str(&clientres->resolver.resolver.resolver_id.sv_srvid), print_control_message(&dmessage->header, len));
+    LOG_DBG("Sending discovery message with %i service descs to remote resolver(%s): %s\n",count, service_id_to_str(&clientres->resolver.resolver.resolver.resolver_id.sv_srvid), print_control_message(&dmessage->header, len));
     /* to inform the receiving peer to ignore the SID/addr values in the discover message
      * and use the src values instead
      */
@@ -499,19 +525,20 @@ static int client_peer_discovered(void* resolver, service_resolver* peer, uint16
     struct service_desc* sdesc;
     int i = 0;
     for(; i < count; i++) {
-        sdesc = resolver_get_service_desc(peer->target, i);
+        sdesc = resolver_get_service_desc(peer, i);
         memcpy(&dmessage->service_prefixes[i], sdesc, sizeof(*sdesc));
         dmessage->service_prefixes[i].type = htons(sdesc->type);
     }
 
     /* no direct response expected - the server-handler will take care of the incoming discovery message */
-    retval = clientres->messaging.interface->send_resolver_message(clientres->messaging.target,
-            xid, &dmessage->header, sizeof(*dmessage), NULL);
+    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+            &dmessage->header, sizeof(*dmessage), NULL);
 
     return retval;
 }
 
-static int client_peer_disappeared(void* resolver, service_resolver* peer, uint16_t flags) {
+static int client_peer_disappeared(service_resolver* resolver, service_resolver* peer,
+        uint16_t flags) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
@@ -536,8 +563,8 @@ static int client_peer_disappeared(void* resolver, service_resolver* peer, uint1
     dmessage->flags = htons(flags);
     dmessage->resolver_id.flags = SVSF_INVALID;
 
-    retval = clientres->messaging.interface->send_resolver_message(clientres->messaging.target,
-            xid, &dmessage->header, sizeof(*dmessage), NULL);
+    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+            &dmessage->header, sizeof(*dmessage), NULL);
 
     return retval;
 }
@@ -555,7 +582,7 @@ static struct service_desc* find_service_desc_eq(struct service_desc* services, 
     return NULL;
 }
 
-static int _client_register_services(void* resolver, service_resolver* peer,
+static int _client_register_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl,
         service_resolver_callback* cb) {
     assert(resolver);
@@ -563,9 +590,9 @@ static int _client_register_services(void* resolver, service_resolver* peer,
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
     /* packetize services into requests */
-    uint16_t max_services = (resolver_rpc_get_max_message_size(
-            (struct sv_resolver_rpc*) clientres->messaging.target)
-            - sizeof(struct sv_register_message)) / sizeof(struct service_desc);
+    uint16_t max_services =
+            (resolver_rpc_get_max_message_size((resolver_rpc*) clientres->messaging)
+                    - sizeof(struct sv_register_message)) / sizeof(struct service_desc);
 
     resolver_message_callback* callback;
     struct message_barrier* barrier;
@@ -605,13 +632,13 @@ static int _client_register_services(void* resolver, service_resolver* peer,
             barrier, callback, cb == NULL);
 }
 
-static int client_register_services(void* resolver, service_resolver* peer,
+static int client_register_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl) {
 
     return _client_register_services(resolver, peer, services, num_svc, address, ttl, NULL);
 }
 
-static int client_register_services_async(void* resolver, service_resolver* peer,
+static int client_register_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl,
         service_resolver_callback* callback) {
 
@@ -663,8 +690,8 @@ static int client_send_resolver_requests(struct sv_client_resolver* clientres, u
         num_svc -= limit;
 
         atomic_inc(&barrier->message_count);
-        while((retval = clientres->messaging.interface->send_resolver_message(
-                clientres->messaging.target, xid, message, len, callback)) < 0) {
+        while((retval = clientres->messaging->interface->send_resolver_message(
+                clientres->messaging, xid, message, len, callback)) < 0) {
 
             /* request window congested - currently async calls will block indefinitely here... TODO */
             if(retval == -2) {
@@ -691,16 +718,16 @@ static int client_send_resolver_requests(struct sv_client_resolver* clientres, u
     return barrier->successes;
 }
 
-static int _client_unregister_services(void* resolver, service_resolver* peer,
+static int _client_unregister_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address,
         service_resolver_callback* cb) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
     /* packetize services into requests */
-    uint16_t max_services = (resolver_rpc_get_max_message_size(
-            (struct sv_resolver_rpc*) clientres->messaging.target)
-            - sizeof(struct sv_unregister_message)) / sizeof(struct service_desc);
+    uint16_t max_services =
+            (resolver_rpc_get_max_message_size((resolver_rpc*) clientres->messaging)
+                    - sizeof(struct sv_unregister_message)) / sizeof(struct service_desc);
 
     struct message_barrier* barrier;
     resolver_message_callback* callback;
@@ -740,26 +767,26 @@ static int _client_unregister_services(void* resolver, service_resolver* peer,
 
 }
 
-static int client_unregister_services(void* resolver, service_resolver* peer,
+static int client_unregister_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address) {
     return _client_unregister_services(resolver, peer, services, num_svc, address, NULL);
 }
 
-static int client_unregister_services_async(void* resolver, service_resolver* peer,
+static int client_unregister_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address,
         service_resolver_callback* callback) {
     return _client_unregister_services(resolver, peer, services, num_svc, address, callback);
 }
 
-static int _client_query_services(void* resolver, service_resolver* peer,
+static int _client_query_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, service_resolver_callback* cb) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
     /* packetize services into requests */
-    uint16_t max_services = (resolver_rpc_get_max_message_size(
-            (struct sv_resolver_rpc*) clientres->messaging.target)
-            - sizeof(struct sv_query_request)) / sizeof(struct service_desc);
+    uint16_t max_services =
+            (resolver_rpc_get_max_message_size((resolver_rpc*) clientres->messaging)
+                    - sizeof(struct sv_query_request)) / sizeof(struct service_desc);
 
     struct query_response_barrier* qbarrier;
     resolver_message_callback* callback;
@@ -801,26 +828,26 @@ static int _client_query_services(void* resolver, service_resolver* peer,
             &qbarrier->barrier, callback, cb == NULL);
 }
 
-static int client_query_services(void* resolver, service_resolver* peer,
+static int client_query_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc) {
     return _client_query_services(resolver, peer, services, num_svc, NULL);
 }
 
-static int client_query_services_async(void* resolver, service_resolver* peer,
+static int client_query_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, service_resolver_callback* callback) {
     return _client_query_services(resolver, peer, services, num_svc, callback);
 }
 
-static int _client_get_service_updates(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc* services, size_t num_svc, stat_response* responses,
+static int _client_get_service_updates(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc* services, size_t num_svc, stat_response* responses,
         service_resolver_callback* cb) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
     /* packetize services into requests */
-    uint16_t max_services = (resolver_rpc_get_max_message_size(
-            (struct sv_resolver_rpc*) clientres->messaging.target)
-            - sizeof(struct sv_update_request)) / sizeof(struct service_desc);
+    uint16_t max_services =
+            (resolver_rpc_get_max_message_size((resolver_rpc*) clientres->messaging)
+                    - sizeof(struct sv_update_request)) / sizeof(struct service_desc);
 
     struct update_response_barrier* ubarrier;
     resolver_message_callback * callback;
@@ -869,19 +896,19 @@ static int _client_get_service_updates(void* resolver, service_resolver* peer, u
 
 }
 
-static int client_get_service_updates_async(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc* services, size_t num_svc, stat_response* responses,
+static int client_get_service_updates_async(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc* services, size_t num_svc, stat_response* responses,
         service_resolver_callback* callback) {
     return _client_get_service_updates(resolver, peer, type, services, num_svc, responses, callback);
 }
 
-static int client_get_service_updates(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc* services, size_t num_svc, stat_response* responses) {
+static int client_get_service_updates(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc* services, size_t num_svc, stat_response* responses) {
     return _client_get_service_updates(resolver, peer, type, services, num_svc, responses, NULL);
 }
 
-static int client_update_services(void* resolver, service_resolver* peer, uint16_t type,
-        stat_response* responses) {
+static int client_update_services(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, stat_response* responses) {
     assert(resolver);
 
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
@@ -900,8 +927,7 @@ static int client_update_services(void* resolver, service_resolver* peer, uint16
     //int statcount = (len - sizeof(struct sv_update_message)) / statsize;
 
     uint16_t max_responses = (resolver_rpc_get_max_message_size(
-            (struct sv_resolver_rpc*) clientres->messaging.target)
-            - sizeof(struct sv_update_message)) / statsize;
+            (resolver_rpc*) clientres->messaging) - sizeof(struct sv_update_message)) / statsize;
 
     uint16_t count = responses->count;
     while(count > 0) {
@@ -933,8 +959,8 @@ static int client_update_services(void* resolver, service_resolver* peer, uint16
         count -= limit;
 
         /*unwindowed? TODO*/
-        while((retval = clientres->messaging.interface->send_resolver_message(
-                clientres->messaging.target, xid, &umessage->header, len, NULL)) < 0) {
+        while((retval = clientres->messaging->interface->send_resolver_message(
+                clientres->messaging, xid, &umessage->header, len, NULL)) < 0) {
 
             /* request window congested TODO */
             if(retval == -2) {
@@ -950,7 +976,7 @@ static int client_update_services(void* resolver, service_resolver* peer, uint16
 }
 
 //resolver multiple services?
-static int _client_resolve_service(void* resolver, service_resolver* peer,
+static int _client_resolve_service(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address, service_resolver_callback* cb) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
@@ -1012,8 +1038,8 @@ static int _client_resolve_service(void* resolver, service_resolver* peer,
     rmessage->service_id.type = htons(service->type);
 
     atomic_inc(&rbarrier->barrier.message_count);
-    retval = clientres->messaging.interface->send_resolver_message(clientres->messaging.target,
-            xid, &rmessage->header, sizeof(*rmessage), callback);
+    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+            &rmessage->header, sizeof(*rmessage), callback);
 
     /* synchronous call so wait for everything to reply */
     if(cb == NULL) {
@@ -1024,18 +1050,18 @@ static int _client_resolve_service(void* resolver, service_resolver* peer,
 
 }
 
-static int client_resolve_service(void* resolver, service_resolver* peer,
+static int client_resolve_service(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address) {
     return _client_resolve_service(resolver, peer, service, address, NULL);
 }
 
-static int client_resolve_service_async(void* resolver, service_resolver* peer,
+static int client_resolve_service_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address, service_resolver_callback* callback) {
     return _client_resolve_service(resolver, peer, service, address, callback);
 }
 
-static int _client_poke_resolver(void* resolver, service_resolver* peer, uint32_t count,
-        service_resolver_callback* cb) {
+static int _client_poke_resolver(service_resolver* resolver, service_resolver* peer,
+        uint32_t count, service_resolver_callback* cb) {
     assert(resolver);
     struct sv_client_resolver* clientres = (struct sv_client_resolver*) resolver;
 
@@ -1092,8 +1118,8 @@ static int _client_poke_resolver(void* resolver, service_resolver* peer, uint32_
     emessage->count = htonl(count);
     emessage->timestamp = (uint32_t) get_current_time_ms();
 
-    retval = clientres->messaging.interface->send_resolver_message(clientres->messaging.target,
-            xid, &emessage->header, sizeof(*emessage), callback);
+    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+            &emessage->header, sizeof(*emessage), callback);
 
     if(cb == NULL) {
         wait_for_message_barrier(&ebarrier->barrier);
@@ -1102,11 +1128,11 @@ static int _client_poke_resolver(void* resolver, service_resolver* peer, uint32_
     return barrier.barrier.successes;
 }
 
-static int client_poke_resolver(void* resolver, service_resolver* peer, uint32_t count) {
+static int client_poke_resolver(service_resolver* resolver, service_resolver* peer, uint32_t count) {
     return _client_poke_resolver(resolver, peer, count, NULL);
 }
 
-static int client_poke_resolver_async(void* resolver, service_resolver* peer, uint32_t count,
-        service_resolver_callback* cb) {
+static int client_poke_resolver_async(service_resolver* resolver, service_resolver* peer,
+        uint32_t count, service_resolver_callback* cb) {
     return _client_poke_resolver(resolver, peer, count, cb);
 }

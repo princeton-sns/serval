@@ -28,26 +28,24 @@
  */
 
 struct sv_unix_message_channel {
-    struct base_message_channel base;
-    atomic_t running;
+    struct sv_message_channel_base base;
     //char local_path[104];
     //char remote_path[104];
     struct sockaddr_un local;
     struct sockaddr_un peer;
-
 };
 
-static int unix_initialize(void* channel);
-static void unix_start(void* channel);
-static int unix_finalize(void* channel);
-static const struct sockaddr* unix_get_local_address(void* target, int* len);
-static void unix_set_peer_address(void* target, struct sockaddr* addr, size_t len);
-static const struct sockaddr* unix_get_peer_address(void* target, int* len);
-static int unix_send(void* channel, void *message, size_t datalen);
+static int unix_initialize(message_channel* channel);
+static void unix_start(message_channel* channel);
+static int unix_finalize(message_channel* channel);
+static const struct sockaddr* unix_get_local_address(message_channel* channel, int* len);
+static void unix_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len);
+static const struct sockaddr* unix_get_peer_address(message_channel* channel, int* len);
+static int unix_send(message_channel* channel, void *message, size_t datalen);
 static int
-unix_send_iov(void* channel, struct iovec* iov, size_t veclen, size_t datalen);
+unix_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t datalen);
 
-static int unix_recv(void* channel, const void *message, size_t datalen);
+static int unix_recv(message_channel* channel, const void *message, size_t datalen);
 static void unix_recv_task(void* channel);
 
 static struct sv_message_channel_interface unix_mc_interface = {
@@ -65,15 +63,15 @@ static struct sv_message_channel_interface unix_mc_interface = {
         .send_message_iov = unix_send_iov,
         .recv_message = unix_recv };
 
-void create_unix_message_channel(const char* lpath, const char* rpath, int buffer_len,
-        message_channel_callback* callback, message_channel* channel) {
+message_channel* create_unix_message_channel(const char* lpath, const char* rpath, int buffer_len,
+        message_channel_callback* callback) {
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel *) malloc(
             sizeof(struct sv_unix_message_channel));
 
     if(uchannel == NULL) {
         LOG_ERR("Could not allocate memory for unix message channel");
-        return;
+        return NULL;
     }
 
     bzero(uchannel, sizeof(*uchannel));
@@ -90,20 +88,23 @@ void create_unix_message_channel(const char* lpath, const char* rpath, int buffe
     strcpy(uchannel->local.sun_path, lpath);
     strcpy(uchannel->peer.sun_path, rpath);
 
-    uchannel->base.callback = *callback;
+    if(callback) {
+        uchannel->base.callback = *callback;
+    }
 
-    channel->target = uchannel;
-    channel->interface = &unix_mc_interface;
+    uchannel->base.channel.interface = &unix_mc_interface;
+
+    return &uchannel->base.channel;
 }
 
-static void unix_set_peer_address(void* target, struct sockaddr* addr, size_t len) {
-    assert(target);
+static void unix_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len) {
+    assert(channel);
     /* TODO threading issues? */
     if(addr == NULL || len != sizeof(struct sockaddr_un)) {
         return;
     }
 
-    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) target;
+    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
 
     /* family is set - only change the remote socket address */
     struct sockaddr_un* saddr = (struct sockaddr_un*) addr;
@@ -115,30 +116,31 @@ static void unix_set_peer_address(void* target, struct sockaddr* addr, size_t le
 
 }
 
-static const struct sockaddr* unix_get_peer_address(void* target, int* len) {
-    assert(target);
+static const struct sockaddr* unix_get_peer_address(message_channel* channel, int* len) {
+    assert(channel);
+    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
 
-    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) target;
     *len = sizeof(struct sockaddr_un);
 
     return (struct sockaddr*) &uchannel->peer;
 }
 
-static const struct sockaddr* unix_get_local_address(void* target, int* len) {
-    assert(target);
-    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) target;
+static const struct sockaddr* unix_get_local_address(message_channel* channel, int* len) {
+    assert(channel);
+    struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
     *len = sizeof(struct sockaddr_un);
-
     return (struct sockaddr*) &uchannel->local;
 }
 
-static int unix_initialize(void* channel) {
+static int unix_initialize(message_channel* channel) {
     assert(channel);
+    int ret = base_message_channel_initialize(channel);
+
+    if(ret) {
+        return ret;
+    }
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
-    base_message_channel_initialize(uchannel);
-
-    int ret = 0;
 
     LOG_DBG("initializing SERVAL unix control\n");
 
@@ -202,30 +204,33 @@ static int unix_initialize(void* channel) {
     //out: return ret;
     //exception handling
     //clean up the path
-    error_connect: error_bind: unix_finalize(uchannel);
+    error_connect: error_bind: channel->interface->finalize(channel);
     error_sock: return ret;
 }
 
-static void unix_start(void* channel) {
+static void unix_start(message_channel* channel) {
     assert(channel);
+    if(!is_initialized(channel->channel.state)) {
+        return;
+    }
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
-    base_message_channel_start(uchannel);
+    base_message_channel_start(channel);
 
     uchannel->base.recv_task = task_add(uchannel, unix_recv_task);
 }
 
-static int unix_finalize(void* channel) {
+static int unix_finalize(message_channel* channel) {
     assert(channel);
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
-    base_message_channel_finalize(uchannel);
+    base_message_channel_finalize(channel);
     unlink(uchannel->local.sun_path);
 
     return 0;
 }
 
-static int unix_send(void* channel, void *message, size_t datalen) {
+static int unix_send(message_channel* channel, void *message, size_t datalen) {
     assert(channel);
     if(message == NULL) {
         return EINVAL;
@@ -260,7 +265,7 @@ static int unix_send(void* channel, void *message, size_t datalen) {
     return ret;
 }
 
-static int unix_send_iov(void* channel, struct iovec* iov, size_t veclen, size_t datalen) {
+static int unix_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t datalen) {
     assert(channel);
     if(iov == NULL) {
         return EINVAL;
@@ -295,12 +300,10 @@ static int unix_send_iov(void* channel, struct iovec* iov, size_t veclen, size_t
     return ret;
 }
 
-static int unix_recv(void* channel, const void *message, size_t datalen) {
+static int unix_recv(message_channel* channel, const void *message, size_t datalen) {
     assert(channel);
-
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
-
-    uchannel->base.callback.recv_message(uchannel->base.callback.target, message, datalen);
+    uchannel->base.callback.recv_message(&uchannel->base.callback, message, datalen);
     return 0;
 }
 
@@ -313,7 +316,7 @@ static void unix_recv_task(void* channel) {
     socklen_t addr_len = 0;
     int ret = 1;
 
-    //bzero(uchannel->base.buffer, uchannel->base.buffer_len);
+    //bzero(uchannel->base.channel.buffer, uchannel->base.channel.buffer_len);
 
     //perpetual read loop
     while(atomic_read(&uchannel->base.running) && ret) {
@@ -332,13 +335,13 @@ static void unix_recv_task(void* channel) {
             goto error;
         }
 
+        LOG_DBG("Received %i byte message from the stack\n", ret);
         //TODO - what if ret is 0?
         /* note that if the message is to be cached, it must be copied */
-        unix_recv(channel, uchannel->base.buffer, ret);
+        uchannel->base.channel.interface->recv_message(channel, uchannel->base.buffer, ret);
     }
 
-    error: atomic_set(&uchannel->running, 0);
-
+    error: atomic_set(&uchannel->base.running, 0);
     return;
 }
 

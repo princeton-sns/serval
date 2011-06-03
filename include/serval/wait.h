@@ -24,7 +24,7 @@ struct __wait_queue {
 	pthread_t private_data;
 	wait_queue_func_t func;
 	pthread_mutex_t lock;
-        int pipefd[2];
+    int pipefd[2];
 	struct list_head thread_list;
 };
 
@@ -63,7 +63,11 @@ typedef struct __wait_queue_head wait_queue_head_t;
 #define DECLARE_WAIT_QUEUE_HEAD(name) \
 	wait_queue_head_t name = __WAIT_QUEUE_HEAD_INITIALIZER(name)
 
-
+enum wait_signal{
+    WAIT_READ_DATA = 1 << 0,
+    WAIT_WRITE_DATA = 1 << 1
+};
+enum wait_signal wait_signal_lower(int fd);
 void prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state);
 void prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, int state);
 void finish_wait(wait_queue_head_t *q, wait_queue_t *wait);

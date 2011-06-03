@@ -52,6 +52,9 @@ size_t service_table_size(struct sv_service_table* st);
 int service_table_initialize(struct sv_service_table* st);
 int service_table_finalize(struct sv_service_table* st);
 
+/* like the kernel version - may need to support modification updates for service references
+ * to track changes in weight/priority
+ */
 int
 service_table_add_service_reference(struct sv_service_table* st, struct service_reference* sref);
 

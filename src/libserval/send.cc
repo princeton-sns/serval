@@ -101,8 +101,8 @@ void
 SendReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: dst_obj_id = %s, buflen=%d, flags=%d\n",
-         label, oid_to_str(&_dst_obj_id), _nonserial_len, _flags);
+    info("%s: dst_obj_id = %s, ipaddr = %i, buflen=%d, flags=%d\n",
+         label, oid_to_str(&_dst_obj_id), _ipaddr, _nonserial_len, _flags);
 }
 
 

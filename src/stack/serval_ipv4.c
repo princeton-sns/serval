@@ -19,6 +19,12 @@
 #include <netinet/if_ether.h>
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+#define route_dst(rt) &(rt)->u.dst
+#else
+#define route_dst(rt) &(rt)->dst
+#endif /* LINUX_VERSION_CODE */
+
 extern int serval_srv_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
@@ -26,7 +32,7 @@ extern int serval_srv_rcv(struct sk_buff *);
 static inline void ip_send_check(struct iphdr *iph)
 {
         iph->check = 0;
-        iph->check = in_cksum(iph, iph->ihl << 2);
+        /* iph->check = in_cksum(iph, iph->ihl << 2); */
 }
 
 int serval_ipv4_rcv(struct sk_buff *skb)
@@ -96,7 +102,9 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
     iph->ttl = iph->ttl - 1;
     /* Calculate checksum */
     ip_send_check(ip_hdr(skb));
-    err = serval_output(skb);
+    /* err = serval_output(skb);*/
+    err = dev_queue_xmit(skb);
+
 #endif
         return err;
 }
@@ -122,7 +130,13 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         /* Calculate checksum */
         ip_send_check(ip_hdr(skb));
 
-        err = serval_output(skb);
+        err = dev_queue_xmit(skb);
+
+        if (err < 0) {
+		LOG_ERR("packet_xmit failed\n");
+	}
+        
+        //err = serval_output(skb);
 #endif
         return err;
 }
@@ -183,7 +197,7 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 		goto no_route;
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
-	return &rt->u.dst;
+	return route_dst(rt);
 
 route_err:
 	ip_rt_put(rt);
@@ -226,7 +240,13 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
         iph->tos = inet->tos;
+#if defined(OS_USER) && defined(OS_BSD)
+        /* BSD/Mac OS X requires tot_len to be in host byte order when
+         * sending over IP raw socket */
+        iph->tot_len = skb->len;
+#else
         iph->tot_len = htons(skb->len);
+#endif
         iph->id = 0;
         iph->frag_off = 0;
         iph->ttl = inet->uc_ttl < 0 ? SERVAL_DEFTTL : inet->uc_ttl;
@@ -358,12 +378,12 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                         inet_ntop(AF_INET, &rt->rt_dst, 
                                   dst, sizeof(dst)));
 #endif
-                sk_setup_caps(sk, &rt->u.dst);
+                sk_setup_caps(sk, route_dst(rt));
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
-                skb_dst_set(skb, dst_clone(&rt->u.dst));
+                skb_dst_set(skb, dst_clone(route_dst(rt)));
 #else
-                skb_dst_set_noref(skb, &rt->u.dst);
+                skb_dst_set_noref(skb, route_dst(rt));
 #endif
         }
 
@@ -378,11 +398,11 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 	skb_reset_network_header(skb);
 	iph = ip_hdr(skb);
 	*((__be16 *)iph) = htons((4 << 12) | (5 << 8) | (inet->tos & 0xff));
-	if (ip_dont_fragment(sk, &rt->u.dst) && !skb->local_df)
+	if (ip_dont_fragment(sk, route_dst(rt)) && !skb->local_df)
 		iph->frag_off = htons(IP_DF);
 	else
 		iph->frag_off = 0;
-	iph->ttl      = ip_select_ttl(inet, &rt->u.dst);
+	iph->ttl      = ip_select_ttl(inet, route_dst(rt));
 	iph->protocol = skb->protocol;
 	iph->saddr    = rt->rt_src;
 	iph->daddr    = rt->rt_dst;
@@ -400,7 +420,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 */
 	}
         
-        ip_select_ident_more(iph, &rt->u.dst, sk,
+        ip_select_ident_more(iph, route_dst(rt), sk,
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
 
 	skb->priority = sk->sk_priority;
@@ -412,7 +432,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
 
 	rcu_read_unlock();
 #else
-        struct net_addr saddr;
+        //struct net_addr saddr;
 
         /*
           FIXME: We should not rely on an outgoing interface here.
@@ -420,10 +440,12 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
           kernel. But, we currently do not have an IP routing table
           for userlevel.
          */
-        if(!skb->dev) {
-            LOG_ERR("no device set in skb!\n");
-            err = -ENODEV;
-            goto drop;
+
+        /*
+        if (!skb->dev) {
+                LOG_ERR("no device set in skb!\n");
+                err = -ENODEV;
+                goto drop;
         }
 
         if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
@@ -432,8 +454,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
             err = -ENODEV;
             goto drop;
         }
+        */
 
-        err = serval_ipv4_fill_in_hdr(sk, skb, saddr.net_ip.s_addr,
+        err = serval_ipv4_fill_in_hdr(sk, skb, INADDR_ANY,
                                       SERVAL_SKB_CB(skb)->addr.net_ip.s_addr);
         
         if (err < 0) {

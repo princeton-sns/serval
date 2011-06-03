@@ -296,7 +296,14 @@ int service_table_add_service_reference(struct sv_service_table* st, struct serv
     /*TODO - for RR or DRR, linked list is best, for sampling, a re-normalized sorted array would be better*/
     rlist->normalizer += sref->weight;
     st->count++;
-    return 0;
+
+    /*TODO might be better to cache this count value*/
+    int count = 0;
+    int i = 0;
+    for(; i < pri_array->len; i++) {
+        count += ((struct ref_list*) g_ptr_array_index(pri_array, i))->count;
+    }
+    return count;
 }
 
 int service_table_remove_service_reference(struct sv_service_table* st, uint8_t flags,

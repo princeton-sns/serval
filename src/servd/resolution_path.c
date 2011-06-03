@@ -13,66 +13,55 @@
 #include "message_channel.h"
 #include "task.h"
 
-extern void create_netlink_message_channel(int protocol, int buffer_len, int reliable,
-        message_channel_callback* callback, message_channel* channel);
+extern message_channel* create_netlink_message_channel(int protocol, int buffer_len, int reliable,
+        message_channel_callback* callback);
 
-extern void create_unix_message_channel(const char* lpath, const char* rpath, int buffer_len,
-        message_channel_callback* callback, message_channel* channel);
+extern message_channel* create_unix_message_channel(const char* lpath, const char* rpath,
+        int buffer_len, message_channel_callback* callback);
 
-struct sv_resolution_path {
+static int initialize(resolution_path* path);
+static void stop(resolution_path*path);
+static void start(resolution_path*path);
 
-    //resolution_path_callback res_callback;
-    service_resolver resolver;
+static int finalize(resolution_path* path);
+static const resolution_path_callback* get_path_callback(resolution_path* path);
+static void set_path_callback(resolution_path* path, resolution_path_callback* cb);
 
-    atomic_t request_xid;
-
-    GHashTable* message_table;
-    task_mutex message_mutex;
-    task_cond message_cond;
-
-    message_channel_callback callback;
-    message_channel channel;
-};
-
-static int initialize(void* path);
-static void stop(void*path);
-static void start(void*path);
-
-static int finalize(void* path);
-static const service_resolver* get_resolver(void* target);
-static void set_resolver(void* target, service_resolver* resolver);
-
-static int configure_interface(void* path, const char *ifname, const struct net_addr *ipaddr,
-        unsigned short flags);
-static int get_service_stats(void* path, struct service_stat* stats);
-static void set_transit(void* path, int transit);
-static int get_resolutions(void* path, struct service_desc* service,
+static int configure_interface(resolution_path* path, const char *ifname,
+        const struct net_addr *ipaddr, unsigned short flags);
+static int get_service_stats(resolution_path* path, struct service_stat* stats);
+static void set_capabilities(resolution_path* path, int capabilities);
+static int get_resolutions(resolution_path* path, struct service_desc* service,
         struct service_resolution**resolutions);
-static int get_resolutions_async(void* path, struct service_desc* service,
+static int get_resolutions_async(resolution_path* path, struct service_desc* service,
         resolution_path_callback callback);
 
-static int add_resolutions(void* path, struct service_resolution* resolutions, size_t res_count);
-static int add_resolutions_async(void* path, struct service_resolution* resolutions,
+static int add_resolutions(resolution_path* path, struct service_resolution* resolutions,
+        size_t res_count);
+static int add_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
         size_t res_count, resolution_path_callback callback);
 
-static int remove_resolutions(void* path, struct service_resolution_stat* service, size_t res_count);
-static int remove_resolutions_async(void* path, struct service_resolution_stat* service,
+static int remove_resolutions(resolution_path* path, struct service_resolution_stat* service,
+        size_t res_count);
+static int remove_resolutions_async(resolution_path* path, struct service_resolution_stat* service,
         resolution_path_callback callback);
 
-static int modify_resolutions(void* path, struct service_resolution* resolutions, size_t res_count);
-static int modify_resolutions_async(void* path, struct service_resolution* resolutions,
+static int modify_resolutions(resolution_path* path, struct service_resolution* resolutions,
+        size_t res_count);
+static int modify_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
         size_t res_count, resolution_path_callback callback);
 
+/*resolution path prototype*/
 struct sv_resolution_path_interface sv_res_path_interface = {
         .initialize = initialize,
         .start = start,
         .stop = stop,
         .finalize = finalize,
-        .set_resolver = set_resolver,
-        .get_resolver = get_resolver,
+        .set_path_callback = set_path_callback,
+        .get_path_callback = get_path_callback,
         .configure_interface = configure_interface,
         .get_service_stats = get_service_stats,
-        .set_transit = set_transit,
+        .set_capabilities = set_capabilities,
         .get_resolutions = get_resolutions,
         .get_resolutions_async = get_resolutions_async,
         .add_resolutions = add_resolutions,
@@ -90,7 +79,6 @@ struct sv_resolution_path_interface sv_res_path_interface = {
 struct get_resolution_barrier {
     struct message_barrier barrier;
     int count;
-
     struct service_resolution* resolutions;
 };
 
@@ -99,120 +87,141 @@ struct stat_resolution_barrier {
     struct service_stat* stats;
 };
 
-static int resolution_path_message_channel_cb(void* target, const void* message, size_t length);
-static void init_message_barrier(struct message_barrier* barrier, struct sv_resolution_path* spath,
-        uint16_t type, barrier_handler sh, barrier_handler fh);
+static int resolution_path_message_channel_cb(message_channel_callback* cb, const void* message,
+        size_t length);
+
 static void resolution_path_handle_success_get(struct message_barrier* barrier, const void* msg,
         size_t len);
 
-static void handle_register_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_register* message, size_t length);
-static void handle_unregister_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_register* message, size_t length);
-static void handle_resolve_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolve* message, size_t length);
-static void handle_resolution_removed(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolution* message, size_t length);
+static void handle_register_message(resolution_path* spath, struct ctrlmsg_register* message,
+        size_t length);
+static void handle_unregister_message(resolution_path* spath, struct ctrlmsg_register* message,
+        size_t length);
+static void handle_resolve_message(resolution_path* spath, struct ctrlmsg_resolve* message,
+        size_t length);
+static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_resolution* message,
+        size_t length);
 
-void create_resolution_path(resolution_path* respath) {
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) malloc(sizeof(*spath));
+void init_resolution_path(resolution_path* spath) {
     bzero(spath, sizeof(*spath));
-    //spath->resolver = *resolver;
 
-    spath->callback.target = spath;
-    spath->callback.recv_message = resolution_path_message_channel_cb;
+    spath->path.callback.target = spath;
+    spath->path.callback.recv_message = resolution_path_message_channel_cb;
 
-    /* start with the kernel version */
-    create_netlink_message_channel(NETLINK_SERVAL, 0, 0, &spath->callback, &spath->channel);
-    respath->interface = &sv_res_path_interface;
-    respath->target = spath;
+    /* start with the kernel stack netlink interface*/
+    spath->path.channel = create_netlink_message_channel(NETLINK_SERVAL, 0, 0,
+            &spath->path.callback);
+    spath->interface = &sv_res_path_interface;
 }
 
-static int initialize(void* path) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
+/* really more of an init/constructor function - malloc must occur externally*/
+resolution_path* create_resolution_path() {
+    resolution_path* spath = (resolution_path*) malloc(sizeof(resolution_path));
 
-    spath->message_table = g_hash_table_new_full(g_int_hash, g_int_equal, destroy_int_key, NULL);
+    init_resolution_path(spath);
+    return spath;
+}
 
-    if(spath->channel.interface->initialize(spath->channel.target)) {
-        spath->channel.interface->finalize(spath->channel.target);
-        free(spath->channel.target);
-        spath->channel.target = NULL;
-        spath->channel.interface = NULL;
+static int initialize(resolution_path* spath) {
+    assert(spath);
+
+    if(!is_created(spath->path.state)) {
+        return -1;
+    }
+    spath->path.message_table = g_hash_table_new_full(g_int_hash, g_int_equal, destroy_int_key,
+            NULL);
+
+    if(spath->path.channel->interface->initialize(spath->path.channel)) {
+        spath->path.channel->interface->finalize(spath->path.channel);
+        free(spath->path.channel);
+
         /*try the unix version */
-        create_unix_message_channel(SERVAL_SCAFD_CTRL_PATH, SERVAL_STACK_CTRL_PATH, 0,
-                &spath->callback, &spath->channel);
+        if(spath->path.stack_id > 0) {
+            char stack_buffer[128];
+            sprintf(stack_buffer, "/tmp/serval-stack-ctrl-%i.sock", spath->path.stack_id);
+            char local_buffer[128];
+            sprintf(local_buffer, "/tmp/serval-libstack-ctrl-%i.sock", spath->path.stack_id);
+            spath->path.channel = create_unix_message_channel(local_buffer, stack_buffer, 0,
+                    &spath->path.callback);
+        } else {
+            spath->path.channel = create_unix_message_channel(SERVAL_SCAFD_CTRL_PATH,
+                    SERVAL_STACK_CTRL_PATH, 0, &spath->path.callback);
+        }
 
-        if(spath->channel.interface->initialize(spath->channel.target)) {
+        if(spath->path.channel->interface->initialize(spath->path.channel)) {
             /* TODO error! */
         }
     }
 
-    task_mutex_init(&spath->message_mutex);
-    task_cond_init(&spath->message_cond);
+    task_mutex_init(&spath->path.message_mutex);
+    task_cond_init(&spath->path.message_cond);
+    spath->path.state = COMP_INITIALIZED;
     return 0;
-
 }
 
-static void start(void*path) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
-    spath->channel.interface->start(spath->channel.target);
-}
-static void stop(void*path) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
-    spath->channel.interface->stop(spath->channel.target);
+static void start(resolution_path* spath) {
+    assert(spath);
+    if(!is_initialized(spath->path.state)) {
+        return;
+    }
+    spath->path.channel->interface->start(spath->path.channel);
+    spath->path.state = COMP_STARTED;
 }
 
-static int finalize(void* path) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
+static void stop(resolution_path* spath) {
+    assert(spath);
+    if(!is_started(spath->path.state)) {
+        return;
+    }
+    spath->path.channel->interface->stop(spath->path.channel);
+    spath->path.state = COMP_INITIALIZED;
+}
 
-    if(spath->channel.target) {
-        spath->channel.interface->finalize(spath->channel.target);
-        spath->channel.target = NULL;
+static int finalize(resolution_path* spath) {
+    assert(spath);
+
+    if(spath->path.channel) {
+        spath->path.channel->interface->finalize(spath->path.channel);
+        /*owner of the channel - free it*/
+        free(spath->path.channel);
+        spath->path.channel = NULL;
     }
 
-    g_hash_table_destroy(spath->message_table);
-    //free(spath->message_table);
-    task_mutex_destroy(&spath->message_mutex);
-    task_cond_destroy(&spath->message_cond);
+    g_hash_table_destroy(spath->path.message_table);
 
+    task_mutex_destroy(&spath->path.message_mutex);
+    task_cond_destroy(&spath->path.message_cond);
+    spath->path.state = COMP_CREATED;
     return 0;
 }
 
-static void set_resolver(void* target, service_resolver* resolver) {
-    assert(target);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) target;
-    spath->resolver = *resolver;
+static void set_path_callback(resolution_path* spath, resolution_path_callback* cb) {
+    assert(spath);
+    spath->path.path_callback = *cb;
 }
 
-static const service_resolver* get_resolver(void* target) {
-    assert(target);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) target;
-    return &spath->resolver;
-}
-
-static inline void init_message_barrier(struct message_barrier* barrier,
-        struct sv_resolution_path* spath, uint16_t type, barrier_handler sh, barrier_handler fh) {
-    barrier->private = spath;
-    barrier->type = type;
-    barrier->barrier_cond = spath->message_cond;
-    barrier->barrier_mutex = spath->message_mutex;
-    barrier->success_handler = sh;
-    barrier->failure_handler = fh;
-
+static const resolution_path_callback* get_path_callback(resolution_path* spath) {
+    assert(spath);
+    return &spath->path.path_callback;
 }
 
 static void resolution_path_handle_success_get(struct message_barrier* barrier, const void* msg,
         size_t len) {
+    assert(barrier);
+
+    if(msg == NULL || len == 0) {
+        barrier->status = EINVAL;
+        return;
+    }
+
     struct get_resolution_barrier* gbarrier = (struct get_resolution_barrier*) barrier;
 
     struct ctrlmsg* cmsg = (struct ctrlmsg*) msg;
 
-    if(cmsg->len == CTRLMSG_GET_SERVICE_SIZE && ((struct ctrlmsg_get_service*) cmsg)->sv_prefix_bits == SVSF_INVALID) {
+    if(cmsg->len == CTRLMSG_GET_SERVICE_SIZE
+            && ((struct ctrlmsg_get_service*) cmsg)->sv_prefix_bits == SVSF_INVALID) {
         //TODO - invalid service ID
+        barrier->status = EINVAL;
         return;
     }
 
@@ -226,14 +235,14 @@ static void resolution_path_handle_success_get(struct message_barrier* barrier, 
     /* not a great mem management tech here */
 
     if(gbarrier->count == 0) {
-        gbarrier->resolutions = (struct service_resolution*) malloc(
-                rescount * sizeof(struct service_resolution));
+        gbarrier->resolutions = (struct service_resolution*) malloc(rescount
+                * sizeof(struct service_resolution));
     } else {
-        gbarrier->resolutions = (struct service_resolution*) realloc(gbarrier,
-                (gbarrier->count + rescount) * sizeof(struct service_resolution));
+        gbarrier->resolutions = (struct service_resolution*) realloc(gbarrier, (gbarrier->count
+                + rescount) * sizeof(struct service_resolution));
     }
     int i = 0;
-    for (; i < rescount; i++) {
+    for(; i < rescount; i++) {
         memcpy(&gbarrier->resolutions[gbarrier->count++], &rmessage->resolution[i],
                 sizeof(struct service_resolution));
     }
@@ -242,18 +251,22 @@ static void resolution_path_handle_success_get(struct message_barrier* barrier, 
 
 static void resolution_path_handle_success_stat(struct message_barrier* barrier, const void* msg,
         size_t len) {
+    assert(barrier);
+    if(msg == NULL || len == 0) {
+        barrier->status = EINVAL;
+        return;
+    }
+
     struct stat_resolution_barrier* sbarrier = (struct stat_resolution_barrier*) barrier;
 
     struct ctrlmsg_stats* smessage = (struct ctrlmsg_stats*) msg;
 
     /* not a great mem management tech here */
-
     memcpy(sbarrier->stats, &smessage->stats, sizeof(smessage->stats));
 }
 
-static int get_service_stats(void* path, struct service_stat* stats) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
+static int get_service_stats(resolution_path* spath, struct service_stat* stats) {
+    assert(spath);
 
     /* no copying, no resend */
     struct ctrlmsg_stats cm;
@@ -261,33 +274,35 @@ static int get_service_stats(void* path, struct service_stat* stats) {
     memset(&cm, 0, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_SERVICE_STATS;
     cm.cmh.len = sizeof(cm);
-    cm.xid = atomic_add_return(1, &spath->request_xid);
+    cm.xid = atomic_add_return(1, &spath->path.request_xid);
 
     struct stat_resolution_barrier barrier;
     bzero(&barrier, sizeof(barrier));
     barrier.stats = stats;
 
     init_message_barrier(&barrier.barrier, spath, CTRLMSG_TYPE_SERVICE_STATS,
-            resolution_path_handle_success_stat, message_barrier_handle_failure_default);
+            resolution_path_handle_success_stat, message_barrier_handle_failure_default, NULL);
 
-    task_mutex_lock(&spath->message_mutex);
+    atomic_inc(&barrier.barrier.message_count);
+
+    task_mutex_lock(&spath->path.message_mutex);
     uint32_t* xid = (uint32_t*) malloc(sizeof(*xid));
     *xid = cm.xid;
 
-    g_hash_table_insert(spath->message_table, xid, &barrier);
-    task_mutex_unlock(&spath->message_mutex);
+    g_hash_table_insert(spath->path.message_table, xid, &barrier);
+    task_mutex_unlock(&spath->path.message_mutex);
 
-    spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+    spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
 
+    /*why does it mutate the path interface???*/
+    LOG_DBG("Waiting for service stats response\n");
     wait_for_message_barrier(&barrier.barrier);
     return 0;
 
 }
 
-static int configure_interface(void* path, const char *ifname, const struct net_addr *ipaddr,
-        unsigned short flags) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
+static int configure_interface(resolution_path* spath, const char *ifname,
+        const struct net_addr *ipaddr, unsigned short flags) {
 
     struct ctrlmsg_iface_conf cm;
 
@@ -305,15 +320,14 @@ static int configure_interface(void* path, const char *ifname, const struct net_
     cm.flags = flags;
 
     /*async message - send it!*/
-    int retval = spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+    int retval = spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
 
     return retval;
 }
 
-static int get_resolutions(void* path, struct service_desc* service,
+static int get_resolutions(resolution_path* spath, struct service_desc* service,
         struct service_resolution**resolutions) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
+    assert(spath);
 
     /* no copying, no resend */
     struct ctrlmsg_get_service cm;
@@ -323,7 +337,7 @@ static int get_resolutions(void* path, struct service_desc* service,
     cm.cmh.len = sizeof(cm);
     cm.sv_flags = service->flags;
     cm.sv_prefix_bits = service->prefix;
-    cm.xid = atomic_add_return(1, &spath->request_xid);
+    cm.xid = atomic_add_return(1, &spath->path.request_xid);
 
     memcpy(&cm.srvid, &service->service, sizeof(struct service_id));
 
@@ -331,16 +345,17 @@ static int get_resolutions(void* path, struct service_desc* service,
     bzero(&barrier, sizeof(barrier));
 
     init_message_barrier(&barrier.barrier, spath, CTRLMSG_TYPE_GET_SERVICE,
-            resolution_path_handle_success_get, message_barrier_handle_failure_default);
+            resolution_path_handle_success_get, message_barrier_handle_failure_default, NULL);
+    atomic_inc(&barrier.barrier.message_count);
 
-    task_mutex_lock(&spath->message_mutex);
+    task_mutex_lock(&spath->path.message_mutex);
     uint32_t* xid = (uint32_t*) malloc(sizeof(*xid));
     *xid = cm.xid;
 
-    g_hash_table_insert(spath->message_table, xid, &barrier);
-    task_mutex_unlock(&spath->message_mutex);
+    g_hash_table_insert(spath->path.message_table, xid, &barrier);
+    task_mutex_unlock(&spath->path.message_mutex);
 
-    spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+    spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
 
     wait_for_message_barrier(&barrier.barrier);
 
@@ -348,31 +363,37 @@ static int get_resolutions(void* path, struct service_desc* service,
     return barrier.count;
 
 }
-static int get_resolutions_async(void* path, struct service_desc* service,
+static int get_resolutions_async(resolution_path* path, struct service_desc* service,
         resolution_path_callback callback) {
     return 0;
 }
 
-static int add_resolutions(void* path, struct service_resolution* resolutions, size_t res_count) {
-    assert(path);
+static int add_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+        size_t res_count) {
+    assert(spath);
     if(resolutions == NULL) {
         return EINVAL;
     }
     if(res_count == 0) {
         return 0;
     }
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
 
-    LOG_DBG("Adding %i stack resolution rules\n", res_count);
-    /* no copying, no resend */
-    int size = sizeof(struct ctrlmsg_resolution) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
     struct ctrlmsg_resolution cm;
+    int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
+    int batch_count = res_count / batch_size;
+    int count = 0;
+    if(res_count % batch_size > 0) {
+        batch_count++;
+    }
 
+    /* no copying, no resend */
+    int size = sizeof(cm) + res_count * sizeof(*resolutions);
+    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    LOG_DBG("Adding %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+
+    //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_ADD_SERVICE;
-    cm.cmh.len = size;
-    //cm.xid = atomic_add_return(1, &spath->request_xid);
 
     /*would be better with scatter gather? */
     //    int i = 0;
@@ -380,24 +401,37 @@ static int add_resolutions(void* path, struct service_resolution* resolutions, s
     //        memcpy(&cm->resolution[i], &resolutions[i], sizeof(*resolutions));
     //    }
 
-    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { (void*) resolutions, res_count
-            * sizeof(*resolutions) } };
+    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { NULL, 0 } };
 
-    int retval = spath->channel.interface->send_message_iov(spath->channel.target, iov, 2, size);
+    int i = 0, retval = 0, sent = 0;
+    for(i = 0; i < batch_count; i++) {
+        count = batch_size > res_count ? res_count : batch_size;
+        cm.cmh.len = sizeof(cm) + count * sizeof(*resolutions);
+        iov[1].iov_base = resolutions + i * batch_size;
+        iov[1].iov_len = count * sizeof(*resolutions);
+        retval = spath->path.channel->interface->send_message_iov(spath->path.channel, iov, 2,
+                cm.cmh.len);
 
-    /* response handled as event*/
-    return retval;
+        if(retval <= 0) {
+            //error TODO
+        } else {
+            sent += count;
+        }
+    }
+
+    /* response handled as event
+     * TODO - still keep (async) callback to check which resolutions were added?
+     * */
+    return sent;
 }
 
-static int _add_resolutions(void* path, struct service_resolution* resolutions, size_t res_count) {
-    assert(path);
+static int _add_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+        size_t res_count) {
+    assert(spath);
     if(resolutions == NULL || res_count <= 0) {
         return -1;
     }
 
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
-
-    /*adds a single service at a time..and is async..yuck*/
     struct ctrlmsg_service cm;
 
     memset(&cm, 0, sizeof(cm));
@@ -405,25 +439,24 @@ static int _add_resolutions(void* path, struct service_resolution* resolutions, 
     cm.cmh.len = sizeof(cm);
     int i = 0;
 
-    for (; i < res_count; i++) {
+    for(; i < res_count; i++) {
 
         cm.prefix_bits = resolutions[i].sv_prefix_bits > 255 ? 255 : resolutions[i].sv_prefix_bits;
         memcpy(&cm.srvid, &resolutions[i].srvid, sizeof(struct service_id));
         memcpy(&cm.ipaddr, &resolutions[i].address.net_un.un_ip, sizeof(struct in_addr));
 
-        spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+        spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
     }
 
     return 0;
 }
 
-static int _remove_resolutions(void* path, struct service_resolution* resolutions, size_t res_count) {
-    assert(path);
+static int _remove_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+        size_t res_count) {
+    assert(spath);
     if(resolutions == NULL || res_count <= 0) {
         return -1;
     }
-
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
 
     struct ctrlmsg_service cm;
     cm.cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
@@ -433,7 +466,7 @@ static int _remove_resolutions(void* path, struct service_resolution* resolution
 
     int i = 0;
 
-    for (; i < res_count; i++) {
+    for(; i < res_count; i++) {
 
         cm.prefix_bits = resolutions[i].sv_prefix_bits > 255 ? 255 : resolutions[i].sv_prefix_bits;
         memcpy(&cm.srvid, &resolutions[i].srvid, sizeof(struct service_id));
@@ -442,221 +475,298 @@ static int _remove_resolutions(void* path, struct service_resolution* resolution
         /* send message must send or fail then return. it cannot return
          * incomplete.
          */
-        spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+        spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
     }
 
     return 0;
 }
 
-static int add_resolutions_async(void* path, struct service_resolution* resolutions,
+static int add_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
         size_t res_count, resolution_path_callback callback) {
     return 0;
 }
 
-static int remove_resolutions(void* path, struct service_resolution_stat* resolutions, size_t res_count) {
+static int remove_resolutions(resolution_path* spath, struct service_resolution_stat* resolutions,
+        size_t res_count) {
 
-    assert(path);
+    assert(spath);
     if(resolutions == NULL) {
         return EINVAL;
     }
     if(res_count == 0) {
         return 0;
     }
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
 
-    LOG_DBG("Removing %i stack resolution rules\n", res_count);
-
-    int size = sizeof(struct ctrlmsg_resolution) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
     struct ctrlmsg_resolution cm;
 
+    int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
+    int batch_count = res_count / batch_size;
+    int count = 0;
+    if(res_count % batch_size > 0) {
+        batch_count++;
+    }
+
+    /* no copying, no resend */
+    int size = sizeof(cm) + res_count * sizeof(*resolutions);
+    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    LOG_DBG("Removing %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+
+    //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
-    cm.cmh.len = size;
-    //cm.xid = atomic_add_return(1, &spath->request_xid);
 
-    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { (void*) resolutions, res_count
-            * sizeof(*resolutions) } };
+    /*would be better with scatter gather? */
+    //    int i = 0;
+    //    for(; i < res_count; i++) {
+    //        memcpy(&cm->resolution[i], &resolutions[i], sizeof(*resolutions));
+    //    }
 
-    int retval = spath->channel.interface->send_message_iov(spath->channel.target, iov, 2, size);
-    /* response handled as remove event*/
-    return retval;
+    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { NULL, 0 } };
+
+    int i = 0, retval = 0, sent = 0;
+    for(i = 0; i < batch_count; i++) {
+        count = batch_size > res_count ? res_count : batch_size;
+        cm.cmh.len = sizeof(cm) + count * sizeof(*resolutions);
+        iov[1].iov_base = resolutions + i * batch_size;
+        iov[1].iov_len = count * sizeof(*resolutions);
+        retval = spath->path.channel->interface->send_message_iov(spath->path.channel, iov, 2,
+                cm.cmh.len);
+
+        if(retval <= 0) {
+            //error TODO
+        } else {
+            sent += count;
+        }
+    }
+
+    return sent;
 
 }
-static int remove_resolutions_async(void* path, struct service_resolution_stat* service,
+static int remove_resolutions_async(resolution_path* path, struct service_resolution_stat* service,
         resolution_path_callback callback) {
     return 0;
 }
 
-static void set_transit(void* path, int transit) {
-    assert(path);
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
-    LOG_DBG("Setting resolution path to transit mode: %i\n", transit);
+static void set_capabilities(resolution_path* spath, int capabilities) {
+    assert(spath);
+    LOG_DBG("Setting resolution path capabilities: %i\n", capabilities);
 
-    struct ctrlmsg_set_transit cm;
+    struct ctrlmsg_capabilities cm;
     bzero(&cm, sizeof(cm));
-    cm.cmh.type = CTRLMSG_TYPE_SET_TRANSIT;
+    cm.cmh.type = CTRLMSG_TYPE_CAPABILITIES;
     cm.cmh.len = sizeof(cm);
-
-    //    cm.xid = atomic_add_return(1, &spath->request_xid);
+    cm.capabilities = capabilities;
+    //    cm.xid = atomic_add_return(1, &spath->path.request_xid);
     //    struct message_barrier barrier;
     //    bzero(&barrier, sizeof(barrier));
     //
-    //    init_message_barrier(&barrier, spath, CTRLMSG_TYPE_SET_TRANSIT,
-    //            message_barrier_handle_success_default, message_barrier_handle_failure_default);
-    //
-    //    task_mutex_lock(&spath->message_mutex);
+    //    init_message_barrier(spath, &barrier, CTRLMSG_TYPE_SET_TRANSIT,
+    //            message_barrier_handle_success_default, message_barrier_handle_failure_default, NULL);
+    //    atomic_inc(&barrier.barrier.message_count);
+    //    task_mutex_lock(&spath->path.message_mutex);
     //
     //    uint32_t* xid = (uint32_t*) malloc(sizeof(*xid));
     //    *xid = cm.xid;
     //
-    //    g_hash_table_insert(spath->message_table, xid, &barrier);
-    //    task_mutex_unlock(&spath->message_mutex);
+    //    g_hash_table_insert(spath->path.message_table, xid, &barrier);
+    //    task_mutex_unlock(&spath->path.message_mutex);
 
-    int retval = spath->channel.interface->send_message(spath->channel.target, &cm, sizeof(cm));
+    spath->path.channel->interface->send_message(spath->path.channel, &cm, sizeof(cm));
 
     // wait_for_message_barrier(&barrier);
 
 }
 
-static int modify_resolutions(void* path, struct service_resolution* resolutions, size_t res_count) {
-    assert(path);
+static int modify_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+        size_t res_count) {
+    assert(spath);
     if(resolutions == NULL) {
         return EINVAL;
     }
     if(res_count == 0) {
         return 0;
     }
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) path;
 
     LOG_DBG("Modifying %i stack resolution rules\n", res_count);
     /* no copying, no resend */
-    int size = sizeof(struct ctrlmsg_resolution) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+
     struct ctrlmsg_resolution cm;
+
+    int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
+    int batch_count = res_count / batch_size;
+    int count = 0;
+    if(res_count % batch_size > 0) {
+        batch_count++;
+    }
+
+    /* no copying, no resend */
+    int size = sizeof(cm) + res_count * sizeof(*resolutions);
+    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    LOG_DBG("Modifying %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+
+    //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_MOD_SERVICE;
-    cm.cmh.len = size;
 
-    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { (void*) resolutions, res_count
-            * sizeof(*resolutions) } };
+    /*would be better with scatter gather? */
+    //    int i = 0;
+    //    for(; i < res_count; i++) {
+    //        memcpy(&cm->resolution[i], &resolutions[i], sizeof(*resolutions));
+    //    }
 
-    int retval = spath->channel.interface->send_message_iov(spath->channel.target, iov, 2, size);
+    struct iovec iov[2] = { { (void*) &cm, sizeof(cm) }, { NULL, 0 } };
 
-    return retval;
+    int i = 0, retval = 0, sent = 0;
+    for(i = 0; i < batch_count; i++) {
+        count = batch_size > res_count ? res_count : batch_size;
+        cm.cmh.len = sizeof(cm) + count * sizeof(*resolutions);
+        iov[1].iov_base = resolutions + i * batch_size;
+        iov[1].iov_len = count * sizeof(*resolutions);
+        retval = spath->path.channel->interface->send_message_iov(spath->path.channel, iov, 2,
+                cm.cmh.len);
+
+        if(retval <= 0) {
+            //error TODO
+        } else {
+            sent += count;
+        }
+    }
+
+    return count;
 
 }
-static int modify_resolutions_async(void* path, struct service_resolution* resolutions,
+static int modify_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
         size_t res_count, resolution_path_callback callback) {
     return 0;
 }
 
-static void handle_register_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_register* message, size_t length) {
+static void handle_register_message(resolution_path* spath, struct ctrlmsg_register* message,
+        size_t length) {
+    assert(spath);
     LOG_DBG("Handling stack-local register: SID(%i:%i) %s\n", message->sv_flags, message->sv_prefix_bits, service_id_to_str(&message->srvid));
-    struct service_desc sdesc;
-    sdesc.flags = message->sv_flags;
-    sdesc.prefix = message->sv_prefix_bits;
-    memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
-    spath->resolver.interface->register_services(spath->resolver.target, NULL, &sdesc, 1, NULL, 0);
 
+    if(spath->path.path_callback.target) {
+        struct service_desc sdesc;
+        sdesc.flags = message->sv_flags;
+        sdesc.prefix = message->sv_prefix_bits;
+
+        memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
+        spath->path.path_callback.service_registered(&spath->path.path_callback, &sdesc);
+    }
 }
 
-static void handle_unregister_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_register* message, size_t length) {
+static void handle_unregister_message(resolution_path* spath, struct ctrlmsg_register* message,
+        size_t length) {
+    assert(spath);
     LOG_DBG("Handling stack-local unregister: SID(%i:%i) %s\n", message->sv_flags, message->sv_prefix_bits, service_id_to_str(&message->srvid));
-    struct service_desc sdesc;
-    sdesc.flags = message->sv_flags;
-    sdesc.prefix = message->sv_prefix_bits;
-    memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
-    spath->resolver.interface->unregister_services(spath->resolver.target, NULL, &sdesc, 1, NULL);
+    if(spath->path.path_callback.target) {
+        struct service_desc sdesc;
+        sdesc.flags = message->sv_flags;
+        sdesc.prefix = message->sv_prefix_bits;
+        memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
+        spath->path.path_callback.service_unregistered(&spath->path.path_callback, &sdesc);
+    }
 }
 
-static void handle_resolve_message(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolve* message, size_t length) {
+static void handle_resolve_message(resolution_path* spath, struct ctrlmsg_resolve* message,
+        size_t length) {
+    assert(spath);
     /*note that the resolve message could/should include src SID and IP and TODO */
     LOG_DBG("Handling resolve: src SID(%i:%i) %s dst SID(%i:%i) %s\n", message->src_flags, message->src_prefix_bits, service_id_to_str(&message->src_srvid),
             message->dst_flags, message->dst_prefix_bits, service_id_to_str(&message->dst_srvid));
 
-
-
 }
 
-static void handle_resolution_removed(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolution* message, size_t length) {
+static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_resolution* message,
+        size_t length) {
+    assert(spath);
     /*TODO - big assumption that the resolutions here include stats */
     int rcount = CTRL_NUM_STAT_SERVICES(message, length);
     LOG_DBG("Handling resolution removed: %i\n", rcount);
 
-    stat_response resp;
-    resp.count = rcount;
-    resp.type = SVS_INSTANCE_STATS;
-    resp.data = (uint8_t*) &message->resolution;
+    if(rcount <= 0) {
+        LOG_ERR("Invalid resolution stats in remove message! len: %u / %u\n", length, sizeof(struct service_resolution_stat));
+    }
+    if(spath->path.path_callback.target) {
 
-    spath->resolver.interface->update_services(spath->resolver.target, NULL, SVS_INSTANCE_STATS,
-            &resp);
+        spath->path.path_callback.stat_update(&spath->path.path_callback,
+                (struct service_resolution_stat*) message->resolution, rcount);
 
+        //        stat_response resp;
+        //                resp.count = rcount;
+        //                resp.type = SVS_INSTANCE_STATS;
+        //                /*TODO this is rather dangerous to assume - full binary compatibilitye between service_resolution_stat == sv_instance_stats*/
+        //                resp.data = (uint8_t*) &message->resolution;
+        //spath->path.resolver.interface->update_services(spath->path.resolver.target, NULL,
+        //        SVS_INSTANCE_STATS, &resp);
+    }
 }
 
-static void handle_resolution_added(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolution* message, size_t length) {
+static void handle_resolution_added(resolution_path* spath, struct ctrlmsg_resolution* message,
+        size_t length) {
+    assert(spath);
     /*DO NOTHING for now - may need to verify actual resolutions added TODO*/
-    LOG_DBG("Handling resolution added: %i\n", length);
+    LOG_DBG("Handling resolution added: %i\n", CTRL_NUM_SERVICES(message,length));
 }
 
-static void handle_resolution_modified(struct sv_resolution_path* spath,
-        struct ctrlmsg_resolution* message, size_t length) {
+static void handle_resolution_modified(resolution_path* spath, struct ctrlmsg_resolution* message,
+        size_t length) {
     /*DO NOTHING for now TODO*/
+    assert(spath);
     LOG_DBG("Handling resolution modified: %i\n", length);
 }
 
-static int resolution_path_message_channel_cb(void* target, const void* message, size_t length) {
-    assert(target);
+static int resolution_path_message_channel_cb(message_channel_callback* cb, const void* message,
+        size_t length) {
+    assert(cb);
 
+    resolution_path* spath = (resolution_path*) cb->target;
     struct ctrlmsg* cmsg = (struct ctrlmsg*) message;
     struct ctrlmsg_resolution* amsg;
-    struct sv_resolution_path* spath = (struct sv_resolution_path*) target;
     struct message_barrier* barrier = NULL;
 
-    switch (cmsg->type) {
-    case CTRLMSG_TYPE_REGISTER:
-        handle_register_message(spath, (struct ctrlmsg_register*) message, length);
-        break;
-    case CTRLMSG_TYPE_UNREGISTER:
-        handle_unregister_message(spath, (struct ctrlmsg_register*) message, length);
-        break;
-    case CTRLMSG_TYPE_RESOLVE:
-        handle_resolve_message(spath, (struct ctrlmsg_resolve*) message, length);
-        break;
-    case CTRLMSG_TYPE_ADD_SERVICE:
-        handle_resolution_added(spath, (struct ctrlmsg_resolution*) message, length);
-        break;
-    case CTRLMSG_TYPE_DEL_SERVICE:
-        handle_resolution_removed(spath, (struct ctrlmsg_resolution*) message, length);
-        break;
-    case CTRLMSG_TYPE_MOD_SERVICE:
-        handle_resolution_modified(spath, (struct ctrlmsg_resolution*) message, length);
-        break;
-    case CTRLMSG_TYPE_GET_SERVICE:
-    case CTRLMSG_TYPE_SERVICE_STATS:
-        //case CTRLMSG_TYPE_SET_TRANSIT:
-        task_mutex_lock(&spath->message_mutex);
+    LOG_DBG("Recevied stack message of type %i\n", cmsg->type);
 
-        /* TODO although it's a bit dangerous to cast solely to the resolution message,
-         * the xid is in the same field position
-         */
-        amsg = (struct ctrlmsg_resolution*) message;
-        barrier = (struct message_barrier*) g_hash_table_lookup(spath->message_table, &amsg->xid);
+    switch(cmsg->type) {
+        case CTRLMSG_TYPE_REGISTER:
+            handle_register_message(spath, (struct ctrlmsg_register*) message, length);
+            break;
+        case CTRLMSG_TYPE_UNREGISTER:
+            handle_unregister_message(spath, (struct ctrlmsg_register*) message, length);
+            break;
+        case CTRLMSG_TYPE_RESOLVE:
+            handle_resolve_message(spath, (struct ctrlmsg_resolve*) message, length);
+            break;
+        case CTRLMSG_TYPE_ADD_SERVICE:
+            handle_resolution_added(spath, (struct ctrlmsg_resolution*) message, length);
+            break;
+        case CTRLMSG_TYPE_DEL_SERVICE:
+            handle_resolution_removed(spath, (struct ctrlmsg_resolution*) message, length);
+            break;
+        case CTRLMSG_TYPE_MOD_SERVICE:
+            handle_resolution_modified(spath, (struct ctrlmsg_resolution*) message, length);
+            break;
+        case CTRLMSG_TYPE_GET_SERVICE:
+        case CTRLMSG_TYPE_SERVICE_STATS:
+            //case CTRLMSG_TYPE_SET_TRANSIT:
+            task_mutex_lock(&spath->path.message_mutex);
 
-        if(barrier == NULL) {
-            task_mutex_unlock(&spath->message_mutex);
-            LOG_ERR("Resolution response received for unknown request: %u", amsg->xid);
-        } else {
-            g_hash_table_remove(spath->message_table, &amsg->xid);
-            task_mutex_unlock(&spath->message_mutex);
-            message_barrier_default_cb(barrier, cmsg->type, message, length);
-        }
-        break;
+            /* TODO although it's a bit dangerous to cast solely to the resolution message,
+             * the xid is in the same field position
+             */
+            amsg = (struct ctrlmsg_resolution*) message;
+            barrier = (struct message_barrier*) g_hash_table_lookup(spath->path.message_table,
+                    &amsg->xid);
+
+            if(barrier == NULL) {
+                task_mutex_unlock(&spath->path.message_mutex);
+                LOG_ERR("Resolution response received for unknown request: %u", amsg->xid);
+            } else {
+                g_hash_table_remove(spath->path.message_table, &amsg->xid);
+                task_mutex_unlock(&spath->path.message_mutex);
+                message_barrier_default_cb(barrier, cmsg->type, message, length);
+            }
+            break;
     }
 
     return 0;

@@ -20,6 +20,11 @@ typedef enum {
 } client_state_t;
 
 
+enum client_signal{
+    CLIENT_EXIT = 1
+    //CLIENT_SIGNAL_DATA = 2
+};
+
 struct client_list {
         struct list_head head;
         pthread_mutex_t mutex;        
@@ -44,9 +49,9 @@ void client_put(struct client *c);
 int client_lock(struct client *c);
 void client_unlock(struct client *c);
 int client_signal_pending(struct client *c);
-int client_signal_raise(struct client *c);
+int client_signal_raise(struct client *c, enum client_signal s);
 int client_signal_exit(struct client *c);
-int client_signal_lower(struct client *c);
+enum client_signal client_signal_lower(int fd);
 int client_start(struct client *c);
 struct client *client_get_by_socket(struct socket *sock, struct client_list *list);
 void client_list_init(struct client_list *list);

@@ -143,7 +143,7 @@ public class ChatActivity extends Activity {
 				sock = new ServalDatagramSocket(new ServiceID((short) 32769));
 				sock.setSoTimeout(3000);
 				statusText.post(new StatusUpdater("Connecting..."));
-				sock.connect(new ServiceID((short) 16385), 3000);
+				sock.connect(new ServiceID((short) 16385), 10000);
 				Log.d("ServalChat", "connected");
 				
 				statusText.post(new StatusUpdater("Connected"));

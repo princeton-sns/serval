@@ -26,7 +26,7 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
                                    unsigned int prefix_bits,
                                    gfp_t alloc);
 void bst_remove_node(struct bst *tree, struct bst_node *n);
-void bst_remove_prefix(struct bst *tree, void *prefix, 
+int bst_remove_prefix(struct bst *tree, void *prefix,
                        unsigned int prefix_bits);
 void bst_node_remove(struct bst_node *n);
 unsigned int bst_node_prefix_bits(struct bst_node *n);

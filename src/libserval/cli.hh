@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <sys/un.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "state.hh"
 #include "log.hh"
@@ -41,6 +42,10 @@ public:
   State::Type state() const              { return _state; } 
   sv_proto_t proto() const         { return _proto; }
   
+  pthread_mutex_t& get_lock() { return _lock; }
+  void lock() { pthread_mutex_lock(&_lock); }
+  void unlock() { pthread_mutex_unlock(&_lock); }
+
   void set_proto(int proto)        { _proto.v = proto; }
   void set_fd(int fd)              { _fd = fd; }
   void set_rcvlowat(int lowat)     { _rcv_lowat = lowat; }
@@ -79,6 +84,7 @@ private:
   bool _connect_in_progress;
   int _flags;
   struct sockaddr_un _cli;      // local socket
+  pthread_mutex_t _lock;
   static uint32_t _UNIX_ID;
 };
 

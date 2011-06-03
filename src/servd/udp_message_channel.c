@@ -44,6 +44,7 @@
  */
 #define UDP_MC_CALLBACKS 2
 struct sv_udp_message_channel {
+    message_channel channel;
     struct sv_instance_addr remote;
     size_t remote_len;
     atomic_t ref_count;
@@ -75,22 +76,22 @@ static int native_serval = 0;
 /* TODO - might need to be a r/w lock */
 static task_mutex udp_dispatch_mutex = TASK_MUTEX_INITIALIZER;
 
-static int udp_initialize(void* channel);
-static void udp_start(void* channel);
-static void udp_stop(void* channel);
-static int udp_finalize(void* channel);
-static const struct sockaddr* udp_get_local_address(void* target, int* len);
-static void udp_set_peer_address(void* target, struct sockaddr* addr, size_t len);
-static const struct sockaddr* udp_get_peer_address(void* target, int* len);
+static int udp_initialize(message_channel* channel);
+static void udp_start(message_channel* channel);
+static void udp_stop(message_channel* channel);
+static int udp_finalize(message_channel* channel);
+static const struct sockaddr* udp_get_local_address(message_channel* channel, int* len);
+static void udp_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len);
+static const struct sockaddr* udp_get_peer_address(message_channel* channel, int* len);
 
-static int udp_register_callback(void* target, message_channel_callback* cb);
-static int udp_unregister_callback(void* target, message_channel_callback* cb);
-static int udp_get_callback_count(void* target);
+static int udp_register_callback(message_channel* channel, message_channel_callback* cb);
+static int udp_unregister_callback(message_channel* channel, message_channel_callback* cb);
+static int udp_get_callback_count(message_channel* channel);
 
-static int udp_send(void* channel, void *message, size_t datalen);
-static int udp_send_iov(void* target, struct iovec* iov, size_t veclen, size_t len);
-static int udp_recv(void* channel, const void *message, size_t datalen);
-static int udp_get_max_message_size(void* channel) {
+static int udp_send(message_channel* channel, void *message, size_t datalen);
+static int udp_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t len);
+static int udp_recv(message_channel* channel, const void *message, size_t datalen);
+static int udp_get_max_message_size(message_channel* channel) {
     return MAX_UDP_PACKET;
 }
 
@@ -118,7 +119,7 @@ static void message_dispatch_stop(struct sv_udp_message_dispatch* dispatch);
 static void message_dispatch_finalize(struct sv_udp_message_dispatch* dispatch);
 static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch);
 static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch);
-static void message_dispatch_recv_task(void* target);
+static void message_dispatch_recv_task(void* channel);
 
 static inline void udp_incref(struct sv_udp_message_channel* channel) {
     assert(channel);
@@ -129,7 +130,7 @@ static inline void udp_decref(struct sv_udp_message_channel* channel) {
     assert(channel);
     if(atomic_dec_and_test(&channel->ref_count)) {
 
-        udp_finalize(channel);
+        udp_finalize(&channel->channel);
         free(channel);
     }
 }
@@ -168,11 +169,11 @@ void udp_channel_create() {
 }
 
 /* include buffer len as well, for consistency? */
-int create_udp_message_channel(struct sockaddr_sv* local, struct sv_instance_addr* remote,
-        int buffer_len, message_channel_callback* callback, message_channel* channel) {
+message_channel* create_udp_message_channel(struct sockaddr_sv* local,
+        struct sv_instance_addr* remote, int buffer_len, message_channel_callback* callback) {
 
     if(local == NULL || remote == NULL) {
-        return -1;
+        return NULL;
     }
 
     //udp_channel_create();
@@ -223,6 +224,7 @@ int create_udp_message_channel(struct sockaddr_sv* local, struct sv_instance_add
         }
 
         uchannel->dispatch = dispatch;
+
         g_hash_table_insert(dispatch->dispatch_table, &remote->service.sv_srvid, uchannel);
 
     }
@@ -231,20 +233,22 @@ int create_udp_message_channel(struct sockaddr_sv* local, struct sv_instance_add
     task_mutex_unlock(&dispatch->mutex);
     task_mutex_unlock(&udp_dispatch_mutex);
 
-    channel->target = uchannel;
-    channel->interface = &udp_mc_interface;
+    uchannel->channel.interface = &udp_mc_interface;
     goto out;
 
     error: task_mutex_unlock(&dispatch->mutex);
     task_mutex_unlock(&udp_dispatch_mutex);
 
-    out: return retval;
+    out: return &uchannel->channel;
 }
 
-static int udp_register_callback(void* target, message_channel_callback* cb) {
-    assert(target);
-    assert(cb);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+static int udp_register_callback(message_channel* channel, message_channel_callback* cb) {
+    assert(channel);
+    if(cb == NULL) {
+        return -1;
+    }
+
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     if(uchannel->callbacks[0].target == NULL) {
         uchannel->callbacks[0] = *cb;
@@ -255,9 +259,10 @@ static int udp_register_callback(void* target, message_channel_callback* cb) {
     }
     return 0;
 }
-static int udp_unregister_callback(void* target, message_channel_callback* cb) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+
+static int udp_unregister_callback(message_channel* channel, message_channel_callback* cb) {
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     if(uchannel->callbacks[0].target == cb->target) {
         uchannel->callbacks[0].target = NULL;
@@ -272,13 +277,13 @@ static int udp_unregister_callback(void* target, message_channel_callback* cb) {
 
     return -1;
 }
-static int udp_get_callback_count(void* target) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+static int udp_get_callback_count(message_channel* channel) {
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     int count = 0;
     int i;
-    for (i = 0; i < UDP_MC_CALLBACKS; i++) {
+    for(i = 0; i < UDP_MC_CALLBACKS; i++) {
 
         if(uchannel->callbacks[i].target) {
             count++;
@@ -288,60 +293,81 @@ static int udp_get_callback_count(void* target) {
     return count;
 }
 
-static int udp_initialize(void* target) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
-
+static int udp_initialize(message_channel* channel) {
+    assert(channel);
+    if(!is_created(channel->channel.state)) {
+        return -1;
+    }
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
+    channel->channel.state = COMP_INITIALIZED;
     return message_dispatch_initialize(uchannel->dispatch);
 }
 
-static void udp_start(void* target) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
-
+static void udp_start(message_channel* channel) {
+    assert(channel);
+    if(!is_initialized(channel->channel.state)) {
+        return;
+    }
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
     message_dispatch_start(uchannel->dispatch);
-
+    channel->channel.state = COMP_STARTED;
 }
 
-static void udp_stop(void* target) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
-
+static void udp_stop(message_channel* channel) {
+    assert(channel);
+    if(!is_started(channel->channel.state)) {
+        return;
+    }
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
+    //should only stop if there is one channel left
     message_dispatch_stop(uchannel->dispatch);
-
+    channel->channel.state = COMP_INITIALIZED;
 }
 
 /* Lock required?*/
-static void udp_set_peer_address(void* target, struct sockaddr* addr, size_t len) {
-    assert(target);
+static void udp_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len) {
+    assert(channel);
 
     if(addr == NULL) {
         return;
     }
 
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
-    /* lock? TODO */
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
+    task_mutex_lock(&uchannel->dispatch->mutex);
 
     if(len == sizeof(struct sv_instance_addr)) {
+        g_hash_table_remove(uchannel->dispatch->dispatch_table, &uchannel->remote.service.sv_srvid);
         memcpy(&uchannel->remote, addr, len);
+        uchannel->remote_len = len;
+        g_hash_table_insert(uchannel->dispatch->dispatch_table, &uchannel->remote.service.sv_srvid,
+                uchannel);
+
     } else if(len == sizeof(struct sockaddr_sv)) {
         /* dangerous if the local addr reference is owned elsewhere TODO*/
+        g_hash_table_remove(uchannel->dispatch->dispatch_table, &uchannel->remote.service.sv_srvid);
         memcpy(&uchannel->remote.service, addr, len);
+        uchannel->remote_len = len;
+        g_hash_table_insert(uchannel->dispatch->dispatch_table, &uchannel->remote.service.sv_srvid,
+                uchannel);
     } else if(len == sizeof(struct sockaddr_in) || len == sizeof(struct sockaddr_in6)) {
         memcpy(&uchannel->remote.address, addr, len);
+        uchannel->remote_len = sizeof(struct sockaddr_sv) + len;
     }
+
+    task_mutex_unlock(&uchannel->dispatch->mutex);
+
 }
 
-static const struct sockaddr* udp_get_peer_address(void* target, int* len) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+static const struct sockaddr* udp_get_peer_address(message_channel* channel, int* len) {
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
     *len = sizeof(struct sv_instance_addr);
     return (struct sockaddr*) &uchannel->remote;
 }
 
-static const struct sockaddr* udp_get_local_address(void* target, int* len) {
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+static const struct sockaddr* udp_get_local_address(message_channel* channel, int* len) {
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
     *len = sizeof(uchannel->dispatch->local);
     return (struct sockaddr*) &uchannel->dispatch->local;
 }
@@ -394,6 +420,7 @@ static int message_dispatch_initialize(struct sv_udp_message_dispatch* dispatch)
     assert(dispatch);
     /* add the dispatch to the global table */
     if(dispatch->sock > 0) {
+        /*already initialized*/
         return 0;
     }
 
@@ -418,21 +445,21 @@ static int message_dispatch_initialize(struct sv_udp_message_dispatch* dispatch)
     int sock = socket(AF_SERVAL, SOCK_DGRAM, 0);
 
     if(sock == -1) {
-        switch (errno) {
-        case EAFNOSUPPORT:
-        case EPROTONOSUPPORT:
-            /* Try libserval */
-            sock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
+        switch(errno) {
+            case EAFNOSUPPORT:
+            case EPROTONOSUPPORT:
+                /* Try libserval */
+                sock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
 
-            if(sock == -1) {
-                LOG_ERR("Could not create controller socket: %s\n", strerror_sv(errno));
+                if(sock == -1) {
+                    LOG_ERR("Could not create controller socket: %s\n", strerror_sv(errno));
+                    return -1;
+                }
+                native_serval = 0;
+                break;
+            default:
+                LOG_ERR("Could not create controller socket (native): %s\n", strerror(errno));
                 return -1;
-            }
-            native_serval = 0;
-            break;
-        default:
-            LOG_ERR("Could not create controller socket (native): %s\n", strerror(errno));
-            return -1;
         }
     } else {
         native_serval = 1;
@@ -486,11 +513,17 @@ static void message_dispatch_start(struct sv_udp_message_dispatch* dispatch) {
 static void message_dispatch_stop(struct sv_udp_message_dispatch* dispatch) {
     assert(dispatch);
 
-    if(atomic_read(&dispatch->running)) {
-        atomic_set(&dispatch->running, 0);
-        task_unblock(dispatch->sock, FD_ALL);
-        task_remove(dispatch->recv_task);
+    task_mutex_lock(&dispatch->mutex);
+
+    if(g_hash_table_size(dispatch->dispatch_table) == 1) {
+        if(atomic_read(&dispatch->running)) {
+            atomic_set(&dispatch->running, 0);
+            task_unblock(dispatch->sock, FD_ALL);
+            task_remove(dispatch->recv_task);
+        }
     }
+
+    task_mutex_unlock(&dispatch->mutex);
 
 }
 
@@ -515,7 +548,11 @@ static void message_dispatch_finalize(struct sv_udp_message_dispatch* dispatch) 
     }
 
     if(dispatch->sock > 0) {
-        close(dispatch->sock);
+        if(native_serval) {
+            close(dispatch->sock);
+        } else {
+            close_sv(dispatch->sock);
+        }
         dispatch->sock = 0;
     }
 
@@ -525,8 +562,8 @@ static void message_dispatch_finalize(struct sv_udp_message_dispatch* dispatch) 
 
 }
 
-static void message_dispatch_recv_task(void* target) {
-    message_dispatch_recv((struct sv_udp_message_dispatch*) target);
+static void message_dispatch_recv_task(void* channel) {
+    message_dispatch_recv((struct sv_udp_message_dispatch*) channel);
 }
 
 static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch) {
@@ -537,7 +574,7 @@ static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch) {
     int slen = sizeof(struct sv_instance_addr);
     struct sv_instance_addr peer;
 
-    while (atomic_read(&dispatch->running) && ret) {
+    while(atomic_read(&dispatch->running) && ret) {
         if(native_serval) {
             ret = recvfrom(dispatch->sock, dispatch->buffer, (size_t) dispatch->buffer_len, 0,
                     (struct sockaddr*) &peer, (socklen_t*) &slen);
@@ -563,12 +600,18 @@ static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch) {
         //no multi-threaded reads - only one message can be processed
         //at a time and all data must be copied out of the buffer
         //TODO crc check or other authentication data?
+        LOG_DBG("Received UDP %i byte message from %s @ %s\n", ret, service_id_to_str(&peer.service.sv_srvid), inet_ntoa(peer.address.sin.sin_addr));
+
+        if(memcmp(&peer.service.sv_srvid, &dispatch->local.sv_srvid, sizeof(struct service_id))
+                == 0) {
+            LOG_DBG("Dropping packet originating from the local SID source: %s\n", service_id_to_str(&dispatch->local.sv_srvid));
+            continue;
+        }
+
         task_mutex_lock(&dispatch->mutex);
         struct sv_udp_message_channel* channel =
                 (struct sv_udp_message_channel*) g_hash_table_lookup(dispatch->dispatch_table,
                         &peer.service.sv_srvid);
-
-        LOG_DBG("Received UDP %i byte message from %s\n", ret, service_id_to_str(&channel->remote.service.sv_srvid));
 
         /*TODO should this always set the peer address?*/
         if(channel) {
@@ -578,31 +621,32 @@ static int message_dispatch_recv(struct sv_udp_message_dispatch* dispatch) {
             /*in essence, this is the "listening" channel*/
             channel = dispatch->default_channel;
             udp_incref(channel);
-            udp_set_peer_address(channel, (struct sockaddr*) &peer, slen);
+            udp_set_peer_address(&channel->channel, (struct sockaddr*) &peer, slen);
         }
 
         if(channel) {
-            udp_recv(channel, dispatch->buffer, ret);
+            udp_recv(&channel->channel, dispatch->buffer, ret);
             udp_decref(channel);
         } else {
             LOG_ERR("No message callback for remote service id: %s", service_id_to_str(&peer.service.sv_srvid));
         }
 
-        /* should probably be a read lock here ...*/task_mutex_unlock(&dispatch->mutex);
+        /* should probably be a read lock here ... may be proper to release before calling udp_recv*/
+        task_mutex_unlock(&dispatch->mutex);
     }
 
     return ret;
 }
 
-static int udp_finalize(void* target) {
+static int udp_finalize(message_channel* channel) {
     //remove from the dispatch table
-    assert(target);
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     if(uchannel->dispatch) {
         task_mutex_lock(&udp_dispatch_mutex);
         task_mutex_lock(&uchannel->dispatch->mutex);
-        g_hash_table_remove(((struct sv_udp_message_channel*) target)->dispatch->dispatch_table,
+        g_hash_table_remove(((struct sv_udp_message_channel*) channel)->dispatch->dispatch_table,
                 &uchannel->remote.service.sv_srvid);
         task_mutex_unlock(&uchannel->dispatch->mutex);
 
@@ -616,28 +660,29 @@ static int udp_finalize(void* target) {
         uchannel->dispatch = NULL;
     }
 
+    channel->channel.state = COMP_CREATED;
     return 0;
 }
 
-static int udp_recv(void* target, const void *message, size_t datalen) {
-    assert(target);
-    struct sv_udp_message_channel* channel = (struct sv_udp_message_channel*) target;
+static int udp_recv(message_channel* channel, const void *message, size_t datalen) {
+    assert(channel);
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     int retval = -1;
-    if(channel->callbacks[0].target) {
-        retval = channel->callbacks[0].recv_message(channel->callbacks[0].target, message, datalen);
+    if(uchannel->callbacks[0].target) {
+        retval = uchannel->callbacks[0].recv_message(&uchannel->callbacks[0], message, datalen);
     }
 
-    if(retval && channel->callbacks[1].target) {
-        retval = channel->callbacks[1].recv_message(channel->callbacks[1].target, message, datalen);
+    if(retval && uchannel->callbacks[1].target) {
+        retval = uchannel->callbacks[1].recv_message(&uchannel->callbacks[1], message, datalen);
     }
     /* TODO - error if both callbacks are NULL! */
 
     return retval;
 }
 
-static int udp_send_iov(void* target, struct iovec* iov, size_t veclen, size_t len) {
-    assert(target);
+static int udp_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t len) {
+    assert(channel);
 
     if(iov == NULL) {
         return EINVAL;
@@ -653,7 +698,7 @@ static int udp_send_iov(void* target, struct iovec* iov, size_t veclen, size_t l
         return -1;
     }
 
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
     LOG_DBG("Sending UDP %i byte message to %s\n", len, service_id_to_str(&uchannel->remote.service.sv_srvid));
     struct msghdr mh = { &uchannel->remote, uchannel->remote_len, iov, veclen, NULL, 0, 0 };
@@ -661,14 +706,13 @@ static int udp_send_iov(void* target, struct iovec* iov, size_t veclen, size_t l
     int retval = -1;
     int retries = 0;
 
-    while (atomic_read(&uchannel->dispatch->running) && retval < 0 && retries < MAX_MESSAGE_RETRIES) {
+    while(atomic_read(&uchannel->dispatch->running) && retval < 0 && retries < MAX_MESSAGE_RETRIES) {
         retries++;
 
         if(native_serval) {
             retval = sendmsg(uchannel->dispatch->sock, &mh, 0);
         } else {
-            LOG_ERR("Non-native sendmsg not supported!\n");
-            return ENOTSUP;
+            retval = sendmsg_sv(uchannel->dispatch->sock, &mh, 0);
         }
 
         if(retval == -1) {
@@ -684,8 +728,8 @@ static int udp_send_iov(void* target, struct iovec* iov, size_t veclen, size_t l
     return retval;
 }
 
-static int udp_send(void* target, void* message, size_t len) {
-    assert(target);
+static int udp_send(message_channel* channel, void* message, size_t len) {
+    assert(channel);
 
     if(message == NULL) {
         LOG_ERR("Cannot send null udp message!");
@@ -703,14 +747,17 @@ static int udp_send(void* target, void* message, size_t len) {
         LOG_ERR("UDP message length is zero!");
         return -1;
     }
-    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) target;
+    struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
-    LOG_DBG("Sending UDP %i byte message to %s\n", len, service_id_to_str(&uchannel->remote.service.sv_srvid));
+    LOG_DBG("Sending UDP %i byte message to %s @ %s, sockaddr len %i\n", len,
+            service_id_to_str(&uchannel->remote.service.sv_srvid), inet_ntoa(uchannel->remote.address.sin.sin_addr),
+            uchannel->remote_len);
+
     int retval = -1;
 
     int retries = 0;
 
-    while (atomic_read(&uchannel->dispatch->running) && retval < 0 && retries < MAX_MESSAGE_RETRIES) {
+    while(atomic_read(&uchannel->dispatch->running) && retval < 0 && retries < MAX_MESSAGE_RETRIES) {
         retries++;
 
         if(native_serval) {

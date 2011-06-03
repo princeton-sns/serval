@@ -11,8 +11,16 @@
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
+#if defined(__BIG_ENDIAN)
+#define __BYTE_ORDER __BIG_ENDIAN
+#elif defined(__LITTLE_ENDIAN)
+#define __BYTE_ORDER __LITTLE_ENDIAN
+#endif
 #else
 #include <netinet/ip.h>
+#if defined(OS_LINUX)
+#include <endian.h>
+#endif
 #endif
 
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
@@ -131,8 +139,13 @@ out:
 
 struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 {
+#if __BYTE_ORDER == __LITTLE_ENDIAN
         return serval_sock_lookup(&established_table, &init_net, 
-                                  flowid, sizeof(*flowid));
+                                  &flowid->s_id8[3], sizeof(flowid->s_id8[3]));
+#else
+        return serval_sock_lookup(&established_table, &init_net, 
+                                  &flowid->s_id8[0], sizeof(flowid->s_id8[0]));
+#endif
 }
 
 struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
@@ -151,7 +164,7 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
                                              struct sock *sk)
 {
         return serval_hashfn(sock_net(sk), 
-                             &serval_sk(sk)->local_flowid,
+                             serval_sk(sk)->hash_key,
                              serval_sk(sk)->hash_key_len,
                              table->mask);
 }
@@ -172,7 +185,7 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
         sk->sk_hash = table->hashfn(table, sk);
 
         slot = &table->hash[sk->sk_hash];
-
+        
         /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
         slot->count++;
@@ -199,8 +212,13 @@ static void __serval_sock_hash(struct sock *sk)
             sk->sk_state == SERVAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
-                ssk->hash_key = &ssk->local_flowid;
-                ssk->hash_key_len = sizeof(ssk->local_flowid);
+#if __BYTE_ORDER == __LITTLE_ENDIAN
+                ssk->hash_key = &ssk->local_flowid.s_id8[3];
+                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[3]);
+#else
+                ssk->hash_key = &ssk->local_flowid.s_id8[0];
+                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[0]);
+#endif
                 __serval_table_hash(&established_table, sk);
         } else { 
                 /* We use the service table for listening sockets. See
@@ -536,6 +554,19 @@ void serval_sock_destruct(struct sock *sk)
 
 	LOG_DBG("SERVAL socket %p destroyed, %d are still alive.\n", 
                 sk, atomic_read(&serval_nr_socks));
+}
+
+void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+        if (ssk->dev)
+                dev_put(ssk->dev);
+
+        if (dev) {
+                ssk->dev = dev;
+                dev_hold(dev);
+        }
 }
 
 const char *serval_sock_state_str(struct sock *sk)

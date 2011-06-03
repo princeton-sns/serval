@@ -36,8 +36,6 @@ struct sv_local_resolver {
      * service-table - by scope? host, local, (remote?)
      */
 
-    service_resolver default_peer;
-
     uint16_t echo_interval;
     uint16_t disc_interval;
     uint16_t expire_interval;
@@ -47,20 +45,20 @@ struct sv_local_resolver {
     task_handle_t expire_task;
 
     service_resolver_callback echo_callback;
-
+    resolution_path_callback path_callback;
     task_mutex peer_mutex;
     GHashTable* peer_table;
 
     task_rwlock res_lock;
     struct sv_service_table resolution_table;
 
-    resolution_path rpath;
-
-    service_resolver self;
+    service_resolver* default_peer;
+    resolution_path* rpath;
+//service_resolver* self;
 };
 
 struct peer_info {
-    service_resolver peer;
+    service_resolver* peer;
     int poking;
     /* track per-peer info */
     uint64_t last_discovery;
@@ -84,59 +82,65 @@ struct register_cb_info {
     service_resolver_callback cb;
 };
 
-static int local_initialize(void* resolver);
-static void local_stop(void*resolver);
-static void local_start(void* resolver);
+static int local_initialize(service_resolver* resolver);
+static void local_stop(service_resolver* resolver);
+static void local_start(service_resolver* resolver);
 
-static int local_finalize(void* resolver);
-static uint32_t local_get_uptime(void* resolver);
-static void local_set_uptime(void* resolver, uint32_t uptime);
-static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_t type);
-static int local_peer_disappeared(void* resolver, service_resolver* peer, uint16_t type);
+static int local_finalize(service_resolver* resolver);
+static uint32_t local_get_uptime(service_resolver* resolver);
+static void local_set_uptime(service_resolver* resolver, uint32_t uptime);
 
-static int local_register_services(void* resolver, service_resolver* peer,
+static void local_set_capabilities(service_resolver*resolver, uint32_t capabilities);
+
+static int local_peer_discovered(service_resolver* resolver, service_resolver* peer, uint16_t type);
+static int
+local_peer_disappeared(service_resolver* resolver, service_resolver* peer, uint16_t type);
+
+static int local_register_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl);
-static int local_register_services_async(void* resolver, service_resolver* peer,
+static int local_register_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl,
         service_resolver_callback* callback);
 
-static int local_unregister_services(void* resolver, service_resolver* peer,
+static int local_unregister_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address);
-static int local_unregister_services_async(void* resolver, service_resolver* peer,
+static int local_unregister_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address,
         service_resolver_callback* callback);
 
-static int local_query_services(void* resolver, service_resolver* peer,
+static int local_query_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc);
-static int local_query_services_async(void* resolver, service_resolver* peer,
+static int local_query_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, service_resolver_callback* callback);
 
-static int local_get_service_updates(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc*, size_t num_svc, stat_response* responses);
-static int local_get_service_updates_async(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc*, size_t num_svc, stat_response* responses,
+static int local_get_service_updates(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc*, size_t num_svc, stat_response* responses);
+static int local_get_service_updates_async(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc*, size_t num_svc, stat_response* responses,
         service_resolver_callback* callback);
 
-static int local_update_services(void* resolver, service_resolver* peer, uint16_t type,
+static int local_update_services(service_resolver* resolver, service_resolver* peer, uint16_t type,
         stat_response* responses);
 
-static int local_resolve_service(void* resolver, service_resolver* peer,
+static int local_resolve_service(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address);
 static int
-local_resolve_service_async(void* resolver, service_resolver* peer, struct service_desc* service,
-        struct net_addr* address, service_resolver_callback* callback);
+        local_resolve_service_async(service_resolver* resolver, service_resolver* peer,
+                struct service_desc* service, struct net_addr* address,
+                service_resolver_callback* callback);
 
-static int local_poke_resolver(void* resolver, service_resolver* peer, uint32_t count);
-static int local_poke_resolver_async(void* resolver, service_resolver* peer, uint32_t count,
-        service_resolver_callback* callback);
+static int local_poke_resolver(service_resolver* resolver, service_resolver* peer, uint32_t count);
+static int local_poke_resolver_async(service_resolver* resolver, service_resolver* peer,
+        uint32_t count, service_resolver_callback* callback);
 
-static void local_incref(void*resolver);
-static void local_decref(void*resolver);
+static void local_incref(service_resolver* resolver);
+static void local_decref(service_resolver* resolver);
 
-static service_resolver* local_get_peer(void* resolver, struct service_id* peer_id);
+static service_resolver* local_get_peer(service_resolver* resolver, struct service_id* peer_id);
 
-static int local_has_peer(void* resolver, struct service_id* peer_id);
-static int local_get_peer_count(void* resolver);
+static int local_has_peer(service_resolver* resolver, struct service_id* peer_id);
+static int local_get_peer_count(service_resolver* resolver);
+static void local_clear_peers(service_resolver* resolver);
 
 static struct sv_resolver_interface local_resolver_interface = {
 //eh?
@@ -149,11 +153,12 @@ static struct sv_resolver_interface local_resolver_interface = {
 
         .get_uptime = local_get_uptime,
         .set_uptime = local_set_uptime,
-
+        .set_address = base_resolver_set_address,
+        .set_capabilities = local_set_capabilities,
         .get_peer = local_get_peer,
         .has_peer = local_has_peer,
         .get_peer_count = local_get_peer_count,
-
+        .clear_peers = local_clear_peers,
         .peer_discovered = local_peer_discovered,
         .peer_disappeared = local_peer_disappeared,
         .register_services = local_register_services,
@@ -176,10 +181,12 @@ static struct sv_resolver_interface local_resolver_interface = {
         .poke_resolver = local_poke_resolver,
         .poke_resolver_async = local_poke_resolver_async };
 
-static int notify_peer_registration(void* resolver, service_resolver* peer, GArray* svc_list,
-        struct net_addr* address, uint32_t ttl, int type);
+static int notify_peer_registration(struct sv_local_resolver* lres, service_resolver* peer,
+        GArray* svc_list, struct net_addr* address, uint32_t ttl, int type);
+static void purge_peer_resolution(struct sv_local_resolver*lres, service_resolver* peer,
+        struct sockaddr_sv* sdesc);
 
-static service_resolver* local_get_peer(void* resolver, struct service_id* peer_id) {
+static service_resolver* local_get_peer(service_resolver* resolver, struct service_id* peer_id) {
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
@@ -189,10 +196,10 @@ static service_resolver* local_get_peer(void* resolver, struct service_id* peer_
     struct peer_info * peer = (struct peer_info*) g_hash_table_lookup(lres->peer_table, peer_id);
 
     task_mutex_unlock(&lres->peer_mutex);
-    return &peer->peer;
+    return peer->peer;
 }
 
-static int local_has_peer(void* resolver, struct service_id* peer_id) {
+static int local_has_peer(service_resolver* resolver, struct service_id* peer_id) {
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
@@ -206,7 +213,7 @@ static int local_has_peer(void* resolver, struct service_id* peer_id) {
     return res != NULL;
 }
 
-static int local_get_peer_count(void* resolver) {
+static int local_get_peer_count(service_resolver* resolver) {
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
@@ -220,22 +227,65 @@ static int local_get_peer_count(void* resolver) {
 
 }
 
-static void local_incref(void*resolver) {
+static void local_clear_peers(service_resolver* resolver) {
+    assert(resolver);
+
+    struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
+
+    task_mutex_lock(&lres->peer_mutex);
+
+    GHashTableIter iter;
+    g_hash_table_iter_init(&iter, lres->peer_table);
+    struct peer_info* pinfo;
+    service_resolver* peer;
+    while(g_hash_table_iter_next(&iter, NULL, (void**) &pinfo)) {
+        peer = pinfo->peer;
+        peer->interface->incref(peer);
+
+        g_hash_table_iter_remove(&iter);
+        /*could be a dangerous lock contention...TODO*/
+        task_rwlock_wrlock(&lres->res_lock);
+        purge_peer_resolution(lres, peer, NULL);
+
+        if(peer->resolver.relation == RELATION_PARENT) {
+            purge_peer_resolution(lres, peer, &peer->resolver.resolver_id);
+        }
+        task_rwlock_unlock(&lres->res_lock);
+
+        peer->interface->decref(peer);
+    }
+
+    task_mutex_unlock(&lres->peer_mutex);
+
+}
+
+static void local_set_capabilities(service_resolver*resolver, uint32_t capabilities) {
+    assert(resolver);
+
+    struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
+
+    task_rwlock_wrlock(&lres->res_lock);
+    lres->rpath->interface->set_capabilities(lres->rpath, capabilities);
+
+    task_rwlock_unlock(&lres->res_lock);
+}
+
+static void local_incref(service_resolver* resolver) {
     assert(resolver);
     base_resolver_incref(resolver);
 
 }
-static void local_decref(void*resolver) {
+static void local_decref(service_resolver* resolver) {
     assert(resolver);
     struct sv_local_resolver* localres = (struct sv_local_resolver*) resolver;
 
-    if(atomic_dec_and_test(&localres->resolver.resolver.ref_count)) {
-        local_finalize(resolver);
+    if(atomic_dec_and_test(&localres->resolver.ref_count)) {
+        resolver->interface->finalize(resolver);
         free(resolver);
     }
 }
 
-static uint32_t local_get_uptime(void* resolver) {
+static uint32_t local_get_uptime(service_resolver* resolver) {
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
@@ -245,57 +295,66 @@ static uint32_t local_get_uptime(void* resolver) {
     return (uint32_t) ((ctime - lres->start_time) / 1000);
 }
 
-static void local_set_uptime(void* resolver, uint32_t uptime) {
+static void local_set_uptime(service_resolver* resolver, uint32_t uptime) {
 
 }
 
-static void purge_peer_resolution(struct sv_local_resolver*lres, service_resolver* peer) {
+static void purge_peer_resolution(struct sv_local_resolver*lres, service_resolver* peer,
+        struct sockaddr_sv* sdesc) {
     /*if the peer is a parent, remove the default resolution*/
-    if(((struct sv_service_resolver*) peer->target)->relation == RELATION_PARENT) {
-        task_rwlock_wrlock(&lres->res_lock);
+    //struct service_reference ref;
+    //struct sockaddr_sv* sdesc = &peer->resolver.resolver_id;
+    //        bzero(&ref, sizeof(ref));
+    //        memcpy(&ref.instance.service, &peer->resolver.resolver_id,
+    //                sizeof(struct sockaddr_sv));
+    //        memcpy(&ref.instance.address, resolver_get_address(peer, 0),
+    //                sizeof(struct net_addr));
 
-        //struct service_reference ref;
-        struct sockaddr_sv* sdesc = &((struct sv_service_resolver*) peer->target)->resolver_id;
-        //        bzero(&ref, sizeof(ref));
-        //        memcpy(&ref.instance.service, &((struct sv_service_resolver*) peer->target)->resolver_id,
-        //                sizeof(struct sockaddr_sv));
-        //        memcpy(&ref.instance.address, resolver_get_address(peer->target, 0),
-        //                sizeof(struct net_addr));
-
+    if(sdesc) {
         service_table_remove_service_reference(&lres->resolution_table, sdesc->sv_flags,
-                sdesc->sv_prefix_bits, &sdesc->sv_srvid, resolver_get_address(peer->target, 0),
-                NULL);
+                sdesc->sv_prefix_bits, &sdesc->sv_srvid, resolver_get_address(peer, 0), NULL);
+    } else {
+        struct service_id dummy;
+        service_table_remove_service_reference(&lres->resolution_table, 0, 0, &dummy,
+                resolver_get_address(peer, 0), NULL);
+    }
 
-        struct service_resolution_stat res;
-        bzero(&res, sizeof(res));
+    struct service_resolution_stat res;
+    bzero(&res, sizeof(res));
+
+    if(sdesc) {
         res.res.sv_flags = sdesc->sv_flags;
         res.res.sv_prefix_bits = sdesc->sv_prefix_bits;
-
         memcpy(&res.res.srvid, &sdesc->sv_srvid, sizeof(struct service_id));
-        memcpy(&res.res.address, resolver_get_address(peer->target, 0), sizeof(struct net_addr));
-
-        //init_resolution_from_reference(&res, &ref);
-
-        lres ->rpath.interface->remove_resolutions(lres->rpath.target, &res, 1);
-        task_rwlock_unlock(&lres->res_lock);
     }
+
+    memcpy(&res.res.address, resolver_get_address(peer, 0), sizeof(struct net_addr));
+
+    //init_resolution_from_reference(&res, &ref);
+
+    lres->rpath->interface->remove_resolutions(lres->rpath, &res, 1);
+
 }
 
 /* TODO -start/stop/suspend/resume? */
 
-static void local_echo_callback(void* target, int status, void* data) {
-    assert(target);
-    struct peer_cb_info* cbinfo = (struct peer_cb_info*) target;
+static void local_echo_callback(service_resolver_callback* cb, int status, void* data) {
+    assert(cb);
+    struct peer_cb_info* cbinfo = (struct peer_cb_info*) cb->target;
 
+    enum resolver_state pstatus = ACTIVE;
     task_mutex_lock(&cbinfo->resolver->peer_mutex);
     if(status == -SV_TIMEOUT) {
         /* purge the peer */
 
         g_hash_table_remove(cbinfo->resolver->peer_table,
-                &((struct sv_service_resolver*) cbinfo->pinfo->peer.target)->resolver_id.sv_srvid);
+                &cbinfo->pinfo->peer->resolver.resolver_id.sv_srvid);
+        pstatus = UNRESPONSIVE;
+
     } else if(status == -SV_ERROR) {
         g_hash_table_remove(cbinfo->resolver->peer_table,
-                &((struct sv_service_resolver*) cbinfo->pinfo->peer.target)->resolver_id.sv_srvid);
+                &cbinfo->pinfo->peer->resolver.resolver_id.sv_srvid);
+        pstatus = UNRESPONSIVE;
     } else {
         /* all good - last access should already be updated, simply set
          * poking state to off
@@ -305,10 +364,22 @@ static void local_echo_callback(void* target, int status, void* data) {
 
     task_mutex_unlock(&cbinfo->resolver->peer_mutex);
 
-    purge_peer_resolution(cbinfo->resolver, &cbinfo->pinfo->peer);
+    if(pstatus > ACTIVE) {
+        notify_peer_status_callbacks((service_resolver*) cbinfo->resolver, cbinfo->pinfo->peer,
+                pstatus);
+    }
+
+    task_rwlock_wrlock(&cbinfo->resolver->res_lock);
+    purge_peer_resolution(cbinfo->resolver, cbinfo->pinfo->peer, NULL);
+
+    if(cbinfo->pinfo->peer->resolver.relation == RELATION_PARENT) {
+        purge_peer_resolution(cbinfo->resolver, cbinfo->pinfo->peer,
+                &cbinfo->pinfo->peer->resolver.resolver_id);
+    }
+    task_rwlock_unlock(&cbinfo->resolver->res_lock);
 
     /*decrementing the echo ref*/
-    cbinfo->pinfo->peer.interface->decref(cbinfo->pinfo->peer.target);
+    cbinfo->pinfo->peer->interface->decref(cbinfo->pinfo->peer);
 
     free(cbinfo);
 }
@@ -345,12 +416,12 @@ static void local_echo_task(void* data) {
         }
 
         /* last_access is not atomically updated... TODO */
-        lastup = ((struct sv_service_resolver*) rinfo->peer.target)->last_access;
+        lastup = rinfo->peer->resolver.last_access;
 
         if(ctime - lastup > lres->echo_interval) {
             /*count?*/
             rinfo->poking = TRUE;
-            rinfo->peer.interface->incref(rinfo->peer.target);
+            rinfo->peer->interface->incref(rinfo->peer);
 
             cbinfo = (struct peer_cb_info*) malloc(sizeof(*cbinfo));
             cbinfo->pinfo = rinfo;
@@ -358,7 +429,7 @@ static void local_echo_task(void* data) {
             cbinfo->cb.target = cbinfo;
             cbinfo->cb.service_resolver_cb = local_echo_callback;
 
-            rinfo->peer.interface->poke_resolver_async(rinfo->peer.target, &lres->self, 0,
+            rinfo->peer->interface->poke_resolver_async(rinfo->peer, &lres->resolver.resolver, 0,
                     &cbinfo->cb);
         }
     }
@@ -447,7 +518,7 @@ static void local_expire_task(void* data) {
     service_table_iter_destroy(&iter);
 
     if(ref_list->len > 0) {
-        lres->rpath.interface->remove_resolutions(lres->rpath.target,
+        lres->rpath->interface->remove_resolutions(lres->rpath,
                 (struct service_resolution_stat*) ref_list->data, ref_list->len);
     }
     g_array_free(ref_list, TRUE);
@@ -480,7 +551,7 @@ static void local_discover_task(void* data) {
     struct sv_local_resolver* lres = (struct sv_local_resolver*) data;
 
     /* default is to find peers on the local segment for now - do not propagate TODO */
-    lres->default_peer.interface->peer_discovered(lres->default_peer.target, &lres->self,
+    lres->default_peer->interface->peer_discovered(lres->default_peer, &lres->resolver.resolver,
             DISCOVER_NOTIFY);
 
     struct timeval cur;
@@ -503,32 +574,39 @@ static void destroy_peer_info(void* value) {
     }
 
     struct peer_info* pinfo = (struct peer_info*) value;
-
-    pinfo->peer.interface->decref(pinfo->peer.target);
-
+    pinfo->peer->interface->decref(pinfo->peer);
     free(pinfo);
 }
 
-void create_local_resolver(struct sockaddr_sv* local, uint32_t capabilities, uint32_t capacity,
-        service_resolver* default_res, resolution_path* spath, service_resolver* resolver) {
+static int local_handle_path_service_registered(resolution_path_callback* cb,
+        struct service_desc* service);
+static int local_handle_path_service_unregistered(resolution_path_callback* target,
+        struct service_desc* service);
+static int local_handle_path_stat_update(resolution_path_callback* target,
+        struct service_resolution_stat* res_stats, size_t scount);
+static int local_handle_path_resolve_service(resolution_path_callback* target,
+        struct service_desc* service, struct net_addr* address);
+
+service_resolver* create_local_service_resolver(struct sockaddr_sv* local, uint32_t capabilities,
+        uint32_t capacity, service_resolver* default_res, resolution_path* spath) {
     struct sv_local_resolver* lres = (struct sv_local_resolver*) malloc(sizeof(*lres));
 
     if(lres == NULL) {
         LOG_ERR("Could not allocate local resolver memory!");
-        return;
+        return NULL;
     }
 
     bzero(lres, sizeof(*lres));
-    create_base_resolver(&lres->resolver);
+    init_base_resolver(&lres->resolver);
 
-    memcpy(&lres->resolver.resolver.resolver_id, local, sizeof(struct sockaddr_sv));
+    memcpy(&lres->resolver.resolver.resolver.resolver_id, local, sizeof(struct sockaddr_sv));
 
     lres->start_time = get_current_time_ms();
 
     /*first address specified */
-    lres->resolver.resolver.capabilities = capabilities;
-    lres->resolver.resolver.capacity = capacity;
-    lres->resolver.resolver.relation = RELATION_SELF;
+    lres->resolver.resolver.resolver.capabilities = capabilities;
+    lres->resolver.resolver.resolver.capacity = capacity;
+    lres->resolver.resolver.resolver.relation = RELATION_SELF;
 
     /* addresses and auth/delegate service_descs added externally */
 
@@ -541,24 +619,65 @@ void create_local_resolver(struct sockaddr_sv* local, uint32_t capabilities, uin
     lres->disc_interval = DISCOVERY_INTERVAL;
     lres->expire_interval = EXPIRATION_INTERVAL;
     if(default_res) {
-        lres->default_peer = *default_res;
+        lres->default_peer = default_res;
     }
+
+    lres->path_callback.target = lres;
+    lres->path_callback.resolve_service = local_handle_path_resolve_service;
+    lres->path_callback.service_registered = local_handle_path_service_registered;
+    lres->path_callback.service_unregistered = local_handle_path_service_unregistered;
+    lres->path_callback.stat_update = local_handle_path_stat_update;
 
     if(spath) {
-        lres->rpath = *spath;
+        lres->rpath = spath;
+        spath->interface->set_path_callback(spath, &lres->path_callback);
     }
 
-    lres->self.target = lres;
-    lres->self.interface = &local_resolver_interface;
-
-    resolver->target = lres;
-    resolver->interface = &local_resolver_interface;
+    lres->resolver.resolver.interface = &local_resolver_interface;
+    return &lres->resolver.resolver;
 }
 
-static int local_initialize(void* resolver) {
+static int local_handle_path_service_registered(resolution_path_callback* cb,
+        struct service_desc* service) {
+    assert(cb);
+    service_resolver* res = (service_resolver*) cb->target;
+    return res->interface->register_services(res, NULL, service, 1, NULL, 0);
+}
+static int local_handle_path_service_unregistered(resolution_path_callback* cb,
+        struct service_desc* service) {
+    assert(cb);
+    service_resolver* res = (service_resolver*) cb->target;
+    return res->interface->unregister_services(res, NULL, service, 1, NULL);
+}
+
+static int local_handle_path_stat_update(resolution_path_callback* cb,
+        struct service_resolution_stat* res_stats, size_t scount) {
+    assert(cb);
+    service_resolver* res = (service_resolver*) cb->target;
+
+    stat_response resp;
+    resp.count = scount;
+    resp.type = SVS_INSTANCE_STATS;
+    /*TODO this is rather dangerous to assume - full binary compatibilitye between service_resolution_stat == sv_instance_stats*/
+    resp.data = (uint8_t*) res_stats;
+    return res->interface->update_services(res, NULL, SVS_INSTANCE_STATS, &resp);
+}
+
+static int local_handle_path_resolve_service(resolution_path_callback* cb,
+        struct service_desc* service, struct net_addr* address) {
+    assert(cb);
+    service_resolver* res = (service_resolver*) cb->target;
+    return res->interface->resolve_service(res, NULL, service, address);
+}
+
+static int local_initialize(service_resolver* resolver) {
     assert(resolver);
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
-    base_resolver_initialize(&lres->resolver);
+    int ret = base_resolver_initialize(&lres->resolver.resolver);
+
+    if(ret) {
+        return ret;
+    }
 
     task_mutex_init(&lres->peer_mutex);
     task_rwlock_init(&lres->res_lock);
@@ -566,39 +685,46 @@ static int local_initialize(void* resolver) {
     lres->peer_table = g_hash_table_new_full(service_id_prefix_hash, service_id_prefix_equal, NULL,
             destroy_peer_info);
 
-    //lres->default_peer.interface->initialize(lres->default_peer.target);
-    lres->default_peer.interface->incref(lres->default_peer.target);
+    //lres->default_peer->interface->initialize(lres->default_peer);
+    lres->default_peer->interface->incref(lres->default_peer);
 
     service_table_initialize(&lres->resolution_table);
-
     return 0;
 }
 
-static void local_start(void* resolver) {
+static void local_start(service_resolver* resolver) {
     assert(resolver);
+    if(resolver->resolver.state < INITIALIZED) {
+        return;
+    }
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
     /* start the discovery task */
     struct timeval cur;
     cur.tv_sec = lres->disc_interval;
     cur.tv_usec = 0;
     lres->discover_task = add_timer_task(lres, local_discover_task, &cur);
+    resolver->resolver.state = ACTIVE;
 }
 
-static void local_stop(void*resolver) {
+static void local_stop(service_resolver* resolver) {
     assert(resolver);
+    if(resolver->resolver.state < ACTIVE) {
+        return;
+    }
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
 
     if(lres->discover_task) {
         remove_timer_task(lres->discover_task);
     }
+    resolver->resolver.state = INITIALIZED;
 }
 
-static int local_finalize(void* resolver) {
+static int local_finalize(service_resolver* resolver) {
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
 
-    lres->default_peer.interface->decref(lres->default_peer.target);
+    lres->default_peer->interface->decref(lres->default_peer);
 
     task_mutex_destroy(&lres->peer_mutex);
     task_rwlock_destroy(&lres->res_lock);
@@ -617,14 +743,16 @@ static int local_finalize(void* resolver) {
 
     /* cancel the discover task */
     remove_timer_task(lres->discover_task);
-    base_resolver_finalize(&lres->resolver);
+    base_resolver_finalize(&lres->resolver.resolver);
+
+    //TODO - finalize the resolution path?
     return 0;
 }
 
-static void local_register_callback(void* target, int status, void* data) {
-    assert(target);
+static void local_register_callback(service_resolver_callback* cb, int status, void* data) {
+    assert(cb);
 
-    struct register_cb_info* cbinfo = (struct register_cb_info*) target;
+    struct register_cb_info* cbinfo = (struct register_cb_info*) cb->target;
 
     if(status == -SV_TIMEOUT) {
         if(cbinfo->type == SV_REGISTER_REQUEST) {
@@ -645,11 +773,9 @@ static void local_register_callback(void* target, int status, void* data) {
     free(cbinfo);
 }
 
-static int notify_peer_registration(void* resolver, service_resolver* peer, GArray* svc_list,
-        struct net_addr* address, uint32_t ttl, int type) {
-    assert(resolver);
-
-    struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
+static int notify_peer_registration(struct sv_local_resolver* lres, service_resolver* peer,
+        GArray* svc_list, struct net_addr* address, uint32_t ttl, int type) {
+    assert(lres);
 
     task_mutex_lock(&lres->peer_mutex);
 
@@ -663,11 +789,11 @@ static int notify_peer_registration(void* resolver, service_resolver* peer, GArr
 
     //int count = 0;
     while(g_hash_table_iter_next(&iter, NULL, (void**) &pinfo)) {
-        if(peer == &pinfo->peer) {
+        if(peer == pinfo->peer) {
             continue;
         }
 
-        if(((struct sv_service_resolver*) pinfo->peer.target)->relation == RELATION_PARENT) {
+        if(pinfo->peer->resolver.relation == RELATION_PARENT) {
             g_array_ref(svc_list);
             cbinfo = (struct register_cb_info*) malloc(sizeof(*cbinfo));
             cbinfo->pinfo = pinfo;
@@ -679,12 +805,13 @@ static int notify_peer_registration(void* resolver, service_resolver* peer, GArr
             cbinfo->cb.service_resolver_cb = local_register_callback;
 
             if(type == SV_REGISTER_REQUEST) {
-                pinfo->peer.interface->register_services_async(pinfo->peer.target, &lres->self,
-                        (struct service_desc*) svc_list->data, svc_list->len, address, ttl,
-                        &cbinfo->cb);
+                pinfo->peer->interface->register_services_async(pinfo->peer,
+                        &lres->resolver.resolver, (struct service_desc*) svc_list->data,
+                        svc_list->len, address, ttl, &cbinfo->cb);
             } else if(type == SV_UNREGISTER_REQUEST) {
-                pinfo->peer.interface->unregister_services_async(pinfo->peer.target, &lres->self,
-                        (struct service_desc*) svc_list->data, svc_list->len, address, &cbinfo->cb);
+                pinfo->peer->interface->unregister_services_async(pinfo->peer,
+                        &lres->resolver.resolver, (struct service_desc*) svc_list->data,
+                        svc_list->len, address, &cbinfo->cb);
 
             }
 
@@ -696,11 +823,12 @@ static int notify_peer_registration(void* resolver, service_resolver* peer, GArr
 }
 
 /*not responsible for the memory - caller is */
-static int local_register_services(void* resolver, service_resolver* peer,
+static int local_register_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl) {
     assert(resolver);
 
     if(peer != NULL && address == NULL) {
+        //remote registration must include an instance address
         return -EINVAL;
     }
 
@@ -709,8 +837,8 @@ static int local_register_services(void* resolver, service_resolver* peer,
 
     if(address == NULL) {
         /* it's a local registration*/
-        printf("Resolver address count: %i\n", resolver_get_address_count(lres));
-        address = resolver_get_address(lres, 0);
+        printf("Resolver address count: %i\n", resolver_get_address_count(resolver));
+        address = resolver_get_address(resolver, 0);
         assert(address);
     }
 
@@ -767,7 +895,7 @@ static int local_register_services(void* resolver, service_resolver* peer,
 
         count = service_table_add_service_reference(&lres->resolution_table, sref);
 
-        if(count == 0) {
+        if(count >= 1) {
             rcount++;
 
             if(ref_list) {
@@ -782,6 +910,7 @@ static int local_register_services(void* resolver, service_resolver* peer,
 
             sref = NULL;
             if(count == 1) {
+                /*only notify parent resolvers if this is the first instance*/
                 g_array_append_val(svc_list, services[i]);
             }
 
@@ -799,14 +928,14 @@ static int local_register_services(void* resolver, service_resolver* peer,
         /* remote peer registration - insert into the resolution path
          * this should follow some sort of policy - along with the setting of default priority, weight, and timeouts
          * */
-        lres->rpath.interface->add_resolutions(lres->rpath.target,
+        lres->rpath->interface->add_resolutions(lres->rpath,
                 (struct service_resolution*) ref_list->data, ref_list->len);
         g_array_free(ref_list, TRUE);
     }
 
-    if(rcount > 0 && (peer == NULL || peer->target != resolver)) {
+    if(rcount > 0 && (peer == NULL || peer != resolver)) {
         /* relies on an async callback, so the callback is reponsible for freeing the svc_list*/
-        notify_peer_registration(resolver, peer, svc_list, address, ttl, SV_REGISTER_REQUEST);
+        notify_peer_registration(lres, peer, svc_list, address, ttl, SV_REGISTER_REQUEST);
         g_array_unref(svc_list);
     } else {
         g_array_free(svc_list, TRUE);
@@ -828,13 +957,13 @@ static int local_register_services(void* resolver, service_resolver* peer,
 }
 
 //zero signifies error, anything else is a xid
-static int local_register_services_async(void* resolver, service_resolver* peer,
+static int local_register_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address, uint32_t ttl,
         service_resolver_callback* callback) {
     return 0;
 }
 
-static int local_unregister_services(void* resolver, service_resolver* peer,
+static int local_unregister_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address) {
     assert(resolver);
 
@@ -846,7 +975,7 @@ static int local_unregister_services(void* resolver, service_resolver* peer,
     /* peer can be self! */
 
     if(address == NULL) {
-        address = resolver_get_address(lres, 0);
+        address = resolver_get_address(resolver, 0);
         assert(address);
     }
 
@@ -903,15 +1032,15 @@ static int local_unregister_services(void* resolver, service_resolver* peer,
     task_rwlock_unlock(&lres->res_lock);
 
     if(peer) {
-        lres->rpath.interface->remove_resolutions(lres->rpath.target,
+        lres->rpath->interface->remove_resolutions(lres->rpath,
                 (struct service_resolution_stat*) ref_list->data, ref_list->len);
         g_array_free(ref_list, TRUE);
     }
 
     if(svc_list) {
-        if((peer == NULL || peer->target != resolver)) {
+        if((peer == NULL || peer != resolver)) {
             /* async unregistration - callback is reponsible for freeing svc_list*/
-            notify_peer_registration(resolver, peer, svc_list, address, 0, SV_UNREGISTER_REQUEST);
+            notify_peer_registration(lres, peer, svc_list, address, 0, SV_UNREGISTER_REQUEST);
             g_array_unref(svc_list);
         } else {
             g_array_free(svc_list, TRUE);
@@ -925,14 +1054,14 @@ static int local_unregister_services(void* resolver, service_resolver* peer,
     return rcount;
 }
 
-static int local_unregister_services_async(void* resolver, service_resolver* peer,
+static int local_unregister_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, struct net_addr* address,
         service_resolver_callback* callback) {
     return 0;
 }
 
 /* TODO this function would probably be more useful if it actually returned the full resolution set*/
-static int local_query_services(void* resolver, service_resolver* peer,
+static int local_query_services(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc) {
 
     assert(resolver);
@@ -972,12 +1101,12 @@ static int local_query_services(void* resolver, service_resolver* peer,
 
 }
 
-static int local_query_services_async(void* resolver, service_resolver* peer,
+static int local_query_services_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* services, size_t num_svc, service_resolver_callback* callback) {
     return 0;
 }
 
-static int local_update_services(void* resolver, service_resolver* peer, uint16_t type,
+static int local_update_services(service_resolver* resolver, service_resolver* peer, uint16_t type,
         stat_response* responses) {
     assert(resolver);
     if(responses == NULL) {
@@ -1030,7 +1159,6 @@ static int local_update_services(void* resolver, service_resolver* peer, uint16_
 
             for(; i < responses->count; i++) {
                 istat = &((struct sv_instance_stats*) responses->data)[i];
-                /* TODO -address?? */
                 sref = service_table_find_service_reference(&lres->resolution_table,
                         istat->service.flags, istat->service.prefix, &istat->service.service,
                         &istat->address);
@@ -1051,8 +1179,8 @@ static int local_update_services(void* resolver, service_resolver* peer, uint16_
     return 0;
 }
 
-static int local_get_service_updates(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc* services, size_t num_svc, stat_response* responses) {
+static int local_get_service_updates(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc* services, size_t num_svc, stat_response* responses) {
 
     /*note that responses should already be allocated - count capped by message sizes*/
     assert(resolver);
@@ -1078,8 +1206,8 @@ static int local_get_service_updates(void* resolver, service_resolver* peer, uin
              * these should really be batched vs. individual TODO*/
             for(; i < num_svc; i++) {
                 /* might need to specify resolutions vs. resolution stats*/
-                resolutions = lres->rpath.interface->get_resolutions(lres->rpath.target,
-                        &services[i], (struct service_resolution**) &sres);
+                resolutions = lres->rpath->interface->get_resolutions(lres->rpath, &services[i],
+                        (struct service_resolution**) &sres);
 
                 if(sres) {
 
@@ -1179,17 +1307,17 @@ static int local_get_service_updates(void* resolver, service_resolver* peer, uin
     return stat_index;
 }
 
-static int local_get_service_updates_async(void* resolver, service_resolver* peer, uint16_t type,
-        struct service_desc* desc, size_t num_svc, stat_response* responses,
+static int local_get_service_updates_async(service_resolver* resolver, service_resolver* peer,
+        uint16_t type, struct service_desc* desc, size_t num_svc, stat_response* responses,
         service_resolver_callback* callback) {
     return 0;
 }
 
-//    static int local_update_services_async(void* resolver, uint16_t type, struct service_desc*,
+//    static int local_update_services_async(service_resolver* resolver, uint16_t type, struct service_desc*,
 //            size_t num_svc, service_resolver_callback* callback);
 //
 //resolve multiple services?
-static int local_resolve_service(void* resolver, service_resolver* peer,
+static int local_resolve_service(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address) {
     assert(resolver);
     if(service == NULL) {
@@ -1219,12 +1347,12 @@ static int local_resolve_service(void* resolver, service_resolver* peer,
     error: return -1;
 }
 
-static int local_resolve_service_async(void* resolver, service_resolver* peer,
+static int local_resolve_service_async(service_resolver* resolver, service_resolver* peer,
         struct service_desc* service, struct net_addr* address, service_resolver_callback* callback) {
     return 0;
 }
 
-static int local_poke_resolver(void* resolver, service_resolver* peer, uint32_t count) {
+static int local_poke_resolver(service_resolver* resolver, service_resolver* peer, uint32_t count) {
     assert(resolver);
     if(peer == NULL) {
         return -EINVAL;
@@ -1235,12 +1363,12 @@ static int local_poke_resolver(void* resolver, service_resolver* peer, uint32_t 
      * */
     //update_last_updated(peer);
     //update_count(peer);
-    LOG_DBG("Locally poking resolver by peer %s\n", service_id_to_str(& ((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid));
+    LOG_DBG("Locally poking resolver by peer %s\n", service_id_to_str(&peer->resolver.resolver_id.sv_srvid));
 
     task_mutex_lock(&lres->peer_mutex);
 
     struct peer_info* pinfo = g_hash_table_lookup(lres->peer_table,
-            &((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid);
+            &peer->resolver.resolver_id.sv_srvid);
 
     if(pinfo == NULL) {
         /* inconsistency detected! */
@@ -1253,8 +1381,8 @@ static int local_poke_resolver(void* resolver, service_resolver* peer, uint32_t 
     return 0;
 }
 
-static int local_poke_resolver_async(void* resolver, service_resolver* peer, uint32_t count,
-        service_resolver_callback* callback) {
+static int local_poke_resolver_async(service_resolver* resolver, service_resolver* peer,
+        uint32_t count, service_resolver_callback* callback) {
     return 0;
 }
 
@@ -1263,7 +1391,7 @@ static int notify_discovery(struct sv_local_resolver* lres, struct peer_info* pi
 
     if(pinfo->last_discovery > pinfo->disc_cooldown) {
         pinfo->disc_cooldown = pinfo->last_discovery + DISCOVERY_COOLDOWN * 1000;
-        pinfo->peer.interface->peer_discovered(pinfo->peer.target, &lres->self, flags);
+        pinfo->peer->interface->peer_discovered(pinfo->peer, &lres->resolver.resolver, flags);
     }
 
     return 0;
@@ -1277,7 +1405,7 @@ static int propagate_discovery(struct sv_local_resolver* lres, struct peer_info*
      * also assumes that the peer lock is in effect
      * */
 
-    uint16_t rel = ((struct sv_service_resolver*) pinfo->peer.target)->relation;
+    uint16_t rel = pinfo->peer->resolver.relation;
     uint16_t prel = 0;
     if(rel == RELATION_CHILD || rel == RELATION_SELF || rel == RELATION_UNKNOWN || rel
             == RELATION_PARENT) {
@@ -1298,10 +1426,11 @@ static int propagate_discovery(struct sv_local_resolver* lres, struct peer_info*
                 continue;
             }
 
-            prel = ((struct sv_service_resolver*) rinfo->peer.target)->relation;
+            prel = rinfo->peer->resolver.relation;
 
             if(prel == RELATION_PEER) {
-                pinfo->peer.interface->peer_discovered(pinfo->peer.target, &lres->self, flags);
+                pinfo->peer->interface->peer_discovered(pinfo->peer, &lres->resolver.resolver,
+                        flags);
             }
         }
     }
@@ -1315,17 +1444,43 @@ static int should_retain_peer(struct sv_local_resolver* lres, service_resolver* 
      * along with ttl's and such
      */
 
-    uint16_t rel = ((struct sv_service_resolver*) peer->target)->relation;
+    uint16_t rel = peer->resolver.relation;
     return rel == RELATION_PARENT || rel == RELATION_CHILD;
 }
-static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_t flags) {
+
+static void add_peer_resolution(struct sv_local_resolver* lres, service_resolver* peer,
+        struct sockaddr_sv* sdesc) {
+    struct service_reference* ref = (struct service_reference*) malloc(sizeof(*ref));
+    bzero(ref, sizeof(*ref));
+
+    ref = (struct service_reference*) malloc(sizeof(*ref));
+    bzero(ref, sizeof(*ref));
+
+    ref->ttl = 0;
+    ref->weight = DEFAULT_SERVICE_WEIGHT;
+    ref->priority = DEFAULT_SERVICE_PRIORITY;
+
+    if(sdesc) {
+        memcpy(&ref->instance.service, sdesc, sizeof(*sdesc));
+    }
+    memcpy(&ref->instance.address, resolver_get_address(peer, 0), sizeof(struct net_addr));
+
+    service_table_add_service_reference(&lres->resolution_table, ref);
+
+    struct service_resolution res;
+    init_resolution_from_reference(&res, ref);
+
+    lres ->rpath->interface->add_resolutions(lres->rpath, &res, 1);
+}
+
+static int local_peer_discovered(service_resolver* resolver, service_resolver* peer, uint16_t flags) {
     assert(resolver);
 
     if(peer == NULL) {
         return -SV_ERR_SYSTEM_ERROR;
     }
 
-    LOG_DBG("Locally discovred peer %s\n", service_id_to_str(& ((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid));
+    LOG_DBG("Locally discovered peer %s\n", service_id_to_str(&peer->resolver.resolver_id.sv_srvid));
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
     int retval = 0;
@@ -1335,22 +1490,21 @@ static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_
      */
     task_mutex_lock(&lres->peer_mutex);
 
-    if(g_hash_table_lookup_extended(lres->peer_table,
-            &((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid, NULL,
+    if(g_hash_table_lookup_extended(lres->peer_table, &peer->resolver.resolver_id.sv_srvid, NULL,
             (void**) &pinfo)) {
         /* the peer has been updated - its still good to respond in case he's forgotten about us
          * might need to "limit" the # of response and propagations per peer - NACK table?
          * */
 
         /* update the actual peer if the objects differ */
-        if(peer->target != pinfo->peer.target) {
+        if(peer != pinfo->peer) {
             //TODO
         }
     } else if(should_retain_peer(lres, peer)) {
         /*decide whether or not to add in the peer based on relationship and other factors */
         pinfo = (struct peer_info*) malloc(sizeof(*pinfo));
         bzero(pinfo, sizeof(*pinfo));
-        pinfo->peer = *peer;
+        pinfo->peer = peer;
 
         if(g_hash_table_size(lres->peer_table) == 0) {
             struct timeval cur;
@@ -1359,10 +1513,9 @@ static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_
             lres->echo_task = add_timer_task(lres, local_echo_task, &cur);
         }
 
-        g_hash_table_insert(lres->peer_table,
-                &((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid, pinfo);
+        g_hash_table_insert(lres->peer_table, &peer->resolver.resolver_id.sv_srvid, pinfo);
 
-        pinfo->peer.interface->incref(pinfo->peer.target);
+        pinfo->peer->interface->incref(pinfo->peer);
 
     } else {
         retval = -SV_ERR_PEER_DECLINED;
@@ -1372,43 +1525,31 @@ static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_
     pinfo->disc_count++;
     pinfo->last_discovery = get_current_time_ms();
 
+    /*inc ref for notification and discovery*/
+    pinfo->peer->interface->incref(pinfo->peer);
+    task_mutex_unlock(&lres->peer_mutex);
+
+    /*default is to install a resolution rule for the peer's SID, regardless of relation*/
+    task_rwlock_wrlock(&lres->res_lock);
+    add_peer_resolution(lres, peer, &pinfo->peer->resolver.resolver_id);
+
+    /*if the peer is a parent, install the default resolutions*/
+    if(pinfo->peer->resolver.relation == RELATION_PARENT) {
+        add_peer_resolution(lres, peer, NULL);
+    }
+    task_rwlock_unlock(&lres->res_lock);
+
     if(PROPAGATE_TTL(flags) > 0) {
         propagate_discovery(lres, pinfo, DEC_PROPAGATE_TTL(flags, 1));
     }
 
-    pinfo->peer.interface->incref(pinfo->peer.target);
-    task_mutex_unlock(&lres->peer_mutex);
-
     /*peer reference inc'd*/
     if(flags & DISCOVER_NOTIFY) {
+        /*respond back to peer with discovery*/
         notify_discovery(lres, pinfo, flags & ~DISCOVER_NOTIFY);
     }
 
-    /*if the peer is a parent, install the default resolutions*/
-    if(((struct sv_service_resolver*) pinfo->peer.target)->relation == RELATION_PARENT) {
-        task_rwlock_wrlock(&lres->res_lock);
-
-        struct service_reference* ref = (struct service_reference*) malloc(sizeof(*ref));
-        bzero(ref, sizeof(*ref));
-        ref->ttl = 0;
-        ref->weight = DEFAULT_SERVICE_WEIGHT;
-        ref->priority = DEFAULT_SERVICE_PRIORITY;
-        memcpy(&ref->instance.service,
-                &((struct sv_service_resolver*) pinfo->peer.target)->resolver_id,
-                sizeof(struct sockaddr_sv));
-        memcpy(&ref->instance.address, resolver_get_address(pinfo->peer.target, 0),
-                sizeof(struct net_addr));
-
-        service_table_add_service_reference(&lres->resolution_table, ref);
-
-        struct service_resolution res;
-        init_resolution_from_reference(&res, ref);
-
-        lres ->rpath.interface->add_resolutions(lres->rpath.target, &res, 1);
-
-        task_rwlock_unlock(&lres->res_lock);
-    }
-    pinfo->peer.interface->decref(pinfo->peer.target);
+    pinfo->peer->interface->decref(pinfo->peer);
     return retval;
 
     decline: task_mutex_unlock(&lres->peer_mutex);
@@ -1416,13 +1557,14 @@ static int local_peer_discovered(void* resolver, service_resolver* peer, uint16_
     return retval;
 }
 
-static int local_peer_disappeared(void* resolver, service_resolver* peer, uint16_t flags) {
+static int local_peer_disappeared(service_resolver* resolver, service_resolver* peer,
+        uint16_t flags) {
     assert(resolver);
     if(peer == NULL) {
         return -SV_ERR_PEER_UNKNOWN;
     }
 
-    LOG_DBG("Locally disappered peer %s\n", service_id_to_str(& ((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid));
+    LOG_DBG("Locally disappeared peer %s\n", service_id_to_str(&peer->resolver.resolver_id.sv_srvid));
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
     int retval = 0;
@@ -1431,17 +1573,16 @@ static int local_peer_disappeared(void* resolver, service_resolver* peer, uint16
      */
     task_mutex_lock(&lres->peer_mutex);
 
-    if(g_hash_table_lookup_extended(lres->peer_table,
-            &((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid, NULL, NULL)) {
+    if(g_hash_table_lookup_extended(lres->peer_table, &peer->resolver.resolver_id.sv_srvid, NULL,
+            NULL)) {
         /* the peer has been updated - its still good to respond in case he's forgotten about us
          * might need to "limit" the # of response and propagations per peer - NACK table?
          * */
 
         /*for the purge use*/
-        peer->interface->incref(peer->target);
+        peer->interface->incref(peer);
 
-        g_hash_table_remove(lres->peer_table,
-                &((struct sv_service_resolver*) peer->target)->resolver_id.sv_srvid);
+        g_hash_table_remove(lres->peer_table, &peer->resolver.resolver_id.sv_srvid);
     } else {
         retval = -SV_ERR_PEER_UNKNOWN;
         goto error;
@@ -1449,14 +1590,21 @@ static int local_peer_disappeared(void* resolver, service_resolver* peer, uint16
     /*of the hash table reference*/
     task_mutex_unlock(&lres->peer_mutex);
 
-    /*if the peer is a parent, remove the default resolution*/
-    purge_peer_resolution(lres, peer);
+    notify_peer_status_callbacks((service_resolver*) lres, peer, DISAPPEARED);
+    /*remove the default resolutions*/
+    task_rwlock_wrlock(&lres->res_lock);
+    purge_peer_resolution(lres, peer, NULL);
+
+    if(peer->resolver.relation == RELATION_PARENT) {
+        purge_peer_resolution(lres, peer, &peer->resolver.resolver_id);
+    }
+    task_rwlock_unlock(&lres->res_lock);
 
     if(PROPAGATE_TTL(flags) > 0) {
         //propagate_disappearance(lres, peer, DEC_PROPAGATE_TTL(flags, 1));
     }
 
-    peer->interface->decref(peer->target);
+    peer->interface->decref(peer);
 
     out: return retval;
 

@@ -16,16 +16,28 @@
 #include "task.h"
 #include <glib.h>
 
+/* Note how the rpc handler will maintain a separate
+ * callback info per peer remote resolver to handle
+ * incoming requests. The resolver_rpc here maintains
+ * the incoming request/response cache, while the
+ * dual/pair peer->resolver_rpc is responsible for
+ * output request delivery/reliability. Maintaining
+ * separate req/resp caches eliminates the possibility
+ * of txn ID collision to allow for independent full
+ * duplex req streams. Moreover, the underlying udp
+ * message channel mechanism relies on remote-SID
+ * dispatch to map packets to their appropriate handlers
+ */
 struct callback_info {
     /* cache reference - may be invalid - incref? */
-    service_resolver peer;
+    service_resolver* peer;
     /* request rate, etc? */
-    resolver_rpc rpc;
+    resolver_rpc* rpc;
     struct server_rpc_handler* handler;
 };
 
 struct server_rpc_handler {
-    service_resolver resolver;
+    service_resolver* resolver;
 
     /* TODO - this really needs to lock the dispatch table....*/
     /* should be removed on peer removal */
@@ -36,6 +48,7 @@ struct server_rpc_handler {
     /* default messaging for unknown peers */
     struct callback_info def_callback;
     resolver_message_callback callback;
+    peer_status_callback status_callback;
 };
 
 struct server_rpc_handler* create_server_rpc_handler(service_resolver* res);

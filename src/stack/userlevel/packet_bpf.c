@@ -38,6 +38,7 @@ static int packet_bpf_init(struct net_device *dev)
         struct bpf_program bpfp = 
                 { sizeof(insns) / sizeof(struct bpf_insn), insns };
         unsigned int i;
+        struct timeval to = { 0, 100000 };
         int ret;
 
         /* Try to find a free bpf device */
@@ -74,16 +75,6 @@ static int packet_bpf_init(struct net_device *dev)
                 return -1;
         }
 
-        i = 1;
-
-        ret = ioctl(dev->fd, BIOCIMMEDIATE, &i);
-        
-        if (ret == -1) {
-                LOG_ERR("bpf BIOCIMMEDIATE ioctl: %s\n", 
-                        strerror(errno));
-                goto fail_ioctl;
-        }
-        
         ret = ioctl(dev->fd, BIOCSETF, &bpfp);
 
         if (ret == -1) {
@@ -112,6 +103,26 @@ static int packet_bpf_init(struct net_device *dev)
                 goto fail_ioctl;
         }
         
+        i = 1;
+
+        ret = ioctl(dev->fd, BIOCIMMEDIATE, &i);
+        
+        if (ret == -1) {
+                LOG_ERR("bpf BIOCIMMEDIATE ioctl: %s\n", 
+                        strerror(errno));
+                goto fail_ioctl;
+        }
+
+        /*
+        ret = ioctl(dev->fd, BIOCSRTIMEOUT, &to);
+                   
+
+        if (ret == -1) {
+                LOG_ERR("bpf BIOCSRTIMEOUT ioctl: %s\n", 
+                        strerror(errno));
+                goto fail_ioctl;
+        }   
+        */
         priv->buf = (unsigned char *)malloc(priv->buflen);
 
         if (!priv->buf) {

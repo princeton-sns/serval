@@ -180,7 +180,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         pskb_pull(skb, sizeof(*udph));
 
         
-        LOG_PKT("data len=%u skb->len=%u\n", 
+        LOG_DBG("data len=%u skb->len=%u\n",
                 datalen, skb->len); 
                 
         /* Ideally, this trimming would not be necessary. However, it
@@ -233,10 +233,8 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 		return -EOPNOTSUPP;
 
 	if (msg->msg_name) {
-		struct sockaddr_sv *svaddr = 
-                        (struct sockaddr_sv *)msg->msg_name;
-                struct sockaddr_in *inaddr = 
-                        (struct sockaddr_in *)(svaddr + 1);
+		struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
+        struct sockaddr_in *inaddr = (struct sockaddr_in *)(svaddr + 1);
 
 		if ((unsigned)msg->msg_namelen < sizeof(*svaddr))
 			return -EINVAL;
@@ -246,32 +244,33 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 				return -EAFNOSUPPORT;
 		}
                 
-                srvid = &svaddr->sv_srvid;
-                
-                /* Check for advisory IP address */
-                if ((unsigned)msg->msg_namelen >= 
-                    (sizeof(*svaddr) + sizeof(*inaddr))) {
-                                
-                        if (inaddr->sin_family != AF_INET)
-                                return -EAFNOSUPPORT;
+        srvid = &svaddr->sv_srvid;
+
+        /* Check for advisory IP address */
+        LOG_DBG("dest sid: %s, sock addr len: %i\n", service_id_to_str(&svaddr->sv_srvid), msg->msg_namelen);
+        if ((unsigned)msg->msg_namelen >=
+            (sizeof(*svaddr) + sizeof(*inaddr))) {
+
+            if (inaddr->sin_family != AF_INET)
+                return -EAFNOSUPPORT;
 #if defined(ENABLE_DEBUG)
-                        {
-                                char buf[20];
-                                LOG_DBG("Advisory IP %s\n",
-                                        inet_ntop(inaddr->sin_family, 
-                                          &inaddr->sin_addr,
-                                                  buf, sizeof(buf)));
-                        }
+            {
+                char buf[20];
+                LOG_DBG("Advisory IP %s\n",
+                        inet_ntop(inaddr->sin_family,
+                        &inaddr->sin_addr,
+                        buf, sizeof(buf)));
+            }
 #endif
-                        netaddr = (struct net_addr *)&inaddr->sin_addr;
-                }
-        } else if (sk->sk_state != SERVAL_CONNECTED) {
-                return -EDESTADDRREQ;
+            netaddr = (struct net_addr *)&inaddr->sin_addr;
         }
+    } else if (sk->sk_state != SERVAL_CONNECTED) {
+            return -EDESTADDRREQ;
+    }
 
-        ulen += sizeof(struct udphdr);
+    ulen += sizeof(struct udphdr);
 
-        lock_sock(sk);
+    lock_sock(sk);
 
 	timeo = sock_sndtimeo(sk, nonblock);
 
@@ -321,24 +320,24 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                               struct msghdr *msg, size_t len, int nonblock, 
                               int flags, int *addr_len)
 {
-        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
-        int retval = -ENOMEM;
+    struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
+    int retval = -ENOMEM;
 	long timeo;
         
-        lock_sock(sk);
+    lock_sock(sk);
 
-        if (sk->sk_state == SERVAL_CLOSED) {
-                /* SERVAL_CLOSED is a valid state here because recvmsg
-                 * should return 0 and not an error */
+    if (sk->sk_state == SERVAL_CLOSED) {
+            /* SERVAL_CLOSED is a valid state here because recvmsg
+             * should return 0 and not an error */
 		retval = -ENOTCONN;
 		goto out;
 	}
 
-        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
-                retval = -EINVAL;
-                LOG_DBG("address length is incorrect\n");
-                goto out;
-        }
+    if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
+            retval = -EINVAL;
+            LOG_DBG("address length is incorrect\n");
+            goto out;
+    }
 
 	timeo = sock_rcvtimeo(sk, nonblock);
 
@@ -348,17 +347,17 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		if (skb)
 			goto found_ok_skb;
 	
-                if (sk->sk_err) {
-                        retval = sock_error(sk);
-                        LOG_ERR("sk=%p error=%d\n",
-                                sk, retval);
-                        break;
-                }
+        if (sk->sk_err) {
+                retval = sock_error(sk);
+                LOG_ERR("sk=%p error=%d\n",
+                        sk, retval);
+                break;
+        }
 
-                if (sk->sk_shutdown & RCV_SHUTDOWN) {
-                        retval = 0;
-                        break;
-                }
+        if (sk->sk_shutdown & RCV_SHUTDOWN) {
+                retval = 0;
+                break;
+        }
 
 		if (sk->sk_state == SERVAL_CLOSED) {
 			if (!sock_flag(sk, SOCK_DONE)) {
@@ -377,45 +376,46 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 		if (signal_pending(current)) {
 			retval = sock_intr_errno(timeo);
+			LOG_DBG("signal pending failed here\n");
 			break;
 		}
 
-                sk_wait_data(sk, &timeo);
+        sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
-                if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
-                        retval = 0;
-                        goto found_fin_ok;
-                }
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+                retval = 0;
+                goto found_fin_ok;
+        }
 
 		if (len >= skb->len) {
 			retval = skb->len;
-                        len = skb->len;
-                } else if (len < skb->len) {
+            len = skb->len;
+        } else if (len < skb->len) {
 			msg->msg_flags |= MSG_TRUNC;
-                        retval = len;
-                }
+            retval = len;
+        }
                 
-                /* Copy service id */
-                if (svaddr) {
-                        size_t addrlen = msg->msg_namelen;
-                        
-                        svaddr->sv_family = AF_SERVAL;
-                        *addr_len = sizeof(*svaddr);
-                        memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid, 
-                               sizeof(svaddr->sv_srvid));
-                        
-                        /* Copy also IP address if possible */
-                        if (addrlen >= (sizeof(*svaddr) + 
-                                        sizeof(struct sockaddr_in))) {
-                                struct sockaddr_in *inaddr = 
-                                        (struct sockaddr_in *)(svaddr + 1);
-                                inaddr->sin_family = AF_INET;
-                                memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
-                                       sizeof(ip_hdr(skb)->saddr));
-                                *addr_len += sizeof(*inaddr);
-                        }
-                }
+        /* Copy service id */
+        if (svaddr) {
+            size_t addrlen = msg->msg_namelen;
+
+            svaddr->sv_family = AF_SERVAL;
+            *addr_len = sizeof(*svaddr);
+            memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid,
+                   sizeof(svaddr->sv_srvid));
+
+            /* Copy also IP address if possible */
+            if (addrlen >= (sizeof(*svaddr) +
+                            sizeof(struct sockaddr_in))) {
+                struct sockaddr_in *inaddr =
+                        (struct sockaddr_in *)(svaddr + 1);
+                inaddr->sin_family = AF_INET;
+                memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
+                       sizeof(ip_hdr(skb)->saddr));
+                *addr_len += sizeof(*inaddr);
+            }
+        }
                                 
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */
@@ -432,7 +432,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	} while (1);
 out:
         release_sock(sk);
-        
+        LOG_DBG("final retval: %i\n", retval);
         return retval;
 }
 
@@ -723,17 +723,17 @@ ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
 struct proto serval_udp_proto = {
 	.name			= "SERVAL_UDP",
 	.owner			= THIS_MODULE,
-        .init                   = serval_udp_init_sock,
-        .destroy                = serval_udp_destroy_sock,        
+    .init                   = serval_udp_init_sock,
+    .destroy                = serval_udp_destroy_sock,
 	.close  		= serval_srv_close,   
-        .connect                = serval_srv_connect,
+    .connect                = serval_srv_connect,
 	.disconnect 		= serval_udp_disconnect,
 	.shutdown		= serval_udp_shutdown,
-        .sendmsg                = serval_udp_sendmsg,
-        .recvmsg                = serval_udp_recvmsg,
+    .sendmsg                = serval_udp_sendmsg,
+    .recvmsg                = serval_udp_recvmsg,
 	.backlog_rcv		= serval_srv_do_rcv,
-        .hash                   = serval_sock_hash,
-        .unhash                 = serval_sock_unhash,
+    .hash                   = serval_sock_hash,
+    .unhash                 = serval_sock_unhash,
 	.max_header		= UDP_MAX_HDR,
 	.obj_size		= sizeof(struct serval_udp_sock),
 };

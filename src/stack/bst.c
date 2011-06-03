@@ -114,33 +114,33 @@ static struct bst_node *stack_pop(struct list_head *stack)
 
 int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
 {
-       struct list_head stack;
-       int len = 0;
-
+        struct list_head stack;
+        int len = 0;
+        
         if (buflen <= 0)
                 return len;
-
-       INIT_LIST_HEAD(&stack);
-
-       stack_push(&stack, n);
-       
-       while (!list_empty(&stack)) {
-               n = stack_pop(&stack);
-               if (n) {
-                       if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
-                               if (n->ops && n->ops->print) {
-                                       len += n->ops->print(n, buf + len, 
-                                                            buflen - len);
-                               }
-                       }
-                       if (n->right)
-                               stack_push(&stack, n->right);
-
-                       if (n->left)
-                               stack_push(&stack, n->left);
-               }
-       }
-       return len;
+        
+        INIT_LIST_HEAD(&stack);
+        
+        stack_push(&stack, n);
+        
+        while (!list_empty(&stack)) {
+                n = stack_pop(&stack);
+                if (n) {
+                        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                                if (n->ops && n->ops->print) {
+                                        len += n->ops->print(n, buf + len, 
+                                                             buflen - len);
+                                }
+                        }
+                        if (n->right)
+                                stack_push(&stack, n->right);
+                        
+                        if (n->left)
+                                stack_push(&stack, n->left);
+                }
+        }
+        return len;
 }
 
 /*
@@ -284,6 +284,8 @@ static void __bst_node_destroy(struct bst_node *n)
                         n->tree->entries--;
                 }
                 bst_node_reset_flag(n, BST_FLAG_ACTIVE);
+                n->ops = NULL;
+                n->private = NULL;
         }
 }
 
@@ -349,8 +351,42 @@ int bst_subtree_func(struct bst_node *n,
                      int (*func)(struct bst_node *, void *arg),
                      void *arg)
 {
-        int count = 0, ret;
+        struct list_head stack;
+        int ret = 0, count = 0;
+        
+        INIT_LIST_HEAD(&stack);
+        
+        stack_push(&stack, n);
+        
+        while (!list_empty(&stack)) {
+                n = stack_pop(&stack);
+                if (n) {
+                        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                                
+                                ret = func(n, arg);
+                                
+                                if (ret < 0)
+                                        return ret;
+                                
+                                count += ret;
+                        }
+                        if (n->right)
+                                stack_push(&stack, n->right);
+                        
+                        if (n->left)
+                                stack_push(&stack, n->left);
+                }
+        }
+        return count;
+}
 
+/* Apply function to subtree recursively */
+int bst_subtree_func_recursive(struct bst_node *n, 
+                               int (*func)(struct bst_node *, void *arg),
+                               void *arg)
+{
+        int count = 0, ret;
+        
         if (!n)
                 return count;
 
@@ -400,17 +436,21 @@ static int bst_node_init(struct bst_node *n,
                          struct bst_node_ops *ops, 
                          void *private)
 {
-        if (n->ops)
+        if (n->ops) {
+                LOG_ERR("ops already set\n");
                 return -1;
-        
-        if (n->private)
+        }        
+        if (n->private) {
+                LOG_ERR("private already set\n");
                 return -1;
+        }
 
         n->ops = ops;
         n->private = private;
         
         if (ops && ops->init) {
                 if (ops->init(n) < 0) {
+                        LOG_ERR("init failed\n");
                         return -1;
                 }
         }
@@ -418,8 +458,6 @@ static int bst_node_init(struct bst_node *n,
 }
 
 static struct bst_node *bst_create_node(struct bst_node *parent,
-                                        struct bst_node_ops *ops,
-                                        void *private,
                                         void *prefix, 
                                         unsigned int prefix_size,
                                         unsigned int prefix_bits,
@@ -443,6 +481,8 @@ static struct bst_node *bst_create_node(struct bst_node *parent,
         n->tree = parent->tree;
 	n->left = NULL;
 	n->right = NULL;
+        n->ops = NULL;
+        n->private = NULL;
 	n->parent = parent;
 	n->flags = 0;
         n->prefix_size = prefix_size;
@@ -450,11 +490,7 @@ static struct bst_node *bst_create_node(struct bst_node *parent,
 	memcpy(n->prefix, prefix, n->prefix_size);
         INIT_LIST_HEAD(&n->lh);
         
-        if (bst_node_init(n, ops, private) == -1) {
-                FREE(n);
-                return NULL;
-        }
-        
+    
 	/* 
 	   Compute a mask that zeros out the extra bits that we might
 	   have copied in the last byte of the prefix.
@@ -488,12 +524,10 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
                                      gfp_t alloc)
 {
 
-        struct bst_node *n;
+        struct bst_node *n = NULL;
         
         while (1) {
                 n =  bst_create_node(parent,
-                                     ops,
-                                     private,
                                      prefix,
                                      PREFIX_SIZE(parent->prefix_bits + 1),
                                      prefix_bits,
@@ -520,7 +554,7 @@ static struct bst_node *bst_node_new(struct bst_node *parent,
                                 break;
                 }
         }
-
+        
         return n;
 }
 
@@ -545,14 +579,18 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
         if (n->prefix_bits < prefix_bits) {
                 n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
 		
-		if (!n)
+		if (!n) {
+                        LOG_ERR("node_new failed\n");
 			return NULL;
-
-	} else {
-                if (bst_node_init(n, ops, private) == -1)
-                        return NULL;
+                }
         }
         
+        if (bst_node_init(n, ops, private) == -1) {
+                LOG_ERR("node_init failed\n");
+                /* TODO: handle init failure... cleanup tree? */
+                return NULL;
+        }
+
         bst_node_set_flag(n, BST_FLAG_ACTIVE);
       
 	return n;
@@ -575,6 +613,8 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
                 memset(tree->root, 0, sizeof(*tree->root));
                 tree->root->left = tree->root->right = NULL;
                 tree->root->parent = tree->root;
+                tree->root->ops = NULL;
+                tree->root->private = NULL;
                 tree->root->flags = 0;
                 tree->root->prefix_bits = 0;
                 tree->root->tree = tree;
@@ -595,15 +635,18 @@ void bst_remove_node(struct bst *tree, struct bst_node *n)
         bst_node_remove(n);
 }
 
-void bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
+int bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
 {
         struct bst_node *n;
 
         n = bst_find_longest_prefix(tree, prefix, prefix_bits);
         
         if (n && n->prefix_bits == prefix_bits) {
-                bst_remove_node(tree, n);
+            bst_remove_node(tree, n);
+            return 1;
         }
+
+        return 0;
 }
 
 int bst_print(struct bst *tree, char *buf, int buflen)

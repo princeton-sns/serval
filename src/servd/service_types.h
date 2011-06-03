@@ -9,6 +9,8 @@
 #define SERVICE_TYPES_H_
 #include "netinet/serval.h"
 #include "serval/atomic.h"
+#include "resolver.h"
+#include "libstack/resolver_protocol.h"
 #include "task.h"
 
 #define DEFAULT_SERVICE_PRIORITY 5000;
@@ -23,6 +25,18 @@ struct sv_resolver;
 #define FALSE 0
 #endif
 
+enum component_state {
+    COMP_CREATED = 0,
+    COMP_INITIALIZED,
+    COMP_STARTED,
+    COMP_SUSPENDED
+};
+
+#define is_created(state) (state == COMP_CREATED)
+#define is_initialized(state) (state >= COMP_INITIALIZED)
+#define is_started(state) (state >= COMP_STARTED)
+#define is_suspended(state) (state >= COMP_SUSPENDED)
+
 struct sv_instance_addr {
     struct sockaddr_sv service;
     union {
@@ -31,6 +45,7 @@ struct sv_instance_addr {
         struct sockaddr_in6 sin6;
     } address;
 };
+
 
 //TODO what is the size of this thing, esp. with sockaddr_sv having 3 bytes before the serviceID
 struct service_reference {
@@ -52,7 +67,7 @@ struct service_reference {
     uint32_t tokens_consumed;
 
     /* source resolver? */
-    struct sv_resolver* resolver;
+    service_resolver* resolver;
 
     /* data from the actual instance/source SR */
     uint32_t peer_instance_count;
@@ -105,6 +120,24 @@ struct message_barrier {
 
 };
 
+void init_message_barrier(struct message_barrier* barrier,
+        void* priv_data, uint16_t type, barrier_handler sh,
+        barrier_handler fh, callback_trigger cbt);
+
+static inline int get_stat_size(uint16_t type) {
+    switch(type) {
+        case SVS_INSTANCE_STATS:
+            return sizeof(struct sv_instance_stats);
+        case SVS_SERVICE_STATS:
+            return sizeof(struct sv_service_stats);
+        case SVS_TABLE_STATS:
+            return sizeof(struct sv_table_stats);
+        case SVS_ROUTER_STATS:
+            return sizeof(struct sv_router_stats);
+        default:
+            return 0;
+    }
+}
 
 void message_barrier_default_cb(struct message_barrier* barrier, uint16_t type, const void* message,
         size_t len);

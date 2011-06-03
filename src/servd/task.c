@@ -28,7 +28,7 @@
 #define MAX_CACHED_TASKS 15
 
 /* this is a tiny stack, but it really depends on the type of functions we're writing
- * places a limit on the depth of the call task and especially recursion
+ * places a limit on the depth of the call stack and especially recursion
  */
 #define DEFAULT_STACK_SIZE 9192
 

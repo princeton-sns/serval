@@ -1,4 +1,4 @@
-AC_INIT([serval-stack], 0.1, [serval@lists.cs.princeton.edu])
+AC_INIT([Serval], 0.1, [serval@lists.cs.princeton.edu])
 
 dnl support for cross compiling
 AC_CANONICAL_SYSTEM

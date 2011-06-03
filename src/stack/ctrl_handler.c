@@ -49,28 +49,46 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_resolution *cmr = (struct ctrlmsg_resolution *)cm;
         int num_res = CTRL_NUM_SERVICES(cmr, cmr->cmh.len);
-#if defined(ENABLE_DEBUG)
-        //char ipstr[20];
-        LOG_DBG("adding %i services\n", num_res);
-#endif         
-
 
 
         /* TODO - flags, etc */
         int i = 0;
+        int index = 0;
         struct service_resolution* res;
+        struct net_device* dev = NULL;
+        int err = 0;
+
+#if defined(ENABLE_DEBUG)
+        //char ipstr[20];
+        LOG_DBG("adding %i services, msg size %i,res size %i\n", num_res, sizeof(*cmr), cmr->cmh.len - sizeof(*cmr));
+#endif
+
         for(i = 0; i < num_res;i++) {
             res = &cmr->resolution[i];
             if (res->sv_prefix_bits > (sizeof(res->srvid)*8)) {
                 res->sv_prefix_bits = (uint8_t) (sizeof(res->srvid) * 8);
             }
 
-            service_add(&res->srvid, res->sv_prefix_bits, res->sv_flags, res->priority, res->weight,
+            dev = dev_get_by_index(NULL, res->if_index);
+
+            LOG_DBG("Adding service id: %s(%i) @ address %i, priority %i, weight %i\n", service_id_to_str(&res->srvid), res->sv_prefix_bits, res->address.net_un.un_ip.s_addr, res->priority, res->weight);
+            err = service_add(&res->srvid, res->sv_prefix_bits, res->sv_flags, res->priority, res->weight,
                                        &res->address, sizeof(res->address),
-                                       NULL, GFP_KERNEL);
+                                       dev, GFP_KERNEL);
+
+            if(err > 0) {
+               if(index < i) {
+                    /*copy it over */
+                    memcpy(&cmr->resolution[index], res, sizeof(*res));
+                }
+                index++;
+            }
+            else {
+                LOG_ERR("Error adding service: %i\n", err);
+            }
         }
 
-        /*TODO for now - assume all services added - best bet is to clear out invalid adds */
+        cm->len = sizeof(*cmr) + index * sizeof(struct service_resolution);
         ctrl_sendmsg(cm, GFP_KERNEL);
         return 0;
 }
@@ -103,10 +121,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         struct in_addr *ip = NULL;
         uint32_t null_ip = 0;
         int num_res = CTRL_NUM_STAT_SERVICES(cmr, cmr->cmh.len);
-#if defined(ENABLE_DEBUG)
-        //char ipstr[20];
-        LOG_DBG("deleting %i services\n", num_res);
-#endif
 
         //int size = sizeof(struct ctrlmsg_resolution) + num_res * sizeof(struct service_resolution_stat);
         //struct ctrlmsg_resolution *cms = (struct ctrlmsg_resolution *) MALLOC(size, GFP_KERNEL);
@@ -117,15 +131,19 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         //cms->cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
 
         int i = 0;
-        //int j = 0;
+        int index = 0;
         struct dest_stats dstat;
-        //struct service_resolution*res;
         struct service_resolution_stat *stats = (struct service_resolution_stat*) &cmr->resolution;
         struct service_resolution_stat *sres;
         struct service_entry* se;
         int err = 0;
+
+#if defined(ENABLE_DEBUG)
+        //char ipstr[20];
+        LOG_DBG("deleting %i services\n", num_res);
+#endif
+
         for(i = 0; i < num_res;i++) {
-            //sres = &cmr->resolution[i];
             sres = &stats[i];
 
             if (sres->res.sv_prefix_bits > (sizeof(sres->res.srvid)*8)) {
@@ -155,22 +173,29 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 sres->bytes_resolved = dstat.bytes_resolved;
                 sres->packets_dropped = dstat.packets_dropped;
                 sres->bytes_dropped = dstat.packets_dropped;
+
+                if(index < i) {
+                    memcpy(&stats[index], sres, sizeof(*sres));
+                }
+                index++;
+            }
+            else {
+                LOG_ERR("Could not remove service %s: %i\n", service_id_to_str(&sres->res.srvid), err);
             }
 
             service_entry_put(se);
         }
 
-        //cms->cmh.len = sizeof(*cms) + j * sizeof(struct service_resolution_stat);
-        //ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
+        cm->len = sizeof(*cmr) + index * sizeof(struct service_resolution_stat);
         ctrl_sendmsg(cm, GFP_KERNEL);
-        //FREE(cms);
+
         return 0;
 }
 
-static int ctrl_handle_set_transit_msg(struct ctrlmsg *cm)
+static int ctrl_handle_capabilities_msg(struct ctrlmsg *cm)
 {
-    struct ctrlmsg_set_transit *cmt = (struct ctrlmsg_set_transit*)cm;
-    atomic_set(&serval_transit, cmt->transit);
+    struct ctrlmsg_capabilities *cmt = (struct ctrlmsg_capabilities*)cm;
+    atomic_set(&serval_transit, cmt->capabilities & SVSTK_TRANSIT);
     return 0;
 }
 
@@ -180,15 +205,19 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
         struct in_addr *ip = NULL;
         uint32_t null_ip = 0;
         int num_res = CTRL_NUM_SERVICES(cmr, cmr->cmh.len);
+
+        int i = 0;
+        int index = 0;
+        int err = 0;
+        struct service_resolution*res;
+
 #if defined(ENABLE_DEBUG)
         //char ipstr[20];
         LOG_DBG("modifying %i services\n", num_res);
 #endif
 
-        int i = 0;
-        struct service_resolution*res;
         for(i = 0; i < num_res;i++) {
-            res= &cmr->resolution[i];
+            res = &cmr->resolution[i];
             if (res->sv_prefix_bits > (sizeof(res->srvid)*8)) {
                 res->sv_prefix_bits = (uint8_t) (sizeof(res->srvid) * 8);
             }
@@ -197,12 +226,21 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                     ip = &res->address.net_un.un_ip;
             }
 
-            service_modify(&res->srvid, res->sv_prefix_bits, res->sv_flags, res->priority, res->weight, ip, ip ? sizeof(res->address) : 0, NULL);
-//            service_del_dest(&res->srvid, res->sv_prefix_bits,
-//                             ip, ip ? sizeof(res->address) : 0);
+            LOG_DBG("Modifying: %s flags(%i) bits(%i)\n", service_id_to_str(&res->srvid), res->sv_flags, res->sv_prefix_bits);
+            err = service_modify(&res->srvid, res->sv_prefix_bits, res->sv_flags, res->priority, res->weight, ip, ip ? sizeof(res->address) : 0, NULL);
+            if(err > 0) {
+                if(index < i) {
+                    /*copy it over */
+                    memcpy(&cmr->resolution[index], res, sizeof(*res));
+                }
+                index++;
+            }
+            else {
+                LOG_ERR("Could not modify service %s: %i\n", service_id_to_str(&res->srvid), err);
+            }
         }
 
-        /*TODO for now - assume all services added - best bet is to clear out invalid mods */
+        cm->len = sizeof(*cmr) + index * sizeof(*res);
         ctrl_sendmsg(cm, GFP_KERNEL);
         return 0;
 }
@@ -210,21 +248,19 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_get_service *cmg = (struct ctrlmsg_get_service *)cm;
-
+        struct service_entry *se = service_find(&cmg->srvid, cmg->sv_prefix_bits);
+        struct service_resolution_iter iter;
+        int i = 0;
+        struct service_resolution* res;
+        struct dest* dst;
 
 #if defined(ENABLE_DEBUG)
         //char ipstr[20];
         LOG_DBG("getting service: %s\n", service_id_to_str(&cmg->srvid));
 #endif
 
-        struct service_entry *se = service_find(&cmg->srvid, cmg->sv_prefix_bits);
-
         if(se) {
 
-            struct service_resolution_iter iter;
-            int i = 0;
-            struct service_resolution* res;
-            struct dest* dst;
             memset(&iter, 0, sizeof(iter));
 
             int size = sizeof(struct ctrlmsg_resolution) + se->count * sizeof(struct service_resolution);
@@ -249,9 +285,9 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                 memcpy(&res->srvid, &cmg->srvid, sizeof(cmg->srvid));
                 memcpy(&res->address, dst->dst, dst->dstlen);
                 res->sv_prefix_bits = cmg->sv_prefix_bits;
-                res->sv_flags = cmg->sv_flags;
+                res->sv_flags = service_resolution_iter_get_flags(&iter);
                 res->weight = dst->weight;
-                //TODO res->priority =
+                res->priority = service_resolution_iter_get_priority(&iter);
             }
 
             service_resolution_iter_destroy(&iter);
@@ -298,22 +334,27 @@ static int _ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 {
     struct ctrlmsg_stats *cms = (struct ctrlmsg_stats*)cm;
+    struct table_stats tstats;
 
     memset(&cms->stats, 0, sizeof(cms->stats));
     if(atomic_read(&serval_transit)) {
         cms->stats.capabilities = SVSTK_TRANSIT;
     }
 
-    struct table_stats tstats;
     memset(&tstats, 0, sizeof(tstats));
 
     service_get_stats(&tstats);
 
     cms->stats.instances = tstats.instances;
+    cms->stats.services = tstats.services;
     cms->stats.bytes_resolved = tstats.bytes_resolved;
     cms->stats.packets_resolved = tstats.packets_resolved;
     cms->stats.bytes_dropped = tstats.bytes_dropped;
     cms->stats.packets_dropped = tstats.packets_dropped;
+
+    LOG_DBG("service stats: instances(%i) services(%i) bytes resolved(%i) packets resolved(%i) capabilities\n",
+            tstats.instances, tstats.services, tstats.bytes_resolved,
+            tstats.packets_resolved, cms->stats.capabilities);
 
     ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
     return 0;
@@ -331,5 +372,5 @@ ctrlmsg_handler_t handlers[] = {
         ctrl_handle_mod_service_msg,
         ctrl_handle_get_service_msg,
         ctrl_handle_service_stats_msg,
-        ctrl_handle_set_transit_msg
+        ctrl_handle_capabilities_msg
 };

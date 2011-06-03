@@ -19,7 +19,7 @@
 #include <stdint.h>
 #include <pthread.h>
 /*should move task_cond def to a private header file*/
-#include "serval/list.h"
+#include <serval/list.h>
 
 /* define a thread-based version */
 

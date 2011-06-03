@@ -27,10 +27,10 @@ struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
 
-extern int loopback_init(void);
 extern int telnet_init(void);
 extern void telnet_fini(void);
 extern unsigned int debug;
+extern int stackid;
 
 #define MAX(x, y) (x >= y ? x : y)
 
@@ -133,7 +133,7 @@ void garbage_collect_clients(unsigned long data)
 #define TCP_SERVER_PATH "/tmp/serval-tcp.sock"
 #endif 
 
-static const char *server_sock_path[] = {
+static char *server_sock_path[] = {
 	UDP_SERVER_PATH,
 	TCP_SERVER_PATH
 };
@@ -143,30 +143,41 @@ static int server_run(void)
 	sigset_t sigset, orig_sigset;
 	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
-        int timer_list_signal[2];
+    int timer_list_signal[2];
+    char tcp_buffer[128];
+    char udp_buffer[128];
 
-        /* pipe/signal to tell us when a new timer timeout must be
-         * scheduled */
-        ret = pipe(timer_list_signal);
+    /* pipe/signal to tell us when a new timer timeout must be
+     * scheduled */
+    ret = pipe(timer_list_signal);
 
-        if (ret == -1) {
-                LOG_ERR("could not open signal pipe: %s\n",
-                        strerror(errno));
-                return -1;
-        }
+    if (ret == -1) {
+            LOG_ERR("could not open signal pipe: %s\n",
+                    strerror(errno));
+            return -1;
+    }
 
 	sigemptyset(&sigset);
-        sigaddset(&sigset, SIGTERM);
-        sigaddset(&sigset, SIGHUP);
-        sigaddset(&sigset, SIGINT);
-	
-        /* Block the signals we are watching here so that we can
-         * handle them in pselect instead. */
-        sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
+    sigaddset(&sigset, SIGTERM);
+    sigaddset(&sigset, SIGHUP);
+    sigaddset(&sigset, SIGINT);
+
+    /* Block the signals we are watching here so that we can
+     * handle them in pselect instead. */
+    sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
 	
 	if (should_exit) {
-                goto out_close_pipe;
-        }
+        goto out_close_pipe;
+    }
+
+	if(stackid > 0) {
+
+	    sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
+	    sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
+
+	    server_sock_path[0] = udp_buffer;
+	    server_sock_path[1] = tcp_buffer;
+	}
 
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
 		server_sock[i] = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -281,9 +292,9 @@ static int server_run(void)
 			continue;
 		}
 		
-                if (FD_ISSET(timer_list_signal[0], &readfds)) {
-                        timer_list_signal_lower();
-                }
+        if (FD_ISSET(timer_list_signal[0], &readfds)) {
+                timer_list_signal_lower();
+        }
 		if (FD_ISSET(ctrl_getfd(), &readfds)) {
 			ret = ctrl_recvmsg();
 
@@ -336,7 +347,7 @@ static int server_run(void)
 		}
 	}
 	
-        client_list_lock(&client_list);
+    client_list_lock(&client_list);
 
 	while (!list_empty(&client_list.head)) {
 		struct client *c = __client_list_first_entry(&client_list);
@@ -356,7 +367,7 @@ static int server_run(void)
                 __client_list_del(c);
 		client_put(c);
 	}
-        client_list_unlock(&client_list);
+    client_list_unlock(&client_list);
 
 out_close_socks:
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
@@ -388,57 +399,65 @@ int main(int argc, char **argv)
         action.sa_handler = signal_handler;
         
 	/* The server should shut down on these signals. */
-        sigaction(SIGTERM, &action, 0);
+    sigaction(SIGTERM, &action, 0);
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 	
-        client_list_init(&client_list);
+    client_list_init(&client_list);
 
-        /* Seed random number generator */
-        gettimeofday(&now, NULL);
+    /* Seed random number generator */
+    gettimeofday(&now, NULL);
 
-        srandom((unsigned int)now.tv_sec);
+    srandom((unsigned int)now.tv_sec);
 
 	argc--;
 	argv++;
         
 	while (argc) {
-                if (strcmp(argv[0], "-i") == 0 ||
+        if (strcmp(argv[0], "-i") == 0 ||
 		    strcmp(argv[0], "--interface") == 0) {
 			dev_list_add(argv[1]);
 			argv++;
 			argc--;
 		} else if (strcmp(argv[0], "-d") == 0 ||
-                           strcmp(argv[0], "--daemon") == 0) {
-                        daemon = 1;
+                    strcmp(argv[0], "--daemon") == 0) {
+		    daemon = 1;
 		} else if (strcmp(argv[0], "-dl") == 0 ||
                            strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--debug-level") == 0) {
-                        char *p = NULL;
-                        unsigned int d = strtoul(argv[1], &p, 10);
-                        
-                        if (*argv[1] != '\0' && *p == '\0') {
-                                argv++;
-                                argc--;
-                                LOG_DBG("Setting debug to %u\n", d);
-                                debug = d;
-                        } else {
-                                fprintf(stderr, "Invalid debug setting %s\n",
-                                        argv[1]);
-                        }
+            char *p = NULL;
+            unsigned int d = strtoul(argv[1], &p, 10);
+
+            if (*argv[1] != '\0' && *p == '\0') {
+                    argv++;
+                    argc--;
+                    LOG_DBG("Setting debug to %u\n", d);
+                    debug = d;
+            } else {
+                    fprintf(stderr, "Invalid debug setting %s\n",
+                            argv[1]);
+            }
 		} 
+		else if (strcmp(argv[0], "-s") == 0 || strcmp(argv[0], "-stackid")) {
+		    stackid = atoi(argv[1]);
+		    if(stackid < 0) {
+		        stackid = 0;
+		    }
+		    argv++;
+		    argc--;
+		}
 		argc--;
 		argv++;
 	}	
       
-        if (daemon) {
-                ret = daemonize();
+    if (daemon) {
+        ret = daemonize();
 
-                if (ret < 0) {
-                        LOG_ERR("Could not make daemon\n");
-                        return -1;
-                } 
+        if (ret < 0) {
+                LOG_ERR("Could not make daemon\n");
+                return -1;
         }
+    }
 
 	ret = serval_init();
 
@@ -448,15 +467,6 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
-    ret = loopback_init();
-
-    if (ret == -1) {
-        LOG_ERR("Could not initialize IP loopback\n");
-                netdev_fini();
-        return -1;
-    }
-
-
 	ret = ctrl_init();
 	
 	if (ret == -1) {

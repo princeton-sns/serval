@@ -41,6 +41,7 @@ Cli::Cli(int fd)
   _proto.v = SERVAL_PROTO_UDP;
   lerr("cli construct");
   INIT_LIST_HEAD(&lh);
+  pthread_mutex_init(&_lock, NULL);
 }
 
 Cli::Cli(const Cli &c)
@@ -54,11 +55,13 @@ Cli::Cli(const Cli &c)
   strcpy(_cli.sun_path, c._cli.sun_path);
   _proto.v = SERVAL_PROTO_UDP;
   INIT_LIST_HEAD(&lh);
+  pthread_mutex_init(&_lock, NULL);
 }
 
 Cli::~Cli()
 {
   unlink(_cli.sun_path);
+  pthread_mutex_destroy(&_lock);
 }
 
 int
@@ -303,8 +306,8 @@ Cli::has_unread_data(int atleast, bool &v, sv_err_t &err) const
     err = errno;
     return -1;
   }
-  info("has_unread_data: found %d bytes, need atleast %d bytes",
-       n, atleast);
+  info("has_unread_data: found %d bytes, need atleast %d bytes type: %i",
+       n, atleast, buf[1]);
   if (n >= atleast)
     v = true;
   else

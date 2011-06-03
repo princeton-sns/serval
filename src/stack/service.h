@@ -46,12 +46,14 @@ struct service_resolution_iter {
 
 struct table_stats {
     uint32_t instances;
+    uint32_t services;
     uint32_t packets_resolved;
     uint32_t bytes_resolved;
     uint32_t packets_dropped;
     uint32_t bytes_dropped;
 };
 
+/* TODO - should this include the device ifindex?*/
 struct dest_stats {
     uint32_t duration_sec;
     uint32_t duration_nsec;
@@ -130,6 +132,8 @@ void service_resolution_iter_init(struct service_resolution_iter* iter, struct s
 void service_resolution_iter_destroy(struct service_resolution_iter* iter);
 struct dest *service_resolution_iter_next(struct service_resolution_iter* iter);
 void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, int packets, int bytes);
+int service_resolution_iter_get_priority(struct service_resolution_iter* iter);
+int service_resolution_iter_get_flags(struct service_resolution_iter* iter);
 
 int service_entry_dest_fill(struct service_entry *se, void *dst,
                             int dstlen);

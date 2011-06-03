@@ -25,7 +25,7 @@
 //
 
 RecvRsp::RecvRsp(int err)
-        :Message(RECV_RSP), _nsbuf(0), _nonserial_len(0), _flags(0), _err(err)
+        :Message(RECV_RSP), _ipaddr(0), _nsbuf(0), _nonserial_len(0), _flags(0), _err(err)
 {
     memset(&_src_obj_id, 0xff, sizeof(_src_obj_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
@@ -34,7 +34,7 @@ RecvRsp::RecvRsp(int err)
 uint16_t
 RecvRsp::serial_pld_len() const
 {
-    return sizeof(_src_obj_id) 
+    return sizeof(_src_obj_id) + sizeof(_ipaddr)
             + sizeof(_nonserial_len) 
             + sizeof(_flags) 
             + sizeof(_err);
@@ -47,7 +47,7 @@ RecvRsp::check_type() const
 }
 
 RecvRsp::RecvRsp(unsigned char *buf, uint16_t buflen, int flags, int err)
-        :Message(RECV_RSP), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
+        :Message(RECV_RSP), _ipaddr(0), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
          _err(err)
 {
     memset(&_src_obj_id, 0xff, sizeof(_src_obj_id));
@@ -56,7 +56,7 @@ RecvRsp::RecvRsp(unsigned char *buf, uint16_t buflen, int flags, int err)
 
 RecvRsp::RecvRsp(const sv_srvid_t& src_obj_id,
                  unsigned char *buf, uint16_t buflen, int flags)
-        :Message(RECV_RSP), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
+        :Message(RECV_RSP), _ipaddr(0), _nsbuf(buf), _nonserial_len(buflen), _flags(flags),
          _err(SERVAL_OK)
 {
     memcpy(&_src_obj_id, &src_obj_id, sizeof(src_obj_id));
@@ -68,6 +68,7 @@ RecvRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_src_obj_id, p);
+    p += serial_write(_ipaddr, p);
     p += serial_write(_nonserial_len, p);
     p += serial_write(_flags, p);
     p += serial_write(_err, p);
@@ -79,6 +80,7 @@ RecvRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_src_obj_id, p);
+    p += serial_read(&_ipaddr, p);
     p += serial_read(&_nonserial_len, p);
     p += serial_read(&_flags, p);
     p += serial_read(&_err, p);
@@ -89,8 +91,8 @@ void
 RecvRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: src_obj_id = %s, buflen=%d, flags=%d, err=%d\n",
-         label, oid_to_str(&_src_obj_id), _nonserial_len, _flags, _err.v);
+    info("%s: src_obj_id = %s, src_ipaddr = %u, buflen=%d, flags=%d, err=%d\n",
+         label, oid_to_str(&_src_obj_id), _ipaddr, _nonserial_len, _flags, _err.v);
 }
 
 //
@@ -137,8 +139,7 @@ RecvReq::read_serial_payload(const unsigned char *buf)
 void
 RecvReq::print(const char *label) const
 {
-    info("here 1");
     Message::print(label);
     info("%s: len=%d", label, _len);
-    info("here 2");
+
 }

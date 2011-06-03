@@ -38,10 +38,6 @@ extern int __init packet_init(void);
 extern void __exit packet_fini(void);
 extern int __init service_init(void);
 extern void __exit service_fini(void);
-#if defined(OS_USER)
-extern int __init neighbor_init(void);
-extern void __exit neighbor_fini(void);
-#endif
 
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
@@ -584,6 +580,21 @@ static int serval_shutdown(struct socket *sock, int how)
 
 	lock_sock(sk);
 
+	if (!host_ctrl_mode) {
+        struct ctrlmsg_register cm;
+        int ret = 0;
+        cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
+        cm.cmh.len = sizeof(cm);
+        cm.sv_flags = serval_sk(sk)->srvid_flags;
+        cm.sv_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
+        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, sizeof(cm.srvid));
+        ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
+
+        if (ret < 0) {
+                LOG_INF("servd not running?\n");
+        }
+    }
+
 	if (sock->state == SS_CONNECTING) {
                 /*
 		if ((1 << sk->sk_state) &
@@ -621,6 +632,7 @@ static int serval_shutdown(struct socket *sock, int how)
 
 	/* Wake up anyone sleeping in poll. */
 	sk->sk_state_change(sk);
+
 	release_sock(sk);
 
         return err;
@@ -927,14 +939,6 @@ int __init serval_init(void)
 {
         int err = 0;
 
-#if defined(OS_USER)
-        err = neighbor_init();
-
-        if (err < 0) {
-                LOG_CRIT("Cannot initialize neighbor table\n");
-                goto fail_neighbor;
-        }
-#endif
         err = service_init();
 
         if (err < 0) {
@@ -982,11 +986,7 @@ fail_packet:
 fail_sock:
         service_fini();
 fail_service:
-#if defined(OS_USER)
-        neighbor_fini();
-fail_neighbor:
-#endif
-        goto out;
+        goto out;      
 }
 
 #if defined(OS_LINUX_KERNEL)
@@ -1000,7 +1000,4 @@ void __exit serval_fini(void)
         packet_fini();
         serval_sock_tables_fini();
         service_fini();
-#if defined(OS_USER)
-        neighbor_fini();
-#endif
 }

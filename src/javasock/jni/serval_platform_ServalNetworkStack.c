@@ -743,7 +743,7 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 jint Java_serval_platform_ServalNetworkStack_getSocketFlags(JNIEnv *env, 
 							    jobject obj)
 {
-	LOG_WARN("Not implemented!\n");
+	/* LOG_WARN("Not implemented!\n"); */
 	return 0;
 }
 

@@ -8,10 +8,7 @@ LOCAL_SRC_FILES := \
 	debug.c \
 	platform.c \
         bst.c \
-	neighbor.c \
         service.c \
-	input.c \
-	output.c \
 	ctrl_handler.c \
 	af_serval.c \
 	serval_sock.c \
@@ -28,7 +25,7 @@ LOCAL_SRC_FILES := \
 	userlevel/wait.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \
-	userlevel/packet_linux.c \
+	userlevel/packet_raw.c \
 	userlevel/ctrl.c \
 	userlevel/telnet.c \
 	userlevel/serval.c
@@ -39,10 +36,7 @@ SERVAL_HDR = \
 	af_serval.h \
 	ctrl.h \
 	bst.h \
-	neighbor.h \
         service.h \
-	input.h \
-	output.h \
 	serval_sock.h \
 	serval_udp_sock.h \
 	serval_tcp_sock.h \

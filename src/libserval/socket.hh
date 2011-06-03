@@ -18,7 +18,15 @@
 #include "migrate.hh"
 
 #define SERVAL_SOCKET_ERROR -2
+#define MAX_MSG_SIZE 1500
 
+/* TODO
+ * As it stands, the user space serval socket library does NOT support full duplex
+ * operation (concurrent send/receive), since all operations traverse the same
+ * unix domain socket and must be serialized: send cli req/recv cli resp. To properly
+ * interleave send_sv/recv_sv requests, we probably need to add a cli response
+ * demultiplexing facility
+ */
 class SVSockLib {
 public:
   SVSockLib(int scafd_id = 0);
@@ -44,6 +52,11 @@ public:
 		  sv_err_t &err);
   ssize_t recv_sv(int socket, void *buffer, size_t length, int flags, 
 		  sv_err_t &err);
+  ssize_t sendmsg_sv(int socket, const struct msghdr *message, int flags,
+          sv_err_t &err);
+  ssize_t recvmsg_sv(int socket, struct msghdr *message, int flags,
+          sv_err_t &err);
+
   int close_sv(int soc, sv_err_t &err);
   
   ssize_t sendto_sv(int socket, const void *buffer, size_t length, int flags,
@@ -89,16 +102,16 @@ private:
   int check_state_for_recvfrom(const Cli &cli, sv_err_t &err) const;
   
   int query_scafd_bind(const struct sockaddr_sv *sv_addr, 
-		       const Cli &cli, sv_err_t &err);
+		       Cli &cli, sv_err_t &err);
   int query_scafd_connect(const struct sockaddr_sv *sv_addr, 
 			  bool nb, Cli &cli, sv_err_t &err);
   int query_scafd_soerror(Cli &cli, sv_err_t &err);
-  int query_scafd_listen(int backlog, const Cli &cli, sv_err_t &err);
+  int query_scafd_listen(int backlog, Cli &cli, sv_err_t &err);
   int query_scafd_listen(int backlog, const sv_srvid_t& local_obj_id, 
-			 const Cli &cli, sv_err_t &err);
-  int query_scafd_accept1(bool nb, const Cli &cli, AcceptRsp &aresp,
+			 Cli &cli, sv_err_t &err);
+  int query_scafd_accept1(bool nb, Cli &cli, AcceptRsp &aresp,
 			  sv_err_t &err);
-  int query_scafd_accept2(bool nb, const Cli &cli, const AcceptRsp &aresp,
+  int query_scafd_accept2(bool nb, Cli &cli, const AcceptRsp &aresp,
 			  sv_err_t &err);
   int query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
 		       Cli &cli, sv_err_t &err);
@@ -106,9 +119,10 @@ private:
 			 const void *buffer, size_t length, int flags,
 			 Cli &cli, sv_err_t &err);
   int query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, int flags,
-                       sv_srvid_t &src_obj_id, Cli &cli, sv_err_t &err);
-  int query_scafd_close(const Cli &cli, sv_err_t &err);
-  int query_scafd_migrate(const Cli &cli, sv_err_t &err);
+                       sv_srvid_t &src_obj_id, uint32_t& src_ipaddr,
+                       Cli &cli, sv_err_t &err);
+  int query_scafd_close(Cli &cli, sv_err_t &err);
+  int query_scafd_migrate(Cli &cli, sv_err_t &err);
   
   struct sockaddr_un _tcp_srv;
   struct sockaddr_un _udp_srv;

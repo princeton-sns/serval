@@ -37,7 +37,7 @@
  */
 
 struct sv_netlink_message_channel {
-    struct base_message_channel base;
+    struct sv_message_channel_base base;
     int protocol;
     int pid;
     atomic_t seq_num;
@@ -52,17 +52,17 @@ struct sv_netlink_message_channel {
     task_mutex mutex;
 };
 
-static int netlink_initialize(void* channel);
-static void netlink_start(void* channel);
-static int netlink_finalize(void* channel);
-static const struct sockaddr* netlink_get_local_address(void* target, int* len);
-static void netlink_set_peer_address(void* target, struct sockaddr* addr, size_t len);
-static const struct sockaddr* netlink_get_peer_address(void* target, int* len);
-static int netlink_send(void* channel, void *message, size_t datalen);
+static int netlink_initialize(message_channel* channel);
+static void netlink_start(message_channel* channel);
+static int netlink_finalize(message_channel* channel);
+static const struct sockaddr* netlink_get_local_address(message_channel* channel, int* len);
+static void netlink_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len);
+static const struct sockaddr* netlink_get_peer_address(message_channel* channel, int* len);
+static int netlink_send(message_channel* channel, void *message, size_t datalen);
 static int
-netlink_send_iov(void* channel, struct iovec* iov, size_t veclen, size_t datalen);
+netlink_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t datalen);
 
-static int netlink_recv(void* channel, const void *message, size_t datalen);
+static int netlink_recv(message_channel* channel, const void *message, size_t datalen);
 static void netlink_recv_task(void* channel);
 
 static struct sv_message_channel_interface netlink_mc_interface = {
@@ -80,7 +80,7 @@ static struct sv_message_channel_interface netlink_mc_interface = {
         .send_message_iov = netlink_send_iov,
         .recv_message = netlink_recv };
 
-static int _netlink_send(void* channel, struct iovec* iov, size_t veclen);
+static int _netlink_send(struct sv_netlink_message_channel* nchannel, struct iovec* iov, size_t veclen);
 
 static inline void skip_seq_num(struct sv_netlink_message_channel* nchannel, uint32_t seq_num) {
     task_mutex_lock(&nchannel->mutex);
@@ -199,14 +199,14 @@ static void ack_seq_num(struct sv_netlink_message_channel* nchannel, uint32_t se
     /*errors?*/
 }
 
-void create_netlink_message_channel(int protocol, int buffer_len, int reliable,
-        message_channel_callback* callback, message_channel* channel) {
+message_channel* create_netlink_message_channel(int protocol, int buffer_len, int reliable,
+        message_channel_callback* callback) {
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) malloc(
             sizeof(struct sv_netlink_message_channel));
 
     if(nchannel == NULL) {
         LOG_ERR("Could not allocate netlink message channel memory");
-        return;
+        return NULL;
     }
 
     bzero(nchannel, sizeof(*nchannel));
@@ -223,20 +223,22 @@ void create_netlink_message_channel(int protocol, int buffer_len, int reliable,
         nchannel->reliable = reliable;
     }
 
-    nchannel->base.callback = *callback;
+    if(callback) {
+        nchannel->base.callback = *callback;
+    }
 
-    channel->target = nchannel;
-    channel->interface = &netlink_mc_interface;
+    nchannel->base.channel.interface = &netlink_mc_interface;
+    return &nchannel->base.channel;
 }
 
-static const struct sockaddr* netlink_get_local_address(void* target, int* len) {
+static const struct sockaddr* netlink_get_local_address(message_channel* channel, int* len) {
     return NULL;
 }
 
-static void netlink_set_peer_address(void* target, struct sockaddr* addr, size_t len) {
-    assert(target);
+static void netlink_set_peer_address(message_channel* channel, struct sockaddr* addr, size_t len) {
+    assert(channel);
 
-    struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) target;
+    struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
 
     if(addr == NULL || len != sizeof(struct sockaddr_nl)) {
         return;
@@ -247,7 +249,7 @@ static void netlink_set_peer_address(void* target, struct sockaddr* addr, size_t
     nchannel->peer.nl_pid = naddr->nl_pid;
 }
 
-const struct sockaddr* netlink_get_peer_address(void* channel, int* len) {
+const struct sockaddr* netlink_get_peer_address(message_channel* channel, int* len) {
     assert(channel);
 
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
@@ -255,15 +257,16 @@ const struct sockaddr* netlink_get_peer_address(void* channel, int* len) {
     return (struct sockaddr*) &nchannel->peer;
 }
 
-static int netlink_initialize(void* channel) {
+static int netlink_initialize(message_channel* channel) {
     assert(channel);
 
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
     LOG_DBG("initializing SERVAL netlink control\n");
 
-    int ret;
-
-    base_message_channel_initialize(&nchannel->base);
+    int ret = base_message_channel_initialize(channel);
+    if(ret) {
+        return ret;
+    }
     atomic_set(&nchannel->seq_num, 0);
 
     if(nchannel->reliable) {
@@ -314,26 +317,29 @@ static int netlink_initialize(void* channel) {
 
     out: return ret;
 
-    error: netlink_finalize(channel);
+    error: channel->interface->finalize(channel);
     goto out;
 }
 
-static void netlink_start(void* channel) {
+static void netlink_start(message_channel* channel) {
     assert(channel);
+    if(!is_initialized(channel->channel.state)) {
+        return;
+    }
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
-    base_message_channel_start(&nchannel->base);
+    base_message_channel_start(channel);
     nchannel->base.recv_task = task_add(nchannel, netlink_recv_task);
+
 }
 
-static int netlink_finalize(void* channel) {
+static int netlink_finalize(message_channel* channel) {
     assert(channel);
-    struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
-
-    base_message_channel_finalize(&nchannel->base);
+    //struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
+    base_message_channel_finalize(channel);
     return 0;
 }
 
-static int netlink_send_iov(void* channel, struct iovec* iov, size_t veclen, size_t datalen) {
+static int netlink_send_iov(message_channel* channel, struct iovec* iov, size_t veclen, size_t datalen) {
     assert(channel);
 
     if(iov == NULL) {
@@ -366,15 +372,14 @@ static int netlink_send_iov(void* channel, struct iovec* iov, size_t veclen, siz
         nh.nlmsg_flags |= NLM_F_ACK;
     }
 
-    retval = _netlink_send(channel, vec, veclen + 1);
+    retval = _netlink_send(nchannel, vec, veclen + 1);
 
     free(vec);
     return retval;
 }
 
-static int _netlink_send(void* channel, struct iovec* iov, size_t veclen) {
+static int _netlink_send(struct sv_netlink_message_channel* nchannel, struct iovec* iov, size_t veclen) {
 
-    struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
     struct msghdr mh = { &nchannel->peer, sizeof(nchannel->peer), iov, veclen, NULL, 0, 0 };
 
     /* datagram style sendmsg is thread-safe and should avoid message collision/mangling issues */
@@ -416,7 +421,7 @@ static int _netlink_send(void* channel, struct iovec* iov, size_t veclen) {
 
 }
 
-static int netlink_send(void* channel, void *message, size_t datalen) {
+static int netlink_send(message_channel* channel, void *message, size_t datalen) {
     assert(channel);
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
 
@@ -437,10 +442,11 @@ static int netlink_send(void* channel, void *message, size_t datalen) {
         nh.nlmsg_flags |= NLM_F_ACK;
     }
 
-    return _netlink_send(channel, iov, 2);
+    return _netlink_send(nchannel, iov, 2);
 }
 
-static int netlink_recv(void* channel, const void *message, size_t datalen) {
+static int netlink_recv(message_channel* channel, const void *message, size_t datalen) {
+    assert(channel);
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
     struct nlmsghdr* nlm;
     int num_msgs = 0;
@@ -480,7 +486,7 @@ static int netlink_recv(void* channel, const void *message, size_t datalen) {
             break;
         case NLMSG_SERVAL:
             //TODO - ack and rpc request cache/resend?
-            nchannel->base.callback.recv_message(nchannel->base.callback.target, NLMSG_DATA(nlm),
+            nchannel->base.callback.recv_message(&nchannel->base.callback, NLMSG_DATA(nlm),
                     datalen - NLMSG_LENGTH(0));
             break;
         default:
@@ -518,7 +524,7 @@ static void netlink_recv_task(void* channel) {
             return;
         }
 
-        netlink_recv(channel, nchannel->base.buffer, ret);
+        nchannel->base.channel.interface->recv_message(&nchannel->base.channel, nchannel->base.buffer, ret);
     }
 
     return;

@@ -21,10 +21,10 @@ struct service_entry;
    the service id instead of a copy.
 */
 struct serval_skb_cb {
-        enum serval_packet_type pkttype;
+    enum serval_packet_type pkttype;
 	struct net_addr addr;
-        uint32_t seqno;
-        struct service_id srvid;
+    uint32_t seqno;
+    struct service_id srvid;
 };
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)

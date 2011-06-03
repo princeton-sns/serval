@@ -28,7 +28,9 @@ extern struct service_id _serval_null_srvid;
 #define listen_sv listen
 #define accept_sv accept
 #define send_sv send
+#define sendmsg_sv sendmsg
 #define recv_sv recv
+#define recvmsg_sv recvmsg
 #define close_sv close
 #define sendto_sv sendto
 #define recvfrom_sv recvfrom
@@ -98,6 +100,18 @@ extern "C"
 #endif
 ssize_t 
 recv_sv(int socket, void *buffer, size_t length, int flags);
+
+#ifdef __cplusplus
+extern "C"
+#endif
+ssize_t
+sendmsg_sv(int socket, const struct msghdr *message, int flags);
+
+#ifdef __cplusplus
+extern "C"
+#endif
+ssize_t
+recvmsg_sv(int socket, struct msghdr *message, int flags);
 
 #ifdef __cplusplus
 extern "C"

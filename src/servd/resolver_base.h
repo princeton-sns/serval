@@ -13,34 +13,18 @@
 #include "resolver.h"
 
 struct sv_base_service_resolver {
-    struct sv_service_resolver resolver;
+    service_resolver resolver;
     atomic_t ref_count;
     GArray* addresses;
     GPtrArray* service_descs;
+    GArray* peer_status_callbacks;
 };
 
-int base_resolver_initialize(void* resolver);
-int base_resolver_finalize(void* resolver);
-void base_resolver_incref(void*resolver);
-void create_base_resolver(struct sv_base_service_resolver *base);
-
-void
-        init_control_header(struct sv_control_header* header, uint8_t type, uint32_t xid,
-                uint16_t len);
-
-static inline int get_stat_size(uint16_t type) {
-    switch(type) {
-        case SVS_INSTANCE_STATS:
-            return sizeof(struct sv_instance_stats);
-        case SVS_SERVICE_STATS:
-            return sizeof(struct sv_service_stats);
-        case SVS_TABLE_STATS:
-            return sizeof(struct sv_table_stats);
-        case SVS_ROUTER_STATS:
-            return sizeof(struct sv_router_stats);
-        default:
-            return 0;
-    }
-}
-
+void base_resolver_set_address(service_resolver* resolver, struct sockaddr* saddr, size_t len);
+int base_resolver_initialize(service_resolver* resolver);
+int base_resolver_finalize(service_resolver* resolver);
+void base_resolver_incref(service_resolver* resolver);
+void init_base_resolver(struct sv_base_service_resolver *base);
+void base_set_capabilities (service_resolver* resolver, uint32_t capabilities);
+void notify_peer_status_callbacks(service_resolver* resolver, service_resolver* peer, enum resolver_state status);
 #endif /* RESOLVER_BASE_H_ */

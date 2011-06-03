@@ -69,8 +69,9 @@ static void sock_def_error_report(struct sock *sk)
 */
 static void sock_def_readable(struct sock *sk, int bytes)
 {
+        /* TODO should differentiate between write and read sleepers in the wait queue */
         struct socket_wq *wq = sk->sk_wq;
-
+        LOG_DBG("Sock readable, wake up sleepers? %i\n", wq_has_sleeper(wq));
         read_lock(&sk->sk_callback_lock);
         if (wq_has_sleeper(wq))
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
@@ -430,7 +431,7 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 		return -ENOBUFS;
 	}
         */
-
+	LOG_DBG("Queuing in socket for receive\n");
 	skb->dev = NULL;
 	skb_set_owner_r(skb, sk);
 

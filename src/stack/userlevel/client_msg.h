@@ -182,11 +182,12 @@ struct client_msg_recv_req {
 
 struct client_msg_recv_rsp {
 	struct client_msg msghdr;
-        struct service_id srvid;
-        uint16_t data_len;
-        int flags;
+    struct service_id srvid;
+    uint32_t ipaddr;
+    uint16_t data_len;
+    int flags;
 	uint8_t error;
-        unsigned char data[0];
+    unsigned char data[0];
 } __attribute__((packed));
 
 #define CLIENT_MSG_RECV_RSP_LEN (sizeof(struct client_msg_recv_rsp))

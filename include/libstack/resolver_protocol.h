@@ -189,6 +189,7 @@ struct sv_service_stats {
 struct sv_instance_stats {
     struct service_desc service;
     struct net_addr address;
+    int output_port;
     uint16_t priority;
     uint16_t weight;
     uint16_t idle_timeout;
