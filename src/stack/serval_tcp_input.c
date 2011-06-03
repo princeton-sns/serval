@@ -1124,7 +1124,8 @@ static void serval_tcp_remove_reno_sacks(struct sock *sk, int acked)
  * is before the ack sequence we can discard it as it's confirmed to have
  * arrived at the other end.
  */
-static int serval_tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
+static int serval_tcp_clean_rtx_queue(struct sock *sk, 
+                                      int prior_fackets,
                                       u32 prior_snd_una)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
@@ -1210,6 +1211,7 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 			break;
 
 		serval_tcp_unlink_write_queue(skb, sk);
+                LOG_DBG("Freeing ACKed skb\n");
 		sk_wmem_free_skb(sk, skb);
                 /*
 		tp->scoreboard_skb_hint = NULL;
