@@ -44,7 +44,7 @@ static task_mutex test_mutex;
 static task_rwlock test_rwlock;
 static int cond_count = 0;
 static int yield_count = 0;
-static int join_count = 0;
+/* static int join_count = 0; */
 
 struct test_task {
     int id;

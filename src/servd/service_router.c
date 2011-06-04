@@ -261,7 +261,21 @@ static int parse_service_desc(char* sid_str, struct sockaddr_sv* service) {
     return 0;
 }
 
-static int load_config(const char* config_path) {
+static int load_config(const char* config_path) 
+{
+    char line_buffer[1024];
+    char* temp;
+    service_resolver* peer = NULL;
+    GPtrArray* peer_list; 
+    FILE* config_file;
+    struct sv_instance_addr peer_addr;
+    char sid_str[96];
+    char addr_str[96];
+    uint32_t capabilities = 0;
+    uint32_t capacity = 0;
+    uint32_t relation = 0;
+    int tok_read = 0;
+
     //#peerSID peerAddress peerCapabilities peerCapacity peerRelation
     //first entry is always the local resolver - peerRelation = SELF
     if(!config_path) {
@@ -269,32 +283,20 @@ static int load_config(const char* config_path) {
     }
 
     LOG_DBG("Loading config file: %s\n", config_path);
-    FILE* config_file = fopen(config_path, "r");
+    config_file = fopen(config_path, "r");
 
     if(!config_file) {
         return -1;
     }
 
-    char line_buffer[1024];
-    char* temp;
-    service_resolver* peer = NULL;
-    GPtrArray* peer_list = g_ptr_array_new();
+    peer_list = g_ptr_array_new();
 
-    char sid_str[96];
-    char addr_str[96];
-
-    struct sv_instance_addr peer_addr;
     bzero(&peer_addr, sizeof(peer_addr));
 
     peer_addr.service.sv_family = AF_SERVAL;
     peer_addr.service.sv_prefix_bits = 255;
     peer_addr.address.sin.sin_family = AF_INET;
 
-    uint32_t capabilities = 0;
-    uint32_t capacity = 0;
-    uint32_t relation = 0;
-
-    int tok_read = 0;
     while(fgets(line_buffer, 1024, config_file)) {
         temp = strchr(line_buffer, '#');
 
@@ -348,7 +350,8 @@ static int load_config(const char* config_path) {
     }
 
     if(ferror(config_file)) {
-        LOG_ERR("Error reading peer config file %s: %s\n", config_file, strerror(errno));
+        LOG_ERR("Error reading peer config file %s: %s\n", 
+                config_path, strerror(errno));
         goto error;
     }
 

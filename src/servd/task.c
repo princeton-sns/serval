@@ -124,9 +124,11 @@ static inline void* create_coroutine_stack(int size) {
     return stack;
 }
 
+
 static inline char* print_task(struct co_task* task, char* buffer, int len) {
-    snprintf(buffer, len, "task: handle(%li):runner(%li):state(%i):stacksize(%i)\n", task->handle,
-            task->runner, atomic_read(&task->state), task->stack.ss_size);
+    snprintf(buffer, len, "task: handle(%li):runner(%li):"
+	     "state(%i):stacksize(%zu)\n", task->handle,
+	     task->runner, atomic_read(&task->state), task->stack.ss_size);
 
     return buffer;
 }
@@ -134,7 +136,8 @@ static inline char* print_task(struct co_task* task, char* buffer, int len) {
 static inline void _task_block(int fd, int flags, struct co_task* task) {
 
     if(flags & FD_ALL) {
-        pr_set_interest(&reactor, fd, reactor_execute, task, reactor_execute, task,
+        pr_set_interest(&reactor, fd, reactor_execute, task, 
+			reactor_execute, task,
                 reactor_execute, task);
 
     } else {
@@ -152,7 +155,7 @@ static inline void _task_block(int fd, int flags, struct co_task* task) {
 
 static void destroy_task(struct co_task* task, int del_coro) {
     assert(task);
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("destroying task: %s\n", print_task(task, buffer, 128));
     if(del_coro) {
         co_delete(task->task);
@@ -467,7 +470,7 @@ static void add_task_to_work_queue(struct co_task* task) {
         goto out;
     }
 
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("WORKER THREAD %i adding task to work queue(%i): %s\n", (int) pthread_self(),
     //        task_queue.task_count, print_task(task, buffer, 128));
     atomic_set(&task->state, TASK_QUEUED);
@@ -740,7 +743,7 @@ static struct co_task* create_task(void* data, task_func tfunc) {
     /*add to task table */
     g_hash_table_insert(task_set.task_table, &task->handle, task);
 
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("created task(%i): %s\n", g_hash_table_size(task_set.task_table), print_task(task,
     //                buffer, 128));
 
@@ -811,7 +814,7 @@ int task_free_count() {
 void task_yield() {
     struct co_task* task = (struct co_task*) co_get_data(co_current());
 
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("yielding task: %s\n", print_task(task, buffer, 128));
 
     add_task_to_work_queue(task);
@@ -912,7 +915,7 @@ task_handle_t add_task_block(int fd, int flags, void* data, task_func tfunc) {
     assert(tfunc);
 
     struct co_task* task = create_task(data, tfunc);
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("adding task block on fd: %i, flags: %i, task: %s\n", flags, fd, print_task(task,
     //                buffer, 128));
 
@@ -955,7 +958,7 @@ void task_sleep(int ms) {
     assert(ms >= 0);
 
     struct co_task* task = (struct co_task*) co_get_data(co_current());
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("task sleep for %ims task: %s\n", ms, print_task(task, buffer, 128));
 
     if(atomic_read(&task->finalize) == TRUE) {
@@ -985,7 +988,7 @@ int task_kill(task_handle_t handle, int signal) {
         retval = ESRCH;
         goto out;
     }
-    char buffer[128];
+    //char buffer[128];
     //LOG_DBG("killing task: %s\n", print_task(task, buffer, 128));
 
     /*this may be strange, but for now, only deliver signals to running tasks*/

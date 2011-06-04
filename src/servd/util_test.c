@@ -63,7 +63,7 @@ static void* test_time(void* data) {
     /*schedule every second*/
     long long int ctime = get_current_time_ms();
     int elapsed = 0;
-    printf("Initial time: %llu\n", (uint64_t) ctime);
+    printf("Initial time: %llu\n", ctime);
 
     /*first check: 50 ms should be the same*/
 
@@ -72,7 +72,7 @@ static void* test_time(void* data) {
     long long int ntime = get_current_time_ms();
 
     assert(ntime == ctime);
-    printf("Time after %i (50 ms): %llu\n", elapsed, (uint64_t) ctime);
+    printf("Time after %i (50 ms): %llu\n", elapsed, ctime);
 
     /*give it 1.05 s*/
     elapsed += thread_sleep(1050);
@@ -80,7 +80,7 @@ static void* test_time(void* data) {
     assert(ntime - ctime > 0);
 
     ctime = ntime;
-    printf("Time after %i (1100 ms): %llu\n", elapsed, (uint64_t) ctime);
+    printf("Time after %i (1100 ms): %llu\n", elapsed, ctime);
 
     /* rev up the avg resolutions/tick */
     int i = 0;
@@ -90,11 +90,11 @@ static void* test_time(void* data) {
         assert(ntime == ctime);
     }
 
-    printf("Time after %i (1400ms): %llu\n", elapsed, (uint64_t) ctime);
+    printf("Time after %i (1400ms): %llu\n", elapsed, ctime);
 
     elapsed += thread_sleep(1000);
 
-    printf("Time after %i (2400ms): %llu\n", elapsed, (uint64_t) ctime);
+    printf("Time after %i (2400ms): %llu\n", elapsed, ctime);
     ntime = get_current_time_ms();
     assert(ntime - ctime > 0);
 
@@ -103,7 +103,7 @@ static void* test_time(void* data) {
     ntime = get_current_time_ms();
     assert(ntime - ctime > 0);
 
-    printf("Time after %i (7400ms): %llu\n", elapsed, (uint64_t) ctime);
+    printf("Time after %i (7400ms): %llu\n", elapsed, ctime);
 
     return NULL;
 }

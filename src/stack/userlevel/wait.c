@@ -47,56 +47,56 @@ void destroy_wait(wait_queue_t *w)
 
 enum wait_signal wait_signal_lower(int fd)
 {
-    ssize_t sz;
-    //int ret = 0;
-    /*char r = 'r';*/
-    uint8_t sig = 0;
+        ssize_t sz;
+        //int ret = 0;
+        /*char r = 'r';*/
+        uint8_t sig = 0;
 
-    do {
-        sz = read(fd, &sig, 1);
+        do {
+                sz = read(fd, &sig, 1);
 
-        /*if (sz == 1)
-            ret = 1; */
-    } while (sz == 0);
+                /*if (sz == 1)
+                  ret = 1; */
+        } while (sz == 0);
 
-    return (enum wait_signal) (sz == -1 ? -1 : sig);
+        return (enum wait_signal) (sz == -1 ? -1 : sig);
 }
 int default_wake_function(wait_queue_t *curr, unsigned mode, 
                           int wake_flags, void *key)
 {
-    //char w = 'w';
+        uintptr_t pflags = (uintptr_t) key;
+        uint8_t sig = WAIT_READ_DATA & 0xFF;
+        int ret = 0;
+        
+        if (pflags & POLLIN) {
+                sig = WAIT_READ_DATA;
+                /*LOG_DBG("Waking up wait queue pipefd %i with read sig %u\n", curr->pipefd[0], sig);*/
+                if (curr->pipefd[1] == -1) {
+                        LOG_ERR("pipefd[1] == -1\n");
+                        return -1;
+                }
+                ret = write(curr->pipefd[1], &sig, 1);
 
-    int pflags = (int) key;
-    uint8_t sig = WAIT_READ_DATA & 0xFF;
-    int ret = 0;
-
-    if(pflags & POLLIN) {
-        sig = WAIT_READ_DATA;
-        /*LOG_DBG("Waking up wait queue pipefd %i with read sig %u\n", curr->pipefd[0], sig);*/
-        if (curr->pipefd[1] == -1) {
-            LOG_ERR("pipefd[1] == -1\n");
-            return -1;
+                if (ret < 0) {
+                        LOG_ERR("Could not write out signal to pipe: %u\n", 
+                                curr->pipefd[1]);
+                }
         }
-        ret = write(curr->pipefd[1], &sig, 1);
 
-        if(ret < 0) {
-            LOG_ERR("Could not write out signal to pipe: %u\n", curr->pipefd[1]);
-        }
-    }
+        if (pflags & POLLOUT) {
+                sig = WAIT_WRITE_DATA;
+                /*LOG_DBG("Waking up wait queue pipefd %i with write sig %u\n", curr->pipefd[0], sig);*/
+                if (curr->pipefd[1] == -1) {
+                        LOG_ERR("pipefd[1] == -1\n");
+                        return -1;
+                }
+                ret = write(curr->pipefd[1], &sig, 1);
 
-    if(pflags & POLLOUT) {
-        sig = WAIT_WRITE_DATA;
-        /*LOG_DBG("Waking up wait queue pipefd %i with write sig %u\n", curr->pipefd[0], sig);*/
-        if (curr->pipefd[1] == -1) {
-            LOG_ERR("pipefd[1] == -1\n");
-            return -1;
+                if (ret < 0) {
+                        LOG_ERR("Could not write in signal to pipe: %u\n", 
+                                curr->pipefd[1]);
+                }
         }
-        ret = write(curr->pipefd[1], &sig, 1);
-
-        if(ret < 0) {
-            LOG_ERR("Could not write in signal to pipe: %u\n", curr->pipefd[1]);
-        }
-    }
 
 	return ret;
 }
@@ -107,7 +107,7 @@ int default_wake_function(wait_queue_t *curr, unsigned mode,
    Assume we are using microsecond precision.
 
    As in kernel, returns the remaining time, never negative.
- */
+*/
 long schedule_timeout(long timeo)
 {        
         wait_queue_head_t *q = 
@@ -149,7 +149,7 @@ long schedule_timeout(long timeo)
                   On Linux, pselect returns the time not slept in the
                   timeout. Not sure how ppoll works. In any case, this
                   is not portable.
-                 */
+                */
                 gettime(&later);
                 
                 timespec_sub(&later, &now);
@@ -178,10 +178,10 @@ void pre_add_wait_queue(wait_queue_head_t *q, wait_queue_t *wait)
 	pthread_once(&key_once, make_keys);
         
         /*
-        if (pthread_getspecific(wq_key)) {
-                LOG_ERR("Wait queue key already set\n");
-                return;
-        }
+          if (pthread_getspecific(wq_key)) {
+          LOG_ERR("Wait queue key already set\n");
+          return;
+          }
         */
 	ret = pthread_setspecific(wq_key, q);
         
@@ -205,7 +205,7 @@ void __add_wait_queue(wait_queue_head_t *head, wait_queue_t *new)
 }
 
 void __add_wait_queue_tail(wait_queue_head_t *head,
-					 wait_queue_t *new)
+                           wait_queue_t *new)
 {
         pre_add_wait_queue(head, new);
 	list_add_tail(&new->thread_list, &head->thread_list);
@@ -287,7 +287,7 @@ void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 	list_for_each_entry_safe(curr, next, &q->thread_list, thread_list) {
 		unsigned flags = curr->flags;
 		if (curr->func(curr, mode, wake_flags, key) &&
-				(flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
+                    (flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
 	}
 }
@@ -307,7 +307,6 @@ void __wake_up_locked(wait_queue_head_t *q, unsigned int mode)
 {
         __wake_up_common(q, mode, 1, 0, NULL);
 }
-EXPORT_SYMBOL_GPL(__wake_up_locked);
 
 void __wake_up_locked_key(wait_queue_head_t *q, unsigned int mode, void *key)
 {

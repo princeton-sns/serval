@@ -239,7 +239,7 @@ static int unix_send(message_channel* channel, void *message, size_t datalen) {
         return 0;
     }
 
-    LOG_DBG("Sending UNIX %i byte message to the local stack\n", datalen);
+    LOG_DBG("Sending UNIX %zu byte message to the local stack\n", datalen);
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
 
@@ -274,7 +274,7 @@ static int unix_send_iov(message_channel* channel, struct iovec* iov, size_t vec
         return 0;
     }
 
-    LOG_DBG("Sending UNIX %i byte message to the local stack\n", datalen);
+    LOG_DBG("Sending UNIX %zu byte message to the local stack\n", datalen);
 
     struct sv_unix_message_channel* uchannel = (struct sv_unix_message_channel*) channel;
     struct msghdr mh = { &uchannel->peer, sizeof(uchannel->peer), iov, veclen, NULL, 0, 0 };

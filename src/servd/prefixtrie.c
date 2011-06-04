@@ -2035,11 +2035,14 @@ int prefix_trie_has_key(struct prefix_trie_struct* trie, uint8_t* key, uint16_t 
 void print_trie(struct prefix_trie_struct* trie) {
     assert(trie);
 
-    printf(
-            "Trie: key_len=%u count=%u node_count=%u def_value=%u fill_factor=%f branch_fill=%u shortest=%u max_depth=%u\n",
-            (uint32_t) trie->key_len, (uint32_t) trie->count, (uint32_t) trie->node_count,
-            (uintptr_t) trie->def_value, trie->fill_factor, trie->branch_fill, trie->shortest,
-            (uint32_t) trie->max_depth);
+    printf("Trie: key_len=%zu count=%zu node_count=%zu def_value=%p fill_factor=%f branch_fill=%u shortest=%u max_depth=%zu\n",
+	   trie->key_len, trie->count, 
+	   trie->node_count,
+           trie->def_value, 
+	   trie->fill_factor, 
+	   trie->branch_fill, 
+	   trie->shortest,
+	   trie->max_depth);
 
     struct prefix_trie_iter iter;
     _prefix_trie_iter_init(&iter, trie, TRUE);
@@ -2066,8 +2069,9 @@ char* print_trie_data(struct prefix_trie_data* dnode) {
     int bytes = dnode->len / 8 + (dnode->len % 8 > 0 ? 1 : 0);
     __hexdump(dnode->key, bytes, keybuf, 128);
 
-    snprintf(outbuf, 128, "%s:%u:%u:%i:%u:%u", keybuf, dnode->len, dnode->shortest,
-            dnode->ref_count, (uintptr_t) dnode->data, (uintptr_t) dnode->prefix);
+    snprintf(outbuf, 128, "%s:%d:%d:%i:%p:%p", 
+	     keybuf, dnode->len, dnode->shortest,
+	     dnode->ref_count, dnode->data, dnode->prefix);
 
     return outbuf;
 }
@@ -2081,9 +2085,10 @@ char* print_trie_node(struct prefix_trie_node* node, uint8_t offset) {
     int bytes = (offset + node->skip) / 8 + ((offset + node->skip) % 8 > 0 ? 1 : 0);
     __hexdump(node->key, bytes, keybuf, 128);
 
-    snprintf(outbuf, 128, "%s:%u(%u):%u:%u:%u:%u:%u", keybuf, offset + node->skip, node->skip,
-            node->shortest, get_branch_bits(node), get_branch_fill(node), get_branch_full(node),
-            (uintptr_t) node->prefix);
+    snprintf(outbuf, 128, "%s:%u(%u):%u:%u:%u:%d:%p", 
+	     keybuf, offset + node->skip, node->skip,
+	     node->shortest, get_branch_bits(node), 
+	     get_branch_fill(node), get_branch_full(node), node->prefix);
 
     return outbuf;
 }
@@ -2113,13 +2118,13 @@ static void _prefix_trie_iter_init(struct prefix_trie_iter* iter, struct prefix_
     char buffer[128];
     while(fnode == NULL) {
         int i = 0;
-        for(; i < inode->limit; i++) {
+        for (; i < inode->limit; i++) {
             if(inode->branches[i]) {
                 inode->branch = i;
 
                 dnode = inode->branches[i];
 
-                if(trie_get_type(dnode) == PREFIX_TRIE_TYPE_DATA) {
+                if (trie_get_type(dnode) == PREFIX_TRIE_TYPE_DATA) {
                     fnode = dnode;
                 } else {
                     node = (struct prefix_trie_node*) dnode;
@@ -2128,18 +2133,17 @@ static void _prefix_trie_iter_init(struct prefix_trie_iter* iter, struct prefix_
             }
         }
 
-        if(fnode == NULL && node == NULL) {
+        if (fnode == NULL && node == NULL)
             break;
-        }
 
-        if(node) {
+        if (node) {
             total_len += level_bits + node->skip;
             level_bits = get_branch_bits(node);
+	    
+            nnode = create_iter_node(total_len, 
+				     (struct prefix_trie_data**) (((uint8_t*) node) + sizeof(*node)), 0, inode->level + 1, node, inode);
 
-            nnode = create_iter_node(total_len, (struct prefix_trie_data**) (((uint8_t*) node)
-                    + sizeof(*node)), 0, inode->level + 1, node, inode);
-
-            if(print_out) {
+            if (print_out) {
                 memset(buffer, ' ', inode->level);
                 buffer[inode->level] = 0;
                 printf("%snode(%u): %s\n", buffer, inode->branch, print_trie_node(node, nnode->len

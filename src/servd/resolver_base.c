@@ -21,6 +21,7 @@ static void destroy_service_desc(void* value) {
     free(sdesc);
 }
 
+/*
 static void destroy_net_addr(void* value) {
     if(value == NULL) {
         return;
@@ -29,6 +30,7 @@ static void destroy_net_addr(void* value) {
     struct net_addr* addr = (struct net_addr*) value;
     free(addr);
 }
+*/
 
 void init_base_resolver(struct sv_base_service_resolver *base) {
     assert(base);

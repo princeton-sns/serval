@@ -89,7 +89,7 @@ static int test_recv_message(message_channel_callback* cb, const void* message, 
     if(cb->target == &test_cb1) {
 
         LOG_DBG(
-                "Receiving message for channel 1: %s of size %i\n",
+                "Receiving message for channel 1: %s of size %zu\n",
                 service_id_to_str(
                         &((const struct sockaddr_sv*) channel1->interface->
                                 get_local_address(channel1, &addrlen))->sv_srvid),
@@ -97,7 +97,7 @@ static int test_recv_message(message_channel_callback* cb, const void* message, 
         channel1_recv++;
     } else if(cb->target == &test_cb2) {
         LOG_DBG(
-                "Receiving message for channel 2: %s of size %i\n",
+                "Receiving message for channel 2: %s of size %zu\n",
                 service_id_to_str(
                         &((const struct sockaddr_sv*) channel2->interface->
                                 get_local_address(channel2, &addrlen))->sv_srvid),

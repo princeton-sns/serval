@@ -389,7 +389,7 @@ static int add_resolutions(resolution_path* spath, struct service_resolution* re
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
     //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
-    LOG_DBG("Adding %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+    LOG_DBG("Adding %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
@@ -425,6 +425,7 @@ static int add_resolutions(resolution_path* spath, struct service_resolution* re
     return sent;
 }
 
+#if defined(ENABLE_DISABLED)
 static int _add_resolutions(resolution_path* spath, struct service_resolution* resolutions,
         size_t res_count) {
     assert(spath);
@@ -480,6 +481,7 @@ static int _remove_resolutions(resolution_path* spath, struct service_resolution
 
     return 0;
 }
+#endif /* ENABLE_DISABLED */
 
 static int add_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
         size_t res_count, resolution_path_callback callback) {
@@ -509,7 +511,7 @@ static int remove_resolutions(resolution_path* spath, struct service_resolution_
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
     //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
-    LOG_DBG("Removing %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+    LOG_DBG("Removing %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
@@ -587,7 +589,7 @@ static int modify_resolutions(resolution_path* spath, struct service_resolution*
         return 0;
     }
 
-    LOG_DBG("Modifying %i stack resolution rules\n", res_count);
+    LOG_DBG("Modifying %zu stack resolution rules\n", res_count);
     /* no copying, no resend */
 
     struct ctrlmsg_resolution cm;
@@ -602,7 +604,7 @@ static int modify_resolutions(resolution_path* spath, struct service_resolution*
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
     //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
-    LOG_DBG("Modifying %i stack resolution rules, size %i, %i\n", res_count, size, sizeof(cm));
+    LOG_DBG("Modifying %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
     bzero(&cm, sizeof(cm));
@@ -685,7 +687,7 @@ static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_res
     LOG_DBG("Handling resolution removed: %i\n", rcount);
 
     if(rcount <= 0) {
-        LOG_ERR("Invalid resolution stats in remove message! len: %u / %u\n", length, sizeof(struct service_resolution_stat));
+        LOG_ERR("Invalid resolution stats in remove message! len: %zu / %zu\n", length, sizeof(struct service_resolution_stat));
     }
     if(spath->path.path_callback.target) {
 
@@ -706,14 +708,14 @@ static void handle_resolution_added(resolution_path* spath, struct ctrlmsg_resol
         size_t length) {
     assert(spath);
     /*DO NOTHING for now - may need to verify actual resolutions added TODO*/
-    LOG_DBG("Handling resolution added: %i\n", CTRL_NUM_SERVICES(message,length));
+    LOG_DBG("Handling resolution added: %zu\n", CTRL_NUM_SERVICES(message,length));
 }
 
 static void handle_resolution_modified(resolution_path* spath, struct ctrlmsg_resolution* message,
         size_t length) {
     /*DO NOTHING for now TODO*/
     assert(spath);
-    LOG_DBG("Handling resolution modified: %i\n", length);
+    LOG_DBG("Handling resolution modified: %zu\n", length);
 }
 
 static int resolution_path_message_channel_cb(message_channel_callback* cb, const void* message,

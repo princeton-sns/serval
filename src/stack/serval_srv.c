@@ -28,8 +28,8 @@
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE
 /* payload + LL + IP + extra */
-#define SERVAL_MAX_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
-                        sizeof(struct serval_hdr) +                 \
+#define SERVAL_MAX_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE +     \
+                        sizeof(struct serval_hdr) +                     \
                         sizeof(struct serval_connection_ext))
 
 extern int serval_tcp_rcv(struct sk_buff *);
@@ -280,7 +280,7 @@ static int serval_srv_queue_and_push(struct sock *sk, struct sk_buff *skb)
   Reschedule retransmission timer as neccessary, i.e., if there are
   still unacked packets in the queue and we removed the first packet
   in the queue.
- */
+*/
 static int serval_srv_clean_rtx_queue(struct sock *sk, uint32_t ackno)
 {
         struct serval_sock *ssk = serval_sk(sk);
@@ -466,12 +466,12 @@ static int serval_srv_syn_rcv(struct sock *sk,
          * instance. */
        
         /*
-        err = service_add(&conn_ext->src_srvid, sizeof(conn_ext->src_srvid) * 8, 
-                          skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
+          err = service_add(&conn_ext->src_srvid, sizeof(conn_ext->src_srvid) * 8, 
+          skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
         
-        if (err < 0) {
-                LOG_ERR("could not cache service for incoming packet\n");
-        }
+          if (err < 0) {
+          LOG_ERR("could not cache service for incoming packet\n");
+          }
         */
 
         LOG_DBG("SYN seqno=%u\n", ntohl(conn_ext->seqno));
@@ -546,7 +546,7 @@ static int serval_srv_syn_rcv(struct sock *sk,
                   For kernel, we need to route this packet and
                   associate a dst_entry with the skb for it to be
                   accepted by the kernel IP stack.
-                 */
+                */
                 struct dst_entry *dst;
 
                 dst = serval_ipv4_req_route(sk, rsk, skb->protocol,
@@ -613,7 +613,7 @@ serval_srv_create_respond_sock(struct sock *sk,
   sock. Such processing includes transforming the request sock into a
   regular sock and putting it on the parent sock's accept queue.
 
- */
+*/
 static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                                                     struct serval_hdr *sfh,
                                                     struct sk_buff *skb)
@@ -767,7 +767,7 @@ static int serval_srv_rcv_fin(struct sock *sk, struct serval_hdr *sfh,
                         /* Must be retransmitted FIN */
                         
                         /* FIXME: is this the right place for async
-                                 * wake? */
+                         * wake? */
                         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                         break;
                 case SERVAL_FINWAIT1:
@@ -839,7 +839,7 @@ static int serval_srv_connected_state_process(struct sock *sk,
   The processing resembles that which happened for the parent socket
   when this packet was first received by the parent.
 
- */
+*/
 static int serval_srv_child_process(struct sock *parent, struct sock *child,
                                     struct serval_hdr *sfh,
                                     struct sk_buff *skb)
@@ -850,7 +850,7 @@ static int serval_srv_child_process(struct sock *parent, struct sock *child,
         serval_sk(child)->dev = NULL;
         
         /* Check lock on child socket, similarly to how we handled the
-        parent sock for the incoming skb. */
+           parent sock for the incoming skb. */
         if (!sock_owned_by_user(child)) {
                 ret = serval_srv_state_process(child, sfh, skb);
                 if (state == SERVAL_RESPOND && child->sk_state != state) {
@@ -862,7 +862,7 @@ static int serval_srv_child_process(struct sock *parent, struct sock *child,
                    User got lock, add skb to backlog so that it will
                    be processed in user context when the lock is
                    released.
-                 */
+                */
                 __sk_add_backlog(child, skb);
         }
 
@@ -1088,7 +1088,7 @@ static int serval_srv_lastack_state_process(struct sock *sk,
 
 /*
   Receive for datagram sockets that are not connected.
- */
+*/
 static int serval_srv_init_state_process(struct sock *sk, 
                                          struct serval_hdr *sfh, 
                                          struct sk_buff *skb)
@@ -1099,9 +1099,9 @@ static int serval_srv_init_state_process(struct sock *sk,
         int err = 0;
 
         if(ssk->hash_key && srv_ext && srv_ext){
-            //LOG_DBG("Receiving unconnected datagram for service %s at %i from service %s at %s\n", service_id_to_str((struct service_id*) ssk->hash_key),
-            //    ip_hdr(skb)->daddr, service_id_to_str(&srv_ext->src_srvid), ip_hdr(skb)->saddr);
-            LOG_DBG("Receiving unconnected datagram for service %s\n", service_id_to_str((struct service_id*) ssk->hash_key));
+                //LOG_DBG("Receiving unconnected datagram for service %s at %i from service %s at %s\n", service_id_to_str((struct service_id*) ssk->hash_key),
+                //    ip_hdr(skb)->daddr, service_id_to_str(&srv_ext->src_srvid), ip_hdr(skb)->saddr);
+                LOG_DBG("Receiving unconnected datagram for service %s\n", service_id_to_str((struct service_id*) ssk->hash_key));
         }
 
         /* Set receive IP */
@@ -1186,12 +1186,16 @@ void serval_srv_error_rcv(struct sk_buff *skb, u32 info)
         /* TODO: deal with ICMP errors, e.g., wake user and report. */
 }
 
-static int serval_srv_add_source_ext(struct sk_buff *skb, struct serval_hdr* sfh, struct iphdr *iph, unsigned int iph_len) {
-    //int hdr_len = iph_len;
+static int serval_srv_add_source_ext(struct sk_buff *skb, 
+                                     struct serval_hdr* sfh, 
+                                     struct iphdr *iph, 
+                                     unsigned int iph_len) 
+{
+        //int hdr_len = iph_len;
 
 
-    /* Add in source header TODO
-    skb_push(skb, ntohs(sfh->length));
+        /* Add in source header TODO
+           skb_push(skb, ntohs(sfh->length));
 
            sfh = (struct serval_hdr *)skb_push(skb, sizeof(*sfh));
            sfh->flags = flags;
@@ -1199,15 +1203,16 @@ static int serval_srv_add_source_ext(struct sk_buff *skb, struct serval_hdr* sfh
            sfh->length = htons(hdr_len);
            memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
            memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
-*/
-    return 0;
+        */
+        return 0;
 }
+
 int serval_srv_rcv(struct sk_buff *skb)
 {
         struct sock *sk = NULL;
         struct serval_hdr *sfh = 
                 (struct serval_hdr *)skb_transport_header(skb);
-        unsigned int hdr_len;
+        unsigned int hdr_len = 0;
         int err = 0;
         struct service_entry* se = NULL;
         struct service_resolution_iter iter;
@@ -1248,7 +1253,7 @@ int serval_srv_rcv(struct sk_buff *skb)
        
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
-         if (!(sfh->flags & SVH_SYN && !(sfh->flags & SVH_ACK))) {
+        if (!(sfh->flags & SVH_SYN && !(sfh->flags & SVH_ACK))) {
                 /* Ok, check if we can demux on socket id */
                 sk = serval_sock_lookup_flowid(&sfh->dst_flowid);
 
@@ -1259,185 +1264,207 @@ int serval_srv_rcv(struct sk_buff *skb)
         }
         
         if (!sk) {
-            /* Try to demux on service id */
-            struct service_id *srvid = NULL;
+                /* Try to demux on service id */
+                struct service_id *srvid = NULL;
 
-            /* Check for connection extension. We require that this
-             * extension always directly follows the main Serval
-             * header */
-            if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK) {
-                    struct serval_connection_ext *conn_ext =
-                            (struct serval_connection_ext *)(sfh + 1);
-                    /* Check for connection extension and do early
-                     * drop if SYN or ACK flags are set. */
-                    if (!has_connection_extension(sfh))
-                            goto drop;
+                /* Check for connection extension. We require that this
+                 * extension always directly follows the main Serval
+                 * header */
+                if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK) {
+                        struct serval_connection_ext *conn_ext =
+                                (struct serval_connection_ext *)(sfh + 1);
+                        /* Check for connection extension and do early
+                         * drop if SYN or ACK flags are set. */
+                        if (!has_connection_extension(sfh))
+                                goto drop;
 
-                    srvid = &conn_ext->srvid;
-            } else {
-                    struct serval_service_ext *srv_ext =
-                            (struct serval_service_ext *)(sfh + 1);
+                        srvid = &conn_ext->srvid;
+                } else {
+                        struct serval_service_ext *srv_ext =
+                                (struct serval_service_ext *)(sfh + 1);
 
-                    if (!has_service_extension(sfh))
-                            goto drop;
+                        if (!has_service_extension(sfh))
+                                goto drop;
 
-                    srvid = &srv_ext->dst_srvid;
-            }
-
-            if(atomic_read(&serval_transit)) {
-                LOG_DBG("Resolve or demux inbound packet on serviceID %s\n",service_id_to_str(srvid));
-                /* Match on the highest priority srvid rule, even if it's
-                 * not the sock TODO - use flags/prefix in resolution
-                 * This should probably be in a separate function call
-                 * serval_srv_transit_rcv or resolve something
-                 */
-                se = service_find(srvid, sizeof(*srvid) * 8);
-
-                if (!se) {
-                    LOG_INF("No matching service entry for serviceID %s\n",
-                                    service_id_to_str(srvid));
-                    goto drop;
+                        srvid = &srv_ext->dst_srvid;
                 }
 
-                service_resolution_iter_init(&iter, se, 0);
+                if (atomic_read(&serval_transit)) {
+                        LOG_DBG("Resolve or demux inbound "
+                                "packet on serviceID %s\n", 
+                                service_id_to_str(srvid));
 
-                /*
-               Send to all destinations listed for this service.
-                */
-                dest = service_resolution_iter_next(&iter);
+                        /* Match on the highest priority srvid rule, even if it's
+                         * not the sock TODO - use flags/prefix in resolution
+                         * This should probably be in a separate function call
+                         * serval_srv_transit_rcv or resolve something
+                         */
+                        se = service_find(srvid, sizeof(*srvid) * 8);
 
-                if (!dest) {
-                    LOG_INF("No dest to transmit resolution on!\n");
-                    service_resolution_iter_inc_stats(&iter, -1, -(skb->len - hdr_len));
-                    service_resolution_iter_destroy(&iter);
-                    service_entry_put(se);
-                    err = -EHOSTUNREACH;
-                    goto drop_no_stats;
-                }
-
-                while (dest) {
-                    struct dest *next_dest;
-
-
-                    if(cskb == NULL) {
-                        service_resolution_iter_inc_stats(&iter, 1, skb->len - hdr_len);
-                    }
-
-                    next_dest = service_resolution_iter_next(&iter);
-
-                    if (next_dest == NULL) {
-                        cskb = skb;
-                    } else {
-                        cskb = skb_clone(skb, GFP_ATOMIC);
-
-                        if (!cskb) {
-                            LOG_ERR("Skb allocation failed\n");
-                            FREE_SKB(skb);
-                            err = -ENOBUFS;
-                            break;
+                        if (!se) {
+                                LOG_INF("No matching service entry "
+                                        "for serviceID %s\n",
+                                        service_id_to_str(srvid));
+                                goto drop;
                         }
-                        /* Cloned skb will have no socket set. */
-                        //skb_serval_set_owner_w(cskb, sk);
-                    }
 
-                    if(is_sock_dest(dest)) {
-                        /* local resolution */
-                        sk = dest->dest_out.sk;
-                        sock_hold(sk);
-                        temp = cskb;
-                    }
-                    else {
-                        /* Need to drop dst since this packet is routed for
-                         * input. Otherwise, kernel IP stack will be confused when
-                         * transmitting this packet. */
-                        skb_dst_drop(cskb);
+                        service_resolution_iter_init(&iter, se, 0);
+
+                        /*
+                          Send to all destinations listed for this service.
+                        */
+                        dest = service_resolution_iter_next(&iter);
+
+                        if (!dest) {
+                                LOG_INF("No dest to transmit resolution on!\n");
+                                service_resolution_iter_inc_stats(&iter, -1, -(skb->len - hdr_len));
+                                service_resolution_iter_destroy(&iter);
+                                service_entry_put(se);
+                                err = -EHOSTUNREACH;
+                                goto drop_no_stats;
+                        }
+
+                        while (dest) {
+                                struct dest *next_dest;
 
 
-                        iph = (struct iphdr *)skb_network_header(cskb);
-                        iph_len = iph->ihl << 2;
-                        skb_push(cskb, iph_len);
+                                if (cskb == NULL) {
+                                        service_resolution_iter_inc_stats(&iter, 1, skb->len - hdr_len);
+                                }
+
+                                next_dest = service_resolution_iter_next(&iter);
+
+                                if (next_dest == NULL) {
+                                        cskb = skb;
+                                } else {
+                                        cskb = skb_clone(skb, GFP_ATOMIC);
+
+                                        if (!cskb) {
+                                                LOG_ERR("Skb allocation failed\n");
+                                                FREE_SKB(skb);
+                                                err = -ENOBUFS;
+                                                break;
+                                        }
+                                        /* Cloned skb will have no socket set. */
+                                        //skb_serval_set_owner_w(cskb, sk);
+                                }
+
+                                if (is_sock_dest(dest)) {
+                                        /* local resolution */
+                                        sk = dest->dest_out.sk;
+                                        sock_hold(sk);
+                                        temp = cskb;
+                                } else {
+                                        /* Need to drop dst since this packet is routed for
+                                         * input. Otherwise, kernel IP stack will be confused when
+                                         * transmitting this packet. */
+                                        skb_dst_drop(cskb);
+
+
+                                        iph = (struct iphdr *)skb_network_header(cskb);
+                                        iph_len = iph->ihl << 2;
+                                        skb_push(cskb, iph_len);
 
 #if defined(OS_LINUX_KERNEL)
+                                        err = ip_route_input(cskb, 
+                                                             iph->daddr, 
+                                                             iph->saddr, 
+                                                             iph->tos, 
+                                                             cskb->dev);
 
-                        err = ip_route_input(cskb, iph->daddr, iph->saddr, iph->tos, cskb->dev);
-
-                        if(err < 0) {
-                            //LOG_ERR("Could not route resolution packet from %s to %s\n", inet_ntoa(iph->saddr), inet_ntoa(iph->daddr));
-                            LOG_ERR("Could not route resolution packet\n");
-                            FREE_SKB(cskb);
-                            continue;
-                        }
+                                        if (err < 0) {
+                                                //LOG_ERR("Could not route resolution packet from %s to %s\n", inet_ntoa(iph->saddr), inet_ntoa(iph->daddr));
+                                                LOG_ERR("Could not route resolution packet\n");
+                                                FREE_SKB(cskb);
+                                                continue;
+                                        }
 
 #else
-                        /* Set the output device - ip_forward uses the out device specified in the dst_entry route and assumes that skb->dev is the input interface*/
-                        if (dest->dest_out.dev)
-                            skb_set_dev(cskb, dest->dest_out.dev);
+                                        /* Set the output device -
+                                         * ip_forward uses the out
+                                         * device specified in the
+                                         * dst_entry route and assumes
+                                         * that skb->dev is the input
+                                         * interface*/
+                                        if (dest->dest_out.dev)
+                                                skb_set_dev(cskb, 
+                                                            dest->dest_out.dev);
 
 #endif /* OS_LINUX_KERNEL */
 
-                        /* TODO Set the true overlay source address if the packet may be ingress-filtered
-                         * user-level raw socket forwarding may drop the packet if the source address is invalid
-                         * */
-                        serval_srv_add_source_ext(cskb, sfh, iph, iph_len);
+                                        /* TODO Set the true overlay
+                                         * source address if the
+                                         * packet may be
+                                         * ingress-filtered user-level
+                                         * raw socket forwarding may
+                                         * drop the packet if the
+                                         * source address is
+                                         * invalid */
+                                        serval_srv_add_source_ext(cskb, sfh, 
+                                                                  iph, iph_len);
 
-                        //struct serval_sock *ssk = serval_sk(sk);
-                        //err = ssk->af_ops->queue_xmit(cskb);
+                                        //struct serval_sock *ssk = serval_sk(sk);
+                                        //err = ssk->af_ops->queue_xmit(cskb);
 
-                        err = serval_ipv4_forward_out(cskb);
+                                        err = serval_ipv4_forward_out(cskb);
 
-                        if (err < 0) {
-                            LOG_ERR("Transit resolution forwarding failed\n");
+                                        if (err < 0) {
+                                                LOG_ERR("Transit resolution forwarding failed\n");
+                                        }
+
+                                }
+                                dest = next_dest;
+                        }
+                        if (!cskb) {
+                                /* TODO this is not going to work
+                                 * since it needs to be called PRIOR
+                                 * to hitting the end*/
+                                service_resolution_iter_inc_stats(&iter, -1, -(skb->len - hdr_len));
                         }
 
-                    }
-                    dest = next_dest;
+                        service_resolution_iter_destroy(&iter);
+                        service_entry_put(se);
+
+                        /* if no local socket destination encountered,
+                         * return */
+                        if (!sk) {
+                                return 0;
+                        }
+
+                        skb = temp;
+                } else {
+                        /*LOG_DBG("Demux on serviceID %s\n", service_id_to_str(srvid));*/
+
+                        /* only allow listening socket demux */
+                        sk = serval_sock_lookup_serviceid(srvid);
+
+                        if (!sk) {
+                                LOG_INF("No matching sock for serviceID %s\n",
+                                        service_id_to_str(srvid));
+                                goto drop;
+                        }
                 }
-                if(!cskb) {
-                    /* TODO this is not going to work since it needs to be called PRIOR to hitting the end*/
-                   service_resolution_iter_inc_stats(&iter, -1, -(skb->len - hdr_len));
-                }
-
-                service_resolution_iter_destroy(&iter);
-                service_entry_put(se);
-
-                /* if no local socket destination encountered, return */
-                if(!sk) {
-                    return 0;
-                }
-
-                skb = temp;
-            }
-            else {
-                /*LOG_DBG("Demux on serviceID %s\n", service_id_to_str(srvid));*/
-
-                /*only allow listening socket demux */
-                sk = serval_sock_lookup_serviceid(srvid);
-
-                if (!sk) {
-                    LOG_INF("No matching sock for serviceID %s\n",
-                            service_id_to_str(srvid));
-                    goto drop;
-                }
-            }
         }
 
-        /*We only reach this point if a valid local socket destination has been found */
-        /* Drop check if control queue is full here - this should increment the per-service drop stats as well*/
+        /* We only reach this point if a valid local socket destination
+         * has been found */
+        /* Drop check if control queue is full here - this should
+         * increment the per-service drop stats as well*/
         if (is_control_packet(skb) && 
             serval_srv_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN) {
 
-            /* Don't treat local flows as resolutions
-            if(!se) {
-                struct serval_sock *ssk = serval_sk(sk);
-                se = service_find(ssk->hash_key, ssk->hash_key_len);
-            }
+                /* Don't treat local flows as resolutions
+                   if(!se) {
+                   struct serval_sock *ssk = serval_sk(sk);
+                   se = service_find(ssk->hash_key, ssk->hash_key_len);
+                   }
 
-            if(se) {
-                service_entry_inc_dest_stats(se, NULL, 0, -1, -skb->len);
-                service_entry_put(se);
-            }
-            */
-            goto drop_no_stats;
+                   if(se) {
+                   service_entry_inc_dest_stats(se, NULL, 0, -1, -skb->len);
+                   service_entry_put(se);
+                   }
+                */
+                goto drop_no_stats;
         }
 
         bh_lock_sock_nested(sk);
@@ -1474,15 +1501,15 @@ int serval_srv_rcv(struct sk_buff *skb)
         }
 
         /* Don't treat established flow packets as resolutions
-        if(!se) {
-            struct serval_sock *ssk = serval_sk(sk);
-            se = service_find(ssk->hash_key, ssk->hash_key_len);
-        }
+           if(!se) {
+           struct serval_sock *ssk = serval_sk(sk);
+           se = service_find(ssk->hash_key, ssk->hash_key_len);
+           }
 
-        if(se) {
-            service_entry_inc_dest_stats(se, NULL, 0, -1, -skb->len);
-            service_entry_put(se);
-        }
+           if(se) {
+           service_entry_inc_dest_stats(se, NULL, 0, -1, -skb->len);
+           service_entry_put(se);
+           }
         */
 
         bh_unlock_sock(sk);
@@ -1567,44 +1594,44 @@ void serval_srv_timewait_timeout(unsigned long data)
 
 static inline int serval_srv_do_xmit(struct sk_buff *skb)
 {
-    struct sock *sk = skb->sk;
-    struct serval_sock *ssk = serval_sk(sk);
-    int err = 0;
+        struct sock *sk = skb->sk;
+        struct serval_sock *ssk = serval_sk(sk);
+        int err = 0;
 
-    /*
-    FIXME: we kind of hard code the outgoing device here based
-    on what has been bound to the socket in the connection
-    setup phase. Instead, the device should be resolved based
-    on, e.g., dst IP (if it exists at this point).
+        /*
+          FIXME: we kind of hard code the outgoing device here based
+          on what has been bound to the socket in the connection
+          setup phase. Instead, the device should be resolved based
+          on, e.g., dst IP (if it exists at this point).
 
-    However, we currently do not implement an IP routing table
-    for userlevel, which would otherwise be used for this
-    resolution. Kernel space should work, because it routes
-    packet according to the kernel's routing table, thus
-    figuring out the device along the way.
+          However, we currently do not implement an IP routing table
+          for userlevel, which would otherwise be used for this
+          resolution. Kernel space should work, because it routes
+          packet according to the kernel's routing table, thus
+          figuring out the device along the way.
 
-    Packets that are sent using an advisory IP may fail in
-    queue_xmit for userlevel unless the socket has had its
-    interface set by a previous send event.
-    */
-    if (!skb->dev && ssk->dev)
-         skb_set_dev(skb, ssk->dev);
+          Packets that are sent using an advisory IP may fail in
+          queue_xmit for userlevel unless the socket has had its
+          interface set by a previous send event.
+        */
+        if (!skb->dev && ssk->dev)
+                skb_set_dev(skb, ssk->dev);
 
-    if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
-            sizeof(null_addr)) == 0) {
-         /* Copy address from socket if no address is set */
-         memcpy(&SERVAL_SKB_CB(skb)->addr,
-                &inet_sk(sk)->inet_daddr,
-                sizeof(inet_sk(sk)->inet_daddr));
-    }
+        if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
+                   sizeof(null_addr)) == 0) {
+                /* Copy address from socket if no address is set */
+                memcpy(&SERVAL_SKB_CB(skb)->addr,
+                       &inet_sk(sk)->inet_daddr,
+                       sizeof(inet_sk(sk)->inet_daddr));
+        }
 
-    err = ssk->af_ops->queue_xmit(skb);
+        err = ssk->af_ops->queue_xmit(skb);
 
-    if (err < 0) {
-         LOG_ERR("xmit failed\n");
-    }
+        if (err < 0) {
+                LOG_ERR("xmit failed\n");
+        }
 
-    return err;
+        return err;
 }
 
 static inline int serval_srv_add_conn_ext(struct sock *sk, 
@@ -1671,49 +1698,50 @@ static inline int serval_srv_add_service_ext(struct sock *sk,
 int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                             int clone_it, gfp_t gfp_mask)
 {
-    struct serval_sock *ssk = serval_sk(sk);
+        struct serval_sock *ssk = serval_sk(sk);
 	struct service_entry *se;
 	struct dest *dest;
-    struct serval_hdr *sfh;
-    uint8_t flags = 0;
-    int hdr_len = sizeof(*sfh);
+        struct serval_hdr *sfh;
+        uint8_t flags = 0;
+        int hdr_len = sizeof(*sfh);
 	int err = 0;
-    struct service_resolution_iter iter;
-    struct sk_buff *cskb = NULL;
-    int dlen = skb->len - 8; //KLUDGE?! TODO not sure where the extra 8 bytes are coming from at this point
-    char buffer[128];
-
+        struct service_resolution_iter iter;
+        struct sk_buff *cskb = NULL;
+        int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
+                                    extra 8 bytes are coming from at
+                                    this point */
+    
 	if (likely(clone_it)) {
 		if (unlikely(skb_cloned(skb)))
 			skb = pskb_copy(skb, gfp_mask);
 		else
 			skb = skb_clone(skb, gfp_mask);
 		if (unlikely(!skb)) {
-            /* Shouldn't free the passed skb here, since
-             * we were asked to clone it. That probably
-             * means the original skb sits in a queue
-             * somewhere, and freeing it would be bad. */
-            return -ENOBUFS;
-        }
-        if (!skb->sk)
-            skb_serval_set_owner_w(skb, sk);
+                        /* Shouldn't free the passed skb here, since
+                         * we were asked to clone it. That probably
+                         * means the original skb sits in a queue
+                         * somewhere, and freeing it would be bad. */
+                        return -ENOBUFS;
+                }
+                if (!skb->sk)
+                        skb_serval_set_owner_w(skb, sk);
 	}
 
-    /* NOTE:
-     *
-     * Do not use skb_set_owner_w(skb, sk) here as that will
-     * reserve write space for the socket on the transport
-     * queue. We might not want to reserve such space for control
-     * packets as they might then fill up the write queue/buffer
-     * for the socket. However, skb_set_owner_w(skb, sk) also
-     * guarantees that the socket is not released until skb is
-     * free'd, which is good. I guess we could implement our own
-     * version of skb_set_owner_w() and grab a socket refcount
-     * instead, which is released in the skb's destructor.
-     */
+        /* NOTE:
+         *
+         * Do not use skb_set_owner_w(skb, sk) here as that will
+         * reserve write space for the socket on the transport
+         * queue. We might not want to reserve such space for control
+         * packets as they might then fill up the write queue/buffer
+         * for the socket. However, skb_set_owner_w(skb, sk) also
+         * guarantees that the socket is not released until skb is
+         * free'd, which is good. I guess we could implement our own
+         * version of skb_set_owner_w() and grab a socket refcount
+         * instead, which is released in the skb's destructor.
+         */
 
-    /* Add appropriate flags and headers */
-    switch (SERVAL_SKB_CB(skb)->pkttype) {
+        /* Add appropriate flags and headers */
+        switch (SERVAL_SKB_CB(skb)->pkttype) {
         case SERVAL_PKT_CONN_SYNACK:
                 flags |= SVH_ACK;
         case SERVAL_PKT_CONN_SYN:
@@ -1759,72 +1787,82 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
         
 	/* Unresolved packet, use service id to resolve IP, unless IP
          * is set already by user. */
-    if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
-                        sizeof(null_addr)) != 0) {
-        LOG_DBG("Sending packet to user-specified advisory address: %u\n", SERVAL_SKB_CB(skb)->addr.net_un.un_ip.s_addr);
-        /* for user-space, need to specify a device - the kernel will route*/
+        if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
+                   sizeof(null_addr)) != 0) {
+                LOG_DBG("Sending packet to user-specified "
+                        "advisory address: %u\n", 
+                        SERVAL_SKB_CB(skb)->addr.net_un.un_ip.s_addr);
+                /* for user-space, need to specify a device - the
+                 * kernel will route */
 #if defined(OS_USER)
-        skb_set_dev(skb, dev_get_by_index(NULL, 0));
+                skb_set_dev(skb, dev_get_by_index(NULL, 0));
 #endif
-        /* note that the service resolution stats (packets/bytes) will not be incremented here
-         * In the future, the stats should be defined as SNMP counters in include/net/snmp.h and incremented with
-         * the appropriate per-cpu atomic inc macros TODO
-         */
-        return serval_srv_do_xmit(skb);
-    }
+                /* note that the service resolution stats
+                 * (packets/bytes) will not be incremented here In the
+                 * future, the stats should be defined as SNMP
+                 * counters in include/net/snmp.h and incremented with
+                 * the appropriate per-cpu atomic inc macros TODO
+                 */
+                return serval_srv_do_xmit(skb);
+        }
 
-    /* TODO - prefix, flags??*/
-    //ssk->srvid_flags;
-    //ssk->srvid_prefix;
-    se = service_find(&SERVAL_SKB_CB(skb)->srvid, sizeof(struct service_id) * 8);
+        /* TODO - prefix, flags??*/
+        //ssk->srvid_flags;
+        //ssk->srvid_prefix;
+        se = service_find(&SERVAL_SKB_CB(skb)->srvid, 
+                          sizeof(struct service_id) * 8);
 
 	if (!se) {
 		LOG_INF("service lookup failed\n");
-        service_inc_stats(-1, -dlen);
-        FREE_SKB(skb);
+                service_inc_stats(-1, -dlen);
+                FREE_SKB(skb);
 		return -EADDRNOTAVAIL;
 	}
 
 	service_resolution_iter_init(&iter, se, 0);
-    /*
-       Send to all destinations resolved for this service.
-     */
+        /*
+          Send to all destinations resolved for this service.
+        */
 	
 	dest = service_resolution_iter_next(&iter);
 	
-    if (!dest) {
-        LOG_DBG("No device to transmit on!\n");
-        service_resolution_iter_inc_stats(&iter, -1, -dlen);
-        FREE_SKB(skb);
-        service_resolution_iter_destroy(&iter);
-        service_entry_put(se);
-        return -EHOSTUNREACH;
-    }
+        if (!dest) {
+                LOG_DBG("No device to transmit on!\n");
+                service_resolution_iter_inc_stats(&iter, -1, -dlen);
+                FREE_SKB(skb);
+                service_resolution_iter_destroy(&iter);
+                service_entry_put(se);
+                return -EHOSTUNREACH;
+        }
 
 	while (dest) {
 		struct dest *next_dest;
 		
-        /* Remember the flow destination */
-		if(is_sock_dest(dest)) {
-		    /*use a localhost address and bounce it off the IP layer*/
-		    memcpy(&SERVAL_SKB_CB(skb)->addr, &local_addr, sizeof(struct net_addr));
-		}
-		else {
-            memcpy(&SERVAL_SKB_CB(skb)->addr, dest->dst, sizeof(struct net_addr) < dest->dstlen ? sizeof(struct net_addr) : dest->dstlen);
-        }
+                /* Remember the flow destination */
+		if (is_sock_dest(dest)) {
+                        /*use a localhost address and bounce it off
+                         * the IP layer*/
+                        memcpy(&SERVAL_SKB_CB(skb)->addr,
+                               &local_addr, sizeof(struct net_addr));
+		} else {
+                        memcpy(&SERVAL_SKB_CB(skb)->addr, 
+                               dest->dst, 
+                               sizeof(struct net_addr) < dest->dstlen ? 
+                               sizeof(struct net_addr) : dest->dstlen);
+                }
 
-        if(cskb == NULL) {
-            service_resolution_iter_inc_stats(&iter, 1, dlen);
-        }
+                if (cskb == NULL) {
+                        service_resolution_iter_inc_stats(&iter, 1, dlen);
+                }
 
-        next_dest = service_resolution_iter_next(&iter);
+                next_dest = service_resolution_iter_next(&iter);
 		
-        if (next_dest == NULL) {
+                if (next_dest == NULL) {
 			cskb = skb;
 		} else {
-            /* Always be atomic here since we are holding
-             * socket lock */
-            cskb = skb_clone(skb, GFP_ATOMIC);
+                        /* Always be atomic here since we are holding
+                         * socket lock */
+                        cskb = skb_clone(skb, GFP_ATOMIC);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
@@ -1832,22 +1870,23 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                 err = -ENOBUFS;
 				break;
 			}
-            /* Cloned skb will have no socket set. */
-            skb_serval_set_owner_w(cskb, sk);
+                        /* Cloned skb will have no socket set. */
+                        skb_serval_set_owner_w(cskb, sk);
 		}
                 
 		/* Set the output device */
-        if(is_sock_dest(dest)) {
-            /* kludgey but sets the output device for reaching a local socket destination to the default device
-             * TODO - make sure this is appropriate for kernel operation as well
-             */
-            skb_set_dev(cskb, dev_get_by_index(NULL, 0));
-        }
-        else if(dest->dest_out.dev) {
-            skb_set_dev(cskb, dest->dest_out.dev);
-        }
+                if (is_sock_dest(dest)) {
+                        /* kludgey but sets the output device for
+                         * reaching a local socket destination to the
+                         * default device TODO - make sure this is
+                         * appropriate for kernel operation as well
+                         */
+                        skb_set_dev(cskb, dev_get_by_index(NULL, 0));
+                } else if (dest->dest_out.dev) {
+                        skb_set_dev(cskb, dest->dest_out.dev);
+                }
 
-        //snprintf(buffer, dest->dstlen, "%s", dest->dst)
+                //snprintf(buffer, dest->dstlen, "%s", dest->dst)
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
@@ -1856,7 +1895,7 @@ int serval_srv_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		dest = next_dest;
 	}
 
-    service_resolution_iter_destroy(&iter);
+        service_resolution_iter_destroy(&iter);
 	service_entry_put(se);
 
 	return err;

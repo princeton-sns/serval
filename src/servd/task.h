@@ -112,6 +112,7 @@ enum task_block {
     FD_READ = 1 << 0, FD_WRITE = 1 << 1, FD_ERROR = 1 << 2, FD_ALL = 1 << 3
 };
 
+int task_free_count();
 void task_yield();
 void task_block(int fd, int flags);
 task_handle_t add_task_block(int fd, int flags, void* data, task_func tfunc);

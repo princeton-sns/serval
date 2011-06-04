@@ -351,7 +351,7 @@ static int netlink_send_iov(message_channel* channel, struct iovec* iov, size_t 
     }
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
 
-    LOG_DBG("Sending NETLINK %i byte message to the local stack\n", datalen);
+    LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", datalen);
 
     struct iovec* vec = (struct iovec*) malloc((veclen + 1) * sizeof(*vec));
     struct nlmsghdr nh;
@@ -425,7 +425,7 @@ static int netlink_send(message_channel* channel, void *message, size_t datalen)
     assert(channel);
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
 
-    LOG_DBG("Sending NETLINK %i byte message to the local stack\n", datalen);
+    LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", datalen);
 
     struct nlmsghdr nh;
     struct iovec iov[2] = { { (void *) &nh, sizeof(nh) }, { (void *) message, datalen } };
@@ -450,7 +450,8 @@ static int netlink_recv(message_channel* channel, const void *message, size_t da
     struct sv_netlink_message_channel* nchannel = (struct sv_netlink_message_channel *) channel;
     struct nlmsghdr* nlm;
     int num_msgs = 0;
-    LOG_DBG("Received NETLINK %i byte message from the local stack\n", datalen);
+    LOG_DBG("Received NETLINK %zu byte message from the local stack\n", 
+	    datalen);
     for (nlm = (struct nlmsghdr *) message; NLMSG_OK(nlm, (unsigned int) datalen); nlm
             = NLMSG_NEXT(nlm, datalen)) {
         struct nlmsgerr *nlmerr = NULL;

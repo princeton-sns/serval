@@ -18,12 +18,20 @@ utiltest_SOURCES = \
 	task.c \
 	poll_reactor.c
 
-utiltest_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/servd/ -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0
+utiltest_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd/ \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
 
-utiltest_LDFLAGS =-L$(top_srcdir)/src/libstack \
+utiltest_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
 	-L$(top_srcdir)/src/libserval \
 	-L$(top_srcdir)/src/servd \
-	-lglib-2.0 -lpthread -lrt -lpcl
+	$(GLIB_LIBS) \
+	-lpthread \
+	-lrt \
+	-lpcl
 
 messagetest_SOURCES = \
 	messaging_test.c \
@@ -40,16 +48,24 @@ messagetest_SOURCES = \
 	resolution_path.c \
 	resolver_base.c \
 	time_util.c
-	
-	
-messagetest_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/servd/ -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0
 
-messagetest_LDFLAGS =-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval -lserval \
+
+messagetest_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
+
+messagetest_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
+	-L$(top_srcdir)/src/libserval \
 	-L$(top_srcdir)/src/servd \
-	-lrt -lpcl \
-	-lglib-2.0 -lpthread 
-	
+	-lserval \
+	-lrt \
+	-lpcl \
+	$(GLIB_LIBS) \
+	-lpthread 
+
 trietest_SOURCES = \
 	service_util.c \
 	time_util.c \
@@ -61,19 +77,35 @@ trietest_SOURCES = \
 	prefixtrie.c \
 	prefixtrie_test.c
 
-trietest_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/servd/ -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0
+trietest_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
 
-trietest_LDFLAGS =-L$(top_srcdir)/src/libstack \
+trietest_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
 	-L$(top_srcdir)/src/libserval \
 	-L$(top_srcdir)/src/servd \
-	-lglib-2.0 -lpthread -lrt -lpcl
+	$(GLIB_LIBS) \
+	-lpthread \
+	-lrt \
+	-lpcl
 
-stabletest_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/servd/ -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0
+stabletest_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
 
-stabletest_LDFLAGS =-L$(top_srcdir)/src/libstack \
+stabletest_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
 	-L$(top_srcdir)/src/libserval \
 	-L$(top_srcdir)/src/servd \
-	-lglib-2.0 -lpthread -lrt -lpcl
+	$(GLIB_LIBS) \
+	-lpthread \
+	-lrt \
+	-lpcl
 
 stabletest_SOURCES = \
 	service_util.c \
@@ -96,13 +128,21 @@ tasktest_SOURCES = \
 	task.c \
 	poll_reactor.c \
 	task_test.c
-	
-tasktest_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/servd/ -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0 -pthread
 
-tasktest_LDFLAGS =-L$(top_srcdir)/src/libstack \
+tasktest_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
+
+tasktest_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
 	-L$(top_srcdir)/src/libserval \
 	-L$(top_srcdir)/src/servd \
-	-lglib-2.0 -lpthread -lrt -lpcl
+	$(GLIB_LIBS) \
+	-lpthread \
+	-lrt \
+	-lpcl
 
 servr_SOURCES = \
 	time_util.c \
@@ -125,11 +165,21 @@ servr_SOURCES = \
 	local_resolver.c \
 	service_router.c
 
-servr_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include -I/opt/local/include/glib-2.0
-servr_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack \
-	-L$(top_srcdir)/src/libserval -lserval \
-	-lpcl -lrt \
-	-lglib-2.0 -pthread
+servr_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
+
+servr_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
+	-L$(top_srcdir)/src/libserval \
+	-L/usr/local/lib \
+	-lstack \
+	-lserval \
+	-lpcl \
+	-lrt \
+	-lpthread \
+	$(GLIB_LIBS)
 
 servd_SOURCES = \
 	timer.c \
@@ -151,11 +201,16 @@ noinst_HEADERS = \
 	ifa.h \
 	rtnl.h
 
+servd_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/libstack
 
-servd_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include
-servd_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack \
-	-L$(top_srcdir)/src/libserval -lserval \
-	-pthread
+servd_LDFLAGS = \
+	-L$(top_srcdir)/src/libstack \
+	-L$(top_srcdir)/src/libserval \
+	-lstack \
+	-lserval \
+	-lpthread
 
 clean-local:
 	rm -f *~

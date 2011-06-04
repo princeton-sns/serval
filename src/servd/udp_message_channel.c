@@ -432,7 +432,7 @@ static int message_dispatch_initialize(struct sv_udp_message_dispatch* dispatch)
     dispatch->buffer = (char*) malloc(dispatch->buffer_len);
 
     if(dispatch->buffer == NULL) {
-        LOG_ERR("Could not allocate udp dispatch buffer: %u", dispatch->buffer_len);
+        LOG_ERR("Could not allocate udp dispatch buffer: %zu", dispatch->buffer_len);
         return -1;
     }
     bzero(dispatch->buffer, dispatch->buffer_len);
@@ -694,13 +694,13 @@ static int udp_send_iov(message_channel* channel, struct iovec* iov, size_t vecl
     //sanity check the length
     if(len > MAX_UDP_PACKET) {
         //should have been packetized at upper layers into multiple messages
-        LOG_ERR("UDP message length exceeds max udp packet: %i", len);
+        LOG_ERR("UDP message length exceeds max udp packet: %zu", len);
         return -1;
     }
 
     struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
-    LOG_DBG("Sending UDP %i byte message to %s\n", len, service_id_to_str(&uchannel->remote.service.sv_srvid));
+    LOG_DBG("Sending UDP %zu byte message to %s\n", len, service_id_to_str(&uchannel->remote.service.sv_srvid));
     struct msghdr mh = { &uchannel->remote, uchannel->remote_len, iov, veclen, NULL, 0, 0 };
     //return ;
     int retval = -1;
@@ -739,7 +739,7 @@ static int udp_send(message_channel* channel, void* message, size_t len) {
     //sanity check the length
     if(len > MAX_UDP_PACKET) {
         //should have been packetized at upper layers into multiple messages
-        LOG_ERR("UDP message length exceeds max udp packet: %i", len);
+        LOG_ERR("UDP message length exceeds max udp packet: %zu", len);
         return -1;
     }
 
@@ -749,7 +749,7 @@ static int udp_send(message_channel* channel, void* message, size_t len) {
     }
     struct sv_udp_message_channel* uchannel = (struct sv_udp_message_channel*) channel;
 
-    LOG_DBG("Sending UDP %i byte message to %s @ %s, sockaddr len %i\n", len,
+    LOG_DBG("Sending UDP %zu byte message to %s @ %s, sockaddr len %zu\n", len,
             service_id_to_str(&uchannel->remote.service.sv_srvid), inet_ntoa(uchannel->remote.address.sin.sin_addr),
             uchannel->remote_len);
 

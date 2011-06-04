@@ -9,6 +9,7 @@
 #include <assert.h>
 #include <limits.h>
 #include <glib.h>
+#include <inttypes.h>
 
 #include "resolver_messaging.h"
 
@@ -627,7 +628,7 @@ static void expire_client_requests(resolver_rpc* bm, uint64_t curtime, struct rp
             LOG_ERR("Error on message send! %s", strerror(errno));
         }
     }
-    LOG_DBG("Re-issued %i rpc requests at: %llu mintime: %llu", count, curtime, mintime);
+    LOG_DBG("Re-issued %i rpc requests at: %" PRIu64 " mintime: %" PRIu64 " ", count, curtime, mintime);
 
     g_ptr_array_free(resend, TRUE);
 }
@@ -674,7 +675,7 @@ static int check_resolver_message(resolver_rpc* bm, struct sv_control_header* me
 
     //sanity check the length
     if(len != mlen) {
-        LOG_ERR("Invalid serval message length: %i != %u", len, mlen);
+        LOG_ERR("Invalid serval message length: %zu != %u", len, mlen);
         //drop the packet
         return 0;
     }

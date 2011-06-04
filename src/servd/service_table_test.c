@@ -274,7 +274,7 @@ static void test_service_table() {
         print_trie(&table.service_trie);
     }
 
-    printf("total iterations: %i table size: %i unique refs: %i\n", i, service_table_size(&table),
+    printf("total iterations: %i table size: %zu unique refs: %i\n", i, service_table_size(&table),
             UNIQUE_SERVICE_REFERENCES);
 
     assert(i == service_table_size(&table));

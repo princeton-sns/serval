@@ -837,12 +837,14 @@ static int local_register_services(service_resolver* resolver, service_resolver*
 
     if(address == NULL) {
         /* it's a local registration*/
-        printf("Resolver address count: %i\n", resolver_get_address_count(resolver));
+        printf("Resolver address count: %i\n", 
+	       resolver_get_address_count(resolver));
         address = resolver_get_address(resolver, 0);
         assert(address);
     }
 
-    LOG_DBG("Locally registering %i services @ %s with ttl %i\n", num_svc, inet_ntoa(address->net_un.un_ip), ttl);
+    LOG_DBG("Locally registering %zu services @ %s with ttl %u\n", 
+	    num_svc, inet_ntoa(address->net_un.un_ip), ttl);
 
     int count = 0;
     int rcount = 0;
@@ -979,7 +981,8 @@ static int local_unregister_services(service_resolver* resolver, service_resolve
         assert(address);
     }
 
-    LOG_DBG("Locally unregistering %i services @ %s\n", num_svc, inet_ntoa(address->net_un.un_ip));
+    LOG_DBG("Locally unregistering %zu services @ %s\n", 
+	    num_svc, inet_ntoa(address->net_un.un_ip));
 
     int count = 0;
     int rcount = 0;
@@ -1067,7 +1070,7 @@ static int local_query_services(service_resolver* resolver, service_resolver* pe
     assert(resolver);
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
-    LOG_DBG("Locally querying %i services\n", num_svc);
+    LOG_DBG("Locally querying %zu services\n", num_svc);
 
     size_t count = 0;
     int rcount = 0;

@@ -35,6 +35,8 @@
 #define HAVE_LIBIO 1
 #define HAVE_PPOLL 1
 #define HAVE_PSELECT 1
+#define HAVE_OFFSETOF 1
+#include <stddef.h>
 #endif
 
 #if defined(OS_ANDROID)

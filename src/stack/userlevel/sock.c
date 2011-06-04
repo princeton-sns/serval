@@ -69,7 +69,8 @@ static void sock_def_error_report(struct sock *sk)
 */
 static void sock_def_readable(struct sock *sk, int bytes)
 {
-        /* TODO should differentiate between write and read sleepers in the wait queue */
+        /* TODO should differentiate between write and read sleepers
+         * in the wait queue */
         struct socket_wq *wq = sk->sk_wq;
         LOG_DBG("Sock readable, wake up sleepers? %i\n", wq_has_sleeper(wq));
         read_lock(&sk->sk_callback_lock);

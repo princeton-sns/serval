@@ -133,6 +133,7 @@ static int spec_service_ids() {
     return limit;
 }
 
+#if defined(ENABLE_NOT_USED)
 static void randomize_service_ids() {
     bzero(services, sizeof(struct service_id) * MAX_SERVICE_ID);
     int i = 0;
@@ -165,6 +166,7 @@ static void randomize_service_ids() {
     }
 
 }
+#endif /* ENABLE_NOT_USED */
 
 static void initialize_service_ids() {
     bzero(services, sizeof(struct service_id) * MAX_SERVICE_ID);

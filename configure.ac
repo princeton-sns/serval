@@ -231,6 +231,16 @@ esac],[kernel=yes])
 
 AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
+
+dnl Check for PCL library
+AC_CHECK_LIB(pcl,co_thread_init, [AC_CHECK_HEADERS([pcl.h],have_pcl=yes,AC_MSG_ERROR(You have libpcl but not the development headers))],AC_MSG_ERROR(PCL library not found...),)
+		
+AC_MSG_CHECKING([for Portable Coroutine Library (PCL)])
+AC_MSG_RESULT([$have_pcl])
+
+dnl Check for glib
+PKG_CHECK_MODULES([GLIB], [glib-2.0])
+
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
 #                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)

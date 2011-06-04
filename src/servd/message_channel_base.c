@@ -12,8 +12,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "serval/platform.h"
-#include "serval/atomic.h"
+#include <serval/platform.h>
+#include <serval/atomic.h>
 #include "debug.h"
 #include "service_util.h"
 #include "task.h"
