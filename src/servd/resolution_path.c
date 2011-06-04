@@ -144,7 +144,7 @@ static int initialize(resolution_path* spath) {
             spath->path.channel = create_unix_message_channel(local_buffer, stack_buffer, 0,
                     &spath->path.callback);
         } else {
-            spath->path.channel = create_unix_message_channel(SERVAL_SCAFD_CTRL_PATH,
+            spath->path.channel = create_unix_message_channel(SERVAL_SERVD_CTRL_PATH,
                     SERVAL_STACK_CTRL_PATH, 0, &spath->path.callback);
         }
 

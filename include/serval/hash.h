@@ -20,6 +20,7 @@
 #include <linux/hash.h>
 #else
 #include <stdint.h>
+#include "platform.h"
 
 #if defined(__BIONIC__)
 #if __SIZEOF_LONG__ == 8
