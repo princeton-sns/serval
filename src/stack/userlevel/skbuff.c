@@ -95,7 +95,6 @@ struct sk_buff *__alloc_skb(unsigned int size, int fclone, int node)
 	skb->mac_header = ~0U;
 
 	/* make sure we initialize shinfo sequentially */
-
 	shinfo = skb_shinfo(skb);
 	memset(shinfo, 0, offsetof(struct skb_shared_info, dataref));
 
@@ -795,9 +794,8 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
                     int len, __wsum csum)
 {
 	int start = skb_headlen(skb);
-	int i, copy = start - offset;
-	struct sk_buff *frag_iter;
-	int pos = 0;
+	int copy = start - offset;
+        int pos = 0;
 
 	/* Checksum header. */
 	if (copy > 0) {

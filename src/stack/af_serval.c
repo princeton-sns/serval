@@ -527,10 +527,11 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 goto out;
         }
 
-        if (sk->sk_state != SERVAL_CONNECTED)
+        if (sk->sk_state == SERVAL_CLOSED)
                 goto sock_error;
 
         sock->state = SS_CONNECTED;
+        err = 0;
 out:
         release_sock(sk);
 
@@ -985,7 +986,7 @@ int __init serval_init(void)
 		LOG_CRIT("Cannot register UDP proto\n");
 		goto fail_udp_proto;
 	}
-        
+                
         err = proto_register(&serval_tcp_proto, 1);
 
 	if (err != 0) {
