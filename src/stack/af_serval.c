@@ -963,7 +963,7 @@ int __init serval_init(void)
         err = proto_register(&serval_udp_proto, 1);
 
 	if (err != 0) {
-		LOG_CRIT("Cannot create serval_sock SLAB cache!\n");
+		LOG_CRIT("Cannot register UDP protocol!\n");
 		goto fail_proto;
 	}
 

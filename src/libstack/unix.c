@@ -44,7 +44,7 @@ static int unix_handle_init(struct event_handler *eh)
 	}
 
 	uh->peer.sun_family = AF_UNIX;
-	strcpy(uh->peer.sun_path, SERVAL_SCAFD_CTRL_PATH);
+	strcpy(uh->peer.sun_path, SERVAL_SERVD_CTRL_PATH);
 	
 	ret = bind(uh->sock, (struct sockaddr *)&uh->peer, 
 		   sizeof(uh->peer));
@@ -93,7 +93,7 @@ error_connect:
 error_bind:
 	close(uh->sock);
 	uh->sock = -1;
-	unlink(SERVAL_SCAFD_CTRL_PATH);
+	unlink(SERVAL_SERVD_CTRL_PATH);
 error_sock:
 	event_unregister_handler(eh);
 	goto out;
@@ -106,7 +106,7 @@ static void unix_handle_destroy(struct event_handler *eh)
 	if (uh->sock != -1) {
 		close(uh->sock);
 	}
-        unlink(SERVAL_SCAFD_CTRL_PATH);
+        unlink(SERVAL_SERVD_CTRL_PATH);
 }
 
 static int unix_handle_event(struct event_handler *eh)

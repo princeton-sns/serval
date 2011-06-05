@@ -93,7 +93,7 @@ struct dest {
 typedef enum {
         SERVICE_ENTRY_LOCAL,
         SERVICE_ENTRY_GLOBAL,
-        SERVICE_ENTRY_ANY
+        SERVICE_ENTRY_ANY,
 } service_entry_type_t;
 
 void service_inc_stats(int packets, int bytes);
@@ -138,11 +138,13 @@ int service_resolution_iter_get_flags(struct service_resolution_iter* iter);
 int service_entry_dest_fill(struct service_entry *se, void *dst,
                             int dstlen);
 
-int service_add(struct service_id *srvid, uint16_t prefix_bits, uint16_t flags, uint32_t priority, uint32_t weight,
+int service_add(struct service_id *srvid, uint16_t prefix_bits, 
+                uint16_t flags, uint32_t priority, uint32_t weight,
 		const void *dst, int dstlen, const void* dest_out, gfp_t alloc);
 
-int service_modify(struct service_id *srvid, uint16_t prefix_bits, uint16_t flags, uint32_t priority, uint32_t weight,
-        const void *dst, int dstlen, const void* dest_out);
+int service_modify(struct service_id *srvid, uint16_t prefix_bits, 
+                   uint16_t flags, uint32_t priority, uint32_t weight,
+                   const void *dst, int dstlen, const void* dest_out);
 
 void service_del(struct service_id *srvid, uint16_t prefix_bits);
 void service_del_dest(struct service_id *srvid, uint16_t prefix_bits,
@@ -151,10 +153,16 @@ void service_del_dest(struct service_id *srvid, uint16_t prefix_bits,
 int service_del_dest_all(const void *dst, int dstlen);
 int service_del_dev_all(const char *devname);
 
-//struct service_entry *service_find_type(struct service_id *srvid,
-//                                        service_entry_type_t type);
+struct service_entry *service_find_type(struct service_id *srvid, 
+                                        int prefix,
+                                        service_entry_type_t type);
 
-struct service_entry *service_find(struct service_id *srvid, int prefix);
+static inline struct service_entry *service_find(struct service_id *srvid, 
+                                                 int prefix)
+{
+        return service_find_type(srvid, prefix, SERVICE_ENTRY_ANY);
+}
+
 struct sock *service_find_sock(struct service_id *srvid, int prefix);
 
 void service_entry_hold(struct service_entry *se);
