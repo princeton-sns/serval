@@ -45,6 +45,7 @@ int ctrl_recvmsg(void)
 	cm = (struct ctrlmsg *)mh.msg_iov[0].iov_base;
 
 	LOG_DBG("Received ctrl msg(%i) of %d bytes\n", cm->type, nbytes);
+
         if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
                 LOG_ERR("No handler for message type %u\n",
                         cm->type);
@@ -67,6 +68,7 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 	int ret;
 
 	memset(mh, 0, sizeof(*mh));
+        memset(&iov, 0, sizeof(iov));
 	mh->msg_name = &unaddr;
 	mh->msg_namelen = sizeof(unaddr);
 	mh->msg_iov = &iov;
@@ -105,11 +107,11 @@ int ctrl_init(void)
 	memset(&unaddr, 0, sizeof(unaddr));
 	unaddr.sun_family = AF_UNIX;
 
-	if(stackid <= 0) {
-	    strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
-	}
-	else {
-	    sprintf(unaddr.sun_path, "/tmp/serval-stack-ctrl-%i.sock", stackid);
+	if (stackid <= 0) {
+                strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
+	} else {
+                sprintf(unaddr.sun_path, 
+                        "/tmp/serval-stack-ctrl-%i.sock", stackid);
 	}
 
 	ret = bind(ctrl_sock,
@@ -134,7 +136,6 @@ int ctrl_init(void)
                 sprintf(unaddr.sun_path, 
                         "/tmp/serval-libstack-ctrl-%i.sock", stackid);
         }
-        
 out:
 	return ret;
 out_unbind:
@@ -149,12 +150,11 @@ void ctrl_fini(void)
 	if (ctrl_sock != -1)
 		close(ctrl_sock);
 
-    if(stackid <= 0) {
-        unlink(SERVAL_STACK_CTRL_PATH);
-    }
-    else {
-        char buffer[128];
-        sprintf(buffer, "/tmp/serval-stack-ctrl-%i.sock", stackid);
-        unlink(buffer);
-    }
+        if (stackid <= 0) {
+                unlink(SERVAL_STACK_CTRL_PATH);
+        } else {
+                char buffer[128];
+                sprintf(buffer, "/tmp/serval-stack-ctrl-%i.sock", stackid);
+                unlink(buffer);
+        }
 }

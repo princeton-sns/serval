@@ -255,14 +255,16 @@ void serval_sock_hash(struct sock *sk)
                         ssk->srvid_prefix_bits;
 
                 err = service_add(ssk->hash_key, 
-                                  ssk->hash_key_len, ssk->srvid_flags, LOCAL_SERVICE_DEFAULT_PRIORITY, LOCAL_SERVICE_DEFAULT_WEIGHT,
+                                  ssk->hash_key_len, ssk->srvid_flags, 
+                                  LOCAL_SERVICE_DEFAULT_PRIORITY, 
+                                  LOCAL_SERVICE_DEFAULT_WEIGHT,
                                   NULL, 0, sk, GFP_ATOMIC);
                 if (err < 0) {
-                    #if defined(OS_LINUX_KERNEL)
+#if defined(OS_LINUX_KERNEL)
                         LOG_ERR("could not add service for listening demux\n");
-                    #else
+#else
                         LOG_ERR("could not add service for listening demux: %s\n", strerror(-err));
-                    #endif
+#endif
                 } else {
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)

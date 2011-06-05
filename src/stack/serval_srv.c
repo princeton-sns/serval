@@ -794,7 +794,7 @@ static struct sock * serval_srv_request_sock_handle(struct sock *sk,
                         newinet = inet_sk(nsk);
                         nssk = serval_sk(nsk);
 
-                        nsk->sk_state = SERVAL_RESPOND;
+                        serval_sock_set_state(sk, SERVAL_RESPOND);
 
                         memcpy(&nssk->local_flowid, &srsk->local_flowid, 
                                sizeof(srsk->local_flowid));
@@ -1389,10 +1389,11 @@ static int serval_srv_init_state_process(struct sock *sk,
                 (struct serval_service_ext *)(sfh + 1);
         int err = 0;
 
-        if(ssk->hash_key && srv_ext && srv_ext){
+        if (ssk->hash_key && srv_ext && srv_ext){
                 //LOG_DBG("Receiving unconnected datagram for service %s at %i from service %s at %s\n", service_id_to_str((struct service_id*) ssk->hash_key),
                 //    ip_hdr(skb)->daddr, service_id_to_str(&srv_ext->src_srvid), ip_hdr(skb)->saddr);
-                LOG_DBG("Receiving unconnected datagram for service %s\n", service_id_to_str((struct service_id*) ssk->hash_key));
+                LOG_DBG("Receiving unconnected datagram for service %s\n", 
+                        service_id_to_str((struct service_id*) ssk->hash_key));
         }
 
         /* Set receive IP */
@@ -1413,6 +1414,9 @@ int serval_srv_state_process(struct sock *sk,
                              struct sk_buff *skb)
 {
         int err = 0;
+
+        LOG_DBG("receive in state %s\n",
+                serval_sock_state_str(sk));
 
         switch (sk->sk_state) {
         case SERVAL_INIT:
@@ -1736,6 +1740,8 @@ int serval_srv_rcv(struct sk_buff *skb)
                                         service_id_to_str(srvid));
                                 goto drop;
                         }
+
+                        LOG_DBG("Socket is %p\n", sk);
                 }
         }
 

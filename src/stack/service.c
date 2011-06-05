@@ -86,6 +86,8 @@ static void dest_free(struct dest *de)
 {
         if (!is_sock_dest(de) && de->dest_out.dev)
                 dev_put(de->dest_out.dev);
+        else if (is_sock_dest(de) && de->dest_out.sk)
+                sock_put(de->dest_out.sk);
         FREE(de);
 }
 
@@ -96,7 +98,7 @@ static struct dest_set *dset_create(uint16_t flags,
 
         dset = (struct dest_set *) MALLOC(sizeof(*dset), alloc);
 
-        if(!dset)
+        if (!dset)
                 return NULL;
 
         memset(dset, 0, sizeof(*dset));
@@ -131,11 +133,11 @@ static struct dest *__service_entry_get_dev(struct service_entry *se,
         struct dest *de;
         //struct net_device *dev = NULL;
         struct dest_set* dset = NULL;
-
+        
         list_for_each_entry(dset, &se->dest_set, ds) {
                 list_for_each_entry(de, &dset->dest_list, lh) {
-                        if(!is_sock_dest(de) && de->dest_out.dev && 
-                           strcmp(de->dest_out.dev->name, ifname) == 0) {
+                        if (!is_sock_dest(de) && de->dest_out.dev && 
+                            strcmp(de->dest_out.dev->name, ifname) == 0) {
                                 return de;
                         }
                 }
@@ -197,7 +199,7 @@ static void dset_add_dest(struct dest_set* dset, struct dest* de)
 }
 
 static void service_entry_insert_dset(struct service_entry *se, 
-                                      struct dest_set* dset) 
+                                      struct dest_set *dset) 
 {
 
         struct dest_set* pos = NULL;
@@ -303,7 +305,7 @@ static int __service_entry_modify_dest(struct service_entry *se,
                 if (!ndset) {
                         ndset = dset_create(flags, priority, alloc);
 
-                        if(!ndset)
+                        if (!ndset)
                                 return -ENOMEM;
 
                         service_entry_insert_dset(se, ndset);
@@ -545,8 +547,10 @@ void __service_entry_free(struct service_entry *se)
                 list_for_each_entry_safe(de, temp, &dset->dest_list, lh) {
                         if (is_sock_dest(de) && de->dest_out.sk) {
                                 sock_put(de->dest_out.sk);
+                                de->dest_out.sk = NULL;
                         } else if (!is_sock_dest(de) && de->dest_out.dev) {
                                 dev_put(de->dest_out.dev);
+                                de->dest_out.dev = NULL;
                         }
                         list_del(&de->lh);
                         dest_free(de);
@@ -865,35 +869,95 @@ int services_print(char *buf, int buflen)
         return service_table_print(&srvtable, buf, buflen);
 }
 
-static struct service_entry *service_table_find(struct service_table *tbl,
-                                                struct service_id *srvid, 
-                                                int prefix) 
+
+static int service_entry_local_match(struct bst_node *n)
+{
+        struct service_entry *se = get_service(n);
+        struct dest *dst;
+
+        dst = __service_entry_get_dest(se, NULL, 0, NULL);
+        
+        if (dst && is_sock_dest(dst) && dst->dest_out.sk) 
+                return 1;
+
+        return 0;
+}
+
+static int service_entry_global_match(struct bst_node *n)
+{
+        struct service_entry *se = get_service(n);        
+        struct dest *dst;
+
+        dst = __service_entry_get_dest(se, NULL, 0, NULL);
+        
+        if (dst && !is_sock_dest(dst)) 
+                return 1;
+
+        return 0;
+}
+
+static int service_entry_any_match(struct bst_node *n)
+{
+        return 1;
+}
+
+static struct service_entry *__service_table_find(struct service_table *tbl,
+                                                  struct service_id *srvid, 
+                                                  int prefix, 
+                                                  service_entry_type_t type) 
 {
         struct service_entry *se = NULL;
         struct bst_node *n;
+        int (*match)(struct bst_node *) = NULL;
 
         if (!srvid)
                 return NULL;
+        
+        switch (type) {
+        case SERVICE_ENTRY_LOCAL:
+                match = service_entry_local_match;
+                break;
+        case SERVICE_ENTRY_GLOBAL:
+                match = service_entry_global_match;
+                break;
+        case SERVICE_ENTRY_ANY:
+                match = service_entry_any_match;
+                break;
+        }
+
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, match);
+
+        if (n)
+                se = get_service(n);
+
+        return se;
+}
+
+static struct service_entry *service_table_find(struct service_table *tbl,
+                                                struct service_id *srvid, 
+                                                int prefix, 
+                                                service_entry_type_t type)
+{
+        struct service_entry *se = NULL;
 
         read_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix);
+        se = __service_table_find(tbl, srvid, prefix, type);
 
-        if (n) {
-                se = get_service(n);
+        if (se)
                 service_entry_hold(se);
-        }
 
         read_unlock_bh(&tbl->lock);
-        return se;
+
+        return se;        
 }
+
 
 static struct sock* service_table_find_sock(struct service_table *tbl, 
                                             struct service_id *srvid,
                                             int prefix) 
 {
         struct service_entry *se = NULL;
-        struct bst_node *n;
         struct sock* sk = NULL;
         struct dest* dst = NULL;
         
@@ -901,21 +965,18 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
                 return NULL;
         
         read_lock_bh(&tbl->lock);
-        
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix);
-        
-        if (n) {
-                se = get_service(n);
-                //service_entry_hold(se);
 
+        se = __service_table_find(tbl, srvid, prefix, SERVICE_ENTRY_LOCAL);
+        
+        if (se) {
                 dst = __service_entry_get_dest(se, NULL, 0, NULL);
                 
-                if(dst) {
+                if (dst && is_sock_dest(dst)) {
                         sock_hold(dst->dest_out.sk);
                         sk = dst->dest_out.sk;
                 }
         }
-
+        
         read_unlock_bh(&tbl->lock);
 
         return sk;
@@ -944,9 +1005,10 @@ void service_get_stats(struct table_stats* tstats)
         return service_table_get_stats(&srvtable, tstats);
 }
 
-struct service_entry *service_find(struct service_id *srvid, int prefix) 
+struct service_entry *service_find_type(struct service_id *srvid, int prefix,
+                                        service_entry_type_t type) 
 {
-        return service_table_find(&srvtable, srvid, prefix);
+        return service_table_find(&srvtable, srvid, prefix, type);
 }
 
 struct sock *service_find_sock(struct service_id *srvid, int prefix) 
@@ -1175,7 +1237,8 @@ static int del_dev_func(struct bst_node *n, void *arg)
         write_unlock_bh(&se->destlock);
 
         if (ret == 1) {
-                /* TODO - global reference kludge - assume the write lock is already acquired*/
+                /* TODO - global reference kludge - assume the write
+                 * lock is already acquired*/
                 srvtable.instances--;
         }
 
@@ -1226,7 +1289,8 @@ static int del_dest_func(struct bst_node *n, void *arg)
         write_unlock_bh(&se->destlock);
 
         if (ret == 1) {
-                /* TODO - global reference kludge - assume the write lock is already acquired*/
+                /* TODO - global reference kludge - assume the write
+                 * lock is already acquired*/
                 srvtable.instances--;
         }
 

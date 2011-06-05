@@ -62,7 +62,7 @@ Logger::initialize(const char *name)
     if (!_initialized) {
 
         if (_log_fname)
-            free(_log_fname);
+            delete [] _log_fname;
 
         _log_fname = new char[strlen(name) + 1];
 
@@ -72,13 +72,13 @@ Logger::initialize(const char *name)
         strcpy(_log_fname, name);
 
         if (_dirname)
-            free(_dirname);
+            delete [] _dirname;
 
-        _dirname = new char[strlen(PREFIX) + strlen(DIRNAME_STR) + 1];
+        _dirname = new char[strlen(PREFIX) + strlen(DIRNAME_STR) + 2];
 
         if (!_dirname)
             return -1;
-
+        
         sprintf(_dirname, "%s/%s", PREFIX, DIRNAME_STR);
 
         setup_logfd();

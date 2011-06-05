@@ -1380,24 +1380,29 @@ SVSockLib::close_sv(int soc, sv_err_t &err)
   Cli &cli = get_cli(soc, err);
   if (cli.is_null()) {
     return ::close(soc);
-  }
-
-  info("closing serval socket");
-  SimpleLock slock(cli.get_lock());
-
-  cli.save_flags();
-  cli.set_sync();
-
-  if (query_scafd_close(cli, err) < 0) {
+  } else {
+    // Must scope this lock, since we cannot unlock after we delete
+    // the client
+    SimpleLock slock(cli.get_lock());
+    
+    info("closing serval socket");
+    
+    cli.save_flags();
+    cli.set_sync();
+    
+    if (query_scafd_close(cli, err) < 0) {
+      cli.restore_flags();
+      lerr("query_scafd_close failed");
+      return -2;
+    }
+    
     cli.restore_flags();
-    lerr("query_scafd_close failed");
-    return -2;
+    //
+    // Socket -> CLOSED or TIMEDWAIT
+    //
+
+    // unlock happens here.
   }
-  
-  cli.restore_flags();
-  //
-  // Socket -> CLOSED or TIMEDWAIT
-  //
   delete_cli(&cli, err);
   return 0;
 }

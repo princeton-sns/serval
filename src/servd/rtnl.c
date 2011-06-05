@@ -115,14 +115,13 @@ static int rtnl_send(struct netlink_handle *nlh, struct nlmsghdr *n)
 {
 	int res;
 	struct iovec iov = {
-		(void *)n, n->nlmsg_len
-	};
+		n, n->nlmsg_len
+        };
 	struct msghdr msg = {
 		(void *)&nlh->peer, 
                 sizeof(nlh->peer), 
                 &iov, 1, NULL, 0, 0
 	};
-
 	n->nlmsg_seq = ++nlh->seq;
 	n->nlmsg_pid = nlh->local.nl_pid;
 
