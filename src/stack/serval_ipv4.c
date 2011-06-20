@@ -319,9 +319,14 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 {
 	int ttl = inet->uc_ttl;
-
-	if (ttl < 0)
-		ttl = dst_metric(dst, RTAX_HOPLIMIT);
+        
+        if (ttl < 0) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
+                ttl = ip4_dst_hoplimit(dst);        
+#else
+                ttl = dst_metric(dst, RTAX_HOPLIMIT);
+#endif
+        }
 	return ttl;
 }
 #endif

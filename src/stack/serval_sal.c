@@ -1945,18 +1945,24 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         skb_serval_set_owner_w(cskb, sk);
 		}
                 
-		/* Set the output device */
+#if defined(OS_USER)
+		/*
+                  Set the output device for user space operation.  The
+                  kernel will route the packet throught the IP routing
+                  table and figure out the device that way.
+                */
                 if (is_sock_dest(dest)) {
                         /* kludgey but sets the output device for
                          * reaching a local socket destination to the
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
+
                         skb_set_dev(cskb, dev_get_by_index(NULL, 0));
                 } else if (dest->dest_out.dev) {
                         skb_set_dev(cskb, dest->dest_out.dev);
                 }
-
+#endif
                 //snprintf(buffer, dest->dstlen, "%s", dest->dst)
 		err = ssk->af_ops->queue_xmit(cskb);
 
