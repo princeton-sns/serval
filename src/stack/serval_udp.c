@@ -8,7 +8,7 @@
 #include <serval_sock.h>
 #include <serval_request_sock.h>
 #include <serval_ipv4.h>
-#include <serval_srv.h>
+#include <serval_sal.h>
 #include <input.h>
 
 #if defined(OS_LINUX_KERNEL)
@@ -95,7 +95,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
                 ntohs(uh->dest),
                 ntohs(uh->len));
 
-        err = serval_srv_xmit_skb(skb);
+        err = serval_sal_xmit_skb(skb);
         
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
@@ -725,13 +725,13 @@ struct proto serval_udp_proto = {
 	.owner			= THIS_MODULE,
         .init                   = serval_udp_init_sock,
         .destroy                = serval_udp_destroy_sock,
-	.close  		= serval_srv_close,   
-        .connect                = serval_srv_connect,
+	.close  		= serval_sal_close,   
+        .connect                = serval_sal_connect,
 	.disconnect 		= serval_udp_disconnect,
 	.shutdown		= serval_udp_shutdown,
         .sendmsg                = serval_udp_sendmsg,
         .recvmsg                = serval_udp_recvmsg,
-	.backlog_rcv		= serval_srv_do_rcv,
+	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.max_header		= UDP_MAX_HDR,

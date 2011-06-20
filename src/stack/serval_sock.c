@@ -7,7 +7,7 @@
 #include <serval/netdevice.h>
 #include <netinet/serval.h>
 #include <serval_sock.h>
-#include <serval_srv.h>
+#include <serval_sal.h>
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
@@ -422,14 +422,14 @@ void serval_sock_init(struct sock *sk)
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
         setup_timer(&ssk->retransmit_timer, 
-                    serval_srv_rexmit_timeout,
+                    serval_sal_rexmit_timeout,
                     (unsigned long)sk);
 
         setup_timer(&ssk->tw_timer, 
-                    serval_srv_timewait_timeout,
+                    serval_sal_timewait_timeout,
                     (unsigned long)sk);
 
-        serval_srv_init_ctrl_queue(sk);
+        serval_sal_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)
         get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
@@ -480,7 +480,7 @@ void serval_sock_destroy(struct sock *sk)
         sk_stop_timer(sk, &ssk->tw_timer);
         
         /* Clean control queue */
-        serval_srv_ctrl_queue_purge(sk);
+        serval_sal_ctrl_queue_purge(sk);
 
 	if (sk->sk_prot->destroy)
 		sk->sk_prot->destroy(sk);
@@ -527,7 +527,7 @@ void serval_sock_destruct(struct sock *sk)
         __skb_queue_purge(&sk->sk_error_queue);
 
         /* Clean control queue */
-        serval_srv_ctrl_queue_purge(sk);
+        serval_sal_ctrl_queue_purge(sk);
 
         if (ssk->dev)
                 dev_put(ssk->dev);

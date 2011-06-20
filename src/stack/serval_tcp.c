@@ -5,7 +5,7 @@
 #include <serval/sock.h>
 #include <netinet/serval.h>
 #include <serval_tcp_sock.h>
-#include <serval_srv.h>
+#include <serval_sal.h>
 #include <input.h>
 
 #if defined(OS_LINUX_KERNEL)
@@ -321,7 +321,7 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
-	.backlog_rcv		= serval_srv_do_rcv,
+	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	/* .max_header		= TCP_MAX_HEADER, */
