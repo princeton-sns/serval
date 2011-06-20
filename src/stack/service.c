@@ -621,8 +621,10 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
                 uint32_t sample = 0;
 #if defined(OS_LINUX_KERNEL)
                 get_random_bytes(&sample, sizeof(sample));
-                sample = (uint32_t) ((float) sample / 
+                /* FIXME: Floating point not allowed in kernel */
+                /* sample = (uint32_t) ((float) sample / 
                                      0xFFFFFFFF * dset->normalizer);
+                */
 #else
 
                 sample = (uint32_t) ((float) rand() / 

@@ -177,7 +177,7 @@ message_channel* create_udp_message_channel(struct sockaddr_sv* local,
     }
 
     //udp_channel_create();
-    int retval = 0;
+
     task_mutex_lock(&udp_dispatch_mutex);
 
     assert(udp_dispatch_table);
@@ -205,7 +205,6 @@ message_channel* create_udp_message_channel(struct sockaddr_sv* local,
             uchannel->callbacks[1] = *callback;
         } else {
             LOG_ERR("No callback slots available!");
-            retval = -1;
             goto error;
         }
     } else {

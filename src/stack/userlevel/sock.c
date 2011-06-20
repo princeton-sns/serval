@@ -522,11 +522,8 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
                                      int *errcode)
 {
         struct sk_buff *skb;
-	gfp_t gfp_mask;
 	long timeo;
 	int err;
-
-	gfp_mask = sk->sk_allocation;
 
 	timeo = sock_sndtimeo(sk, noblock);
 

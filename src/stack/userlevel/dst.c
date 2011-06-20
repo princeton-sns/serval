@@ -66,10 +66,11 @@ void __dst_free(struct dst_entry *dst)
 
 struct dst_entry *dst_destroy(struct dst_entry *dst)
 {
-	struct dst_entry *child;
+	/*
+          struct dst_entry *child;
 
-	child = dst->child;
-
+          child = dst->child;
+        */
 	atomic_dec(&dst->ops->entries);
 
 	if (dst->ops->destroy)
@@ -101,8 +102,9 @@ struct dst_entry *dst_destroy(struct dst_entry *dst)
 void dst_release(struct dst_entry *dst)
 {
 	if (dst) {
-		int newrefcnt;
-		newrefcnt = atomic_dec_return(&dst->__refcnt);
+		/* int newrefcnt;
+                   newrefcnt = */
+                atomic_dec_return(&dst->__refcnt);
 	}
 }
 

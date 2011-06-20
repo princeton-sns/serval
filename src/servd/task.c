@@ -195,7 +195,7 @@ static void destroy_task(struct co_task* task, int del_coro) {
 
 /* main worker thread task execution/scheduling loop */
 static void run_task_loop() {
-    struct co_task* task;
+    struct co_task* task = NULL;
     char buffer[128];
 
     /* increment the active worker thread count*/
@@ -322,7 +322,7 @@ void initialize_tasks(int threads) {
 
     /*initialize the poll reactor*/
     reactor.threaded = TRUE;
-    int retval = pr_initialize(&reactor);
+    pr_initialize(&reactor);
 
     /*set the queue to active*/
     task_queue.active = TRUE;
@@ -341,7 +341,7 @@ void initialize_tasks(int threads) {
     int i = 0;
     thread_pool = (pthread_t*) malloc(sizeof(*thread_pool) * max_threads);
     for (; i < max_threads; i++) {
-        retval = pthread_create(&thread_pool[i], NULL, start_task_worker, NULL);
+        pthread_create(&thread_pool[i], NULL, start_task_worker, NULL);
     }
 }
 
