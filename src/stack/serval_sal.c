@@ -657,7 +657,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         if (!nsk)
                                 return NULL;
                         
-                        serval_sock_set_state(sk, SERVAL_RESPOND);
+                        serval_sock_set_state(nsk, SERVAL_RESPOND);
                         nssk = serval_sk(nsk);
                         memcpy(&nssk->local_flowid, &rsk->local_flowid, 
                                sizeof(rsk->local_flowid));
