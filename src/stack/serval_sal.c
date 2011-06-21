@@ -1254,6 +1254,10 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 return SAL_RESOLVE_FAIL;
         }
 
+        LOG_DBG("Service entry count=%u\n", se->count);
+
+	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
+
         /*
           Send to all destinations listed for this service.
         */
@@ -1890,11 +1894,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	service_resolution_iter_init(&iter, se, 0);
+	service_resolution_iter_init(&iter, se, SERVICE_ITER_ALL);
+
         /*
           Send to all destinations resolved for this service.
         */
-	
 	dest = service_resolution_iter_next(&iter);
 	
         if (!dest) {
@@ -1908,20 +1912,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	while (dest) {
 		struct dest *next_dest;
-		
-                /* Remember the flow destination */
-		if (is_sock_dest(dest)) {
-                        /*use a localhost address and bounce it off
-                         * the IP layer*/
-                        memcpy(&SERVAL_SKB_CB(skb)->addr,
-                               &local_addr, sizeof(struct net_addr));
-		} else {
-                        memcpy(&SERVAL_SKB_CB(skb)->addr, 
-                               dest->dst, 
-                               sizeof(struct net_addr) < dest->dstlen ? 
-                               sizeof(struct net_addr) : dest->dstlen);
-                }
-
+               
                 if (cskb == NULL) {
                         service_resolution_iter_inc_stats(&iter, 1, dlen);
                 }
@@ -1945,6 +1936,27 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         skb_serval_set_owner_w(cskb, sk);
 		}
                 
+                /* Remember the flow destination */
+		if (is_sock_dest(dest)) {
+                        /* use a localhost address and bounce it off
+                         * the IP layer*/
+                        memcpy(&SERVAL_SKB_CB(cskb)->addr,
+                               &local_addr, sizeof(struct net_addr));
+		} else {
+                        memcpy(&SERVAL_SKB_CB(cskb)->addr, 
+                               dest->dst, 
+                               sizeof(struct net_addr) < dest->dstlen ? 
+                               sizeof(struct net_addr) : dest->dstlen);
+                }
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char dst[18];
+                        LOG_PKT("Resolve: dst %s\n",
+                                inet_ntop(AF_INET, &SERVAL_SKB_CB(cskb)->addr, 
+                                          dst, sizeof(dst)));
+                }
+#endif
 #if defined(OS_USER)
 		/*
                   Set the output device for user space operation.  The
@@ -1963,7 +1975,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         skb_set_dev(cskb, dest->dest_out.dev);
                 }
 #endif
-                //snprintf(buffer, dest->dstlen, "%s", dest->dst)
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {

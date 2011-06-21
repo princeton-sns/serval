@@ -18,17 +18,19 @@
 
 struct service_id;
 
+/** 
+    The service entry contains a list of sets of destinations.
+    Each set contains destinations with the same priority.
+*/
 struct service_entry {
+        /*
 	union {
 		struct dst_entry dst;
 	} u;
+        */
         struct bst_node *node;
-
-        //struct list_head dest_list, *dest_pos;
         struct list_head dest_set;
-
-        int count;
-        //struct sock *sk;
+        unsigned int count;
         atomic_t packets_resolved;
         atomic_t bytes_resolved;
         atomic_t bytes_dropped;
@@ -37,9 +39,15 @@ struct service_entry {
         atomic_t refcnt;
 };
 
+/**
+   Iterator for the service table. 
+
+   Iterates through all destinations in all sets, or only one set with
+   a particular priority.
+*/
 struct service_resolution_iter {
     struct service_entry* entry;
-    struct dest_set* destset;
+    struct dest_set *destset;
     struct list_head *dest_pos;
     struct list_head *last_pos;
 };
@@ -53,7 +61,11 @@ struct table_stats {
     uint32_t bytes_dropped;
 };
 
-/* TODO - should this include the device ifindex?*/
+/**
+
+
+   TODO - should this include the device ifindex?
+*/
 struct dest_stats {
     uint32_t duration_sec;
     uint32_t duration_nsec;
@@ -63,6 +75,9 @@ struct dest_stats {
     uint32_t bytes_dropped;
 };
 
+/**
+   A set of destinations sharing the same priority.
+ */
 struct dest_set {
         struct list_head ds;
         struct list_head dest_list;
@@ -74,6 +89,9 @@ struct dest_set {
 
 #define is_sock_dest(dest) (dest->dstlen == 0)
 
+/**
+   A destination, either a local socket or remote host.
+ */
 struct dest {
         struct list_head lh;
         uint32_t weight;
@@ -128,10 +146,17 @@ void service_entry_inc_dest_stats(struct service_entry *se, const void* dst, int
 //void service_entry_dest_iterate_end(struct service_entry *se);
 //struct dest *service_entry_dest_next(struct service_entry *se);
 
-void service_resolution_iter_init(struct service_resolution_iter* iter, struct service_entry *se, int all);
+typedef enum {
+        SERVICE_ITER_ALL, /* Return all entries */
+        SERVICE_ITER_ANYCAST, /* Only top priority entries */
+} iter_mode_t;
+
+void service_resolution_iter_init(struct service_resolution_iter* iter, 
+                                  struct service_entry *se, iter_mode_t mode);
 void service_resolution_iter_destroy(struct service_resolution_iter* iter);
 struct dest *service_resolution_iter_next(struct service_resolution_iter* iter);
-void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, int packets, int bytes);
+void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, 
+                                       int packets, int bytes);
 int service_resolution_iter_get_priority(struct service_resolution_iter* iter);
 int service_resolution_iter_get_flags(struct service_resolution_iter* iter);
 

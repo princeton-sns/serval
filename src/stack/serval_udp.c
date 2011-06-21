@@ -37,8 +37,8 @@ static int serval_udp_connection_request(struct sock *sk,
                                          struct sk_buff *skb);
 
 static void serval_udp_connection_respond_sock(struct sock *sk, 
-                                                struct sk_buff *skb,
-                                                struct sock *child,
+                                               struct sk_buff *skb,
+                                               struct sock *child,
                                                struct dst_entry *dst);
 
 static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
@@ -118,7 +118,7 @@ static int serval_udp_init_sock(struct sock *sk)
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
 static int serval_udp_destroy_sock(struct sock *sk)
 #else
-static void serval_udp_destroy_sock(struct sock *sk)
+        static void serval_udp_destroy_sock(struct sock *sk)
 #endif
 {
         //struct serval_udp_sock *usk = serval_udp_sk(sk);
@@ -153,7 +153,7 @@ void serval_udp_connection_respond_sock(struct sock *sk,
 
 /* 
    Receive from network.
-  */
+*/
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
@@ -234,7 +234,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 
 	if (msg->msg_name) {
 		struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
-        struct sockaddr_in *inaddr = (struct sockaddr_in *)(svaddr + 1);
+                struct sockaddr_in *inaddr = (struct sockaddr_in *)(svaddr + 1);
 
 		if ((unsigned)msg->msg_namelen < sizeof(*svaddr))
 			return -EINVAL;
@@ -244,33 +244,33 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 				return -EAFNOSUPPORT;
 		}
                 
-        srvid = &svaddr->sv_srvid;
+                srvid = &svaddr->sv_srvid;
 
-        /* Check for advisory IP address */
-        LOG_DBG("dest sid: %s, sock addr len: %i\n", service_id_to_str(&svaddr->sv_srvid), msg->msg_namelen);
-        if ((unsigned)msg->msg_namelen >=
-            (sizeof(*svaddr) + sizeof(*inaddr))) {
+                /* Check for advisory IP address */
+                LOG_DBG("dest sid: %s, sock addr len: %i\n", service_id_to_str(&svaddr->sv_srvid), msg->msg_namelen);
+                if ((unsigned)msg->msg_namelen >=
+                    (sizeof(*svaddr) + sizeof(*inaddr))) {
 
-            if (inaddr->sin_family != AF_INET)
-                return -EAFNOSUPPORT;
+                        if (inaddr->sin_family != AF_INET)
+                                return -EAFNOSUPPORT;
 #if defined(ENABLE_DEBUG)
-            {
-                char buf[20];
-                LOG_DBG("Advisory IP %s\n",
-                        inet_ntop(inaddr->sin_family,
-                        &inaddr->sin_addr,
-                        buf, sizeof(buf)));
-            }
+                        {
+                                char buf[20];
+                                LOG_DBG("Advisory IP %s\n",
+                                        inet_ntop(inaddr->sin_family,
+                                                  &inaddr->sin_addr,
+                                                  buf, sizeof(buf)));
+                        }
 #endif
-            netaddr = (struct net_addr *)&inaddr->sin_addr;
+                        netaddr = (struct net_addr *)&inaddr->sin_addr;
+                }
+        } else if (sk->sk_state != SERVAL_CONNECTED) {
+                return -EDESTADDRREQ;
         }
-    } else if (sk->sk_state != SERVAL_CONNECTED) {
-            return -EDESTADDRREQ;
-    }
 
-    ulen += sizeof(struct udphdr);
+        ulen += sizeof(struct udphdr);
 
-    lock_sock(sk);
+        lock_sock(sk);
 
 	timeo = sock_sndtimeo(sk, nonblock);
 
@@ -310,7 +310,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
         }
-out:
+ out:
         release_sock(sk);
 
         return err;
@@ -320,24 +320,24 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                               struct msghdr *msg, size_t len, int nonblock, 
                               int flags, int *addr_len)
 {
-    struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
-    int retval = -ENOMEM;
+        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)msg->msg_name;
+        int retval = -ENOMEM;
 	long timeo;
         
-    lock_sock(sk);
+        lock_sock(sk);
 
-    if (sk->sk_state == SERVAL_CLOSED) {
-            /* SERVAL_CLOSED is a valid state here because recvmsg
-             * should return 0 and not an error */
+        if (sk->sk_state == SERVAL_CLOSED) {
+                /* SERVAL_CLOSED is a valid state here because recvmsg
+                 * should return 0 and not an error */
 		retval = -ENOTCONN;
 		goto out;
 	}
 
-    if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
-            retval = -EINVAL;
-            LOG_DBG("address length is incorrect\n");
-            goto out;
-    }
+        if ((unsigned)msg->msg_namelen < sizeof(struct sockaddr_sv)) {
+                retval = -EINVAL;
+                LOG_DBG("address length is incorrect\n");
+                goto out;
+        }
 
 	timeo = sock_rcvtimeo(sk, nonblock);
 
@@ -347,17 +347,17 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		if (skb)
 			goto found_ok_skb;
 	
-        if (sk->sk_err) {
-                retval = sock_error(sk);
-                LOG_ERR("sk=%p error=%d\n",
-                        sk, retval);
-                break;
-        }
+                if (sk->sk_err) {
+                        retval = sock_error(sk);
+                        LOG_ERR("sk=%p error=%d\n",
+                                sk, retval);
+                        break;
+                }
 
-        if (sk->sk_shutdown & RCV_SHUTDOWN) {
-                retval = 0;
-                break;
-        }
+                if (sk->sk_shutdown & RCV_SHUTDOWN) {
+                        retval = 0;
+                        break;
+                }
 
 		if (sk->sk_state == SERVAL_CLOSED) {
 			if (!sock_flag(sk, SOCK_DONE)) {
@@ -380,42 +380,42 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			break;
 		}
 
-        sk_wait_data(sk, &timeo);
+                sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
-        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
-                retval = 0;
-                goto found_fin_ok;
-        }
+                if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+                        retval = 0;
+                        goto found_fin_ok;
+                }
 
 		if (len >= skb->len) {
 			retval = skb->len;
-            len = skb->len;
-        } else if (len < skb->len) {
+                        len = skb->len;
+                } else if (len < skb->len) {
 			msg->msg_flags |= MSG_TRUNC;
-            retval = len;
-        }
+                        retval = len;
+                }
                 
-        /* Copy service id */
-        if (svaddr) {
-            size_t addrlen = msg->msg_namelen;
+                /* Copy service id */
+                if (svaddr) {
+                        size_t addrlen = msg->msg_namelen;
 
-            svaddr->sv_family = AF_SERVAL;
-            *addr_len = sizeof(*svaddr);
-            memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid,
-                   sizeof(svaddr->sv_srvid));
+                        svaddr->sv_family = AF_SERVAL;
+                        *addr_len = sizeof(*svaddr);
+                        memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid,
+                               sizeof(svaddr->sv_srvid));
 
-            /* Copy also IP address if possible */
-            if (addrlen >= (sizeof(*svaddr) +
-                            sizeof(struct sockaddr_in))) {
-                struct sockaddr_in *inaddr =
-                        (struct sockaddr_in *)(svaddr + 1);
-                inaddr->sin_family = AF_INET;
-                memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
-                       sizeof(ip_hdr(skb)->saddr));
-                *addr_len += sizeof(*inaddr);
-            }
-        }
+                        /* Copy also IP address if possible */
+                        if (addrlen >= (sizeof(*svaddr) +
+                                        sizeof(struct sockaddr_in))) {
+                                struct sockaddr_in *inaddr =
+                                        (struct sockaddr_in *)(svaddr + 1);
+                                inaddr->sin_family = AF_INET;
+                                memcpy(&inaddr->sin_addr, &ip_hdr(skb)->saddr,
+                                       sizeof(ip_hdr(skb)->saddr));
+                                *addr_len += sizeof(*inaddr);
+                        }
+                }
                                 
 		if (skb_copy_datagram_iovec(skb, 0, msg->msg_iov, len)) {
 			/* Exception. Bailout! */
@@ -430,7 +430,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 }
 		break;
 	} while (1);
-out:
+ out:
         release_sock(sk);
         LOG_DBG("final retval: %i\n", retval);
         return retval;
@@ -447,7 +447,7 @@ struct udp_splice_state {
 };
 
 typedef int (*sk_read_actor_t)(read_descriptor_t *, struct sk_buff *,
-				unsigned int, size_t);
+                               unsigned int, size_t);
 
 extern int skb_splice_bits(struct sk_buff *skb, unsigned int offset,
                            struct pipe_inode_info *pipe, unsigned int tlen,
@@ -614,7 +614,7 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 
 	release_sock(sk);
         /*
-        LOG_DBG("spliced=%zu ret=%d\n", spliced, ret);
+          LOG_DBG("spliced=%zu ret=%d\n", spliced, ret);
         */
 	if (spliced)
 		return spliced;
@@ -656,7 +656,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
           This code is adapted from do_tcp_sendpages and is currently
           very much experimental. This needs some serious cleanups
           before ready.
-         */
+        */
 	while (psize > 0) {
 		struct sk_buff *skb;
 		struct page *page = pages[poffset / PAGE_SIZE];
@@ -697,7 +697,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
 	}
 
         return copied;
-out_err:
+ out_err:
         LOG_ERR("Error\n");
 	return sk_stream_error(sk, flags, err);
 }

@@ -14,6 +14,12 @@ libtool
 ltmain.sh
 missing
 src/servd/servd
+src/servd/messagetest
+src/servd/servr
+src/servd/stabletest
+src/servd/tasktest
+src/servd/trietest
+src/servd/utiltest
 src/stack/Kbuild
 src/stack/serval
 src/test/nltest
