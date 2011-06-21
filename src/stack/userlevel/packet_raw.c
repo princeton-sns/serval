@@ -101,8 +101,10 @@ static int packet_raw_recv(struct net_device *dev)
 		return -1;
 	}
         
-
-        /* LOG_DBG("Received %d bytes IP packet\n", ret); */
+        /*
+        LOG_DBG("Received %d bytes IP packet on device %s\n", 
+                ret, dev->name);
+        */
 
         skb_put(skb, ret);
 	skb->dev = dev;

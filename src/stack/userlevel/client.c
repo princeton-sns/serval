@@ -581,7 +581,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         iov.iov_base = r.data;
         iov.iov_len = req->data_len;
 
-        LOG_DBG("Client %u data_len=%u flags=%u\n", c->id, req->data_len, req->flags);
+        LOG_DBG("Client %u data_len=%u flags=%u\n", 
+                c->id, req->data_len, req->flags);
         
         ret = sock->ops->recvmsg(NULL, sock, &mh, req->data_len, req->flags);
         
@@ -589,7 +590,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
                 r.rsp.error = KERN_ERR(ret);
                 LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
         } else {
-                memcpy(&r.rsp.srvid, &saddr.serv.sv_srvid, sizeof(saddr.serv.sv_srvid));
+                memcpy(&r.rsp.srvid, &saddr.serv.sv_srvid, 
+                       sizeof(saddr.serv.sv_srvid));
                 r.rsp.ipaddr = saddr.addr.sin_addr.s_addr;
                 r.rsp.data_len = ret;
                 r.rsp.msghdr.payload_length += ret;
@@ -625,14 +627,15 @@ int client_handle_clear_data_msg(struct client *c, struct client_msg *msg)
 {
         LOG_DBG("Client %u clearing has data: %i\n", c->id, c->has_data);
         c->has_data = 0;
-        /* TODO - kludge to prevent client_thread from thinking no response data was written and should close */
+        /* TODO - kludge to prevent client_thread from thinking no
+           response data was written and should close */
         return 1;
 }
 
 
 int client_handle_have_data_msg(struct client *c, struct client_msg *msg)
 {
-        LOG_DBG("Client %u sent have data msg...error\n", c->id);
+        LOG_ERR("Client %u sent have data msg...error\n", c->id);
         return 0;
 }
 
@@ -720,15 +723,17 @@ static void *client_thread(void *arg)
 
 		nfds = MAX(c->fd, c->pipefd[0]) + 1;
 
-		if(!c->has_data) {
-                        /*wait for a data signal on the pipe
+		if (!c->has_data) {
+                        /* wait for a data signal on the pipe
                          */
                         lock_sock(c->sock->sk);
 
-                        /*TODO prevent bh from triggering writeable notifications all the time:
-                         * let the wait flags dictate the interest notification sets
+                        /* TODO prevent bh from triggering writeable
+                         * notifications all the time: let the wait
+                         * flags dictate the interest notification
+                         * sets
                          */
-                        if(skb_peek(&c->sock->sk->sk_receive_queue)) {
+                        if (skb_peek(&c->sock->sk->sk_receive_queue)) {
                                 /* data exists on the queue already */
                                 release_sock(c->sock->sk);
                                 c->has_data = 1;
@@ -765,7 +770,8 @@ static void *client_thread(void *arg)
 			/* Timeout */
 			/* LOG_DBG("Client %u timeout\n", c->id);*/
 		} else {
-                        /* LOG_DBG("Is wait queue fd set: %i, has data: %i\n", FD_ISSET(wait.pipefd[0], &readfds), c->has_data);*/
+                        /* LOG_DBG("Is wait queue fd set: %i, has data: %i\n", 
+                           FD_ISSET(wait.pipefd[0], &readfds), c->has_data);*/
 
 			if (FD_ISSET(c->pipefd[0], &readfds)) {
                                 /* Signal received - determine message type
@@ -773,13 +779,15 @@ static void *client_thread(void *arg)
                                  */
                                 csig = client_signal_lower(c->pipefd[0]);
 
-				/*LOG_DBG("Client %u signal received: %u\n", c->id, sig); */
+				/*LOG_DBG("Client %u signal received: %u\n", 
+                                  c->id, sig); 
+                                */
 
-				if(csig < 0) {
+				if (csig < 0) {
                                         continue;
 				}
 
-				switch(csig) {
+				switch (csig) {
                                 case CLIENT_EXIT:
 				        c->should_exit = 1;
 				        break;
@@ -794,11 +802,11 @@ static void *client_thread(void *arg)
 
                                 /* LOG_DBG("Client %u wait queue signal received: %u\n", c->id, sig); */
 
-                                if(wsig < 0) {
+                                if (wsig < 0) {
                                         continue;
                                 }
 
-                                switch(wsig) {
+                                switch (wsig) {
 			        case WAIT_READ_DATA:
                                         lock_sock(c->sock->sk);
                                         clear_bit(SOCK_ASYNC_WAITDATA, &c->sock->sk->sk_socket->flags);
