@@ -1669,14 +1669,16 @@ int serval_tcp_connection_build_fin(struct sock *sk,
 
         skb_reset_transport_header(skb);
         memset(th, 0, sizeof(*th));
-        th->fin = 0;
+        th->fin = 1;
 	th->source = 0;
 	th->dest = 0;
-        th->seq = htonl(serval_tcp_acceptable_seq(sk));
+        th->seq = htonl(serval_tcp_acceptable_seq(sk) + 1);
 	th->ack_seq = htonl(tp->rcv_nxt);
         th->window = htons(serval_tcp_select_window(sk));	
 	th->check = 0;
 	th->urg_ptr = 0;
+
+        LOG_DBG("Built FIN packet %s\n", tcphdr_to_str(th)); 
 
         return 0;
 }

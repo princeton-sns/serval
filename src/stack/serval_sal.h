@@ -14,31 +14,34 @@ struct service_entry;
 /* 
    WARNING:
    
-   We must be careful that this struct does not overflow the 48 bytes
-   that the skb struct gives us in the cb field.
+    We must be careful that this struct does not overflow the 48 bytes
+    that the skb struct gives us in the cb field.
 
-   NOTE: Currently adds up to 44 bytes (non packed) on 64-bit platform.
-   Should probably find another solution for storing a reference to
-   the service id instead of a copy.
-*/
-struct serval_skb_cb {
-        enum serval_packet_type pkttype;
-	struct net_addr addr;
-        uint32_t seqno;
-        struct service_id srvid;
-};
+    NOTE: Currently adds up to 44 bytes (non packed) on 64-bit platform.
+    Should probably find another solution for storing a reference to
+    the service id instead of a copy.
+ */
+ struct serval_skb_cb {
+         enum serval_packet_type pkttype;
+         struct net_addr addr;
+         uint32_t seqno;
+         struct service_id srvid;
+ };
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 {
-	struct serval_skb_cb * sscb = 
-		(struct serval_skb_cb *)&(skb)->cb[0];
+        struct serval_skb_cb * sscb = 
+                (struct serval_skb_cb *)&(skb)->cb[0];
 #if defined(ENABLE_DEBUG)
-        if (sizeof(struct serval_skb_cb) > sizeof(skb->cb)) {
-                LOG_WARN("serval_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
-                         "skb->cb may overflow!\n", 
-                         sizeof(struct serval_skb_cb), 
-                         sizeof(skb->cb));
-        } /*
+        /*
+          if (sizeof(struct serval_skb_cb) > sizeof(skb->cb)) {
+                 LOG_WARN("serval_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
+                          "skb->cb may overflow!\n", 
+                          sizeof(struct serval_skb_cb), 
+                          sizeof(skb->cb));
+         } 
+         */
+         /*
             else {
                 LOG_WARN("serval_skb_cb (%zu bytes) skb->cb (%zu bytes).\n", 
                          sizeof(struct serval_skb_cb), 
