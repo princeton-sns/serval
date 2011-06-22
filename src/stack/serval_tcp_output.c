@@ -1670,6 +1670,7 @@ int serval_tcp_connection_build_fin(struct sock *sk,
         skb_reset_transport_header(skb);
         memset(th, 0, sizeof(*th));
         th->fin = 1;
+        th->ack = 1;
 	th->source = 0;
 	th->dest = 0;
         th->seq = htonl(serval_tcp_acceptable_seq(sk) + 1);
@@ -1801,7 +1802,8 @@ void serval_tcp_send_fin(struct sock *sk)
 
 		/* Reserve space for headers and prepare control bits. */
 		skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
-		/* FIN eats a sequence byte, write_seq advanced by tcp_queue_skb(). */
+		/* FIN eats a sequence byte, write_seq advanced by
+                   tcp_queue_skb(). */
 		serval_tcp_init_nondata_skb(skb, tp->write_seq,
                                             TCPH_ACK | TCPH_FIN);
 		serval_tcp_queue_skb(sk, skb);

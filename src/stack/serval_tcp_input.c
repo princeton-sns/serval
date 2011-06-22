@@ -2794,7 +2794,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	case TCP_CLOSING:
 	case TCP_LAST_ACK:
 		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
-                        LOG_DBG("Unexpected sequence number\n");
+                        LOG_DBG("Unexpected sequence number %d, rcv_nxt\n",
+                                TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 			break;
                 }
 	case TCP_FIN_WAIT1:

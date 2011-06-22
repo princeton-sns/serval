@@ -459,6 +459,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                 skb_serval_set_owner_w(skb, sk);
 
                 /* Ask transport to fill in*/
+                /*
                 if (ssk->af_ops->conn_build_fin) {
                         err = ssk->af_ops->conn_build_fin(sk, skb);
                         
@@ -468,7 +469,8 @@ void serval_sal_close(struct sock *sk, long timeout)
                                 return;
                         }
                 }
-                
+                */
+
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
                 memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
