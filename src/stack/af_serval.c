@@ -728,7 +728,7 @@ int serval_release(struct socket *sock)
 
 #if defined(OS_LINUX_KERNEL)
 static unsigned int serval_poll(struct file *file, struct socket *sock,
-                                  poll_table *wait)
+                                poll_table *wait)
 {
 	struct sock *sk = sock->sk;
 	unsigned int mask = 0;
@@ -812,7 +812,9 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 #endif
 
 #if defined(OS_LINUX_KERNEL)
-unsigned int tcp_poll(struct file *file, struct socket *sock, poll_table *wait);
+extern unsigned int serval_tcp_poll(struct file *file, 
+                                    struct socket *sock, 
+                                    poll_table *wait);
 #endif
 
 static const struct proto_ops serval_stream_ops = {
@@ -831,8 +833,7 @@ static const struct proto_ops serval_stream_ops = {
 	.setsockopt =	sock_no_setsockopt,
 	.getsockopt =	sock_no_getsockopt,
 	.socketpair =	sock_no_socketpair,
-	/* .poll =	        serval_poll, */
-	.poll =	        tcp_poll,
+	.poll =	        serval_tcp_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,

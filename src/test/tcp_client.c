@@ -137,6 +137,8 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
         while (!should_exit) {
                 n = recv_sv(sock, recvbuf, RECVBUF_SIZE, 0);
         
+                printf("received %zd bytes\n", n);
+
                 if (n < 0) {
                         ret = check_migration(sock, total_bytes);
             

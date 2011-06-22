@@ -255,12 +255,22 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 		else
 #endif
 		{
-			if (!serval_tcp_prequeue(sk, skb))
+			if (!serval_tcp_prequeue(sk, skb)) {
+                                LOG_DBG("Calling serval_tcp_do_rcv\n");
 				err = serval_tcp_do_rcv(sk, skb);
+                        } else {
+                                LOG_DBG("packet was prequeued\n");
+                        }
 		}
 	} else {
-                LOG_WARN("Socket is owned by user! Shouldn't happen here!!!\n");
-		goto discard_it;
+                /* User has the socket lock, add to backlog */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb))
+                        goto discard_it;
+#else
+                sk_add_backlog(sk, skb);
+#endif
+                LOG_DBG("Put packet on backlog\n");
 	}
         
         return err;
@@ -522,6 +532,114 @@ static void tcp_service_net_dma(struct sock *sk, bool wait)
 	} while (wait);
 }
 #endif
+
+#if defined(OS_LINUX_KERNEL)
+/*
+ *	Wait for a TCP event.
+ *
+ *	Note that we don't need to lock the socket, as the upper poll layers
+ *	take care of normal races (between the test and the event) and we don't
+ *	go look at any of the socket buffers directly.
+ */
+unsigned int serval_tcp_poll(struct file *file, 
+                             struct socket *sock, 
+                             poll_table *wait)
+{
+	unsigned int mask;
+	struct sock *sk = sock->sk;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	sock_poll_wait(file, sk_sleep(sk), wait);
+        
+        if (sk->sk_state == SERVAL_LISTEN) {
+                struct serval_sock *ssk = serval_sk(sk);
+                return list_empty(&ssk->accept_queue) ? 0 :
+                        (POLLIN | POLLRDNORM);
+        }
+
+        /* Socket is not locked. We are protected from async events
+	 * by poll logic and correct handling of state changes
+	 * made by other threads is impossible in any case.
+	 */
+
+	mask = 0;
+
+	/*
+	 * POLLHUP is certainly not done right. But poll() doesn't
+	 * have a notion of HUP in just one direction, and for a
+	 * socket the read side is more interesting.
+	 *
+	 * Some poll() documentation says that POLLHUP is incompatible
+	 * with the POLLOUT/POLLWR flags, so somebody should check this
+	 * all. But careful, it tends to be safer to return too many
+	 * bits than too few, and you can easily break real applications
+	 * if you don't tell them that something has hung up!
+	 *
+	 * Check-me.
+	 *
+	 * Check number 1. POLLHUP is _UNMASKABLE_ event (see UNIX98 and
+	 * our fs/select.c). It means that after we received EOF,
+	 * poll always returns immediately, making impossible poll() on write()
+	 * in state CLOSE_WAIT. One solution is evident --- to set POLLHUP
+	 * if and only if shutdown has been made in both directions.
+	 * Actually, it is interesting to look how Solaris and DUX
+	 * solve this dilemma. I would prefer, if POLLHUP were maskable,
+	 * then we could set it on SND_SHUTDOWN. BTW examples given
+	 * in Stevens' books assume exactly this behaviour, it explains
+	 * why POLLHUP is incompatible with POLLOUT.	--ANK
+	 *
+	 * NOTE. Check for TCP_CLOSE is added. The goal is to prevent
+	 * blocking on fresh not-connected or disconnected socket. --ANK
+	 */
+	if (sk->sk_shutdown == SHUTDOWN_MASK || sk->sk_state == TCP_CLOSE)
+		mask |= POLLHUP;
+	if (sk->sk_shutdown & RCV_SHUTDOWN)
+		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
+
+	/* Connected? */
+	if ((1 << sk->sk_state) & ~(TCPF_SYN_SENT | TCPF_SYN_RECV)) {
+		int target = sock_rcvlowat(sk, 0, INT_MAX);
+
+		if (tp->urg_seq == tp->copied_seq &&
+		    !sock_flag(sk, SOCK_URGINLINE) &&
+		    tp->urg_data)
+			target++;
+
+		/* Potential race condition. If read of tp below will
+		 * escape above sk->sk_state, we can be illegally awaken
+		 * in SYN_* states. */
+		if (tp->rcv_nxt - tp->copied_seq >= target)
+			mask |= POLLIN | POLLRDNORM;
+
+		if (!(sk->sk_shutdown & SEND_SHUTDOWN)) {
+			if (sk_stream_wspace(sk) >= sk_stream_min_wspace(sk)) {
+				mask |= POLLOUT | POLLWRNORM;
+			} else {  /* send SIGIO later */
+				set_bit(SOCK_ASYNC_NOSPACE,
+					&sk->sk_socket->flags);
+				set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+
+				/* Race breaker. If space is freed after
+				 * wspace test but before the flags are set,
+				 * IO signal will be lost.
+				 */
+				if (sk_stream_wspace(sk) >= sk_stream_min_wspace(sk))
+					mask |= POLLOUT | POLLWRNORM;
+			}
+		} else
+			mask |= POLLOUT | POLLWRNORM;
+
+		if (tp->urg_data & TCP_URG_VALID)
+			mask |= POLLPRI;
+	}
+	/* This barrier is coupled with smp_wmb() in tcp_reset() */
+	smp_rmb();
+	if (sk->sk_err)
+		mask |= POLLERR;
+
+	return mask;
+}
+#endif /* OS_LINUX_KERNEL */
 
 static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, 
                               struct msghdr *msg, size_t len)
@@ -931,6 +1049,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	struct sk_buff *skb;
 	u32 urg_hole = 0;
 
+        LOG_DBG("User reads data len=%zu\n", len);
+
 	lock_sock(sk);
 
 	TCP_CHECK_TIMER(sk);
@@ -1254,6 +1374,7 @@ skip_copy:
 
 	found_fin_ok:
 		/* Process the FIN. */
+                LOG_DBG("processing FIN\n");
 		++*seq;
 		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, copied_early);
@@ -1299,6 +1420,7 @@ skip_copy:
 	 */
 
 	/* Clean up data we have read: This will do ACK frames. */
+        LOG_DBG("Copied %d bytes\n", copied);
 	serval_tcp_cleanup_rbuf(sk, copied);
 
 	TCP_CHECK_TIMER(sk);
@@ -1481,6 +1603,8 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
 
 	serval_tcp_initialize_rcv_mss(newsk);
 
+        newtp->bytes_queued = 0;
+
         return 0;
 #if defined(OS_LINUX_KERNEL)
 exit:
@@ -1533,6 +1657,8 @@ static int serval_tcp_init_sock(struct sock *sk)
 
 	sk->sk_sndbuf = sysctl_tcp_wmem[1];
 	sk->sk_rcvbuf = sysctl_tcp_rmem[1];
+
+        tp->bytes_queued = 0;
 
 #if defined(OS_LINUX_KERNEL)
 	local_bh_disable();

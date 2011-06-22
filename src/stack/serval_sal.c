@@ -457,6 +457,18 @@ void serval_sal_close(struct sock *sk, long timeout)
                 
                 skb_reserve(skb, sk->sk_prot->max_header);
                 skb_serval_set_owner_w(skb, sk);
+
+                /* Ask transport to fill in*/
+                if (ssk->af_ops->conn_build_fin) {
+                        err = ssk->af_ops->conn_build_fin(sk, skb);
+                        
+                        if (err) {
+                                LOG_ERR("Transport error on building ACK\n");
+                                kfree_skb(skb);
+                                return;
+                        }
+                }
+                
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
                 memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
@@ -1469,7 +1481,6 @@ int serval_sal_do_rcv(struct sock *sk,
                 (struct serval_hdr *)skb_transport_header(skb);
         unsigned int hdr_len = ntohs(sfh->length);
                  
-        LOG_DBG("Auto-receiving\n");
         pskb_pull(skb, hdr_len);
         skb_reset_transport_header(skb);
                 
@@ -1913,7 +1924,7 @@ static int serval_sal_rexmit(struct sock *sk)
         err = serval_sal_transmit_skb(sk, skb, 1, GFP_ATOMIC);
         
         if (err < 0) {
-                LOG_ERR("retransmit failed\n");
+                LOG_ERR("Retransmit failed\n");
         }
 
         return err;
@@ -1926,7 +1937,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock_nested(sk);
 
-        LOG_DBG("Retransmit timeout sock=%p num=%u backoff=%u\n", 
+        LOG_DBG("Transmit timeout sock=%p num=%u backoff=%u\n", 
                 sk, ssk->retransmits, backoff[ssk->retransmits]);
         
         if (backoff[ssk->retransmits + 1] == 0) {
@@ -1935,7 +1946,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
                 sk->sk_err = ETIMEDOUT;
                 serval_sock_done(sk);
         } else {
-                LOG_DBG("retransmitting and rescheduling timer\n");
+                LOG_DBG("Retransmitting and rescheduling timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + (msecs_to_jiffies(ssk->rto) * 
                                           backoff[ssk->retransmits]));
@@ -2163,13 +2174,16 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_CLOSEWAIT))
 		return serval_sal_do_xmit(skb);
         
-	/* Unresolved packet, use service id to resolve IP, unless IP
-         * is set already by user. */
+	/* Use service id to resolve IP, unless IP is already set. */
         if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
                    sizeof(null_addr)) != 0) {
+                /*
+                char ip[18];
                 LOG_DBG("Sending packet to user-specified "
-                        "advisory address: %u\n", 
-                        SERVAL_SKB_CB(skb)->addr.net_un.un_ip.s_addr);
+                        "advisory address: %s\n", 
+                        inet_ntop(AF_INET, &SERVAL_SKB_CB(skb)->addr, 
+                                  ip, 17));
+                */
                 /* for user-space, need to specify a device - the
                  * kernel will route */
 #if defined(OS_USER)

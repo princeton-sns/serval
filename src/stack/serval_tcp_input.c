@@ -2714,9 +2714,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	res = serval_tcp_validate_incoming(sk, skb, th, 0);
 
-	if (res <= 0)
+	if (res <= 0) {
+                LOG_ERR("Incoming packet could not be validated\n");
                 return -res;
-
+        }
 	/* step 5: check the ACK field */
 	if (th->ack) {
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
@@ -2780,9 +2781,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			break;
 #endif
 		}
-	} else
+	} else {
+                LOG_DBG("NO ACK in packet -> goto discard\n");
 		goto discard;
-
+        }
 	/* step 6: check the URG bit */
 	//serval_tcp_urg(sk, skb, th);
 
@@ -2791,8 +2793,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	case TCP_CLOSE_WAIT:
 	case TCP_CLOSING:
 	case TCP_LAST_ACK:
-		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt))
+		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
+                        LOG_DBG("Unexpected sequence number\n");
 			break;
+                }
 	case TCP_FIN_WAIT1:
 	case TCP_FIN_WAIT2:
 		/* RFC 793 says to queue data in these states,
@@ -2812,6 +2816,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		}
 		/* Fall through */
 	case TCP_ESTABLISHED:
+                LOG_DBG("Queuing packet\n");
 		serval_tcp_data_queue(sk, skb);
 		queued = 1;
 		break;
@@ -2825,6 +2830,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (!queued) {
 discard:
+                LOG_DBG("Discarding packet\n");
 		__kfree_skb(skb);
 	}
 	return 0;
@@ -2885,7 +2891,10 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	 *	PSH flag is ignored.
 	 */
 
-        LOG_DBG("Packet %s\n", tcphdr_to_str(th));
+        tp->bytes_queued += len;
+
+        LOG_DBG("Packet %s total_bytes=%u\n", 
+                tcphdr_to_str(th), tp->bytes_queued);
 
 	if ((serval_tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
 	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
@@ -2946,6 +2955,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			if (tp->copied_seq == tp->rcv_nxt &&
 			    len - tcp_header_len <= tp->ucopy.len) {
 #ifdef CONFIG_NET_DMA
+                                LOG_DBG("Trying early copy\n");
 				if (serval_tcp_dma_try_early_copy(sk, skb, tcp_header_len)) {                                        
 					copied_early = 1;
 					eaten = 1;
@@ -2955,6 +2965,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				    sock_owned_by_user(sk) && !copied_early) {
 					__set_current_state(TASK_RUNNING);
 
+                                        LOG_DBG("copy directly to user\n");
 					if (!serval_tcp_copy_to_iovec(sk, skb, tcp_header_len))
 						eaten = 1;
 				}
@@ -2998,6 +3009,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPHPHITS);
 
+                                LOG_DBG("Bulk data transfer, receiver\n");
 				/* Bulk data transfer: receiver */
                                 __skb_pull(skb, tcp_header_len);
 				__skb_queue_tail(&sk->sk_receive_queue, skb);
@@ -3005,7 +3017,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				tp->rcv_nxt = TCP_SKB_CB(skb)->end_seq;
 			}
 
-                        LOG_DBG("Data received eaten=%d copied_early=%d\n",
+                        LOG_DBG("Data eaten=%d copied_early=%d\n",
                                 eaten, copied_early);
 
 			serval_tcp_event_data_recv(sk, skb);
@@ -3028,8 +3040,10 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 #endif
                         {
                                 if (eaten) {
+                                        LOG_DBG("packet was eaten\n");
                                         __kfree_skb(skb);
                                 } else {
+                                        LOG_DBG("signal data ready 2!\n");
                                         sk->sk_data_ready(sk, 0);
                                 }
                         }
@@ -3045,12 +3059,16 @@ slow_path:
 	 *	Standard slow path.
 	 */
 
+        LOG_DBG("Slow path\n");
+
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 
 	if (res <= 0)
 		return -res;
 
 step5:
+        LOG_DBG("Step 5\n");
+
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
 		goto discard;
 
@@ -3060,7 +3078,9 @@ step5:
 	//serval_tcp_urg(sk, skb, th);
 
 	/* step 7: process the segment text */
-        LOG_DBG("Queueing packet, skb->len=%u\n", skb->len);
+
+        LOG_DBG("Queueing packet, skb->len=%u\n", 
+                skb->len);
 
 	serval_tcp_data_queue(sk, skb);
 
