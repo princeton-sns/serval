@@ -5,7 +5,7 @@
 #include <serval/netdevice.h>
 #include <serval_sock.h>
 #include <serval_ipv4.h>
-#include <serval_srv.h>
+#include <serval_sal.h>
 #include <input.h>
 #include <output.h>
 #include <neighbor.h>
@@ -19,7 +19,13 @@
 #include <netinet/if_ether.h>
 #endif
 
-extern int serval_srv_rcv(struct sk_buff *);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+#define route_dst(rt) &(rt)->u.dst
+#else
+#define route_dst(rt) &(rt)->dst
+#endif /* LINUX_VERSION_CODE */
+
+extern int serval_sal_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
 
@@ -67,7 +73,7 @@ int serval_ipv4_rcv(struct sk_buff *skb)
         pskb_pull(skb, hdr_len);                
         skb_reset_transport_header(skb);
         
-        ret = serval_srv_rcv(skb);
+        ret = serval_sal_rcv(skb);
 out:
 	return ret;
 inhdr_error:
@@ -91,7 +97,10 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
         err = ip_forward(skb);
 #endif
 */
-        return dst_input(skb);
+        //return dst_input(skb);
+        /* Inject into stack again and let IP take care of
+           business. */
+        err = dev_forward_skb(skb->dev, skb);
 #else
         struct iphdr *iph = ip_hdr(skb);
         
@@ -102,7 +111,6 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
         ip_send_check(ip_hdr(skb));
         /* err = serval_output(skb);*/
         err = dev_queue_xmit(skb);
-        
 #endif
         return err;
 }
@@ -315,11 +323,11 @@ static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 {
 	int ttl = inet->uc_ttl;
 
-	if (ttl < 0) {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-		ttl = dst_metric(dst, RTAX_HOPLIMIT);
+        if (ttl < 0) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
+                ttl = ip4_dst_hoplimit(dst);        
 #else
-		ttl = ip4_dst_hoplimit(dst);
+                ttl = dst_metric(dst, RTAX_HOPLIMIT);
 #endif
         }
 	return ttl;

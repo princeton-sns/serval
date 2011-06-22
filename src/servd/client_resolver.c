@@ -985,7 +985,6 @@ static int _client_resolve_service(service_resolver* resolver, service_resolver*
 
     /* packetize services into requests */
     /* fire off all messages in parallel - with window limit? TODO */
-    int retval = 0;
 
     struct resolution_response_barrier* rbarrier;
     resolver_message_callback * callback;
@@ -1038,7 +1037,7 @@ static int _client_resolve_service(service_resolver* resolver, service_resolver*
     rmessage->service_id.type = htons(service->type);
 
     atomic_inc(&rbarrier->barrier.message_count);
-    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+    clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
             &rmessage->header, sizeof(*rmessage), callback);
 
     /* synchronous call so wait for everything to reply */
@@ -1069,7 +1068,6 @@ static int _client_poke_resolver(service_resolver* resolver, service_resolver* p
 
     /* packetize services into requests */
     /* fire off all messages in parallel - with window limit? TODO */
-    int retval = 0;
 
     struct echo_response_barrier* ebarrier;
     struct echo_response_barrier barrier;
@@ -1118,7 +1116,7 @@ static int _client_poke_resolver(service_resolver* resolver, service_resolver* p
     emessage->count = htonl(count);
     emessage->timestamp = (uint32_t) get_current_time_ms();
 
-    retval = clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
+    clientres->messaging->interface->send_resolver_message(clientres->messaging, xid,
             &emessage->header, sizeof(*emessage), callback);
 
     if(cb == NULL) {

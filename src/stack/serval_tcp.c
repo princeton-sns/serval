@@ -9,7 +9,7 @@
 #include <netinet/serval.h>
 #include <serval_tcp_sock.h>
 #include <serval_tcp_request_sock.h>
-#include <serval_srv.h>
+#include <serval_sal.h>
 #include <serval_ipv4.h>
 #include <serval_tcp.h>
 
@@ -1598,13 +1598,13 @@ struct proto serval_tcp_proto = {
 	.owner			= THIS_MODULE,
         .init                   = serval_tcp_init_sock,
         .destroy                = serval_tcp_destroy_sock,
-	.close  		= serval_srv_close,   
-        .connect                = serval_srv_connect,
+	.close  		= serval_sal_close,   
+        .connect                = serval_sal_connect,
 	.disconnect		= serval_tcp_disconnect,
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
-	.backlog_rcv		= serval_srv_do_rcv,
+	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.enter_memory_pressure	= tcp_enter_memory_pressure,

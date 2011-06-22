@@ -48,6 +48,8 @@ int host_ctrl_mode = 0;
 static struct sock *serval_accept_dequeue(struct sock *parent,
                                             struct socket *newsock);
 
+
+#if 0
 /* Wait for the socket to reach or leave a specific state, depending
  * on the outofstate variable. It this variable is "true" the function
  * will wait until the socket leaves the given state, otherwise it
@@ -116,6 +118,7 @@ static int serval_wait_state(struct sock *sk, int state,
 
 	return err;
 }
+#endif /* 0 */
 
 /*
   Automatically assigns a random service id.
@@ -516,9 +519,13 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 	}
 
         if (!nonblock) {
+                long timeo = sock_sndtimeo(sk, nonblock);        
                 /* Go to sleep, wait for timeout or successful connection */
                 LOG_DBG("waiting for connect\n");
-                err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
+                //err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
+                if ((1 << sk->sk_state) & SERVALF_REQUEST)
+                        err = sk_stream_wait_connect(sk, &timeo);
+                        
                 LOG_DBG("wait for connect returned=%d\n", err);
         } else {
                 /* TODO: handle nonblocking connect */
@@ -527,6 +534,8 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 goto out;
         }
 
+        /* We must be in SERVAL_REQUEST or later state. All those
+           states are valid "connected" states, except for CLOSED. */
         if (sk->sk_state == SERVAL_CLOSED)
                 goto sock_error;
 

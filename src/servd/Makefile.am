@@ -1,11 +1,14 @@
 bin_PROGRAMS = \
-	servd \
-	servr \
-	utiltest \
-	trietest \
-	tasktest \
-	stabletest \
-	messagetest
+	servd
+
+if ENABLE_SERVICE_ROUTER
+
+bin_PROGRAMS +=	servr \
+		utiltest \
+		trietest \
+		tasktest \
+		stabletest \
+		messagetest
 
 utiltest_SOURCES = \
 	util_test.c \
@@ -180,6 +183,8 @@ servr_LDFLAGS = \
 	-lrt \
 	-lpthread \
 	$(GLIB_LIBS)
+
+endif # ENABLE_SERVICE_ROUTER
 
 servd_SOURCES = \
 	timer.c \

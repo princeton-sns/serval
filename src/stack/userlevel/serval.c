@@ -83,10 +83,24 @@ static int daemonize(void)
 		return -1;
 	}
 	
-	/* Redirect standard files to /dev/null */
+        /* Redirect standard files to /dev/null */
 	f = freopen("/dev/null", "r", stdin);
+
+        if (!f) {
+                LOG_ERR("stdin redirection failed\n");
+        }
+
 	f = freopen("/dev/null", "w", stdout);
+
+        if (!f) {
+                LOG_ERR("stdout redirection failed\n");
+        }
+
 	f = freopen("/dev/null", "w", stderr);
+
+        if (!f) {
+                LOG_ERR("stderr redirection failed\n");
+        }
 
         return 0;
 }

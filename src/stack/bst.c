@@ -86,10 +86,11 @@ int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)
 
         if (n->prefix_bits == 0) {
                 len += snprintf(buf, buflen - len, "0");
-        }
-        for (i = 0; i < PREFIX_SIZE(n->prefix_bits); i++) {
-                len += snprintf(&buf[i*2], buflen - len, "%02x", 
-                                n->prefix[i] & 0xff);
+        } else {
+                for (i = 0; i < PREFIX_SIZE(n->prefix_bits); i++) {
+                        len += snprintf(&buf[i*2], buflen - len, "%02x", 
+                                        n->prefix[i] & 0xff);
+                }
         }
         return len;
 }
@@ -189,18 +190,16 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
         while (1) {
                 /* Keep track of the previous matching node */
                 if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
-                        if (!match || (match && match(n))) {
+                        if (match == NULL || match(n)) {
                                 *prev = n;
                         }
                 }
-                
-                if (n->prefix_bits == prefix_bits)
+                /*
+                  We are matching the root node, or we hit the prefix
+                  length we are matching.
+                */
+                if (prefix_bits == 0 || n->prefix_bits == prefix_bits)
                         break;
-                
-                if (prefix_bits == 0) {
-                        /* must be the root node */
-                        break;
-                }
                 
                 /* check if next bit is zero or one and, based on that, go
                  * left or right */

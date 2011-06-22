@@ -39,6 +39,10 @@ static void signal_handler(int sig)
         char q = 'q';
 	should_exit = 1;
         ret = write(p[1], &q, 1);
+
+        if (ret < 0) {
+                LOG_ERR("Could not signal quit!\n");
+        }
 }
 
 static ssize_t servd_sendto(int sock, void *data, size_t len, int flags, 
@@ -140,6 +144,10 @@ static void servd_register_service(struct service_id *srvid)
 
         ret = servd_sendto(ctrlsock, &data, sizeof(data), 0, 
 			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
+
+        if (ret < 0) {
+                LOG_ERR("sendto failed.\n");
+        }
 }
 
 static struct libstack_callbacks callbacks = {
@@ -212,8 +220,22 @@ static int daemonize(void)
 	
 	/* Redirect standard files to /dev/null */
 	f = freopen("/dev/null", "r", stdin);
+
+        if (!f) {
+                LOG_ERR("stdin redirection failed\n");
+        }
+
 	f = freopen("/dev/null", "w", stdout);
+
+        if (!f) {
+                LOG_ERR("stdout redirection failed\n");
+        }
+
 	f = freopen("/dev/null", "w", stderr);
+
+        if (!f) {
+                LOG_ERR("stderr redirection failed\n");
+        }
 
         return 0;
 }

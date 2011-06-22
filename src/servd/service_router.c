@@ -94,14 +94,28 @@ static int daemonize(void) {
      Change the current working directory. This prevents the current
      directory from being locked; hence not being able to remove it.
      */
-    if(chdir("/") < 0) {
-        return -1;
+    if (chdir("/") < 0) {
+            return -1;
     }
 
     /* Redirect standard files to /dev/null */
     f = freopen("/dev/null", "r", stdin);
+    
+    if (!f) {
+            LOG_ERR("stdin redirection failed\n");
+    }
+
     f = freopen("/dev/null", "w", stdout);
+    
+    if (!f) {
+            LOG_ERR("stdout redirection failed\n");
+    }
+    
     f = freopen("/dev/null", "w", stderr);
+    
+    if (!f) {
+            LOG_ERR("stderr redirection failed\n");
+    }
 
     return 0;
 }
@@ -491,15 +505,16 @@ int main(int argc, char **argv) {
     /*add the local addresses to the resolver*/
     init_local_address_list(resolver);
 
+    /*
     int count = resolver_get_address_count(resolver);
 
     int i = 0;
     struct net_addr* address;
     for(i = 0; i < count; i++) {
         address = resolver_get_address(resolver, i);
-        //printf("Local resolver address: %s\n", inet_ntoa(address->net_un.un_ip));
+        printf("Local resolver address: %s\n", inet_ntoa(address->net_un.un_ip));
     }
-
+    */
     /* create the rpc handler for receiving incoming remote requests*/
     rpc_handler = create_server_rpc_handler(resolver);
 

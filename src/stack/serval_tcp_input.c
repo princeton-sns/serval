@@ -1893,7 +1893,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 
         /* Tell service access layer this stream is closed at other
          * end */
-        serval_srv_rcv_transport_fin(sk, skb);
+        serval_sal_rcv_transport_fin(sk, skb);
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.

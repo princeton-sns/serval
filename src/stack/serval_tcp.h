@@ -13,7 +13,7 @@
 #include <userlevel/serval_tcp_user.h>
 #endif /* OS_USER */
 
-#include <serval_srv.h>
+#include <serval_sal.h>
 
 /* TCP timestamps are only 32-bits, this causes a slight
  * complication on 64-bit systems since we store a snapshot

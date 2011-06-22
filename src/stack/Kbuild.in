@@ -20,7 +20,7 @@ serval-y := \
 	   service.o \
 	   ctrl_handler.o \
 	   serval_sock.o \
-	   serval_srv.o \
+	   serval_sal.o \
 	   serval_ipv4.o \
 	   serval_udp.o \
 	   serval_tcp.o \

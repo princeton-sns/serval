@@ -23,8 +23,8 @@
 static struct proc_dir_entry *serval_dir = NULL;
 
 static int serval_proc_service_table_read(char *page, char **start, 
-                                            off_t off, int count, 
-                                            int *eof, void *data)
+                                          off_t off, int count, 
+                                          int *eof, void *data)
 {
 	int len;
         len = 0;

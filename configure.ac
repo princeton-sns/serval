@@ -233,13 +233,27 @@ AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes && test x$serval_os_linux =
 
 
 dnl Check for PCL library
-AC_CHECK_LIB(pcl,co_thread_init, [AC_CHECK_HEADERS([pcl.h],have_pcl=yes,AC_MSG_ERROR(You have libpcl but not the development headers))],AC_MSG_ERROR(PCL library not found...),)
+have_pcl=no
+
+AC_CHECK_LIB(pcl,co_thread_init, [AC_CHECK_HEADERS([pcl.h],have_pcl=yes,AC_MSG_WARN(You have libpcl but not the development headers))],AC_MSG_WARN(PCL library missing or wrong version. Check http://www.xmailserver.org/libpcl.html for latest version.),)
 		
 AC_MSG_CHECKING([for Portable Coroutine Library (PCL)])
 AC_MSG_RESULT([$have_pcl])
+AM_CONDITIONAL([HAVE_PCL_LIB], [test x$have_pcl = xyes])
 
 dnl Check for glib
-PKG_CHECK_MODULES([GLIB], [glib-2.0])
+have_glib2=no
+PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
+
+AM_CONDITIONAL([HAVE_GLIB2], [test x$have_glib2 = xyes])
+
+if test "$have_glib2" = yes && test "$have_pcl" = yes; then
+	enable_service_router=yes
+else	
+	enable_service_router=no
+fi
+
+AM_CONDITIONAL([ENABLE_SERVICE_ROUTER], [test x$enable_service_router = xyes])
 
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
@@ -285,5 +299,6 @@ echo
 echo "Build Linux kernel module.................$kernel"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"
+echo "Build service router......................$enable_service_router"
 #echo "Enable GPROF.............................$enable_gprof"
 echo

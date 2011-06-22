@@ -1720,7 +1720,7 @@ void* prefix_trie_find(struct prefix_trie_struct* trie, uint8_t* key, uint16_t p
     struct prefix_trie_node* prev = NULL;
 
     uint8_t level_bits = PREFIX_TRIE_ROOT_BIT;
-    uint8_t shortest = trie->shortest;
+    //uint8_t shortest = trie->shortest;
     /*TODO this really shouldn't need to be 16 bits*/
     uint16_t bits_left = prefix;
 
@@ -1794,7 +1794,7 @@ void* prefix_trie_find(struct prefix_trie_struct* trie, uint8_t* key, uint16_t p
 
             total_bits += node->skip;
             bits_left -= node->skip;
-            shortest = next->shortest;
+            //shortest = next->shortest;
             /*continue*/
             level_bits = get_branch_bits(node);
             branches = (struct prefix_trie_data**) (((uint8_t*) node) + sizeof(*node));

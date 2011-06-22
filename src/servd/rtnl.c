@@ -285,47 +285,53 @@ int rtnl_read(struct netlink_handle *nlh)
 			//struct host_addr haddr = { 6 };
 			//struct as_addr aaddr = { 2 };
 			ret = rtnl_parse_link_info(nlm, &ifinfo);
-			
-                        LOG_DBG("Interface newlink %s %s %s\n", 
-                               ifinfo.ifname, eth_to_str(ifinfo.mac), 
-                               ifinfo.isUp ? "up" : "down");
-
-			/* TODO: Should find a good way to sort out
-			 * unwanted interfaces. */
-                        /*
-			if (ifinfo.isUp) {
-				if (get_ipconf(&ifinfo) < 0)
+			                        
+                        if (ret > 0) {
+                                LOG_DBG("Interface newlink %s %s %s\n", 
+                                        ifinfo.ifname, eth_to_str(ifinfo.mac), 
+                                        ifinfo.isUp ? "up" : "down");
+                                
+                                /* TODO: Should find a good way to sort out
+                                 * unwanted interfaces. */
+                                /*
+                                  if (ifinfo.isUp) {
+                                  if (get_ipconf(&ifinfo) < 0)
 					break;
-
-				if (ifinfo.mac[0] == 0 &&
-                                    ifinfo.mac[1] == 0 &&
-                                    ifinfo.mac[2] == 0 &&
-                                    ifinfo.mac[3] == 0 &&
-                                    ifinfo.mac[4] == 0 &&
-                                    ifinfo.mac[5] == 0)
+                                        
+                                        if (ifinfo.mac[0] == 0 &&
+                                        ifinfo.mac[1] == 0 &&
+                                        ifinfo.mac[2] == 0 &&
+                                        ifinfo.mac[3] == 0 &&
+                                        ifinfo.mac[4] == 0 &&
+                                        ifinfo.mac[5] == 0)
                                         break;
-						
-                                servd_send_join(ifinfo.ifname);
+					
+                                        servd_send_join(ifinfo.ifname);
+                                        }
+                                */
                         }
-                        */
 			break;
 		}
 		case RTM_DELLINK:
                         ret = rtnl_parse_link_info(nlm, &ifinfo);
 		
-			LOG_DBG("Interface dellink %s %s\n", 
-				ifinfo.ifname, eth_to_str(ifinfo.mac));
+                        if (ret > 0) {
+                                LOG_DBG("Interface dellink %s %s\n", 
+                                        ifinfo.ifname, eth_to_str(ifinfo.mac));
+                        }
                         break;
 		case RTM_DELADDR:
 			ret = rtnl_parse_addr_info(nlm, &ifinfo);
-			LOG_DBG("Interface deladdr %s %s\n", 
-				ifinfo.ifname, 
-                                inet_ntoa(ifinfo.ipaddr.sin_addr));
+                        if (ret > 0) {
+                                LOG_DBG("Interface deladdr %s %s\n", 
+                                        ifinfo.ifname, 
+                                        inet_ntoa(ifinfo.ipaddr.sin_addr));
+                        }
 			break;
 		case RTM_NEWADDR:
 			ret = rtnl_parse_addr_info(nlm, &ifinfo);
                         
-                        if (!is_blacklist_iface(ifinfo.ifname)) {
+                        if (ret > 0 && !is_blacklist_iface(ifinfo.ifname)) {
                                 LOG_DBG("Interface newaddr %s %s\n", 
                                         ifinfo.ifname, 
                                         inet_ntoa(ifinfo.ipaddr.sin_addr));

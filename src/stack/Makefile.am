@@ -8,7 +8,7 @@ serval_SOURCES = \
 	ctrl_handler.c \
 	af_serval.c \
 	serval_sock.c \
-	serval_srv.c \
+	serval_sal.c \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \
@@ -45,7 +45,7 @@ SERVAL_HDR = \
 	serval_udp_sock.h \
 	serval_tcp_sock.h \
 	serval_ipv4.h \
-	serval_srv.h \
+	serval_sal.h \
 	serval_tcp.h \
 	userlevel/serval_tcp_user.h \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
@@ -108,7 +108,7 @@ SERVAL_KERNEL_SRC = \
 	ctrl_handler.c \
 	af_serval.c \
 	serval_sock.c \
-	serval_srv.c \
+	serval_sal.c \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \

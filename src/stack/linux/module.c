@@ -42,7 +42,10 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(NULL, 0, 0, BROADCAST_SERVICE_DEFAULT_PRIORITY,BROADCAST_SERVICE_DEFAULT_WEIGHT, &dst, sizeof(dst), dev, GFP_ATOMIC);
+                service_add(NULL, 0, 0, 
+                            BROADCAST_SERVICE_DEFAULT_PRIORITY,
+                            BROADCAST_SERVICE_DEFAULT_WEIGHT, 
+                            &dst, sizeof(dst), dev, GFP_ATOMIC);
                 /*
                 dev_get_ipv4_netmask(dev, &mask);
                 
