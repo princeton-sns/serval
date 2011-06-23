@@ -45,6 +45,29 @@ struct sk_buff;
 struct proto;
 struct request_sock_ops;
 
+/* From linux asm-generic/poll.h. Seems to be non-standardized */
+#ifndef POLLRDNORM 
+#define POLLRDNORM      0x0040
+#endif
+#ifndef POLLRDBAND
+#define POLLRDBAND      0x0080
+#endif
+#ifndef POLLWRNORM
+#define POLLWRNORM      0x0100
+#endif
+#ifndef POLLWRBAND
+#define POLLWRBAND      0x0200
+#endif
+#ifndef POLLMSG
+#define POLLMSG         0x0400
+#endif
+#ifndef POLLREMOVE
+#define POLLREMOVE      0x1000
+#endif
+#ifndef POLLRDHUP
+#define POLLRDHUP       0x2000
+#endif
+
 #define SOCK_SNDBUF_LOCK	1
 #define SOCK_RCVBUF_LOCK	2
 #define SOCK_BINDADDR_LOCK	4

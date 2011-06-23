@@ -940,7 +940,7 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
 #if defined(OS_LINUX_KERNEL)
 	inet->mc_loop	= 1;
 	inet->mc_ttl	= 1;
-	inet->mc_all	= 1;
+	/* inet->mc_all	= 1; */
 	inet->mc_index	= 0;
 	inet->mc_list	= NULL;
 #endif

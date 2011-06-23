@@ -634,17 +634,20 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 	const struct inet_request_sock *ireq = inet_rsk(req);
 	//struct ip_options *opt = inet_rsk(req)->opt;
 	struct flowi fl = { .oif = 0, //sk->sk_bound_dev_if,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 			    .mark = sk->sk_mark,
+#endif
 			    .nl_u = { .ip4_u =
 				      { .daddr = ireq->rmt_addr,
 					.saddr = ireq->loc_addr,
 					.tos = 0 /*RT_CONN_FLAGS(sk)*/ } },
 			    .proto = sk->sk_protocol,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
 			    .flags = inet_sk_flowi_flags(sk),
+#endif
 			    .uli_u = { .ports =
 				       { .sport = 0,
 					 .dport = 0 } } };
-	struct net *net = sock_net(sk);
 
         {
                 char rmtstr[18], locstr[18];
@@ -653,10 +656,17 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
                         inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
                         sk->sk_protocol);
         }
+
 	security_req_classify_flow(req, &fl);
 
-	if (ip_route_output_flow(net, &rt, &fl, sk, 0))
-		goto no_route;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+        if (ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0))
+                goto no_route;
+#else
+        if (ip_route_output_flow(&rt, &fl, sk, 0))
+                goto no_route;
+#endif
+
         /*
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;

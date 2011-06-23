@@ -11,6 +11,7 @@
 
 #if defined(OS_USER)
 #include <userlevel/serval_tcp_user.h>
+#include <poll.h>
 #endif /* OS_USER */
 
 #include <serval_sal.h>

@@ -25,6 +25,7 @@
  * skb to iovec copies.
  */
 
+#include <serval/skbuff.h>
 #include <linux/dmaengine.h>
 #include <linux/socket.h>
 #include <net/tcp.h>

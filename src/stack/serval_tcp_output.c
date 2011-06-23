@@ -1409,8 +1409,11 @@ static void serval_tcp_connect_init(struct sock *sk)
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	__u8 rcv_wscale;
 	struct dst_entry *dst = __sk_dst_get(sk);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34))
         unsigned int initrwnd = dst ? dst_metric(dst, RTAX_INITRWND) : 655356;
-
+#else
+        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_WINDOW) : 655356;
+#endif
         tp->tcp_header_len = sizeof(struct tcphdr);
  
 	if (tp->rx_opt.user_mss)

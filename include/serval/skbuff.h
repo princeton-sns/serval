@@ -32,6 +32,9 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 {
         skb->dst = dst;
 }
+
+#define skb_walk_frags(skb, iter)                                       \
+        for (iter = skb_shinfo(skb)->frag_list; iter; iter = iter->next)
 #endif
 
 #endif /* OS_LINUX_KERNEL */

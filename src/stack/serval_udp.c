@@ -23,8 +23,6 @@
 #else
 #include <netinet/udp.h>
 #endif
-#define UDP_INC_STATS_USER(x,y,z)
-#define UDP_INC_STATS_BH(x,y,z)
 #endif /* OS_USER */
 
 #define EXTRA_HDR (20)
@@ -207,9 +205,8 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 /* Increase error statistics. These are standard
                  * macros defined for standard UDP. */
                 if (err == -ENOMEM) {
-			UDP_INC_STATS_BH(sock_net(sk), UDP_MIB_RCVBUFERRORS, 0);
+                        /* TODO: statistics */
                 }
-		UDP_INC_STATS_BH(sock_net(sk), UDP_MIB_INERRORS, 0);
                 FREE_SKB(skb);
         }
 
@@ -430,7 +427,10 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
         found_fin_ok:
 		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, 0);
+                        /*
+                          Only for stream-based memory accounting? 
                         sk_mem_reclaim_partial(sk);
+                        */
                 }
 		break;
 	} while (1);

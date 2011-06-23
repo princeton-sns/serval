@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _LIBSTACK_CALLBACK_H_
 #define _LIBSTACK_CALLBACK_H_
 

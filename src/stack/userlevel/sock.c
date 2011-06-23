@@ -27,29 +27,6 @@ int sysctl_optmem_max __read_mostly = sizeof(unsigned long)*(2*UIO_MAXIOV+512);
 LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
 
-/* From linux asm-generic/poll.h. Seems to be non-standardized */
-#ifndef POLLRDNORM 
-#define POLLRDNORM      0x0040
-#endif
-#ifndef POLLRDBAND
-#define POLLRDBAND      0x0080
-#endif
-#ifndef POLLWRNORM
-#define POLLWRNORM      0x0100
-#endif
-#ifndef POLLWRBAND
-#define POLLWRBAND      0x0200
-#endif
-#ifndef POLLMSG
-#define POLLMSG         0x0400
-#endif
-#ifndef POLLREMOVE
-#define POLLREMOVE      0x1000
-#endif
-#ifndef POLLRDHUP
-#define POLLRDHUP       0x2000
-#endif
-
 static void sock_def_destruct(struct sock *sk)
 {
 

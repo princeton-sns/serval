@@ -87,20 +87,18 @@ inhdr_error:
 
 int serval_ipv4_forward_out(struct sk_buff *skb)
 {
-        int err;
+        int err = -EHOSTUNREACH;
 
 #if defined(OS_LINUX_KERNEL)
-/*
-  #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        err = ip_forward(skb);
-#else
-        err = ip_forward(skb);
-#endif
-*/
         //return dst_input(skb);
         /* Inject into stack again and let IP take care of
            business. */
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+        /* TODO: Figure out the right thing to do here. */
         err = dev_forward_skb(skb->dev, skb);
+#endif
+
 #else
         struct iphdr *iph = ip_hdr(skb);
         
