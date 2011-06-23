@@ -153,34 +153,11 @@ int serval_udp_connection_respond_sock(struct sock *sk,
         return 0;
 }
 
-/* 
-   Receive from network.
-*/
-int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
+static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
         unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
         int err = 0;
-        
-        /* Only ignore this message in case it has zero length and is
-         * not a FIN */
-        if (datalen == 0 && 
-            SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
-                FREE_SKB(skb);
-                return 0;
-        }
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
-        /* Drop if receive queue is full. Dropping due to full queue
-         * is done below in sock_queue_rcv for those kernel versions
-         * that do not define this sk_rcvqueues_full().  */
-        if (sk_rcvqueues_full(sk, skb)) {
-                FREE_SKB(skb);
-                return -ENOBUFS; 
-        }
-#endif
-        pskb_pull(skb, sizeof(*udph));
-
         
         LOG_DBG("data len=%u skb->len=%u\n",
                 datalen, skb->len); 
@@ -211,6 +188,56 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         }
 
         return err;
+}
+
+/* 
+   Receive from network.
+*/
+int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
+{
+        struct udphdr *udph = udp_hdr(skb);
+        unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
+        int err = 0;
+	/*
+	 *  Validate the packet.
+	 */
+	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
+		goto drop;		/* No space for header. */
+        
+        /* Only ignore this message in case it has zero length and is
+         * not a FIN */
+        if (datalen == 0 && 
+            SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
+                FREE_SKB(skb);
+                return 0;
+        }
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+        /* Drop if receive queue is full. Dropping due to full queue
+         * is done below in sock_queue_rcv for those kernel versions
+         * that do not define this sk_rcvqueues_full().  */
+        if (sk_rcvqueues_full(sk, skb)) {
+                FREE_SKB(skb);
+                return -ENOBUFS; 
+        }
+#endif
+
+	if (!sock_owned_by_user(sk))
+		err = serval_udp_do_rcv(sk, skb);
+	else {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (unlikely(sk_add_backlog(sk, skb))) {
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
+	}
+
+        return err;
+ drop:
+        FREE_SKB(skb);
+        return 0;
 }
 
 static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk, 
@@ -745,7 +772,7 @@ struct proto serval_udp_proto = {
 	.shutdown		= serval_udp_shutdown,
         .sendmsg                = serval_udp_sendmsg,
         .recvmsg                = serval_udp_recvmsg,
-	.backlog_rcv		= serval_sal_do_rcv,
+	.backlog_rcv		= serval_udp_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.max_header		= MAX_SERVAL_UDP_HDR,

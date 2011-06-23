@@ -1063,11 +1063,19 @@ static int serval_sal_child_process(struct sock *parent, struct sock *child,
         int ret = 0;
         int state = child->sk_state;
 
-        serval_sk(child)->dev = NULL;
+        serval_sk(child)->dev = NULL;        
+
+        ret = serval_sal_state_process(child, sfh, skb);
         
+        if (ret == 0 && state == SERVAL_RESPOND && child->sk_state != state) {
+                LOG_DBG("waking up parent (listening) sock\n");
+                parent->sk_data_ready(parent, 0);
+        }
+#if 0
         /* Check lock on child socket, similarly to how we handled the
            parent sock for the incoming skb. */
         if (!sock_owned_by_user(child)) {
+
                 ret = serval_sal_state_process(child, sfh, skb);
                 if (state == SERVAL_RESPOND && child->sk_state != state) {
                         LOG_DBG("waking up parent (listening) sock\n");
@@ -1081,7 +1089,7 @@ static int serval_sal_child_process(struct sock *parent, struct sock *child,
                 */
                 __sk_add_backlog(child, skb);
         }
-
+#endif
         bh_unlock_sock(child);
         sock_put(child);
         LOG_DBG("child refcnt=%d\n", atomic_read(&child->sk_refcnt));
@@ -1809,7 +1817,13 @@ int serval_sal_rcv(struct sk_buff *skb)
         LOG_PKT("flowid (src,dst)=(%u,%u)\n",
                 ntohl(sfh->src_flowid.s_id), 
                 ntohl(sfh->dst_flowid.s_id));
-       
+        
+        /*
+          FIXME: We should try to do early transport layer header
+          checks here so that we can drop bad packets before we put
+          them on, e.g., the backlog queue
+        */
+        
         /* Try flowID demux first */
         sk = serval_sal_demux_flow(skb, sfh);
         
@@ -1833,6 +1847,8 @@ int serval_sal_rcv(struct sk_buff *skb)
                 }
         }
         
+        bh_lock_sock_nested(sk);
+
         /* We only reach this point if a valid local socket destination
          * has been found */
         /* Drop check if control queue is full here - this should
@@ -1851,12 +1867,14 @@ int serval_sal_rcv(struct sk_buff *skb)
                    service_entry_put(se);
                    }
                 */
+                bh_unlock_sock(sk);
                 sock_put(sk);
                 goto drop_no_stats;
         }
 
-        bh_lock_sock_nested(sk);
+        err = serval_sal_do_rcv(sk, skb);
 
+#if 0
         if (!sock_owned_by_user(sk)) {
                 err = serval_sal_do_rcv(sk, skb);
         } else {
@@ -1887,7 +1905,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 sk_add_backlog(sk, skb);
 #endif
         }
-
+#endif /* 0 */
         /* Don't treat established flow packets as resolutions
            if(!se) {
            struct serval_sock *ssk = serval_sk(sk);
@@ -1943,7 +1961,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
         struct sock *sk = (struct sock *)data;
         struct serval_sock *ssk = serval_sk(sk);
 
-        bh_lock_sock_nested(sk);
+        bh_lock_sock(sk);
 
         LOG_DBG("Transmit timeout sock=%p num=%u backoff=%u\n", 
                 sk, ssk->retransmits, backoff[ssk->retransmits]);
@@ -1971,7 +1989,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
 void serval_sal_timewait_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
-        bh_lock_sock_nested(sk);
+        bh_lock_sock(sk);
         LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
         serval_sock_done(sk);
         bh_unlock_sock(sk);

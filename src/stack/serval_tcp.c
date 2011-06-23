@@ -276,13 +276,16 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                                 if (!serval_tcp_prequeue(sk, skb)) {
                                         LOG_DBG("Calling serval_tcp_do_rcv\n");
                                         err = serval_tcp_do_rcv(sk, skb);
-                        } else {
-                                        LOG_DBG("packet was prequeued\n");
-                                }
+                                } 
                         }
         } else {
-                /* We are processing the backlog. */
-                err = serval_tcp_do_rcv(sk, skb);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (unlikely(sk_add_backlog(sk, skb))) {
+                        goto discard_it;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
         }
         
         return err;
@@ -1745,7 +1748,7 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
-	.backlog_rcv		= serval_sal_do_rcv,
+	.backlog_rcv		= serval_tcp_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.enter_memory_pressure	= tcp_enter_memory_pressure,

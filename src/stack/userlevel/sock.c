@@ -522,11 +522,12 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	if (err)
 		return err;
         
-	if (!sk_rmem_schedule(sk, skb->truesize)) {
+        */
+        if (!sk_rmem_schedule(sk, skb->truesize)) {
 		atomic_inc(&sk->sk_drops);
 		return -ENOBUFS;
 	}
-        */
+
 	LOG_DBG("Queuing in socket for receive\n");
 	skb->dev = NULL;
 	skb_set_owner_r(skb, sk);
