@@ -1840,7 +1840,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
                            struct sock *sk, struct tcphdr *th)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-
 	serval_tsk_schedule_ack(sk);
 
 	/*sk->sk_shutdown |= RCV_SHUTDOWN;
@@ -1893,7 +1892,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 
         /* Tell service access layer this stream is closed at other
          * end */
-        serval_sal_rcv_transport_fin(sk, skb);
+        serval_sk(sk)->af_ops->recv_fin(sk, skb);
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.
@@ -2794,7 +2793,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	case TCP_CLOSING:
 	case TCP_LAST_ACK:
 		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
-                        LOG_DBG("Unexpected sequence number %d, rcv_nxt\n",
+                        LOG_DBG("Unexpected sequence number %u, rcv_nxt=%u\n",
                                 TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 			break;
                 }

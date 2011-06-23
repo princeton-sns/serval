@@ -951,11 +951,17 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         return err;
 }
 
+/**
+   Called by transport when it has finished.
+ */
 int serval_sal_rcv_transport_fin(struct sock *sk,
                                  struct sk_buff *skb)
 {
         int err = 0;
         struct serval_sock *ssk = serval_sk(sk);
+        
+        LOG_DBG("Transport FIN received. Serval close received=%d\n", 
+                ssk->close_received);
 
         if (!ssk->close_received)
                 return 0;

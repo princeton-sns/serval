@@ -328,6 +328,8 @@ static int serval_tcp_connection_close(struct sock *sk)
 	}
 
 	sk_mem_reclaim(sk);
+        
+        LOG_DBG("Sending transport FIN\n");
 
         serval_tcp_send_fin(sk);
 
@@ -1450,6 +1452,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_connection_respond_sock,
+        .recv_fin = serval_sal_rcv_transport_fin,
 };
 
 /**

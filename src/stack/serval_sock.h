@@ -118,6 +118,7 @@ struct serval_sock_af_ops {
                                            struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
+        int             (*recv_fin)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
 };
