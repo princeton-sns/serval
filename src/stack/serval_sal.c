@@ -1851,6 +1851,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                    service_entry_put(se);
                    }
                 */
+                sock_put(sk);
                 goto drop_no_stats;
         }
 
@@ -1910,7 +1911,6 @@ int serval_sal_rcv(struct sk_buff *skb)
 
 	return 0;
 drop:
-        /*TODO - does this need a sock_put?*/
         service_inc_stats(-1, -(skb->len - hdr_len));
 drop_no_stats:
         FREE_SKB(skb);

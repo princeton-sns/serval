@@ -203,7 +203,21 @@ reset:
 }
 
 /* 
-   Receive from network
+   Receive from network.
+
+   TODO/NOTE:
+
+   Since we are adding packets to the backlog in the SAL, and not here
+   in the transport receive function, we cannot drop packets with bad
+   transport headers before adding to the backlog. Ideally, we would
+   not bother queueing bad packets on the backlog, but this requires a
+   way to check transport headers before backlogging.
+
+   We could add an "early-packet-sanity-check" function in transport
+   that the SAL calls before adding packets to the backlog just to
+   make sure they are not bad. This function would basically have the
+   checks in the beginning of the function below.
+
 */
 static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
@@ -248,21 +262,28 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 TCP_SKB_CB(skb)->end_seq,
                 th->doff * 4);
 
+        if (!sock_owned_by_user(sk)) {
+                /* Non-backlog receive. User process has lock and we
+                   can do neat tricks, like prequeing. */
 #ifdef CONFIG_NET_DMA        
-        if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
-                tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
-        if (tp->ucopy.dma_chan)
-                err = serval_tcp_do_rcv(sk, skb);
-        else
+                if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
+                        tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
+                if (tp->ucopy.dma_chan)
+                        err = serval_tcp_do_rcv(sk, skb);
+                else
 #endif
-                {                
-                        if (!serval_tcp_prequeue(sk, skb)) {
-                                LOG_DBG("Calling serval_tcp_do_rcv\n");
-                                err = serval_tcp_do_rcv(sk, skb);
+                        {                
+                                if (!serval_tcp_prequeue(sk, skb)) {
+                                        LOG_DBG("Calling serval_tcp_do_rcv\n");
+                                        err = serval_tcp_do_rcv(sk, skb);
                         } else {
-                                LOG_DBG("packet was prequeued\n");
+                                        LOG_DBG("packet was prequeued\n");
+                                }
                         }
-                }
+        } else {
+                /* We are processing the backlog. */
+                err = serval_tcp_do_rcv(sk, skb);
+        }
         
         return err;
 bad_packet:
