@@ -930,16 +930,16 @@ static void serval_tcp_ack_probe(struct sock *sk)
 	if (!after(TCP_SKB_CB(serval_tcp_send_head(sk))->end_seq, 
                    serval_tcp_wnd_end(tp))) {
 		tp->backoff = 0;
-		//inet_csk_clear_xmit_timer(sk, ICSK_TIME_PROBE0);
+		serval_tsk_clear_xmit_timer(sk, STSK_TIME_PROBE0);
 		/* Socket must be waked up by subsequent tcp_data_snd_check().
 		 * This function is not for random using!
 		 */
 	} else {
-		/*inet_csk_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
-					  min(tp->tp_rto << tp->tp_backoff, TCP_RTO_MAX),
-					  TCP_RTO_MAX);
-                */
-	}
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_PROBE0,
+                                            min(tp->rto << tp->backoff, 
+                                                SERVAL_TCP_RTO_MAX),
+                                            SERVAL_TCP_RTO_MAX);
+        }
 }
 
 static inline int serval_tcp_ack_is_dubious(const struct sock *sk, 
@@ -1018,10 +1018,10 @@ static void serval_tcp_rearm_rto(struct sock *sk)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
 	if (!tp->packets_out) {
-		//inet_csk_clear_xmit_timer(sk, ICSK_TIME_RETRANS);
+		serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
 	} else {
-		//inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-		//			  inet_csk(sk)->icsk_rto, TCP_RTO_MAX);
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
+                                            tp->rto, SERVAL_TCP_RTO_MAX);
 	}
 }
 

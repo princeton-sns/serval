@@ -110,7 +110,7 @@ static unsigned serval_tcp_established_options(struct sock *sk,
 static void serval_tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	//unsigned int prior_packets = tp->packets_out;
+	unsigned int prior_packets = tp->packets_out;
 
 	serval_tcp_advance_send_head(sk, skb);
 	tp->snd_nxt = TCP_SKB_CB(skb)->end_seq;
@@ -120,11 +120,11 @@ static void serval_tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 		tp->frto_counter = 3;
 
 	tp->packets_out += serval_tcp_skb_pcount(skb);
-	/*
+
 	if (!prior_packets)
-		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
-					  inet_csk(sk)->icsk_rto, SERVAL_TCP_RTO_MAX);
-	*/
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
+                                            tp->rto, 
+                                            SERVAL_TCP_RTO_MAX);
 }
 
 /* RFC2861. Reset CWND after idle period longer RTO to "restart window".
@@ -170,8 +170,8 @@ static void serval_tcp_event_data_sent(struct serval_tcp_sock *tp,
 /* Account for an ACK we sent. */
 static inline void serval_tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
 {
-	//tcp_dec_quickack_mode(sk, pkts);
-	//inet_csk_clear_xmit_timer(sk, ICSK_TIME_DACK);
+	serval_tcp_dec_quickack_mode(sk, pkts);
+	serval_tsk_clear_xmit_timer(sk, STSK_TIME_DACK);
 }
 
 /* Initialize TSO segments for a packet. */

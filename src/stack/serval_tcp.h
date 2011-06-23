@@ -252,6 +252,20 @@ extern int sysctl_tcp_wmem[3];
 extern int sysctl_tcp_rmem[3];
 #endif
 
+static inline void serval_tcp_dec_quickack_mode(struct sock *sk,
+                                                const unsigned int pkts)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+	if (tp->tp_ack.quick) {
+		if (pkts >= tp->tp_ack.quick) {
+			tp->tp_ack.quick = 0;
+			/* Leaving quickack mode we deflate ATO. */
+			tp->tp_ack.ato   = TCP_ATO_MIN;
+		} else
+			tp->tp_ack.quick -= pkts;
+	}
+}
 
 static inline int serval_tcp_too_many_orphans(struct sock *sk, int shift)
 {

@@ -207,7 +207,9 @@ reset:
 */
 static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
+#ifdef CONFIG_NET_DMA   
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+#endif
         struct tcphdr *th;
         struct iphdr *iph;
 
