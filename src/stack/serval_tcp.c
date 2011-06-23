@@ -207,6 +207,7 @@ reset:
 */
 static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct tcphdr *th;
         struct iphdr *iph;
 
@@ -245,33 +246,21 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 TCP_SKB_CB(skb)->end_seq,
                 th->doff * 4);
 
-	if (!sock_owned_by_user(sk)) {
 #ifdef CONFIG_NET_DMA        
-                struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-		if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
-			tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
-		if (tp->ucopy.dma_chan)
-			err = serval_tcp_do_rcv(sk, skb);
-		else
+        if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
+                tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
+        if (tp->ucopy.dma_chan)
+                err = serval_tcp_do_rcv(sk, skb);
+        else
 #endif
-		{
-			if (!serval_tcp_prequeue(sk, skb)) {
+                {                
+                        if (!serval_tcp_prequeue(sk, skb)) {
                                 LOG_DBG("Calling serval_tcp_do_rcv\n");
-				err = serval_tcp_do_rcv(sk, skb);
+                                err = serval_tcp_do_rcv(sk, skb);
                         } else {
                                 LOG_DBG("packet was prequeued\n");
                         }
-		}
-	} else {
-                /* User has the socket lock, add to backlog */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb))
-                        goto discard_it;
-#else
-                sk_add_backlog(sk, skb);
-#endif
-                LOG_DBG("Put packet on backlog\n");
-	}
+                }
         
         return err;
 bad_packet:
