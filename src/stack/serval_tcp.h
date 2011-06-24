@@ -35,8 +35,9 @@
 /*
  * TCP general constants
  */
-#define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
+//#define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
 #define SERVAL_TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
+#define SERVAL_TCP_MSS_DEFAULT		 SERVAL_TCP_MSS_DESIRED
 
 /* 
  * Never offer a window over 32767 without using window scaling. Some

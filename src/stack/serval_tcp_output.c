@@ -419,13 +419,16 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 	u32 end_seq = TCP_SKB_CB(skb)->end_seq;
         int ret;
 
-        LOG_DBG("skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
+        LOG_DBG("1. skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
                 skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
 
 	if (skb->len > cur_mss)
 		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
 
 	ret = !after(end_seq, serval_tcp_wnd_end(tp));
+
+        LOG_DBG("2. skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
+                skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
 
         LOG_DBG("ret=%d\n", ret);
 
