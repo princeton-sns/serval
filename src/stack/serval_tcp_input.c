@@ -2033,13 +2033,13 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 		serval_tcp_unlink_write_queue(skb, sk);
                 LOG_DBG("Freeing ACKed skb\n");
 		sk_wmem_free_skb(sk, skb);
-                /*
+
 		tp->scoreboard_skb_hint = NULL;
 		if (skb == tp->retransmit_skb_hint)
 			tp->retransmit_skb_hint = NULL;
 		if (skb == tp->lost_skb_hint)
 			tp->lost_skb_hint = NULL;
-                */
+
 	}
 
 	if (likely(between(tp->snd_up, prior_snd_una, tp->snd_una)))
@@ -2553,8 +2553,8 @@ static int serval_tcp_fast_parse_options(struct sk_buff *skb,
 		if (serval_tcp_parse_aligned_timestamp(tp, th))
 			return 1;
 	}
-        /* TODO: support options */
-	//serval_tcp_parse_options(skb, &tp->rx_opt, hvpp, 1);
+
+	serval_tcp_parse_options(skb, &tp->rx_opt, hvpp, 1);
         return 1;
 }
 

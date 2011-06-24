@@ -67,7 +67,6 @@ static inline __sum16 csum_fold(__wsum csum)
 	return (__force __sum16)~sum;
 }
 
-#ifndef csum_tcpudp_nofold
 /*
  * computes the checksum of the TCP/UDP pseudo-header
  * returns a 16-bit checksum, already complemented
@@ -75,7 +74,6 @@ static inline __sum16 csum_fold(__wsum csum)
 extern __wsum
 csum_tcpudp_nofold(__be32 saddr, __be32 daddr, unsigned short len,
 		   unsigned short proto, __wsum sum);
-#endif
 
 static inline __sum16
 csum_tcpudp_magic(__be32 saddr, __be32 daddr, unsigned short len,

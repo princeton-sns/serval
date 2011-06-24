@@ -482,8 +482,8 @@ static void serval_tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
         /* Tells hardware to compute checksum or not. */
-	skb->ip_summed = CHECKSUM_NONE;
-	//skb->ip_summed = CHECKSUM_PARTIAL;
+	//skb->ip_summed = CHECKSUM_NONE;
+	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0; /* For outgoing packets, this is the offset
                         * (starting at the end of IP I guess) where to
                         * put the hardware computed checksum */
@@ -931,10 +931,9 @@ static void serval_tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	if (next_skb->ip_summed == CHECKSUM_PARTIAL)
 		skb->ip_summed = CHECKSUM_PARTIAL;
 
-#if defined(OS_LINUX_KERNEL)
 	if (skb->ip_summed != CHECKSUM_PARTIAL)
 		skb->csum = csum_block_add(skb->csum, next_skb->csum, skb_size);
-#endif
+
 	/* Update sequence range on original skb. */
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(next_skb)->end_seq;
 
@@ -1065,10 +1064,8 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 		return -EAGAIN;
 
 	if (skb->len > cur_mss) {
-                LOG_WARN("TCP fragmentation not implemented!\n");
-                return -ENOMEM;
-		//if (serval_tcp_fragment(sk, skb, cur_mss, cur_mss))
-		//	return -ENOMEM; /* We'll try again later. */
+		if (serval_tcp_fragment(sk, skb, cur_mss, cur_mss))
+			return -ENOMEM; /* We'll try again later. */
 	} else {
 		int oldpcount = serval_tcp_skb_pcount(skb);
 

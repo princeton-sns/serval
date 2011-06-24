@@ -1455,9 +1455,35 @@ recv_urg:
 	goto out;
 }
 
+static void __serval_tcp_v4_send_check(struct sk_buff *skb,
+                                       __be32 saddr, __be32 daddr)
+{
+	struct tcphdr *th = tcp_hdr(skb);
+
+	if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		th->check = ~serval_tcp_v4_check(skb->len, saddr, daddr, 0);
+		skb->csum_start = skb_transport_header(skb) - skb->head;
+		skb->csum_offset = offsetof(struct tcphdr, check);
+	} else {
+		th->check = serval_tcp_v4_check(skb->len, saddr, daddr,
+                                                csum_partial(th,
+                                                             th->doff << 2,
+                                                             skb->csum));
+	}
+}
+
+/* This routine computes an IPv4 TCP checksum. */
+void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
+{
+	struct inet_sock *inet = inet_sk(sk);
+
+	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
+}
+
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_tcp_rcv,
+        .send_check = serval_tcp_v4_send_check,
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
