@@ -272,7 +272,9 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                                         err = serval_tcp_do_rcv(sk, skb);
                         }
         } else {
-                /* We are processing the backlog */
+                /* We are processing the backlog in user/process
+                   context */
+                err = serval_tcp_do_rcv(sk, skb);
         }
         
         return err;
@@ -346,7 +348,7 @@ static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 
 	xmit_size_goal = mss_now;
 
-	if (large_allowed && sk_can_gso(sk)) {
+	if (0 && large_allowed && sk_can_gso(sk)) {
 		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
 				  SERVAL_NET_HEADER_LEN -
 				  tp->tcp_header_len);
@@ -466,7 +468,7 @@ static inline int select_size(struct sock *sk, int sg)
 	int tmp = tp->mss_cache;
 
 	if (sg) {
-		if (sk_can_gso(sk))
+		if (0 && sk_can_gso(sk))
 			tmp = 0;
 		else {
 			int pgbreak = SKB_MAX_HEAD(MAX_SERVAL_TCP_HEADER);
@@ -1028,7 +1030,9 @@ static void serval_tcp_prequeue_process(struct sock *sk)
 	 * necessary */
 	local_bh_disable();
 	while ((skb = __skb_dequeue(&tp->ucopy.prequeue)) != NULL)
-		sk_backlog_rcv(sk, skb);
+		/* sk_backlog_rcv(sk, skb); */
+                serval_tcp_do_rcv(sk, skb);
+
 	local_bh_enable();
 
 	/* Clear memory counter. */

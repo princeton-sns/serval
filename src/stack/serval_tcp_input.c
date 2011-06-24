@@ -1662,7 +1662,7 @@ static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-	    /* More than one full frame received... */
+        /* More than one full frame received... */
 	if (((tp->rcv_nxt - tp->rcv_wup) > tp->tp_ack.rcv_mss &&
 	     /* ... and right edge of window advances far enough.
 	      * (tcp_recvmsg() will send ACK otherwise). Or...
@@ -1671,7 +1671,9 @@ static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	    /* We ACK each frame or... */
 	    serval_tcp_in_quickack_mode(sk) ||
 	    /* We have out of order data. */
-	    (ofo_possible && skb_peek(&tp->out_of_order_queue))) {
+	    (ofo_possible && skb_peek(&tp->out_of_order_queue))
+            /* FIXME: Disabled delayed ACKs */
+            || 1) {
 		/* Then ack it now */
 		serval_tcp_send_ack(sk);
 	} else {

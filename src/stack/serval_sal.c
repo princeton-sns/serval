@@ -1889,7 +1889,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                   receive buffer is full. This might not be a big deal
                   though, as control packets are retransmitted.
                 */
-
+                LOG_PKT("Adding packet to backlog\n");
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
                 if (sk_add_backlog(sk, skb)) {
                         bh_unlock_sock(sk);
