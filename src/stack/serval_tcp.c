@@ -168,7 +168,7 @@ static int serval_tcp_connection_respond_sock(struct sock *sk,
                                               struct sock *child,
                                               struct dst_entry *dst);
 
-static int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
+int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
         int err = 0;
         
@@ -221,12 +221,8 @@ reset:
 */
 static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
-#ifdef CONFIG_NET_DMA   
-        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-#endif
         struct tcphdr *th;
         struct iphdr *iph;
-
         int err = 0;
         
 #if defined(OS_LINUX_KERNEL)
@@ -257,15 +253,14 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
 
-        LOG_DBG("TCP %s end_seq=%u doff=%u\n",
+        LOG_PKT("TCP %s end_seq=%u doff=%u\n",
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
                 th->doff * 4);
 
         if (!sock_owned_by_user(sk)) {
-                /* Non-backlog receive. User process has lock and we
-                   can do neat tricks, like prequeing. */
 #ifdef CONFIG_NET_DMA        
+                struct serval_tcp_sock *tp = serval_tcp_sk(sk);
                 if (!tp->ucopy.dma_chan && tp->ucopy.pinned_list)
                         tp->ucopy.dma_chan = dma_find_channel(DMA_MEMCPY);
                 if (tp->ucopy.dma_chan)
@@ -273,24 +268,16 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 else
 #endif
                         {                
-                                if (!serval_tcp_prequeue(sk, skb)) {
-                                        LOG_DBG("Calling serval_tcp_do_rcv\n");
+                                if (!serval_tcp_prequeue(sk, skb))
                                         err = serval_tcp_do_rcv(sk, skb);
-                                } 
                         }
         } else {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (unlikely(sk_add_backlog(sk, skb))) {
-                        goto discard_it;
-                }
-#else
-                sk_add_backlog(sk, skb);
-#endif
+                /* We are processing the backlog */
         }
         
         return err;
 bad_packet:
-        LOG_ERR("Bad packet\n");
+        LOG_ERR("Bad TCP packet\n");
 discard_it:
         LOG_ERR("Discarding TCP packet\n");
         kfree_skb(skb);
@@ -1748,7 +1735,7 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
-	.backlog_rcv		= serval_tcp_do_rcv,
+	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.enter_memory_pressure	= tcp_enter_memory_pressure,

@@ -1031,8 +1031,12 @@ static int serval_sal_connected_state_process(struct sock *sk,
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_DATA) {
-                LOG_DBG("Data packet\n");
-                /* Set the received service id */
+                /* Set the received service id.
+
+                   NOTE: The transport protocol is free to overwrite
+                   the control block with its own information. TCP
+                   does this, for sure.
+                 */
                 memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
                        sizeof(ssk->peer_srvid));
                 /* Set receive IP */
@@ -1041,7 +1045,6 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
-                LOG_DBG("Not a data packet\n");
                 FREE_SKB(skb);
         }
         return err;
@@ -1065,19 +1068,15 @@ static int serval_sal_child_process(struct sock *parent, struct sock *child,
 
         serval_sk(child)->dev = NULL;        
 
-        ret = serval_sal_state_process(child, sfh, skb);
-        
-        if (ret == 0 && state == SERVAL_RESPOND && child->sk_state != state) {
-                LOG_DBG("waking up parent (listening) sock\n");
-                parent->sk_data_ready(parent, 0);
-        }
-#if 0
         /* Check lock on child socket, similarly to how we handled the
            parent sock for the incoming skb. */
         if (!sock_owned_by_user(child)) {
 
                 ret = serval_sal_state_process(child, sfh, skb);
-                if (state == SERVAL_RESPOND && child->sk_state != state) {
+
+                if (ret == 0 && 
+                    state == SERVAL_RESPOND && 
+                    child->sk_state != state) {
                         LOG_DBG("waking up parent (listening) sock\n");
                         parent->sk_data_ready(parent, 0);
                 }
@@ -1089,7 +1088,7 @@ static int serval_sal_child_process(struct sock *parent, struct sock *child,
                 */
                 __sk_add_backlog(child, skb);
         }
-#endif
+
         bh_unlock_sock(child);
         sock_put(child);
         LOG_DBG("child refcnt=%d\n", atomic_read(&child->sk_refcnt));
@@ -1443,8 +1442,7 @@ int serval_sal_state_process(struct sock *sk,
 {
         int err = 0;
 
-        LOG_DBG("receive in state %s\n",
-                serval_sock_state_str(sk));
+        LOG_PKT("receive in state %s\n", serval_sock_state_str(sk));
 
         switch (sk->sk_state) {
         case SERVAL_INIT:
@@ -1872,9 +1870,6 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop_no_stats;
         }
 
-        err = serval_sal_do_rcv(sk, skb);
-
-#if 0
         if (!sock_owned_by_user(sk)) {
                 err = serval_sal_do_rcv(sk, skb);
         } else {
@@ -1905,7 +1900,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 sk_add_backlog(sk, skb);
 #endif
         }
-#endif /* 0 */
+
         /* Don't treat established flow packets as resolutions
            if(!se) {
            struct serval_sock *ssk = serval_sk(sk);

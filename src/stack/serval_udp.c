@@ -197,7 +197,6 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *udph = udp_hdr(skb);
         unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
-        int err = 0;
 	/*
 	 *  Validate the packet.
 	 */
@@ -221,7 +220,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 return -ENOBUFS; 
         }
 #endif
-
+        /*
 	if (!sock_owned_by_user(sk))
 		err = serval_udp_do_rcv(sk, skb);
 	else {
@@ -233,8 +232,8 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 sk_add_backlog(sk, skb);
 #endif
 	}
-
-        return err;
+        */
+        return serval_udp_do_rcv(sk, skb);
  drop:
         FREE_SKB(skb);
         return 0;
@@ -772,7 +771,7 @@ struct proto serval_udp_proto = {
 	.shutdown		= serval_udp_shutdown,
         .sendmsg                = serval_udp_sendmsg,
         .recvmsg                = serval_udp_recvmsg,
-	.backlog_rcv		= serval_udp_do_rcv,
+	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.max_header		= MAX_SERVAL_UDP_HDR,

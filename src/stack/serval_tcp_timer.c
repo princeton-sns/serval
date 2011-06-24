@@ -129,7 +129,9 @@ static int retransmits_timed_out(struct sock *sk,
 {
 	unsigned int timeout, linear_backoff_thresh;
 	unsigned int start_ts;
-	unsigned int rto_base = syn_set ? SERVAL_TCP_TIMEOUT_INIT : SERVAL_TCP_RTO_MIN;
+	unsigned int rto_base = syn_set ? 
+                SERVAL_TCP_TIMEOUT_INIT : 
+                SERVAL_TCP_RTO_MIN;
 	
 	if (!serval_tcp_sk(sk)->retransmits)
 		return 0;
@@ -195,6 +197,7 @@ static void serval_tcp_delack_timer(unsigned long data)
         LOG_DBG("timeout\n");
 
 	bh_lock_sock(sk);
+
 	if (sock_owned_by_user(sk)) {
 		/* Try again later. */
 		tp->tp_ack.blocked = 1;
@@ -306,7 +309,7 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 
         LOG_DBG("timeout\n");
 
-	//WARN_ON(serval_tcp_write_queue_empty(sk));
+	WARN_ON(serval_tcp_write_queue_empty(sk));
 
 	if (!tp->snd_wnd && !sock_flag(sk, SOCK_DEAD) &&
 	    !((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))) {
