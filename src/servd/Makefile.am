@@ -10,16 +10,36 @@ bin_PROGRAMS +=	servr \
 		stabletest \
 		messagetest
 
-utiltest_SOURCES = \
-	util_test.c \
-	time_util.c \
-	service_util.c \
-	service_table.c \
-	prefixtrie.c \
+noinst_LIBRARIES = libservr.a
+
+libservr_a_SOURCES = \
 	cmwc.c \
-	service_types.c \
 	task.c \
-	poll_reactor.c
+	time_util.c \
+	poll_reactor.c \
+	prefixtrie.c \
+	service_util.c \
+	service_types.c \
+	service_table.c \
+	message_channel_base.c \
+	unix_message_channel.c \
+	netlink_message_channel.c \
+	udp_message_channel.c \
+	resolver_messaging.c \
+	resolution_path.c \
+	resolver_base.c
+
+libservr_a_CPPFLAGS = \
+	-I$(top_srcdir)/include \
+	-I$(top_srcdir)/src/servd \
+	-I$(top_srcdir)/src/libstack \
+	$(GLIB_CFLAGS)
+
+utiltest_SOURCES = \
+	util_test.c
+
+utiltest_LDADD = \
+	libservr.a
 
 utiltest_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -37,21 +57,10 @@ utiltest_LDFLAGS = \
 	-lpcl
 
 messagetest_SOURCES = \
-	messaging_test.c \
-	task.c \
-	cmwc.c \
-	poll_reactor.c \
-	service_util.c \
-	service_types.c \
-	message_channel_base.c \
-	unix_message_channel.c \
-	netlink_message_channel.c \
-	udp_message_channel.c \
-	resolver_messaging.c \
-	resolution_path.c \
-	resolver_base.c \
-	time_util.c
+	messaging_test.c
 
+messagetest_LDADD = \
+	libservr.a
 
 messagetest_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -70,15 +79,10 @@ messagetest_LDFLAGS = \
 	-lpthread 
 
 trietest_SOURCES = \
-	service_util.c \
-	time_util.c \
-	cmwc.c \
-	service_types.c \
-	service_table.c \
-	task.c \
-	poll_reactor.c \
-	prefixtrie.c \
 	prefixtrie_test.c
+
+trietest_LDADD = \
+	libservr.a
 
 trietest_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -111,26 +115,16 @@ stabletest_LDFLAGS = \
 	-lpcl
 
 stabletest_SOURCES = \
-	service_util.c \
-	time_util.c \
-	cmwc.c \
-	service_types.c \
-	task.c \
-	poll_reactor.c \
-	prefixtrie.c \
-	service_table.c \
 	service_table_test.c
 
+stabletest_LDADD = \
+	libservr.a
+
 tasktest_SOURCES = \
-	service_util.c \
-	time_util.c \
-	cmwc.c \
-	service_types.c \
-	service_table.c \
-	prefixtrie.c \
-	task.c \
-	poll_reactor.c \
 	task_test.c
+
+tasktest_LDADD = \
+	libservr.a
 
 tasktest_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -148,25 +142,13 @@ tasktest_LDFLAGS = \
 	-lpcl
 
 servr_SOURCES = \
-	time_util.c \
-	task.c \
-	cmwc.c \
-	poll_reactor.c \
-	prefixtrie.c \
-	service_table.c \
-	service_util.c \
-	service_types.c \
-	message_channel_base.c \
-	unix_message_channel.c \
-	netlink_message_channel.c \
-	udp_message_channel.c \
-	resolver_messaging.c \
-	resolution_path.c \
-	resolver_base.c \
 	server_resolver.c \
 	client_resolver.c \
 	local_resolver.c \
 	service_router.c
+
+servr_LDADD = \
+	libservr.a
 
 servr_CPPFLAGS = \
 	-I$(top_srcdir)/include \

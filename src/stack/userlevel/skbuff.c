@@ -649,7 +649,7 @@ __wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
 	int start = skb_headlen(skb);
 	int copy = start - offset;
 	//struct sk_buff *frag_iter;
-	int pos = 0;
+	//int pos = 0;
 
 	/* Copy header. */
 	if (copy > 0) {
@@ -662,7 +662,7 @@ __wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
 			return csum;
 		offset += copy;
 		to     += copy;
-		pos	= copy;
+		//pos	= copy;
 	}
         /*
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
@@ -750,7 +750,7 @@ static int skb_copy_and_csum_datagram(const struct sk_buff *skb,
 	int copy = start - offset;
         //int i;
 	//struct sk_buff *frag_iter;
-	int pos = 0;
+	//int pos = 0;
 
 	/* Copy header. */
 	if (copy > 0) {
@@ -767,7 +767,7 @@ static int skb_copy_and_csum_datagram(const struct sk_buff *skb,
 			return 0;
 		offset += copy;
 		to += copy;
-		pos = copy;
+		//pos = copy;
 	}
 /*
 	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
@@ -973,7 +973,7 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
 {
 	int start = skb_headlen(skb);
 	int copy = start - offset;
-        int pos = 0;
+        //int pos = 0;
 
 	/* Checksum header. */
 	if (copy > 0) {
@@ -983,7 +983,7 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
 		if ((len -= copy) == 0)
 			return csum;
 		offset += copy;
-		pos	= copy;
+		//pos	= copy;
 	}
         return csum;
 }
