@@ -122,11 +122,14 @@ struct skb_shared_info {
 
 #define skb_shinfo(SKB)	((struct skb_shared_info *)(skb_end_pointer(SKB)))
 
+
 struct sk_buff {
 	/* These two members must be first. */
 	struct sk_buff		*next;
 	struct sk_buff		*prev;
         
+	ktime_t			tstamp;
+
 	struct sock		*sk;
 	struct net_device	*dev;
 	/*
@@ -975,6 +978,8 @@ int skb_copy_datagram_iovec(const struct sk_buff *from,
                             int offset, struct iovec *to,
                             int size);
 
+__wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
+                              u8 *to, int len, __wsum csum);
 
 int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
                                      int hlen,
@@ -989,6 +994,9 @@ int skb_copy_datagram_from_iovec(struct sk_buff *skb,
 
 int skb_copy_bits(const struct sk_buff *skb, int offset,
                   void *to, int len);
+
+extern void	       skb_split(struct sk_buff *skb,
+				 struct sk_buff *skb1, const u32 len);
 
 __wsum skb_checksum(const struct sk_buff *skb, int offset,
                     int len, __wsum csum);

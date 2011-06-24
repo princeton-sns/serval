@@ -561,7 +561,188 @@ fault:
 }
 
 
-static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
+static inline void skb_split_inside_header(struct sk_buff *skb,
+					   struct sk_buff* skb1,
+					   const u32 len, const int pos)
+{
+	int i;
+        
+	skb_copy_from_linear_data_offset(skb, len, 
+                                         skb_put(skb1, pos - len),
+					 pos - len);
+	/* And move data appendix as is. */
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+		skb_shinfo(skb1)->frags[i] = skb_shinfo(skb)->frags[i];
+
+	skb_shinfo(skb1)->nr_frags = skb_shinfo(skb)->nr_frags;
+	skb_shinfo(skb)->nr_frags  = 0;
+	skb1->data_len		   = skb->data_len;
+	skb1->len		   += skb1->data_len;
+	skb->data_len		   = 0;
+	skb->len		   = len;
+	skb_set_tail_pointer(skb, len);
+}
+
+static inline void skb_split_no_header(struct sk_buff *skb,
+				       struct sk_buff* skb1,
+				       const u32 len, int pos)
+{
+	int k = 0;
+	//const int nfrags = skb_shinfo(skb)->nr_frags;
+
+	skb_shinfo(skb)->nr_frags = 0;
+	skb1->len		  = skb1->data_len = skb->len - len;
+	skb->len		  = len;
+	skb->data_len		  = len - pos;
+#if 0
+	for (i = 0; i < nfrags; i++) {
+		int size = skb_shinfo(skb)->frags[i].size;
+
+		if (pos + size > len) {
+			skb_shinfo(skb1)->frags[k] = skb_shinfo(skb)->frags[i];
+
+			if (pos < len) {
+				/* Split frag.
+				 * We have two variants in this case:
+				 * 1. Move all the frag to the second
+				 *    part, if it is possible. F.e.
+				 *    this approach is mandatory for TUX,
+				 *    where splitting is expensive.
+				 * 2. Split is accurately. We make this.
+				 */
+				get_page(skb_shinfo(skb)->frags[i].page);
+				skb_shinfo(skb1)->frags[0].page_offset += len - pos;
+				skb_shinfo(skb1)->frags[0].size -= len - pos;
+				skb_shinfo(skb)->frags[i].size	= len - pos;
+				skb_shinfo(skb)->nr_frags++;
+			}
+			k++;
+		} else
+			skb_shinfo(skb)->nr_frags++;
+		pos += size;
+	}
+#endif
+	skb_shinfo(skb1)->nr_frags = k;
+}
+
+/**
+ * skb_split - Split fragmented skb to two parts at length len.
+ * @skb: the buffer to split
+ * @skb1: the buffer to receive the second part
+ * @len: new length for skb
+ */
+void skb_split(struct sk_buff *skb, struct sk_buff *skb1, const u32 len)
+{
+	int pos = skb_headlen(skb);
+
+	if (len < pos)	/* Split line is inside header. */
+		skb_split_inside_header(skb, skb1, len, pos);
+	else		/* Second chunk has no header, nothing to copy. */
+		skb_split_no_header(skb, skb1, len, pos);
+}
+
+/* Both of above in one bottle. */
+
+__wsum skb_copy_and_csum_bits(const struct sk_buff *skb, int offset,
+                              u8 *to, int len, __wsum csum)
+{
+	int start = skb_headlen(skb);
+	int copy = start - offset;
+	//struct sk_buff *frag_iter;
+	int pos = 0;
+
+	/* Copy header. */
+	if (copy > 0) {
+		if (copy > len)
+			copy = len;
+                csum = csum_partial_copy_nocheck(skb->data + offset, 
+                                                 to, copy, csum);
+                
+		if ((len -= copy) == 0)
+			return csum;
+		offset += copy;
+		to     += copy;
+		pos	= copy;
+	}
+        /*
+	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + skb_shinfo(skb)->frags[i].size;
+		if ((copy = end - offset) > 0) {
+			__wsum csum2;
+			u8 *vaddr;
+			skb_frag_t *frag = &skb_shinfo(skb)->frags[i];
+
+			if (copy > len)
+				copy = len;
+			vaddr = kmap_skb_frag(frag);
+			csum2 = csum_partial_copy_nocheck(vaddr +
+							  frag->page_offset +
+							  offset - start, to,
+							  copy, 0);
+			kunmap_skb_frag(vaddr);
+			csum = csum_block_add(csum, csum2, pos);
+			if (!(len -= copy))
+				return csum;
+			offset += copy;
+			to     += copy;
+			pos    += copy;
+		}
+		start = end;
+	}
+
+	skb_walk_frags(skb, frag_iter) {
+		__wsum csum2;
+		int end;
+
+		WARN_ON(start > offset + len);
+
+		end = start + frag_iter->len;
+		if ((copy = end - offset) > 0) {
+			if (copy > len)
+				copy = len;
+			csum2 = skb_copy_and_csum_bits(frag_iter,
+						       offset - start,
+						       to, copy, 0);
+			csum = csum_block_add(csum, csum2, pos);
+			if ((len -= copy) == 0)
+				return csum;
+			offset += copy;
+			to     += copy;
+			pos    += copy;
+		}
+		start = end;
+	}
+        */
+	BUG_ON(len);
+	return csum;
+}
+
+__sum16 __skb_checksum_complete_head(struct sk_buff *skb, int len)
+{
+	__sum16 sum;
+
+	sum = csum_fold(skb_checksum(skb, 0, len, skb->csum));
+	if (likely(!sum)) {
+		/*
+                  if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE))
+			netdev_rx_csum_fault(skb->dev);
+                */
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+	}
+	return sum;
+}
+
+__sum16 __skb_checksum_complete(struct sk_buff *skb)
+{
+	return __skb_checksum_complete_head(skb, skb->len);
+}
+
+static int skb_copy_and_csum_datagram(const struct sk_buff *skb, 
+                                      int offset,
 				      u8 __user *to, int len,
 				      __wsum *csump)
 {
@@ -576,13 +757,10 @@ static int skb_copy_and_csum_datagram(const struct sk_buff *skb, int offset,
 		int err = 0;
 		if (copy > len)
 			copy = len;
-                memcpy(to, skb->data + offset, copy);
-                *csump = 0;
-                
-		/*
-                 *csump = csum_and_copy_to_user(skb->data + offset, to, copy,
-                 *csump, &err);
-                 */
+
+                *csump = csum_and_copy_to_user(skb->data + offset, 
+                                               to, copy,
+                                               *csump, &err);
 		if (err)
 			goto fault;
 		if ((len -= copy) == 0)
@@ -686,21 +864,20 @@ int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
 		iov++;
 
 	if (iov->iov_len < chunk) {
-                /*
 		if (__skb_checksum_complete(skb))
 			goto csum_error;
-                */
 		if (skb_copy_datagram_iovec(skb, hlen, iov, chunk))
 			goto fault;
 	} else {
-		//csum = csum_partial(skb->data, hlen, skb->csum);
+		csum = csum_partial(skb->data, hlen, skb->csum);
 
 		if (skb_copy_and_csum_datagram(skb, hlen, iov->iov_base,
 					       chunk, &csum))
 			goto fault;
-                /*
+                
 		if (csum_fold(csum))
 			goto csum_error;
+                /*
 		if (unlikely(skb->ip_summed == CHECKSUM_COMPLETE))
 			netdev_rx_csum_fault(skb->dev);
                 */
@@ -708,7 +885,7 @@ int skb_copy_and_csum_datagram_iovec(struct sk_buff *skb,
 		iov->iov_base += chunk;
 	}
 	return 0;
-//csum_error:
+csum_error:
 	return -EINVAL;
 fault:
 	return -EFAULT;
@@ -730,8 +907,9 @@ int skb_copy_bits(const struct sk_buff *skb, int offset, void *to, int len)
 	if ((copy = start - offset) > 0) {
 		if (copy > len)
 			copy = len;
-                memcpy(to, skb->data + offset, copy);
-		//skb_copy_from_linear_data_offset(skb, offset, to, copy);
+
+		skb_copy_from_linear_data_offset(skb, offset, to, copy);
+
 		if ((len -= copy) == 0)
 			return 0;
 		offset += copy;

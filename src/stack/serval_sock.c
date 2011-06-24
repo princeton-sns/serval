@@ -468,7 +468,7 @@ void serval_sock_destroy(struct sock *sk)
 	WARN_ON(sk->sk_state != SERVAL_CLOSED);
 
 	/* It cannot be in hash table! */
-	WARN_ON(!sk_unhashed(sk));
+	//WARN_ON(!sk_unhashed(sk));
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
 		LOG_WARN("Attempt to release alive inet socket %p\n", sk);

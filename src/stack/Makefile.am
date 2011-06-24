@@ -1,6 +1,6 @@
 bin_PROGRAMS = serval
 
-serval_SOURCES = \
+serval_common_SRC = \
 	debug.c \
 	platform.c \
 	bst.c \
@@ -16,7 +16,10 @@ serval_SOURCES = \
 	serval_tcp_input.c \
 	serval_tcp_output.c \
 	serval_tcp_cong.c \
-	serval_tcp_timer.c \
+	serval_tcp_timer.c
+
+serval_SOURCES = \
+	$(serval_common_SRC) \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/packet_raw.c \
@@ -24,6 +27,7 @@ serval_SOURCES = \
 	userlevel/stream.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
+	userlevel/checksum.c \
 	userlevel/timer.c \
 	userlevel/wait.c \
 	userlevel/serval_tcp_user.c \
@@ -63,6 +67,7 @@ SERVAL_HDR = \
 	$(SERVAL_INCLUDE_DIR)/serval/netdevice.h \
 	$(SERVAL_INCLUDE_DIR)/serval/sock.h \
 	$(SERVAL_INCLUDE_DIR)/serval/skbuff.h \
+	$(SERVAL_INCLUDE_DIR)/serval/checksum.h \
 	$(SERVAL_INCLUDE_DIR)/serval/timer.h \
 	$(SERVAL_INCLUDE_DIR)/serval/wait.h
 
@@ -93,6 +98,7 @@ SERVAL_KERNEL_HDR = \
 	linux/log.h
 
 SERVAL_KERNEL_SRC = \
+	$(serval_common_SRC) \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
@@ -100,22 +106,7 @@ SERVAL_KERNEL_SRC = \
 	linux/log.c \
 	linux/splice.c \
 	linux/user_dma.c \
-	linux/iovlock.c \
-	debug.c \
-	platform.c \
-	bst.c \
-	service.c \
-	ctrl_handler.c \
-	af_serval.c \
-	serval_sock.c \
-	serval_sal.c \
-	serval_ipv4.c \
-	serval_udp.c \
-	serval_tcp.c \
-	serval_tcp_sock.c \
-	serval_tcp_input.c \
-	serval_tcp_output.c \
-	serval_tcp_cong.c
+	linux/iovlock.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \

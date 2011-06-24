@@ -146,6 +146,10 @@ struct serval_tcp_sock {
 	struct sk_buff *scoreboard_skb_hint;
 	struct sk_buff *retransmit_skb_hint;
 
+	struct sk_buff *highest_sack;   /* highest skb with SACK received
+					 * (validity guaranteed only if
+					 * sacked_out > 0)
+					 */
 	int     lost_cnt_hint;
 	u32     retransmit_high;	/* L-bits may be on up to this seqno */
 	u32	lost_retrans_low;	/* Sent seq after any rxmit (lowest) */

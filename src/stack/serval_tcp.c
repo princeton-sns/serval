@@ -1030,6 +1030,16 @@ static void serval_tcp_prequeue_process(struct sock *sk)
 	 * necessary */
 	local_bh_disable();
 	while ((skb = __skb_dequeue(&tp->ucopy.prequeue)) != NULL)
+                /* We cannot call sk_backlog_rcv here as we do backlog
+                   queueing and processing in the SAL, and therefore
+                   sk_backlog_rcv will put the packet back in SAL and
+                   then through TCP processing again (part of which we
+                   have already done at this point.
+
+                   We must instead call serval_tcp_do_rcv directly
+                   since that is the logical next step in the packet
+                   processing. 
+                */
 		/* sk_backlog_rcv(sk, skb); */
                 serval_tcp_do_rcv(sk, skb);
 
@@ -1635,10 +1645,10 @@ static int serval_tcp_init_sock(struct sock *sk)
 
         tp->rto = SERVAL_TCP_TIMEOUT_INIT;
 	tp->mdev = SERVAL_TCP_TIMEOUT_INIT;
-        	/* So many TCP implementations out there (incorrectly) count the
-	 * initial SYN frame in their delayed-ACK and congestion control
-	 * algorithms that we must have the following bandaid to talk
-	 * efficiently to them.  -DaveM
+        /* So many TCP implementations out there (incorrectly) count
+	 * the initial SYN frame in their delayed-ACK and congestion
+	 * control algorithms that we must have the following bandaid
+	 * to talk efficiently to them.  -DaveM
 	 */
 	tp->snd_cwnd = 2;
 

@@ -578,7 +578,19 @@ static inline void serval_tcp_push_pending_frames(struct sock *sk)
 	}
 }
 
+/* Start sequence of the highest skb with SACKed bit, valid only if
+ * sacked > 0 or when the caller has ensured validity by itself.
+ */
+static inline u32 serval_tcp_highest_sack_seq(struct serval_tcp_sock *tp)
+{
+	if (!tp->sacked_out)
+		return tp->snd_una;
 
+	if (tp->highest_sack == NULL)
+		return tp->snd_nxt;
+
+	return TCP_SKB_CB(tp->highest_sack)->seq;
+}
 
 /* The length of constant payload data.  Note that s_data_desired is
  * overloaded, depending on s_data_constant: either the length of constant
@@ -625,6 +637,7 @@ void __serval_tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 extern int serval_tcp_retransmit_skb(struct sock *, struct sk_buff *);
 extern void serval_tcp_retransmit_timer(struct sock *sk);
 extern void serval_tcp_xmit_retransmit_queue(struct sock *);
+extern void serval_tcp_simple_retransmit(struct sock *sk);
 
 void serval_tcp_push_one(struct sock *sk, unsigned int mss_now);
 
@@ -832,7 +845,9 @@ void serval_tcp_cleanup_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
-
+int serval_tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
+                        unsigned int mss_now);
+int serval_tcp_may_send_now(struct sock *sk);
 
 static inline void serval_tcp_set_ca_state(struct sock *sk, const u8 ca_state)
 {

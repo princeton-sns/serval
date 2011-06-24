@@ -101,8 +101,23 @@ typedef uint8_t u8;
 typedef uint8_t __u8;
 typedef int8_t s8;
 typedef int8_t __s8;
-typedef __u32 __wsum;
-typedef __u16 __sum16;
+
+#include <serval/checksum.h>
+
+union ktime {
+	s64	tv64;
+#if BITS_PER_LONG != 64
+	struct {
+# ifdef __BIG_ENDIAN
+	s32	sec, nsec;
+# else
+	s32	nsec, sec;
+# endif
+	} tv;
+#endif
+};
+
+typedef union ktime ktime_t;		/* Kill this */
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT) /* 4096 bytes */
@@ -188,7 +203,10 @@ static inline void yield(void) {}
 #define __exit
 
 #define panic(name) { int *foo = NULL; *foo = 1; } /* Cause a sefault */
-#define WARN_ON(cond)
+#define WARN_ON(cond) ({                        \
+                        int ret = !!(cond);     \
+                        ret;                    \
+                })
 
 #if !HAVE_OFFSETOF
 #define offsetof(TYPE, MEMBER) ((size_t) &((TYPE *)0)->MEMBER)
