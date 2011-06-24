@@ -893,7 +893,6 @@ static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)
 {
 	const int off = skb->len;
 
-        /*
 	if (skb->ip_summed == CHECKSUM_NONE) {
 		int err = 0;
 
@@ -903,13 +902,10 @@ static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)
 			skb->csum = csum_block_add(skb->csum, csum, off);
 			return 0;
 		}
-	} else if (!copy_from_user(skb_put(skb, copy), from, copy))
-		return 0;
-        */
-        
-        memcpy(skb_put(skb, copy), from, copy);
-        
-        return 0;
+	} else {
+                memcpy(skb_put(skb, copy), from, copy);
+                return 0;
+        }
 
 	__skb_trim(skb, off);
 

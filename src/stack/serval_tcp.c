@@ -252,7 +252,11 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
-
+        
+#if defined(OS_USER)
+        /* FIXME: disable checksumming */
+        skb->ip_summed = CHECKSUM_UNNECESSARY;
+#endif
         LOG_PKT("TCP %s end_seq=%u doff=%u\n",
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
