@@ -1567,7 +1567,8 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 			if (!tp->undo_marker ||
 			    /* For SACK case do not Open to allow to undo
 			     * catching for all duplicate ACKs. */
-			    serval_tcp_is_reno(tp) || tp->snd_una != tp->high_seq) {
+			    serval_tcp_is_reno(tp) || 
+                            tp->snd_una != tp->high_seq) {
 				tp->undo_marker = 0;
 				serval_tcp_set_ca_state(sk, TCP_CA_Open);
 			}
@@ -3406,6 +3407,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		if (!th->rst) {
 			//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSESTABREJECTED);
 			serval_tcp_send_dupack(sk, skb);
+                        LOG_DBG("Paws check discarding packet\n");
 			goto discard;
 		}
 		/* Reset is accepted even if it did not pass PAWS. */
@@ -3424,7 +3426,11 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		if (!th->rst)
 			serval_tcp_send_dupack(sk, skb);
 
-                LOG_DBG("Bad sequence number seq=%u end_seq=%u rcv_nxt=%u rcv_wnd=%u\n", TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt, tp->rcv_wnd);
+                LOG_DBG("Bad seqno seq=%u end_seq=%u rcv_nxt=%u rcv_wnd=%u\n", 
+                        TCP_SKB_CB(skb)->seq, 
+                        TCP_SKB_CB(skb)->end_seq, 
+                        tp->rcv_nxt, 
+                        tp->rcv_wnd);
                         
 		goto discard;
 	}
@@ -3432,6 +3438,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	/* Step 2: check RST bit */
 	if (th->rst) {
 		serval_tcp_reset(sk);
+                LOG_DBG("RST bit set!\n");
 		goto discard;
 	}
 
@@ -3713,7 +3720,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 
         tp->bytes_queued += len;
 
-        LOG_DBG("Packet %s total_bytes=%u\n", 
+        LOG_PKT("Packet %s total_bytes=%u\n", 
                 tcphdr_to_str(th), tp->bytes_queued);
 
 	if ((serval_tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
@@ -3727,8 +3734,9 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 		 */
 
 		/* Check timestamp */
-		if (tcp_header_len == sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED) {
-                        LOG_DBG("TCP has timestamp\n");
+		if (tcp_header_len == sizeof(struct tcphdr) + 
+                    TCPOLEN_TSTAMP_ALIGNED) {
+                        LOG_PKT("TCP has timestamp\n");
 
 			/* No? Slow path! */
 			if (!serval_tcp_parse_aligned_timestamp(tp, th))
@@ -3775,7 +3783,6 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			if (tp->copied_seq == tp->rcv_nxt &&
 			    len - tcp_header_len <= tp->ucopy.len) {
 #ifdef CONFIG_NET_DMA
-                                LOG_DBG("Trying early copy\n");
 				if (serval_tcp_dma_try_early_copy(sk, skb, tcp_header_len)) {                                        
 					copied_early = 1;
 					eaten = 1;
@@ -3785,7 +3792,6 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				    sock_owned_by_user(sk) && !copied_early) {
 					__set_current_state(TASK_RUNNING);
 
-                                        LOG_DBG("copy directly to user\n");
 					if (!serval_tcp_copy_to_iovec(sk, skb, tcp_header_len))
 						eaten = 1;
 				}

@@ -969,6 +969,9 @@ static inline struct iphdr *ipip_hdr(const struct sk_buff *skb)
 	return (struct iphdr *)skb_transport_header(skb);
 }
 
+extern __sum16 __skb_checksum_complete_head(struct sk_buff *skb, int len);
+extern __sum16 __skb_checksum_complete(struct sk_buff *skb);
+
 static inline int skb_csum_unnecessary(const struct sk_buff *skb)
 {
 	return skb->ip_summed & CHECKSUM_UNNECESSARY;

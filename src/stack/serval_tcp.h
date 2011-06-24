@@ -519,17 +519,17 @@ static inline void __serval_tcp_add_write_queue_tail(struct sock *sk, struct sk_
 	__skb_queue_tail(&sk->sk_write_queue, skb);
 }
 
-static inline void serval_tcp_add_write_queue_tail(struct sock *sk, struct sk_buff *skb)
+static inline void serval_tcp_add_write_queue_tail(struct sock *sk, 
+                                                   struct sk_buff *skb)
 {
 	__serval_tcp_add_write_queue_tail(sk, skb);
 
 	/* Queue it, remembering where we must start sending. */
 	if (sk->sk_send_head == NULL) {
 		sk->sk_send_head = skb;
-		/*
-		if (tcp_sk(sk)->highest_sack == NULL)
-			tcp_sk(sk)->highest_sack = skb;
-		*/
+
+		if (serval_tcp_sk(sk)->highest_sack == NULL)
+			serval_tcp_sk(sk)->highest_sack = skb;
 	}
 }
 
@@ -747,15 +747,12 @@ static inline void serval_tcp_minshall_update(struct serval_tcp_sock *tp,
 
 static inline void serval_tcp_check_probe_timer(struct sock *sk)
 {
-	/*
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	const struct inet_connection_sock *icsk = inet_csk(sk);
 
+	if (!tp->packets_out && !tp->pending)
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_PROBE0,
+                                            tp->rto, SERVAL_TCP_RTO_MAX);
 
-	if (!tp->packets_out && !icsk->icsk_pending)
-		inet_csk_reset_xmit_timer(sk, ICSK_TIME_PROBE0,
-					  icsk->icsk_rto, SERVAL_TCP_RTO_MAX);
-	*/
 }
 
 static inline void serval_tcp_init_wl(struct serval_tcp_sock *tp, u32 seq)
@@ -768,16 +765,15 @@ static inline void serval_tcp_update_wl(struct serval_tcp_sock *tp, u32 seq)
 	tp->snd_wl1 = seq;
 }
 
-
 static inline __sum16 __serval_tcp_checksum_complete(struct sk_buff *skb)
 {
-	return 0; /* FIXME: __skb_checksum_complete(skb); */
+	return __skb_checksum_complete(skb);
 }
 
 static inline int serval_tcp_checksum_complete(struct sk_buff *skb)
 {
-	return 0; /* FIXME: !skb_csum_unnecessary(skb) &&
-                    __tcp_checksum_complete(skb); */
+	return !skb_csum_unnecessary(skb) &&
+                __serval_tcp_checksum_complete(skb);
 }
 /* Prequeue for VJ style copy to user, combined with checksumming. */
 
