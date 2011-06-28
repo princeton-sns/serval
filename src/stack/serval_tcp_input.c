@@ -3396,13 +3396,11 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 {
 	u8 *hash_location;
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        int ret;
 
-        ret = serval_tcp_fast_parse_options(skb, th, tp, &hash_location);
-        
 #if defined(ENABLE_TCP_PAWS)
 	/* RFC1323: H1. Apply PAWS check first. */
-	if (ret && tp->rx_opt.saw_tstamp &&
+	if (serval_tcp_fast_parse_options(skb, th, tp, &hash_location) && 
+            tp->rx_opt.saw_tstamp &&
 	    serval_tcp_paws_discard(sk, skb)) {
 		if (!th->rst) {
 			//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSESTABREJECTED);
@@ -3412,6 +3410,8 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		}
 		/* Reset is accepted even if it did not pass PAWS. */
 	}
+#else
+        serval_tcp_fast_parse_options(skb, th, tp, &hash_location);
 #endif /* ENABLE_TCP_PAWS */
 
 	/* Step 1: check sequence number */
@@ -3496,6 +3496,9 @@ static __sum16 __serval_tcp_checksum_complete_user(struct sock *sk,
 {
 	__sum16 result = 0;
 
+        /* FIXME: Disable checksum check */
+        return result;
+
 	if (sock_owned_by_user(sk)) {
 		local_bh_enable();
 		result = __serval_tcp_checksum_complete(skb);
@@ -3546,7 +3549,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
-		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
+                serval_tcp_ack(sk, skb, FLAG_SLOWPATH);
                 
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
@@ -3878,14 +3881,14 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	}
 
 slow_path:
+        LOG_DBG("Slow path\n");
+
 	if (len < (th->doff << 2) || serval_tcp_checksum_complete_user(sk, skb))
 		goto csum_error;
 
 	/*
 	 *	Standard slow path.
 	 */
-
-        LOG_DBG("Slow path\n");
 
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 

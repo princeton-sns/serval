@@ -75,15 +75,16 @@ static inline int serval_tcp_urg_mode(const struct serval_tcp_sock *tp)
 /* Compute TCP options for SYN packets. This is not the final
  * network wire format yet.
  */
+
 static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 				       struct tcp_out_options *opts,
 				       struct tcp_md5sig_key **md5) 
 {
-	/* Not implemented */
 	return 0;
 }
 
 /* Set up TCP options for SYN-ACKs. */
+/*
 static unsigned serval_tcp_synack_options(struct sock *sk,
 					  struct serval_request_sock *req,
 					  unsigned mss, struct sk_buff *skb,
@@ -91,9 +92,9 @@ static unsigned serval_tcp_synack_options(struct sock *sk,
 					  struct tcp_md5sig_key **md5,
 					  struct tcp_extend_values *xvp)
 {
-	/* Not implemented */
 	return 0;
 }
+*/
 
 /* Compute TCP options for ESTABLISHED sockets. This is not the
  * final wire format yet.
@@ -783,7 +784,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 				   int clone_it, gfp_t gfp_mask)
 {
 	struct serval_sock *ssk = serval_sk(sk);
-	struct inet_sock *inet;
 	struct serval_tcp_sock *tp;
 	struct tcp_skb_cb *tcb;
 	struct tcp_out_options opts;
@@ -810,7 +810,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			return -ENOBUFS;
 	}
 
-	inet = inet_sk(sk);
 	tp = serval_tcp_sk(sk);
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
@@ -899,14 +898,11 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
                sizeof(inet_sk(sk)->inet_daddr));
 
         {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("queue_xmit gso_size=%u dst=%s\n",
+                char rmtstr[18];
+                LOG_DBG("queue_xmit dst=%s\n",
                         inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr, 
-                                  rmtstr, 18), skb_shinfo(skb)->gso_size);
+                                  rmtstr, 18));
 
-                skb_shinfo(skb)->gso_size = 0;
-                skb->csum = CHECKSUM_NONE;
-                
         }
 	err = serval_sal_xmit_skb(skb);
         //ssk->af_ops->queue_xmit(skb);
@@ -1270,6 +1266,61 @@ static int serval_tcp_mtu_probe(struct sock *sk)
 	return -1;
 }
 
+/* Trim TSO SKB to LEN bytes, put the remaining data into a new packet
+ * which is put after SKB on the list.  It is very much like
+ * tcp_fragment() except that it may make several kinds of assumptions
+ * in order to speed up the splitting operation.  In particular, we
+ * know that all the data is in scatter-gather pages, and that the
+ * packet has never been sent out before (and thus is not cloned).
+ */
+static int serval_tso_fragment(struct sock *sk, struct sk_buff *skb, 
+                               unsigned int len, unsigned int mss_now, 
+                               gfp_t gfp)
+{
+	struct sk_buff *buff;
+	int nlen = skb->len - len;
+	u8 flags;
+
+	/* All of a TSO frame must be composed of paged data.  */
+	if (skb->len != skb->data_len)
+		return serval_tcp_fragment(sk, skb, len, mss_now);
+
+	buff = sk_stream_alloc_skb(sk, 0, gfp);
+	if (unlikely(buff == NULL))
+		return -ENOMEM;
+
+	sk->sk_wmem_queued += buff->truesize;
+	sk_mem_charge(sk, buff->truesize);
+	buff->truesize += nlen;
+	skb->truesize -= nlen;
+
+	/* Correct the sequence numbers. */
+	TCP_SKB_CB(buff)->seq = TCP_SKB_CB(skb)->seq + len;
+	TCP_SKB_CB(buff)->end_seq = TCP_SKB_CB(skb)->end_seq;
+	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
+
+	/* PSH and FIN should only be set in the second packet. */
+	flags = TCP_SKB_CB(skb)->flags;
+	TCP_SKB_CB(skb)->flags = flags & ~(TCPH_FIN | TCPH_PSH);
+	TCP_SKB_CB(buff)->flags = flags;
+
+	/* This packet was never sent out yet, so no SACK bits. */
+	TCP_SKB_CB(buff)->sacked = 0;
+
+	buff->ip_summed = skb->ip_summed = CHECKSUM_PARTIAL;
+	skb_split(skb, buff, len);
+
+	/* Fix up tso_factor for both original and new SKB.  */
+	serval_tcp_set_skb_tso_segs(sk, skb, mss_now);
+	serval_tcp_set_skb_tso_segs(sk, buff, mss_now);
+
+	/* Link BUFF into the send queue. */
+	skb_header_release(buff);
+	serval_tcp_insert_write_queue_after(skb, buff, sk);
+
+	return 0;
+}
+
 static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now, 
 				 int nonagle, int push_one, gfp_t gfp)
 {
@@ -1298,7 +1349,7 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
         LOG_DBG("Checking send queue\n");
 
 	while ((skb = serval_tcp_send_head(sk))) {
-		unsigned int limit;
+                unsigned int limit;
 
 		tso_segs = serval_tcp_init_tso_segs(sk, skb, mss_now);
 		BUG_ON(!tso_segs);
@@ -1316,8 +1367,6 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			break;
                 }
 
-                LOG_DBG("tso_segs=%u\n", tso_segs);
-
                 /*
 		if (tso_segs == 1) {
 			if (unlikely(!serval_tcp_nagle_test(tp, skb, mss_now,
@@ -1327,19 +1376,17 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 		} else {
 			if (!push_one && serval_tcp_tso_should_defer(sk, skb))
 				break;
-		}
                 */
-
 		limit = mss_now;
 		if (tso_segs > 1 && !serval_tcp_urg_mode(tp))
 			limit = serval_tcp_mss_split_point(sk, skb, mss_now,
 							   cwnd_quota);
 
-		/*
+		
 		if (skb->len > limit &&
-		    unlikely(serval_tso_fragment(sk, skb, limit, mss_now)))
+		    unlikely(serval_tso_fragment(sk, skb, limit, mss_now, gfp)))
 			break;
-		*/
+                
 		TCP_SKB_CB(skb)->when = tcp_time_stamp;
 
                 LOG_DBG("tcp_transmit_skb\n");
@@ -1711,6 +1758,7 @@ static void serval_tcp_connect_init(struct sock *sk)
 	serval_tcp_clear_retrans(tp);       
 }
 
+#if defined(__DISABLED__)
 static int serval_tcp_build_header(struct sock *sk, 
                                    struct sk_buff *skb,
                                    u32 seq)
@@ -1743,6 +1791,7 @@ static int serval_tcp_build_header(struct sock *sk,
 
         return 0;
 }
+#endif /* __DISABLED__ */
 
 int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 {
