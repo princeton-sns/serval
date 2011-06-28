@@ -1707,7 +1707,7 @@ static struct sock *serval_sal_demux_service(struct sk_buff *skb,
 {
         struct sock *sk;
 
-        /* LOG_DBG("Demux on serviceID %s\n", service_id_to_str(srvid));*/
+        LOG_DBG("Demux on serviceID %s\n", service_id_to_str(srvid));
 
         /* only allow listening socket demux */
         sk = serval_sock_lookup_serviceid(srvid);

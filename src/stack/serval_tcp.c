@@ -202,6 +202,26 @@ reset:
         return err;
 }
 
+static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
+{
+	const struct iphdr *iph = ip_hdr(skb);
+
+	if (skb->ip_summed == CHECKSUM_COMPLETE) {
+		if (!serval_tcp_v4_check(skb->len, iph->saddr,
+				  iph->daddr, skb->csum)) {
+			skb->ip_summed = CHECKSUM_UNNECESSARY;
+			return 0;
+		}
+	}
+
+	skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
+				       skb->len, IPPROTO_TCP, 0);
+
+	if (skb->len <= 76) {
+		return __skb_checksum_complete(skb);
+	}
+	return 0;
+}
 /* 
    Receive from network.
 
@@ -243,6 +263,17 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 	if (!pskb_may_pull(skb, th->doff * 4))
 		goto discard_it;
 
+#if defined(OS_USER)
+        /* FIXME: disable checksumming */
+        skb->ip_summed = CHECKSUM_UNNECESSARY;
+#endif
+        /* An explanation is required here, I think.
+	 * Packet length and doff are validated by header prediction,
+	 * provided case of th->doff==0 is eliminated.
+	 * So, we defer the checks. */
+	if (!skb_csum_unnecessary(skb) && serval_tcp_v4_checksum_init(skb))
+		goto bad_packet;
+
 	iph = ip_hdr(skb);
 
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
@@ -253,10 +284,6 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
         
-#if defined(OS_USER)
-        /* FIXME: disable checksumming */
-        skb->ip_summed = CHECKSUM_UNNECESSARY;
-#endif
         LOG_PKT("TCP %s end_seq=%u doff=%u\n",
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
