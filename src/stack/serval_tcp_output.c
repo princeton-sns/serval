@@ -1293,8 +1293,9 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 
 		cwnd_quota = serval_tcp_cwnd_test(tp, skb);
 
+                LOG_DBG("cwnd_quota=%d\n", cwnd_quota);
+
 		if (!cwnd_quota) {
-                        LOG_DBG("cwnd_quota=%d\n", cwnd_quota);
                         break;
                 }
 

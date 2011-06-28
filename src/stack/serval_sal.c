@@ -410,10 +410,16 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
 
 static void serval_sal_timewait(struct sock *sk, int state)
 {
+        unsigned long timeout = jiffies;
+
         serval_sock_set_state(sk, state);
         /* FIXME: Dynamically set timeout */
-        sk_reset_timer(sk, &serval_sk(sk)->tw_timer,
-                       jiffies + msecs_to_jiffies(8000)); 
+        if (state == SERVAL_FINWAIT2) {
+                timeout += msecs_to_jiffies(60000);
+        } else {
+                timeout += msecs_to_jiffies(8000);
+        }
+        sk_reset_timer(sk, &serval_sk(sk)->tw_timer, timeout); 
 }
 
 /* Called as a result of user app close() */

@@ -3546,7 +3546,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
-		//int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
+		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
                 
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:

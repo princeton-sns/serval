@@ -538,17 +538,17 @@ int main(int argc, char **argv)
         action.sa_handler = signal_handler;
         
 	/* The server should shut down on these signals. */
-    sigaction(SIGTERM, &action, 0);
-	sigaction(SIGHUP, &action, 0);
+        sigaction(SIGTERM, &action, 0);
+        sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 	
-    client_list_init(&client_list);
-
-    /* Seed random number generator */
-    gettimeofday(&now, NULL);
-
-    srandom((unsigned int)now.tv_sec);
-
+        client_list_init(&client_list);
+        
+        /* Seed random number generator */
+        gettimeofday(&now, NULL);
+        
+        srandom((unsigned int)now.tv_sec);
+        
 	argc--;
 	argv++;
         
@@ -576,10 +576,10 @@ int main(int argc, char **argv)
                     fprintf(stderr, "Invalid debug setting %s\n",
                             argv[1]);
             }
-		} 
-		else if (strcmp(argv[0], "-s") == 0 || strcmp(argv[0], "-stackid")) {
+        } else if (strcmp(argv[0], "-s") == 0 || 
+                   strcmp(argv[0], "-stackid")) {
 		    stackid = atoi(argv[1]);
-		    if(stackid < 0) {
+		    if (stackid < 0) {
 		        stackid = 0;
 		    }
 		    argv++;
