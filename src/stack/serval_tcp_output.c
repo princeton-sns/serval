@@ -482,11 +482,23 @@ static void serval_tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
         /* Tells hardware to compute checksum or not. */
-	//skb->ip_summed = CHECKSUM_NONE;
-	skb->ip_summed = CHECKSUM_PARTIAL;
-	skb->csum = 0; /* For outgoing packets, this is the offset
-                        * (starting at the end of IP I guess) where to
-                        * put the hardware computed checksum */
+
+        /*
+          Serval note.
+
+          skb->ip_summed determines whether the hardware should
+          compute checksum or not. This seems to not work with Serval,
+          because its extra service access header screws up the offset
+          where the device hardware assumes it should put the computed
+          checksum.
+
+          Wonder if there is a way to specify the offset where the
+          hardware should write the checksum?
+
+         */
+	skb->ip_summed = CHECKSUM_NONE;
+	//skb->ip_summed = CHECKSUM_PARTIAL;
+	skb->csum = 0; 
 	
         TCP_SKB_CB(skb)->flags = flags;
 	TCP_SKB_CB(skb)->sacked = 0;
