@@ -4015,12 +4015,15 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 {
+        u8 *hash_location;
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct tcphdr *th = tcp_hdr(skb);
 	int saved_clamp = tp->rx_opt.mss_clamp;
         u32 seq = ntohl(th->seq);
 
         LOG_DBG("expecting SYN-ACK %s\n", tcphdr_to_str(th));
+
+	serval_tcp_parse_options(skb, &tp->rx_opt, &hash_location, 0);
 
         if (th->ack) {
                 LOG_DBG("ACK received\n");

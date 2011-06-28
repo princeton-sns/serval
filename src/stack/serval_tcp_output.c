@@ -199,6 +199,7 @@ static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 		opts->ws = tp->rx_opt.rcv_wscale;
 		opts->options |= OPTION_WSCALE;
 		remaining -= TCPOLEN_WSCALE_ALIGNED;
+                LOG_DBG("Adding window scale option\n");
 	}
 	return MAX_SERVAL_TCP_OPTION_SPACE - remaining;
 }

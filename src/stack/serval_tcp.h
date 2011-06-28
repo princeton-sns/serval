@@ -356,6 +356,10 @@ serval_tcp_paws_reject(const struct serval_tcp_options_received *rx_opt,
 	return 1;
 }
 
+void serval_tcp_parse_options(struct sk_buff *skb, 
+                              struct serval_tcp_options_received *opt_rx,
+                              u8 **hvpp, int estab);
+
 int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb);
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb);
 

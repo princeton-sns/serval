@@ -126,16 +126,17 @@ static inline void serval_tcp_openreq_init(struct request_sock *req,
 	ireq->loc_port = tcp_hdr(skb)->dest;
 }
 
-
 static int serval_tcp_connection_request(struct sock *sk, 
                                          struct request_sock *req,
                                          struct sk_buff *skb)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        /* struct inet_request_sock *ireq = inet_rsk(req); */
         struct serval_tcp_request_sock *trsk = serval_tcp_rsk(req);
         struct tcphdr *th;
 	struct serval_tcp_options_received tmp_opt;
-        
+        u8 *hash_location;
+
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header?\n");
                 return -1;
@@ -153,7 +154,7 @@ static int serval_tcp_connection_request(struct sock *sk,
 	serval_tcp_clear_options(&tmp_opt);
 	tmp_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 	tmp_opt.user_mss  = tp->rx_opt.user_mss;
-	//tcp_parse_options(skb, &tmp_opt, &hash_location, 0);
+	serval_tcp_parse_options(skb, &tmp_opt, &hash_location, 0);
 
         serval_tcp_openreq_init(req, &tmp_opt, skb);
 
