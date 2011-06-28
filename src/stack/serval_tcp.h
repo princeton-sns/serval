@@ -31,6 +31,7 @@
 #define MAX_SERVAL_TCP_HEADER (MAX_SERVAL_HDR + \
                                sizeof(struct tcphdr))
 
+#define MAX_SERVAL_TCP_OPTION_SPACE 40
 
 /*
  * TCP general constants

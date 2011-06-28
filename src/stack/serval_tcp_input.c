@@ -2313,6 +2313,8 @@ void serval_tcp_parse_options(struct sk_buff *skb,
 						    opt_rx->user_mss < in_mss)
 							in_mss = opt_rx->user_mss;
 						opt_rx->mss_clamp = in_mss;
+                                                LOG_DBG("TCPOPT_MSS mss_clamp=%u\n",
+                                                        in_mss);
 					}
 				}
 				break;
@@ -2327,6 +2329,8 @@ void serval_tcp_parse_options(struct sk_buff *skb,
 						snd_wscale = 14;
 					}
 					opt_rx->snd_wscale = snd_wscale;
+                                        LOG_DBG("TCPOPT_WINDOW wscale=%u\n",
+                                                snd_wscale);
 				}
 				break;
 			case TCPOPT_TIMESTAMP:

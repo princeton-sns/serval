@@ -205,12 +205,6 @@ reset:
 static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
-        char src[18], dst[18];
-
-        LOG_DBG("check init %s %s len=%u\n",
-                inet_ntop(AF_INET, &iph->saddr, src, 18),
-                inet_ntop(AF_INET, &iph->daddr, dst, 18),
-                skb->len);
                 
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
 		if (!serval_tcp_v4_check(skb->len, iph->saddr,
@@ -1497,21 +1491,7 @@ static void __serval_tcp_v4_send_check(struct sk_buff *skb,
 {
 	struct tcphdr *th = tcp_hdr(skb);
 
-        char src[18], dst[18];
-        LOG_DBG("send check %s %s len=%u ip_summed=%u\n",
-                inet_ntop(AF_INET, &saddr, src, 18),
-                inet_ntop(AF_INET, &daddr, dst, 18),
-                skb->len, skb->ip_summed);
-        
-        /* FIXME:
-
-           This is a hack: we use zero saddr and daddr for the
-           checksum since these are "resolved" by lower layers in
-           Serval.
-
-        */
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-                LOG_DBG("CHECKSUM_PARTIAL\n");
 		th->check = ~serval_tcp_v4_check(skb->len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);

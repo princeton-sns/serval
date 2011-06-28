@@ -72,29 +72,170 @@ static inline int serval_tcp_urg_mode(const struct serval_tcp_sock *tp)
 	return tp->snd_una != tp->snd_up;
 }
 
+
+/* Calculate mss to advertise in SYN segment.
+ * RFC1122, RFC1063, draft-ietf-tcpimpl-pmtud-01 state that:
+ *
+ * 1. It is independent of path mtu.
+ * 2. Ideally, it is maximal possible segment size i.e. 65535-40.
+ * 3. For IPv4 it is reasonable to calculate it from maximal MTU of
+ *    attached devices, because some buggy hosts are confused by
+ *    large MSS.
+ * 4. We do not make 3, we advertise MSS, calculated from first
+ *    hop device mtu, but allow to raise it to ip_rt_min_advmss.
+ *    This may be overridden via information stored in routing table.
+ * 5. Value 65535 for MSS is valid in IPv6 and means "as large as possible,
+ *    probably even Jumbo".
+ */
+static __u16 serval_tcp_advertise_mss(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+#if defined(OS_USER)
+        struct dst_entry *dst = NULL;
+#else
+	struct dst_entry *dst = __sk_dst_get(sk);
+#endif
+	int mss = tp->advmss;
+
+	if (dst) {
+                unsigned int metric;
+                
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+                metric = dst_metric(dst, RTAX_ADVMSS);
+#else
+                metric = dst_metric_advmss(dst);
+#endif
+		if (metric < mss) {
+			mss = metric;
+			tp->advmss = mss;
+		}
+	}
+
+	return (__u16)mss;
+}
+
+/* Write previously computed TCP options to the packet.
+ *
+ * Beware: Something in the Internet is very sensitive to the ordering of
+ * TCP options, we learned this through the hard way, so be careful here.
+ * Luckily we can at least blame others for their non-compliance but from
+ * inter-operatibility perspective it seems that we're somewhat stuck with
+ * the ordering which we have been using if we want to keep working with
+ * those broken things (not that it currently hurts anybody as there isn't
+ * particular reason why the ordering would need to be changed).
+ *
+ * At least SACK_PERM as the first option is known to lead to a disaster
+ * (but it may well be that other scenarios fail similarly).
+ */
+static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
+                                     struct tcp_out_options *opts)
+{
+	u8 options = opts->options;	/* mungable copy */
+
+	if (unlikely(opts->mss)) {
+		*ptr++ = htonl((TCPOPT_MSS << 24) |
+			       (TCPOLEN_MSS << 16) |
+			       opts->mss);
+	}
+        /*
+	if (likely(OPTION_TS & options)) {
+		if (unlikely(OPTION_SACK_ADVERTISE & options)) {
+			*ptr++ = htonl((TCPOPT_SACK_PERM << 24) |
+				       (TCPOLEN_SACK_PERM << 16) |
+				       (TCPOPT_TIMESTAMP << 8) |
+				       TCPOLEN_TIMESTAMP);
+			options &= ~OPTION_SACK_ADVERTISE;
+		} else {
+			*ptr++ = htonl((TCPOPT_NOP << 24) |
+				       (TCPOPT_NOP << 16) |
+				       (TCPOPT_TIMESTAMP << 8) |
+				       TCPOLEN_TIMESTAMP);
+		}
+		*ptr++ = htonl(opts->tsval);
+		*ptr++ = htonl(opts->tsecr);
+	}
+        */
+
+	if (unlikely(OPTION_WSCALE & options)) {
+		*ptr++ = htonl((TCPOPT_NOP << 24) |
+			       (TCPOPT_WINDOW << 16) |
+			       (TCPOLEN_WINDOW << 8) |
+			       opts->ws);
+	}
+}
+
 /* Compute TCP options for SYN packets. This is not the final
  * network wire format yet.
  */
-
 static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 				       struct tcp_out_options *opts,
 				       struct tcp_md5sig_key **md5) 
 {
-	return 0;
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	unsigned remaining = MAX_SERVAL_TCP_OPTION_SPACE;
+
+	*md5 = NULL;
+
+	/* We always get an MSS option.  The option bytes which will be seen in
+	 * normal data packets should timestamps be used, must be in the MSS
+	 * advertised.  But we subtract them from tp->mss_cache so that
+	 * calculations in tcp_sendmsg are simpler etc.  So account for this
+	 * fact here if necessary.  If we don't do this correctly, as a
+	 * receiver we won't recognize data packets as being full sized when we
+	 * should, and thus we won't abide by the delayed ACK rules correctly.
+	 * SACKs don't matter, we never delay an ACK when we have any of those
+	 * going out.  */
+	opts->mss = serval_tcp_advertise_mss(sk);
+	remaining -= TCPOLEN_MSS_ALIGNED;
+        /*
+	if (likely(sysctl_tcp_timestamps && *md5 == NULL)) {
+		opts->options |= OPTION_TS;
+		opts->tsval = TCP_SKB_CB(skb)->when;
+		opts->tsecr = tp->rx_opt.ts_recent;
+		remaining -= TCPOLEN_TSTAMP_ALIGNED;
+	}
+        */
+	if (likely(sysctl_serval_tcp_window_scaling)) {
+		opts->ws = tp->rx_opt.rcv_wscale;
+		opts->options |= OPTION_WSCALE;
+		remaining -= TCPOLEN_WSCALE_ALIGNED;
+	}
+	return MAX_SERVAL_TCP_OPTION_SPACE - remaining;
 }
 
 /* Set up TCP options for SYN-ACKs. */
-/*
 static unsigned serval_tcp_synack_options(struct sock *sk,
-					  struct serval_request_sock *req,
+					  struct request_sock *req,
 					  unsigned mss, struct sk_buff *skb,
 					  struct tcp_out_options *opts,
 					  struct tcp_md5sig_key **md5,
 					  struct tcp_extend_values *xvp)
 {
-	return 0;
-}
+	struct inet_request_sock *ireq = inet_rsk(req);
+	unsigned remaining = MAX_SERVAL_TCP_OPTION_SPACE;
+
+	*md5 = NULL;
+
+	/* We always send an MSS option. */
+	opts->mss = mss;
+	remaining -= TCPOLEN_MSS_ALIGNED;
+
+	if (likely(ireq->wscale_ok)) {
+		opts->ws = ireq->rcv_wscale;
+		opts->options |= OPTION_WSCALE;
+		remaining -= TCPOLEN_WSCALE_ALIGNED;
+	}
+/*
+	if (likely(ireq->tstamp_ok)) {
+		opts->options |= OPTION_TS;
+		opts->tsval = TCP_SKB_CB(skb)->when;
+		opts->tsecr = req->ts_recent;
+		remaining -= TCPOLEN_TSTAMP_ALIGNED;
+	}
 */
+	return MAX_SERVAL_TCP_OPTION_SPACE - remaining;
+}
+
 
 /* Compute TCP options for ESTABLISHED sockets. This is not the
  * final wire format yet.
@@ -104,7 +245,20 @@ static unsigned serval_tcp_established_options(struct sock *sk,
 					       struct tcp_out_options *opts,
 					       struct tcp_md5sig_key **md5) 
 {
-	return 0;
+	/* struct tcp_skb_cb *tcb = skb ? TCP_SKB_CB(skb) : NULL;
+           struct serval_tcp_sock *tp = serval_tcp_sk(sk); */
+	unsigned size = 0;
+
+	*md5 = NULL;
+        /*
+	if (likely(tp->rx_opt.tstamp_ok)) {
+		opts->options |= OPTION_TS;
+		opts->tsval = tcb ? tcb->when : 0;
+		opts->tsecr = tp->rx_opt.ts_recent;
+		size += TCPOLEN_TSTAMP_ALIGNED;
+	}
+        */
+	return size;
 }
 
 /* Account for new data that has been sent to the network. */
@@ -849,8 +1003,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			th->urg = 1;
 		}
 	}
-
-	//tcp_options_write((__be32 *)(th + 1), tp, &opts);
+        
+	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 	
 	/*
 	if (likely((tcb->flags & TCPH_SYN) == 0))
@@ -1835,6 +1989,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct inet_request_sock *ireq = inet_rsk(req);
 	unsigned tcp_header_size;
+	struct tcp_out_options opts;
+	struct tcp_md5sig_key *md5 = NULL;
 	struct tcphdr *th;
         int mss;
 
@@ -1891,7 +2047,11 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
                                      TCPH_SYN | TCPH_ACK);
 
-        tcp_header_size = sizeof(*th);
+	memset(&opts, 0, sizeof(opts));
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
+	tcp_header_size = serval_tcp_synack_options(sk, req, mss,
+                                                    skb, &opts, &md5, NULL)
+                + sizeof(*th);
 	memset(th, 0, sizeof(struct tcphdr));
 	th->syn = 1;
 	th->ack = 1;
@@ -1904,6 +2064,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
 	/* RFC1323: The window in SYN & SYN/ACK segments is never scaled. */
 	th->window = htons(min(req->rcv_wnd, 65535U));
+	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
         th->doff = (tcp_header_size >> 2);
 
         LOG_DBG("TCP sending SYNACK seq=%u ackno=%u\n",
