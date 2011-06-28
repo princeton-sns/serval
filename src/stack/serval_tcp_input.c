@@ -3816,9 +3816,10 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 					serval_tcp_cleanup_rbuf(sk, skb->len);
 			}
 			if (!eaten) {
-				if (serval_tcp_checksum_complete_user(sk, skb))
+				if (serval_tcp_checksum_complete_user(sk, skb)) {
+                                        LOG_DBG("Csum error !eaten\n");
 					goto csum_error;
-
+                                }
 				/* Predicted packet is in window by definition.
 				 * seq == rcv_nxt and rcv_wup <= rcv_nxt.
 				 * Hence, check seq<=rcv_wup reduces to:
@@ -3880,9 +3881,14 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 slow_path:
         LOG_DBG("Slow path\n");
 
-	if (len < (th->doff << 2) || serval_tcp_checksum_complete_user(sk, skb))
-		goto csum_error;
-
+	if (len < (th->doff << 2)) {
+                LOG_DBG("doff error\n");
+                goto csum_error;
+        }
+        if (serval_tcp_checksum_complete_user(sk, skb)) {
+                LOG_DBG("checksum error\n");
+                goto csum_error;
+        }
 	/*
 	 *	Standard slow path.
 	 */
