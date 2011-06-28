@@ -540,11 +540,13 @@ static int serval_sal_syn_rcv(struct sock *sk,
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
         int err = 0;
-        
+
+        /* Make compiler be quiet */
+        memset(&saddr, 0, sizeof(saddr));
+
         /* Cache this service. FIXME, need to garbage this entry at
          * some point so that we aren't always redirected to same
          * instance. */
-       
         /*
           err = service_add(&conn_ext->src_srvid, sizeof(conn_ext->src_srvid) * 8, 
           skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
@@ -819,7 +821,9 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         memcpy(&nssk->peer_srvid, &srsk->peer_srvid,
                                sizeof(srsk->peer_srvid));
                         memcpy(&newinet->inet_daddr, &irsk->rmt_addr,
-                               sizeof(newinet->inet_daddr));              
+                               sizeof(newinet->inet_daddr));
+                        memcpy(&newinet->inet_saddr, &irsk->loc_addr,
+                               sizeof(newinet->inet_saddr));      
                         //newinet->mc_index = inet_iif(skb);
                         //newinet->mc_ttl	= ip_hdr(skb)->ttl;
 
