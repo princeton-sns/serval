@@ -147,22 +147,37 @@ int ilog2(unsigned long n)
                 i++;                    /* Update our search position */
         return i;
 }
-
 int memcpy_toiovec(struct iovec *iov, unsigned char *from, int len)
 {
-        if (!memcpy(iov->iov_base, from, len)) 
-                return -EFAULT;
+        while (len > 0) {
+                if (iov->iov_len) {
+                        int copy = min_t(unsigned int, iov->iov_len, len);
 
-        iov->iov_len = len;
+                        memcpy(iov->iov_base, from, copy);
 
+                        from += copy;
+                        len -= copy;
+                        iov->iov_len -= copy;
+                        iov->iov_base += copy;
+                }
+                iov++;
+        }
         return 0;
 }
 
 int memcpy_fromiovec(unsigned char *to, struct iovec *iov, int len)
 {
-        if (!memcpy(to, iov->iov_base, iov->iov_len))
-                return -EFAULT;
-
+        while (len > 0) {
+                if (iov->iov_len) {
+                        int copy = min_t(unsigned int, len, iov->iov_len);
+                        memcpy(to, iov->iov_base, copy);
+                        len -= copy;
+                        to += copy;
+                        iov->iov_base += copy;
+                        iov->iov_len -= copy;
+                }
+                iov++;
+        }
         return 0;
 }
 

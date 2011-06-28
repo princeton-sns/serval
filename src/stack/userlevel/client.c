@@ -600,6 +600,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
                 r.data[ret] = '\0';
         }
         
+        LOG_DBG("Client %u read data len=%u\n", r.rsp.data_len);
+
         ret = client_msg_write(c->fd, &r.rsp.msghdr);
         
         return ret;

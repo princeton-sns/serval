@@ -501,7 +501,8 @@ void skb_append(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head 
  *
  *	A buffer cannot be placed on two lists at the same time.
  */
-void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list)
+void skb_insert(struct sk_buff *old, struct sk_buff *newsk, 
+                struct sk_buff_head *list)
 {
 	spin_lock(&list->lock);
 	__skb_insert(newsk, old->prev, old, list);
