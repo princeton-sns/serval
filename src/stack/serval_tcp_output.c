@@ -497,8 +497,8 @@ static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
           hardware should write the checksum?
 
          */
-	skb->ip_summed = CHECKSUM_NONE;
-	//skb->ip_summed = CHECKSUM_PARTIAL;
+	//skb->ip_summed = CHECKSUM_NONE;
+	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0; 
 	
         TCP_SKB_CB(skb)->flags = flags;
@@ -1834,6 +1834,9 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("TCP sending SYN seq=%u ackno=%u\n",
                 ntohl(th->seq), ntohl(th->ack_seq));
 
+        if (serval_sk(sk)->af_ops->send_check)
+                serval_sk(sk)->af_ops->send_check(sk, skb);
+
         return 0;
 }
 
@@ -1922,6 +1925,9 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         LOG_DBG("2. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
 
+        if (serval_sk(sk)->af_ops->send_check)
+                serval_sk(sk)->af_ops->send_check(sk, skb);
+
         return 0;
 }
 
@@ -1944,9 +1950,13 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	th->dest = 0;
         th->seq = htonl(serval_tcp_acceptable_seq(sk));
 	th->ack_seq = htonl(tp->rcv_nxt);
-        th->window = htons(serval_tcp_select_window(sk));	
+        th->window = htons(serval_tcp_select_window(sk));
+        th->doff = (tcp_header_size >> 2);	
 	th->check = 0;
 	th->urg_ptr = 0;
+
+        if (serval_sk(sk)->af_ops->send_check)
+                serval_sk(sk)->af_ops->send_check(sk, skb);
 
         return 0;
 }
@@ -1971,11 +1981,15 @@ int serval_tcp_connection_build_fin(struct sock *sk,
 	th->dest = 0;
         th->seq = htonl(serval_tcp_acceptable_seq(sk) + 1);
 	th->ack_seq = htonl(tp->rcv_nxt);
-        th->window = htons(serval_tcp_select_window(sk));	
+        th->window = htons(serval_tcp_select_window(sk));
+        th->doff = (tcp_header_size >> 2);	
 	th->check = 0;
 	th->urg_ptr = 0;
 
         LOG_DBG("Built FIN packet %s\n", tcphdr_to_str(th)); 
+
+        if (serval_sk(sk)->af_ops->send_check)
+                serval_sk(sk)->af_ops->send_check(sk, skb);
 
         return 0;
 }

@@ -3496,9 +3496,6 @@ static __sum16 __serval_tcp_checksum_complete_user(struct sock *sk,
 {
 	__sum16 result = 0;
 
-        /* FIXME: Disable checksum check */
-        return result;
-
 	if (sock_owned_by_user(sk)) {
 		local_bh_enable();
 		result = __serval_tcp_checksum_complete(skb);
