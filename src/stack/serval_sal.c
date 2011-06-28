@@ -1162,8 +1162,13 @@ static int serval_sal_request_state_process(struct sock *sk,
 
         /* Save device and peer flow id */
         serval_sock_set_dev(sk, skb->dev);
+
+        /* Save IP addresses. These are important for checksumming in
+           transport protocols */
         memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
                sizeof(inet_sk(sk)->inet_daddr));
+        memcpy(&inet_sk(sk)->inet_saddr, &ip_hdr(skb)->daddr, 
+               sizeof(inet_sk(sk)->inet_saddr));
 
         /* Save nonce */
         memcpy(ssk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
