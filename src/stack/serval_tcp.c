@@ -424,9 +424,9 @@ static inline int forced_push(struct serval_tcp_sock *tp)
 	return after(tp->write_seq, tp->pushed_seq + (tp->max_window >> 1));
 }
 
-void serval_tcp_skb_free(struct sk_buff *skb)
+static void serval_tcp_skb_free(struct sk_buff *skb)
 {
-        LOG_DBG("Freeing skb data packet, skb->len=%u\n", skb->len);
+        /* LOG_PKT("Freeing skb data packet, skb->len=%u\n", skb->len); */
 }
 
 static inline void skb_serval_tcp_set_owner(struct sk_buff *skb, 
@@ -450,7 +450,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
-                LOG_DBG("Allocated skb size=%u skb->truesize=%u\n",
+                LOG_PKT("Allocated skb size=%u skb->truesize=%u\n",
                         size + sk->sk_prot->max_header, skb->truesize);
                 
                 skb_serval_tcp_set_owner(skb, sk);
@@ -467,9 +467,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 		__kfree_skb(skb);
 	} else {
 		sk->sk_prot->enter_memory_pressure(sk);
-                /* FIXME */
-                LOG_WARN("Implement sk_stream_moderate_sndbuf()\n");
-		/* sk_stream_moderate_sndbuf(sk); */
+		sk_stream_moderate_sndbuf(sk);
 	}
 	return NULL;
 }
@@ -531,7 +529,6 @@ static inline void serval_tcp_push(struct sock *sk, int flags, int mss_now,
 
 		serval_tcp_mark_urg(tp, flags);
 
-                LOG_DBG("pushing pending frames\n");
 		__serval_tcp_push_pending_frames(sk, mss_now,
                                                  (flags & MSG_MORE) ? 
                                                  TCP_NAGLE_CORK : nonagle);
@@ -1113,7 +1110,7 @@ new_segment:
 				if (!sk_stream_memory_free(sk))
 					goto wait_for_sndbuf;
 
-                                LOG_DBG("Allocating skb size=%d\n", 
+                                LOG_PKT("Allocating skb size=%d\n", 
                                         select_size(sk, sg));
 
 				skb = sk_stream_alloc_skb(sk,
@@ -1133,7 +1130,7 @@ new_segment:
 				max = size_goal;
 			}
 
-                        LOG_DBG("copy=%u seglen=%u\n",
+                        LOG_PKT("copy=%u seglen=%u\n",
                                 copy, seglen);
 
 			/* Try to append data to the end of skb. */
@@ -1146,7 +1143,7 @@ new_segment:
 				if (copy > skb_tailroom(skb))
 					copy = skb_tailroom(skb);
 
-                                LOG_DBG("Add data tailroom=%u copy=%u\n", 
+                                LOG_PKT("Add data tailroom=%u copy=%u\n", 
                                         skb_tailroom(skb), copy);
                                 
 				if ((err = skb_add_data(skb, from, copy)) != 0) {
@@ -1224,7 +1221,7 @@ new_segment:
 
 				TCP_OFF(sk) = off + copy;
 #endif /* ENABLE_PAGE */
-                                LOG_DBG("No tailroom in skb, add page\n");
+                                LOG_PKT("No tailroom in skb, add page\n");
 			}
 
 			if (!copied)
@@ -1242,7 +1239,7 @@ new_segment:
 			if (skb->len < max || (flags & MSG_OOB))
 				continue;
 
-                        LOG_DBG("skb->len=%u max=%u\n", skb->len, max);
+                        LOG_PKT("skb->len=%u max=%u\n", skb->len, max);
 
 			if (forced_push(tp)) {
 				serval_tcp_mark_push(tp, skb);

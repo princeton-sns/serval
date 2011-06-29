@@ -674,6 +674,13 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 		goto route_err;
         */
 
+        /* Save the route addresses to make sure they match
+           what is configured in the socket. If we do not make
+           sure they are the same, there can be checksum
+           problems. */
+        memcpy(&ireq->rmt_addr, &rt->rt_dst, sizeof(ireq->rmt_addr));
+        memcpy(&ireq->loc_addr, &rt->rt_src, sizeof(ireq->loc_addr));
+
 	return route_dst(rt);
 /*
 route_err:

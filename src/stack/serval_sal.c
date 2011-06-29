@@ -589,8 +589,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
                sizeof(inet_rsk(rsk)->rmt_addr));
-        memcpy(&inet_rsk(rsk)->loc_addr, &saddr,
-               sizeof(inet_rsk(rsk)->loc_addr));
+        /* No point in saving the IP dest address here, since it may
+           be a broadcast address. */
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ntohl(conn_ext->seqno);
 #if defined(ENABLE_DEBUG)
