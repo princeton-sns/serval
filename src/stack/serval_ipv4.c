@@ -19,12 +19,6 @@
 #include <netinet/if_ether.h>
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-#define route_dst(rt) &(rt)->u.dst
-#else
-#define route_dst(rt) &(rt)->dst
-#endif /* LINUX_VERSION_CODE */
-
 extern int serval_sal_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
@@ -203,6 +197,7 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 		goto no_route;
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
+
 	return route_dst(rt);
 
 route_err:
@@ -350,48 +345,79 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         struct rtable *rt;
         struct inet_sock *inet = inet_sk(sk);
 	struct ip_options *opt = inet->opt;
-        struct flowi fl = { .oif = sk->sk_bound_dev_if,
+        int ifindex;
+
+        /* 
+         * Skip all of this if the packet is already routed,
+         */
+        rcu_read_lock();
+
+        rt = skb_rtable(skb);
+
+        if (rt != NULL) {
+                LOG_PKT("Packet already routed\n");
+                goto packet_routed;
+        }
+        /* Make sure we can route this packet. */
+        rt = (struct rtable *)__sk_dst_check(sk, 0);
+
+        if (skb->dev) {
+                ifindex = skb->dev->ifindex;
+        } else {
+                ifindex = sk->sk_bound_dev_if;
+        }
+
+        if (rt == NULL) {
+                struct flowi fl = { .oif = ifindex,
+                                    .iif = ifindex,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-                            .mark = sk->sk_mark,
+                                    .mark = sk->sk_mark,
 #endif
-                            .nl_u = { .ip4_u =
-                                      { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
-                                        .saddr = inet->inet_saddr,
-                                        .tos = RT_CONN_FLAGS(sk) } },
+                                    .nl_u = { .ip4_u =
+                                              { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
+                                                /* .saddr = inet->inet_saddr, */
+                                                .tos = RT_CONN_FLAGS(sk) } },
                             .proto = skb->protocol,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                            .flags = inet_sk_flowi_flags(sk),
+                                    .flags = inet_sk_flowi_flags(sk),
 #endif
-        };
-        
-	rcu_read_lock();
-        
-        security_sk_classify_flow(sk, &fl);
+                };
+                
+                security_sk_classify_flow(sk, &fl);
+                
+                if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
+                        LOG_DBG("No route!\n");
+                        err = -EHOSTUNREACH;
+                        rcu_read_unlock();
+                        goto drop;
+                }
 
-        if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
-                LOG_DBG("No route!\n");
-                err = -EHOSTUNREACH;
-                rcu_read_unlock();
-                goto drop;
+                /* Setup the socket to use this route in the future */
+                sk_setup_caps(sk, route_dst(rt));
+
         } else {
-#if defined(ENABLE_DEBUG)                
+                LOG_PKT("Using route associated with socket\n");
+        }
+        
+#if defined(ENABLE_DEBUG)
+        {
                 char src[18], dst[18];
-                LOG_PKT("Route found skb->len=%u - src %s dst %s\n",
-                        skb->len,
+                LOG_PKT("Route found %s -> %s %s\n",
                         inet_ntop(AF_INET, &rt->rt_src, 
                                   src, sizeof(src)),
                         inet_ntop(AF_INET, &rt->rt_dst, 
-                                  dst, sizeof(dst)));
+                                  dst, sizeof(dst)),
+                        route_dst(rt)->dev ? 
+                        route_dst(rt)->dev->name : "(null)");
+        }
 #endif
-                sk_setup_caps(sk, route_dst(rt));
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
-                skb_dst_set(skb, dst_clone(route_dst(rt)));
+        skb_dst_set(skb, dst_clone(route_dst(rt)));
 #else
-                skb_dst_set_noref(skb, route_dst(rt));
+        skb_dst_set_noref(skb, route_dst(rt));
 #endif
-        }
-
+ packet_routed:              
         if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
                 err = -EHOSTUNREACH;
                 rcu_read_unlock();

@@ -399,9 +399,9 @@ static inline const char *hexdump(const void *data, int datalen,
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-#define route_dst(rt) &(rt)->u.dst
+#define route_dst(rt) (&(rt)->u.dst)
 #else
-#define route_dst(rt) &(rt)->dst
+#define route_dst(rt) (&(rt)->dst)
 #endif /* LINUX_VERSION_CODE */
 
 #endif /* _PLATFORM_H */

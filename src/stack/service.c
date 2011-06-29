@@ -49,7 +49,7 @@ static void service_entry_destroy(struct bst_node *n);
 static struct service_table srvtable;
 
 static struct dest *dest_create(const void *dst, int dstlen, 
-                                const void* dest_out, uint32_t weight,
+                                const void *dest_out, uint32_t weight,
                                 gfp_t alloc) 
 {
         struct dest *de;
@@ -157,17 +157,20 @@ static struct dest *__service_entry_get_dev(struct service_entry *se,
 
 static struct dest * __service_entry_get_dest(struct service_entry *se, 
                                               const void *dst,
-                                              int dstlen, 
+                                              int dstlen,
+                                              const void *dest_out,
                                               struct dest_set **dset_p) 
 {
         struct dest *de = NULL;
         struct dest_set* dset = NULL;
+        const struct net_device *dev = (const struct net_device *)dest_out;
 
         list_for_each_entry(dset, &se->dest_set, ds) {
                 list_for_each_entry(de, &dset->dest_list, lh) {
                         if ((is_sock_dest(de) && dstlen == 0) || 
-                           (!is_sock_dest(de) && memcmp(de->dst, dst,
-                                                        dstlen) == 0)) {
+                            (!is_sock_dest(de) && 
+                             memcmp(de->dst, dst, dstlen) == 0 && 
+                             (!dev || dev->ifindex == de->dest_out.dev->ifindex))) {
                                 if (dset_p)
                                         *dset_p = dset;
                                 return de;
@@ -211,7 +214,7 @@ static void service_entry_insert_dset(struct service_entry *se,
                                       struct dest_set *dset) 
 {
 
-        struct dest_set* pos = NULL;
+        struct dest_set *pos = NULL;
         list_for_each_entry(pos, &se->dest_set, ds) {
                 if (pos->priority < dset->priority) {
                         list_add_tail(&dset->ds, &pos->ds);
@@ -221,10 +224,10 @@ static void service_entry_insert_dset(struct service_entry *se,
         list_add_tail(&dset->ds, &se->dest_set);
 }
 
-static struct dest_set* __service_entry_get_dset(struct service_entry *se, 
+static struct dest_set *__service_entry_get_dset(struct service_entry *se, 
                                                  uint32_t priority) 
 {
-        struct dest_set* pos = NULL;
+        struct dest_set *pos = NULL;
 
         list_for_each_entry(pos, &se->dest_set, ds) {
                 if (pos->priority == priority)
@@ -241,11 +244,12 @@ static int __service_entry_add_dest(struct service_entry *se,
                                     gfp_t alloc) 
 {
         struct dest_set* dset = NULL;
-        struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+        struct dest *de = __service_entry_get_dest(se, dst, dstlen, (const struct net_device *)dest_out, &dset);
 
         if (de) {
                 if (is_sock_dest(de))
                         return -EADDRINUSE;
+                LOG_INF("Identical service entry already exists\n");
                 return 0;
         }
         
@@ -303,11 +307,10 @@ static int __service_entry_modify_dest(struct service_entry *se,
                                        gfp_t alloc) 
 {
         struct dest_set* dset = NULL;
-        struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+        struct dest *de = __service_entry_get_dest(se, dst, dstlen, dest_out, &dset);
         
-        if (!de) {
+        if (!de)
                 return 0;
-        }
 
         if (dset->priority != priority) {
                 struct dest_set* ndset;
@@ -365,7 +368,7 @@ static void __service_entry_inc_dest_stats(struct service_entry *se,
                                            int packets, int bytes) 
 {
         struct dest_set* dset = NULL;
-        struct dest *de = __service_entry_get_dest(se, dst, dstlen, &dset);
+        struct dest *de = __service_entry_get_dest(se, dst, dstlen, NULL, &dset);
 
         if (!de)
                 return;
@@ -888,7 +891,7 @@ static int service_entry_local_match(struct bst_node *n)
         struct service_entry *se = get_service(n);
         struct dest *dst;
 
-        dst = __service_entry_get_dest(se, NULL, 0, NULL);
+        dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
         
         if (dst && is_sock_dest(dst) && dst->dest_out.sk) 
                 return 1;
@@ -901,7 +904,7 @@ static int service_entry_global_match(struct bst_node *n)
         struct service_entry *se = get_service(n);        
         struct dest *dst;
 
-        dst = __service_entry_get_dest(se, NULL, 0, NULL);
+        dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
         
         if (dst && !is_sock_dest(dst)) 
                 return 1;
@@ -982,7 +985,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         se = __service_table_find(tbl, srvid, prefix, SERVICE_ENTRY_LOCAL);
         
         if (se) {
-                dst = __service_entry_get_dest(se, NULL, 0, NULL);
+                dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
                 
                 if (dst && is_sock_dest(dst)) {
                         sock_hold(dst->dest_out.sk);
@@ -1098,12 +1101,10 @@ static int service_table_add(struct service_table *tbl,
 
         if (n && bst_node_prefix_bits(n) >= prefix_bits) {
                 if (dst || dstlen == 0) {
-                        LOG_DBG("Adding additional entry\n");
                         ret = __service_entry_add_dest(get_service(n), 
                                                        flags, priority, 
                                                        weight, dst, dstlen,
                                                        dest_out, GFP_ATOMIC);
-                        
                 }
                 goto out;
         }
@@ -1164,7 +1165,7 @@ int service_add(struct service_id *srvid,
                 uint32_t weight, 
                 const void *dst, 
                 int dstlen, 
-                const void* dest_out, 
+                const void *dest_out, 
                 gfp_t alloc) 
 {
         return service_table_add(&srvtable, srvid, 

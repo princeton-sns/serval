@@ -633,7 +633,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 	struct rtable *rt;
 	const struct inet_request_sock *ireq = inet_rsk(req);
 	//struct ip_options *opt = inet_rsk(req)->opt;
-	struct flowi fl = { .oif = 0, //sk->sk_bound_dev_if,
+	struct flowi fl = { .oif = sk->sk_bound_dev_if,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 			    .mark = sk->sk_mark,
 #endif
@@ -673,6 +673,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
         */
+
 	return route_dst(rt);
 /*
 route_err:

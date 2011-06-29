@@ -634,14 +634,21 @@ static int serval_sal_syn_rcv(struct sock *sk,
                   associate a dst_entry with the skb for it to be
                   accepted by the kernel IP stack.
                  */
-                dst = serval_ipv4_req_route(sk, rsk, rskb->protocol,
+                /*
+                dst = serval_sock_req_route(sk, rsk, rskb->protocol,
                                             saddr.net_ip.s_addr,
                                             ip_hdr(skb)->saddr);
+                */
+                
+                dst = serval_sock_route_req(sk, rsk);
 
                 if (!dst) {
                         LOG_ERR("RESPONSE not routable\n");
                         goto drop;
                 }
+
+                /* Setup socket to use this route in the future */
+                sk_setup_caps(sk, dst);
         }
 #endif /* OS_LINUX_KERNEL */
 
@@ -2260,7 +2267,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 if (cskb == NULL) {
                         service_resolution_iter_inc_stats(&iter, 1, dlen);
                 }
-
+                
                 next_dest = service_resolution_iter_next(&iter);
 		
                 if (next_dest == NULL) {
@@ -2292,16 +2299,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                sizeof(struct net_addr) < dest->dstlen ? 
                                sizeof(struct net_addr) : dest->dstlen);
                 }
-
-#if defined(ENABLE_DEBUG)
-                {
-                        char dst[18];
-                        LOG_PKT("Resolve: dst %s\n",
-                                inet_ntop(AF_INET, &SERVAL_SKB_CB(cskb)->addr, 
-                                          dst, sizeof(dst)));
-                }
-#endif
-#if defined(OS_USER)
 		/*
                   Set the output device for user space operation.  The
                   kernel will route the packet throught the IP routing
@@ -2313,12 +2310,33 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
-
+#if defined(OS_USER)
                         skb_set_dev(cskb, dev_get_by_index(NULL, 0));
+#endif
                 } else if (dest->dest_out.dev) {
                         skb_set_dev(cskb, dest->dest_out.dev);
                 }
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char dst[18];
+                        LOG_PKT("Resolved service %s to destination %s " 
+                                "on device=%s\n",
+                                service_id_to_str(&SERVAL_SKB_CB(cskb)->srvid),
+                                inet_ntop(AF_INET, &SERVAL_SKB_CB(cskb)->addr, 
+                                          dst, sizeof(dst)), 
+                                cskb->dev ? cskb->dev->name : "Undefined");
+                }
 #endif
+
+                /* Make sure no route is associated with the
+                   socket. When IP routes a packet which is associated
+                   with a socket, it will stick to that route in the
+                   future. This will inhibit a re-resolution, which is
+                   not what we want here. */
+                
+                sk_dst_reset(sk);
+
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
