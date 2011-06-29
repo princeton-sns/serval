@@ -373,6 +373,14 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 int serval_tcp_connection_build_fin(struct sock *sk, 
                                     struct sk_buff *skb);
 
+#if defined(ENABLE_SPLICE) && defined(OS_LINUX_KERNEL)
+
+#include <linux/seq_file.h>
+
+int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
+                         sk_read_actor_t recv_actor);
+#endif
+
 void serval_tcp_initialize_rcv_mss(struct sock *sk);
 
 int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu);

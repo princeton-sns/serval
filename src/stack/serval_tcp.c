@@ -679,6 +679,230 @@ unsigned int serval_tcp_poll(struct file *file,
 }
 
 #if defined(ENABLE_SPLICE)
+/*
+ * TCP splice context
+ */
+struct tcp_splice_state {
+	struct pipe_inode_info *pipe;
+	size_t len;
+	unsigned int flags;
+};
+
+static inline struct sk_buff *serval_tcp_recv_skb(struct sock *sk, 
+                                                  u32 seq, u32 *off)
+{
+	struct sk_buff *skb;
+	u32 offset;
+
+	skb_queue_walk(&sk->sk_receive_queue, skb) {
+		offset = seq - TCP_SKB_CB(skb)->seq;
+		if (tcp_hdr(skb)->syn)
+			offset--;
+		if (offset < skb->len || tcp_hdr(skb)->fin) {
+			*off = offset;
+			return skb;
+		}
+	}
+	return NULL;
+}
+
+/*
+ * This routine provides an alternative to tcp_recvmsg() for routines
+ * that would like to handle copying from skbuffs directly in 'sendfile'
+ * fashion.
+ * Note:
+ *	- It is assumed that the socket was locked by the caller.
+ *	- The routine does not block.
+ *	- At present, there is no support for reading OOB data
+ *	  or for 'peeking' the socket using this routine
+ *	  (although both would be easy to implement).
+ */
+int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
+                         sk_read_actor_t recv_actor)
+{
+	struct sk_buff *skb;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	u32 seq = tp->copied_seq;
+	u32 offset;
+	int copied = 0;
+
+	if (sk->sk_state == TCP_LISTEN)
+		return -ENOTCONN;
+	while ((skb = serval_tcp_recv_skb(sk, seq, &offset)) != NULL) {
+		if (offset < skb->len) {
+			int used;
+			size_t len;
+
+			len = skb->len - offset;
+			/* Stop reading if we hit a patch of urgent data */
+			if (tp->urg_data) {
+				u32 urg_offset = tp->urg_seq - seq;
+				if (urg_offset < len)
+					len = urg_offset;
+				if (!len)
+					break;
+			}
+			used = recv_actor(desc, skb, offset, len);
+			if (used < 0) {
+				if (!copied)
+					copied = used;
+				break;
+			} else if (used <= len) {
+				seq += used;
+				copied += used;
+				offset += used;
+			}
+			/*
+			 * If recv_actor drops the lock (e.g. TCP splice
+			 * receive) the skb pointer might be invalid when
+			 * getting here: tcp_collapse might have deleted it
+			 * while aggregating skbs from the socket queue.
+			 */
+			skb = serval_tcp_recv_skb(sk, seq-1, &offset);
+			if (!skb || (offset+1 != skb->len))
+				break;
+		}
+		if (tcp_hdr(skb)->fin) {
+			sk_eat_skb(sk, skb, 0);
+			++seq;
+			break;
+		}
+		sk_eat_skb(sk, skb, 0);
+		if (!desc->count)
+			break;
+		tp->copied_seq = seq;
+	}
+	tp->copied_seq = seq;
+
+	serval_tcp_rcv_space_adjust(sk);
+
+	/* Clean up data we have read: This will do ACK frames. */
+	if (copied > 0)
+		serval_tcp_cleanup_rbuf(sk, copied);
+	return copied;
+}
+
+static int serval_tcp_splice_data_recv(read_descriptor_t *rd_desc, 
+                                       struct sk_buff *skb,
+                                       unsigned int offset, size_t len)
+{
+	struct tcp_splice_state *tss = rd_desc->arg.data;
+	int ret;
+
+	ret = skb_splice_bits(skb, offset, tss->pipe, min(rd_desc->count, len),
+			      tss->flags);
+	if (ret > 0)
+		rd_desc->count -= ret;
+	return ret;
+}
+
+static int __serval_tcp_splice_read(struct sock *sk,
+                                    struct tcp_splice_state *tss)
+{
+	/* Store TCP splice context information in read_descriptor_t. */
+	read_descriptor_t rd_desc = {
+		.arg.data = tss,
+		.count	  = tss->len,
+	};
+
+	return serval_tcp_read_sock(sk, &rd_desc, serval_tcp_splice_data_recv);
+}
+
+/**
+ *  tcp_splice_read - splice data from TCP socket to a pipe
+ * @sock:	socket to splice from
+ * @ppos:	position (not valid)
+ * @pipe:	pipe to splice to
+ * @len:	number of bytes to splice
+ * @flags:	splice modifier flags
+ *
+ * Description:
+ *    Will read pages from given socket and fill them into a pipe.
+ *
+ **/
+ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
+                               struct pipe_inode_info *pipe, size_t len,
+                               unsigned int flags)
+{
+	struct sock *sk = sock->sk;
+	struct tcp_splice_state tss = {
+		.pipe = pipe,
+		.len = len,
+		.flags = flags,
+	};
+	long timeo;
+	ssize_t spliced;
+	int ret;
+
+	sock_rps_record_flow(sk);
+	/*
+	 * We can't seek on a socket input
+	 */
+	if (unlikely(*ppos))
+		return -ESPIPE;
+
+	ret = spliced = 0;
+
+	lock_sock(sk);
+
+	timeo = sock_rcvtimeo(sk, sock->file->f_flags & O_NONBLOCK);
+
+	while (tss.len) {
+		ret = __serval_tcp_splice_read(sk, &tss);
+		if (ret < 0)
+			break;
+		else if (!ret) {
+			if (spliced)
+				break;
+			if (sock_flag(sk, SOCK_DONE))
+				break;
+			if (sk->sk_err) {
+				ret = sock_error(sk);
+				break;
+			}
+			if (sk->sk_shutdown & RCV_SHUTDOWN)
+				break;
+			if (sk->sk_state == TCP_CLOSE) {
+				/*
+				 * This occurs when user tries to read
+				 * from never connected socket.
+				 */
+				if (!sock_flag(sk, SOCK_DONE))
+					ret = -ENOTCONN;
+				break;
+			}
+			if (!timeo) {
+				ret = -EAGAIN;
+				break;
+			}
+			sk_wait_data(sk, &timeo);
+			if (signal_pending(current)) {
+				ret = sock_intr_errno(timeo);
+				break;
+			}
+			continue;
+		}
+		tss.len -= ret;
+		spliced += ret;
+
+		if (!timeo)
+			break;
+		release_sock(sk);
+		lock_sock(sk);
+
+		if (sk->sk_err || sk->sk_state == TCP_CLOSE ||
+		    (sk->sk_shutdown & RCV_SHUTDOWN) ||
+		    signal_pending(current))
+			break;
+	}
+
+	release_sock(sk);
+
+	if (spliced)
+		return spliced;
+
+	return ret;
+}
 
 static ssize_t serval_do_tcp_sendpages(struct sock *sk, struct page **pages, 
                                        int poffset, size_t psize, int flags)
