@@ -362,7 +362,6 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_ANDROID */
 
-#if defined(ENABLE_DEBUG)
 #include <assert.h>
 #ifndef BUG_ON
 #define BUG() do {                                                      \
@@ -376,7 +375,6 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 #ifndef BUG_ON
 #define BUG_ON(x) 
 #endif 
-#endif /* ENABLE_DEBUG */
 
 #endif /* OS_USER */
 

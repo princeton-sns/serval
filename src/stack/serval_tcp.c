@@ -979,7 +979,7 @@ static ssize_t serval_do_tcp_sendpages(struct sock *sk, struct page **pages,
 		skb_shinfo(skb)->gso_segs = 0;
 
 		if (!copied)
-			TCP_SKB_CB(skb)->flags &= ~TCPHDR_PSH;
+			TCP_SKB_CB(skb)->flags &= ~TCPH_PSH;
 
 		copied += copy;
 		poffset += copy;

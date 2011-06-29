@@ -593,6 +593,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                sizeof(inet_rsk(rsk)->loc_addr));
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ntohl(conn_ext->seqno);
+#if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
                 LOG_DBG("rmt_addr=%s loc_addr=%s\n",
@@ -601,6 +602,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                         inet_ntop(AF_INET, &inet_rsk(rsk)->loc_addr, 
                                   locstr, 18));
         }
+#endif
         list_add(&srsk->lh, &ssk->syn_queue);
         
         /* Call upper transport protocol handler */
@@ -682,11 +684,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_SYNACK;
-     
-        {
-                char buf[900];                
-                LOG_DBG("Hex: %s\n", hexdump(rskb->data, rskb->len, buf, 900));
-        }
 
         //skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
@@ -1185,13 +1182,6 @@ static int serval_sal_request_state_process(struct sock *sk,
            invalid.
          */
         serval_sal_ack_process(sk, sfh, skb);
-
-        {
-                char buf[900];
-                
-                LOG_DBG("Hex: %s\n", 
-                        hexdump(sfh, ntohs(sfh->length) + 20, buf, 900));
-        } 
         
         /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {

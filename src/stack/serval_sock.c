@@ -648,7 +648,8 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 			    .uli_u = { .ports =
 				       { .sport = 0,
 					 .dport = 0 } } };
-
+        
+#if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
                 LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
@@ -656,6 +657,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
                         inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
                         sk->sk_protocol);
         }
+#endif
 
 	security_req_classify_flow(req, &fl);
 
