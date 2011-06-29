@@ -132,7 +132,10 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 {
 	u8 options = opts->options;	/* mungable copy */
 
+        LOG_DBG("Writing TCP options\n");
+
 	if (unlikely(opts->mss)) {
+                LOG_DBG("Writing MSS option\n");
 		*ptr++ = htonl((TCPOPT_MSS << 24) |
 			       (TCPOLEN_MSS << 16) |
 			       opts->mss);
@@ -157,6 +160,7 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
         */
 
 	if (unlikely(OPTION_WSCALE & options)) {
+                LOG_DBG("Writing window scale option\n");
 		*ptr++ = htonl((TCPOPT_NOP << 24) |
 			       (TCPOPT_WINDOW << 16) |
 			       (TCPOLEN_WINDOW << 8) |
@@ -199,7 +203,7 @@ static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 		opts->ws = tp->rx_opt.rcv_wscale;
 		opts->options |= OPTION_WSCALE;
 		remaining -= TCPOLEN_WSCALE_ALIGNED;
-                LOG_DBG("Adding window scale option\n");
+                LOG_DBG("Adding window scale option ws=%u\n", opts->ws);
 	}
 	return MAX_SERVAL_TCP_OPTION_SPACE - remaining;
 }
@@ -407,16 +411,22 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 
 	(*rcv_wscale) = 0;
 	if (wscale_ok) {
+
+                LOG_DBG("space=%u sysctl_rcp_rmem[2]=%u window_clamp=%u\n",
+                        space, sysctl_tcp_rmem[2], *window_clamp);
 		/* Set window scaling on max possible window
 		 * See RFC1323 for an explanation of the limit to 14
 		 */
 		space = max_t(u32, sysctl_tcp_rmem[2], sysctl_serval_rmem_max);
 		space = min_t(u32, space, *window_clamp);
+
 		while (space > 65535 && (*rcv_wscale) < 14) {
 			space >>= 1;
 			(*rcv_wscale)++;
 		}
 	}
+
+        LOG_DBG("wscale_ok=%d window scaling=%u\n", wscale_ok, *rcv_wscale);
 
 	/* Set initial window to value enough for senders,
 	 * following RFC2414. Senders, not following this RFC,
@@ -473,7 +483,8 @@ static u16 serval_tcp_select_window(struct sock *sk)
 	/* Make sure we do not exceed the maximum possible
 	 * scaled window.
 	 */
-	if (!tp->rx_opt.rcv_wscale && sysctl_serval_tcp_workaround_signed_windows)
+	if (!tp->rx_opt.rcv_wscale && 
+            sysctl_serval_tcp_workaround_signed_windows)
 		new_win = min(new_win, MAX_TCP_WINDOW);
 	else
 		new_win = min(new_win, (65535U << tp->rx_opt.rcv_wscale));
@@ -1835,6 +1846,12 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
    space version of the stack does not have dst cache
    implemented. Therefore we cannot access the default dst_metrics.
 
+   Further, __sk_dst_get(sk) will return NULL here, even in the
+   kernel. This is because the normal TCP/IP stack always routes a SYN
+   before transmission (i.e., it associates the socket with a route
+   that contains metrics). However, we cannot really route here, since
+   we do not know the destination --- it is resolved on the SYN.
+
  */
 static void serval_tcp_connect_init(struct sock *sk)
 {
@@ -1842,9 +1859,9 @@ static void serval_tcp_connect_init(struct sock *sk)
 	__u8 rcv_wscale;
 	struct dst_entry *dst = __sk_dst_get(sk);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34))
-        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_INITRWND) : 655356;
+        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_INITRWND) : 65535;
 #else
-        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_WINDOW) : 655356;
+        unsigned int initrwnd = dst ? dst_metric(dst, RTAX_WINDOW) : 65535;
 #endif
         tp->tcp_header_len = sizeof(struct tcphdr);
  
@@ -1860,7 +1877,7 @@ static void serval_tcp_connect_init(struct sock *sk)
                 serval_tcp_sync_mss(sk, 1500);
 
 	if (!tp->window_clamp)
-		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 65535;
+		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 0;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_TCP_MSS_DEFAULT;
@@ -1882,6 +1899,9 @@ static void serval_tcp_connect_init(struct sock *sk)
                                          initrwnd);
 
 	tp->rx_opt.rcv_wscale = rcv_wscale;
+
+        LOG_DBG("rx_opt.rcv_wscale=%u\n", rcv_wscale);
+
 	tp->rcv_ssthresh = tp->rcv_wnd;
 
 	sk->sk_err = 0;
@@ -1939,9 +1959,16 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 {
         //struct serval_sock *ssk = serval_sk(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        unsigned int tcp_header_size = sizeof(struct tcphdr);
+	struct tcp_out_options opts;
+        unsigned int tcp_options_size, tcp_header_size;
+	struct tcp_md5sig_key *md5;
         struct tcphdr *th;
         u8 flags = TCPH_SYN;
+
+        serval_tcp_connect_init(sk);
+
+        tcp_options_size = serval_tcp_syn_options(sk, skb, &opts, &md5);
+	tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
@@ -1952,8 +1979,6 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
         if (!tp->write_seq)
                 tp->write_seq = serval_tcp_random_sequence_number();
-
-        serval_tcp_connect_init(sk);
 
 	tp->rx_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 
@@ -1968,10 +1993,13 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
                                         flags);
                 
+
 	tp->packets_out += serval_tcp_skb_pcount(skb);
 
 	tp->snd_nxt = tp->write_seq;
 	tp->pushed_seq = tp->write_seq;
+
+	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
         LOG_DBG("TCP sending SYN seq=%u ackno=%u\n",
                 ntohl(th->seq), ntohl(th->ack_seq));
@@ -2021,7 +2049,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
 		req->window_clamp = tp->window_clamp ? : dst_metric(dst, RTAX_WINDOW);
 #else
-                req->window_clamp = SERVAL_TCP_MSS_DEFAULT;
+                req->window_clamp = 0;
 #endif
 		/* tcp_full_space because it is guaranteed to be the
                  * first packet */
@@ -2039,7 +2067,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
                                                  dst_metric(dst, RTAX_INITRWND)
 #else
-                                                 1460
+                                                 0
 #endif
                                                  );
 		ireq->rcv_wscale = rcv_wscale;
