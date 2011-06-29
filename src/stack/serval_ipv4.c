@@ -130,7 +130,8 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         err = NF_HOOK(PF_INET, NF_IP_LOCAL_OUT, skb, NULL, skb->dst->dev,
                       dst_output);
 #endif
-#else
+#else /* OS_USER */
+       
         /* Calculate checksum */
         ip_send_check(ip_hdr(skb));
 
@@ -394,6 +395,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
                 err = -EHOSTUNREACH;
                 rcu_read_unlock();
+                LOG_DBG("dest is not gateway!\n");
                 goto drop;
         }
 
@@ -471,9 +473,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         /* Transmit */
         err = serval_ip_local_out(skb);
 #endif        
-out:
+ out:
         if (err < 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed: %d\n", err);
         }
 
         return err;

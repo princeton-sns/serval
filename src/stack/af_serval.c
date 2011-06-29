@@ -463,6 +463,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         int err = 0;
         int nonblock = flags & O_NONBLOCK;
+        long timeo;
 
         if (addr->sa_family != AF_SERVAL) {
                 LOG_ERR("bad address family\n");
@@ -505,9 +506,10 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 
                 err = sk->sk_prot->connect(sk, addr, alen);
 
-		if (err < 0)
+		if (err < 0) {
+                        serval_sock_set_state(sk, SERVAL_CLOSED);
 			goto out;
-
+                }
 		sock->state = SS_CONNECTING;
 
 		/* Just entered SS_CONNECTING state; the only
@@ -517,22 +519,35 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 		err = -EINPROGRESS;
 		break;
 	}
+                
+        timeo = sock_sndtimeo(sk, nonblock);
 
+        if ((1 << sk->sk_state) & (SERVALF_REQUEST | SERVALF_RESPOND)) {
+                /* Error code is set above */
+                if (!timeo || !sk_stream_wait_connect(sk, &timeo))
+                        goto out;
+                
+                err = sock_intr_errno(timeo);
+                if (signal_pending(current))
+                        goto out;
+        }
+
+        /*
         if (!nonblock) {
                 long timeo = sock_sndtimeo(sk, nonblock);        
-                /* Go to sleep, wait for timeout or successful connection */
+        
                 LOG_DBG("waiting for connect\n");
-                //err = serval_wait_state(sk, SERVAL_REQUEST, -1, 1);
+        
                 if ((1 << sk->sk_state) & SERVALF_REQUEST)
                         err = sk_stream_wait_connect(sk, &timeo);
                         
                 LOG_DBG("wait for connect returned=%d\n", err);
         } else {
-                /* TODO: handle nonblocking connect */
-                LOG_DBG("non-blocking connect\n");
-                err = -EINPROGRESS;
+        LOG_DBG("non-blocking connect\n");
+        err = -EINPROGRESS;
                 goto out;
         }
+        */
 
         /* We must be in SERVAL_REQUEST or later state. All those
            states are valid "connected" states, except for CLOSED. */
