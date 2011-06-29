@@ -2031,7 +2031,6 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 			break;
 
 		serval_tcp_unlink_write_queue(skb, sk);
-                LOG_DBG("Freeing ACKed skb\n");
 		sk_wmem_free_skb(sk, skb);
 
 		tp->scoreboard_skb_hint = NULL;
@@ -2774,7 +2773,7 @@ static void serval_tcp_ofo_queue(struct sock *sk)
 			__kfree_skb(skb);
 			continue;
 		}
-		LOG_DBG("ofo requeuing : rcv_next %X seq %X - %X\n",
+		LOG_PKT("ofo requeuing : rcv_next %X seq %X - %X\n",
                         tp->rcv_nxt, TCP_SKB_CB(skb)->seq,
                         TCP_SKB_CB(skb)->end_seq);
 
@@ -2815,7 +2814,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_DBG("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
+        LOG_PKT("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
                 skb->len, skb->data_len, th->doff * 4);
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
@@ -2863,7 +2862,7 @@ queue_and_out:
 			    serval_tcp_try_rmem_schedule(sk, skb->truesize))
 				goto drop;
                         
-                        LOG_DBG("Queueing in order segement\n");
+                        LOG_PKT("Queueing in order segement\n");
 			skb_set_owner_r(skb, sk);
 			__skb_queue_tail(&sk->sk_receive_queue, skb);
 		}
@@ -2889,10 +2888,10 @@ queue_and_out:
 		serval_tcp_fast_path_check(sk);
 
 		if (eaten > 0) {
-                        LOG_DBG("skb eaten\n");
+                        LOG_PKT("skb eaten\n");
 			__kfree_skb(skb);
                 } else if (!sock_flag(sk, SOCK_DEAD)) {
-                        LOG_DBG("Signal data ready!\n");
+                        LOG_PKT("Signal data ready!\n");
 			sk->sk_data_ready(sk, 0);
                 }
 		return;
@@ -2904,11 +2903,11 @@ queue_and_out:
 
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, 
                                      TCP_SKB_CB(skb)->end_seq);
-out_of_window:
-                LOG_DBG("Segment out of window!\n");
+        out_of_window:
+                LOG_PKT("Segment out of window!\n");
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
-drop:
+        drop:
                 LOG_DBG("Dropping segment!\n");
 		__kfree_skb(skb);
 		return;
@@ -2923,7 +2922,7 @@ drop:
 
 	if (before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
 		/* Partial packet, seq < rcv_next < end_seq */
-		LOG_DBG("partial segment: rcv_next %X seq %X - %X\n",
+		LOG_PKT("partial segment: rcv_next %X seq %X - %X\n",
                         tp->rcv_nxt, TCP_SKB_CB(skb)->seq,
                         TCP_SKB_CB(skb)->end_seq);
                 
@@ -2945,7 +2944,7 @@ drop:
 	tp->pred_flags = 0;
 	serval_tsk_schedule_ack(sk);
 
-        LOG_DBG("out of order segment: rcv_next %X seq %X - %X\n",
+        LOG_PKT("out of order segment: rcv_next %X seq %X - %X\n",
                 tp->rcv_nxt, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq);
         
 	skb_set_owner_r(skb, sk);
@@ -2960,14 +2959,11 @@ drop:
 						TCP_SKB_CB(skb)->end_seq;
 		}
 #endif
-                LOG_DBG("Segment put first in OFO queue\n");
 		__skb_queue_head(&tp->out_of_order_queue, skb);
 	} else {
 		struct sk_buff *skb1 = skb_peek_tail(&tp->out_of_order_queue);
 		u32 seq = TCP_SKB_CB(skb)->seq;
 		u32 end_seq = TCP_SKB_CB(skb)->end_seq;
-
-                LOG_DBG("Packet put in OFO queue\n");
 
 		if (seq == TCP_SKB_CB(skb1)->end_seq) {
 			__skb_queue_after(&tp->out_of_order_queue, skb1, skb);
@@ -3050,7 +3046,6 @@ drop:
 			serval_tcp_sack_new_ofo_skb(sk, seq, end_seq);
 #endif
 	}
-        LOG_DBG("data queueing done\n");
 }
 
 static struct sk_buff *serval_tcp_collapse_one(struct sock *sk, 

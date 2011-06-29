@@ -2340,6 +2340,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		}
 		dest = next_dest;
 	}
+        
+        /* Reset dst cache since we don't want to potantially cache a
+           broadcast destination */
+        sk_dst_reset(sk);
 
         service_resolution_iter_destroy(&iter);
 	service_entry_put(se);

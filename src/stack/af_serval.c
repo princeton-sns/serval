@@ -524,10 +524,23 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if ((1 << sk->sk_state) & (SERVALF_REQUEST | SERVALF_RESPOND)) {
                 /* Error code is set above */
-                if (!timeo || !sk_stream_wait_connect(sk, &timeo))
+                LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
+
+                if (!timeo) {
+                        LOG_DBG("Zero timeout\n");
                         goto out;
+                }
+
+                err = sk_stream_wait_connect(sk, &timeo);
+
+                if (!err) {
+                        LOG_ERR("sk_stream_wait_connect returned err=%d\n",
+                                err);
+                        goto out;
+                }
                 
                 err = sock_intr_errno(timeo);
+
                 if (signal_pending(current))
                         goto out;
         }

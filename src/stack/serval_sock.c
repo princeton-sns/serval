@@ -631,7 +631,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 {
 #if defined(OS_LINUX_KERNEL)
 	struct rtable *rt;
-	const struct inet_request_sock *ireq = inet_rsk(req);
+	struct inet_request_sock *ireq = inet_rsk(req);
 	//struct ip_options *opt = inet_rsk(req)->opt;
 	struct flowi fl = { .oif = sk->sk_bound_dev_if,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))

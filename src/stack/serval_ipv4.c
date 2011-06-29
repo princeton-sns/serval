@@ -396,7 +396,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                 sk_setup_caps(sk, route_dst(rt));
 
         } else {
-                LOG_PKT("Using route associated with socket\n");
+                LOG_PKT("Using route already associated with socket\n");
         }
         
 #if defined(ENABLE_DEBUG)

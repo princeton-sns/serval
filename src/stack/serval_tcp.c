@@ -1460,8 +1460,6 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	struct sk_buff *skb;
 	u32 urg_hole = 0;
 
-        LOG_DBG("User reads data len=%zu\n", len);
-
 	lock_sock(sk);
 
 	TCP_CHECK_TIMER(sk);
@@ -1831,7 +1829,6 @@ skip_copy:
 	 */
 
 	/* Clean up data we have read: This will do ACK frames. */
-        LOG_DBG("Copied %d bytes\n", copied);
 	serval_tcp_cleanup_rbuf(sk, copied);
 
 	TCP_CHECK_TIMER(sk);
