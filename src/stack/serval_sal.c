@@ -559,7 +559,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         LOG_DBG("REQUEST seqno=%u\n", ntohl(conn_ext->seqno));
 
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
-                goto drop;
+                goto done;
 
 
         /* Try to figure out the source address for the incoming
@@ -572,14 +572,14 @@ static int serval_sal_syn_rcv(struct sock *sk,
         if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
                 LOG_ERR("No source address for interface %s\n",
                         skb->dev);
-                goto drop;
+                goto done;
         }
 
         rsk = serval_reqsk_alloc(sk->sk_prot->rsk_prot);
 
         if (!rsk) {
                 err = -ENOMEM;
-                goto drop;
+                goto done;
         }
 
         srsk = serval_rsk(rsk);
@@ -589,10 +589,12 @@ static int serval_sal_syn_rcv(struct sock *sk,
                sizeof(sfh->src_flowid));
         memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
                sizeof(inet_rsk(rsk)->rmt_addr));
-        /* No point in saving the IP dest address here, since it may
-           be a broadcast address. */
+        memcpy(&inet_rsk(rsk)->loc_addr, &saddr,
+               sizeof(inet_rsk(rsk)->rmt_addr));
+
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ntohl(conn_ext->seqno);
+
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
@@ -603,6 +605,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                                   locstr, 18));
         }
 #endif
+
         list_add(&srsk->lh, &ssk->syn_queue);
         
         /* Call upper transport protocol handler */
@@ -610,8 +613,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 err = ssk->af_ops->conn_request(sk, rsk, skb);
                 
                 if (err) {
-                        reqsk_free(rsk);
-                        goto drop;
+                        goto done;
                 }
         }
         
@@ -620,7 +622,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         if (!rskb) {
                 err = -ENOMEM;
-                goto drop;
+                goto done;
         }
         
         skb_reserve(rskb, sk->sk_prot->max_header);
@@ -628,28 +630,20 @@ static int serval_sal_syn_rcv(struct sock *sk,
         rskb->protocol = 0;
 
 #if defined(OS_LINUX_KERNEL)
-        {
-                /*
-                  For kernel, we need to route this packet and
-                  associate a dst_entry with the skb for it to be
-                  accepted by the kernel IP stack.
-                 */
-                /*
-                dst = serval_sock_req_route(sk, rsk, rskb->protocol,
-                                            saddr.net_ip.s_addr,
-                                            ip_hdr(skb)->saddr);
-                */
-                
-                dst = serval_sock_route_req(sk, rsk);
-
-                if (!dst) {
-                        LOG_ERR("RESPONSE not routable\n");
-                        goto drop;
-                }
-
-                /* Setup socket to use this route in the future */
-                sk_setup_caps(sk, dst);
+        /*
+          For kernel, we need to route this packet and
+          associate a dst_entry with the skb for it to be
+          accepted by the kernel IP stack.
+        */
+        dst = serval_sock_route_req(sk, rsk);
+        
+        if (!dst) {
+                LOG_ERR("RESPONSE not routable\n");
+                goto drop;
         }
+        
+        /* Setup socket to use this route in the future */
+        sk_setup_caps(sk, dst);
 #endif /* OS_LINUX_KERNEL */
 
         /* Let transport chip in */
@@ -657,7 +651,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 err = ssk->af_ops->conn_build_synack(sk, dst, rsk, rskb);
                 
                 if (err) {
-                        reqsk_free(rsk);
                         goto drop_and_release;
                 }
         } else {
@@ -708,14 +701,17 @@ static int serval_sal_syn_rcv(struct sock *sk,
                                              saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
         
-done:        
+done:
         /* Free the REQUEST */
         FREE_SKB(skb);
 
         return err;
 drop_and_release:
         dst_release(dst);
+#if defined(OS_LINUX_KERNEL)
 drop:
+#endif
+        FREE_SKB(rskb);
         goto done;
 }
 
