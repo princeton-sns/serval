@@ -2287,6 +2287,8 @@ void serval_tcp_parse_options(struct sk_buff *skb,
 	ptr = (unsigned char *)(th + 1);
 	opt_rx->saw_tstamp = 0;
 
+        LOG_DBG("Parsing TCP options\n");
+
 	while (length > 0) {
 		int opcode = *ptr++;
 		int opsize;
@@ -2319,6 +2321,7 @@ void serval_tcp_parse_options(struct sk_buff *skb,
 				}
 				break;
 			case TCPOPT_WINDOW:
+                                LOG_DBG("TCPOPT_WINDOW\n");
 				if (opsize == TCPOLEN_WINDOW && th->syn &&
 				    !estab && sysctl_serval_tcp_window_scaling) {
 					__u8 snd_wscale = *(__u8 *)ptr;
@@ -3952,8 +3955,6 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         ack_seq = ntohl(th->ack_seq);
         seq = ntohl(th->seq);
 
-        LOG_DBG("expecting ACK %s\n", tcphdr_to_str(th));
-
 	tp->copied_seq = tp->rcv_nxt;
 #if defined(OS_LINUX_KERNEL)
         smp_mb();
@@ -3982,11 +3983,9 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                  */
                 serval_tcp_ack_update_rtt(sk, 0, 0);
                 
-                /*
-                  if (tp->rx_opt.tstamp_ok)
-                  tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
-                */
-                
+                if (tp->rx_opt.tstamp_ok)
+                          tp->advmss -= TCPOLEN_TSTAMP_ALIGNED;
+
                 /* Make sure socket is routed, for
                  * correct metrics.
                  */

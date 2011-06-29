@@ -815,7 +815,21 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 extern unsigned int serval_tcp_poll(struct file *file, 
                                     struct socket *sock, 
                                     poll_table *wait);
-#endif
+#if defined(ENABLE_SPLICE)
+extern ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
+                                      struct pipe_inode_info *pipe, size_t len,
+                                      unsigned int flags);
+ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
+                            size_t size, int flags);
+
+extern ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
+                                      struct pipe_inode_info *pipe, size_t len,
+                                      unsigned int flags);
+ssize_t serval_tcp_sendpage(struct socket *sock, struct page *page, int offset,
+                            size_t size, int flags);
+
+#endif /* ENABLE_SPLICE */
+#endif /* OS_LINUX_KERNEL */
 
 static const struct proto_ops serval_stream_ops = {
 	.family =	PF_SERVAL,
@@ -836,20 +850,14 @@ static const struct proto_ops serval_stream_ops = {
 	.poll =	        serval_tcp_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
+#if defined(ENABLE_SPLICE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+	.splice_read =  serval_tcp_splice_read,
+	.sendpage =	serval_tcp_sendpage,
+#else
 	.sendpage =	sock_no_sendpage,
-#if defined(ENABLE_SPLICE)
-	/* .splice_read =  serval_tcp_splice_read, */
 #endif
 #endif
 };
-
-#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
-extern ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
-                                      struct pipe_inode_info *pipe, size_t len,
-                                      unsigned int flags);
-ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
-                            size_t size, int flags);
-#endif
 
 static const struct proto_ops serval_dgram_ops = {
 	.family =	PF_SERVAL,
