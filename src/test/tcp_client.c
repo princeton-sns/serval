@@ -196,26 +196,45 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
         return ret;
 }
 
-static int client(const char *filepath, int handle_migration)
+static int client(const char *filepath, int handle_migration, 
+                  struct in_addr *srv_inetaddr)
 {
         int sock, ret = EXIT_FAILURE;
-        struct sockaddr_sv cliaddr;
-        struct sockaddr_sv srvaddr;
+        union {
+                struct sockaddr_sv serval;
+                struct sockaddr_in inet;
+                struct sockaddr saddr;
+        } cliaddr, srvaddr;
+        socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
+        unsigned short srv_inetport = 9898;
+        int family = AF_SERVAL;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
-        cliaddr.sv_family = AF_SERVAL;
-        cliaddr.sv_srvid.s_sid16[0] = htons(getpid());
-  
-        bzero(&srvaddr, sizeof(srvaddr));
-        srvaddr.sv_family = AF_SERVAL;
-        memcpy(&srvaddr.sv_srvid, &listen_srvid, sizeof(listen_srvid));
-        /* srvaddr.sv_flags = SV_WANT_FAILOVER; */
-  
-        sock = socket_sv(AF_SERVAL, SOCK_STREAM, 0);
+        memset(&srvaddr, 0, sizeof(srvaddr));
+
+        if (srv_inetaddr) {
+                family = AF_INET;
+                cliaddr.inet.sin_family = family;
+                cliaddr.inet.sin_port = htons(srv_inetport);
+                memcpy(&cliaddr.inet.sin_addr, srv_inetaddr, 
+                       sizeof(*srv_inetaddr));
+                addrlen = sizeof(cliaddr.inet);
+        } else {
+                cliaddr.serval.sv_family = family;
+                cliaddr.serval.sv_srvid.s_sid16[0] = htons(getpid());
+                srvaddr.serval.sv_family = AF_SERVAL;
+                memcpy(&srvaddr.serval.sv_srvid, 
+                       &listen_srvid, sizeof(listen_srvid));
+                addrlen = sizeof(cliaddr.serval);
+                /* srvaddr.sv_flags = SV_WANT_FAILOVER; */
+        }
+        
+        sock = socket_sv(family, SOCK_STREAM, 0);
+        
         set_reuse_ok(sock);
 
-        ret = bind_sv(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr));
+        ret = bind_sv(sock, &cliaddr.saddr, addrlen);
     
         if (ret < 0) {
                 fprintf(stderr, "error client binding socket: %s\n", 
@@ -223,7 +242,7 @@ static int client(const char *filepath, int handle_migration)
                 goto out;
         }
         
-        ret = connect_sv(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+        ret = connect_sv(sock, &srvaddr.saddr, addrlen);
     
         if (ret < 0) {
                 fprintf(stderr, "error client connecting to socket: %s\n",
@@ -231,11 +250,16 @@ static int client(const char *filepath, int handle_migration)
                 goto out;
         }
         
-        fprintf(stderr, "Connected to service id %s\n", 
-                service_id_to_str(&srvaddr.sv_srvid));
-    
-        sleep(2);
-    
+        if (family == AF_INET) {
+                char buf[18];
+                printf("Connected to service %s:%u\n",
+                       inet_ntop(family, srv_inetaddr, buf, 18), 
+                       srv_inetport);
+        } else {
+                printf("Connected to service id %s\n", 
+                       service_id_to_str(&srvaddr.serval.sv_srvid));
+        }
+
         ret = recv_file(sock, filepath, handle_migration, digest);
         
         if (ret == EXIT_SUCCESS) {
@@ -255,7 +279,8 @@ static void print_help()
         printf("Usage: %s [-hfm]\n", progname);
         printf("-h, --help              - Print this information.\n"
                "-f, --file FILE         - Read data from FILE.\n"
-               "-m, --migration         - Handle migration.\n");
+               "-m, --migration         - Handle migration.\n"
+               "-i, --inet IP_ADDR    - Use AF_INET\n");
 }
 
 int
@@ -264,6 +289,8 @@ main(int argc, char **argv)
 	struct sigaction action;
         char *filepath = NULL;
         int handle_migration = 0;
+        struct in_addr srv_inetaddr;
+        int family = AF_SERVAL;
 
         listen_srvid.s_sid16[0] = htons(DEFAULT_LISTEN_SID);    
 
@@ -284,6 +311,14 @@ main(int argc, char **argv)
                     strcmp("--file", argv[0]) == 0) {
                         if (argv[1]) {
                                 filepath = argv[1];
+                                argc--;
+                                argv++;
+                        }
+                } else if (strcmp("-i", argv[0]) == 0 || 
+                           strcmp("--inet", argv[0]) == 0) {
+                        if (argv[1] && 
+                            inet_pton(AF_INET, argv[1], &srv_inetaddr) == 1) {
+                                family = AF_INET;
                                 argc--;
                                 argv++;
                         }
@@ -315,5 +350,6 @@ main(int argc, char **argv)
                 argv++;
         }
     
-        return client(filepath, handle_migration);
+        return client(filepath, handle_migration, 
+                      family == AF_INET ? &srv_inetaddr : NULL);
 }

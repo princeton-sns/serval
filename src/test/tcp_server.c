@@ -294,15 +294,37 @@ static int send_memory_buffer(int sock, size_t bytes_to_send,
 }
 
 static int server(const char *filepath, size_t send_memory_buffer_size, 
-                  unsigned long migrate_offset)
+                  unsigned long migrate_offset, int family)
 {
         int sock;
-        int backlog = 8;
-        struct sockaddr_sv servaddr, cliaddr;  
+        int backlog = 8;    
+        union {
+                 struct sockaddr_sv serval;
+                struct sockaddr_in inet;
+                struct sockaddr saddr;
+        } cliaddr, srvaddr;
+        socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
         int ret = EXIT_FAILURE;
+        unsigned short srv_inetport = 9898;
 
-        sock = socket_sv(AF_SERVAL, SOCK_STREAM, 0);
+        memset(&cliaddr, 0, sizeof(cliaddr));
+        memset(&srvaddr, 0, sizeof(srvaddr));
+
+        if (family == AF_INET) {
+                cliaddr.inet.sin_family = family;
+                cliaddr.inet.sin_port = htons(srv_inetport);
+                addrlen = sizeof(cliaddr.inet);
+        } else {
+                cliaddr.serval.sv_family = family;
+                cliaddr.serval.sv_srvid.s_sid16[0] = htons(getpid());
+                srvaddr.serval.sv_family = AF_SERVAL;
+                memcpy(&srvaddr.serval.sv_srvid,
+                       &listen_srvid, sizeof(listen_srvid));
+                addrlen = sizeof(cliaddr.serval);
+        }
+      
+        sock = socket_sv(family, SOCK_STREAM, 0);
 
         if (sock < 0) {
                 fprintf(stderr, "error creating AF_SERVAL socket: %s\n", 
@@ -310,13 +332,9 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                 return EXIT_FAILURE;
         }
   
-        memset(&servaddr, 0, sizeof(servaddr));
-        servaddr.sv_family = AF_SERVAL;
-        memcpy(&servaddr.sv_srvid, &listen_srvid, sizeof(listen_srvid));
-  
         set_reuse_ok(sock);
         
-        ret = bind_sv(sock, (struct sockaddr *) &servaddr, sizeof(servaddr));
+        ret = bind_sv(sock, &srvaddr.saddr, addrlen);
   
         if (ret < 0) {
                 fprintf(stderr, "error binding socket: %s\n", strerror(errno));
@@ -324,9 +342,14 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                 return ret;
         }
         
-        printf("server: bound to object id %s\n", 
-               service_id_to_str(&listen_srvid));
-
+        if (family == AF_INET) {
+                printf("server: bount to port %u\n",
+                       srv_inetport);
+        } else {
+                printf("server: bound to object id %s\n", 
+                       service_id_to_str(&listen_srvid));
+        }
+        
         ret = listen_sv(sock, backlog);
 
         if (ret < 0) {
@@ -337,14 +360,13 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
         }
     
         while (!should_exit) {
-                socklen_t l = sizeof(cliaddr);
+                socklen_t l = addrlen;
                 int client_sock;
                 long offset = 0;
 
                 printf("Waiting for new connections\n");
                 
-                client_sock = accept_sv(sock, 
-                                        (struct sockaddr *)&cliaddr, &l);
+                client_sock = accept_sv(sock, &cliaddr.saddr, &l);
         
                 if (client_sock < 0) {
                         fprintf(stderr, "error accepting new conn: %s\n", 
@@ -361,9 +383,18 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                                 continue;
                         }
                 }
-         
-                printf("Connect req from object id %s (sock = %d)\n",
-                       service_id_to_str(&cliaddr.sv_srvid), client_sock);
+                
+                if (family == AF_INET) {
+                        char buf[18];
+                        printf("Connect request from %s:%u\n",
+                               inet_ntop(family, 
+                                         &cliaddr.inet.sin_addr, buf, 18),
+                               ntohs(cliaddr.inet.sin_port));
+                } else {
+                        printf("Connect req from object id %s (sock = %d)\n",
+                               service_id_to_str(&cliaddr.serval.sv_srvid), 
+                               client_sock);
+                }
                 
                 if (send_memory_buffer_size > 0)
                         ret = send_memory_buffer(client_sock, 
@@ -395,7 +426,8 @@ static void print_help()
                "-f, --file FILE         - Read data from FILE.\n"
                "-m, --migrate BYTE      - Migrate at every sent data byte BYTE.\n"
                "-b, --buffer BYTES      - Generate BYTES bytes random data using a memory buffer.\n"
-               "-s, --seed SEED         - Set PRNG seed to SEED.\n");    
+               "-s, --seed SEED         - Set PRNG seed to SEED.\n"
+               "-i, --inet              - Use AF_INET\n");
 }
 
 int
@@ -406,6 +438,7 @@ main(int argc, char **argv)
         char *filepath = NULL;
         unsigned int seed = 2;
         unsigned long migrate_offset = 0;
+        int family = AF_SERVAL;
 
         listen_srvid.s_sid16[0] = htons(DEFAULT_LISTEN_SID);
 
@@ -429,6 +462,9 @@ main(int argc, char **argv)
                                 argc--;
                                 argv++;
                         }
+                } else if (strcmp("-i", argv[0]) == 0 || 
+                           strcmp("--inet", argv[0]) == 0) {
+                        family = AF_INET;
                 } else if (strcmp("-b", argv[0]) == 0 || 
                            strcmp("--buffer", argv[0]) == 0) {
                         if (argv[1]) {
@@ -505,5 +541,5 @@ main(int argc, char **argv)
 
         srandom(seed);
         
-        return server(filepath, send_memory_buffer, migrate_offset);
+        return server(filepath, send_memory_buffer, migrate_offset, family);
 }
