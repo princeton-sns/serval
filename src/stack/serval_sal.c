@@ -287,7 +287,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                         serval_sal_unlink_ctrl_queue(skb, sk);
                         LOG_PKT("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);
-                        FREE_SKB(skb);
+                        kfree_skb(skb);
                         skb = serval_sal_ctrl_queue_head(sk);
                         if (skb)
                                 ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
@@ -380,7 +380,7 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
 
                 if (err) {
                         LOG_ERR("Transport protocol returned error\n");
-                        FREE_SKB(skb);
+                        kfree_skb(skb);
                         return err;
                 }
         }
@@ -697,7 +697,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         
 done:
         /* Free the REQUEST */
-        FREE_SKB(skb);
+        kfree_skb(skb);
 
         return err;
 drop_and_release:
@@ -705,7 +705,7 @@ drop_and_release:
 #if defined(OS_LINUX_KERNEL)
 drop:
 #endif
-        FREE_SKB(rskb);
+        kfree_skb(rskb);
         goto done;
 }
 
@@ -1049,7 +1049,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
-                FREE_SKB(skb);
+                kfree_skb(skb);
         }
         return err;
 }
@@ -1115,7 +1115,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                 if (nsk && nsk != sk) {
                         return serval_sal_child_process(sk, nsk, sfh, skb);
                 }
-                FREE_SKB(skb);
+                kfree_skb(skb);
         } else if (sfh->flags & SVH_SYN) {
                 err = serval_sal_syn_rcv(sk, sfh, skb);
         }
@@ -1231,7 +1231,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
 
 drop: 
-        FREE_SKB(skb);
+        kfree_skb(skb);
 error:
         return err;
 }
@@ -1271,7 +1271,7 @@ static int serval_sal_respond_state_process(struct sock *sk,
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
         }
 drop:
-        FREE_SKB(skb);
+        kfree_skb(skb);
 error:
         return err;
 }
@@ -1315,7 +1315,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         
         err = ssk->af_ops->receive(sk, skb);
 
-        //FREE_SKB(skb);
+        //kfree_skb(skb);
                 
         return err;
 }
@@ -1346,7 +1346,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         
         err = ssk->af_ops->receive(sk, skb);
 
-        //FREE_SKB(skb);
+        //kfree_skb(skb);
         
         return err;
 }
@@ -1374,7 +1374,7 @@ static int serval_sal_closing_state_process(struct sock *sk,
         
         err = ssk->af_ops->receive(sk, skb);
 
-        //FREE_SKB(skb);
+        //kfree_skb(skb);
 
         return err;
 }
@@ -1402,7 +1402,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         
         err = ssk->af_ops->receive(sk, skb);
 
-        //FREE_SKB(skb);
+        //kfree_skb(skb);
 
         return err;
 }
@@ -1487,7 +1487,7 @@ int serval_sal_state_process(struct sock *sk,
 
         return err;
 drop:
-        FREE_SKB(skb);
+        kfree_skb(skb);
         return err;
 }
 
@@ -1610,7 +1610,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
                         if (!cskb) {
                                 LOG_ERR("Skb allocation failed\n");
-                                FREE_SKB(skb);
+                                kfree_skb(skb);
                                 err = -ENOBUFS;
                                 break;
                         }
@@ -1645,7 +1645,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         if (err < 0) {
                                 //LOG_ERR("Could not route resolution packet from %s to %s\n", inet_ntoa(iph->saddr), inet_ntoa(iph->daddr));
                                 LOG_ERR("Could not forward SAL packet\n");
-                                FREE_SKB(cskb);
+                                kfree_skb(cskb);
                                 continue;
                         }
 
@@ -1929,7 +1929,7 @@ int serval_sal_rcv(struct sk_buff *skb)
 drop:
         service_inc_stats(-1, -(skb->len - hdr_len));
 drop_no_stats:
-        FREE_SKB(skb);
+        kfree_skb(skb);
         return 0;
 }
 
@@ -2232,7 +2232,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		LOG_INF("service lookup failed for [%s]\n",
                         service_id_to_str(&SERVAL_SKB_CB(skb)->srvid));
                 service_inc_stats(-1, -dlen);
-                FREE_SKB(skb);
+                kfree_skb(skb);
 		return -EADDRNOTAVAIL;
 	}
 
@@ -2246,7 +2246,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         if (!dest) {
                 LOG_DBG("No device to transmit on!\n");
                 service_resolution_iter_inc_stats(&iter, -1, -dlen);
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 service_resolution_iter_destroy(&iter);
                 service_entry_put(se);
                 return -EHOSTUNREACH;
@@ -2270,7 +2270,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
-                                FREE_SKB(skb);
+                                kfree_skb(skb);
                                 err = -ENOBUFS;
 				break;
 			}

@@ -3462,7 +3462,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 
 discard:
         LOG_ERR("Discarding packet\n");
-	__kfree_skb(skb);
+        kfree_skb(skb);
 	return 0;
 }
 
@@ -3657,7 +3657,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	if (!queued) {
 discard:
                 LOG_DBG("Discarding packet\n");
-		__kfree_skb(skb);
+                kfree_skb(skb);
+		//__kfree_skb(skb);
 	}
 	return 0;
 }

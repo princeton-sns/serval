@@ -199,7 +199,7 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
         return 0;
 reset:
         //LOG_WARN("Should handle RESET in non-established state\n");
-        __kfree_skb(skb);
+        kfree_skb(skb);
         return err;
 }
 
@@ -541,7 +541,7 @@ static void serval_tcp_service_net_dma(struct sock *sk, bool wait)
 {
 	dma_cookie_t done, used;
 	dma_cookie_t last_issued;
-	struct serval_tcp_sock *tp = tcp_sk(sk);
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
 	if (!tp->ucopy.dma_chan)
 		return;

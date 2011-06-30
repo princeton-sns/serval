@@ -92,12 +92,12 @@ static int packet_raw_recv(struct net_device *dev)
 	if (ret == -1) {
 		LOG_ERR("recv: %s\n", 
 			strerror(errno));
-		kfree_skb(skb);
+		__kfree_skb(skb);
 		return -1;
 	} else if (ret == 0) {
 		/* Should not happen */
                 LOG_ERR("recv return 0\n");
-		kfree_skb(skb);
+		__kfree_skb(skb);
 		return -1;
 	}
         /*
