@@ -1110,9 +1110,6 @@ new_segment:
 				if (!sk_stream_memory_free(sk))
 					goto wait_for_sndbuf;
 
-                                LOG_PKT("Allocating skb size=%d\n", 
-                                        select_size(sk, sg));
-
 				skb = sk_stream_alloc_skb(sk,
 							  select_size(sk, sg),
 							  sk->sk_allocation);
@@ -1130,9 +1127,6 @@ new_segment:
 				max = size_goal;
 			}
 
-                        LOG_PKT("copy=%u seglen=%u\n",
-                                copy, seglen);
-
 			/* Try to append data to the end of skb. */
 			if (copy > seglen)
 				copy = seglen;
@@ -1143,9 +1137,6 @@ new_segment:
 				if (copy > skb_tailroom(skb))
 					copy = skb_tailroom(skb);
 
-                                LOG_PKT("Add data tailroom=%u copy=%u\n", 
-                                        skb_tailroom(skb), copy);
-                                
 				if ((err = skb_add_data(skb, from, copy)) != 0) {
                                         LOG_ERR("skb_add_data() failed!\n");
 					goto do_fault;
@@ -1238,8 +1229,6 @@ new_segment:
 
 			if (skb->len < max || (flags & MSG_OOB))
 				continue;
-
-                        LOG_PKT("skb->len=%u max=%u\n", skb->len, max);
 
 			if (forced_push(tp)) {
 				serval_tcp_mark_push(tp, skb);
