@@ -306,7 +306,7 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
         socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
         int ret = EXIT_FAILURE;
-        unsigned short srv_inetport = 9898;
+        unsigned short srv_inetport = 14567;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
         memset(&srvaddr, 0, sizeof(srvaddr));
@@ -343,7 +343,7 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
         }
         
         if (family == AF_INET) {
-                printf("server: bount to port %u\n",
+                printf("server: bound to port %u\n",
                        srv_inetport);
         } else {
                 printf("server: bound to object id %s\n", 

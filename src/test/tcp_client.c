@@ -207,7 +207,7 @@ static int client(const char *filepath, int handle_migration,
         } cliaddr, srvaddr;
         socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
-        unsigned short srv_inetport = 9898;
+        unsigned short srv_inetport = 14567;
         int family = AF_SERVAL;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
@@ -216,8 +216,10 @@ static int client(const char *filepath, int handle_migration,
         if (srv_inetaddr) {
                 family = AF_INET;
                 cliaddr.inet.sin_family = family;
-                cliaddr.inet.sin_port = htons(srv_inetport);
-                memcpy(&cliaddr.inet.sin_addr, srv_inetaddr, 
+                cliaddr.inet.sin_port = htons(6767);
+                srvaddr.inet.sin_family = family;
+                srvaddr.inet.sin_port = htons(srv_inetport);
+                memcpy(&srvaddr.inet.sin_addr, srv_inetaddr, 
                        sizeof(*srv_inetaddr));
                 addrlen = sizeof(cliaddr.inet);
         } else {
@@ -233,33 +235,37 @@ static int client(const char *filepath, int handle_migration,
         sock = socket_sv(family, SOCK_STREAM, 0);
         
         set_reuse_ok(sock);
-
-        ret = bind_sv(sock, &cliaddr.saddr, addrlen);
-    
-        if (ret < 0) {
-                fprintf(stderr, "error client binding socket: %s\n", 
-                        strerror_sv(errno));
-                goto out;
-        }
         
-        ret = connect_sv(sock, &srvaddr.saddr, addrlen);
-    
-        if (ret < 0) {
-                fprintf(stderr, "error client connecting to socket: %s\n",
-                        strerror_sv(errno));
-                goto out;
+        if (family == AF_SERVAL) {
+                ret = bind_sv(sock, &cliaddr.saddr, addrlen);
+                
+                if (ret < 0) {
+                        fprintf(stderr, "error client binding socket: %s\n", 
+                                strerror_sv(errno));
+                        goto out;
+                }
         }
         
         if (family == AF_INET) {
                 char buf[18];
-                printf("Connected to service %s:%u\n",
+                printf("Connecting to service %s:%u\n",
                        inet_ntop(family, srv_inetaddr, buf, 18), 
                        srv_inetport);
         } else {
-                printf("Connected to service id %s\n", 
+                printf("Connecting to service id %s\n", 
                        service_id_to_str(&srvaddr.serval.sv_srvid));
         }
 
+        ret = connect_sv(sock, &srvaddr.saddr, addrlen);
+    
+        if (ret < 0) {
+                fprintf(stderr, "ERROR connecting: %s\n",
+                        strerror_sv(errno));
+                goto out;
+        }
+        
+        printf("Connected successfully!\n");
+        
         ret = recv_file(sock, filepath, handle_migration, digest);
         
         if (ret == EXIT_SUCCESS) {
