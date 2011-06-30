@@ -2107,6 +2107,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                             int clone_it, gfp_t gfp_mask)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct inet_sock *inet = inet_sk(sk);
 	struct service_entry *se;
 	struct dest *dest;
         struct serval_hdr *sfh;
@@ -2285,8 +2286,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * the IP layer*/
                         memcpy(&SERVAL_SKB_CB(cskb)->addr,
                                &local_addr, sizeof(struct net_addr));
-                        memcpy(&inet_sk(sk)->inet_daddr,
-                               &local_addr, sizeof(inet_sk(sk)->inet_daddr));
+                        memcpy(&inet->inet_daddr,
+                               &local_addr, sizeof(inet->inet_daddr));
 
                         /* kludgey but sets the output device for
                          * reaching a local socket destination to the
@@ -2305,10 +2306,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                dest->dst, 
                                sizeof(struct net_addr) < dest->dstlen ? 
                                sizeof(struct net_addr) : dest->dstlen);
-                        memcpy(&inet_sk(sk)->inet_daddr,
+                        memcpy(&inet->inet_daddr,
                                dest->dst,
-                               sizeof(inet_sk(sk)->inet_daddr) < dest->dstlen ? 
-                               sizeof(inet_sk(sk)->inet_daddr) : dest->dstlen);
+                               sizeof(inet->inet_daddr) < dest->dstlen ? 
+                               sizeof(inet->inet_daddr) : dest->dstlen);
                        
                         dev = dest->dest_out.dev;
                 }
@@ -2317,15 +2318,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 sk->sk_bound_dev_if = dev->ifindex;
                 /* Need also to set the source address for
                    checksum calculation */
-                dev_get_ipv4_addr(dev, &inet_sk(sk)->inet_saddr);
+                dev_get_ipv4_addr(dev, &inet->inet_saddr);
 
 #if defined(ENABLE_DEBUG)
                 {
-                        char dst[18];
-                        LOG_PKT("Resolved service %s to destination %s " 
+                        char src[18], dst[18];
+                        LOG_PKT("Resolved service %s with IP %s->%s " 
                                 "on device=%s\n",
                                 service_id_to_str(&SERVAL_SKB_CB(cskb)->srvid),
-                                inet_ntop(AF_INET, &SERVAL_SKB_CB(cskb)->addr, 
+                                inet_ntop(AF_INET, &inet->inet_saddr, 
+                                          src, sizeof(src)), 
+                                inet_ntop(AF_INET, &inet->inet_daddr, 
                                           dst, sizeof(dst)), 
                                 cskb->dev ? cskb->dev->name : "Undefined");
                 }
