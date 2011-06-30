@@ -3934,7 +3934,6 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 {
         struct tcphdr *th;
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        u32 ack_seq, seq;
         int err = 0;
 
         if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
@@ -3944,16 +3943,20 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         }
 
         th = tcp_hdr(skb);
-        ack_seq = ntohl(th->ack_seq);
-        seq = ntohl(th->seq);
-
-	tp->copied_seq = tp->rcv_nxt;
-#if defined(OS_LINUX_KERNEL)
-        smp_mb();
-#endif
+	tp->rx_opt.saw_tstamp = 0;
      
+        LOG_PKT("TCP %s\n", tcphdr_to_str(th));
+
+	err = serval_tcp_validate_incoming(sk, skb, th, 0);
+
+	if (err <= 0) {
+                LOG_ERR("Bad ACK in SYN-RECV state\n");
+		return -err;
+        }
+
 	if (th->ack) {
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
+                u32 ack_seq, seq;
 
                 if (!acceptable) {
                         LOG_WARN("ACK is not acceptable.\n");
@@ -3961,8 +3964,15 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                         return 1;
                 }
                 
+                ack_seq = ntohl(th->ack_seq);
+                seq = ntohl(th->seq);
+
                 LOG_DBG("ACK is acceptable!\n");
 
+                tp->copied_seq = tp->rcv_nxt;
+#if defined(OS_LINUX_KERNEL)
+                smp_mb();
+#endif
                 tp->snd_una = ack_seq;
                 tp->snd_wnd = ntohs(th->window) <<
                                 tp->rx_opt.snd_wscale;
@@ -3981,7 +3991,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 /* Make sure socket is routed, for
                  * correct metrics.
                  */
-                //tp->tp_af_ops->rebuild_header(sk);
+                serval_sk(sk)->af_ops->rebuild_header(sk);
                 
                 serval_tcp_init_metrics(sk);
                 
@@ -4064,7 +4074,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 			tp->tcp_header_len = sizeof(struct tcphdr);
 		}
 
-#if ENABLE_TCP_SACK                
+#if defined(ENABLE_TCP_SACK)
 		if (serval_tcp_is_sack(tp) && sysctl_serval_tcp_fack)
 			serval_tcp_enable_fack(tp);
 #endif

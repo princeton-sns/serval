@@ -1253,6 +1253,12 @@ static int serval_sal_respond_state_process(struct sock *sk,
                 struct serval_sock *ssk = serval_sk(sk);
                 LOG_DBG("\n");
 
+                /* Save device */
+                serval_sock_set_dev(sk, skb->dev);
+
+                memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
+                       sizeof(inet_sk(sk)->inet_daddr));
+
                 if (ssk->af_ops->respond_state_process) {
                         if (ssk->af_ops->respond_state_process(sk, skb)) {
                                 LOG_WARN("Transport drops ACK\n");
@@ -1266,11 +1272,6 @@ static int serval_sal_respond_state_process(struct sock *sk,
                 /* Let user know */
                 sk->sk_state_change(sk);
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
-
-                /* Save device and peer flow id */
-                serval_sock_set_dev(sk, skb->dev);
-                memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
-                       sizeof(inet_sk(sk)->inet_daddr));
         }
 drop:
         FREE_SKB(skb);

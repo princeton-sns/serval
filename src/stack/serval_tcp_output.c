@@ -1206,8 +1206,8 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 			return -ENOMEM;
 	}
        
-	//if (tp->af_ops->rebuild_header(sk))
-	//	return -EHOSTUNREACH; /* Routing failure or similar. */
+	if (serval_sk(sk)->af_ops->rebuild_header(sk))
+		return -EHOSTUNREACH; /* Routing failure or similar. */
         
 	cur_mss = serval_tcp_current_mss(sk);
 
