@@ -1888,7 +1888,7 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
                                        struct sock *newsk,
                                        struct dst_entry *dst)
 {
-        //struct serval_sock *new_ssk = serval_sk(newsk);
+        struct serval_sock *newssk = serval_sk(newsk);
         //struct inet_sock *newinet = inet_sk(newsk);
         struct inet_request_sock *ireq = inet_rsk(req);
         struct serval_tcp_sock *newtp = serval_tcp_sk(newsk);
@@ -1903,6 +1903,7 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
 	if (!dst && (dst = serval_sock_route_req(sk, req)) == NULL)
 		goto exit;
 #endif
+        newssk->af_ops = &serval_tcp_af_ops;
 
 	newtp->pred_flags = 0;
 
