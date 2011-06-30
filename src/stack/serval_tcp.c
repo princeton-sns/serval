@@ -263,20 +263,36 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 		goto bad_packet;
         }
 
+	iph = ip_hdr(skb);
+
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("saddr=%s daddr=%s\n",
+                        inet_ntop(AF_INET, &iph->saddr, 
+                                  rmtstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, 
+                                  locstr, 18));
+        }
+#endif
+
 #if defined(OS_USER)
         /* FIXME: disable checksumming */
         skb->ip_summed = CHECKSUM_UNNECESSARY;
 #endif
+        if (th->syn && !th->ack)
+                skb->ip_summed = CHECKSUM_UNNECESSARY;
+
         /* An explanation is required here, I think.
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
 	 * So, we defer the checks. */
-	if (!skb_csum_unnecessary(skb) && serval_tcp_v4_checksum_init(skb)) {
+	if (!skb_csum_unnecessary(skb) && 
+            serval_tcp_v4_checksum_init(skb)) {
                 LOG_ERR("Checksum error!\n");
                 goto bad_packet;
         }
 
-	iph = ip_hdr(skb);
 
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
