@@ -3541,7 +3541,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (res <= 0) {
                 LOG_ERR("Incoming packet could not be validated\n");
-                return -res;
+                return -1;
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
@@ -3895,7 +3895,7 @@ slow_path:
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 
 	if (res <= 0)
-		return -res;
+		return -1;
 
 step5:
         LOG_DBG("Step 5\n");
@@ -3951,7 +3951,8 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 
 	if (err <= 0) {
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
-		return -err;
+                kfree_skb(skb);
+		return -1;
         }
 
 	if (th->ack) {

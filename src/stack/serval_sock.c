@@ -754,6 +754,15 @@ int serval_sock_rebuild_header(struct sock *sk)
                         .fl_ip_dport = 0,
                 };
                 
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
+                        inet_ntop(AF_INET, &daddr, rmtstr, 18),
+                        inet_ntop(AF_INET, &inet->inet_saddr, locstr, 18),
+                        sk->sk_protocol);
+        }
+#endif
                 security_sk_classify_flow(sk, &fl);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
@@ -767,6 +776,7 @@ int serval_sock_rebuild_header(struct sock *sk)
 	else {
 		/* Routing failed... */
 		sk->sk_route_caps = 0;
+                LOG_ERR("Routing failed for socket %p\n", sk);
 	}
 #endif /* OS_LINUX_KERNEL */
 	return err;
