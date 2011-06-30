@@ -119,7 +119,7 @@ EXTRA_DIST = \
 	$(SERVAL_KERNEL_HDR) \
 	$(SERVAL_KERNEL_SRC)
 
-if LINUX_KERNEL
+if ENABLE_LINUX_MODULE
 all: serval.ko
 endif
 
@@ -127,7 +127,7 @@ serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean-local:
-if LINUX_KERNEL
+if ENABLE_LINUX_MODULE
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 endif
 	rm -f *~
