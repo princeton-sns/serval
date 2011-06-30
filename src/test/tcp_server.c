@@ -306,18 +306,19 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
         socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
         int ret = EXIT_FAILURE;
-        unsigned short srv_inetport = 14567;
+        unsigned short srv_inetport = 49254;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
         memset(&srvaddr, 0, sizeof(srvaddr));
 
         if (family == AF_INET) {
                 cliaddr.inet.sin_family = family;
-                cliaddr.inet.sin_port = htons(srv_inetport);
-                addrlen = sizeof(cliaddr.inet);
+                srvaddr.inet.sin_family = family;
+                srvaddr.inet.sin_addr.s_addr = INADDR_ANY;
+                srvaddr.inet.sin_port = htons(srv_inetport);
+                addrlen = sizeof(srvaddr.inet);
         } else {
                 cliaddr.serval.sv_family = family;
-                cliaddr.serval.sv_srvid.s_sid16[0] = htons(getpid());
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid,
                        &listen_srvid, sizeof(listen_srvid));

@@ -207,7 +207,7 @@ static int client(const char *filepath, int handle_migration,
         } cliaddr, srvaddr;
         socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
-        unsigned short srv_inetport = 14567;
+        unsigned short srv_inetport = 49254;
         int family = AF_SERVAL;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
