@@ -44,7 +44,7 @@ static int dev_configuration(struct net_device *dev)
         */
         int ret;
         
-        if (ifname && strcmp(dev->name, ifname) == 0)
+        if (ifname && strcmp(dev->name, ifname) != 0)
                 return 0;
 
         ret = dev_get_ipv4_broadcast(dev, &dst);
