@@ -186,7 +186,10 @@ static inline int has_valid_control_extension(struct sock *sk,
 
 static void serval_sal_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
-	skb_header_release(skb);
+        /* Cannot release header here in case this is an unresolved
+           packet. We need the skb_transport_header() pointer to
+           calculate checksum */
+	//skb_header_release(skb);
 	serval_sal_add_ctrl_queue_tail(sk, skb);
         LOG_PKT("queue packet seqno=%u\n", SERVAL_SKB_CB(skb)->seqno);
         /* Check if the skb became first in queue, in that case update
