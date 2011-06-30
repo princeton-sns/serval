@@ -252,7 +252,7 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 #endif
 
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
-                LOG_ERR("No TCP header\n");
+                LOG_ERR("No TCP header -- discarding\n");
                 goto discard_it;
         }
 
@@ -261,8 +261,10 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 	if (th->doff < sizeof(struct tcphdr) / 4)
 		goto bad_packet;
 
-	if (!pskb_may_pull(skb, th->doff * 4))
+	if (!pskb_may_pull(skb, th->doff * 4)) {
+                LOG_ERR("Bad TCP header! -- discarding\n");
 		goto discard_it;
+        }
 
 #if defined(OS_USER)
         /* FIXME: disable checksumming */
@@ -313,7 +315,6 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 bad_packet:
         LOG_ERR("Bad TCP packet\n");
 discard_it:
-        LOG_ERR("Discarding TCP packet\n");
         kfree_skb(skb);
 
         return 0;
@@ -536,11 +537,11 @@ static inline void serval_tcp_push(struct sock *sk, int flags, int mss_now,
 }
 
 #ifdef CONFIG_NET_DMA
-static void tcp_service_net_dma(struct sock *sk, bool wait)
+static void serval_tcp_service_net_dma(struct sock *sk, bool wait)
 {
 	dma_cookie_t done, used;
 	dma_cookie_t last_issued;
-	struct tcp_sock *tp = tcp_sk(sk);
+	struct serval_tcp_sock *tp = tcp_sk(sk);
 
 	if (!tp->ucopy.dma_chan)
 		return;
@@ -1638,7 +1639,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			sk_wait_data(sk, &timeo);
 
 #ifdef CONFIG_NET_DMA
-		tcp_service_net_dma(sk, false);  /* Don't block */
+		serval_tcp_service_net_dma(sk, false);  /* Don't block */
 		tp->ucopy.wakeup = 0;
 #endif
 
@@ -1804,7 +1805,7 @@ skip_copy:
 	}
 
 #ifdef CONFIG_NET_DMA
-	tcp_service_net_dma(sk, true);  /* Wait for queue to drain */
+	serval_tcp_service_net_dma(sk, true);  /* Wait for queue to drain */
 	tp->ucopy.dma_chan = NULL;
 
 	if (tp->ucopy.pinned_list) {
