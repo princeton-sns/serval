@@ -638,9 +638,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 LOG_ERR("RESPONSE not routable\n");
                 goto drop;
         }
-        
-        /* Setup socket to use this route in the future */
-        sk_setup_caps(sk, dst);
 #endif /* OS_LINUX_KERNEL */
 
         /* Let transport chip in */
