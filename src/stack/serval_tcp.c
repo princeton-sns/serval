@@ -1978,9 +1978,10 @@ int serval_tcp_connection_respond_sock(struct sock *sk,
         newtp->window_clamp = req->window_clamp;
         newtp->rcv_ssthresh = req->rcv_wnd;
         newtp->rcv_wnd = req->rcv_wnd;
-        newtp->rx_opt.wscale_ok = treq->wscale_ok;
+        newtp->rx_opt.wscale_ok = ireq->wscale_ok;
 
         if (newtp->rx_opt.wscale_ok) {
+                LOG_DBG("TCP windows scaling OK!\n");
                 newtp->rx_opt.snd_wscale = ireq->snd_wscale;
                 newtp->rx_opt.rcv_wscale = ireq->rcv_wscale;
         } else {

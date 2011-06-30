@@ -16,10 +16,6 @@ struct serval_tcp_request_sock {
         struct serval_request_sock rsk;
 	__u32 snt_isn;
 	__u32 rcv_isn;
-        u16
-		wscale_ok : 1,	/* Wscale seen on SYN packet		*/
-		snd_wscale : 4,	/* Window scaling received from sender	*/
-		rcv_wscale : 4;	/* Window scaling to send to receiver	*/
 };
 
 static inline struct serval_tcp_request_sock *
