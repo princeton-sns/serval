@@ -2121,6 +2121,8 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	th->check = 0;
 	th->urg_ptr = 0;
 
+        LOG_DBG("Built ACK %s\n", tcphdr_to_str(th));                
+
         if (serval_sk(sk)->af_ops->send_check)
                 serval_sk(sk)->af_ops->send_check(sk, skb);
 

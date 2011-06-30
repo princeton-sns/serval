@@ -137,8 +137,9 @@ static int serval_tcp_connection_request(struct sock *sk,
 	struct serval_tcp_options_received tmp_opt;
         u8 *hash_location;
 
-        if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
-                LOG_ERR("No TCP header?\n");
+        if (serval_tcp_rcv_checks(sk, skb)) {                
+                LOG_ERR("packet failed receive checks!\n");
+                kfree_skb(skb);
                 return -1;
         }
 
@@ -223,37 +224,20 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 	}
 	return 0;
 }
-/* 
-   Receive from network.
 
-   TODO/NOTE:
-
-   Since we are adding packets to the backlog in the SAL, and not here
-   in the transport receive function, we cannot drop packets with bad
-   transport headers before adding to the backlog. Ideally, we would
-   not bother queueing bad packets on the backlog, but this requires a
-   way to check transport headers before backlogging.
-
-   We could add an "early-packet-sanity-check" function in transport
-   that the SAL calls before adding packets to the backlog just to
-   make sure they are not bad. This function would basically have the
-   checks in the beginning of the function below.
-
-*/
-static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
+int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb)
 {
         struct tcphdr *th;
         struct iphdr *iph;
-        int err = 0;
         
 #if defined(OS_LINUX_KERNEL)
 	if (skb->pkt_type != PACKET_HOST)
-		goto discard_it;
+		goto bad_packet;
 #endif
 
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
                 LOG_ERR("No TCP header -- discarding\n");
-                goto discard_it;
+                goto bad_packet;
         }
 
 	th = tcp_hdr(skb);
@@ -263,7 +247,7 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 
 	if (!pskb_may_pull(skb, th->doff * 4)) {
                 LOG_ERR("Bad TCP header! -- discarding\n");
-		goto discard_it;
+		goto bad_packet;
         }
 
 #if defined(OS_USER)
@@ -291,6 +275,37 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
                 th->doff * 4);
+        
+        return 0;
+bad_packet:
+        LOG_ERR("Bad TCP packet\n");
+
+        return -1;
+}
+
+/* 
+   Receive from network.
+
+   TODO/NOTE:
+
+   Since we are adding packets to the backlog in the SAL, and not here
+   in the transport receive function, we cannot drop packets with bad
+   transport headers before adding to the backlog. Ideally, we would
+   not bother queueing bad packets on the backlog, but this requires a
+   way to check transport headers before backlogging.
+
+   We could add an "early-packet-sanity-check" function in transport
+   that the SAL calls before adding packets to the backlog just to
+   make sure they are not bad. This function would basically have the
+   checks in the beginning of the function below.
+
+*/
+static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
+{
+        int err = 0;
+        
+        if (serval_tcp_rcv_checks(sk, skb))
+                goto discard_it;
 
         if (!sock_owned_by_user(sk)) {
 #ifdef CONFIG_NET_DMA        
@@ -312,8 +327,6 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
         }
         
         return err;
-bad_packet:
-        LOG_ERR("Bad TCP packet\n");
 discard_it:
         kfree_skb(skb);
 

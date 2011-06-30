@@ -609,9 +609,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
         if (ssk->af_ops->conn_request) {
                 err = ssk->af_ops->conn_request(sk, rsk, skb);
                 
-                if (err) {
+                if (err)
                         goto done;
-                }
         }
         
         /* Allocate RESPONSE reply */
@@ -619,7 +618,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         if (!rskb) {
                 err = -ENOMEM;
-                goto done;
+                goto drop;
         }
         
         skb_reserve(rskb, sk->sk_prot->max_header);
@@ -636,7 +635,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         
         if (!dst) {
                 LOG_ERR("RESPONSE not routable\n");
-                goto drop;
+                goto drop_response;
         }
 #endif /* OS_LINUX_KERNEL */
 
@@ -695,18 +694,19 @@ static int serval_sal_syn_rcv(struct sock *sk,
                                              saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
         
-done:
-        /* Free the REQUEST */
-        kfree_skb(skb);
 
+        /* Free the REQUEST */
+ drop:
+        kfree_skb(skb);
+ done:
         return err;
-drop_and_release:
+ drop_and_release:
         dst_release(dst);
 #if defined(OS_LINUX_KERNEL)
-drop:
+ drop_response:
 #endif
         kfree_skb(rskb);
-        goto done;
+        goto drop;
 }
 
 /*

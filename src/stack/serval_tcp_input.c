@@ -3937,9 +3937,9 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         int err = 0;
 
-        if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
-                LOG_ERR("No TCP header?\n");
-                __kfree_skb(skb);
+        if (serval_tcp_rcv_checks(sk, skb)) {
+                LOG_ERR("packet failed receive checks!\n");
+                kfree_skb(skb);
                 return -1;
         }
 
@@ -3952,22 +3952,17 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 
 	if (err <= 0) {
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
-                kfree_skb(skb);
 		return -1;
         }
 
 	if (th->ack) {
 		int acceptable = serval_tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
-                u32 ack_seq, seq;
 
                 if (!acceptable) {
                         LOG_WARN("ACK is not acceptable.\n");
                         __kfree_skb(skb);
                         return 1;
                 }
-                
-                ack_seq = ntohl(th->ack_seq);
-                seq = ntohl(th->seq);
 
                 LOG_DBG("ACK is acceptable!\n");
 
@@ -3975,11 +3970,11 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 #if defined(OS_LINUX_KERNEL)
                 smp_mb();
 #endif
-                tp->snd_una = ack_seq;
+                tp->snd_una = TCP_SKB_CB(skb)->ack_seq;
                 tp->snd_wnd = ntohs(th->window) <<
                                 tp->rx_opt.snd_wscale;
                 
-                serval_tcp_init_wl(tp, seq);
+                serval_tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
                 
                 /* tcp_ack considers this ACK as duplicate
                  * and does not calculate rtt.
@@ -4022,7 +4017,9 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct tcphdr *th = tcp_hdr(skb);
 	int saved_clamp = tp->rx_opt.mss_clamp;
-        u32 seq = ntohl(th->seq);
+
+        if (serval_tcp_rcv_checks(sk, skb))
+                goto drop;
 
 	serval_tcp_parse_options(skb, &tp->rx_opt, &hash_location, 0);
 
@@ -4040,25 +4037,25 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		 *  We do not send data with SYN, so that RFC-correct
 		 *  test reduces to:
 		 */
-		if (ntohl(th->ack_seq) != tp->snd_nxt) {
+		if (TCP_SKB_CB(skb)->ack_seq != tp->snd_nxt) {
                         LOG_WARN("Unexpected ACK ack_seq=%u snd_next=%u\n",
-                                 ntohl(th->ack_seq), tp->snd_nxt);
+                                 TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt);
                         goto reset_and_undo;
                 }
 
-		tp->snd_wl1 = seq;
+		tp->snd_wl1 = TCP_SKB_CB(skb)->seq;
 		serval_tcp_ack(sk, skb, FLAG_SLOWPATH);
 
 		/* Ok.. it's good. Set up sequence numbers.
 		 */
-		tp->rcv_nxt = seq + 1;
-		tp->rcv_wup = seq + 1;
+		tp->rcv_nxt = TCP_SKB_CB(skb)->seq + 1;
+		tp->rcv_wup = TCP_SKB_CB(skb)->seq + 1;
 
 		/* RFC1323: The window in SYN & SYN/ACK segments is
 		 * never scaled.
 		 */
 		tp->snd_wnd = ntohs(th->window);
-		serval_tcp_init_wl(tp, seq);
+		serval_tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
 
 		if (!tp->rx_opt.wscale_ok) {
                         LOG_DBG("Window scaling is NOT OK!\n");
@@ -4160,8 +4157,9 @@ discard:
         
         return 0;
         
-reset_and_undo:
-        kfree_skb(skb);
+ reset_and_undo:
 	tp->rx_opt.mss_clamp = saved_clamp;
+ drop:
+        kfree_skb(skb);
         return -1;
 }
