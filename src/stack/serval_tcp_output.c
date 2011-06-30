@@ -362,8 +362,6 @@ static int serval_tcp_init_tso_segs(struct sock *sk, struct sk_buff *skb,
 {
 	int tso_segs = serval_tcp_skb_pcount(skb);
 
-        LOG_DBG("tso_segs=%d\n", tso_segs);
-
 	if (!tso_segs || (tso_segs > 1 && tcp_skb_mss(skb) != mss_now)) {
 		serval_tcp_set_skb_tso_segs(sk, skb, mss_now);
 		tso_segs = serval_tcp_skb_pcount(skb);
@@ -586,9 +584,6 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 	u32 end_seq = TCP_SKB_CB(skb)->end_seq;
         int ret;
 
-        LOG_DBG("1. skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
-                skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
-
 	if (skb->len > cur_mss)
 		end_seq = TCP_SKB_CB(skb)->seq + cur_mss;
 
@@ -596,8 +591,6 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 
         LOG_DBG("2. skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
                 skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
-
-        LOG_DBG("ret=%d\n", ret);
 
         return ret;
 }
@@ -1490,7 +1483,6 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 
 	if (!push_one) {
 		/* Do MTU probing. */
-                LOG_PKT("Doing MTU probing\n");
 
 		result = serval_tcp_mtu_probe(sk);
 
@@ -1501,8 +1493,6 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			sent_pkts = 1;
 		}
 	}
-
-        LOG_PKT("Checking send queue\n");
 
 	while ((skb = serval_tcp_send_head(sk))) {
                 unsigned int limit;
