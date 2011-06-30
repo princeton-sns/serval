@@ -2329,8 +2329,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    future. This will inhibit a re-resolution, which is
                    not what we want here. */
                 
-                __sk_dst_reset(sk);
-
+                if (__sk_dst_get(sk))
+                        __sk_dst_reset(sk);
+                
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
@@ -2341,7 +2342,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         
         /* Reset dst cache since we don't want to potantially cache a
            broadcast destination */
-        __sk_dst_reset(sk);
+        if (__sk_dst_get(sk))
+                __sk_dst_reset(sk);
 
         service_resolution_iter_destroy(&iter);
 	service_entry_put(se);
