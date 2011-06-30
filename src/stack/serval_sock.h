@@ -97,6 +97,7 @@ struct serval_sock_af_ops {
 	int	        (*queue_xmit)(struct sk_buff *skb);
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
+	int	        (*rebuild_header)(struct sock *sk);
         int             (*conn_build_syn)(struct sock *sk, struct sk_buff *skb);
         int             (*conn_build_synack)(struct sock *sk,
                                              struct dst_entry *dst,
@@ -104,7 +105,6 @@ struct serval_sock_af_ops {
                                              struct sk_buff *skb);
         int             (*conn_build_ack)(struct sock *sk, struct sk_buff *skb);        
         int             (*conn_build_fin)(struct sock *sk, struct sk_buff *skb);
-	int	        (*rebuild_header)(struct sock *sk);
 	int	        (*conn_request)(struct sock *sk, 
                                         struct request_sock *rsk, 
                                         struct sk_buff *skb);
@@ -298,5 +298,7 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb, struct sock *sk)
 
 struct dst_entry *serval_sock_route_req(struct sock *sk,
                                         const struct request_sock *req);
+
+int serval_sock_rebuild_header(struct sock *sk);
 
 #endif /* _SERVAL_SOCK_H */

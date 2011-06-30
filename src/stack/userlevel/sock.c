@@ -213,6 +213,34 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 	return sk;
 }
 
+struct dst_entry *__sk_dst_check(struct sock *sk, u32 cookie)
+{
+	struct dst_entry *dst = __sk_dst_get(sk);
+        
+        /*
+	if (dst && dst->obsolete && dst->ops->check(dst, cookie) == NULL) {
+		sk_tx_queue_clear(sk);
+		rcu_assign_pointer(sk->sk_dst_cache, NULL);
+		dst_release(dst);
+		return NULL;
+	}
+        */
+	return dst;
+}
+
+struct dst_entry *sk_dst_check(struct sock *sk, u32 cookie)
+{
+	struct dst_entry *dst = sk_dst_get(sk);
+        /*
+	if (dst && dst->obsolete && dst->ops->check(dst, cookie) == NULL) {
+		sk_dst_reset(sk);
+		dst_release(dst);
+		return NULL;
+	}
+        */
+	return dst;
+}
+
 struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
 {
         struct sock *newsk;

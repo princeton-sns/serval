@@ -714,3 +714,60 @@ void serval_sock_wfree(struct sk_buff *skb)
 void serval_sock_rfree(struct sk_buff *skb)
 {
 }
+
+/* 
+   This function reroutes a socket. 
+*/
+int serval_sock_rebuild_header(struct sock *sk)
+{
+	int err = 0;
+#if defined(OS_LINUX_KERNEL)
+	struct inet_sock *inet = inet_sk(sk);
+	struct rtable *rt = (struct rtable *)__sk_dst_check(sk, 0);
+	__be32 daddr;
+
+	/* Route is OK, nothing to do. */
+	if (rt)
+		return 0;
+
+	/* Reroute. */
+	daddr = inet->inet_daddr;
+        /*
+	if (inet->opt && inet->opt->srr)
+		daddr = inet->opt->faddr;
+        */
+
+        {
+                struct flowi fl = {
+                        .oif = sk->sk_bound_dev_if,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+                        .mark = sk->sk_mark,
+#endif
+                        .fl4_dst = daddr,
+                        .fl4_src = inet->inet_saddr,
+                        .fl4_tos = RT_CONN_FLAGS(sk),
+                        .proto = sk->sk_protocol,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
+                        .flags = inet_sk_flowi_flags(sk),
+#endif
+                        .fl_ip_sport = 0,
+                        .fl_ip_dport = 0,
+                };
+                
+                security_sk_classify_flow(sk, &fl);
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+                err = ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0);
+#else
+                err = ip_route_output_flow(&rt, &fl, sk, 0);
+#endif
+        }
+	if (!err)
+		sk_setup_caps(sk, &rt->dst);
+	else {
+		/* Routing failed... */
+		sk->sk_route_caps = 0;
+	}
+#endif /* OS_LINUX_KERNEL */
+	return err;
+}

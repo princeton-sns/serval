@@ -632,6 +632,10 @@ sk_dst_reset(struct sock *sk)
 	spin_unlock(&sk->sk_dst_lock);
 }
 
+struct dst_entry *__sk_dst_check(struct sock *sk, u32 cookie);
+
+struct dst_entry *sk_dst_check(struct sock *sk, u32 cookie);
+
 static inline int sk_can_gso(const struct sock *sk)
 {
 	return 0; //net_gso_ok(sk->sk_route_caps, sk->sk_gso_type);

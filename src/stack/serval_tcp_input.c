@@ -2773,7 +2773,7 @@ static void serval_tcp_ofo_queue(struct sock *sk)
 			__kfree_skb(skb);
 			continue;
 		}
-		LOG_PKT("ofo requeuing : rcv_next %X seq %X - %X\n",
+		LOG_PKT("ofo requeuing : rcv_next=%u seq=%u end=%u\n",
                         tp->rcv_nxt, TCP_SKB_CB(skb)->seq,
                         TCP_SKB_CB(skb)->end_seq);
 
@@ -2842,8 +2842,6 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 			int chunk = min_t(unsigned int, skb->len,
 					  tp->ucopy.len);
 
-                        LOG_DBG("Set current task running\n");
-
 			__set_current_state(TASK_RUNNING);
 
 			local_bh_enable();
@@ -2862,7 +2860,6 @@ queue_and_out:
 			    serval_tcp_try_rmem_schedule(sk, skb->truesize))
 				goto drop;
                         
-                        LOG_PKT("Queueing in order segement\n");
 			skb_set_owner_r(skb, sk);
 			__skb_queue_tail(&sk->sk_receive_queue, skb);
 		}
@@ -4015,12 +4012,10 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 	int saved_clamp = tp->rx_opt.mss_clamp;
         u32 seq = ntohl(th->seq);
 
-        LOG_DBG("expecting SYN-ACK %s\n", tcphdr_to_str(th));
-
 	serval_tcp_parse_options(skb, &tp->rx_opt, &hash_location, 0);
 
         if (th->ack) {
-                LOG_DBG("ACK received\n");
+                LOG_DBG("SYN-ACK %s\n", tcphdr_to_str(th));
 
 		/* rfc793:
 		 * "If the state is SYN-SENT then
@@ -4054,26 +4049,25 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		serval_tcp_init_wl(tp, seq);
 
 		if (!tp->rx_opt.wscale_ok) {
+                        LOG_DBG("Window scaling is NOT OK!\n");
 			tp->rx_opt.snd_wscale = tp->rx_opt.rcv_wscale = 0;
 			tp->window_clamp = min(tp->window_clamp, 65535U);
 		}
 
-                /*
 		if (tp->rx_opt.saw_tstamp) {
-			tp->rx_opt.tstamp_ok	   = 1;
+			tp->rx_opt.tstamp_ok = 1;
 			tp->tcp_header_len =
 				sizeof(struct tcphdr) + TCPOLEN_TSTAMP_ALIGNED;
 			tp->advmss	    -= TCPOLEN_TSTAMP_ALIGNED;
-			tcp_store_ts_recent(tp);
+			serval_tcp_store_ts_recent(tp);
 		} else {
 			tp->tcp_header_len = sizeof(struct tcphdr);
 		}
-                */
 
-                /*
-		if (tcp_is_sack(tp) && sysctl_tcp_fack)
-			tcp_enable_fack(tp);
-                */
+#if ENABLE_TCP_SACK                
+		if (serval_tcp_is_sack(tp) && sysctl_serval_tcp_fack)
+			serval_tcp_enable_fack(tp);
+#endif
 
 		serval_tcp_mtup_init(sk);
 		serval_tcp_sync_mss(sk, tp->pmtu_cookie);
@@ -4084,6 +4078,69 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		 * is initialized. */
 		tp->copied_seq = tp->rcv_nxt;
 
+#if defined(OS_LINUX_KERNEL)
+		smp_mb();
+#endif
+
+		/* Make sure socket is routed, for correct metrics.  */
+		serval_sk(sk)->af_ops->rebuild_header(sk);
+
+		serval_tcp_init_metrics(sk);
+
+		serval_tcp_init_congestion_control(sk);
+
+		/* Prevent spurious tcp_cwnd_restart() on first data
+		 * packet.
+		 */
+		tp->lsndtime = tcp_time_stamp;
+
+		serval_tcp_init_buffer_space(sk);
+
+		if (sock_flag(sk, SOCK_KEEPOPEN))
+			serval_tsk_reset_keepalive_timer(sk, serval_keepalive_time_when(tp));
+
+		if (!tp->rx_opt.snd_wscale)
+			__serval_tcp_fast_path_on(tp, tp->snd_wnd);
+		else
+			tp->pred_flags = 0;
+
+                /*
+                  Waking should be handled in SAL
+		if (!sock_flag(sk, SOCK_DEAD)) {
+			sk->sk_state_change(sk);
+			sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+		}
+                */
+#if 0
+                /* This doesn't really make sense for us since we
+                   handle ACKs in SAL */
+		if (sk->sk_write_pending ||
+		    icsk->icsk_accept_queue.rskq_defer_accept ||
+		    icsk->icsk_ack.pingpong) {
+			/* Save one ACK. Data will be ready after
+			 * several ticks, if write_pending is set.
+			 *
+			 * It may be deleted, but with this feature tcpdumps
+			 * look so _wonderfully_ clever, that I was not able
+			 * to stand against the temptation 8)     --ANK
+			 */
+			inet_csk_schedule_ack(sk);
+			icsk->icsk_ack.lrcvtime = tcp_time_stamp;
+			icsk->icsk_ack.ato	 = TCP_ATO_MIN;
+			tcp_incr_quickack(sk);
+			tcp_enter_quickack_mode(sk);
+			inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK,
+						  TCP_DELACK_MAX, TCP_RTO_MAX);
+
+discard:
+			__kfree_skb(skb);
+			return 0;
+		} else {
+                        tcp_send_ack(sk);
+		}
+#endif
+
+                serval_tcp_send_ack(sk);
         } else {
                 LOG_INF("No ACK in TCP message received in SYN-SENT state\n");
                 goto reset_and_undo;
@@ -4092,7 +4149,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
         return 0;
         
 reset_and_undo:
-        FREE_SKB(skb);
+        kfree_skb(skb);
 	tp->rx_opt.mss_clamp = saved_clamp;
         return -1;
 }

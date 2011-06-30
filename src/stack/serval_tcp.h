@@ -254,6 +254,27 @@ extern int sysctl_tcp_wmem[3];
 extern int sysctl_tcp_rmem[3];
 #endif
 
+static inline int serval_keepalive_intvl_when(const struct serval_tcp_sock *tp)
+{
+	return tp->keepalive_intvl ? : sysctl_serval_tcp_keepalive_intvl;
+}
+
+static inline int serval_keepalive_time_when(const struct serval_tcp_sock *tp)
+{
+	return tp->keepalive_time ? : sysctl_serval_tcp_keepalive_time;
+}
+
+static inline int serval_keepalive_probes(const struct serval_tcp_sock *tp)
+{
+	return tp->keepalive_probes ? : sysctl_serval_tcp_keepalive_probes;
+}
+
+static inline u32 serval_keepalive_time_elapsed(const struct serval_tcp_sock *tp)
+{
+	return min_t(u32, tcp_time_stamp - tp->tp_ack.lrcvtime,
+			  tcp_time_stamp - tp->rcv_tstamp);
+}
+
 static inline void serval_tcp_dec_quickack_mode(struct sock *sk,
                                                 const unsigned int pkts)
 {

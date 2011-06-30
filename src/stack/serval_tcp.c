@@ -1863,6 +1863,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_tcp_rcv,
         .send_check = serval_tcp_v4_send_check,
+        .rebuild_header = serval_sock_rebuild_header,
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
