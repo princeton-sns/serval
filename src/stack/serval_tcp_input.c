@@ -3937,7 +3937,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         int err = 0;
 
-        if (serval_tcp_rcv_checks(sk, skb)) {
+        if (serval_tcp_rcv_checks(sk, skb, 0)) {
                 LOG_ERR("packet failed receive checks!\n");
                 kfree_skb(skb);
                 return -1;
@@ -4018,7 +4018,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
         struct tcphdr *th = tcp_hdr(skb);
 	int saved_clamp = tp->rx_opt.mss_clamp;
 
-        if (serval_tcp_rcv_checks(sk, skb))
+        if (serval_tcp_rcv_checks(sk, skb, 0))
                 goto drop;
 
 	serval_tcp_parse_options(skb, &tp->rx_opt, &hash_location, 0);

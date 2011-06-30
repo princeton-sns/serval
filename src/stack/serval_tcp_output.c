@@ -1946,13 +1946,14 @@ static int serval_tcp_build_header(struct sock *sk,
 
 int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 {
-        //struct serval_sock *ssk = serval_sk(sk);
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	struct tcp_out_options opts;
         unsigned int tcp_options_size, tcp_header_size;
 	struct tcp_md5sig_key *md5;
         struct tcphdr *th;
-        u8 flags = TCPH_SYN;
+        
+        /* From tcp_ipv4.c */
+	tp->rx_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 
         serval_tcp_connect_init(sk);
 
@@ -1969,19 +1970,19 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         if (!tp->write_seq)
                 tp->write_seq = serval_tcp_random_sequence_number();
 
-	tp->rx_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
-
 	tp->snd_nxt = tp->write_seq;
-	serval_tcp_init_nondata_skb(skb, tp->write_seq, flags);
+	serval_tcp_init_nondata_skb(skb, tp->write_seq++, TCPH_SYN);
+
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
+	tp->retrans_stamp = TCP_SKB_CB(skb)->when;
 
         th->syn = 1;
 	th->source		= htons(1);
 	th->dest		= htons(2);
-	th->seq		        = htonl(tp->write_seq++);
+	th->seq		        = htonl(TCP_SKB_CB(skb)->seq);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-                                        flags);
-                
+                                        TCP_SKB_CB(skb)->flags);
 
 	tp->packets_out += serval_tcp_skb_pcount(skb);
 
@@ -1993,8 +1994,12 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("TCP sending SYN seq=%u ackno=%u\n",
                 ntohl(th->seq), ntohl(th->ack_seq));
 
-        if (serval_sk(sk)->af_ops->send_check)
-                serval_sk(sk)->af_ops->send_check(sk, skb);
+        /* On SYN the checksum is deferred until after
+           resolution. This is because we do not know the route and
+           src,dst IP at this point, and these are needed for the
+           checksum */
+
+	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
 }
@@ -2094,6 +2099,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         if (serval_sk(sk)->af_ops->send_check)
                 serval_sk(sk)->af_ops->send_check(sk, skb);
 
+	serval_tcp_enter_cwr(sk, 1);
+
         return 0;
 }
 
@@ -2125,6 +2132,8 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 
         if (serval_sk(sk)->af_ops->send_check)
                 serval_sk(sk)->af_ops->send_check(sk, skb);
+
+	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
 }

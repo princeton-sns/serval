@@ -137,7 +137,7 @@ static int serval_tcp_connection_request(struct sock *sk,
 	struct serval_tcp_options_received tmp_opt;
         u8 *hash_location;
 
-        if (serval_tcp_rcv_checks(sk, skb)) {                
+        if (serval_tcp_rcv_checks(sk, skb, 1)) {                
                 LOG_ERR("packet failed receive checks!\n");
                 kfree_skb(skb);
                 return -1;
@@ -225,14 +225,24 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 	return 0;
 }
 
-int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb)
+int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 {
         struct tcphdr *th;
         struct iphdr *iph;
         
 #if defined(OS_LINUX_KERNEL)
-	if (skb->pkt_type != PACKET_HOST)
-		goto bad_packet;
+	if (is_syn) {
+                /* SYN packets can be broadcast and we should accept
+                   that. */
+                if (skb->pkt_type != PACKET_BROADCAST && 
+                    skb->pkt_type != PACKET_HOST) {
+                        LOG_ERR("TCP packet not for this host (broadcast)!\n");
+                        goto bad_packet;
+                }
+        } else if (skb->pkt_type != PACKET_HOST) {
+                LOG_ERR("TCP packet not for this host!\n");
+                goto bad_packet;
+        }
 #endif
 
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
@@ -242,8 +252,11 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb)
 
 	th = tcp_hdr(skb);
 
-	if (th->doff < sizeof(struct tcphdr) / 4)
+	if (th->doff < sizeof(struct tcphdr) / 4) {
+                LOG_ERR("TCP packet has bad data offset=%u!\n",
+                        th->doff * 4);
 		goto bad_packet;
+        }
 
 	if (!pskb_may_pull(skb, th->doff * 4)) {
                 LOG_ERR("Bad TCP header! -- discarding\n");
@@ -258,8 +271,10 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb)
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
 	 * So, we defer the checks. */
-	if (!skb_csum_unnecessary(skb) && serval_tcp_v4_checksum_init(skb))
-		goto bad_packet;
+	if (!skb_csum_unnecessary(skb) && serval_tcp_v4_checksum_init(skb)) {
+                LOG_ERR("Checksum error!\n");
+                goto bad_packet;
+        }
 
 	iph = ip_hdr(skb);
 
@@ -304,7 +319,7 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         int err = 0;
         
-        if (serval_tcp_rcv_checks(sk, skb))
+        if (serval_tcp_rcv_checks(sk, skb, 0))
                 goto discard_it;
 
         if (!sock_owned_by_user(sk)) {

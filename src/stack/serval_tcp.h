@@ -906,7 +906,7 @@ static inline void serval_tcp_ca_event(struct sock *sk,
 		tp->ca_ops->cwnd_event(sk, event);
 }
 
-int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb);
+int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn);
 
 void serval_tcp_done(struct sock *sk);
 

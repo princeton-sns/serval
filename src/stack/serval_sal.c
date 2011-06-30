@@ -2254,6 +2254,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	while (dest) {
 		struct dest *next_dest;
+                struct net_device *dev = NULL;
                
                 if (cskb == NULL) {
                         service_resolution_iter_inc_stats(&iter, 1, dlen);
@@ -2284,29 +2285,39 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * the IP layer*/
                         memcpy(&SERVAL_SKB_CB(cskb)->addr,
                                &local_addr, sizeof(struct net_addr));
-		} else {
-                        memcpy(&SERVAL_SKB_CB(cskb)->addr, 
-                               dest->dst, 
-                               sizeof(struct net_addr) < dest->dstlen ? 
-                               sizeof(struct net_addr) : dest->dstlen);
-                }
-		/*
-                  Set the output device for user space operation.  The
-                  kernel will route the packet throught the IP routing
-                  table and figure out the device that way.
-                */
-                if (is_sock_dest(dest)) {
+                        memcpy(&inet_sk(sk)->inet_daddr,
+                               &local_addr, sizeof(inet_sk(sk)->inet_daddr));
+
                         /* kludgey but sets the output device for
                          * reaching a local socket destination to the
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
 #if defined(OS_USER)
-                        skb_set_dev(cskb, dev_get_by_index(NULL, 0));
+                        dev = dev_get_by_index(NULL, 0);
+#else
+                        /* FIXME: not sure about getting the device
+                           without a refcount here... */
+                        dev = __dev_get_by_name(sock_net(sk), "lo");
 #endif
-                } else if (dest->dest_out.dev) {
-                        skb_set_dev(cskb, dest->dest_out.dev);
+		} else {
+                        memcpy(&SERVAL_SKB_CB(cskb)->addr, 
+                               dest->dst, 
+                               sizeof(struct net_addr) < dest->dstlen ? 
+                               sizeof(struct net_addr) : dest->dstlen);
+                        memcpy(&inet_sk(sk)->inet_daddr,
+                               dest->dst,
+                               sizeof(inet_sk(sk)->inet_daddr) < dest->dstlen ? 
+                               sizeof(inet_sk(sk)->inet_daddr) : dest->dstlen);
+                       
+                        dev = dest->dest_out.dev;
                 }
+                
+                skb_set_dev(cskb, dev);
+                sk->sk_bound_dev_if = dev->ifindex;
+                /* Need also to set the source address for
+                   checksum calculation */
+                dev_get_ipv4_addr(dev, &inet_sk(sk)->inet_saddr);
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -2319,7 +2330,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                 cskb->dev ? cskb->dev->name : "Undefined");
                 }
 #endif
-
                 /* Make sure no route is associated with the
                    socket. When IP routes a packet which is associated
                    with a socket, it will stick to that route in the
@@ -2329,6 +2339,13 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 if (__sk_dst_get(sk))
                         __sk_dst_reset(sk);
                 
+                /*
+                  Calculate the checksum for the transport header now
+                  that we know the dst and src IP.
+                */
+                if (ssk->af_ops->send_check)
+                        ssk->af_ops->send_check(sk, skb);
+
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
