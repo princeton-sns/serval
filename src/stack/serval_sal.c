@@ -529,7 +529,8 @@ void serval_sal_close(struct sock *sk, long timeout)
             sk->sk_state == SERVAL_CLOSEWAIT) {
                 struct serval_sock *ssk = serval_sk(sk);
                 
-                if (ssk->close_received)
+                if (ssk->close_received && 
+                    sk->sk_state != SERVAL_CLOSEWAIT)
                         serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
 
                 if (ssk->af_ops->conn_close) {
@@ -555,6 +556,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                         yield();
                 }
                 
+                LOG_DBG("Sending Close REQUEST\n");
                 skb_reserve(skb, sk->sk_prot->max_header);
                 skb_serval_set_owner_w(skb, sk);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
@@ -974,7 +976,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                 (struct serval_control_ext *)(sh + 1);
         int err = 0;
 
-        LOG_DBG("received CLOSE REQUEST\n");
+        LOG_DBG("received Close REQUEST\n");
         
         if (!has_valid_control_extension(sk, sh)) {
                 LOG_DBG("Bad control extension\n");
@@ -2208,6 +2210,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                     sk->sk_type == SOCK_DGRAM) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, 0);
                 }
+                if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)                        
+                        hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
         default:
                 break;
         }
