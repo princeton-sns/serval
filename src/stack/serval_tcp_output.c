@@ -1976,14 +1976,12 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 	tp->retrans_stamp = TCP_SKB_CB(skb)->when;
 
-        th->syn = 1;
-	th->source		= htons(1);
-	th->dest		= htons(2);
+        memset(th, 0, tcp_header_size);
 	th->seq		        = htonl(TCP_SKB_CB(skb)->seq);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
                                         TCP_SKB_CB(skb)->flags);
-
+        th->check = 0;
 	tp->packets_out += serval_tcp_skb_pcount(skb);
 
 	tp->snd_nxt = tp->write_seq;
@@ -2066,7 +2064,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	memset(&opts, 0, sizeof(opts));
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 	tcp_options_size = serval_tcp_synack_options(sk, req, mss,
-                                                    skb, &opts, &md5, NULL);
+                                                     skb, &opts, &md5, NULL);
         tcp_header_size = tcp_options_size  + sizeof(struct tcphdr);
         
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
@@ -2076,12 +2074,12 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
         skb_reset_transport_header(skb);
 
-	memset(th, 0, sizeof(struct tcphdr));
+	memset(th, 0, tcp_header_size);
         th->seq = htonl(serval_tcp_rsk(req)->snt_isn);
 	th->ack_seq = htonl(serval_tcp_rsk(req)->rcv_isn + 1);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					TCP_SKB_CB(skb)->flags);
-
+        th->check = 0;
 	/* RFC1323: The window in SYN & SYN/ACK segments is never scaled. */
 	th->window = htons(min(req->rcv_wnd, 65535U));
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
@@ -2116,7 +2114,7 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 
 	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk), 
                                     TCPH_ACK);
-        memset(th, 0, sizeof(*th));
+        memset(th, 0, tcp_header_size);
         th->seq = htonl(TCP_SKB_CB(skb)->seq);
 	th->ack_seq = htonl(tp->rcv_nxt);
         th->window = htons(serval_tcp_select_window(sk));

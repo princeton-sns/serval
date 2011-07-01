@@ -264,10 +264,9 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 		goto bad_packet;
         }
 
-        LOG_PKT("TCP %s end_seq=%u doff=%u skb->len=%u\n",
+        LOG_PKT("TCP %s end_seq=%u skb->len=%u\n",
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
-                th->doff * 4,
                 skb->len);
 
 	if (!pskb_may_pull(skb, th->doff * 4)) {
