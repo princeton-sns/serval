@@ -2017,13 +2017,6 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	struct tcphdr *th;
         int mss;
 
-        th = (struct tcphdr *)skb_push(skb, sizeof(*th));
-
-        if (!th)
-                return -1;
-
-        skb_reset_transport_header(skb);
-
 #if defined(OS_LINUX_KERNEL)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 	mss = dst_metric(dst, RTAX_ADVMSS);
@@ -2075,6 +2068,13 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	tcp_header_size = serval_tcp_synack_options(sk, req, mss,
                                                     skb, &opts, &md5, NULL)
                 + sizeof(*th);
+
+        th = (struct tcphdr *)skb_push(skb, tcp_header_size);
+
+        if (!th)
+                return -1;
+
+        skb_reset_transport_header(skb);
 
 	memset(th, 0, sizeof(struct tcphdr));
         th->seq = htonl(serval_tcp_rsk(req)->snt_isn);
