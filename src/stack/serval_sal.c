@@ -153,7 +153,7 @@ static inline int has_connection_extension(struct serval_hdr *sh)
         }
         
         if (conn_ext->exthdr.type != SERVAL_CONNECTION_EXT || 
-            ntohs(conn_ext->exthdr.length) != sizeof(*conn_ext)) {
+            conn_ext->exthdr.length != sizeof(*conn_ext)) {
                 LOG_DBG("No connection extension, bad extension type\n");
                 return 0;
         }
@@ -174,7 +174,7 @@ static inline int has_service_extension(struct serval_hdr *sh)
         }
         
         if (srv_ext->exthdr.type != SERVAL_SERVICE_EXT || 
-            ntohs(srv_ext->exthdr.length) != sizeof(*srv_ext)) {
+            srv_ext->exthdr.length != sizeof(*srv_ext)) {
                 LOG_DBG("No service extension, bad extension type\n");
                 return 0;
         }
@@ -246,7 +246,7 @@ static inline int has_valid_control_extension(struct sock *sk,
         }
         
         if (ctrl_ext->exthdr.type != SERVAL_CONTROL_EXT ||
-            ntohs(ctrl_ext->exthdr.length) != sizeof(*ctrl_ext)) {
+            ctrl_ext->exthdr.length != sizeof(*ctrl_ext)) {
                 LOG_PKT("No control extension, bad extension type\n");
                 return 0;
         }
