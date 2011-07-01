@@ -1884,8 +1884,8 @@ recv_urg:
 	goto out;
 }
 
-static void __serval_tcp_v4_send_check(struct sk_buff *skb,
-                                       __be32 saddr, __be32 daddr)
+void __serval_tcp_v4_send_check(struct sk_buff *skb,
+                                __be32 saddr, __be32 daddr)
 {
 	struct tcphdr *th = tcp_hdr(skb);
 

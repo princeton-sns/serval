@@ -807,6 +807,8 @@ static inline void serval_tcp_update_wl(struct serval_tcp_sock *tp, u32 seq)
 	tp->snd_wl1 = seq;
 }
 
+void __serval_tcp_v4_send_check(struct sk_buff *skb,
+                                __be32 saddr, __be32 daddr);
 /*
  * Calculate(/check) TCP checksum
  */
