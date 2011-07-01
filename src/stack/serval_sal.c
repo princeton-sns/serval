@@ -1291,7 +1291,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         }
         
         /* Update control block */
-        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_SYN;
+        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
         SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
