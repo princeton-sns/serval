@@ -30,7 +30,7 @@ struct __wait_queue {
 	struct task_struct *private_data;
 	wait_queue_func_t func;
 	pthread_mutex_t lock;
-    int pipefd[2];
+        int pipefd[2];
 	struct list_head thread_list;
 };
 
@@ -75,9 +75,11 @@ enum wait_signal{
 };
 enum wait_signal wait_signal_lower(int fd);
 void prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state);
-void prepare_to_wait_exclusive(wait_queue_head_t *q, wait_queue_t *wait, int state);
+void prepare_to_wait_exclusive(wait_queue_head_t *q,
+                               wait_queue_t *wait, int state);
 void finish_wait(wait_queue_head_t *q, wait_queue_t *wait);
-int autoremove_wake_function(wait_queue_t *wait, unsigned mode, int sync, void *key);
+int autoremove_wake_function(wait_queue_t *wait, unsigned mode, 
+                             int sync, void *key);
 
 #define DEFINE_WAIT_FUNC(name, function)				\
 	wait_queue_t name = {						\

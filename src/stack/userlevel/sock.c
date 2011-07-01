@@ -35,10 +35,10 @@ static void sock_def_destruct(struct sock *sk)
 static void sock_def_wakeup(struct sock *sk)
 {
         struct socket_wq *wq = sk->sk_wq;
-
         read_lock(&sk->sk_callback_lock);
-        if (wq_has_sleeper(wq))
+        if (wq_has_sleeper(wq)) {
                 wake_up_interruptible_all(&wq->wait);
+        }
         read_unlock(&sk->sk_callback_lock);
 }
 

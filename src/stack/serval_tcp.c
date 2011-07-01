@@ -133,7 +133,6 @@ static int serval_tcp_connection_request(struct sock *sk,
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         /* struct inet_request_sock *ireq = inet_rsk(req); */
         struct serval_tcp_request_sock *trsk = serval_tcp_rsk(req);
-        struct tcphdr *th;
 	struct serval_tcp_options_received tmp_opt;
         u8 *hash_location;
 
@@ -143,12 +142,10 @@ static int serval_tcp_connection_request(struct sock *sk,
                 return -1;
         }
 
-        th = tcp_hdr(skb);
-
         LOG_DBG("TCP SYN received seq=%u src=%u dst=%u skb->len=%u\n", 
-                ntohl(th->seq),
-                ntohs(th->source),
-                ntohs(th->dest),
+                ntohl(tcp_hdr(skb)->seq),
+                ntohs(tcp_hdr(skb)->source),
+                ntohs(tcp_hdr(skb)->dest),
                 skb->len);
 
         memset(&tmp_opt, 0, sizeof(tmp_opt));

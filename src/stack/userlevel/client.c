@@ -512,7 +512,6 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
                 struct sockaddr_in in;
         } addr;
         socklen_t addrlen = sizeof(addr.sv);
-        struct in_addr ip;
         int ret;
         
         memset(&addr, 0, sizeof(addr));
@@ -534,13 +533,17 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         iov.iov_base = req->data;
         iov.iov_len = req->data_len;
         
-        ip.s_addr = req->ipaddr;
-
-	LOG_DBG("Client %u data_len=%u dest: %s @ %s\n", 
-                c->id, req->data_len, 
-                service_id_to_str(&req->srvid), 
-                inet_ntoa(ip));
-        
+#if defined(ENABLE_DEBUG)
+        {
+                struct in_addr ip;
+                ip.s_addr = req->ipaddr;
+                
+                LOG_DBG("Client %u data_len=%u dest: %s @ %s\n", 
+                        c->id, req->data_len, 
+                        service_id_to_str(&req->srvid), 
+                        inet_ntoa(ip));
+        }
+#endif
         ret = sock->ops->sendmsg(NULL, sock, &mh, req->data_len);
         
         if (ret < 0) {
@@ -726,7 +729,12 @@ static void *client_thread(void *arg)
 			FD_SET(c->fd, &readfds);
 
 		nfds = MAX(c->fd, c->pipefd[0]) + 1;
-
+#if 0
+                /*
+                  This doesn't work well for me. It breaks normal wake
+                  up. I think this should be implemented throught the
+                  sock_wake_async() function in userlevel/socket.c
+                */
 		if (!c->has_data) {
                         /* wait for a data signal on the pipe
                          */
@@ -759,7 +767,7 @@ static void *client_thread(void *arg)
                                 nfds = MAX(nfds, wait.pipefd[0] + 1);
                         }
 		}
-
+#endif /* 0 */
 		ret = select(nfds, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {

@@ -1216,12 +1216,6 @@ static int serval_sal_request_state_process(struct sock *sk,
                 skb_transport_header(skb) - (unsigned char *)sh,
                 sizeof(*sh) + sizeof(*conn_ext));
 
-        /* Let user know we are connected. */
-	if (!sock_flag(sk, SOCK_DEAD)) {
-                sk->sk_state_change(sk);
-                sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
-        }
-
         /* Save device and peer flow id */
         serval_sock_set_dev(sk, skb->dev);
 
@@ -1254,6 +1248,12 @@ static int serval_sal_request_state_process(struct sock *sk,
         /* Move to connected state */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
+        /* Let user know we are connected. */
+	if (!sock_flag(sk, SOCK_DEAD)) {
+                sk->sk_state_change(sk);
+                sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
+        }
+
         /* Setting the bound device indicates that this socket
            needs no resolution */
         sk->sk_bound_dev_if = skb->dev->ifindex;

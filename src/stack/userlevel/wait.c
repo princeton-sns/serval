@@ -64,13 +64,24 @@ enum wait_signal wait_signal_lower(int fd)
 int default_wake_function(wait_queue_t *curr, unsigned mode, 
                           int wake_flags, void *key)
 {
-        uintptr_t pflags = (uintptr_t) key;
         uint8_t sig = WAIT_READ_DATA & 0xFF;
         int ret = 0;
+#if 0
+        /* 
+           I think this stuff should be implemented in
+           userlevel/socket.c:sock_wake_async().  Currently, this
+           implementation breaks normal wake up for me.
+
+        */
+
+
+        uintptr_t pflags = (uintptr_t) key;
+
+        LOG_DBG("Waking up sleepers!\n");
         
         if (pflags & POLLIN) {
                 sig = WAIT_READ_DATA;
-                /*LOG_DBG("Waking up wait queue pipefd %i with read sig %u\n", curr->pipefd[0], sig);*/
+                LOG_DBG("Waking up wait queue pipefd %i with read sig %u\n", curr->pipefd[0], sig);
                 if (curr->pipefd[1] == -1) {
                         LOG_ERR("pipefd[1] == -1\n");
                         return -1;
@@ -85,7 +96,7 @@ int default_wake_function(wait_queue_t *curr, unsigned mode,
 
         if (pflags & POLLOUT) {
                 sig = WAIT_WRITE_DATA;
-                /*LOG_DBG("Waking up wait queue pipefd %i with write sig %u\n", curr->pipefd[0], sig);*/
+                LOG_DBG("Waking up wait queue pipefd %i with write sig %u\n", curr->pipefd[0], sig);
                 if (curr->pipefd[1] == -1) {
                         LOG_ERR("pipefd[1] == -1\n");
                         return -1;
@@ -98,6 +109,19 @@ int default_wake_function(wait_queue_t *curr, unsigned mode,
                 }
         }
 
+#endif
+        if (curr->pipefd[1] == -1) {
+                LOG_ERR("pipefd[1] == -1\n");
+                return -1;
+        }
+
+        ret = write(curr->pipefd[1], &sig, 1);
+        
+        if (ret < 0) {
+                LOG_ERR("Could not write in signal to pipe: %u\n", 
+                        curr->pipefd[1]);
+        }
+        
 	return ret;
 }
 
