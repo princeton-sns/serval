@@ -45,6 +45,7 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
         .queue_xmit = serval_ipv4_xmit_skb,
         .receive = serval_udp_rcv,
+        .net_header_len = SERVAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
 };

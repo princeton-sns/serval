@@ -229,7 +229,6 @@ int serval_sal_rcv_transport_fin(struct sock *sk, struct sk_buff *skb);
                         sizeof(struct serval_hdr) +                 \
                         sizeof(struct serval_connection_ext))
 
-#define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +                   \
-                               sizeof(struct serval_hdr) +              \
-                               sizeof(struct serval_connection_ext))
+#define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +           \
+                               sizeof(struct serval_hdr))
 #endif /* _SERVAL_SAL_H_ */

@@ -264,11 +264,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 		goto bad_packet;
         }
 
-        LOG_PKT("Received TCP %s end_seq=%u datalen=%u\n",
-                tcphdr_to_str(th),
-                TCP_SKB_CB(skb)->end_seq,
-                skb->len - (th->doff << 2));
-
 	if (!pskb_may_pull(skb, th->doff << 2)) {
                 LOG_ERR("Cannot pull tcp header!\n");
 		goto bad_packet;
@@ -310,6 +305,11 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;        
         
+        LOG_PKT("Received TCP %s end_seq=%u datalen=%u\n",
+                tcphdr_to_str(th),
+                TCP_SKB_CB(skb)->end_seq,
+                skb->len - (th->doff << 2));
+
         return 0;
 bad_packet:
         LOG_ERR("Bad TCP packet\n");
@@ -430,10 +430,12 @@ static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 
 	if (0 && large_allowed && sk_can_gso(sk)) {
 		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
-				  SERVAL_NET_HEADER_LEN -
+				  serval_sk(sk)->af_ops->net_header_len -
+                                  serval_sk(sk)->ext_hdr_len -
 				  tp->tcp_header_len);
 
-		xmit_size_goal = serval_tcp_bound_to_half_wnd(tp, xmit_size_goal);
+		xmit_size_goal = 
+                        serval_tcp_bound_to_half_wnd(tp, xmit_size_goal);
 
 		/* We try hard to avoid divides here */
 		old_size_goal = tp->xmit_size_goal_segs * mss_now;
@@ -1918,6 +1920,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_ack = serval_tcp_connection_build_ack,
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
+        .net_header_len = SERVAL_NET_HEADER_LEN,
         .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,

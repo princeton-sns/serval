@@ -867,20 +867,20 @@ int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
 int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        struct serval_sock *ssk = serval_sk(sk);
 	int mss_now;
 
 	/* Calculate base mss without TCP options:
 	   It is MMS_S - sizeof(tcphdr) of rfc1122
 	 */
-	///mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
-	mss_now = pmtu - SERVAL_NET_HEADER_LEN - sizeof(struct tcphdr);
+	mss_now = pmtu - ssk->af_ops->net_header_len - sizeof(struct tcphdr);
 
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
 		mss_now = tp->rx_opt.mss_clamp;
 
 	/* Now subtract optional transport overhead */
-	//mss_now -= icsk->icsk_ext_hdr_len;
+	mss_now -= ssk->ext_hdr_len;
 
 	/* Then reserve room for full set of TCP options and 8 bytes of data */
 	if (mss_now < 48)
@@ -899,17 +899,13 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 int serval_tcp_mss_to_mtu(struct sock *sk, int mss)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        struct serval_sock *ssk = serval_sk(sk);
 	int mtu;
-        /*
+
 	mtu = mss +
 	      tp->tcp_header_len +
-	      icsk->icsk_ext_hdr_len +
-	      icsk->icsk_af_ops->net_header_len;
-        */
-        
-	mtu = mss +
-                tp->tcp_header_len +
-                SERVAL_NET_HEADER_LEN;
+	      ssk->ext_hdr_len +
+	      ssk->af_ops->net_header_len;
         
         
 	return mtu;
@@ -1733,8 +1729,7 @@ void serval_tcp_mtup_init(struct sock *sk)
 	tp->tp_mtup.enabled = sysctl_serval_tcp_mtu_probing > 1;
 	tp->tp_mtup.search_high = 
                 tp->rx_opt.mss_clamp + sizeof(struct tcphdr) +
-                SERVAL_NET_HEADER_LEN;
-        /* serval_sk(sk)->af_ops->net_header_len; */
+                serval_sk(sk)->af_ops->net_header_len;
 	tp->tp_mtup.search_low = 
                 serval_tcp_mss_to_mtu(sk, sysctl_serval_tcp_base_mss);
 	tp->tp_mtup.probe_size = 0;

@@ -1141,6 +1141,7 @@ static void serval_tcp_mtup_probe_failed(struct sock *sk)
 
 	tp->tp_mtup.search_high = tp->tp_mtup.probe_size - 1;
 	tp->tp_mtup.probe_size = 0;
+        LOG_DBG("TCP MTU probe failed!\n");
 }
 
 static void serval_tcp_mtup_probe_success(struct sock *sk)
@@ -1159,6 +1160,8 @@ static void serval_tcp_mtup_probe_success(struct sock *sk)
 	tp->tp_mtup.search_low = tp->tp_mtup.probe_size;
 	tp->tp_mtup.probe_size = 0;
 	serval_tcp_sync_mss(sk, tp->pmtu_cookie);
+
+        LOG_DBG("TCP MTU probe success!\n");
 }
 
 /* If ACK arrived pointing to a remembered SACK, it means that our

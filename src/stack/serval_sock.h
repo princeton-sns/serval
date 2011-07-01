@@ -117,6 +117,8 @@ struct serval_sock_af_ops {
                                            struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
+	u16	        net_header_len;
+	u16	        sockaddr_len;
         int             (*recv_fin)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
@@ -148,18 +150,19 @@ struct serval_sock {
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
-        uint8_t                 local_nonce[SERVAL_NONCE_SIZE];
-        uint8_t                 peer_nonce[SERVAL_NONCE_SIZE];
+        u8                      local_nonce[SERVAL_NONCE_SIZE];
+        u8                      peer_nonce[SERVAL_NONCE_SIZE];
+        u16                     ext_hdr_len;
         struct {
-                uint32_t        una;
-                uint32_t        nxt;
-                uint32_t        wnd;
-                uint32_t        iss;
+                u32        una;
+                u32        nxt;
+                u32        wnd;
+                u32        iss;
         } snd_seq;
         struct {
-                uint32_t        nxt;
-                uint32_t        wnd;
-                uint32_t        iss;
+                u32        nxt;
+                u32        wnd;
+                u32        iss;
         } rcv_seq;
         unsigned short          retransmits;
         unsigned long           rto;
