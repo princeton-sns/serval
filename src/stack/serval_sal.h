@@ -12,20 +12,34 @@ int serval_sal_xmit_skb(struct sk_buff *skb);
 struct service_entry;
 
 /* 
-   WARNING:
+   NOTE:
    
-    We must be careful that this struct does not overflow the 48 bytes
-    that the skb struct gives us in the cb field.
+   We must be careful that this struct does not overflow the 48 bytes
+   that the skb struct gives us in the cb field.
+   
+   Transport protocols (i.e., in most cases TCP) reserve some room for
+   lower layer control blocks (e.g., IPv4/IPv6) at the head of their
+   own control block. This is done in order to keep the lower layer
+   information when processing incoming packets. We should therefore
+   be careful not to overwrite the IP control block in incoming
+   packets in case TCP expects it to be there.
 
-    NOTE: Currently adds up to 44 bytes (non packed) on 64-bit platform.
-    Should probably find another solution for storing a reference to
-    the service id instead of a copy.
+   For outgoing packets, we are free to overwrite the control block
+   with our own information. Any packets queued by the transport
+   protocol are cloned before transmission, so the original
+   information will be preserved in the queued packet.
+
+   We should be careful to do the same in the SAL layer when queuing
+   packets; i.e., we should always clone queued packets before we
+   transmit.
  */
  struct serval_skb_cb {
-         enum serval_packet_type pkttype;
-         struct net_addr addr;
-         uint32_t seqno;
-         struct service_id srvid;
+         u8 pkttype;
+         u8 flags;
+#define SVH_ACK 0x01
+         u32 seqno;
+         struct serval_hdr *sfh;
+         struct service_id *srvid;
  };
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)

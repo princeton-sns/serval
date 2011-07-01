@@ -374,7 +374,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
                                     .mark = sk->sk_mark,
 #endif
                                     .nl_u = { .ip4_u =
-                                              { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
+                                              { .daddr = inet->inet_daddr,
                                                 /* .saddr = inet->inet_saddr, */
                                                 .tos = RT_CONN_FLAGS(sk) } },
                             .proto = skb->protocol,
@@ -489,7 +489,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         */
 
         err = serval_ipv4_fill_in_hdr(sk, skb, INADDR_ANY,
-                                      SERVAL_SKB_CB(skb)->addr.net_ip.s_addr);
+                                      inet_sk(sk)->inet_daddr);
         
         if (err < 0) {
                 LOG_ERR("hdr failed\n");

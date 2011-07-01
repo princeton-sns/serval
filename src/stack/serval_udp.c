@@ -68,8 +68,7 @@ static void udp_checksum(uint16_t total_len,
 }
 
 static int serval_udp_transmit_skb(struct sock *sk, 
-                                   struct sk_buff *skb,
-                                   enum serval_packet_type type)
+                                   struct sk_buff *skb)
 {
         int err;
         unsigned short tot_len;
@@ -78,7 +77,6 @@ static int serval_udp_transmit_skb(struct sock *sk,
         /* Push back to make space for transport header */
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
-        SERVAL_SKB_CB(skb)->pkttype = type;
 
         tot_len = skb->len + 20 + 14;
         
@@ -187,7 +185,7 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
                 if (err == -ENOMEM) {
                         /* TODO: statistics */
                 }
-                FREE_SKB(skb);
+                kfree_skb(skb);
         }
 
         return err;
@@ -206,11 +204,13 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
 		goto drop;		/* No space for header. */
         
+        /* FIXME: Should verify checksum */
+
         /* Only ignore this message in case it has zero length and is
          * not a FIN */
         if (datalen == 0 && 
             SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 return 0;
         }
 
@@ -219,7 +219,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
          * is done below in sock_queue_rcv for those kernel versions
          * that do not define this sk_rcvqueues_full().  */
         if (sk_rcvqueues_full(sk, skb)) {
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 return -ENOBUFS; 
         }
 #endif
@@ -238,7 +238,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         */
         return serval_udp_do_rcv(sk, skb);
  drop:
-        FREE_SKB(skb);
+        kfree_skb(skb);
         return 0;
 }
 
@@ -318,24 +318,21 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         skb_reserve(skb, sk->sk_prot->max_header);
 
         if (srvid) {
-                memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(*srvid));
+                memcpy(&serval_sk(sk)->peer_srvid, srvid, sizeof(*srvid));
         }
         if (netaddr) {
-                memcpy(&SERVAL_SKB_CB(skb)->addr, netaddr, sizeof(*netaddr));
-        } else {
-                /* Make sure we zero this address to signal it is unset */
-                memset(&SERVAL_SKB_CB(skb)->addr, 0, sizeof(*netaddr));
+                memcpy(&inet_sk(sk)->inet_daddr, netaddr, sizeof(*netaddr));
         }
 
         err = memcpy_fromiovec(skb_put(skb, len), msg->msg_iov, len);
      
         if (err < 0) {
                 LOG_ERR("could not copy user data to skb\n");
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 goto out;
         }
 
-        err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
+        err = serval_udp_transmit_skb(sk, skb);
         
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
@@ -432,9 +429,12 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
                         svaddr->sv_family = AF_SERVAL;
                         *addr_len = sizeof(*svaddr);
-                        memcpy(&svaddr->sv_srvid, &SERVAL_SKB_CB(skb)->srvid,
-                               sizeof(svaddr->sv_srvid));
-
+                        
+                        if (SERVAL_SKB_CB(skb)->srvid) {
+                                memcpy(&svaddr->sv_srvid, 
+                                       SERVAL_SKB_CB(skb)->srvid,
+                                       sizeof(svaddr->sv_srvid));
+                        }
                         /* Copy also IP address if possible */
                         if (addrlen >= (sizeof(*svaddr) +
                                         sizeof(struct sockaddr_in))) {
@@ -705,8 +705,6 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 skb_reserve(skb, sk->sk_prot->max_header);
                 
                 /* Make sure we zero this address to signal it is unset */
-                memset(&SERVAL_SKB_CB(skb)->addr, 0, 4);
-
                 get_page(page);
                 skb_fill_page_desc(skb, 0, page, offset, size);
                 skb->len += size;
@@ -721,7 +719,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 /* FIXME: we only handle one page at this time... Must
                  * really clean up this code. */
 
-                err = serval_udp_transmit_skb(sk, skb, SERVAL_PKT_DATA);
+                err = serval_udp_transmit_skb(sk, skb);
                 
                 if (err < 0) {
                         LOG_ERR("xmit failed\n");

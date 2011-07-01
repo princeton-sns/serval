@@ -29,10 +29,6 @@ extern int serval_tcp_rcv(struct sk_buff *);
 extern int serval_udp_rcv(struct sk_buff *);
 extern atomic_t serval_nr_socks;
 
-static struct net_addr null_addr = { 
-        .net_raw = { 0x00, 0x00, 0x00, 0x00 } 
-};
-
 static struct net_addr local_addr = {
         .net_raw = { 0x7F, 0x00, 0x00, 0x01 }
 };
@@ -56,7 +52,7 @@ static inline int is_control_packet(struct sk_buff *skb)
         struct serval_hdr *sfh = 
                 (struct serval_hdr *)skb_transport_header(skb);
 
-        if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK)
+        if (sfh->ack || sfh->type != SERVAL_PKT_DATA)
                 return 1;
         return 0;
 }
@@ -81,8 +77,8 @@ static inline int has_connection_extension(struct serval_hdr *sfh)
                 return 0;
         }
         
-        if (conn_ext->type != SERVAL_CONNECTION_EXT || 
-            ntohs(conn_ext->length) != sizeof(*conn_ext)) {
+        if (conn_ext->exthdr.type != SERVAL_CONNECTION_EXT || 
+            ntohs(conn_ext->exthdr.length) != sizeof(*conn_ext)) {
                 LOG_DBG("No connection extension, bad extension type\n");
                 return 0;
         }
@@ -102,8 +98,8 @@ static inline int has_service_extension(struct serval_hdr *sfh)
                 return 0;
         }
         
-        if (srv_ext->type != SERVAL_SERVICE_EXT || 
-            ntohs(srv_ext->length) != sizeof(*srv_ext)) {
+        if (srv_ext->exthdr.type != SERVAL_SERVICE_EXT || 
+            ntohs(srv_ext->exthdr.length) != sizeof(*srv_ext)) {
                 LOG_DBG("No service extension, bad extension type\n");
                 return 0;
         }
@@ -131,6 +127,11 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
                         seg_seq, ssk->rcv_seq.nxt);
         }
         return ret;
+}
+
+static inline int packet_has_data(struct sk_buff *skb, struct serval_hdr *sfh)
+{
+        return skb->len > ntohs(sfh->length);
 }
 
 static inline int has_valid_connection_extension(struct sock *sk, 
@@ -169,8 +170,8 @@ static inline int has_valid_control_extension(struct sock *sk,
                 return 0;
         }
         
-        if (ctrl_ext->type != SERVAL_CONTROL_EXT ||
-            ntohs(ctrl_ext->length) != sizeof(*ctrl_ext)) {
+        if (ctrl_ext->exthdr.type != SERVAL_CONTROL_EXT ||
+            ntohs(ctrl_ext->exthdr.length) != sizeof(*ctrl_ext)) {
                 LOG_PKT("No control extension, bad extension type\n");
                 return 0;
         }
@@ -326,7 +327,23 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
         
 	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;
+
+        /* Set the peer serviceID in the socket */
+        memcpy(&ssk->peer_srvid, srvid, sizeof(*srvid));
         
+        /* Check for extra IP address */
+        if ((size_t)addr_len >= sizeof(struct sockaddr_sv) +
+            sizeof(struct sockaddr_in)) {
+                struct sockaddr_in *saddr =
+                        (struct sockaddr_in *)(((struct sockaddr_sv *)uaddr) + 1);
+                
+                if (saddr->sin_family == AF_INET) {
+                        memcpy(&inet_sk(sk)->inet_daddr,
+                               &saddr->sin_addr,
+                               sizeof(saddr->sin_addr));
+                }
+        }
+
         skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!skb)
@@ -388,16 +405,13 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                 }
         }
 
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, srvid, sizeof(struct service_id));
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CONN_SYN;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_SYN;
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
         ssk->snd_seq.nxt = ssk->snd_seq.iss + 1;
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
-               sizeof(inet_sk(sk)->inet_daddr));
 
         LOG_DBG("Sending REQUEST seqno=%u srvid=%s\n",
                 SERVAL_SKB_CB(skb)->seqno, 
-                service_id_to_str(&SERVAL_SKB_CB(skb)->srvid));
+                service_id_to_str(srvid));
 
         err = serval_sal_queue_and_push(sk, skb);
         
@@ -463,11 +477,8 @@ void serval_sal_close(struct sock *sk, long timeout)
                 
                 skb_reserve(skb, sk->sk_prot->max_header);
                 skb_serval_set_owner_w(skb, sk);
-
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
-                memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
-                       sizeof(inet_sk(sk)->inet_daddr));
 
                 err = serval_sal_queue_and_push(sk, skb);
                 
@@ -496,9 +507,8 @@ static int serval_sal_send_close_ack(struct sock *sk, struct serval_hdr *sfh,
         
         skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSEACK;
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
-               sizeof(inet_sk(sk)->inet_daddr));
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+        SERVAL_SKB_CB(skb)->flags = SVH_ACK;
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
 
@@ -643,19 +653,20 @@ static int serval_sal_syn_rcv(struct sock *sk,
         rskb->protocol = IPPROTO_SERVAL;
         conn_ext = (struct serval_connection_ext *)
                 skb_push(rskb, sizeof(*conn_ext));
-        conn_ext->type = SERVAL_CONNECTION_EXT;
-        conn_ext->length = htons(sizeof(*conn_ext));
-        conn_ext->flags = 0;
+        conn_ext->exthdr.type = SERVAL_CONNECTION_EXT;
+        conn_ext->exthdr.length = sizeof(*conn_ext);
+        conn_ext->exthdr.flags = 0;
         conn_ext->seqno = htonl(srsk->iss_seq);
         conn_ext->ackno = htonl(srsk->rcv_seq + 1);
-        memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
-               sizeof(SERVAL_SKB_CB(skb)->srvid));
+        memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
+               sizeof(ssk->peer_srvid));
         /* Copy our nonce to connection extension */
         memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
         
         /* Add Serval header */
         sfh = (struct serval_hdr *)skb_push(rskb, sizeof(*sfh));
-        sfh->flags = SVH_SYN | SVH_ACK;
+        sfh->type = SERVAL_PKT_SYN;
+        sfh->ack = 1;
         sfh->protocol = rskb->protocol;
         sfh->length = htons(sizeof(*sfh) + sizeof(*conn_ext));
 
@@ -666,7 +677,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
                sizeof(srsk->local_flowid));
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
-        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_SYNACK;
 
         //skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
@@ -840,7 +850,7 @@ static int serval_sal_ack_process(struct sock *sk,
         uint32_t ackno = 0;
         int err = -1;
 
-        if (!(sfh->flags & SVH_ACK))
+        if (!sfh->ack)
                 return -1;
 
         switch (ext->type) {
@@ -1001,41 +1011,21 @@ static int serval_sal_connected_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
-        if (sfh->flags & SVH_FIN) {
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+        serval_sal_ack_process(sk, sfh, skb);
 
+        if (sfh->type == SERVAL_PKT_CLOSE)
                 err = serval_sal_rcv_close_req(sk, sfh, skb);
-
-                if (err == 0) {
-                        /* Valid FIN means valid header that may
-                           contain ACK */
-                        serval_sal_ack_process(sk, sfh, skb);
-                        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
-                }
-        }
-
-        if (sfh->flags & SVH_ACK) {
-                serval_sal_ack_process(sk, sfh, skb);
-        } else if (sfh->flags == 0) {
-                /* FIXME: Should find better way to detect that this
-                 * might be a data packet */
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
-        }
 
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
-        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_DATA) {
+        if (packet_has_data(skb, sfh)) {
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
                    the control block with its own information. TCP
                    does this, for sure.
                  */
-                memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
-                       sizeof(ssk->peer_srvid));
-                /* Set receive IP */
-                memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-                       sizeof(ip_hdr(skb)->saddr));
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
@@ -1095,19 +1085,26 @@ static int serval_sal_listen_state_process(struct sock *sk,
 {
         int err = 0;                         
 
-        if (sfh->flags & SVH_ACK) {
-                /* Processing for socket that has received SYN already */
-                struct sock *nsk;
-                LOG_DBG("ACK recv\n");
-
-                nsk = serval_sal_request_sock_handle(sk, sfh, skb);
-                
-                if (nsk && nsk != sk) {
-                        return serval_sal_child_process(sk, nsk, sfh, skb);
+        /* Is this a SYN? */
+        if (sfh->type == SERVAL_PKT_SYN) {
+                if (sfh->ack) {
+                        /* Processing for socket that has received SYN
+                           already */
+                        struct sock *nsk;
+                        LOG_DBG("ACK recv\n");
+                        
+                        nsk = serval_sal_request_sock_handle(sk, sfh, skb);
+                        
+                        if (nsk && nsk != sk) {
+                                return serval_sal_child_process(sk, nsk,
+                                                                sfh, skb);
+                        }
+                        kfree_skb(skb);
+                } else {
+                        err = serval_sal_syn_rcv(sk, sfh, skb);
                 }
+        } else {
                 kfree_skb(skb);
-        } else if (sfh->flags & SVH_SYN) {
-                err = serval_sal_syn_rcv(sk, sfh, skb);
         }
 
         return err;
@@ -1127,11 +1124,17 @@ static int serval_sal_request_state_process(struct sock *sk,
                 goto drop;
         }
         
-        if (!(sfh->flags & SVH_SYN && sfh->flags & SVH_ACK)) {
+        if (!(sfh->type == SERVAL_PKT_SYN && sfh->ack)) {
                 LOG_ERR("packet is not a RESPONSE\n");
                 goto drop;
         }
-
+        /* Process potential ACK 
+         */
+        if (serval_sal_ack_process(sk, sfh, skb) != 0) {
+                LOG_DBG("ACK is invalid\n");
+                goto drop;
+        }
+        
         LOG_DBG("Got RESPONSE seqno=%u ackno=%u TCP off=%u hdrlen=%u\n",
                 ntohl(conn_ext->seqno), 
                 ntohl(conn_ext->ackno),
@@ -1162,13 +1165,6 @@ static int serval_sal_request_state_process(struct sock *sk,
       
         /* Update expected rcv sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
-
-        /* Process potential ACK 
-
-           TODO: should probably reject this packet if the ACK is
-           invalid.
-         */
-        serval_sal_ack_process(sk, sfh, skb);
         
         /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {
@@ -1183,6 +1179,10 @@ static int serval_sal_request_state_process(struct sock *sk,
         /* Move to connected state */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
+        /* Setting the bound device indicates that this socket
+           needs no resolution */
+        sk->sk_bound_dev_if = skb->dev->ifindex;
+
         /* Allocate ACK */
         rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
 
@@ -1206,16 +1206,11 @@ static int serval_sal_request_state_process(struct sock *sk,
         }
         
         /* Update control block */
-        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_CONN_ACK;
-        memcpy(&SERVAL_SKB_CB(rskb)->srvid, &ssk->peer_srvid, 
-               sizeof(ssk->peer_srvid));
-        memcpy(&SERVAL_SKB_CB(rskb)->addr, &inet_sk(sk)->inet_daddr, 
-               sizeof(inet_sk(sk)->inet_daddr));
-
+        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_SYN;
+        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
         rskb->protocol = IPPROTO_SERVAL;
-        skb_serval_set_owner_w(rskb, sk);
 
         /* Xmit, do not queue ACK */
         err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
@@ -1255,6 +1250,10 @@ static int serval_sal_respond_state_process(struct sock *sk,
 
                 /* Valid ACK */
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
+
+                /* Setting the bound device indicates that this socket
+                   needs no resolution */
+                sk->sk_bound_dev_if = skb->dev->ifindex;
                 
                 /* Let user know */
                 sk->sk_state_change(sk);
@@ -1271,42 +1270,22 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                                              struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        int err;
+        int err = 0;
+
+        if (sfh->type == SERVAL_PKT_CLOSE)
+                serval_sal_rcv_close_req(sk, sfh, skb);
+
+        if (sfh->ack && serval_sal_ack_process(sk, sfh, skb) == 0)
+                serval_sal_timewait(sk, SERVAL_TIMEWAIT);
         
-        if (sfh->flags & SVH_FIN) {
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-
-                err = serval_sal_rcv_close_req(sk, sfh, skb);
-
-                if (err == 0) {
-                        /* Both FIN and ACK */
-                        err = serval_sal_ack_process(sk, sfh, skb);
-                        
-                        if (err == 0) {
-                                serval_sal_timewait(sk, SERVAL_TIMEWAIT);
-                        }
-                }
-        } else {
-                /* Only ACK */
-                err = serval_sal_ack_process(sk, sfh, skb);
+        if (packet_has_data(skb, sfh)) {
+                /* Set the received service id */
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
-                if (err == 0) {
-                        /* ACK was valid */
-                        serval_sal_timewait(sk, SERVAL_FINWAIT2);
-                }
+                err = ssk->af_ops->receive(sk, skb);
+        } else  {
+                kfree_skb(skb);
         }
-
-        /* Set the received service id */
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
-               sizeof(ssk->peer_srvid));
-        /* Set receive IP */
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-               sizeof(ip_hdr(skb)->saddr));
-        
-        err = ssk->af_ops->receive(sk, skb);
-
-        //kfree_skb(skb);
-                
         return err;
 }
 
@@ -1317,9 +1296,8 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
-        if (sfh->flags & SVH_FIN) {
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-
+        /* We've received our CLOSE ACK already */
+        if (sfh->type == SERVAL_PKT_CLOSE) {
                 err = serval_sal_rcv_close_req(sk, sfh, skb);
 
                 if (err == 0) {
@@ -1327,17 +1305,15 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 }
         }
 
-        /* Set the received service id */
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
-               sizeof(ssk->peer_srvid));
-        /* Set receive IP */
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-               sizeof(ip_hdr(skb)->saddr));
-        
-        err = ssk->af_ops->receive(sk, skb);
+        if (packet_has_data(skb, sfh)) {
+                /* Set the received service id */
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+                
+                err = ssk->af_ops->receive(sk, skb);
+        } else {
+                kfree_skb(skb);
+        }
 
-        //kfree_skb(skb);
-        
         return err;
 }
 
@@ -1355,16 +1331,14 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 serval_sal_timewait(sk, SERVAL_TIMEWAIT);
         }
 
-        /* Set the received service id */
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
-               sizeof(ssk->peer_srvid));
-        /* Set receive IP */
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-               sizeof(ip_hdr(skb)->saddr));
-        
-        err = ssk->af_ops->receive(sk, skb);
-
-        //kfree_skb(skb);
+        if (packet_has_data(skb, sfh)) {
+                /* Set the received service id */
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+                
+                err = ssk->af_ops->receive(sk, skb);
+        } else {
+                kfree_skb(skb);
+        }
 
         return err;
 }
@@ -1383,16 +1357,14 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 serval_sock_done(sk);
         }
 
-        /* Set the received service id */
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &ssk->peer_srvid,
-               sizeof(ssk->peer_srvid));
-        /* Set receive IP */
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-               sizeof(ip_hdr(skb)->saddr));
-        
-        err = ssk->af_ops->receive(sk, skb);
-
-        //kfree_skb(skb);
+        if (packet_has_data(skb, sfh)) {
+                /* Set the received service id */
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+                
+                err = ssk->af_ops->receive(sk, skb);
+        } else {
+                kfree_skb(skb);
+        }
 
         return err;
 }
@@ -1416,15 +1388,13 @@ static int serval_sal_init_state_process(struct sock *sk,
                         service_id_to_str((struct service_id*) ssk->hash_key));
         }
 
-        /* Set receive IP */
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &ip_hdr(skb)->saddr,
-               sizeof(ip_hdr(skb)->saddr));
-
-        /* Set source serviceID */
-        memcpy(&SERVAL_SKB_CB(skb)->srvid, &srv_ext->src_srvid,
-               sizeof(srv_ext->src_srvid));
-        
-        err = ssk->af_ops->receive(sk, skb);
+        if (packet_has_data(skb, sfh)) {
+                /* Set source serviceID */
+                SERVAL_SKB_CB(skb)->srvid = &srv_ext->src_srvid;                
+                err = ssk->af_ops->receive(sk, skb);
+        } else {
+                kfree_skb(skb);
+        }
 
         return err;
 }
@@ -1489,6 +1459,9 @@ int serval_sal_do_rcv(struct sock *sk,
         unsigned int hdr_len = ntohs(sfh->length);
                  
         pskb_pull(skb, hdr_len);
+        
+        SERVAL_SKB_CB(skb)->sfh = sfh;
+        SERVAL_SKB_CB(skb)->srvid = NULL;
         skb_reset_transport_header(skb);
                 
         return serval_sal_state_process(sk, sfh, skb);
@@ -1716,7 +1689,7 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         
         /* If SYN and not ACK is set, we know for sure that we must
          * demux on service id instead of socket id */
-        if (!(sfh->flags & SVH_SYN && !(sfh->flags & SVH_ACK))) {
+        if (!(sfh->type == SERVAL_PKT_SYN && !sfh->ack)) {
                 /* Ok, check if we can demux on socket id */
                 sk = serval_sock_lookup_flowid(&sfh->dst_flowid);
                 
@@ -1739,7 +1712,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         /* Check for connection extension. We require that this
          * extension always directly follows the main Serval
          * header */
-        if (sfh->flags & SVH_SYN || sfh->flags & SVH_ACK) {
+        if (sfh->type == SERVAL_PKT_SYN) {
                 struct serval_connection_ext *conn_ext =
                         (struct serval_connection_ext *)(sfh + 1);
                 /* Check for connection extension and do early
@@ -1935,6 +1908,7 @@ static int serval_sal_rexmit(struct sock *sk)
                 return -1;
         }
         
+        /* Always clone retransmitted packets */
         err = serval_sal_transmit_skb(sk, skb, 1, GFP_ATOMIC);
         
         if (err < 0) {
@@ -2010,14 +1984,6 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
 
-        if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
-                   sizeof(null_addr)) == 0) {
-                /* Copy address from socket if no address is set */
-                memcpy(&SERVAL_SKB_CB(skb)->addr,
-                       &inet_sk(sk)->inet_daddr,
-                       sizeof(inet_sk(sk)->inet_daddr));
-        }
-
         err = ssk->af_ops->queue_xmit(skb);
 
         if (err < 0) {
@@ -2036,18 +2002,17 @@ static inline int serval_sal_add_conn_ext(struct sock *sk,
  
         conn_ext = (struct serval_connection_ext *)
                 skb_push(skb, sizeof(*conn_ext));
-        conn_ext->type = SERVAL_CONNECTION_EXT;
-        conn_ext->length = htons(sizeof(*conn_ext));
-        conn_ext->flags = flags;
+        conn_ext->exthdr.type = SERVAL_CONNECTION_EXT;
+        conn_ext->exthdr.length = sizeof(*conn_ext);
+        conn_ext->exthdr.flags = flags;
         conn_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
         conn_ext->ackno = htonl(ssk->rcv_seq.nxt);
-        memcpy(&conn_ext->srvid, &SERVAL_SKB_CB(skb)->srvid, 
-               sizeof(SERVAL_SKB_CB(skb)->srvid));
+        memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
+               sizeof(conn_ext->srvid));
         memcpy(conn_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
         /*
-        LOG_DBG("Connection extension srvid=%s sz=%zu\n",
-                service_id_to_str(&conn_ext->srvid),
-                sizeof(SERVAL_SKB_CB(skb)->srvid));
+        LOG_DBG("Connection extension srvid=%s\n",
+                service_id_to_str(&conn_ext->srvid));
         */
         return sizeof(*conn_ext);
 }
@@ -2061,9 +2026,9 @@ static inline int serval_sal_add_ctrl_ext(struct sock *sk,
 
         ctrl_ext = (struct serval_control_ext *)
                 skb_push(skb, sizeof(*ctrl_ext));
-        ctrl_ext->type = SERVAL_CONTROL_EXT;
-        ctrl_ext->length = htons(sizeof(*ctrl_ext));
-        ctrl_ext->flags = flags;
+        ctrl_ext->exthdr.type = SERVAL_CONTROL_EXT;
+        ctrl_ext->exthdr.length = sizeof(*ctrl_ext);
+        ctrl_ext->exthdr.flags = flags;
         ctrl_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
         ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(ctrl_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
@@ -2079,16 +2044,13 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
 
         srv_ext = (struct serval_service_ext *)
                 skb_push(skb, sizeof(*srv_ext));
-        srv_ext->type = SERVAL_SERVICE_EXT;
-        srv_ext->length = htons(sizeof(*srv_ext));
-        srv_ext->flags = flags;
-        memcpy(&srv_ext->dst_srvid, &SERVAL_SKB_CB(skb)->srvid, 
-               sizeof(SERVAL_SKB_CB(skb)->srvid));
-        /* FIXME: check if socket is bound, if not, indicate somehow
-         * that the source service id is not valid (e.g., with a
-         * flag). */
+        srv_ext->exthdr.type = SERVAL_SERVICE_EXT;
+        srv_ext->exthdr.length = sizeof(*srv_ext);
+        srv_ext->exthdr.flags = flags;
+        memcpy(&srv_ext->dst_srvid, &ssk->peer_srvid, 
+               sizeof(srv_ext->dst_srvid));
         memcpy(&srv_ext->src_srvid, &ssk->local_srvid, 
-               sizeof(ssk->local_srvid));
+               sizeof(srv_ext->src_srvid));
 
         return sizeof(*srv_ext);
 }
@@ -2101,7 +2063,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct service_entry *se;
 	struct dest *dest;
         struct serval_hdr *sfh;
-        uint8_t flags = 0;
         int hdr_len = sizeof(*sfh);
 	int err = 0;
         struct service_resolution_iter iter;
@@ -2122,15 +2083,15 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * somewhere, and freeing it would be bad. */
                         return -ENOBUFS;
                 }
-                if (!skb->sk)
-                        skb_serval_set_owner_w(skb, sk);
+
+                skb_serval_set_owner_w(skb, sk);
 	}
 
         /* NOTE:
          *
          * Do not use skb_set_owner_w(skb, sk) here as that will
          * reserve write space for the socket on the transport
-         * queue. We might not want to reserve such space for control
+
          * packets as they might then fill up the write queue/buffer
          * for the socket. However, skb_set_owner_w(skb, sk) also
          * guarantees that the socket is not released until skb is
@@ -2141,23 +2102,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
-        case SERVAL_PKT_CONN_SYNACK:
-                flags |= SVH_ACK;
-        case SERVAL_PKT_CONN_SYN:
-                flags |= SVH_SYN;
+        case SERVAL_PKT_SYN:
                 hdr_len += serval_sal_add_conn_ext(sk, skb, 0);               
                 break;
-        case SERVAL_PKT_CONN_ACK:
-                flags |= SVH_ACK;
-                hdr_len += serval_sal_add_conn_ext(sk, skb, 0);
-                break;
-        case SERVAL_PKT_ACK:
-        case SERVAL_PKT_CLOSEACK:
-                flags |= SVH_ACK;
-                hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
-                break;
         case SERVAL_PKT_CLOSE:
-                flags |= SVH_FIN;
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_DATA:
@@ -2172,7 +2120,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         /* Add Serval header */
         sfh = (struct serval_hdr *)skb_push(skb, sizeof(*sfh));
-        sfh->flags = flags;
+        sfh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK;
         sfh->protocol = skb->protocol;
         sfh->length = htons(hdr_len);
         memcpy(&sfh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
@@ -2189,8 +2137,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return serval_sal_do_xmit(skb);
         
 	/* Use service id to resolve IP, unless IP is already set. */
-        if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
-                   sizeof(null_addr)) != 0) {
+        if (sk->sk_bound_dev_if) {
 
                 skb_reset_transport_header(skb);
                 /*
@@ -2217,12 +2164,12 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /* TODO - prefix, flags??*/
         //ssk->srvid_flags;
         //ssk->srvid_prefix;
-        se = service_find(&SERVAL_SKB_CB(skb)->srvid, 
+        se = service_find(&ssk->peer_srvid, 
                           sizeof(struct service_id) * 8);
 
 	if (!se) {
 		LOG_INF("service lookup failed for [%s]\n",
-                        service_id_to_str(&SERVAL_SKB_CB(skb)->srvid));
+                        service_id_to_str(&ssk->peer_srvid));
                 service_inc_stats(-1, -dlen);
                 kfree_skb(skb);
 		return -EADDRNOTAVAIL;
@@ -2275,8 +2222,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		if (is_sock_dest(dest)) {
                         /* use a localhost address and bounce it off
                          * the IP layer*/
-                        memcpy(&SERVAL_SKB_CB(cskb)->addr,
-                               &local_addr, sizeof(struct net_addr));
                         memcpy(&inet->inet_daddr,
                                &local_addr, sizeof(inet->inet_daddr));
 
@@ -2293,10 +2238,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         dev = __dev_get_by_name(sock_net(sk), "lo");
 #endif
 		} else {
-                        memcpy(&SERVAL_SKB_CB(cskb)->addr, 
-                               dest->dst, 
-                               sizeof(struct net_addr) < dest->dstlen ? 
-                               sizeof(struct net_addr) : dest->dstlen);
                         memcpy(&inet->inet_daddr,
                                dest->dst,
                                sizeof(inet->inet_daddr) < dest->dstlen ? 
@@ -2316,7 +2257,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         char src[18], dst[18];
                         LOG_PKT("Resolved service %s with IP %s->%s " 
                                 "on device=%s\n",
-                                service_id_to_str(&SERVAL_SKB_CB(cskb)->srvid),
+                                service_id_to_str(&ssk->peer_srvid),
                                 inet_ntop(AF_INET, &inet->inet_saddr, 
                                           src, sizeof(src)), 
                                 inet_ntop(AF_INET, &inet->inet_daddr, 
@@ -2358,6 +2299,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         if (__sk_dst_get(sk))
                 __sk_dst_reset(sk);
 
+        /* Make sure retransmitted packets are still resolved. */
+        sk->sk_bound_dev_if = 0;
+
         service_resolution_iter_destroy(&iter);
 	service_entry_put(se);
 
@@ -2367,5 +2311,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 /* This function is typically called by transport to send data */
 int serval_sal_xmit_skb(struct sk_buff *skb) 
 {
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         return serval_sal_transmit_skb(skb->sk, skb, 0, GFP_ATOMIC);
 }

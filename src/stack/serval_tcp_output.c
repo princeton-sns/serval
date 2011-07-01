@@ -1037,9 +1037,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		*/
 	}
 
-        memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
-               sizeof(inet_sk(sk)->inet_daddr));
-
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18];

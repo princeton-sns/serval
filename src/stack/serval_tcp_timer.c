@@ -136,10 +136,17 @@ static int retransmits_timed_out(struct sock *sk,
 	if (!serval_tcp_sk(sk)->retransmits)
 		return 0;
 
-	if (unlikely(!serval_tcp_sk(sk)->retrans_stamp))
-		start_ts = TCP_SKB_CB(serval_tcp_write_queue_head(sk))->when;
-	else
+        if (unlikely(!serval_tcp_sk(sk)->retrans_stamp)) {
+                struct sk_buff *skb = serval_tcp_write_queue_head(sk);
+                
+                if (!skb) {
+                        LOG_ERR("BUG! transmit queue empty!\n");
+                        return 0;
+                }
+                start_ts = TCP_SKB_CB(skb)->when;
+        } else {
 		start_ts = serval_tcp_sk(sk)->retrans_stamp;
+        }
 
 	linear_backoff_thresh = ilog2(SERVAL_TCP_RTO_MAX/rto_base);
 

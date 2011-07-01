@@ -38,14 +38,14 @@
 struct service_id {
         union { 
                 struct {
-                        uint8_t un_ss[4];
-                        uint8_t un_local[4];
-                        uint8_t un_group[4];
-                        uint8_t un_selfcert[20];
+                        __u8 un_ss[4];
+                        __u8 un_local[4];
+                        __u8 un_group[4];
+                        __u8 un_selfcert[20];
                 };
-                uint8_t	un_id8[32];
-                uint16_t un_id16[16];
-                uint32_t un_id32[8];
+                __u8	un_id8[32];
+                __u16   un_id16[16];
+                __u32   un_id32[8];
         } srv_un;
 #define s_ss srv_un.un_ss;
 #define s_local srv_un.un_local;
@@ -70,16 +70,16 @@ enum sv_service_flags {
 
 struct sockaddr_sv {
         sa_family_t sv_family;
-        uint8_t sv_flags;
-        uint8_t sv_prefix_bits;
+        __u8 sv_flags;
+        __u8 sv_prefix_bits;
         struct service_id sv_srvid;
 };
 
 struct flow_id {
         union {
-                uint8_t s_id8[4];
-                uint16_t s_id16[2];
-                uint32_t s_id;       
+                __u8 s_id8[4];
+                __be16 s_id16[2];
+                __be32 s_id;       
         };
 };
 
@@ -89,7 +89,7 @@ struct net_addr {
                    together with 256-bit service_id atm. */
                 /* struct in6_addr net_ip6; */
                 struct in_addr un_ip;
-                unsigned char un_raw[4];
+                __u8 un_raw[4];
         } net_un;
 #define net_ip net_un.un_ip
 #define net_raw net_un.un_raw
@@ -127,36 +127,62 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         return str;
 }
 
+enum serval_packet_type {         
+        SERVAL_PKT_DATA = 0,
+        SERVAL_PKT_SYN,
+        SERVAL_PKT_RESET,
+        SERVAL_PKT_CLOSE,
+        SERVAL_PKT_MIG,
+        SERVAL_PKT_RSYN,
+        SERVAL_PKT_MIGDATA,
+};
+
 struct serval_hdr {
-        uint16_t length;  
-        uint8_t flags;
-#define SVH_FIN	        0x01
-#define SVH_SYN	        0x02
-#define SVH_RST	        0x04
-#define SVH_MIG	        0x08
-#define SVH_ACK	        0x10
-#define SVH_RSYN	0x20
-        uint8_t protocol;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	__u8	res1:3,
+                ack:1,
+		type:4;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	__u8	type:4,
+  		ack:1,
+                res1:3;
+#else
+#error	"Please fix <asm/byteorder.h>"
+#endif
+        __u8    protocol;
+        __sum16 check;
+        __be16  length;       
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
 };
 
 /* Generic extension header */
 struct serval_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	__u8	flags:4,
+		type:4;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	__u8	type:4,
+                flags:4;
+#else
+#error	"Please fix <asm/byteorder.h>"
+#endif
+        __u8 length;
 };
+/*
+  These defines can be used for convenient access to the fields in the
+  base extension in extensions below. */
+#define sv_ext_type exthdr.type
+#define sv_ext_flags exthdr.flags
+#define sv_ext_length exthdr.length
 
 #define SERVAL_CONNECTION_EXT 1
 
 struct serval_connection_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t nonce[8];
+        struct serval_ext exthdr;
+        __be32 seqno;
+        __be32 ackno;
+        __u8 nonce[8];
         struct service_id srvid;
 };
 
@@ -165,20 +191,16 @@ struct serval_connection_ext {
 #define SERVAL_NONCE_SIZE 8
 
 struct serval_control_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t nonce[SERVAL_NONCE_SIZE];
+        struct serval_ext exthdr;
+        __be32 seqno;
+        __be32 ackno;
+        __u8 nonce[8];
 };
 
 #define SERVAL_SERVICE_EXT 3
 
 struct serval_service_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
+        struct serval_ext exthdr;
         struct service_id src_srvid;
         struct service_id dst_srvid;
 };
@@ -186,19 +208,15 @@ struct serval_service_ext {
 #define SERVAL_DESCRIPTION_EXT 4
 
 struct serval_description_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
+        struct serval_ext exthdr;
         struct net_addr addrs[0];
 };
 
 #define SERVAL_SOURCE_EXT 5
 
 struct serval_source_ext {
-        uint8_t type;
-        uint8_t flags;
-        uint16_t length;
-        uint8_t source[0];
+        struct serval_ext exthdr;
+        __u8 source[0];
 };
 
 #endif /* _SERVAL_H */

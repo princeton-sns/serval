@@ -19,21 +19,6 @@
 #include <net/tcp_states.h>
 #endif
 
-enum serval_packet_type { 
-        SERVAL_PKT_DATA = 1,
-        SERVAL_PKT_CONN_SYN,
-        SERVAL_PKT_CONN_SYNACK,
-        SERVAL_PKT_CONN_ACK,
-        SERVAL_PKT_ACK,
-        SERVAL_PKT_RESET,
-        SERVAL_PKT_CLOSE,
-        SERVAL_PKT_CLOSEACK,
-        SERVAL_PKT_MIG,
-        SERVAL_PKT_RSYN,
-        SERVAL_PKT_MIGDATA,
-        SERVAL_PKT_RSYNACK
-};
-
 /*
   TCP states from net/tcp_states.h, should be as compatible as
   possible.

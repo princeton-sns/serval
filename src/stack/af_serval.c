@@ -457,10 +457,9 @@ int serval_getname(struct socket *sock, struct sockaddr *addr,
 }
 
 static int serval_connect(struct socket *sock, struct sockaddr *addr,
-                            int alen, int flags)
+                          int alen, int flags)
 {
         struct sock *sk = sock->sk;
-        struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         int err = 0;
         int nonblock = flags & O_NONBLOCK;
         long timeo;
@@ -487,10 +486,6 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
 		if (sk->sk_state == SERVAL_LISTEN)
 			goto out;
-
-                /* Set the peer address */
-                memcpy(&serval_sk(sk)->peer_srvid, &svaddr->sv_srvid,
-                       sizeof(struct service_id));
 
                 /*
                   We need to rehash the socket because it may be
