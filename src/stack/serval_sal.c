@@ -65,8 +65,11 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
         
         buf[0] = '\0';
         
-        len = snprintf(buf + len, HDR_BUFLEN - len, "[ %s ACK=%u len=%u ",
-                       serval_pkt_names[sh->type], sh->ack, hdr_len);
+        len = snprintf(buf + len, HDR_BUFLEN - len, 
+                       "[ %s ACK=%u len=%u src_fl=%s dst_fl=%s ",
+                       serval_pkt_names[sh->type], sh->ack, hdr_len,
+                       flow_id_to_str(&sh->src_flowid), 
+                       flow_id_to_str(&sh->dst_flowid));
         
         hdr_len -= sizeof(*sh);
 
@@ -1531,8 +1534,6 @@ int serval_sal_do_rcv(struct sock *sk,
         unsigned int hdr_len = ntohs(sh->length);
                  
         pskb_pull(skb, hdr_len);
-        
-        LOG_DBG("Serval packet: %s\n", serval_hdr_to_str(sh));
 
         //SERVAL_SKB_CB(skb)->sh = sh;
         SERVAL_SKB_CB(skb)->srvid = NULL;
@@ -1857,9 +1858,8 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        LOG_PKT("flowid (src,dst)=(%u,%u)\n",
-                ntohl(sh->src_flowid.s_id), 
-                ntohl(sh->dst_flowid.s_id));
+        
+        LOG_DBG("Serval packet: %s\n", serval_hdr_to_str(sh));
         
         /*
           FIXME: We should try to do early transport layer header
@@ -2199,6 +2199,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         /* Add Serval header */
         sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
+        sh->type = SERVAL_SKB_CB(skb)->pkttype;
         sh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK;
         sh->protocol = skb->protocol;
         sh->length = htons(hdr_len);

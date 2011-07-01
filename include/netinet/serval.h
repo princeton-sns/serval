@@ -122,9 +122,12 @@ static inline const char *service_id_to_str(const struct service_id *srvid)
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
 {
-        static char str[11];
-        snprintf(str, 11, "%u", ntohl(flowid->s_id));
-        return str;
+        static char str[22];
+        static int i = 0;
+        i = (i + 1) % 2;
+        snprintf(&str[i * sizeof(str) / 2], 11, 
+                 "%u", ntohl(flowid->s_id));
+        return &str[i * sizeof(str) / 2];
 }
 
 enum serval_packet_type {
