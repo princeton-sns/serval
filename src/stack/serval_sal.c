@@ -1356,12 +1356,21 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-
-        if (sh->type == SERVAL_PKT_CLOSE)
-                serval_sal_rcv_close_req(sk, sh, skb);
+        int ack_ok = 0;
 
         if (sh->ack && serval_sal_ack_process(sk, sh, skb) == 0)
-                serval_sal_timewait(sk, SERVAL_TIMEWAIT);
+                ack_ok = 1;
+
+        if (sh->type == SERVAL_PKT_CLOSE) {
+                serval_sal_rcv_close_req(sk, sh, skb);
+
+                if (ack_ok)
+                        serval_sal_timewait(sk, SERVAL_TIMEWAIT);
+                else
+                        serval_sal_timewait(sk, SERVAL_CLOSING);
+        } else if (ack_ok) {
+                serval_sal_timewait(sk, SERVAL_FINWAIT2);
+        }
         
         if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
@@ -1408,10 +1417,8 @@ static int serval_sal_closing_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-
-        err = serval_sal_ack_process(sk, sh, skb);
                 
-        if (err == 0) {
+        if (sh->ack && serval_sal_ack_process(sk, sh, skb) == 0) {
                 /* ACK was valid */
                 serval_sal_timewait(sk, SERVAL_TIMEWAIT);
         }
@@ -1523,7 +1530,8 @@ int serval_sal_state_process(struct sock *sk,
                 err = serval_sal_lastack_state_process(sk, sh, skb);
                 break;
         case SERVAL_TIMEWAIT:
-                LOG_DBG("Socket in TIMEWAIT, dropping packet\n");
+                /* Send ACK again */
+                err = serval_sal_send_ack(sk, sh, skb);
                 goto drop;
         default:
                 LOG_ERR("bad socket state %u\n", sk->sk_state);
