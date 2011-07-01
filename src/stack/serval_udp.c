@@ -196,17 +196,15 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	/*
 	 *  Validate the packet.
 	 */
-	if (!pskb_may_pull(skb, sizeof(struct udphdr)))
-		goto drop;		/* No space for header. */
-        
-        /* FIXME: Should verify checksum */
-
-        /* Only ignore this message in case it has zero length and is
-         * not a FIN */
-        if (datalen == 0 && 
-            SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
-                kfree_skb(skb);
-                return 0;
+        if (SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
+                if (!pskb_may_pull(skb, sizeof(struct udphdr)))
+                        goto drop;		
+                
+                /* Only ignore this message in case it has zero length and is
+                 * not a FIN */
+                if (datalen == 0) 
+                        goto drop;
+                /* FIXME: Should verify checksum */
         }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))

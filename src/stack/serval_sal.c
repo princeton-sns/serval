@@ -1100,7 +1100,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
-        if (packet_has_transport_hdr(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh) || 
+            sh->type == SERVAL_PKT_CLOSE) {
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
@@ -1111,7 +1112,6 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
-                LOG_DBG("No data in packet -- Dropping!\n");
                 kfree_skb(skb);
         }
         return err;
