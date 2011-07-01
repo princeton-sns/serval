@@ -66,7 +66,7 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
         buf[0] = '\0';
         
         len = snprintf(buf + len, HDR_BUFLEN - len, 
-                       "[ %s ACK=%u len=%u src_fl=%s dst_fl=%s ",
+                       "[ %s ack=%u len=%u src_fl=%s dst_fl=%s ",
                        serval_pkt_names[sh->type], sh->ack, hdr_len,
                        flow_id_to_str(&sh->src_flowid), 
                        flow_id_to_str(&sh->dst_flowid));
@@ -114,7 +114,7 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
                 hdr_len -= ext->length;
         }       
 
-        len += snprintf(buf + len, HDR_BUFLEN - len, "]\n");
+        len += snprintf(buf + len, HDR_BUFLEN - len, "]");
 
         return buf;
 }
@@ -204,9 +204,14 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
         return ret;
 }
 
-static inline int packet_has_data(struct sk_buff *skb, struct serval_hdr *sh)
+static inline int packet_has_transport_hdr(struct sk_buff *skb, 
+                                           struct serval_hdr *sh)
 {
-        return skb->len > ntohs(sh->length);
+        /* We might have pulled the serval header already. */
+        if ((unsigned char *)sh == skb_transport_header(skb))
+            return skb->len > ntohs(sh->length);
+            
+        return skb->len > 0;
 }
 
 static inline int has_valid_connection_extension(struct sock *sk, 
@@ -1086,6 +1091,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
+        LOG_DBG("Processing\n");
+
         serval_sal_ack_process(sk, sh, skb);
 
         if (sh->type == SERVAL_PKT_CLOSE)
@@ -1093,7 +1100,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
@@ -1104,6 +1111,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
+                LOG_DBG("No data in packet -- Dropping!\n");
                 kfree_skb(skb);
         }
         return err;
@@ -1353,7 +1361,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         if (sh->ack && serval_sal_ack_process(sk, sh, skb) == 0)
                 serval_sal_timewait(sk, SERVAL_TIMEWAIT);
         
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -1380,7 +1388,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 }
         }
 
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -1406,7 +1414,7 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 serval_sal_timewait(sk, SERVAL_TIMEWAIT);
         }
 
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -1432,7 +1440,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 serval_sock_done(sk);
         }
 
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -1463,7 +1471,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                         service_id_to_str((struct service_id*) ssk->hash_key));
         }
 
-        if (packet_has_data(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh)) {
                 /* Set source serviceID */
                 SERVAL_SKB_CB(skb)->srvid = &srv_ext->src_srvid;                
                 err = ssk->af_ops->receive(sk, skb);
@@ -1772,6 +1780,8 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
                         LOG_INF("No matching sock for flowid %u\n",
                                 ntohl(sh->dst_flowid.s_id));
                 }
+        } else {
+                LOG_DBG("cannot demux on flowid\n");
         }
 
         return sk;
@@ -1858,8 +1868,11 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
+        /* FIXME: should add checksum verification and check for
+           correct transport protocol. */
         
-        LOG_DBG("Serval packet: %s\n", serval_hdr_to_str(sh));
+        LOG_DBG("Serval packet %s skb->len=%u\n",
+                serval_hdr_to_str(sh), skb->len);
         
         /*
           FIXME: We should try to do early transport layer header
@@ -1971,6 +1984,7 @@ int serval_sal_rcv(struct sk_buff *skb)
 drop:
         service_inc_stats(-1, -(skb->len - hdr_len));
 drop_no_stats:
+        LOG_DBG("Dropping packet\n");
         kfree_skb(skb);
         return 0;
 }

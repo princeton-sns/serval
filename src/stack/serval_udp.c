@@ -162,15 +162,10 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
         
         LOG_DBG("data len=%u skb->len=%u\n",
                 datalen, skb->len); 
-                
-        /* Ideally, this trimming would not be necessary. However, it
-         * seems that somewhere in the receive process trailing
-         * bytes are added to the packet. Perhaps this is a result of
-         * PACKET sockets, and for efficiency the return full words or
-         * something? Anyway, we can live with this for now... */
-        if (datalen < skb->len) {
-                pskb_trim(skb, datalen);
-        }
+
+        /* Strip UDP header before queueing */
+	skb_dst_drop(skb);
+	__skb_pull(skb, sizeof(struct udphdr));
 
         /* 
            sock_queue_rcv_skb() will increase readable memory (i.e.,
@@ -223,19 +218,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 return -ENOBUFS; 
         }
 #endif
-        /*
-	if (!sock_owned_by_user(sk))
-		err = serval_udp_do_rcv(sk, skb);
-	else {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (unlikely(sk_add_backlog(sk, skb))) {
-                        goto drop;
-                }
-#else
-                sk_add_backlog(sk, skb);
-#endif
-	}
-        */
+        
         return serval_udp_do_rcv(sk, skb);
  drop:
         kfree_skb(skb);

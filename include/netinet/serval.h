@@ -155,7 +155,8 @@ struct serval_hdr {
 #endif
         __u8    protocol;
         __sum16 check;
-        __be16  length;       
+        __be16  length;  
+        __be16  res2;       
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
 };
