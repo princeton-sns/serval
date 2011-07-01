@@ -875,9 +875,6 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	///mss_now = pmtu - icsk->icsk_af_ops->net_header_len - sizeof(struct tcphdr);
 	mss_now = pmtu - SERVAL_NET_HEADER_LEN - sizeof(struct tcphdr);
 
-        LOG_DBG("pmtu=%d mss_now=%u mss_clamp=%u\n", 
-                pmtu, mss_now, tp->rx_opt.mss_clamp);
-
 	/* Clamp it (mss_clamp does not include tcp options) */
 	if (mss_now > tp->rx_opt.mss_clamp)
 		mss_now = tp->rx_opt.mss_clamp;
@@ -891,6 +888,9 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 
 	/* Now subtract TCP options size, not including SACKs */
 	mss_now -= tp->tcp_header_len - sizeof(struct tcphdr);
+
+        LOG_DBG("pmtu=%d mss_now=%u mss_clamp=%u\n", 
+                pmtu, mss_now, tp->rx_opt.mss_clamp);
 
 	return mss_now;
 }
