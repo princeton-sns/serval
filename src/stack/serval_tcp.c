@@ -189,6 +189,10 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 		return 0;
 	} 
 
+	if (skb->len < serval_tcp_hdrlen(skb) || 
+            serval_tcp_checksum_complete(skb))
+		goto csum_err;
+
 	TCP_CHECK_TIMER(sk);
 
 	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
@@ -198,7 +202,9 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_CHECK_TIMER(sk);
 
         return 0;
-reset:
+ reset:
+        /* send reset? */
+ csum_err:
         //LOG_WARN("Should handle RESET in non-established state\n");
         kfree_skb(skb);
         return err;
@@ -258,8 +264,15 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 		goto bad_packet;
         }
 
+        LOG_PKT("TCP %s end_seq=%u doff=%u skb->len=%u\n",
+                tcphdr_to_str(th),
+                TCP_SKB_CB(skb)->end_seq,
+                th->doff * 4,
+                skb->len);
+
 	if (!pskb_may_pull(skb, th->doff * 4)) {
-                LOG_ERR("Cannot pull tcp header! -- discarding\n");
+                LOG_ERR("Cannot pull tcp header! doff=%u -- discarding\n",
+                        th->doff * 4);
 		goto bad_packet;
         }
 
@@ -298,12 +311,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
-	TCP_SKB_CB(skb)->sacked	 = 0;
-        
-        LOG_PKT("TCP %s end_seq=%u doff=%u\n",
-                tcphdr_to_str(th),
-                TCP_SKB_CB(skb)->end_seq,
-                th->doff * 4);
+	TCP_SKB_CB(skb)->sacked	 = 0;        
         
         return 0;
 bad_packet:

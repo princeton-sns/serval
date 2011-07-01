@@ -28,8 +28,7 @@
 #define EXTRA_HDR (20)
 
 /* payload + LL + IP + extra */
-#define MAX_SERVAL_TCP_HEADER (MAX_SERVAL_HDR + \
-                               sizeof(struct tcphdr))
+#define MAX_SERVAL_TCP_HEADER (MAX_SERVAL_HDR + 128)
 
 #define MAX_SERVAL_TCP_OPTION_SPACE 40
 
@@ -274,6 +273,17 @@ static inline u32 serval_keepalive_time_elapsed(const struct serval_tcp_sock *tp
 	return min_t(u32, tcp_time_stamp - tp->tp_ack.lrcvtime,
 			  tcp_time_stamp - tp->rcv_tstamp);
 }
+
+static inline unsigned int serval_tcp_hdrlen(const struct sk_buff *skb)
+{
+	return tcp_hdr(skb)->doff * 4;
+}
+
+static inline unsigned int serval_tcp_optlen(const struct sk_buff *skb)
+{
+	return (tcp_hdr(skb)->doff - 5) * 4;
+}
+
 
 static inline void serval_tcp_dec_quickack_mode(struct sock *sk,
                                                 const unsigned int pkts)

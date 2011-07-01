@@ -327,7 +327,7 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
 	if ((size_t)addr_len < sizeof(struct sockaddr_sv))
 		return -EINVAL;
         
-        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!skb)
                 return -ENOMEM;
@@ -454,7 +454,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
                 for (;;) {
-                        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+                        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
                         
                         if (skb)
                                 break;
@@ -489,7 +489,7 @@ static int serval_sal_send_close_ack(struct sock *sk, struct serval_hdr *sfh,
 
         LOG_DBG("Sending Close ACK\n");
 
-        skb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
                         
         if (!skb)
                 return -ENOMEM;
@@ -604,7 +604,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         }
         
         /* Allocate RESPONSE reply */
-        rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+        rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!rskb) {
                 err = -ENOMEM;
@@ -1184,7 +1184,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
         /* Allocate ACK */
-        rskb = ALLOC_SKB(sk->sk_prot->max_header, GFP_ATOMIC);
+        rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!rskb) {
                 err = -ENOMEM;
