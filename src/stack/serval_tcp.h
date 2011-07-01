@@ -1007,9 +1007,9 @@ static inline char *tcphdr_to_str(const struct tcphdr *th)
 {
 	static char buf[100];
         snprintf(buf, sizeof(buf) - 1, 
-                 "[SYN=%d ACK=%d FIN=%d seq=%u ackno=%u window=%u]", 
+                 "[SYN=%d ACK=%d FIN=%d seq=%u ack=%u doff=%u window=%u]", 
                  th->syn, th->ack, th->fin, ntohl(th->seq), 
-                 ntohl(th->ack_seq), ntohs(th->window));
+                 ntohl(th->ack_seq), th->doff << 2, ntohs(th->window));
 
 	return buf;       
 }

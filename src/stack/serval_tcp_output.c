@@ -2011,7 +2011,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         struct inet_request_sock *ireq = inet_rsk(req);
-	unsigned tcp_header_size;
+	unsigned tcp_options_size, tcp_header_size;
 	struct tcp_out_options opts;
 	struct tcp_md5sig_key *md5 = NULL;
 	struct tcphdr *th;
@@ -2065,10 +2065,10 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
 	memset(&opts, 0, sizeof(opts));
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
-	tcp_header_size = serval_tcp_synack_options(sk, req, mss,
-                                                    skb, &opts, &md5, NULL)
-                + sizeof(*th);
-
+	tcp_options_size = serval_tcp_synack_options(sk, req, mss,
+                                                    skb, &opts, &md5, NULL);
+        tcp_header_size = tcp_options_size  + sizeof(struct tcphdr);
+        
         th = (struct tcphdr *)skb_push(skb, tcp_header_size);
 
         if (!th)
@@ -2086,8 +2086,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	th->window = htons(min(req->rcv_wnd, 65535U));
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
-        LOG_DBG("TCP sending SYNACK seq=%u ackno=%u\n",
-                ntohl(th->seq), ntohl(th->ack_seq));
+        LOG_DBG("TCP sending SYNACK %s optlen=%u\n", 
+                tcphdr_to_str(th), tcp_options_size);
 
         LOG_DBG("2. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
