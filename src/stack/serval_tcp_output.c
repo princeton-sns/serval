@@ -996,7 +996,8 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th->check		= 0;
 	th->urg_ptr		= 0;
 
-        LOG_PKT("Transmitting TCP packet %s\n", tcphdr_to_str(th));
+        LOG_PKT("Transmitting TCP packet %s datalen=%u\n", 
+                tcphdr_to_str(th), skb->len - tcp_header_size);
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
 	if (unlikely(serval_tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {

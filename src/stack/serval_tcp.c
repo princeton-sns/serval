@@ -260,18 +260,17 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 
 	if (th->doff < sizeof(struct tcphdr) / 4) {
                 LOG_ERR("TCP packet has bad data offset=%u!\n",
-                        th->doff * 4);
+                        th->doff << 2);
 		goto bad_packet;
         }
 
-        LOG_PKT("TCP %s end_seq=%u skb->len=%u\n",
+        LOG_PKT("Received TCP %s end_seq=%u datalen=%u\n",
                 tcphdr_to_str(th),
                 TCP_SKB_CB(skb)->end_seq,
-                skb->len);
+                skb->len - (th->doff << 2));
 
-	if (!pskb_may_pull(skb, th->doff * 4)) {
-                LOG_ERR("Cannot pull tcp header! doff=%u -- discarding\n",
-                        th->doff * 4);
+	if (!pskb_may_pull(skb, th->doff << 2)) {
+                LOG_ERR("Cannot pull tcp header!\n");
 		goto bad_packet;
         }
 
@@ -280,7 +279,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
-                LOG_DBG("saddr=%s daddr=%s\n",
+                LOG_DBG("iph->saddr=%s iph->daddr=%s\n",
                         inet_ntop(AF_INET, &iph->saddr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &iph->daddr, 
@@ -302,7 +301,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
                 LOG_ERR("Checksum error!\n");
                 goto bad_packet;
         }
-
 
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
