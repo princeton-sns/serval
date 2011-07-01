@@ -16,7 +16,7 @@ int sysctl_serval_tcp_mtu_probing __read_mostly = 0;
  * will allow a single TSO frame to consume.  Building TSO frames
  * which are too large can cause TCP streams to be bursty.
  */
-int sysctl_serval_tcp_base_mss __read_mostly = 512;
+int sysctl_serval_tcp_base_mss __read_mostly = SERVAL_TCP_BASE_MSS;
 
 /* From net/core/sock.c */
 int sysctl_serval_wmem_max __read_mostly = 32767;
@@ -1838,6 +1838,7 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
    we do not know the destination --- it is resolved on the SYN.
 
  */
+#define SERVAL_INIT_MSS (1460 - sizeof(struct serval_hdr))
 static void serval_tcp_connect_init(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
@@ -1865,9 +1866,9 @@ static void serval_tcp_connect_init(struct sock *sk)
 		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 0;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_TCP_MSS_DEFAULT;
+	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_INIT_MSS;
 #else
-	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_TCP_MSS_DEFAULT;
+	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_INIT_MSS;
 #endif
 
 	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
@@ -2018,7 +2019,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	mss = dst_metric_advmss(dst);
 #endif
 #else
-	mss = SERVAL_TCP_MSS_DEFAULT; 
+	mss = SERVAL_INIT_MSS; 
 #endif
         LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
