@@ -464,19 +464,6 @@ void serval_sal_close(struct sock *sk, long timeout)
                 skb_reserve(skb, sk->sk_prot->max_header);
                 skb_serval_set_owner_w(skb, sk);
 
-                /* Ask transport to fill in*/
-                /*
-                if (ssk->af_ops->conn_build_fin) {
-                        err = ssk->af_ops->conn_build_fin(sk, skb);
-                        
-                        if (err) {
-                                LOG_ERR("Transport error on building ACK\n");
-                                kfree_skb(skb);
-                                return;
-                        }
-                }
-                */
-
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
                 memcpy(&SERVAL_SKB_CB(skb)->addr, &inet_sk(sk)->inet_daddr, 
@@ -2192,7 +2179,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memcpy(&sfh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
-        skb_reset_transport_header(skb);
         
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 
@@ -2205,6 +2191,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	/* Use service id to resolve IP, unless IP is already set. */
         if (memcmp(&SERVAL_SKB_CB(skb)->addr, &null_addr,
                    sizeof(null_addr)) != 0) {
+
+                skb_reset_transport_header(skb);
                 /*
                 char ip[18];
                 LOG_DBG("Sending packet to user-specified "
@@ -2351,6 +2339,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 if (ssk->af_ops->send_check)
                         ssk->af_ops->send_check(sk, skb);
+
+                /* Cannot reset transport header until after checksum
+                   calculation since send_check requires access to
+                   transport header */
+                skb_reset_transport_header(skb);
 
 		err = ssk->af_ops->queue_xmit(cskb);
 

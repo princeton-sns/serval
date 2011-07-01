@@ -391,8 +391,6 @@ int serval_tcp_connection_build_synack(struct sock *sk,
                                        struct sk_buff *skb);
 int serval_tcp_connection_build_ack(struct sock *sk,
 				    struct sk_buff *skb);
-int serval_tcp_connection_build_fin(struct sock *sk, 
-                                    struct sk_buff *skb);
 
 #if defined(ENABLE_SPLICE) && defined(OS_LINUX_KERNEL)
 

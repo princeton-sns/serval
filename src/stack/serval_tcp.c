@@ -259,7 +259,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 
 	if (!pskb_may_pull(skb, th->doff * 4)) {
-                LOG_ERR("Bad TCP header! -- discarding\n");
+                LOG_ERR("Cannot pull tcp header! -- discarding\n");
 		goto bad_packet;
         }
 
@@ -280,8 +280,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         /* FIXME: disable checksumming */
         skb->ip_summed = CHECKSUM_UNNECESSARY;
 #endif
-        if (th->syn && !th->ack)
-                skb->ip_summed = CHECKSUM_UNNECESSARY;
 
         /* An explanation is required here, I think.
 	 * Packet length and doff are validated by header prediction,
@@ -1912,7 +1910,6 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
-        .conn_build_fin = serval_tcp_connection_build_fin,
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .close_request = serval_tcp_connection_close_request,

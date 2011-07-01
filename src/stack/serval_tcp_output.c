@@ -2075,20 +2075,16 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	tcp_header_size = serval_tcp_synack_options(sk, req, mss,
                                                     skb, &opts, &md5, NULL)
                 + sizeof(*th);
-	memset(th, 0, sizeof(struct tcphdr));
-	th->syn = 1;
-	th->ack = 1;
-	//TCP_ECN_make_synack(req, th);
-	th->source = 0;
-	th->dest = 0;
 
+	memset(th, 0, sizeof(struct tcphdr));
         th->seq = htonl(serval_tcp_rsk(req)->snt_isn);
 	th->ack_seq = htonl(serval_tcp_rsk(req)->rcv_isn + 1);
+	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
+					TCP_SKB_CB(skb)->flags);
 
 	/* RFC1323: The window in SYN & SYN/ACK segments is never scaled. */
 	th->window = htons(min(req->rcv_wnd, 65535U));
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
-        th->doff = (tcp_header_size >> 2);
 
         LOG_DBG("TCP sending SYNACK seq=%u ackno=%u\n",
                 ntohl(th->seq), ntohl(th->ack_seq));
@@ -2117,16 +2113,19 @@ int serval_tcp_connection_build_ack(struct sock *sk,
                 return -1;
 
         skb_reset_transport_header(skb);
+
+	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk), 
+                                    TCPH_ACK);
         memset(th, 0, sizeof(*th));
-        th->ack = 1;
-	th->source = 0;
-	th->dest = 0;
-        th->seq = htonl(serval_tcp_acceptable_seq(sk));
+        th->seq = htonl(TCP_SKB_CB(skb)->seq);
 	th->ack_seq = htonl(tp->rcv_nxt);
         th->window = htons(serval_tcp_select_window(sk));
-        th->doff = (tcp_header_size >> 2);	
+	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
+					TCP_SKB_CB(skb)->flags);
 	th->check = 0;
 	th->urg_ptr = 0;
+
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 
         LOG_DBG("Built ACK %s\n", tcphdr_to_str(th));                
 
@@ -2134,39 +2133,6 @@ int serval_tcp_connection_build_ack(struct sock *sk,
                 serval_sk(sk)->af_ops->send_check(sk, skb);
 
 	serval_tcp_enter_cwr(sk, 1);
-
-        return 0;
-}
-
-int serval_tcp_connection_build_fin(struct sock *sk, 
-                                    struct sk_buff *skb)
-{
-	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        unsigned int tcp_header_size = sizeof(struct tcphdr);
-        struct tcphdr *th;
-
-        th = (struct tcphdr *)skb_push(skb, tcp_header_size);
-
-        if (!th)
-                return -1;
-
-        skb_reset_transport_header(skb);
-        memset(th, 0, sizeof(*th));
-        th->fin = 1;
-        th->ack = 1;
-	th->source = 0;
-	th->dest = 0;
-        th->seq = htonl(serval_tcp_acceptable_seq(sk) + 1);
-	th->ack_seq = htonl(tp->rcv_nxt);
-        th->window = htons(serval_tcp_select_window(sk));
-        th->doff = (tcp_header_size >> 2);	
-	th->check = 0;
-	th->urg_ptr = 0;
-
-        LOG_DBG("Built FIN packet %s\n", tcphdr_to_str(th)); 
-
-        if (serval_sk(sk)->af_ops->send_check)
-                serval_sk(sk)->af_ops->send_check(sk, skb);
 
         return 0;
 }

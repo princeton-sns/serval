@@ -104,7 +104,6 @@ struct serval_sock_af_ops {
                                              struct request_sock *rsk,
                                              struct sk_buff *skb);
         int             (*conn_build_ack)(struct sock *sk, struct sk_buff *skb);        
-        int             (*conn_build_fin)(struct sock *sk, struct sk_buff *skb);
 	int	        (*conn_request)(struct sock *sk, 
                                         struct request_sock *rsk, 
                                         struct sk_buff *skb);
