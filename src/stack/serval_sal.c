@@ -570,15 +570,14 @@ void serval_sal_close(struct sock *sk, long timeout)
         }
 }
 
-/* We got a close request (FIN) from our peer */
-static int serval_sal_send_close_ack(struct sock *sk, struct serval_hdr *sh, 
-                                     struct sk_buff *rskb)
+static int serval_sal_send_ack(struct sock *sk, struct serval_hdr *sh, 
+                               struct sk_buff *rskb)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         int err = 0;
 
-        LOG_DBG("Sending Close ACK\n");
+        LOG_DBG("Sending ACK\n");
 
         skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
                         
@@ -587,7 +586,7 @@ static int serval_sal_send_close_ack(struct sock *sk, struct serval_hdr *sh,
         
         skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
-        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         SERVAL_SKB_CB(skb)->flags = SVH_ACK;
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
@@ -1029,7 +1028,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                 } else {
                         LOG_DBG("Transport not ready to close\n");
                 }
-                err = serval_sal_send_close_ack(sk, sh, skb);
+                err = serval_sal_send_ack(sk, sh, skb);
         }
         
         return err;
@@ -1112,6 +1111,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
+                LOG_DBG("Dropping packet\n");
                 kfree_skb(skb);
         }
         return err;
@@ -1544,6 +1544,7 @@ int serval_sal_do_rcv(struct sock *sk,
         pskb_pull(skb, hdr_len);
 
         //SERVAL_SKB_CB(skb)->sh = sh;
+        SERVAL_SKB_CB(skb)->pkttype = sh->type;
         SERVAL_SKB_CB(skb)->srvid = NULL;
         skb_reset_transport_header(skb);
                 

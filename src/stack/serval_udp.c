@@ -191,17 +191,18 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
 */
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
-        struct udphdr *udph = udp_hdr(skb);
-        unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
-	/*
+   	/*
 	 *  Validate the packet.
 	 */
         if (SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
+                struct udphdr *udph = udp_hdr(skb);
+                unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
+                
                 if (!pskb_may_pull(skb, sizeof(struct udphdr)))
                         goto drop;		
                 
                 /* Only ignore this message in case it has zero length and is
-                 * not a FIN */
+                      * not a FIN */
                 if (datalen == 0) 
                         goto drop;
                 /* FIXME: Should verify checksum */
@@ -219,6 +220,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
         
         return serval_udp_do_rcv(sk, skb);
  drop:
+        LOG_DBG("Dropping bad UDP packet\n");
         kfree_skb(skb);
         return 0;
 }
