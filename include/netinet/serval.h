@@ -127,7 +127,7 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         return str;
 }
 
-enum serval_packet_type {         
+enum serval_packet_type {
         SERVAL_PKT_DATA = 0,
         SERVAL_PKT_SYN,
         SERVAL_PKT_RESET,
@@ -135,6 +135,7 @@ enum serval_packet_type {
         SERVAL_PKT_MIG,
         SERVAL_PKT_RSYN,
         SERVAL_PKT_MIGDATA,
+        __SERVAL_PKT_MAX = SERVAL_PKT_MIGDATA, 
 };
 
 struct serval_hdr {
