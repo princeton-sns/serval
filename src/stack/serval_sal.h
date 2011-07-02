@@ -37,6 +37,7 @@ struct service_entry;
          u8 pkttype;
          u8 flags;
 #define SVH_ACK 0x01
+#define SVH_CONN_ACK 0x02
          u32 seqno;
          //struct serval_hdr *sh;
          struct service_id *srvid;

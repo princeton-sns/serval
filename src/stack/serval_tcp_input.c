@@ -4153,7 +4153,7 @@ discard:
 		}
 #endif
 
-                serval_tcp_send_ack(sk);
+                //serval_tcp_send_ack(sk);
         } else {
                 LOG_INF("No ACK in TCP message received in SYN-SENT state\n");
                 goto reset_and_undo;

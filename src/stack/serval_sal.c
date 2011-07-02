@@ -825,7 +825,6 @@ serval_sal_create_respond_sock(struct sock *sk,
         return nsk;
 }
 
-
 /*
   This function is called as a result of receiving a ACK in response
   to a SYNACK that was sent by a "parent" sock in LISTEN state (the sk
@@ -1245,6 +1244,12 @@ static int serval_sal_request_state_process(struct sock *sk,
         /* Update expected rcv sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
         
+        /* Setting the bound device indicates that this socket
+           needs no resolution */
+        sk->sk_bound_dev_if = skb->dev->ifindex;
+
+        LOG_DBG("Bound set to %u\n", sk->sk_bound_dev_if);
+                
         /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {
                 err = ssk->af_ops->request_state_process(sk, skb);
@@ -1263,10 +1268,6 @@ static int serval_sal_request_state_process(struct sock *sk,
                 sk->sk_state_change(sk);
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
         }
-
-        /* Setting the bound device indicates that this socket
-           needs no resolution */
-        sk->sk_bound_dev_if = skb->dev->ifindex;
 
         /* Allocate ACK */
         rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
@@ -1292,7 +1293,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         
         /* Update control block */
         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
-        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+        SERVAL_SKB_CB(rskb)->flags = SVH_CONN_ACK;
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
         rskb->protocol = IPPROTO_SERVAL;
@@ -1340,6 +1341,8 @@ static int serval_sal_respond_state_process(struct sock *sk,
                    needs no resolution */
                 sk->sk_bound_dev_if = skb->dev->ifindex;
                 
+                LOG_DBG("Bound dev set to %u\n", sk->sk_bound_dev_if);
+
                 /* Let user know */
                 sk->sk_state_change(sk);
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
@@ -1804,29 +1807,42 @@ static int serval_sal_resolve(struct sk_buff *skb,
 {
         int ret = SAL_RESOLVE_ERROR;
         struct service_id *srvid = NULL;
+        struct serval_ext *ext = (struct serval_ext *)(sh + 1);
         
-        /* Check for connection extension. We require that this
-         * extension always directly follows the main Serval
-         * header */
-        if (sh->type == SERVAL_PKT_SYN) {
-                struct serval_connection_ext *conn_ext =
-                        (struct serval_connection_ext *)(sh + 1);
-                /* Check for connection extension and do early
-                 * drop if SYN or ACK flags are set. */
-                if (!has_connection_extension(sh))
-                        return SAL_RESOLVE_ERROR;
+        if (sh->length <= sizeof(struct serval_hdr))
+                return ret;
+        
+        switch (ext->type) {
+        case SERVAL_CONNECTION_EXT:
+                {
+                        struct serval_connection_ext *conn_ext =
+                                (struct serval_connection_ext *)ext;
+                        /* Check for connection extension and do early
+                         * drop if SYN or ACK flags are set. */
+                        if (!has_connection_extension(sh))
+                                return SAL_RESOLVE_ERROR;
                 
-                srvid = &conn_ext->srvid;
-        } else {
-                struct serval_service_ext *srv_ext =
-                        (struct serval_service_ext *)(sh + 1);
-                
-                if (!has_service_extension(sh))
-                        return SAL_RESOLVE_ERROR;
-                
-                srvid = &srv_ext->dst_srvid;
+                        srvid = &conn_ext->srvid;
+                }
+                break;
+        case SERVAL_CONTROL_EXT:
+                {
+                        struct serval_service_ext *srv_ext =
+                                (struct serval_service_ext *)ext;
+                        
+                        if (!has_service_extension(sh))
+                                return SAL_RESOLVE_ERROR;
+                        
+                        srvid = &srv_ext->dst_srvid;
+                }
+                break;
+        default:
+                break;
         }
-        
+       
+        if (!srvid)
+                return SAL_RESOLVE_ERROR;
+
         if (atomic_read(&serval_transit)) {
                 ret = serval_sal_resolve_service(skb, sh, srvid, sk);
         } else {
@@ -1882,7 +1898,7 @@ int serval_sal_rcv(struct sk_buff *skb)
         /* FIXME: should add checksum verification and check for
            correct transport protocol. */
         
-        LOG_DBG("Serval packet %s skb->len=%u\n",
+        LOG_DBG("Serval RECEIVE %s skb->len=%u\n",
                 serval_hdr_to_str(sh), skb->len);
         
         /*
@@ -2088,6 +2104,11 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
 
+        LOG_DBG("Serval XMIT %s skb->len=%u\n",
+                serval_hdr_to_str((struct serval_hdr *)
+                                  skb_transport_header(skb)), 
+                skb->len);
+        
         err = ssk->af_ops->queue_xmit(skb);
 
         if (err < 0) {
@@ -2207,7 +2228,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /* Add appropriate flags and headers */
         switch (SERVAL_SKB_CB(skb)->pkttype) {
         case SERVAL_PKT_SYN:
-                hdr_len += serval_sal_add_conn_ext(sk, skb, 0);               
+                hdr_len += serval_sal_add_conn_ext(sk, skb, 0);           
                 break;
         case SERVAL_PKT_CLOSE:
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
@@ -2220,6 +2241,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 }
                 if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)                        
                         hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
+
+                if (SERVAL_SKB_CB(skb)->flags & SVH_CONN_ACK)
+                        hdr_len += serval_sal_add_conn_ext(sk, skb, 0);
         default:
                 break;
         }
@@ -2243,6 +2267,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_CLOSEWAIT))
 		return serval_sal_do_xmit(skb);
         
+        LOG_DBG("Bound dev is %u\n", sk->sk_bound_dev_if);
+
 	/* Use service id to resolve IP, unless IP is already set. */
         if (sk->sk_bound_dev_if) {
 
@@ -2355,6 +2381,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 
                 skb_set_dev(cskb, dev);
                 sk->sk_bound_dev_if = dev->ifindex;
+
+                LOG_DBG("Bound dev set to %u\n", sk->sk_bound_dev_if);
+
                 /* Need also to set the source address for
                    checksum calculation */
                 dev_get_ipv4_addr(dev, &inet->inet_saddr);
