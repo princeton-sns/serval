@@ -1813,7 +1813,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
                         srvid = &conn_ext->srvid;
                 }
                 break;
-        case SERVAL_CONTROL_EXT:
+        case SERVAL_SERVICE_EXT:
                 {
                         struct serval_service_ext *srv_ext =
                                 (struct serval_service_ext *)ext;
@@ -2257,7 +2257,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	/* Use service id to resolve IP, unless IP is already set. */
         if (memcmp(&zero_addr, 
                    &inet_sk(sk)->inet_daddr, 
-                   sizeof(zero_addr)) == 0) {
+                   sizeof(zero_addr)) != 0) {
 
                 skb_reset_transport_header(skb);
                 /*
