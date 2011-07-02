@@ -33,6 +33,10 @@ static struct net_addr local_addr = {
         .net_raw = { 0x7F, 0x00, 0x00, 0x01 }
 };
 
+static struct net_addr zero_addr = {
+        .net_raw = { 0x00, 0x00, 0x00, 0x00 }
+};
+
 static const char *serval_pkt_names[] = {
         [SERVAL_PKT_DATA]    = "SERVAL_PKT_DATA",
         [SERVAL_PKT_SYN]     = "SERVAL_PKT_SYN",
@@ -1240,12 +1244,6 @@ static int serval_sal_request_state_process(struct sock *sk,
         /* Update expected rcv sequence number */
         ssk->rcv_seq.nxt = ntohl(conn_ext->seqno) + 1;
         
-        /* Setting the bound device indicates that this socket
-           needs no resolution */
-        sk->sk_bound_dev_if = skb->dev->ifindex;
-
-        LOG_DBG("Bound set to %u\n", sk->sk_bound_dev_if);
-                
         /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {
                 err = ssk->af_ops->request_state_process(sk, skb);
@@ -1332,12 +1330,6 @@ static int serval_sal_respond_state_process(struct sock *sk,
 
                 /* Valid ACK */
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
-
-                /* Setting the bound device indicates that this socket
-                   needs no resolution */
-                sk->sk_bound_dev_if = skb->dev->ifindex;
-                
-                LOG_DBG("Bound dev set to %u\n", sk->sk_bound_dev_if);
 
                 /* Let user know */
                 sk->sk_state_change(sk);
@@ -2262,10 +2254,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_CLOSEWAIT))
 		return serval_sal_do_xmit(skb);
         
-        LOG_DBG("Bound dev is %u\n", sk->sk_bound_dev_if);
-
 	/* Use service id to resolve IP, unless IP is already set. */
-        if (sk->sk_bound_dev_if) {
+        if (memcmp(&zero_addr, 
+                   &inet_sk(sk)->inet_daddr, 
+                   sizeof(zero_addr)) == 0) {
 
                 skb_reset_transport_header(skb);
                 /*
@@ -2375,9 +2367,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 }
                 
                 skb_set_dev(cskb, dev);
-                sk->sk_bound_dev_if = dev->ifindex;
-
-                LOG_DBG("Bound dev set to %u\n", sk->sk_bound_dev_if);
 
                 /* Need also to set the source address for
                    checksum calculation */
@@ -2429,9 +2418,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
            broadcast destination */
         if (__sk_dst_get(sk))
                 __sk_dst_reset(sk);
-
-        /* Make sure retransmitted packets are still resolved. */
-        sk->sk_bound_dev_if = 0;
 
         service_resolution_iter_destroy(&iter);
 	service_entry_put(se);
