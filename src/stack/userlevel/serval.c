@@ -374,7 +374,7 @@ static int server_run(void)
 		}
 	}
 	
-    client_list_lock(&client_list);
+        client_list_lock(&client_list);
 
 	while (!list_empty(&client_list.head)) {
 		struct client *c = __client_list_first_entry(&client_list);
@@ -394,7 +394,7 @@ static int server_run(void)
                 __client_list_del(c);
 		client_put(c);
 	}
-    client_list_unlock(&client_list);
+        client_list_unlock(&client_list);
 
 out_close_socks:
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {

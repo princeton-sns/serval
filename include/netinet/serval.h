@@ -116,8 +116,10 @@ static inline const char *__hexdump(const void *data, int datalen,
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
-        static char str[82];
-        return __hexdump(srvid, sizeof(*srvid), str, 82);  
+        static char str[82*2];
+        static int i = 0;
+        i = (i + 1) % 2;
+        return __hexdump(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);  
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -125,9 +127,9 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         static char str[22];
         static int i = 0;
         i = (i + 1) % 2;
-        snprintf(&str[i * sizeof(str) / 2], 11, 
+        snprintf(&str[i*sizeof(str)/2], 11, 
                  "%u", ntohl(flowid->s_id));
-        return &str[i * sizeof(str) / 2];
+        return &str[i*sizeof(str)/2];
 }
 
 enum serval_packet_type {

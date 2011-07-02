@@ -765,7 +765,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         rskb->dev = skb->dev;
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
-                serval_hdr_to_str(sh), skb->len);
+                serval_hdr_to_str(sh), rskb->len);
         
         /* Cannot use serval_sal_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
@@ -1168,11 +1168,13 @@ static int serval_sal_listen_state_process(struct sock *sk,
 
         /* Is this a SYN? */
         if (sh->type == SERVAL_PKT_SYN) {
-                if (sh->ack) {
+                err = serval_sal_syn_rcv(sk, sh, skb);
+        } else if (sh->ack) {
+                        struct sock *nsk;
                         /* Processing for socket that has received SYN
                            already */
-                        struct sock *nsk;
-                        LOG_DBG("ACK recv\n");
+
+                        LOG_PKT("ACK recv\n");
                         
                         nsk = serval_sal_request_sock_handle(sk, sh, skb);
                         
@@ -1181,9 +1183,6 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                                                 sh, skb);
                         }
                         kfree_skb(skb);
-                } else {
-                        err = serval_sal_syn_rcv(sk, sh, skb);
-                }
         } else {
                 kfree_skb(skb);
         }
@@ -1895,7 +1894,7 @@ int serval_sal_rcv(struct sk_buff *skb)
         /* FIXME: should add checksum verification and check for
            correct transport protocol. */
         
-        LOG_DBG("Serval RECEIVE %s skb->len=%u\n",
+        LOG_PKT("Serval RECEIVE %s skb->len=%u\n",
                 serval_hdr_to_str(sh), skb->len);
         
         /*
@@ -2231,11 +2230,12 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                     sk->sk_type == SOCK_DGRAM) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, 0);
                 }
-                if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)                        
-                        hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
 
                 if (SERVAL_SKB_CB(skb)->flags & SVH_CONN_ACK)
                         hdr_len += serval_sal_add_conn_ext(sk, skb, 0);
+                else if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)
+                        hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
+
         default:
                 break;
         }
@@ -2251,7 +2251,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         skb->protocol = IPPROTO_SERVAL;
         
-        LOG_DBG("Serval XMIT %s skb->len=%u\n",
+        LOG_PKT("Serval XMIT %s skb->len=%u\n",
                 serval_hdr_to_str(sh), skb->len);
 
         /* If we are connected, transmit immediately */
