@@ -1809,7 +1809,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         struct service_id *srvid = NULL;
         struct serval_ext *ext = (struct serval_ext *)(sh + 1);
         
-        if (sh->length <= sizeof(struct serval_hdr))
+        if (ntohs(sh->length) <= sizeof(struct serval_hdr))
                 return ret;
         
         switch (ext->type) {
