@@ -764,17 +764,14 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         rskb->dev = skb->dev;
 
-        LOG_DBG("Sending RESPONSE seqno=%u ackno=%u rskb->len=%u\n",
-                ntohl(conn_ext->seqno),
-                ntohl(conn_ext->ackno),
-                rskb->len);
-             
+        LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
+                serval_hdr_to_str(sh), skb->len);
+        
         /* Cannot use serval_sal_transmit_skb here since we do not yet
          * have a full accepted socket (sk is the listening sock). */
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
                                              saddr.net_ip.s_addr,
                                              ip_hdr(skb)->saddr, NULL);
-        
 
         /* Free the REQUEST */
  drop:
@@ -1293,7 +1290,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         
         /* Update control block */
         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
-        SERVAL_SKB_CB(rskb)->flags = SVH_CONN_ACK;
+        SERVAL_SKB_CB(rskb)->flags = SVH_ACK | SVH_CONN_ACK;
         /* Do not increase sequence number for pure ACK */
         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
         rskb->protocol = IPPROTO_SERVAL;
@@ -2103,11 +2100,6 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         */
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
-
-        LOG_DBG("Serval XMIT %s skb->len=%u\n",
-                serval_hdr_to_str((struct serval_hdr *)
-                                  skb_transport_header(skb)), 
-                skb->len);
         
         err = ssk->af_ops->queue_xmit(skb);
 
@@ -2259,6 +2251,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
         skb->protocol = IPPROTO_SERVAL;
         
+        LOG_DBG("Serval XMIT %s skb->len=%u\n",
+                serval_hdr_to_str(sh), skb->len);
+
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 
                                    SERVALF_FINWAIT1 | 
