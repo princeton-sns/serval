@@ -236,7 +236,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 #if defined(OS_LINUX_KERNEL)
 	if (is_syn) {
                 /* SYN packets can be broadcast and we should accept
-                   that. */
+                   those packets. */
                 if (skb->pkt_type != PACKET_BROADCAST && 
                     skb->pkt_type != PACKET_HOST) {
                         LOG_ERR("TCP packet not for this host (broadcast)!\n");
@@ -2069,7 +2069,8 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 
         newsk = serval_tcp_create_openreq_child(sk, req, newsk, skb);
 
-	newsk->sk_gso_type = SKB_GSO_TCPV4;
+        /* FIXME: can we support GSO with Serval? */
+	newsk->sk_gso_type = 0 /* SKB_GSO_TCPV4 */;
 	sk_setup_caps(newsk, dst);
 	
 	newinet->inet_id = newtp->write_seq ^ jiffies;

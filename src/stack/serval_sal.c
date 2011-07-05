@@ -1206,9 +1206,8 @@ static int serval_sal_request_state_process(struct sock *sk,
         struct sk_buff *rskb;       
         int err = 0;
                 
-        if (!has_connection_extension(sh)) {
+        if (!has_connection_extension(sh))
                 goto drop;
-        }
         
         if (!(sh->type == SERVAL_PKT_SYN && sh->ack)) {
                 LOG_ERR("packet is not a RESPONSE\n");

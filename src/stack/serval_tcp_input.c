@@ -2734,6 +2734,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 #endif
 	sk_mem_reclaim(sk);
 #if 0
+        /* Should be handled by service access layer... */
 	if (!sock_flag(sk, SOCK_DEAD)) {
 		sk->sk_state_change(sk);
 
@@ -3954,6 +3955,8 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
 	err = serval_tcp_validate_incoming(sk, skb, th, 0);
 
 	if (err <= 0) {
+                /* serval_tcp_validate_incoming has dropped the
+                   packet */
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
 		return -1;
         }
@@ -4010,6 +4013,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
         } else {
                 LOG_WARN("No ACK flag in packet!\n");
                 err = 1;
+                kfree_skb(skb);
         }
 
         return err;

@@ -576,6 +576,60 @@ static inline unsigned int serval_tcp_cwnd_test(struct serval_tcp_sock *tp,
 	return 0;
 }
 
+/* Minshall's variant of the Nagle send check. */
+static inline int serval_tcp_minshall_check(const struct serval_tcp_sock *tp)
+{
+	return after(tp->snd_sml, tp->snd_una) &&
+		!after(tp->snd_sml, tp->snd_nxt);
+}
+
+/* Return 0, if packet can be sent now without violation Nagle's rules:
+ * 1. It is full sized.
+ * 2. Or it contains FIN. (already checked by caller)
+ * 3. Or TCP_NODELAY was set.
+ * 4. Or TCP_CORK is not set, and all sent packets are ACKed.
+ *    With Minshall's modification: all sent small packets are ACKed.
+ */
+static inline int serval_tcp_nagle_check(const struct serval_tcp_sock *tp,
+                                         const struct sk_buff *skb,
+                                         unsigned mss_now, int nonagle)
+{
+	return skb->len < mss_now &&
+		((nonagle & TCP_NAGLE_CORK) ||
+		 (!nonagle && tp->packets_out && 
+                  serval_tcp_minshall_check(tp)));
+}
+
+/* Return non-zero if the Nagle test allows this packet to be
+ * sent now.
+ */
+static inline int serval_tcp_nagle_test(struct serval_tcp_sock *tp, 
+                                        struct sk_buff *skb,
+                                        unsigned int cur_mss, 
+                                        int nonagle)
+{
+	/* Nagle rule does not apply to frames, which sit in the middle of the
+	 * write_queue (they have no chances to get new data).
+	 *
+	 * This is implemented in the callers, where they modify the 'nonagle'
+	 * argument based upon the location of SKB in the send queue.
+	 */
+	if (nonagle & TCP_NAGLE_PUSH)
+		return 1;
+
+	/* Don't use the nagle rule for urgent data (or for the final FIN).
+	 * Nagle can be ignored during F-RTO too (see RFC4138).
+	 */
+	if (serval_tcp_urg_mode(tp) || (tp->frto_counter == 2) ||
+	    (TCP_SKB_CB(skb)->flags & TCPH_FIN))
+		return 1;
+
+	if (!serval_tcp_nagle_check(tp, skb, cur_mss, nonagle))
+		return 1;
+
+	return 0;
+}
+
 /* Does at least the first segment of SKB fit into the send window? */
 static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp, 
 					  struct sk_buff *skb,
@@ -1283,6 +1337,78 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 	return err;
 }
 
+/* Try to defer sending, if possible, in order to minimize the amount
+ * of TSO splitting we do.  View it as a kind of TSO Nagle test.
+ *
+ * This algorithm is from John Heffner.
+ */
+static int serval_tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	u32 send_win, cong_win, limit, in_flight;
+	int win_divisor;
+
+	if (TCP_SKB_CB(skb)->flags & TCPH_FIN)
+		goto send_now;
+
+	if (tp->ca_state != TCP_CA_Open)
+		goto send_now;
+
+	/* Defer for less than two clock ticks. */
+	if (tp->tso_deferred &&
+	    (((u32)jiffies << 1) >> 1) - (tp->tso_deferred >> 1) > 1)
+		goto send_now;
+
+	in_flight = serval_tcp_packets_in_flight(tp);
+
+	BUG_ON(serval_tcp_skb_pcount(skb) <= 1 || (tp->snd_cwnd <= in_flight));
+
+	send_win = serval_tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
+
+	/* From in_flight test above, we know that cwnd > in_flight.  */
+	cong_win = (tp->snd_cwnd - in_flight) * tp->mss_cache;
+
+	limit = min(send_win, cong_win);
+
+	/* If a full-sized TSO skb can be sent, do it. */
+	if (limit >= sk->sk_gso_max_size)
+		goto send_now;
+
+	/* Middle in queue won't get any more data, full sendable already? */
+	if ((skb != serval_tcp_write_queue_tail(sk)) && (limit >= skb->len))
+		goto send_now;
+
+	win_divisor = ACCESS_ONCE(sysctl_serval_tcp_tso_win_divisor);
+
+	if (win_divisor) {
+		u32 chunk = min(tp->snd_wnd, tp->snd_cwnd * tp->mss_cache);
+
+		/* If at least some fraction of a window is available,
+		 * just use it.
+		 */
+		chunk /= win_divisor;
+		if (limit >= chunk)
+			goto send_now;
+	} else {
+		/* Different approach, try not to defer past a single
+		 * ACK.  Receiver should ACK every other full sized
+		 * frame, so if we have space for more than 3 frames
+		 * then send now.
+		 */
+		if (limit > serval_tcp_max_burst(tp) * tp->mss_cache)
+			goto send_now;
+	}
+
+	/* Ok, it looks like it is advisable to defer.  */
+	tp->tso_deferred = 1 | (jiffies << 1);
+
+	return 1;
+
+send_now:
+	tp->tso_deferred = 0;
+	return 0;
+}
+
 /* Create a new MTU probe if we are ready.
  * MTU probe is regularly attempting to increase the path MTU by
  * deliberately sending larger packets.  This discovers routing
@@ -1513,7 +1639,7 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			break;
                 }
 
-                /*
+
 		if (tso_segs == 1) {
 			if (unlikely(!serval_tcp_nagle_test(tp, skb, mss_now,
                                                             (serval_tcp_skb_is_last(sk, skb) ?
@@ -1522,7 +1648,8 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 		} else {
 			if (!push_one && serval_tcp_tso_should_defer(sk, skb))
 				break;
-                */
+                }
+
 		limit = mss_now;
 		if (tso_segs > 1 && !serval_tcp_urg_mode(tp))
 			limit = serval_tcp_mss_split_point(sk, skb, mss_now,
@@ -2082,6 +2209,13 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 
         __serval_tcp_v4_send_check(skb, ireq->loc_addr, ireq->rmt_addr);
 
+        /*
+          FIXME: call serval_tcp_event_ack_sent? Not sure, since we
+          haven't sent any data at this point. */
+        /*
+	if (likely(tcb->flags & TCPH_ACK))
+		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
+        */
 	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
@@ -2119,6 +2253,13 @@ int serval_tcp_connection_build_ack(struct sock *sk,
         if (serval_sk(sk)->af_ops->send_check)
                 serval_sk(sk)->af_ops->send_check(sk, skb);
 
+        /*
+          FIXME: call serval_tcp_event_ack_sent? Not sure, since we
+          haven't sent any data at this point. */
+        /*
+	if (likely(tcb->flags & TCPH_ACK))
+		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
+        */
 	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
