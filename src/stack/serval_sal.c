@@ -37,6 +37,7 @@ static struct net_addr zero_addr = {
         .net_raw = { 0x00, 0x00, 0x00, 0x00 }
 };
 
+#if defined(ENABLE_DEBUG)
 static const char *serval_pkt_names[] = {
         [SERVAL_PKT_DATA]    = "SERVAL_PKT_DATA",
         [SERVAL_PKT_SYN]     = "SERVAL_PKT_SYN",
@@ -46,6 +47,7 @@ static const char *serval_pkt_names[] = {
         [SERVAL_PKT_RSYN]    = "SERVAL_PKT_RSYN",
         [SERVAL_PKT_MIGDATA] = "SERVAL_PKT_MIGDATA",        
 };
+#endif /* ENABLE_DEBUG */
 
 /* Backoff multipliers for retransmission, fail when reaching 0. */
 static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };

@@ -545,7 +545,7 @@ static inline int select_size(struct sock *sk, int sg)
 	int tmp = tp->mss_cache;
 
 	if (sg) {
-		if (0 && sk_can_gso(sk))
+		if (sk_can_gso(sk))
 			tmp = 0;
 		else {
 			int pgbreak = SKB_MAX_HEAD(MAX_SERVAL_TCP_HEADER);
@@ -2009,11 +2009,11 @@ static struct sock *serval_tcp_create_openreq_child(struct sock *sk,
         newtp->rcv_wnd = req->rcv_wnd;
         newtp->rx_opt.wscale_ok = ireq->wscale_ok;
         if (newtp->rx_opt.wscale_ok) {
-                LOG_DBG("TCP windows scaling OK!\n");
+                LOG_DBG("TCP window scaling OK!\n");
                 newtp->rx_opt.snd_wscale = ireq->snd_wscale;
                 newtp->rx_opt.rcv_wscale = ireq->rcv_wscale;
         } else {
-                LOG_DBG("No TCP windows scaling!\n");
+                LOG_DBG("No TCP window scaling!\n");
                 newtp->rx_opt.snd_wscale = newtp->rx_opt.rcv_wscale = 0;
                 newtp->window_clamp = min(newtp->window_clamp, 65535U);
         }
@@ -2069,7 +2069,7 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 
         newsk = serval_tcp_create_openreq_child(sk, req, newsk, skb);
 
-	newsk->sk_gso_type = 0; //SKB_GSO_TCPV4;
+	newsk->sk_gso_type = SKB_GSO_TCPV4;
 	sk_setup_caps(newsk, dst);
 	
 	newinet->inet_id = newtp->write_seq ^ jiffies;

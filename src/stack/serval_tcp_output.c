@@ -338,7 +338,7 @@ static inline void serval_tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
 static void serval_tcp_set_skb_tso_segs(struct sock *sk, struct sk_buff *skb,
 					unsigned int mss_now)
 {
-	if (1 /* Disable */ || skb->len <= mss_now || !sk_can_gso(sk) ||
+	if (skb->len <= mss_now || !sk_can_gso(sk) ||
 	    skb->ip_summed == CHECKSUM_NONE) {
 		/* Avoid the costly divide in the normal
 		 * non-TSO case.
