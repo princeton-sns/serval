@@ -4061,11 +4061,13 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		tp->snd_wnd = ntohs(th->window);
 		serval_tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
 
+                LOG_DBG("rx_opt.wscale_ok=%u\n", tp->rx_opt.wscale_ok);
+
 		if (!tp->rx_opt.wscale_ok) {
                         LOG_DBG("Window scaling is NOT OK!\n");
 			tp->rx_opt.snd_wscale = tp->rx_opt.rcv_wscale = 0;
 			tp->window_clamp = min(tp->window_clamp, 65535U);
-		}
+                }
 
 		if (tp->rx_opt.saw_tstamp) {
 			tp->rx_opt.tstamp_ok = 1;

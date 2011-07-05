@@ -589,8 +589,9 @@ static inline int serval_tcp_snd_wnd_test(struct serval_tcp_sock *tp,
 
 	ret = !after(end_seq, serval_tcp_wnd_end(tp));
 
-        LOG_DBG("2. skb->len=%u cur_mss=%u end_seq=%u wnd_end=%u\n", 
-                skb->len, cur_mss, end_seq, serval_tcp_wnd_end(tp));
+        LOG_DBG("skb->len=%u cur_mss=%u end_seq=%u snd_una=%u wnd_end=%u\n", 
+                skb->len, cur_mss, end_seq, 
+                tp->snd_una, serval_tcp_wnd_end(tp));
 
         return ret;
 }
@@ -992,8 +993,14 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th->check		= 0;
 	th->urg_ptr		= 0;
 
-        LOG_PKT("Transmitting TCP packet %s datalen=%u\n", 
-                tcphdr_to_str(th), skb->len - tcp_header_size);
+        LOG_PKT("TCP XMIT %s datalen=%u bytes_queued=%u\n", 
+                tcphdr_to_str(th), skb->len - tcp_header_size,
+                tp->bytes_queued);
+
+        LOG_PKT("rcv_wnd=%u snd_wnd=%u max_window=%u window_clamp=%u\n",
+                tp->rcv_wnd, tp->snd_wnd, tp->max_window, tp->window_clamp);
+        LOG_PKT("snd_ssthresh=%u rcv_ssthresh=%u snd_cwnd=%u\n",
+                tp->snd_ssthresh, tp->rcv_ssthresh, tp->snd_cwnd);
 
 	/* The urg_mode check is necessary during a below snd_una win probe */
 	if (unlikely(serval_tcp_urg_mode(tp) && before(tcb->seq, tp->snd_up))) {
@@ -1498,9 +1505,8 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 
                 LOG_PKT("cwnd_quota=%d\n", cwnd_quota);
 
-		if (!cwnd_quota) {
+		if (!cwnd_quota)
                         break;
-                }
 
 		if (unlikely(!serval_tcp_snd_wnd_test(tp, skb, mss_now))) {
                         LOG_PKT("tcp_snd_wnd_test failed!\n");
@@ -1764,12 +1770,7 @@ unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu)
 
 	mss_now = serval_tcp_mtu_to_mss(sk, pmtu);
         
-
-        LOG_DBG("serval_tcp_mtu_to_mss=%u\n", mss_now);
-
 	mss_now = serval_tcp_bound_to_half_wnd(tp, mss_now);
-
-        LOG_DBG("serval_tcp_bound_to_half_wnd=%u\n", mss_now);
 
 	/* And store cached results */
 	tp->pmtu_cookie = pmtu;
@@ -1778,13 +1779,9 @@ unsigned int serval_tcp_sync_mss(struct sock *sk, u32 pmtu)
 		mss_now = min(mss_now, 
                               serval_tcp_mtu_to_mss(sk, 
                                                     tp->tp_mtup.search_low));
-                
-                LOG_DBG("min=%u\n", mss_now);
         }
 
 	tp->mss_cache = mss_now;
-
-        LOG_DBG("pmtu=%u mss_now=%u\n", pmtu, mss_now);
 
 	return mss_now;
 }
@@ -1835,7 +1832,6 @@ unsigned int serval_tcp_current_mss(struct sock *sk)
    we do not know the destination --- it is resolved on the SYN.
 
  */
-#define SERVAL_INIT_MSS (1460 - sizeof(struct serval_hdr))
 static void serval_tcp_connect_init(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
@@ -1863,9 +1859,9 @@ static void serval_tcp_connect_init(struct sock *sk)
 		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 0;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_INIT_MSS;
+	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_TCP_MSS_INIT;
 #else
-	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_INIT_MSS;
+	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_TCP_MSS_INIT;
 #endif
 
 	if (tp->rx_opt.user_mss && tp->rx_opt.user_mss < tp->advmss)
@@ -2016,7 +2012,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	mss = dst_metric_advmss(dst);
 #endif
 #else
-	mss = SERVAL_INIT_MSS; 
+	mss = SERVAL_TCP_MSS_INIT; 
 #endif
         LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);

@@ -156,12 +156,10 @@ int serval_udp_connection_respond_sock(struct sock *sk,
 
 static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
-        struct udphdr *udph = udp_hdr(skb);
-        unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
         int err = 0;
         
         LOG_DBG("data len=%u skb->len=%u\n",
-                datalen, skb->len); 
+                ntohs(udp_hdr(skb)->len) - sizeof(struct udphdr), skb->len); 
 
         /* Strip UDP header before queueing */
 	skb_dst_drop(skb);

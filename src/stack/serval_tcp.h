@@ -15,6 +15,7 @@
 #endif /* OS_USER */
 
 #include <serval_sal.h>
+#include <netinet/serval.h>
 
 /* TCP timestamps are only 32-bits, this causes a slight
  * complication on 64-bit systems since we store a snapshot
@@ -37,6 +38,8 @@
  */
 #define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
 #define SERVAL_TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
+
+#define SERVAL_TCP_MSS_INIT (1460 - sizeof(struct serval_hdr))
 
 /* 
  * Never offer a window over 32767 without using window scaling. Some
