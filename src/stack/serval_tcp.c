@@ -1628,7 +1628,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 		serval_tcp_cleanup_rbuf(sk, copied);
 
-		if (!sysctl_serval_tcp_low_latency && tp->ucopy.task == user_recv) {
+		if (!sysctl_serval_tcp_low_latency && 
+                    tp->ucopy.task == user_recv) {
 			/* Install new reader */
 			if (!user_recv && !(flags & (MSG_TRUNC | MSG_PEEK))) {
 				user_recv = current;
@@ -1785,7 +1786,8 @@ do_prequeue:
 #endif
 			{
 				err = skb_copy_datagram_iovec(skb, offset,
-						msg->msg_iov, used);
+                                                              msg->msg_iov, 
+                                                              used);
 				if (err) {
 					/* Exception. Bailout! */
 					if (!copied)
