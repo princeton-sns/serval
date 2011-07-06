@@ -415,7 +415,7 @@ static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 
 	xmit_size_goal = mss_now;
 
-	if (0 && large_allowed && sk_can_gso(sk)) {
+	if (large_allowed && 0 /* sk_can_gso(sk) */) {
 		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
 				  serval_sk(sk)->af_ops->net_header_len -
                                   serval_sk(sk)->ext_hdr_len -
@@ -535,7 +535,7 @@ static inline int select_size(struct sock *sk, int sg)
 	int tmp = tp->mss_cache;
 
 	if (sg) {
-		if (sk_can_gso(sk))
+		if (0 /* sk_can_gso(sk) */)
 			tmp = 0;
 		else {
 			int pgbreak = SKB_MAX_HEAD(MAX_SERVAL_TCP_HEADER);
