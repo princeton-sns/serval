@@ -210,7 +210,20 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
-                
+
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("iph->saddr=%s iph->daddr=%s skb->len=%u skb->csum=%u\n",
+                        inet_ntop(AF_INET, &iph->saddr, 
+                                  rmtstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, 
+                                  locstr, 18),
+                        skb->len,
+                        skb->csum);
+        }
+#endif
+
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
 		if (!serval_tcp_v4_check(skb->len, iph->saddr,
 				  iph->daddr, skb->csum)) {
@@ -270,12 +283,16 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 
 #if defined(ENABLE_DEBUG)
         {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("iph->saddr=%s iph->daddr=%s\n",
+                char rmtstr[18], locstr[18], inet_saddr[18], inet_daddr[18];
+                LOG_DBG("iph->saddr=%s iph->daddr=%s inet_saddr=%s inet_daddr=%s\n",
                         inet_ntop(AF_INET, &iph->saddr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &iph->daddr, 
-                                  locstr, 18));
+                                  locstr, 18),
+                        inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr, 
+                                  inet_saddr, 18),
+                        inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr, 
+                                  inet_daddr, 18));
         }
 #endif
 
@@ -1895,6 +1912,19 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_sock *inet = inet_sk(sk);
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("inet_saddr=%s inet_daddr=%s "
+                        "len=%u skb->csum=%u\n",
+                        inet_ntop(AF_INET, &inet->inet_saddr, 
+                                  locstr, 18),
+                        inet_ntop(AF_INET, &inet->inet_daddr, 
+                                  rmtstr, 18),
+                        skb_tail_pointer(skb) - skb_transport_header(skb),
+                        skb->csum);
+        }
+#endif
 
 	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
 }
