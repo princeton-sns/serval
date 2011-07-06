@@ -183,7 +183,7 @@ static int send_file(int sock, const char *filepath,
                                         fprintf(stderr, 
                                                 "\rEAGAIN, continuing..\n");
                                         continue;
-                                } 
+                                }
                 
                                 fprintf(stderr, "\rerror sending data: %s\n",
                                         strerror_sv(errno));

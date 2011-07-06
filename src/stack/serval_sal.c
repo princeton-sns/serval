@@ -989,7 +989,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         LOG_DBG("received Close REQUEST\n");
         
         if (!has_valid_control_extension(sk, sh)) {
-                LOG_DBG("Bad control extension\n");
+                LOG_ERR("Bad control extension\n");
                 return -1;
         }
         
@@ -1020,23 +1020,35 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                         case SERVAL_RESPOND:
                         case SERVAL_CONNECTED:
                                 serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                                 break;
                         case SERVAL_CLOSING:
                                 break;
                         case SERVAL_CLOSEWAIT:
                                 /* Must be retransmitted FIN */
-                                
-                                /* FIXME: is this the right place for async
-                                 * wake? */
-                                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                                 break;
                         case SERVAL_FINWAIT1:
                                 /* Simultaneous close */
                                 serval_sock_set_state(sk, SERVAL_CLOSING);
+                        case SERVAL_FINWAIT2:
+                                // Time-wait
                         default:
                                 break;
                         }
+
+                        if (!sock_flag(sk, SOCK_DEAD)) {
+                                sk->sk_state_change(sk);
+                                
+                                /* Do not send POLL_HUP for half
+                                   duplex close. */
+                                if (sk->sk_shutdown == SHUTDOWN_MASK ||
+                                    sk->sk_state == SERVAL_CLOSED)
+                                        sk_wake_async(sk, SOCK_WAKE_WAITD, 
+                                                      POLL_HUP);
+                                else
+                                        sk_wake_async(sk, SOCK_WAKE_WAITD, 
+                                                      POLL_IN);
+                        }
+                        
                 } else {
                         LOG_DBG("Transport not ready to close\n");
                 }
@@ -1074,7 +1086,6 @@ int serval_sal_rcv_transport_fin(struct sock *sk,
         case SERVAL_RESPOND:
         case SERVAL_CONNECTED:
                 serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                 break;
         case SERVAL_CLOSING:
                 break;
@@ -1083,14 +1094,26 @@ int serval_sal_rcv_transport_fin(struct sock *sk,
                                 
                 /* FIXME: is this the right place for async
                  * wake? */
-                sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
                 break;
         case SERVAL_FINWAIT1:
                 /* Simultaneous close */
                 serval_sock_set_state(sk, SERVAL_CLOSING);
+        case SERVAL_FINWAIT2:
+                // Time-wait
         default:
                 break;
         }
+
+	if (!sock_flag(sk, SOCK_DEAD)) {
+		sk->sk_state_change(sk);
+
+		/* Do not send POLL_HUP for half duplex close. */
+		if (sk->sk_shutdown == SHUTDOWN_MASK ||
+		    sk->sk_state == SERVAL_CLOSED)
+			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
+		else
+			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
+	}
         
         return err;
 }
@@ -1102,7 +1125,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
-        LOG_DBG("Processing\n");
+        LOG_PKT("Processing\n");
 
         serval_sal_ack_process(sk, sh, skb);
 
@@ -1123,7 +1146,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
-                LOG_DBG("Dropping packet\n");
+                LOG_PKT("Dropping packet\n");
                 kfree_skb(skb);
         }
         return err;

@@ -553,50 +553,50 @@ int main(int argc, char **argv)
 	argv++;
         
 	while (argc) {
-        if (strcmp(argv[0], "-i") == 0 ||
+                if (strcmp(argv[0], "-i") == 0 ||
 		    strcmp(argv[0], "--interface") == 0) {
 			dev_list_add(argv[1]);
 			argv++;
 			argc--;
 		} else if (strcmp(argv[0], "-d") == 0 ||
-                    strcmp(argv[0], "--daemon") == 0) {
-		    daemon = 1;
-		} else if (strcmp(argv[0], "-dl") == 0 ||
+                           strcmp(argv[0], "--daemon") == 0) {
+                        daemon = 1;
+                } else if (strcmp(argv[0], "-dl") == 0 ||
                            strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--debug-level") == 0) {
-            char *p = NULL;
-            unsigned int d = strtoul(argv[1], &p, 10);
-
-            if (*argv[1] != '\0' && *p == '\0') {
-                    argv++;
-                    argc--;
-                    LOG_DBG("Setting debug to %u\n", d);
-                    debug = d;
-            } else {
-                    fprintf(stderr, "Invalid debug setting %s\n",
-                            argv[1]);
-            }
-        } else if (strcmp(argv[0], "-s") == 0 || 
-                   strcmp(argv[0], "-stackid")) {
-		    stackid = atoi(argv[1]);
-		    if (stackid < 0) {
-		        stackid = 0;
-		    }
-		    argv++;
-		    argc--;
+                        char *p = NULL;
+                        unsigned int d = strtoul(argv[1], &p, 10);
+                        
+                        if (*argv[1] != '\0' && *p == '\0') {
+                                argv++;
+                                argc--;
+                                LOG_INF("Setting debug to %u\n", d);
+                                debug = d;
+                        } else {
+                                fprintf(stderr, "Invalid debug setting %s\n",
+                                        argv[1]);
+                        }
+                } else if (strcmp(argv[0], "-s") == 0 || 
+                           strcmp(argv[0], "-stackid")) {
+                        stackid = atoi(argv[1]);
+                        if (stackid < 0) {
+                                stackid = 0;
+                        }
+                        argv++;
+                        argc--;
 		}
 		argc--;
 		argv++;
 	}	
-      
-    if (daemon) {
-        ret = daemonize();
-
-        if (ret < 0) {
-                LOG_ERR("Could not make daemon\n");
-                return -1;
+        
+        if (daemon) {
+                ret = daemonize();
+                
+                if (ret < 0) {
+                        LOG_ERR("Could not make daemon\n");
+                        return -1;
+                }
         }
-    }
 
 	ret = serval_init();
 

@@ -378,7 +378,7 @@ static int serval_tcp_connection_close_request(struct sock *sk,
                                                struct sk_buff *skb)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-
+        
         return tp->fin_recvd;
 }
 
