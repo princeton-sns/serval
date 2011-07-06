@@ -771,9 +771,13 @@ int serval_sock_rebuild_header(struct sock *sk)
                 err = ip_route_output_flow(&rt, &fl, sk, 0);
 #endif
         }
-	if (!err)
+	if (!err) {
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
 		sk_setup_caps(sk, &rt->dst);
-	else {
+#else
+                sk_setup_caps(sk, &rt->u.dst);
+#endif
+        } else {
 		/* Routing failed... */
 		sk->sk_route_caps = 0;
                 LOG_ERR("Routing failed for socket %p\n", sk);

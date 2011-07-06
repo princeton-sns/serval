@@ -8,6 +8,12 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/dst.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+static inline void dst_metric_set(struct dst_entry *dst, int metric, u32 val)
+{
+        dst->metrics[metric-1] = val;
+}
+#endif
 #endif
 #if defined(OS_USER)
 #include <sys/types.h>
