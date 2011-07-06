@@ -364,24 +364,14 @@ discard_it:
         return 0;
 }
 
+static void __serval_tcp_done(struct sock *sk)
+{
+	serval_tcp_clear_xmit_timers(sk);
+}
+
 void serval_tcp_done(struct sock *sk)
 {
-        /*
-	if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_RECV)
-		TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_ATTEMPTFAILS);
-	//tcp_set_state(sk, TCP_CLOSE);
-
-	sk->sk_shutdown = SHUTDOWN_MASK;
-
-	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_state_change(sk);
-	else
-		serval_sock_destroy(sk);
-        */
-
-	serval_tcp_clear_xmit_timers(sk);
-
-        LOG_WARN("NOT implemented!\n");
+	serval_sal_done(sk);
 }
 
 static int serval_tcp_connection_close_request(struct sock *sk,
@@ -1925,6 +1915,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
         .recv_fin = serval_sal_rcv_transport_fin,
+        .done = __serval_tcp_done,
 };
 
 /*

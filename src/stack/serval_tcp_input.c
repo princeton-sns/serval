@@ -3518,6 +3518,110 @@ static inline int serval_tcp_checksum_complete_user(struct sock *sk,
 }
 
 
+/* Save metrics learned by this TCP session.
+   This function is called only, when TCP finishes successfully
+   i.e. when it enters TIME-WAIT or goes from LAST-ACK to CLOSE.
+ */
+void serval_tcp_update_metrics(struct sock *sk)
+{
+#if defined(OS_LINUX_KERNEL)
+       	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct dst_entry *dst = __sk_dst_get(sk);
+
+	if (sysctl_serval_tcp_nometrics_save)
+		return;
+
+	dst_confirm(dst);
+
+	if (dst && (dst->flags & DST_HOST)) {
+		int m;
+		unsigned long rtt;
+
+		if (tp->backoff || !tp->srtt) {
+			/* This session failed to estimate rtt. Why?
+			 * Probably, no packets returned in time.
+			 * Reset our results.
+			 */
+			if (!(dst_metric_locked(dst, RTAX_RTT)))
+				dst_metric_set(dst, RTAX_RTT, 0);
+			return;
+		}
+
+		rtt = dst_metric_rtt(dst, RTAX_RTT);
+		m = rtt - tp->srtt;
+
+		/* If newly calculated rtt larger than stored one,
+		 * store new one. Otherwise, use EWMA. Remember,
+		 * rtt overestimation is always better than underestimation.
+		 */
+		if (!(dst_metric_locked(dst, RTAX_RTT))) {
+			if (m <= 0)
+				set_dst_metric_rtt(dst, RTAX_RTT, tp->srtt);
+			else
+				set_dst_metric_rtt(dst, RTAX_RTT, rtt - (m >> 3));
+		}
+
+		if (!(dst_metric_locked(dst, RTAX_RTTVAR))) {
+			unsigned long var;
+			if (m < 0)
+				m = -m;
+
+			/* Scale deviation to rttvar fixed point */
+			m >>= 1;
+			if (m < tp->mdev)
+				m = tp->mdev;
+
+			var = dst_metric_rtt(dst, RTAX_RTTVAR);
+			if (m >= var)
+				var = m;
+			else
+				var -= (var - m) >> 2;
+
+			set_dst_metric_rtt(dst, RTAX_RTTVAR, var);
+		}
+
+		if (serval_tcp_in_initial_slowstart(tp)) {
+			/* Slow start still did not finish. */
+			if (dst_metric(dst, RTAX_SSTHRESH) &&
+			    !dst_metric_locked(dst, RTAX_SSTHRESH) &&
+			    (tp->snd_cwnd >> 1) > dst_metric(dst, RTAX_SSTHRESH))
+				dst_metric_set(dst, RTAX_SSTHRESH, tp->snd_cwnd >> 1);
+			if (!dst_metric_locked(dst, RTAX_CWND) &&
+			    tp->snd_cwnd > dst_metric(dst, RTAX_CWND))
+				dst_metric_set(dst, RTAX_CWND, tp->snd_cwnd);
+		} else if (tp->snd_cwnd > tp->snd_ssthresh &&
+			   tp->ca_state == TCP_CA_Open) {
+			/* Cong. avoidance phase, cwnd is reliable. */
+			if (!dst_metric_locked(dst, RTAX_SSTHRESH))
+				dst_metric_set(dst, RTAX_SSTHRESH,
+					       max(tp->snd_cwnd >> 1, tp->snd_ssthresh));
+			if (!dst_metric_locked(dst, RTAX_CWND))
+				dst_metric_set(dst, RTAX_CWND,
+					       (dst_metric(dst, RTAX_CWND) +
+						tp->snd_cwnd) >> 1);
+		} else {
+			/* Else slow start did not finish, cwnd is non-sense,
+			   ssthresh may be also invalid.
+			 */
+			if (!dst_metric_locked(dst, RTAX_CWND))
+				dst_metric_set(dst, RTAX_CWND,
+					       (dst_metric(dst, RTAX_CWND) +
+						tp->snd_ssthresh) >> 1);
+			if (dst_metric(dst, RTAX_SSTHRESH) &&
+			    !dst_metric_locked(dst, RTAX_SSTHRESH) &&
+			    tp->snd_ssthresh > dst_metric(dst, RTAX_SSTHRESH))
+				dst_metric_set(dst, RTAX_SSTHRESH, tp->snd_ssthresh);
+		}
+
+		if (!dst_metric_locked(dst, RTAX_REORDERING)) {
+			if (dst_metric(dst, RTAX_REORDERING) < tp->reordering &&
+			    tp->reordering != sysctl_tcp_reordering)
+				dst_metric_set(dst, RTAX_REORDERING, tp->reordering);
+		}
+	}
+#endif /* OS_LINUX_KERNEL */
+}
+
 /*
  *	This function implements the receiving procedure of RFC 793 for
  *	all states except ESTABLISHED and TIME_WAIT.
@@ -3593,22 +3697,22 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 #endif /* 0 */
 			}
 			break;
-#if 0
 		case TCP_CLOSING:
+                        /* Time wait handled by SAL */
+                        /*
 			if (tp->snd_una == tp->write_seq) {
 				serval_tcp_time_wait(sk, TCP_TIME_WAIT, 0);
 				goto discard;
 			}
+                        */
 			break;
-
 		case TCP_LAST_ACK:
 			if (tp->snd_una == tp->write_seq) {
-				tcp_update_metrics(sk);
-				tcp_done(sk);
+				serval_tcp_update_metrics(sk);
+				serval_tcp_done(sk);
 				goto discard;
 			}
 			break;
-#endif
 		}
 	} else {
                 LOG_DBG("NO ACK in packet -> goto discard\n");
@@ -3660,7 +3764,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (!queued) {
 discard:
-                LOG_DBG("Discarding packet\n");
                 kfree_skb(skb);
 		//__kfree_skb(skb);
 	}

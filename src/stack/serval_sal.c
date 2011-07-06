@@ -522,6 +522,14 @@ static void serval_sal_timewait(struct sock *sk, int state)
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer, timeout); 
 }
 
+void serval_sal_done(struct sock *sk)
+{
+        if (serval_sk(sk)->af_ops->done)
+                serval_sk(sk)->af_ops->done(sk);
+        
+        serval_sock_done(sk);
+}
+
 /* Called as a result of user app close() */
 void serval_sal_close(struct sock *sk, long timeout)
 {
@@ -574,7 +582,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                         LOG_ERR("queuing failed\n");
                 }
         } else {
-                serval_sock_done(sk);
+                serval_sal_done(sk);
         }
 }
 
@@ -1432,15 +1440,10 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                                             struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        int err = 0;
+        int err = 0, ack_ok;
         
-        err = serval_sal_ack_process(sk, sh, skb);
+        ack_ok = serval_sal_ack_process(sk, sh, skb) == 0;
                 
-        if (err == 0) {
-                /* ACK was valid */
-                serval_sock_done(sk);
-        }
-
         if (packet_has_transport_hdr(skb, sh)) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
@@ -1448,6 +1451,11 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+        }
+
+        if (ack_ok) {
+                /* ACK was valid */
+                serval_sal_done(sk);
         }
 
         return err;
@@ -2041,7 +2049,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer!\n");
                 sk->sk_err = ETIMEDOUT;
-                serval_sock_done(sk);
+                serval_sal_done(sk);
         } else {
                 LOG_DBG("Retransmitting and rescheduling timer\n");
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
@@ -2062,7 +2070,7 @@ void serval_sal_timewait_timeout(unsigned long data)
         struct sock *sk = (struct sock *)data;
         bh_lock_sock(sk);
         LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
-        serval_sock_done(sk);
+        serval_sal_done(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */
         sock_put(sk);

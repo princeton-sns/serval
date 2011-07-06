@@ -107,6 +107,7 @@ struct serval_sock_af_ops {
         int             (*recv_fin)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
+        void            (*done)(struct sock *sk);
 };
 
 /* The AF_SERVAL socket */
