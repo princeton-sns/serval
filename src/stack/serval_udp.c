@@ -88,7 +88,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
         
         skb->protocol = IPPROTO_UDP;
         
-        LOG_PKT("udp pkt [s=%u d=%u len=%u]\n",
+        LOG_PKT("UDP pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len));
@@ -96,7 +96,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
         err = serval_sal_xmit_skb(skb);
         
         if (err < 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed err=%d\n", err);
         }
 
         return err;
@@ -316,7 +316,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         err = serval_udp_transmit_skb(sk, skb);
         
         if (err < 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed err=%d\n", err);
         }
  out:
         release_sock(sk);
@@ -703,7 +703,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
                 err = serval_udp_transmit_skb(sk, skb);
                 
                 if (err < 0) {
-                        LOG_ERR("xmit failed\n");
+                        LOG_ERR("xmit failed err=%d\n", err);
                 }
                 break;
 	}

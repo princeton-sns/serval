@@ -168,7 +168,6 @@ do
 		if test -r "${java_dir}/${java_inc_dir}/jni.h"; 
 		then
 			have_jni=yes
-			java_bindings=yes
 			JAVA_PATH=${java_dir}
   			break
        		fi

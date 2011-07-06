@@ -130,13 +130,13 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         ip_send_check(ip_hdr(skb));
 
         err = dev_queue_xmit(skb);
-
-        if (err < 0) {
-		LOG_ERR("packet_xmit failed\n");
-	}
         
         //err = serval_output(skb);
 #endif
+
+        if (err < 0) {
+		LOG_ERR("packet_xmit failed err=%d\n", err);
+	}
 
         return err;
 }

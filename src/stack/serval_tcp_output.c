@@ -338,7 +338,7 @@ static inline void serval_tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
 static void serval_tcp_set_skb_tso_segs(struct sock *sk, struct sk_buff *skb,
 					unsigned int mss_now)
 {
-	if (skb->len <= mss_now || 1 /* !sk_can_gso(sk) */ ||
+	if (1 /* Disable GSO */ || skb->len <= mss_now || 1 /* !sk_can_gso(sk) */ ||
             skb->ip_summed == CHECKSUM_NONE) {
 		/* Avoid the costly divide in the normal
 		 * non-TSO case.
@@ -697,8 +697,6 @@ static void serval_tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
         /* Tells hardware to compute checksum or not. */
-
-	//skb->ip_summed = CHECKSUM_NONE;
 	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0; 
 	
@@ -851,7 +849,7 @@ int serval_tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
 	TCP_SKB_CB(buff)->when = TCP_SKB_CB(skb)->when;
 	buff->tstamp = skb->tstamp;
 
-	old_factor = tcp_skb_pcount(skb);
+	old_factor = serval_tcp_skb_pcount(skb);
 
 	/* Fix up tso_factor for both original and new SKB.  */
 	serval_tcp_set_skb_tso_segs(sk, skb, mss_now);

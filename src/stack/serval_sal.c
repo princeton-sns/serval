@@ -313,7 +313,7 @@ static int serval_sal_write_xmit(struct sock *sk,
                 err = serval_sal_transmit_skb(sk, skb, 1, gfp);
                 
                 if (err < 0) {
-                        LOG_ERR("xmit failed\n");
+                        LOG_ERR("xmit failed err=%d\n", err);
                         break;
                 }
                 serval_sal_advance_send_head(sk, skb);
@@ -350,7 +350,7 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         err = serval_sal_write_xmit(sk, 1, GFP_ATOMIC);
 
         if (err != 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed err=%d\n", err);
         }
 
         return err;
@@ -2127,7 +2127,7 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         err = ssk->af_ops->queue_xmit(skb);
 
         if (err < 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed err=%d\n", err);
         }
 
         return err;
@@ -2441,7 +2441,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
-			LOG_ERR("xmit failed\n");
+			LOG_ERR("xmit failed err=%d\n", err);
 		}
 		dest = next_dest;
 	}
