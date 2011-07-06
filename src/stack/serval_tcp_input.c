@@ -25,6 +25,7 @@ int sysctl_serval_tcp_adv_win_scale __read_mostly = 2;
 int sysctl_serval_tcp_app_win __read_mostly = 31;
 int sysctl_serval_tcp_max_orphans __read_mostly = NR_FILE;
 int sysctl_serval_tcp_thin_dupack __read_mostly;
+int sysctl_serval_tcp_nometrics_save __read_mostly;
 
 #define FLAG_DATA		0x01 /* Incoming frame contained data.		*/
 #define FLAG_WIN_UPDATE		0x02 /* Incoming ACK was a window update.	*/
