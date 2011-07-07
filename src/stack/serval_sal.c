@@ -191,6 +191,35 @@ static inline int has_valid_control_extension(struct sock *sk,
         return 1;
 }
 
+static inline int has_valid_desc_extension(struct sock *sk,
+                                           struct serval_hdr *sfh)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_description_ext *desc_ext =
+                (struct serval_description_ext *)(sfh + 1);
+        unsigned int hdr_len = ntohs(sfh->length);
+        unsigned int addr_list_len = (ntohs(sfh->length) - 2 * sizeof(uint8_t) -
+                                     sizeof(uint16_t)) / sizeof(net_addr);
+
+        if (hdr_len < sizeof(*sfh) + sizeof(*desc_ext)) {
+                LOG_PKT("No desc extension, hdr_len=%u\n", hdr_len);
+                return 0;
+        }
+
+        if (desc_ext->type != SERVAL_DESCRIPTION_EXT ||
+                ntohs(desc_ext->length) != sizeof(*desc_ext)) {
+                LOG_PKT("No desc extension, bad extension type\n");
+                return 0;
+        }
+
+        if (addr_list_len < 1) {
+        	    LOG_PKT("No desc extension, no list of addrs\n");
+                return 0;
+        }
+
+        return 1;
+}
+
 static void serval_sal_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
 {
 	skb_header_release(skb);

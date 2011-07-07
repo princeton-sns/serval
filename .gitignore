@@ -63,3 +63,4 @@ Makefile
 *.stamp
 *.jar
 .DS_Store
+.project
