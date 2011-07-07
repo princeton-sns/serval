@@ -720,11 +720,59 @@ void *dev_thread(void *arg)
         return NULL;
 }
 
+/*
+ * Invalidate hardware checksum when packet is to be mangled, and
+ * complete checksum manually on outgoing path.
+ */
+static int skb_checksum_help(struct sk_buff *skb)
+{
+        __wsum csum;
+        int ret = 0, offset;
+
+        if (skb->ip_summed == CHECKSUM_COMPLETE)
+                goto out_set_summed;
+
+
+
+        offset = skb_checksum_start_offset(skb);
+        BUG_ON(offset >= skb_headlen(skb));
+        csum = skb_checksum(skb, offset, skb->len - offset, 0);
+
+        offset += skb->csum_offset;
+
+        LOG_DBG("Calculating checksum offset=%u\n", offset);
+
+        BUG_ON(offset + sizeof(__sum16) > skb_headlen(skb));
+
+        if (skb_cloned(skb) &&
+            !skb_clone_writable(skb, offset + sizeof(__sum16))) {
+                ret = pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
+                if (ret)
+                        goto out;
+        }
+
+        *(__sum16 *)(skb->data + offset) = csum_fold(csum);
+
+        LOG_DBG("Checksum is %u\n", *(__sum16 *)(skb->data + offset));
+
+ out_set_summed:
+        skb->ip_summed = CHECKSUM_NONE;
+ out:
+        return ret;
+}
+
 #define DIRECT_TX 1
 
 int dev_queue_xmit(struct sk_buff *skb)
 {
         struct net_device *dev = skb->dev;
+
+        if (skb->ip_summed == CHECKSUM_PARTIAL) {
+                skb_set_transport_header(skb,
+                                         skb_checksum_start_offset(skb));
+                if (skb_checksum_help(skb))
+                        goto out_kfree_skb;
+        }
 #if defined(DIRECT_TX)
         dev->pack_ops->xmit(skb);
 #else
@@ -752,6 +800,9 @@ int dev_queue_xmit(struct sk_buff *skb)
         dev_signal(dev, SIGNAL_TXQUEUE);
 #endif
         return 0;
+ out_kfree_skb:
+        kfree_skb(skb);
+        return -1;
 }
 
 int netdev_init(void)

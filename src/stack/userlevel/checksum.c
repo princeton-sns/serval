@@ -174,6 +174,7 @@ csum_partial_copy(const void *src, void *dst, int len, __wsum sum)
 	memcpy(dst, src, len);
 	return csum_partial(dst, len, sum);
 }
+#include <serval/debug.h>
 
 #ifndef csum_tcpudp_nofold
 __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
@@ -183,6 +184,19 @@ __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
 {
 	unsigned long long s = (__force u32)sum;
 
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("saddr=%s daddr=%s len=%u proto=%u sum=%u\n",
+                        inet_ntop(AF_INET, &saddr, 
+                                  rmtstr, 18),
+                        inet_ntop(AF_INET, &daddr, 
+                                  locstr, 18),
+                        len,
+                        sum);
+        }
+
+#endif
 	s += (__force u32)saddr;
 	s += (__force u32)daddr;
 #ifdef __BIG_ENDIAN

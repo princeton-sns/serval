@@ -818,7 +818,7 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 static inline __sum16 serval_tcp_v4_check(int len, __be32 saddr,
                                           __be32 daddr, __wsum base)
 {
-	return csum_tcpudp_magic(saddr,daddr,len,IPPROTO_TCP,base);
+	return csum_tcpudp_magic(saddr, daddr, len, IPPROTO_TCP, base);
 }
 
 static inline __sum16 __serval_tcp_checksum_complete(struct sk_buff *skb)
