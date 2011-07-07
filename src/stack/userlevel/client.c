@@ -711,7 +711,7 @@ static void *client_thread(void *arg)
 
 	while (!c->should_exit) {
 		fd_set readfds;
-		int nfds;
+		int maxfd;
 		enum client_signal csig;
 		enum wait_signal wsig;
 
@@ -720,9 +720,9 @@ static void *client_thread(void *arg)
 
 		if (c->fd != -1)
 			FD_SET(c->fd, &readfds);
-
-		nfds = MAX(c->fd, c->pipefd[0]) + 1;
-
+                
+		maxfd = MAX(c->fd, c->pipefd[0]);
+#if 0 /* Disabled for now... doesn't work properly a.t.m. */
 		if (!c->has_data) {
                         /* wait for a data signal on the pipe
                          */
@@ -752,11 +752,11 @@ static void *client_thread(void *arg)
                                 release_sock(c->sock->sk);
 
                                 FD_SET(wait.pipefd[0], &readfds);
-                                nfds = MAX(nfds, wait.pipefd[0] + 1);
+                                maxfd = MAX(maxfd, wait.pipefd[0]);
                         }
 		}
-
-		ret = select(nfds, &readfds, NULL, NULL, NULL);
+#endif
+		ret = select(maxfd + 1, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {
 			if (errno == EINTR)
