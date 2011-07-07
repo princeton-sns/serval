@@ -225,8 +225,9 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 #endif
 
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
+                LOG_DBG("Checksum complete\n");
 		if (!serval_tcp_v4_check(skb->len, iph->saddr,
-				  iph->daddr, skb->csum)) {
+                                         iph->daddr, skb->csum)) {
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
 			return 0;
 		}
@@ -236,6 +237,7 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 				       skb->len, IPPROTO_TCP, 0);
 
 	if (skb->len <= 76) {
+                LOG_DBG("doing complete cheksum calculation\n");
 		return __skb_checksum_complete(skb);
 	}
 	return 0;
@@ -1895,16 +1897,32 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 {
 	struct tcphdr *th = tcp_hdr(skb);
         unsigned long len = skb_tail_pointer(skb) - skb_transport_header(skb);
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("saddr=%s daddr=%s len=%u skb->csum=%u\n",
+                        inet_ntop(AF_INET, &saddr, 
+                                  locstr, 18),
+                        inet_ntop(AF_INET, &daddr, 
+                                  rmtstr, 18),
+                        len,
+                        skb->csum);
+        }
+#endif
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
+                LOG_DBG("Doing partial checksumming, offset=%u\n", 
+                        skb->csum_start + skb->csum_offset);
 	} else {
+
 		th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
                                                              th->doff << 2,
                                                              skb->csum));
+                LOG_DBG("Doing complete checksuming check=%u\n", th->check);
 	}
 }
 
@@ -1912,19 +1930,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_sock *inet = inet_sk(sk);
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("inet_saddr=%s inet_daddr=%s "
-                        "len=%u skb->csum=%u\n",
-                        inet_ntop(AF_INET, &inet->inet_saddr, 
-                                  locstr, 18),
-                        inet_ntop(AF_INET, &inet->inet_daddr, 
-                                  rmtstr, 18),
-                        skb_tail_pointer(skb) - skb_transport_header(skb),
-                        skb->csum);
-        }
-#endif
 
 	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
 }

@@ -637,6 +637,11 @@ static inline void skb_set_mac_header(struct sk_buff *skb, const int offset)
 	skb->mac_header += offset;
 }
 
+static inline int skb_checksum_start_offset(const struct sk_buff *skb)
+{
+        return skb->csum_start - skb_headroom(skb);
+}
+
 static inline int skb_transport_offset(const struct sk_buff *skb)
 {
 	return skb_transport_header(skb) - skb->data;
@@ -902,6 +907,20 @@ static inline void __skb_queue_purge(struct sk_buff_head *list)
 	struct sk_buff *skb;
 	while ((skb = __skb_dequeue(list)) != NULL)
 		kfree_skb(skb);
+}
+
+/**
+ *skb_clone_writable - is the header of a clone writable
+ *@skb: buffer to check
+ *@len: length up to which to write
+ *
+ *Returns true if modifying the header part of the cloned buffer
+ *does not requires the data to be copied.
+ */
+static inline int skb_clone_writable(struct sk_buff *skb, unsigned int len)
+{
+        return !skb_header_cloned(skb) &&
+                skb_headroom(skb) + len <= skb->hdr_len;
 }
 
 static inline int skb_add_data(struct sk_buff *skb, char *from, int copy)

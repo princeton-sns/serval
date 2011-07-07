@@ -976,6 +976,9 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
 	int copy = start - offset;
         //int pos = 0;
 
+        LOG_DBG("checksum - offset=%u len=%u csum=%u\n",
+                offset, len, csum);
+
 	/* Checksum header. */
 	if (copy > 0) {
 		if (copy > len)
