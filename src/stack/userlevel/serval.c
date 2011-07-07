@@ -358,7 +358,7 @@ static int server_run(void)
 				if (!c) {
 					close(client_sock);
 				} else {
-					LOG_INF("accepted new client\n");
+					LOG_INF("accepted new client %u\n", client_get_id(c));
 					
 					client_list_add(c, &client_list);
 					

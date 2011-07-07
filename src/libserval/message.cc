@@ -170,7 +170,7 @@ Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
     if (n < 0 || read_hdr(buf) < 0) {
         delete[] buf;
         lerr("Message::read_hdr_from_stream_soc failed");
-        err = ESFINTERNAL;
+        err = errno;
         return -1;
     }
 

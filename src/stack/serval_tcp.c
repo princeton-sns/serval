@@ -296,10 +296,10 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 #endif
 
-#if defined(OS_USER)
+        //#if defined(OS_USER)
         /* FIXME: disable checksumming */
-        skb->ip_summed = CHECKSUM_UNNECESSARY;
-#endif
+        //skb->ip_summed = CHECKSUM_UNNECESSARY;
+        //#endif
 
         /* An explanation is required here, I think.
 	 * Packet length and doff are validated by header prediction,

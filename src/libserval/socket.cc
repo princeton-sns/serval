@@ -25,21 +25,21 @@
 
 #if defined(OS_ANDROID)
 const char *SVSockLib::DEFAULT_SF_CFG = "/data/local/tmp/serval.conf";
-const char *SVSockLib::SCAFD_TCP_PATH = "/data/local/tmp/serval-tcp.sock";
-const char *SVSockLib::SCAFD_UDP_PATH = "/data/local/tmp/serval-udp.sock";
+const char *SVSockLib::SERVAL_TCP_PATH = "/data/local/tmp/serval-tcp.sock";
+const char *SVSockLib::SERVAL_UDP_PATH = "/data/local/tmp/serval-udp.sock";
 #else
 const char *SVSockLib::DEFAULT_SF_CFG = "/etc/serval.conf";
-const char *SVSockLib::SCAFD_TCP_PATH = "/tmp/serval-tcp.sock";
-const char *SVSockLib::SCAFD_UDP_PATH = "/tmp/serval-udp.sock";
+const char *SVSockLib::SERVAL_TCP_PATH = "/tmp/serval-tcp.sock";
+const char *SVSockLib::SERVAL_UDP_PATH = "/tmp/serval-udp.sock";
 #endif
 Cli SVSockLib::null_cli;
-uint32_t SVSockLib::_scafd_id = 0;
+uint32_t SVSockLib::_serval_id = 0;
 
 //
 // SVSockLib
 //
 
-SVSockLib::SVSockLib(int scafd_id)
+SVSockLib::SVSockLib(int serval_id)
 {
   char logname[30];
   memset(logname, 0, 30);
@@ -47,27 +47,27 @@ SVSockLib::SVSockLib(int scafd_id)
   Logger::initialize(logname);
   Logger::set_debug_level(Logger::DEBUG);
 
-  if (!scafd_id) {
-    char *scafd_id_str = getenv("SCAFD_ID");
-    if (!scafd_id_str)
-      _scafd_id = 0;
+  if (!serval_id) {
+    char *serval_id_str = getenv("SERVAL_ID");
+    if (!serval_id_str)
+      _serval_id = 0;
     else {
-      _scafd_id = strtol(scafd_id_str, NULL, 10);
+      _serval_id = strtol(serval_id_str, NULL, 10);
       if (errno == EINVAL) {
-        lerr("illegal value (%s) found in SCAFD_ID; "
+        lerr("illegal value (%s) found in SERVAL_ID; "
              "expected uint32_t; using 0");
-        _scafd_id = 0;
+        _serval_id = 0;
       }
     }
   } else
-    _scafd_id = scafd_id;
+    _serval_id = serval_id;
   bzero(&_udp_srv, sizeof(_udp_srv));
   _udp_srv.sun_family = AF_LOCAL;
-  sprintf(_udp_srv.sun_path, SCAFD_UDP_PATH, _scafd_id);
+  sprintf(_udp_srv.sun_path, SERVAL_UDP_PATH, _serval_id);
 
   bzero(&_tcp_srv, sizeof(_tcp_srv));
   _tcp_srv.sun_family = AF_LOCAL;
-  sprintf(_tcp_srv.sun_path, SCAFD_TCP_PATH, _scafd_id);
+  sprintf(_tcp_srv.sun_path, SERVAL_TCP_PATH, _serval_id);
 
   INIT_LIST_HEAD(&_cli_list);
 }
@@ -180,7 +180,7 @@ SVSockLib::bind_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
   const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_bind(sv_addr, cli, err) < 0) {
+  if (query_serval_bind(sv_addr, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -204,7 +204,7 @@ SVSockLib::check_state_for_bind(const Cli &cli, sv_err_t &err) const
 }
 
 int
-SVSockLib::query_scafd_bind(const struct sockaddr_sv *sv_addr,
+SVSockLib::query_serval_bind(const struct sockaddr_sv *sv_addr,
                             Cli &cli, sv_err_t &err)
 {
   BindReq breq(sv_addr->sv_srvid, sv_addr->sv_flags, sv_addr->sv_prefix_bits);
@@ -310,7 +310,7 @@ SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
   const struct sockaddr_sv *sv_addr =  (const struct sockaddr_sv *)addr;
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_connect(sv_addr, nb, cli, err) < 0) {
+  if (query_serval_connect(sv_addr, nb, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -321,7 +321,7 @@ SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
 }
 
 int
-SVSockLib::query_scafd_connect(const struct sockaddr_sv *sv_addr, 
+SVSockLib::query_serval_connect(const struct sockaddr_sv *sv_addr, 
                                bool nb, Cli &cli, sv_err_t &err)
 {
   uint16_t flags = sv_addr->sv_flags;
@@ -362,6 +362,8 @@ SVSockLib::query_scafd_connect(const struct sockaddr_sv *sv_addr,
   ConnectRsp cresp;
   if (cresp.read_from_stream_soc(cli.fd(), err) < 0) {
     lerr("read from stream sock failed");
+    if (err == EINTR) 
+      cli.set_interrupted(true);
     return SERVAL_SOCKET_ERROR;
   }
   
@@ -369,7 +371,7 @@ SVSockLib::query_scafd_connect(const struct sockaddr_sv *sv_addr,
   
   if (cresp.err().v) {
     err = cresp.err();
-    lerr("bad response from scafd");
+    lerr("bad response from serval");
     return SERVAL_SOCKET_ERROR;
   }
   return 0;
@@ -422,7 +424,7 @@ SVSockLib::getsockopt_sv(int soc, int level, int option_name,
 
     cli.save_flags();
     cli.set_sync();
-    if (query_scafd_soerror(cli, err) < 0) {
+    if (query_serval_soerror(cli, err) < 0) {
       cli.restore_flags();
       return SERVAL_SOCKET_ERROR;
     }
@@ -441,7 +443,7 @@ SVSockLib::getsockopt_sv(int soc, int level, int option_name,
 }
 
 int
-SVSockLib::query_scafd_soerror(Cli &cli, sv_err_t &err)
+SVSockLib::query_serval_soerror(Cli &cli, sv_err_t &err)
 {
   ConnectRsp cresp;
 
@@ -480,7 +482,7 @@ SVSockLib::listen_sv(int soc, int backlog, sv_err_t &err)
 
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_listen(backlog, cli, err) < 0) {
+  if (query_serval_listen(backlog, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -507,7 +509,7 @@ SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
   info("multi-listen: on obj id %s", oid_to_str(&sv_addr->sv_srvid));
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_listen(backlog, sv_addr->sv_srvid, cli, err) < 0) {
+  if (query_serval_listen(backlog, sv_addr->sv_srvid, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -517,7 +519,7 @@ SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
 }
 
 int
-SVSockLib::query_scafd_listen(int backlog, const sv_srvid_t& local_obj_id, 
+SVSockLib::query_serval_listen(int backlog, const sv_srvid_t& local_obj_id, 
                               Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(local_obj_id, backlog);
@@ -551,7 +553,7 @@ SVSockLib::check_state_for_listen(const Cli &cli, sv_err_t &err) const
 }
 
 int
-SVSockLib::query_scafd_listen(int backlog, Cli &cli, sv_err_t &err)
+SVSockLib::query_serval_listen(int backlog, Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(backlog);
 
@@ -611,7 +613,7 @@ SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
   cli.save_flags();
   cli.set_sync();
   AcceptRsp aresp;
-  if (query_scafd_accept1(nb, cli, aresp, err) < 0) {
+  if (query_serval_accept1(nb, cli, aresp, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -627,7 +629,7 @@ SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
   
   info("accept2");
   // blocking by default
-  if (query_scafd_accept2(nb, new_cli, aresp, err) < 0) {
+  if (query_serval_accept2(nb, new_cli, aresp, err) < 0) {
     cli.restore_flags();
     delete_cli(&new_cli, err);
     return SERVAL_SOCKET_ERROR;
@@ -658,7 +660,7 @@ SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
 }
 
 int
-SVSockLib::query_scafd_accept2(bool nb, 
+SVSockLib::query_serval_accept2(bool nb, 
                                Cli &cli, const AcceptRsp &aresp,
                                sv_err_t &err)
 {
@@ -752,7 +754,7 @@ SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
 }
 
 int
-SVSockLib::query_scafd_accept1(bool nb, Cli &cli, AcceptRsp &aresp,
+SVSockLib::query_serval_accept1(bool nb, Cli &cli, AcceptRsp &aresp,
                                sv_err_t &err)
 {
   AcceptReq areq;
@@ -911,7 +913,7 @@ SVSockLib::send_sv(int soc, const void *buffer, size_t length, int flags,
   
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_send(nb, buffer, length, flags, cli, err) < 0) {
+  if (query_serval_send(nb, buffer, length, flags, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -966,7 +968,7 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
 
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_sendto(*remote_obj_id, ipaddr, 
+  if (query_serval_sendto(*remote_obj_id, ipaddr, 
                          buffer, length, flags, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
@@ -1008,7 +1010,7 @@ SVSockLib::check_state_for_sendto(const Cli &cli, sv_err_t &err) const
 }
 
 int
-SVSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flags,
+SVSockLib::query_serval_send(bool nb, const void *buffer, size_t length, int flags,
                             Cli &cli, sv_err_t &err)
 {
   SendReq sreq(nb, (unsigned char *)buffer, length, flags);
@@ -1067,7 +1069,7 @@ SVSockLib::query_scafd_send(bool nb, const void *buffer, size_t length, int flag
 }
 
 int
-SVSockLib::query_scafd_sendto(const sv_srvid_t& dst_obj_id,
+SVSockLib::query_serval_sendto(const sv_srvid_t& dst_obj_id,
                               uint32_t ipaddr,
                               const void *buffer, size_t length, int flags,
                               Cli &cli, sv_err_t &err)
@@ -1153,10 +1155,10 @@ SVSockLib::recv_sv(int soc, void *buffer, size_t length, int flags,
   uint32_t src_ipaddr;
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
+  if (query_serval_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
                        cli, err) < 0) {
     cli.restore_flags();
-    lerr("query_scafd_recv returned error '%s'", strerror_sv(err.v));
+    lerr("query_serval_recv returned error '%s'", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
   }
   cli.restore_flags();
@@ -1200,7 +1202,7 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
   
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
+  if (query_serval_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
                        cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
@@ -1229,11 +1231,11 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
 
 
 int
-SVSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len, 
+SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len, 
                             int flags, sv_srvid_t &src_obj_id, uint32_t& src_ipaddr,
                             Cli &cli, sv_err_t &err)
 {
-  info("query_scafd_recv");
+  info("query_serval_recv");
   bool got_havedata_msg = false;
 
   //if (cli.proto().v == SERVAL_PROTO_TCP) {
@@ -1377,10 +1379,12 @@ SVSockLib::query_scafd_recv(bool nb, unsigned char *buffer, size_t &len,
 int
 SVSockLib::close_sv(int soc, sv_err_t &err)
 {
+  int ret = 0;
   Cli &cli = get_cli(soc, err);
+
   if (cli.is_null()) {
     return ::close(soc);
-  } else {
+  } else if (!cli.is_interrupted()) {
     // Must scope this lock, since we cannot unlock after we delete
     // the client
     SimpleLock slock(cli.get_lock());
@@ -1390,10 +1394,10 @@ SVSockLib::close_sv(int soc, sv_err_t &err)
     cli.save_flags();
     cli.set_sync();
     
-    if (query_scafd_close(cli, err) < 0) {
+    if (query_serval_close(cli, err) < 0) {
       cli.restore_flags();
-      lerr("query_scafd_close failed");
-      return -2;
+      lerr("query_serval_close failed");
+      err = -1;
     }
     
     cli.restore_flags();
@@ -1404,11 +1408,11 @@ SVSockLib::close_sv(int soc, sv_err_t &err)
     // unlock happens here.
   }
   delete_cli(&cli, err);
-  return 0;
+  return ret;
 }
 
 int
-SVSockLib::query_scafd_close(Cli &cli, sv_err_t &err)
+SVSockLib::query_serval_close(Cli &cli, sv_err_t &err)
 {
   CloseReq creq;
 
@@ -1500,13 +1504,13 @@ SVSockLib::migrate_sv(int soc, sv_err_t &err)
 
   cli.save_flags();
   cli.set_sync();
-  if (query_scafd_migrate(cli, err) < 0) {
+  if (query_serval_migrate(cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
   cli.restore_flags();
 
-  // within Scafd socket state transitions to 
+  // within Serval socket state transitions to 
   // one of the SVSock::is_user_closed_state(s), 
   // it's OK to delete the app end of the socket
   delete_cli(&cli, err);
@@ -1514,9 +1518,9 @@ SVSockLib::migrate_sv(int soc, sv_err_t &err)
 }
 
 int
-SVSockLib::query_scafd_migrate(Cli &cli, sv_err_t &err)
+SVSockLib::query_serval_migrate(Cli &cli, sv_err_t &err)
 {
-  info("query_scafd_migrate");
+  info("query_serval_migrate");
   MigrateReq mreq;
 
   if (mreq.write_to_stream_soc(cli.fd(), err) < 0)
