@@ -237,7 +237,7 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 				       skb->len, IPPROTO_TCP, 0);
 
 	if (skb->len <= 76) {
-                LOG_DBG("doing complete cheksum calculation\n");
+                LOG_DBG("doing complete checksum calculation\n");
 		return __skb_checksum_complete(skb);
 	}
 	return 0;
@@ -1915,7 +1915,7 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
                 LOG_DBG("Doing partial checksumming, offset=%u\n", 
-                        skb->csum_start + skb->csum_offset);
+                        skb->csum_start - skb_headroom(skb));
 	} else {
 
 		th->check = serval_tcp_v4_check(len, saddr, daddr,

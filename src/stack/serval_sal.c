@@ -2427,8 +2427,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         __sk_dst_reset(sk);
                 
                 /*
-                  Calculate the checksum for the transport header now
-                  that we know the dst and src IP.
+                  We have to calculate the checksum for resolution
+                  packets at this point as it is not until here that
+                  we know the destination IP to put in the
+                  packet. Normally, the checksum is calculated by the
+                  transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check)
                         ssk->af_ops->send_check(sk, skb);
