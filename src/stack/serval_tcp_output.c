@@ -2082,6 +2082,8 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
         skb_reset_transport_header(skb);
 
+        LOG_DBG("Transport header=%p\n", skb_transport_header(skb));
+
         if (!tp->write_seq)
                 tp->write_seq = serval_tcp_random_sequence_number();
 

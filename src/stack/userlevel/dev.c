@@ -732,15 +732,14 @@ static int skb_checksum_help(struct sk_buff *skb)
         if (skb->ip_summed == CHECKSUM_COMPLETE)
                 goto out_set_summed;
 
-
-
         offset = skb_checksum_start_offset(skb);
         BUG_ON(offset >= skb_headlen(skb));
         csum = skb_checksum(skb, offset, skb->len - offset, 0);
 
-        offset += skb->csum_offset;
+        LOG_DBG("Calculating checksum offset=%u skb->data=%p csum_from=%p csum=%u\n", 
+                offset, skb->data, skb->data + offset, csum);
 
-        LOG_DBG("Calculating checksum offset=%u\n", offset);
+        offset += skb->csum_offset;
 
         BUG_ON(offset + sizeof(__sum16) > skb_headlen(skb));
 
@@ -753,7 +752,7 @@ static int skb_checksum_help(struct sk_buff *skb)
 
         *(__sum16 *)(skb->data + offset) = csum_fold(csum);
 
-        LOG_DBG("Checksum is %u\n", *(__sum16 *)(skb->data + offset));
+        LOG_DBG("Checksum is %u\n", ntohs(*(__sum16 *)(skb->data + offset)));
 
  out_set_summed:
         skb->ip_summed = CHECKSUM_NONE;

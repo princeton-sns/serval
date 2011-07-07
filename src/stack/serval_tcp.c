@@ -1914,8 +1914,8 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
-                LOG_DBG("Doing partial checksumming, offset=%u\n", 
-                        skb->csum_start - skb_headroom(skb));
+                LOG_DBG("Doing partial checksumming, csum_start=%u csum_point=%p\n", 
+                        skb->csum_start, skb_transport_header(skb));
 	} else {
 
 		th->check = serval_tcp_v4_check(len, saddr, daddr,
