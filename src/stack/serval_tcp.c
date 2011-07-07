@@ -1895,6 +1895,19 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 {
 	struct tcphdr *th = tcp_hdr(skb);
         unsigned long len = skb_tail_pointer(skb) - skb_transport_header(skb);
+#if defined(ENABLE_DEBUG)
+        {
+                char rmtstr[18], locstr[18];
+                LOG_DBG("saddr=%s daddr=%s "
+                        "len=%lu skb->csum=%u\n",
+                        inet_ntop(AF_INET, &saddr, 
+                                  locstr, 18),
+                        inet_ntop(AF_INET, &daddr, 
+                                  rmtstr, 18),
+                        len,
+                        skb->csum);
+        }
+#endif
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
@@ -1912,19 +1925,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_sock *inet = inet_sk(sk);
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("inet_saddr=%s inet_daddr=%s "
-                        "len=%u skb->csum=%u\n",
-                        inet_ntop(AF_INET, &inet->inet_saddr, 
-                                  locstr, 18),
-                        inet_ntop(AF_INET, &inet->inet_daddr, 
-                                  rmtstr, 18),
-                        skb_tail_pointer(skb) - skb_transport_header(skb),
-                        skb->csum);
-        }
-#endif
 
 	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
 }
