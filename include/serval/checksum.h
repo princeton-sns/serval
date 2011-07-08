@@ -1,7 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#ifndef __CHECKSUM_H
-#define __CHECKSUM_H
+#ifndef __CHECKSUM_H_
+#define __CHECKSUM_H_
 
+#if defined(OS_LINUX_KERNEL)
+#include <asm/checksum.h>
+#else
 #if defined(OS_LINUX)
 #include <linux/types.h>
 #endif
@@ -61,6 +64,7 @@ extern __sum16 ip_fast_csum(const void *iph, unsigned int ihl);
  */
 static inline __sum16 csum_fold(__wsum csum)
 {
+
 	u32 sum = (__force u32)csum;
 	sum = (sum & 0xffff) + (sum >> 16);
 	sum = (sum & 0xffff) + (sum >> 16);
@@ -154,4 +158,6 @@ static __inline__ __wsum csum_and_copy_to_user
 	return (__force __wsum)-1; /* invalid checksum */
 }
 
-#endif /* __CHECKSUM_H */
+#endif /* __CHECKSUM_H_ */
+
+#endif /* OS_LINUX_KERNEL */

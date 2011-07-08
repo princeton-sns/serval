@@ -111,6 +111,9 @@ static int packet_raw_recv(struct net_device *dev)
         /* skb->pkt_type = */
 	skb->protocol = IPPROTO_IP;
 
+        skb->csum = 0;
+        skb->ip_summed = CHECKSUM_NONE;
+
 	/* Packet should be freed by upper layers */
 	return serval_ipv4_rcv(skb);
 }

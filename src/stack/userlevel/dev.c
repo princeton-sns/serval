@@ -736,8 +736,8 @@ static int skb_checksum_help(struct sk_buff *skb)
         BUG_ON(offset >= skb_headlen(skb));
         csum = skb_checksum(skb, offset, skb->len - offset, 0);
 
-        LOG_DBG("Calculating checksum offset=%u skb->data=%p csum_from=%p csum=%u\n", 
-                offset, skb->data, skb->data + offset, csum);
+        LOG_DBG("Calculating checksum offset=%u skb->data=%p csum_from=%p\n", 
+                offset, skb->data, skb->data + offset);
 
         offset += skb->csum_offset;
 
@@ -765,13 +765,16 @@ static int skb_checksum_help(struct sk_buff *skb)
 int dev_queue_xmit(struct sk_buff *skb)
 {
         struct net_device *dev = skb->dev;
-
+        
         if (skb->ip_summed == CHECKSUM_PARTIAL) {
                 skb_set_transport_header(skb,
                                          skb_checksum_start_offset(skb));
                 if (skb_checksum_help(skb))
                         goto out_kfree_skb;
         }
+
+        LOG_DBG("verify=%u\n", __skb_checksum_complete(skb));
+
 #if defined(DIRECT_TX)
         dev->pack_ops->xmit(skb);
 #else

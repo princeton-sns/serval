@@ -3,6 +3,7 @@
 #include <serval/skbuff.h>
 #include <serval/debug.h>
 #include <serval/netdevice.h>
+#include <serval/checksum.h>
 #include <serval_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
@@ -26,8 +27,7 @@ extern int serval_sal_rcv(struct sk_buff *);
 static inline void ip_send_check(struct iphdr *iph)
 {
         iph->check = 0;
-        /* Set by kernel if 0 */
-        /* iph->check = in_cksum(iph, iph->ihl << 2); */
+        iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);
 }
 
 int serval_ipv4_rcv(struct sk_buff *skb)
