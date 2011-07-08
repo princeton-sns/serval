@@ -29,6 +29,10 @@ extern unsigned int debug;
 module_param(debug, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(debug, "Set debug level 0-6 (0=off).");
 
+unsigned int checksum_mode = 0;
+module_param(checksum_mode, uint, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(debug, "Set checksum mode (0=software, 1=hardware)");
+
 static char *ifname = NULL;
 module_param(ifname, charp, S_IRUGO);
 MODULE_PARM_DESC(ifname, "Resolve only on this device.");

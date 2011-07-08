@@ -31,6 +31,7 @@ static char *progname = NULL;
 extern int telnet_init(void);
 extern void telnet_fini(void);
 extern unsigned int debug;
+unsigned int checksum_mode = 1;
 extern int stackid;
 
 #define MAX(x, y) (x >= y ? x : y)

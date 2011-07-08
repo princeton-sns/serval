@@ -298,12 +298,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 #endif
 
-#if defined(OS_LINUX_KERNEL)
-        /* We cannot trust the hardware to checksumming our
-           packets. */
-        if (skb->ip_summed != CHECKSUM_UNNECESSARY)
-                skb->ip_summed = CHECKSUM_NONE;
-#endif
         /* An explanation is required here, I think.
 	 * Packet length and doff are validated by header prediction,
 	 * provided case of th->doff==0 is eliminated.
@@ -315,7 +309,8 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
-	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
+	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + 
+                                    th->syn + th->fin +
 				    skb->len - th->doff * 4);
 	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
 	TCP_SKB_CB(skb)->when	 = 0;
@@ -1893,6 +1888,8 @@ recv_urg:
 	goto out;
 }
 
+extern int checksum_mode;
+
 void __serval_tcp_v4_send_check(struct sk_buff *skb,
                                 __be32 saddr, __be32 daddr)
 {
@@ -1911,13 +1908,8 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
         }
 #endif
 
-	if (skb->ip_summed == CHECKSUM_PARTIAL) {
-                __sum16 csum = serval_tcp_v4_check(len, saddr, daddr, 0);
-                LOG_DBG("send tcpudp fold csum=%u tcpudp_magic=%u nofold=%u\n", 
-                        csum, 
-                        csum_tcpudp_magic(saddr, daddr, len, IPPROTO_TCP, 0), 
-                        csum_tcpudp_nofold(saddr, daddr, len, IPPROTO_TCP, 0));
-		th->check = ~csum;
+	if (skb->ip_summed == CHECKSUM_PARTIAL && checksum_mode) {
+		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
 	} else {
