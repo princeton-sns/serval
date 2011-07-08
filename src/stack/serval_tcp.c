@@ -298,13 +298,18 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 #endif
 
-        //#if defined(OS_USER)
-        /* FIXME: disable checksumming */
-        //skb->ip_summed = CHECKSUM_UNNECESSARY;
-        //#endif
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[1500];
+                LOG_DBG("Recv hex=[%s]\n", hexdump(skb->data, skb->len, buf, 1500));
+        }
+#endif
+
 #if defined(OS_LINUX_KERNEL)
-        /* We cannot trust the hardware to checksumming our
-           packets. */
+        /* 
+           We cannot trust the hardware to checksum our Serval packets
+           correctly.
+        */
         skb->ip_summed = CHECKSUM_NONE;
 #endif
         /* An explanation is required here, I think.

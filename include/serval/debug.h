@@ -35,6 +35,21 @@ void logme(log_level_t level, const char *func, const char *format, ...);
 
 #if defined(ENABLE_DEBUG)
 
+static inline const char *hexdump(const void *data, int datalen, 
+                                  char *buf, int buflen)
+{
+        int i = 0, len = 0;
+        const unsigned char *h = (const unsigned char *)data;
+        
+        while (i < datalen) {
+                unsigned char c = (i + 1 < datalen) ? h[i+1] : 0;
+                len += snprintf(buf + len, buflen - len, 
+                                "%02x%02x ", h[i], c);
+                i += 2;
+        }
+        return buf;
+}
+
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
