@@ -94,7 +94,7 @@ struct sk_buff_head {
 	/* These two members must be first. */
 	struct sk_buff	*next;
 	struct sk_buff	*prev;
-	uint32_t	qlen;
+	__u32	qlen;
 	spinlock_t	lock;
 };
 
@@ -105,8 +105,8 @@ typedef struct skb_frag_struct skb_frag_t;
 
 struct skb_frag_struct {
 	struct page *page;
-	uint32_t page_offset;
-	uint32_t size;
+	__u32 page_offset;
+	__u32 size;
 };
 
 struct skb_shared_info {
@@ -143,26 +143,27 @@ struct sk_buff {
 	unsigned int		len,
 				data_len;
 	unsigned long		_skb_refdst;
-	uint16_t		mac_len,
+	__u16		        mac_len,
 				hdr_len;
 	union {
-		uint32_t	csum;
+		__u32	csum;
 		struct {
-			uint16_t	csum_start;
-			uint16_t	csum_offset;
+			__u16	csum_start;
+			__u16	csum_offset;
 		};
 	};
-        uint32_t                priority;
+        __u32                   priority;
 
-        unsigned char           cloned:1, ip_summed:2, nohdr:1, pkt_type:3;
+        __u8                    cloned:1, ip_summed:2, nohdr:1, pkt_type:3;
+	__be16	         	protocol;
         union {
-		uint32_t	mark; /* Used for packet type in Serval */
-		uint32_t	dropcount;
+		__u32	mark; /* Used for packet type in Serval */
+		__u32	dropcount;
 	};
 	sk_buff_data_t		transport_header;
 	sk_buff_data_t		network_header;
 	sk_buff_data_t		mac_header;
-	uint16_t		protocol; /* In network byte order */
+
 	void			(*destructor)(struct sk_buff *skb);
 	/* These elements must be at the end, see alloc_skb() for details.  */
 	sk_buff_data_t		tail;
@@ -647,7 +648,7 @@ static inline int skb_transport_offset(const struct sk_buff *skb)
 	return skb_transport_header(skb) - skb->data;
 }
 
-static inline uint32_t skb_network_header_len(const struct sk_buff *skb)
+static inline __u32 skb_network_header_len(const struct sk_buff *skb)
 {
 	return skb->transport_header - skb->network_header;
 }
@@ -704,7 +705,7 @@ static inline void __skb_insert(struct sk_buff *newsk,
  *
  *	Return the length of an &sk_buff queue.
  */
-static inline uint32_t skb_queue_len(const struct sk_buff_head *list_)
+static inline __u32 skb_queue_len(const struct sk_buff_head *list_)
 {
 	return list_->qlen;
 }

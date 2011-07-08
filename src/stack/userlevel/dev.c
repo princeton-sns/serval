@@ -733,11 +733,12 @@ static int skb_checksum_help(struct sk_buff *skb)
                 goto out_set_summed;
 
         offset = skb_checksum_start_offset(skb);
+
+        LOG_DBG("Calculating checksum offset=%u skb->data=%p skb->len=%u csum_from=%p\n", 
+                offset, skb->data, skb->len, skb->data + offset);
+
         BUG_ON(offset >= skb_headlen(skb));
         csum = skb_checksum(skb, offset, skb->len - offset, 0);
-
-        LOG_DBG("Calculating checksum offset=%u skb->data=%p csum_from=%p\n", 
-                offset, skb->data, skb->data + offset);
 
         offset += skb->csum_offset;
 

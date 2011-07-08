@@ -112,6 +112,7 @@ nodata:
 
 static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 {
+        new->tstamp             = new->tstamp;
 	new->dev		= old->dev;
 	new->transport_header	= old->transport_header;
 	new->network_header	= old->network_header;
@@ -123,6 +124,7 @@ static void __copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 	new->csum		= old->csum;
 	new->pkt_type		= old->pkt_type;
 	new->ip_summed		= old->ip_summed;
+        //new->skb_iff            = old->skb_iff;
 	/* skb_copy_queue_mapping(new, old); */
 	new->priority		= old->priority;
 	new->protocol		= old->protocol;
@@ -158,7 +160,6 @@ static struct sk_buff *__skb_clone(struct sk_buff *n, struct sk_buff *skb)
 	atomic_inc(&(skb_shinfo(skb)->dataref));
 	skb->cloned = 1;
 
-        //atomic_inc(&num_skb_alloc);
         atomic_inc(&num_skb_clone);
 
 	return n;

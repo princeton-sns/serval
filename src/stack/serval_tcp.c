@@ -1917,7 +1917,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
                 LOG_DBG("Doing partial checksumming, csum_start=%u csum_point=%p\n", 
                         skb->csum_start, skb_transport_header(skb));
 	} else {
-
 		th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
                                                              th->doff << 2,

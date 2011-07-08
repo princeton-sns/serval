@@ -2434,12 +2434,12 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check)
-                        ssk->af_ops->send_check(sk, skb);
+                        ssk->af_ops->send_check(sk, cskb);
 
                 /* Cannot reset transport header until after checksum
                    calculation since send_check requires access to
                    transport header */
-                skb_reset_transport_header(skb);
+                skb_reset_transport_header(cskb);
 
 		err = ssk->af_ops->queue_xmit(cskb);
 
