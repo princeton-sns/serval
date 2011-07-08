@@ -305,7 +305,8 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 #if defined(OS_LINUX_KERNEL)
         /* We cannot trust the hardware to checksumming our
            packets. */
-        skb->ip_summed = CHECKSUM_NONE;
+        if (skb->ip_summed != CHECKSUM_UNNECESSARY)
+                skb->ip_summed = CHECKSUM_NONE;
 #endif
         /* An explanation is required here, I think.
 	 * Packet length and doff are validated by header prediction,

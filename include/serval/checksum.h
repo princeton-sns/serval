@@ -64,7 +64,6 @@ extern __sum16 ip_fast_csum(const void *iph, unsigned int ihl);
  */
 static inline __sum16 csum_fold(__wsum csum)
 {
-
 	u32 sum = (__force u32)csum;
 	sum = (sum & 0xffff) + (sum >> 16);
 	sum = (sum & 0xffff) + (sum >> 16);

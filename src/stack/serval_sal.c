@@ -1279,6 +1279,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         
         /* Let transport know about the response */
         if (ssk->af_ops->request_state_process) {
+                skb->ip_summed = CHECKSUM_UNNECESSARY;
                 err = ssk->af_ops->request_state_process(sk, skb);
 
                 if (err) {
