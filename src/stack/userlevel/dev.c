@@ -474,6 +474,7 @@ int netdev_populate_table(int sizeof_priv,
                         free_netdev(dev);
                         goto out;
                 }
+
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                                 
@@ -499,6 +500,7 @@ int netdev_populate_table(int sizeof_priv,
 #else
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+#endif
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -513,7 +515,7 @@ int netdev_populate_table(int sizeof_priv,
 
                 }       
 #endif       
-#endif
+
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
@@ -733,10 +735,6 @@ static int skb_checksum_help(struct sk_buff *skb)
                 goto out_set_summed;
 
         offset = skb_checksum_start_offset(skb);
-
-        LOG_DBG("Calculating checksum offset=%u skb->data=%p skb->len=%u csum_from=%p\n", 
-                offset, skb->data, skb->len, skb->data + offset);
-
         BUG_ON(offset >= skb_headlen(skb));
         csum = skb_checksum(skb, offset, skb->len - offset, 0);
 
@@ -753,8 +751,6 @@ static int skb_checksum_help(struct sk_buff *skb)
 
         *(__sum16 *)(skb->data + offset) = csum_fold(csum);
 
-        LOG_DBG("Checksum is %u\n", ntohs(*(__sum16 *)(skb->data + offset)));
-
  out_set_summed:
         skb->ip_summed = CHECKSUM_NONE;
  out:
@@ -766,15 +762,16 @@ static int skb_checksum_help(struct sk_buff *skb)
 int dev_queue_xmit(struct sk_buff *skb)
 {
         struct net_device *dev = skb->dev;
-        
+
+        /*
+          Calculate final checksum if partial 
+        */
         if (skb->ip_summed == CHECKSUM_PARTIAL) {
                 skb_set_transport_header(skb,
                                          skb_checksum_start_offset(skb));
                 if (skb_checksum_help(skb))
                         goto out_kfree_skb;
         }
-
-        LOG_DBG("verify=%u\n", __skb_checksum_complete(skb));
 
 #if defined(DIRECT_TX)
         dev->pack_ops->xmit(skb);

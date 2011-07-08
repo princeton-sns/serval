@@ -163,8 +163,8 @@ int serval_ip_route_output_flow(struct net *net, struct rtable **rp,
 struct dst_entry *serval_ipv4_req_route(struct sock *sk,
                                         struct request_sock *rsk,
                                         int protocol,
-                                        uint32_t saddr,
-                                        uint32_t daddr)
+                                        u32 saddr,
+                                        u32 daddr)
 {
 	struct rtable *rt;
 	struct ip_options *opt = NULL; /* inet_rsk(req)->opt; */
@@ -227,7 +227,7 @@ const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
 }
 
 int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
-                            uint32_t saddr, uint32_t daddr)
+                            u32 saddr, u32 daddr)
 {
 	struct inet_sock *inet = inet_sk(sk);
         struct iphdr *iph;
@@ -281,7 +281,7 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 }
 
 int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
-                                   uint32_t saddr, uint32_t daddr, 
+                                   u32 saddr, u32 daddr, 
                                    struct ip_options *opt)
 {
         int err = 0;
@@ -488,7 +488,7 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         }
         */
 
-        err = serval_ipv4_fill_in_hdr(sk, skb, INADDR_ANY,
+        err = serval_ipv4_fill_in_hdr(sk, skb, inet_sk(sk)->inet_saddr,
                                       inet_sk(sk)->inet_daddr);
         
         if (err < 0) {
