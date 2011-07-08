@@ -1912,7 +1912,7 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
                 skb->ip_summed = CHECKSUM_NONE;
                 th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
-                                                             skb->len,
+                                                             len,
                                                              0));
         } else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
