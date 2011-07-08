@@ -773,7 +773,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
 
-        //skb_reset_transport_header(rskb);      
         skb_dst_set(rskb, dst);
 
         rskb->dev = skb->dev;
@@ -781,11 +780,13 @@ static int serval_sal_syn_rcv(struct sock *sk,
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(sh), rskb->len);
         
-        /* Cannot use serval_sal_transmit_skb here since we do not yet
-         * have a full accepted socket (sk is the listening sock). */
+        /* 
+           Cannot use serval_sal_transmit_skb here since we do not yet
+           have a full accepted socket (sk is the listening sock). 
+        */
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
-                                             saddr.net_ip.s_addr,
-                                             ip_hdr(skb)->saddr, NULL);
+                                             inet_rsk(rsk)->loc_addr,
+                                             inet_rsk(rsk)->rmt_addr, NULL);
 
         /* Free the REQUEST */
  drop:
