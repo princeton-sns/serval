@@ -202,6 +202,7 @@ __wsum csum_tcpudp_nofold(__be32 saddr, __be32 daddr,
 	s += (__force u32)daddr;
 #ifdef __BIG_ENDIAN
 	s += proto + len;
+#warning "big endian"
 #else
 	s += (proto + len) << 8;
 #endif

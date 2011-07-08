@@ -104,15 +104,32 @@ typedef int8_t __s8;
 
 #include <serval/checksum.h>
 
+/* Setup byte order defines according to the Linux kernel */
+#if __BYTE_ORDER == __BIG_ENDIAN
+#ifdef __LITTLE_ENDIAN
+#undef __LITTLE_ENDIAN
+#define __LITTLE_ENDIAN_BITFIELD
+#undef  __BIG_ENDIAN_BITFIELD
+#endif
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __BIG_ENDIAN
+#undef __BIG_ENDIAN
+#define __LITTLE_ENDIAN_BITFIELD
+#undef __BIG_ENDIAN_BITFIELD
+#endif
+#else
+#error "Could not figure out the byte order of this platform!"
+#endif
+
 union ktime {
 	s64	tv64;
 #if BITS_PER_LONG != 64
 	struct {
-# ifdef __BIG_ENDIAN
+#ifdef __BIG_ENDIAN
 	s32	sec, nsec;
-# else
+#else
 	s32	nsec, sec;
-# endif
+#endif
 	} tv;
 #endif
 };

@@ -12,11 +12,6 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
 #include <net/route.h>
-#if defined(__BIG_ENDIAN)
-#define __BYTE_ORDER __BIG_ENDIAN
-#elif defined(__LITTLE_ENDIAN)
-#define __BYTE_ORDER __LITTLE_ENDIAN
-#endif
 #else
 #include <netinet/ip.h>
 #if defined(OS_LINUX)
@@ -140,7 +135,7 @@ out:
 
 struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 {
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __LITTLE_ENDIAN
         return serval_sock_lookup(&established_table, &init_net, 
                                   &flowid->s_id8[3], sizeof(flowid->s_id8[3]));
 #else
@@ -213,7 +208,7 @@ static void __serval_sock_hash(struct sock *sk)
             sk->sk_state == SERVAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
-#if __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __LITTLE_ENDIAN
                 ssk->hash_key = &ssk->local_flowid.s_id8[3];
                 ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[3]);
 #else
