@@ -224,6 +224,7 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 #endif
 
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
+                LOG_DBG("Checksum was complete\n");
 		if (!serval_tcp_v4_check(skb->len, iph->saddr,
                                          iph->daddr, skb->csum)) {
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -234,7 +235,7 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 	skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
 				       skb->len, IPPROTO_TCP, 0);
 
-        LOG_DBG("header csum=%u\n", csum_fold(skb->csum));
+        LOG_DBG("receive tcpudp fold csum=%u nofold=%u\n", csum_fold(skb->csum), skb->csum);
 
 	if (skb->len <= 76) {
 		return __skb_checksum_complete(skb);
@@ -1911,7 +1912,10 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL) {
                 __sum16 csum = serval_tcp_v4_check(len, saddr, daddr, 0);
-                LOG_DBG("csum=%u\n", csum);
+                LOG_DBG("send tcpudp fold csum=%u tcpudp_magic=%u nofold=%u\n", 
+                        csum, 
+                        csum_tcpudp_magic(saddr, daddr, len, IPPROTO_TCP, 0), 
+                        csum_tcpudp_nofold(saddr, daddr, len, IPPROTO_TCP, 0));
 		th->check = ~csum;
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
