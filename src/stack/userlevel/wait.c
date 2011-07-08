@@ -64,9 +64,13 @@ enum wait_signal wait_signal_lower(int fd)
 int default_wake_function(wait_queue_t *curr, unsigned mode, 
                           int wake_flags, void *key)
 {
-        uintptr_t pflags = (uintptr_t) key;
+        int ret = 0;        
         uint8_t sig = WAIT_READ_DATA & 0xFF;
-        int ret = 0;
+#if 0
+        /* This code doesn't seem to work. Clients aren't woken up
+           when there is no POLLIN or POLLOUT (e.g., on state_change
+           events).  */
+        uintptr_t pflags = (uintptr_t) key;
         
         if (pflags & POLLIN) {
                 sig = WAIT_READ_DATA;
@@ -97,7 +101,18 @@ int default_wake_function(wait_queue_t *curr, unsigned mode,
                                 curr->pipefd[1]);
                 }
         }
-
+#else
+        if (curr->pipefd[1] == -1) {
+                LOG_ERR("pipefd[1] == -1\n");
+                return -1;
+        }
+        ret = write(curr->pipefd[1], &sig, 1);
+        
+        if (ret < 0) {
+                LOG_ERR("Could not write out signal to pipe: %u\n", 
+                        curr->pipefd[1]);
+        }
+#endif
 	return ret;
 }
 
