@@ -285,23 +285,16 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 
 #if defined(ENABLE_DEBUG)
         {
-                char rmtstr[18], locstr[18], inet_saddr[18], inet_daddr[18];
+                char rmtstr[18], locstr[18], saddr[18], daddr[18];
                 LOG_DBG("iph->saddr=%s iph->daddr=%s inet_saddr=%s inet_daddr=%s\n",
                         inet_ntop(AF_INET, &iph->saddr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &iph->daddr, 
                                   locstr, 18),
                         inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr, 
-                                  inet_saddr, 18),
+                                  saddr, 18),
                         inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr, 
-                                  inet_daddr, 18));
-        }
-#endif
-
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[1500];
-                LOG_DBG("Recv hex=[%s]\n", hexdump(skb->data, skb->len, buf, 1500));
+                                  daddr, 18));
         }
 #endif
 
