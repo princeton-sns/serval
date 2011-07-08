@@ -745,6 +745,13 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 LOG_DBG("Transport has no SYNACK callback\n");
         }
 
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[1500];
+                LOG_DBG("Send hex=[%s]\n", hexdump(skb->data, skb->len, buf, 1500));
+        }
+#endif
+
         rskb->protocol = IPPROTO_SERVAL;
         conn_ext = (struct serval_connection_ext *)
                 skb_push(rskb, sizeof(*conn_ext));
@@ -776,6 +783,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
         skb_dst_set(rskb, dst);
 
         rskb->dev = skb->dev;
+        
+        skb_reset_transport_header(skb);
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(sh), rskb->len);
@@ -2266,6 +2275,12 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 break;
         }
 
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[1500];
+                LOG_DBG("Send hex=[%s]\n", hexdump(skb->data, skb->len, buf, 1500));
+        }
+#endif
         /* Add Serval header */
         sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
         sh->type = SERVAL_SKB_CB(skb)->pkttype;
