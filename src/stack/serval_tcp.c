@@ -1907,8 +1907,11 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
                         skb->csum);
         }
 #endif
-
-	if (skb->ip_summed == CHECKSUM_PARTIAL && checksum_mode) {
+        /* Force software checksum calculation */
+        if (skb->ip_summed == CHECKSUM_PARTIAL && !checksum_mode)
+                skb->ip_summed = CHECKSUM_NONE;
+                
+	if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
 		skb->csum_offset = offsetof(struct tcphdr, check);
