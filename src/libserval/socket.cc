@@ -205,7 +205,7 @@ SVSockLib::check_state_for_bind(const Cli &cli, sv_err_t &err) const
 
 int
 SVSockLib::query_serval_bind(const struct sockaddr_sv *sv_addr,
-                            Cli &cli, sv_err_t &err)
+                             Cli &cli, sv_err_t &err)
 {
   BindReq breq(sv_addr->sv_srvid, sv_addr->sv_flags, sv_addr->sv_prefix_bits);
 
@@ -322,7 +322,7 @@ SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
 
 int
 SVSockLib::query_serval_connect(const struct sockaddr_sv *sv_addr, 
-                               bool nb, Cli &cli, sv_err_t &err)
+                                bool nb, Cli &cli, sv_err_t &err)
 {
   uint16_t flags = sv_addr->sv_flags;
   ConnectReq creq(sv_addr->sv_srvid, nb, flags);
@@ -520,7 +520,7 @@ SVSockLib::listen_sv(int soc, const struct sockaddr *addr,
 
 int
 SVSockLib::query_serval_listen(int backlog, const sv_srvid_t& local_obj_id, 
-                              Cli &cli, sv_err_t &err)
+                               Cli &cli, sv_err_t &err)
 {
   ListenReq lreq(local_obj_id, backlog);
 
@@ -661,8 +661,8 @@ SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
 
 int
 SVSockLib::query_serval_accept2(bool nb, 
-                               Cli &cli, const AcceptRsp &aresp,
-                               sv_err_t &err)
+                                Cli &cli, const AcceptRsp &aresp,
+                                sv_err_t &err)
 {
   AcceptReq2 areq2(aresp.local_obj_id(), aresp.flow_id(), nb);
 
@@ -755,12 +755,12 @@ SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
 
 int
 SVSockLib::query_serval_accept1(bool nb, Cli &cli, AcceptRsp &aresp,
-                               sv_err_t &err)
+                                sv_err_t &err)
 {
   AcceptReq areq;
 
   if (areq.write_to_stream_soc(cli.fd(), err) < 0)
-      return SERVAL_SOCKET_ERROR;
+    return SERVAL_SOCKET_ERROR;
 
   areq.print("accept:app:tx");
 
@@ -801,73 +801,74 @@ SVSockLib::check_state_for_accept(const Cli &cli, sv_err_t &err) const
 
 ssize_t 
 SVSockLib::sendmsg_sv(int soc, const struct msghdr *message, int flags,
-        sv_err_t &err) {
-
-    info("sending message for socket %i", soc);
-    if (!message || !message->msg_iov) {
+                      sv_err_t &err) {
+  
+  info("sending message for socket %i", soc);
+  if (!message || !message->msg_iov) {
+    err = EINVAL;
+    return SERVAL_SOCKET_ERROR;
+  }
+  
+  //simply copy into a buffer and send it using normal send
+  uint8_t buffer[MAX_MSG_SIZE];
+  
+  uint8_t* head = buffer;
+  
+  size_t i = 0;
+  
+  for(i = 0; i < (size_t)message->msg_iovlen; i++) {
+    memcpy(head, message->msg_iov[i].iov_base, message->msg_iov[i].iov_len);
+    head += message->msg_iov[i].iov_len;
+  }
+  
+  if(message->msg_name && message->msg_namelen > 0) {
+    if(message->msg_namelen < sizeof(struct sockaddr_sv)) {
       err = EINVAL;
       return SERVAL_SOCKET_ERROR;
     }
-
-    //simply copy into a buffer and send it using normal send
-    uint8_t buffer[MAX_MSG_SIZE];
-
-    uint8_t* head = buffer;
-
-    size_t i = 0;
-    for(i = 0; i < (size_t)message->msg_iovlen; i++) {
-        memcpy(head, message->msg_iov[i].iov_base, message->msg_iov[i].iov_len);
-        head += message->msg_iov[i].iov_len;
-    }
-
-    if(message->msg_name && message->msg_namelen > 0) {
-        if(message->msg_namelen < sizeof(struct sockaddr_sv)) {
-            err = EINVAL;
-            return SERVAL_SOCKET_ERROR;
-        }
-
-        return sendto_sv(soc, buffer, head - buffer, flags, (struct sockaddr*) message->msg_name, message->msg_namelen, err);
-    }
-
-    return send_sv(soc, buffer, head - buffer, flags, err);
+    
+    return sendto_sv(soc, buffer, head - buffer, flags, (struct sockaddr*) message->msg_name, message->msg_namelen, err);
+  }
+  
+  return send_sv(soc, buffer, head - buffer, flags, err);
 }
 
 ssize_t
 SVSockLib::recvmsg_sv(int soc, struct msghdr *message, int flags,
-        sv_err_t &err) {
+                      sv_err_t &err) {
+  
+  if (!message || !message->msg_iov) {
+    err = EINVAL;
+    return SERVAL_SOCKET_ERROR;
+  }
+  
+  //simply recv in a buffer and copy it into the iov message
+  uint8_t buffer[MAX_MSG_SIZE];
+  
+  size_t totallen = 0;
+  size_t i = 0;
+  for(i = 0; i < (size_t)message->msg_iovlen; i++) {
+    totallen += message->msg_iov[i].iov_len;
+  }
+  
+  if(totallen > MAX_MSG_SIZE) {
+    err = EINVAL;
+    return SERVAL_SOCKET_ERROR;
+  }
 
-    if (!message || !message->msg_iov) {
-      err = EINVAL;
-      return SERVAL_SOCKET_ERROR;
-    }
+  ssize_t ret = recv_sv(soc, buffer, totallen, flags,err);
 
-    //simply recv in a buffer and copy it into the iov message
-    uint8_t buffer[MAX_MSG_SIZE];
+  if(ret < 0) {
+    return SERVAL_SOCKET_ERROR;
+  }
 
-    size_t totallen = 0;
-    size_t i = 0;
-    for(i = 0; i < (size_t)message->msg_iovlen; i++) {
-        totallen += message->msg_iov[i].iov_len;
-    }
+  uint8_t* head = buffer;
+  for(i = 0; i < message->msg_iovlen; i++) {
+    memcpy(message->msg_iov[i].iov_base, head, message->msg_iov[i].iov_len);
+    head += message->msg_iov[i].iov_len;
+  }
 
-    if(totallen > MAX_MSG_SIZE) {
-        err = EINVAL;
-        return SERVAL_SOCKET_ERROR;
-    }
-
-    ssize_t ret = recv_sv(soc, buffer, totallen, flags,err);
-
-    if(ret < 0) {
-        return SERVAL_SOCKET_ERROR;
-    }
-
-    uint8_t* head = buffer;
-    for(i = 0; i < message->msg_iovlen; i++) {
-        memcpy(message->msg_iov[i].iov_base, head, message->msg_iov[i].iov_len);
-        head += message->msg_iov[i].iov_len;
-    }
-
-    return ret;
+  return ret;
 }
 
 
@@ -969,7 +970,7 @@ SVSockLib::sendto_sv(int soc, const void *buffer, size_t length, int flags,
   cli.save_flags();
   cli.set_sync();
   if (query_serval_sendto(*remote_obj_id, ipaddr, 
-                         buffer, length, flags, cli, err) < 0) {
+                          buffer, length, flags, cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -1011,7 +1012,7 @@ SVSockLib::check_state_for_sendto(const Cli &cli, sv_err_t &err) const
 
 int
 SVSockLib::query_serval_send(bool nb, const void *buffer, size_t length, int flags,
-                            Cli &cli, sv_err_t &err)
+                             Cli &cli, sv_err_t &err)
 {
   SendReq sreq(nb, (unsigned char *)buffer, length, flags);
 
@@ -1030,16 +1031,16 @@ SVSockLib::query_serval_send(bool nb, const void *buffer, size_t length, int fla
     HaveData hdata;
     hdata.read_pld_from_stream_soc(cli.fd(), err);
     hdata.print("hdata:app:rx");
-      got_havedata_msg = true;
-      // read SendRsp
-      m = Message();
-      m.read_hdr_from_stream_soc(cli.fd(), err);
-      if (m.type() != Message::SEND_RSP) {
-        lerr("expected SendRsp message got %d type", 
-             m.type());
-        err = ESFINTERNAL;
-        return SERVAL_SOCKET_ERROR;
-      }
+    got_havedata_msg = true;
+    // read SendRsp
+    m = Message();
+    m.read_hdr_from_stream_soc(cli.fd(), err);
+    if (m.type() != Message::SEND_RSP) {
+      lerr("expected SendRsp message got %d type", 
+           m.type());
+      err = ESFINTERNAL;
+      return SERVAL_SOCKET_ERROR;
+    }
   } else if (errno == EAGAIN)
     info("no data to read; ok to send req");
   
@@ -1070,9 +1071,9 @@ SVSockLib::query_serval_send(bool nb, const void *buffer, size_t length, int fla
 
 int
 SVSockLib::query_serval_sendto(const sv_srvid_t& dst_obj_id,
-                              uint32_t ipaddr,
-                              const void *buffer, size_t length, int flags,
-                              Cli &cli, sv_err_t &err)
+                               uint32_t ipaddr,
+                               const void *buffer, size_t length, int flags,
+                               Cli &cli, sv_err_t &err)
 {
   SendReq sreq(dst_obj_id, ipaddr, (unsigned char *)buffer, length, flags);
 
@@ -1156,7 +1157,7 @@ SVSockLib::recv_sv(int soc, void *buffer, size_t length, int flags,
   cli.save_flags();
   cli.set_sync();
   if (query_serval_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
-                       cli, err) < 0) {
+                        cli, err) < 0) {
     cli.restore_flags();
     lerr("query_serval_recv returned error '%s'", strerror_sv(err.v));
     return SERVAL_SOCKET_ERROR;
@@ -1203,7 +1204,7 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
   cli.save_flags();
   cli.set_sync();
   if (query_serval_recv(nb, (unsigned char *)buffer, length, flags, src_obj_id, src_ipaddr,
-                       cli, err) < 0) {
+                        cli, err) < 0) {
     cli.restore_flags();
     return SERVAL_SOCKET_ERROR;
   }
@@ -1213,16 +1214,16 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
   sv_addr->sv_family = AF_SERVAL;
   memcpy(&sv_addr->sv_srvid, &src_obj_id, sizeof(sv_addr->sv_srvid));
 
-//  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sv)) {
-//    struct sockaddr_sv *sv_addr2 = (struct sockaddr_sv *)&src_addr[1];
-//    sv_addr2->sv_family = AF_SERVAL;
-//    memcpy(&sv_addr2->sv_srvid, SERVAL_NULL_OID, sizeof(sv_addr2->sv_srvid));
-//    *addr_len = 2 * sizeof(struct sockaddr_sv);
+  //  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sv)) {
+  //    struct sockaddr_sv *sv_addr2 = (struct sockaddr_sv *)&src_addr[1];
+  //    sv_addr2->sv_family = AF_SERVAL;
+  //    memcpy(&sv_addr2->sv_srvid, SERVAL_NULL_OID, sizeof(sv_addr2->sv_srvid));
+  //    *addr_len = 2 * sizeof(struct sockaddr_sv);
   if (*addr_len >= sizeof(struct sockaddr_sv) + sizeof(struct sockaddr_in)) {
-      struct sockaddr_in* saddr = (struct sockaddr_in*) (sv_addr + 1);
-      saddr->sin_family = AF_INET;
-      saddr->sin_addr.s_addr = src_ipaddr;
-      *addr_len = sizeof(struct sockaddr_sv) + sizeof(struct sockaddr_in);
+    struct sockaddr_in* saddr = (struct sockaddr_in*) (sv_addr + 1);
+    saddr->sin_family = AF_INET;
+    saddr->sin_addr.s_addr = src_ipaddr;
+    *addr_len = sizeof(struct sockaddr_sv) + sizeof(struct sockaddr_in);
   } else { 
     *addr_len = sizeof(struct sockaddr_sv);
   }
@@ -1232,67 +1233,67 @@ SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
 
 int
 SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len, 
-                            int flags, sv_srvid_t &src_obj_id, uint32_t& src_ipaddr,
-                            Cli &cli, sv_err_t &err)
+                             int flags, sv_srvid_t &src_obj_id, uint32_t& src_ipaddr,
+                             Cli &cli, sv_err_t &err)
 {
   info("query_serval_recv");
   bool got_havedata_msg = false;
 
   //if (cli.proto().v == SERVAL_PROTO_TCP) {
-    if (nb) {  // NON-BLOCKING
-      // first check for null HaveData message
-      // this is used to activate select
+  if (nb) {  // NON-BLOCKING
+    // first check for null HaveData message
+    // this is used to activate select
 
-      info("non-blocking socket %i, type = %i", cli.fd(), cli.proto().v);
-      HaveData hdata;
-      int size = hdata.total_len();
-      bool v;
-      if (cli.has_unread_data(size, v, err) < 0) {
-        lerr("has_unread_data returned error");
-        return SERVAL_SOCKET_ERROR;
-      }
-      if (!v) {
-        err = EWOULDBLOCK;           // or EAGAIN
-        lerr("non-blocking would block");
-        return SERVAL_SOCKET_ERROR;
-      }
-      info("reading hdata in nb mode");
-      hdata.read_from_stream_soc(cli.fd(), err);
-      hdata.print("hdata:app:rx");
-      // we have a message, request for data
-    } else {          // BLOCKING
-      // check if HaveData exists and discard it
-      // This allows select() to wake up without
-      // reading anything from the socket buffers
-      info("recv_sv on blocking socket %i",cli.fd());
-      bool v;
-      if (cli.has_unread_data(1, v, err) >= 0) {
-        if (v) {
-          // This must be HaveData
-          info("reading hdata in blocking mode");
-          HaveData hdata;
-          //int size = hdata.total_len();
-          if (hdata.read_from_stream_soc(cli.fd(), err) < 0) {
-            lerr("found unexpected msg (want HaveData)");
-            err = ESFINTERNAL;
-            return SERVAL_SOCKET_ERROR;
-          } else {
-            info("Got HaveData Msg");
-            hdata.print("hdata:app:rx");
-            got_havedata_msg = true;
-          }
-        }
-      } else if (errno == EAGAIN)
-        info("no data to read; ok to send req");
-    }
-    // Now ready to send read request
-    info("sending recv req of len %d", len);
-    RecvReq rreq(len, flags);
-    if (rreq.write_to_stream_soc(cli.fd(), err) < 0) {
-      lerr("Error writing RecvReq to stream");
+    info("non-blocking socket %i, type = %i", cli.fd(), cli.proto().v);
+    HaveData hdata;
+    int size = hdata.total_len();
+    bool v;
+    if (cli.has_unread_data(size, v, err) < 0) {
+      lerr("has_unread_data returned error");
       return SERVAL_SOCKET_ERROR;
     }
-    rreq.print("recv:app:tx");
+    if (!v) {
+      err = EWOULDBLOCK;           // or EAGAIN
+      lerr("non-blocking would block");
+      return SERVAL_SOCKET_ERROR;
+    }
+    info("reading hdata in nb mode");
+    hdata.read_from_stream_soc(cli.fd(), err);
+    hdata.print("hdata:app:rx");
+    // we have a message, request for data
+  } else {          // BLOCKING
+    // check if HaveData exists and discard it
+    // This allows select() to wake up without
+    // reading anything from the socket buffers
+    info("recv_sv on blocking socket %i",cli.fd());
+    bool v;
+    if (cli.has_unread_data(1, v, err) >= 0) {
+      if (v) {
+        // This must be HaveData
+        info("reading hdata in blocking mode");
+        HaveData hdata;
+        //int size = hdata.total_len();
+        if (hdata.read_from_stream_soc(cli.fd(), err) < 0) {
+          lerr("found unexpected msg (want HaveData)");
+          err = ESFINTERNAL;
+          return SERVAL_SOCKET_ERROR;
+        } else {
+          info("Got HaveData Msg");
+          hdata.print("hdata:app:rx");
+          got_havedata_msg = true;
+        }
+      }
+    } else if (errno == EAGAIN)
+      info("no data to read; ok to send req");
+  }
+  // Now ready to send read request
+  info("sending recv req of len %d", len);
+  RecvReq rreq(len, flags);
+  if (rreq.write_to_stream_soc(cli.fd(), err) < 0) {
+    lerr("Error writing RecvReq to stream");
+    return SERVAL_SOCKET_ERROR;
+  }
+  rreq.print("recv:app:tx");
   //}
 
   // In 3 diff cases, we still reach here
@@ -1420,41 +1421,41 @@ SVSockLib::query_serval_close(Cli &cli, sv_err_t &err)
     return SERVAL_SOCKET_ERROR;
   creq.print("close:app:tx");
 
-   Message m;
-   if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0)
-     return SERVAL_SOCKET_ERROR;
+  Message m;
+  if (m.read_hdr_from_stream_soc(cli.fd(), err) < 0)
+    return SERVAL_SOCKET_ERROR;
    
-   if (m.type() == Message::HAVE_DATA) {
-     info("Got HaveData before CloseRsp; discarding");
-     HaveData hdata;
-     hdata.read_pld_from_stream_soc(cli.fd(), err);
-     hdata.print("hdata:app:rx");
+  if (m.type() == Message::HAVE_DATA) {
+    info("Got HaveData before CloseRsp; discarding");
+    HaveData hdata;
+    hdata.read_pld_from_stream_soc(cli.fd(), err);
+    hdata.print("hdata:app:rx");
           
-     // Expect a CloseRsp directly after HaveData
-     CloseRsp crsp;
-     if (crsp.read_from_stream_soc(cli.fd(), err) < 0)
-       return SERVAL_SOCKET_ERROR;
-     crsp.print("close:app:rx");
+    // Expect a CloseRsp directly after HaveData
+    CloseRsp crsp;
+    if (crsp.read_from_stream_soc(cli.fd(), err) < 0)
+      return SERVAL_SOCKET_ERROR;
+    crsp.print("close:app:rx");
      
-     if (crsp.err().v) {
-       err = crsp.err();
-       return SERVAL_SOCKET_ERROR;
-     }
-   } else if (m.type() == Message::CLOSE_RSP) {
-     CloseRsp crsp;
-     crsp.read_pld_from_stream_soc(cli.fd(), err);
-     crsp.print("close:app:rx");
+    if (crsp.err().v) {
+      err = crsp.err();
+      return SERVAL_SOCKET_ERROR;
+    }
+  } else if (m.type() == Message::CLOSE_RSP) {
+    CloseRsp crsp;
+    crsp.read_pld_from_stream_soc(cli.fd(), err);
+    crsp.print("close:app:rx");
      
-     if (crsp.err().v) {
-       err = crsp.err();
-       return SERVAL_SOCKET_ERROR;
-     }
-   } else {
-     lerr("unexpected message after CloseReq");
-     return SERVAL_SOCKET_ERROR;
-   }
+    if (crsp.err().v) {
+      err = crsp.err();
+      return SERVAL_SOCKET_ERROR;
+    }
+  } else {
+    lerr("unexpected message after CloseReq");
+    return SERVAL_SOCKET_ERROR;
+  }
    
-   return 0;
+  return 0;
 }
 
 bool
@@ -1477,12 +1478,12 @@ bool
 SVSockLib::is_reserved(const sv_srvid_t& obj_id) const
 {
   /*
-  if  (memcmp(&obj_id, CONTROLLER_OID, sizeof(obj_id)) == 0 || 
-       memcmp(&obj_id, SERVAL_OID, sizeof(obj_id)) == 0 || 
-       memcmp(&obj_id, SERVAL_NULL_OID, sizeof(obj_id)) == 0) {
+    if  (memcmp(&obj_id, CONTROLLER_OID, sizeof(obj_id)) == 0 || 
+    memcmp(&obj_id, SERVAL_OID, sizeof(obj_id)) == 0 || 
+    memcmp(&obj_id, SERVAL_NULL_OID, sizeof(obj_id)) == 0) {
     fprintf(stderr, "object ID %s not allowed", oid_to_str(&obj_id));
     return true;
-  }
+    }
   */
   return false;
 }
