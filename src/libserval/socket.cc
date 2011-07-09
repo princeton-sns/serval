@@ -814,8 +814,8 @@ SVSockLib::sendmsg_sv(int soc, const struct msghdr *message, int flags,
 
     uint8_t* head = buffer;
 
-    int i = 0;
-    for(i = 0; i < message->msg_iovlen; i++) {
+    size_t i = 0;
+    for(i = 0; i < (size_t)message->msg_iovlen; i++) {
         memcpy(head, message->msg_iov[i].iov_base, message->msg_iov[i].iov_len);
         head += message->msg_iov[i].iov_len;
     }
@@ -845,8 +845,8 @@ SVSockLib::recvmsg_sv(int soc, struct msghdr *message, int flags,
     uint8_t buffer[MAX_MSG_SIZE];
 
     size_t totallen = 0;
-    int i = 0;
-    for(i = 0; i < message->msg_iovlen; i++) {
+    size_t i = 0;
+    for(i = 0; i < (size_t)message->msg_iovlen; i++) {
         totallen += message->msg_iov[i].iov_len;
     }
 
