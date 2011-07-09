@@ -863,7 +863,7 @@ SVSockLib::recvmsg_sv(int soc, struct msghdr *message, int flags,
   }
 
   uint8_t* head = buffer;
-  for(i = 0; i < message->msg_iovlen; i++) {
+  for(i = 0; i < (size_t)message->msg_iovlen; i++) {
     memcpy(message->msg_iov[i].iov_base, head, message->msg_iov[i].iov_len);
     head += message->msg_iov[i].iov_len;
   }
