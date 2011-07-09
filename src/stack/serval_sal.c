@@ -271,16 +271,15 @@ static inline int has_valid_control_extension(struct sock *sk,
         return 1;
 }
 
-static inline __sum16 serval_sal_fast_csum(struct serval_hdr *sh, int len)
+static inline __sum16 serval_sal_csum(struct serval_hdr *sh, int len)
 {
-	return (__force __sum16)~csum_partial(sh, len, 0);
+        return ip_compute_csum(sh, len);
 }
 
-static inline void serval_sal_send_check(struct sk_buff *skb)
+static inline void serval_sal_send_check(struct serval_hdr *sh)
 {
-        struct serval_hdr *sh = (struct serval_hdr *)skb->data;
         sh->check = 0;
-        sh->check = serval_sal_fast_csum(sh, ntohs(sh->length));
+        sh->check = serval_sal_csum(sh, ntohs(sh->length));
 }
 
 static void serval_sal_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
@@ -795,7 +794,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 serval_hdr_to_str(sh), rskb->len);
         
         /* Calculate SAL header checksum. */
-        serval_sal_send_check(skb);
+        serval_sal_send_check(sh);
 
         /* 
            Cannot use serval_sal_transmit_skb here since we do not yet
@@ -1933,7 +1932,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop;
         }
         
-        if (unlikely(serval_sal_fast_csum(sh, hdr_len))) {
+        if (unlikely(serval_sal_csum(sh, hdr_len))) {
                 LOG_ERR("SAL checksum error!\n");
                 goto drop;
         }
@@ -2307,7 +2306,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_FINWAIT2 | 
                                    SERVALF_CLOSING | 
                                    SERVALF_CLOSEWAIT)) {
-                serval_sal_send_check(skb);
+                serval_sal_send_check(sh);
                 return serval_sal_do_xmit(skb);
         }
         
@@ -2330,7 +2329,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 skb_set_dev(skb, dev_get_by_index(NULL, 0));
 #endif
 
-                serval_sal_send_check(skb);
+                serval_sal_send_check(sh);
                 
                 /* note that the service resolution stats
                  * (packets/bytes) will not be incremented here In the
@@ -2464,9 +2463,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 if (ssk->af_ops->send_check)
                         ssk->af_ops->send_check(sk, cskb);
 
-
-                /* Comput SAL header checksum */
-                serval_sal_send_check(cskb);
+                /* Compute SAL header checksum */
+                serval_sal_send_check((struct serval_hdr *)cskb->data);
 
                 /* Cannot reset transport header until after checksum
                    calculation since send_check requires access to
