@@ -794,6 +794,9 @@ static int serval_sal_syn_rcv(struct sock *sk,
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(sh), rskb->len);
         
+        /* Calculate SAL header checksum. */
+        serval_sal_send_check(skb);
+
         /* 
            Cannot use serval_sal_transmit_skb here since we do not yet
            have a full accepted socket (sk is the listening sock). 
