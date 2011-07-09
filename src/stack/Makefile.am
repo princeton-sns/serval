@@ -30,6 +30,7 @@ serval_SOURCES = \
 	userlevel/checksum.c \
 	userlevel/timer.c \
 	userlevel/wait.c \
+	userlevel/bitops.c \
 	userlevel/serval_tcp_user.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \

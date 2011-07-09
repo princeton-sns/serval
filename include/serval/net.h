@@ -47,7 +47,8 @@ struct sock;
 struct net;
 
 struct fasync_struct {
-        int dummy;
+	pthread_mutex_t lock;
+        int pipefd[2];
 };
 
 struct socket_wq {
