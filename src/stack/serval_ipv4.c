@@ -8,8 +8,6 @@
 #include <serval_ipv4.h>
 #include <serval_sal.h>
 #include <input.h>
-#include <output.h>
-#include <neighbor.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
 #include <linux/inetdevice.h>

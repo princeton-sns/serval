@@ -8,7 +8,6 @@
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <service.h>
-#include <neighbor.h>
 #include "log.h"
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
@@ -18,7 +17,6 @@
 #define SERVAL_PROC_DIR "serval"
 #define SERVAL_PROC_DBG "dbg"
 #define SERVAL_PROC_FILE_SERVICE_TBL "service_table"
-/* #define SERVAL_PROC_FILE_NEIGHBOR_TBL "neighbor_table" */
 
 static struct proc_dir_entry *serval_dir = NULL;
 
@@ -45,31 +43,6 @@ static int serval_proc_service_table_read(char *page, char **start,
 
         return len;
 }
-/*
-static int serval_proc_neighbor_table_read(char *page, char **start, 
-                                            off_t off, int count, 
-                                            int *eof, void *data)
-{
-	int len;
-        len = 0;
-
-        len = neighbors_print(page, count);
-
-        if (len <= off + count) 
-                *eof = 1;
-        
-        *start = page + off;
-        len -= off;
-        
-        if (len > count) 
-                len = count;
-
-        if (len < 0) 
-                len = 0;
-
-        return len;
-}
-*/
 
 /*
   Debug output through /proc/serval/dbg based on linux kernel

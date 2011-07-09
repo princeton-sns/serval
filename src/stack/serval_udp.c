@@ -9,7 +9,6 @@
 #include <serval_request_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
-#include <input.h>
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
