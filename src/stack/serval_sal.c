@@ -2463,7 +2463,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 
                 /* Comput SAL header checksum */
-                serval_sal_send_check(skb);
+                serval_sal_send_check(cskb);
 
                 /* Cannot reset transport header until after checksum
                    calculation since send_check requires access to
