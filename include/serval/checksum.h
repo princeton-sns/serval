@@ -8,12 +8,18 @@
 #if defined(OS_LINUX)
 #include <linux/types.h>
 #endif
+#include <serval/platform.h>
 #include <errno.h>
 #include <string.h>
 
+#ifndef __WSUM__
+#define __WSUM__
 typedef __u32 __wsum;
+#endif
+#ifndef __SUM16__
+#define __SUM16__
 typedef __u16 __sum16;
-
+#endif
 #define __force
 
 /* Taken from Linux kernel sources */

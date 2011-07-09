@@ -20,6 +20,102 @@
 #include <endian.h>
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 #include <machine/endian.h>
+
+
+#ifndef U64__
+#define U64__
+typedef uint64_t u64;
+#endif
+#ifndef S64__
+#define S64__
+typedef int64_t s64;
+#endif
+#ifndef U32__
+#define U32__
+typedef uint32_t u32;
+#endif
+#ifndef __U32__
+#define __U32__
+typedef uint32_t __u32;
+#endif
+#ifndef S32__
+#define S32__
+typedef int32_t s32;
+#endif 
+#ifndef __S32__
+#define __S32__
+typedef int32_t __s32;
+#endif 
+#ifndef BE32__
+#define BE32__
+typedef uint32_t be32;
+#endif 
+#ifndef __BE32__
+#define __BE32__
+typedef uint32_t __be32;
+#endif 
+#ifndef U16__
+#define U16__
+typedef uint16_t u16;
+#endif 
+#ifndef __U16__
+#define __U16__
+typedef uint16_t __u16;
+#endif 
+#ifndef S16__
+#define S16__
+typedef int16_t s16;
+#endif 
+#ifndef __S16__
+#define __S16__
+typedef int16_t __s16;
+#endif 
+#ifndef __BE16__
+#define __BE16__
+typedef uint16_t __be16;
+#endif 
+#ifndef BE16__
+#define BE16__
+typedef uint16_t be16;
+#endif 
+#ifndef U8__
+#define U8__
+typedef uint8_t u8;
+#endif 
+#ifndef __U8__
+#define __U8__
+typedef uint8_t __u8;
+#endif 
+#ifndef S8__
+#define S8__
+typedef int8_t s8;
+#endif 
+#ifndef __S8__
+#define __S8__
+typedef int8_t __s8;
+#endif
+#ifndef __SUM16__
+#define __SUM16__
+typedef __u16 __sum16;
+#endif
+
+/* Setup byte order defines according to the Linux kernel */
+#if __BYTE_ORDER == __BIG_ENDIAN
+#ifdef __LITTLE_ENDIAN
+#undef __LITTLE_ENDIAN
+#endif
+#define __BIG_ENDIAN_BITFIELD
+#undef  __LITTLE_ENDIAN_BITFIELD
+#elif __BYTE_ORDER == __LITTLE_ENDIAN
+#ifdef __BIG_ENDIAN
+#undef __BIG_ENDIAN
+#endif
+#define __LITTLE_ENDIAN_BITFIELD
+#undef __BIG_ENDIAN_BITFIELD
+#else
+#error "Could not figure out the byte order of this platform!"
+#endif
+
 #endif
 #endif
 

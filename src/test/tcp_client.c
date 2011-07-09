@@ -187,7 +187,7 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
         if (ret == EXIT_SUCCESS) {
                 timeval_sub(&diff_time, &end_time, &start_time);
                 printf("Finished successfully in %ld.%06ld seconds\n", 
-                       diff_time.tv_sec, diff_time.tv_usec);
+                       diff_time.tv_sec, (long)diff_time.tv_usec);
         }
         fprintf(stdout, "Read %zu bytes total\n", total_bytes);
         fprintf(stdout, "Wrote to file %s\n", filepath);

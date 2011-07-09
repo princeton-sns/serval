@@ -54,7 +54,6 @@
 #define ETH_ALEN ETHER_ADDR_LEN
 #define ETH_P_IP ETHERTYPE_IP 
 #define EBADFD EBADF
-#include "platform_tcpip.h"
 #endif
 
 #if defined(OS_LINUX_KERNEL)
@@ -87,39 +86,101 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 #include <libio.h>
 #endif
 
+#ifndef U64__
+#define U64__
 typedef uint64_t u64;
+#endif
+#ifndef S64__
+#define S64__
 typedef int64_t s64;
+#endif
+#ifndef U32__
+#define U32__
 typedef uint32_t u32;
+#endif
+#ifndef __U32__
+#define __U32__
 typedef uint32_t __u32;
+#endif
+#ifndef S32__
+#define S32__
 typedef int32_t s32;
+#endif 
+#ifndef __S32__
+#define __S32__
 typedef int32_t __s32;
+#endif 
+#ifndef U16__
+#define U16__
 typedef uint16_t u16;
+#endif 
+#ifndef __U16__
+#define __U16__
 typedef uint16_t __u16;
+#endif 
+#ifndef S16__
+#define S16__
 typedef int16_t s16;
+#endif 
+#ifndef __S16__
+#define __S16__
 typedef int16_t __s16;
+#endif 
+#ifndef U8__
+#define U8__
 typedef uint8_t u8;
+#endif 
+#ifndef __U8__
+#define __U8__
 typedef uint8_t __u8;
+#endif 
+#ifndef S8__
+#define S8__
 typedef int8_t s8;
+#endif 
+#ifndef __S8__
+#define __S8__
 typedef int8_t __s8;
-
-#include <serval/checksum.h>
+#endif
 
 /* Setup byte order defines according to the Linux kernel */
 #if __BYTE_ORDER == __BIG_ENDIAN
 #ifdef __LITTLE_ENDIAN
 #undef __LITTLE_ENDIAN
-#define __LITTLE_ENDIAN_BITFIELD
-#undef  __BIG_ENDIAN_BITFIELD
 #endif
+#define __BIG_ENDIAN_BITFIELD
+#undef  __LITTLE_ENDIAN_BITFIELD
 #elif __BYTE_ORDER == __LITTLE_ENDIAN
 #ifdef __BIG_ENDIAN
 #undef __BIG_ENDIAN
+#endif
 #define __LITTLE_ENDIAN_BITFIELD
 #undef __BIG_ENDIAN_BITFIELD
-#endif
 #else
 #error "Could not figure out the byte order of this platform!"
 #endif
+
+#if defined(OS_BSD)
+#ifndef BE32__
+#define BE32__
+typedef uint32_t be32;
+#endif 
+#ifndef __BE32__
+#define __BE32__
+typedef uint32_t __be32;
+#endif 
+#ifndef __BE16__
+#define __BE16__
+typedef uint16_t __be16;
+#endif 
+#ifndef BE16__
+#define BE16__
+typedef uint16_t be16;
+#endif 
+#include <serval/platform_tcpip.h>
+#endif
+
+#include <serval/checksum.h>
 
 union ktime {
 	s64	tv64;

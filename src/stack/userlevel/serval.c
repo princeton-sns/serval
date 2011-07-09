@@ -445,7 +445,6 @@ static int check_pid_file(void)
         FILE *f;
         pid_t pid;
         int res = SERVAL_NOT_RUNNING;
-        char buf[BUFLEN];
 
         f = fopen(PID_FILE, "r");
         
@@ -477,17 +476,20 @@ static int check_pid_file(void)
         fclose(f);
 
 #if defined(OS_LINUX)
-        snprintf(buf, BUFLEN, "/proc/%d/cmdline", pid);
+        {
+                char buf[BUFLEN];
+                snprintf(buf, BUFLEN, "/proc/%d/cmdline", pid);
+                
+                res = SERVAL_CRASHED;
+                
+                f = fopen(buf, "r");
 
-        res = SERVAL_CRASHED;
-
-        f = fopen(buf, "r");
-
-        if (f) {
-                size_t nitems = fread(buf, 1, BUFLEN, f);
-                if (nitems && strstr(buf, progname) != NULL) 
+                if (f) {
+                        size_t nitems = fread(buf, 1, BUFLEN, f);
+                        if (nitems && strstr(buf, progname) != NULL) 
                         res = SERVAL_RUNNING;
-                fclose(f);
+                        fclose(f);
+                }
         }
 #endif
         return res;

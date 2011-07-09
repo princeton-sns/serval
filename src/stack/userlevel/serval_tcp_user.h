@@ -2,7 +2,9 @@
 #ifndef _SERVAL_TCP_USER_H_
 #define _SERVAL_TCP_USER_H_
 
+#if defined(OS_LINUX)
 #include <netinet/tcp.h>
+#endif
 #include <serval/request_sock.h>
 
 /* Flags in tp->nonagle */
@@ -96,6 +98,10 @@ struct tcp_skb_cb {
 
 	uint32_t	ack_seq;	/* Sequence number ACK'd	*/
 };
+
+#if defined(OS_BSD)
+#define __cpu_to_be32(n) htonl(n)
+#endif
 
 enum { 
 	TCP_FLAG_CWR = __cpu_to_be32(0x00800000),
@@ -248,5 +254,45 @@ struct tcp_extend_values {
 					cookie_out_never:1,
 					cookie_in_always:1;
 };
+
+#if !defined(OS_LINUX)
+
+
+enum {
+        TCP_ESTABLISHED = 1,
+        TCP_SYN_SENT,
+        TCP_SYN_RECV,
+        TCP_FIN_WAIT1,
+        TCP_FIN_WAIT2,
+        TCP_TIME_WAIT,
+        TCP_CLOSE,
+        TCP_CLOSE_WAIT,
+        TCP_LAST_ACK,
+        TCP_LISTEN,
+        TCP_CLOSING,/* Now a valid state */
+
+        TCP_MAX_STATES/* Leave at the end! */
+};
+
+#define TCP_STATE_MASK0xF
+
+#define TCP_ACTION_FIN (1 << 7)
+
+enum tcp_ca_state {
+        TCP_CA_Open = 0,
+#define TCPF_CA_Open (1<<TCP_CA_Open)
+        TCP_CA_Disorder = 1,
+#define TCPF_CA_Disorder (1<<TCP_CA_Disorder)
+        TCP_CA_CWR = 2,
+#define TCPF_CA_CWR (1<<TCP_CA_CWR)
+        TCP_CA_Recovery = 3,
+#define TCPF_CA_Recovery (1<<TCP_CA_Recovery)
+        TCP_CA_Loss = 4
+#define TCPF_CA_Loss (1<<TCP_CA_Loss)
+};
+
+#define MSG_MORE MSG_HAVEMORE
+
+#endif
 
 #endif /* _SERVAL_TCP_USER_H_ */
