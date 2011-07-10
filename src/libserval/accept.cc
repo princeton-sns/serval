@@ -131,9 +131,9 @@ void
 AcceptRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: local_obj_id=%s, remote_obj_id=%s, flow_id = %d, err=%s",
-         label, oid_to_str(&_local_obj_id), oid_to_str(&_remote_obj_id),
-         _flow_id.s_id, _err.v ? "t" : "f");
+    info("%s: local_obj_id=%s, remote_obj_id=%s, flow_id = %s, err=%s",
+         label, service_id_to_str(&_local_obj_id), service_id_to_str(&_remote_obj_id),
+         flow_id_to_str(&_flow_id), _err.v ? "t" : "f");
 }
 
 //
@@ -192,8 +192,8 @@ void
 AcceptReq2::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s, flow_id = %d, nb = %s", 
-         label, oid_to_str(&_obj_id), _flow_id.s_id,
+    info("%s: obj_id=%s, flow_id = %s, nb = %s", 
+         label, service_id_to_str(&_obj_id), flow_id_to_str(&_flow_id),
          _nb ? "t" : "f");
 }
 
