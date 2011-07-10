@@ -1828,8 +1828,8 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
                 sk = serval_sock_lookup_flowid(&sh->dst_flowid);
                 
                 if (!sk) {
-                        LOG_INF("No matching sock for flowid %u\n",
-                                ntohl(sh->dst_flowid.s_id));
+                        LOG_INF("No matching sock for flowid %s\n",
+                                flow_id_to_str(&sh->dst_flowid));
                 }
         } else {
                 LOG_DBG("cannot demux on flowid\n");

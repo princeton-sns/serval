@@ -21,7 +21,6 @@
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 #include <machine/endian.h>
 
-
 #ifndef U64__
 #define U64__
 typedef uint64_t u64;
@@ -173,10 +172,13 @@ struct sockaddr_sv {
 
 struct flow_id {
         union {
-                __u8 s_id8[4];
-                __be16 s_id16[2];
-                __be32 s_id;       
-        };
+                __u8 un_id8[4];
+                __be16 un_id16[2];
+                __be32 un_id32;
+        } fl_un;
+#define s_id8  fl_un.un_id8
+#define s_id16 fl_un.un_id16
+#define s_id32 fl_un.un_id32
 };
 
 struct net_addr {
@@ -224,7 +226,7 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         static int i = 0;
         i = (i + 1) % 2;
         snprintf(&str[i*sizeof(str)/2], 11, 
-                 "%u", ntohl(flowid->s_id));
+                 "%u", ntohl(flowid->s_id32));
         return &str[i*sizeof(str)/2];
 }
 
