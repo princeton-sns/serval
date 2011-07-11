@@ -2099,7 +2099,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
                                         TCP_SKB_CB(skb)->flags);
         th->check = 0;
-	tp->packets_out += serval_tcp_skb_pcount(skb);
+	//tp->packets_out += serval_tcp_skb_pcount(skb);
 
 	tp->snd_nxt = tp->write_seq;
 	tp->pushed_seq = tp->write_seq;
