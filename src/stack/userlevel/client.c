@@ -169,6 +169,7 @@ struct client *client_create(client_type_t type,
                 return NULL;
         }
         
+        c->sock->client = c;
         c->id = id;
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));

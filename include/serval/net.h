@@ -57,6 +57,7 @@ struct socket_wq {
 };
 
 struct socket {
+        struct client           *client;
         unsigned long           flags;
         socket_state            state;
         struct socket_wq        *wq;

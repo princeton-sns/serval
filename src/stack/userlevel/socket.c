@@ -103,6 +103,41 @@ static void sock_free(struct socket *sock)
 	free(sock);
 }
 
+
+
+/*
+ *	Update the socket async list
+ *
+ *	Fasync_list locking strategy.
+ *
+ *	1. fasync_list is modified only under process context socket lock
+ *	   i.e. under semaphore.
+ *	2. fasync_list is used under read_lock(&sk->sk_callback_lock)
+ *	   or under socket lock
+ */
+/*
+static int sock_fasync(int fd, struct file *filp, int on)
+{
+	struct socket *sock = filp->private_data;
+	struct sock *sk = sock->sk;
+
+	if (sk == NULL)
+		return -EINVAL;
+
+	lock_sock(sk);
+
+	fasync_helper(fd, filp, on, &sock->wq->fasync_list);
+
+	if (!sock->wq->fasync_list)
+		sock_reset_flag(sk, SOCK_FASYNC);
+	else
+		sock_set_flag(sk, SOCK_FASYNC);
+
+	release_sock(sk);
+	return 0;
+}
+*/
+
 int sock_wake_async(struct socket *sock, int how, int band)
 {
         struct socket_wq *wq;
@@ -132,6 +167,8 @@ int sock_wake_async(struct socket *sock, int how, int band)
         case SOCK_WAKE_URG:
                 kill_fasync(&wq->fasync_list, SIGURG, band);
                 */
+
+                LOG_ERR("ASYNC IO not implemented!\n");
         }
 
        return 0;

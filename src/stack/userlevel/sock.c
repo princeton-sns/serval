@@ -9,6 +9,7 @@
 #include <serval/bitops.h>
 #include <pthread.h>
 #include <serval_sock.h>
+#include "client.h"
 
 #define _SK_MEM_PACKETS		256
 #define _SK_MEM_OVERHEAD	(sizeof(struct sk_buff) + 256)
@@ -62,12 +63,13 @@ static void sock_def_readable(struct sock *sk, int bytes)
         /* TODO should differentiate between write and read sleepers
          * in the wait queue */
         struct socket_wq *wq = sk->sk_wq;
-        LOG_DBG("Sock readable, wake up sleepers? %i\n", wq_has_sleeper(wq));
         read_lock(&sk->sk_callback_lock);
         if (wq_has_sleeper(wq))
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
                                                 POLLRDNORM | POLLRDBAND);
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
+
+        client_send_have_data_msg((struct client *)sk->sk_socket);
         read_unlock(&sk->sk_callback_lock);
 }
 

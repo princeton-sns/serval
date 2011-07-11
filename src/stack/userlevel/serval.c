@@ -159,40 +159,38 @@ static int server_run(void)
 	sigset_t sigset, orig_sigset;
 	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
-    int timer_list_signal[2];
-    char tcp_buffer[128];
-    char udp_buffer[128];
-
-    /* pipe/signal to tell us when a new timer timeout must be
-     * scheduled */
-    ret = pipe(timer_list_signal);
-
-    if (ret == -1) {
-            LOG_ERR("could not open signal pipe: %s\n",
-                    strerror(errno));
-            return -1;
-    }
-
+        int timer_list_signal[2];
+        char tcp_buffer[128];
+        char udp_buffer[128];
+        
+        /* pipe/signal to tell us when a new timer timeout must be
+         * scheduled */
+        ret = pipe(timer_list_signal);
+        
+        if (ret == -1) {
+                LOG_ERR("could not open signal pipe: %s\n",
+                        strerror(errno));
+                return -1;
+        }
+        
 	sigemptyset(&sigset);
-    sigaddset(&sigset, SIGTERM);
-    sigaddset(&sigset, SIGHUP);
-    sigaddset(&sigset, SIGINT);
-
-    /* Block the signals we are watching here so that we can
-     * handle them in pselect instead. */
-    sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
+        sigaddset(&sigset, SIGTERM);
+        sigaddset(&sigset, SIGHUP);
+        sigaddset(&sigset, SIGINT);
+        
+        /* Block the signals we are watching here so that we can
+         * handle them in pselect instead. */
+        sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
 	
 	if (should_exit) {
-        goto out_close_pipe;
-    }
-
+                goto out_close_pipe;
+        }
+        
 	if(stackid > 0) {
-
-	    sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
-	    sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
-
-	    server_sock_path[0] = udp_buffer;
-	    server_sock_path[1] = tcp_buffer;
+                sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
+                sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
+                server_sock_path[0] = udp_buffer;
+                server_sock_path[1] = tcp_buffer;
 	}
 
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
@@ -320,9 +318,9 @@ static int server_run(void)
 			continue;
 		}
 		
-        if (FD_ISSET(timer_list_signal[0], &readfds)) {
-                timer_list_signal_lower();
-        }
+                if (FD_ISSET(timer_list_signal[0], &readfds)) {
+                        timer_list_signal_lower();
+                }
 		if (FD_ISSET(ctrl_getfd(), &readfds)) {
 			ret = ctrl_recvmsg();
 
