@@ -281,7 +281,8 @@ static void serval_tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 
 	tp->packets_out += serval_tcp_skb_pcount(skb);
 
-        LOG_DBG("packets_out=%u\n", tp->packets_out);
+        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
+                tp->packets_out, tp->write_seq, tp->snd_una);
 
 	if (!prior_packets)
 		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
@@ -728,7 +729,8 @@ static void serval_tcp_adjust_pcount(struct sock *sk,
 
 	tp->packets_out -= decr;
         
-        LOG_DBG("packets_out=%u\n", tp->packets_out);
+        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
+                tp->packets_out, tp->write_seq, tp->snd_una);
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
 		tp->sacked_out -= decr;
@@ -1685,7 +1687,8 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 		return 0;
 	}
 
-        LOG_DBG("packets_out=%u\n", tp->packets_out);
+        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
+                tp->packets_out, tp->write_seq, tp->snd_una);
 
 	return !tp->packets_out && serval_tcp_send_head(sk);
 }
@@ -2122,6 +2125,9 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
            checksum */
 
 	serval_tcp_enter_cwr(sk, 1);
+
+        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
+                tp->packets_out, tp->write_seq, tp->snd_una);
 
         return 0;
 }
