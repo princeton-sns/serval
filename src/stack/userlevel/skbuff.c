@@ -314,7 +314,6 @@ int pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 	long off;
 
 	BUG_ON(nhead < 0);
-
         
 	if (skb_shared(skb)) {
 		LOG_ERR("skb cannot be shared!\n");
@@ -975,10 +974,6 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
 {
 	int start = skb_headlen(skb);
 	int copy = start - offset;
-        //int pos = 0;
-
-        LOG_DBG("checksum - offset=%u data_off=%u len=%u csum=%u\n",
-                offset, skb->data - skb->head, len, csum);
 
 	/* Checksum header. */
 	if (copy > 0) {
@@ -988,7 +983,6 @@ __wsum skb_checksum(const struct sk_buff *skb, int offset,
 		if ((len -= copy) == 0)
 			return csum;
 		offset += copy;
-		//pos	= copy;
 	}
         return csum;
 }

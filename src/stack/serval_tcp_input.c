@@ -1418,7 +1418,8 @@ static int serval_tcp_time_to_recover(struct sock *sk)
 	 */
 	packets_out = tp->packets_out;
 	if (packets_out <= tp->reordering &&
-	    tp->sacked_out >= max_t(__u32, packets_out/2, sysctl_serval_tcp_reordering) &&
+	    tp->sacked_out >= max_t(__u32, packets_out/2, 
+                                    sysctl_serval_tcp_reordering) &&
 	    !serval_tcp_may_send_now(sk)) {
 		/* We have nothing to send. This connection is limited
 		 * either by receiver window or by application.
@@ -1928,7 +1929,6 @@ static int serval_tcp_ack_update_window(struct sock *sk, struct sk_buff *skb,
 	return flag;
 }
 
-
 /* Restart timer after forward progress on connection.
  * RFC2988 recommends to restart timer to now+rto.
  */
@@ -1965,6 +1965,7 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
 	ktime_t last_ackt = net_invalid_timestamp();
 #endif
+        LOG_DBG("1. packets_out=%u\n", tp->packets_out);
 
 	while ((skb = serval_tcp_write_queue_head(sk)) && 
                skb != serval_tcp_send_head(sk)) {
@@ -2104,6 +2105,8 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 		}
 	}
 
+        LOG_DBG("2. packets_out=%u\n", tp->packets_out);
+
 	return flag;
 }
 
@@ -2118,11 +2121,10 @@ static void serval_tcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 /* This routine deals with incoming acks, but not outgoing ones. */
 static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 {
-	//struct inet_connection_sock *icsk = inet_csk(sk);
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	u32 prior_snd_una = tp->snd_una;
-	u32 ack_seq = ntohl(tcp_hdr(skb)->seq); //TCP_SKB_CB(skb)->seq;
-	u32 ack = ntohl(tcp_hdr(skb)->ack_seq); //TCP_SKB_CB(skb)->ack_seq;
+	u32 ack_seq = TCP_SKB_CB(skb)->seq;
+	u32 ack = TCP_SKB_CB(skb)->ack_seq;
 	u32 prior_in_flight;
 	u32 prior_fackets;
 	int prior_packets;

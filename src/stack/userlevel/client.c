@@ -650,7 +650,12 @@ int client_handle_have_data_msg(struct client *c, struct client_msg *msg)
 int client_send_have_data_msg(struct client *c)
 {
         struct client_msg_have_data hd;
+
+        if (c->has_data)
+                return 0;
         
+        c->has_data = 1;
+
         LOG_DBG("Client %u sending have data msg to application\n", c->id);
         memset(&hd, 0, sizeof(hd));
         client_msg_hdr_init(&hd.msghdr, MSG_HAVE_DATA);

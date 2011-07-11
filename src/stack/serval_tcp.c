@@ -211,20 +211,7 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("iph->saddr=%s iph->daddr=%s skb->len=%u\n",
-                        inet_ntop(AF_INET, &iph->saddr, 
-                                  rmtstr, 18),
-                        inet_ntop(AF_INET, &iph->daddr, 
-                                  locstr, 18),
-                        skb->len);
-        }
-#endif
-
 	if (skb->ip_summed == CHECKSUM_COMPLETE) {
-                LOG_DBG("Checksum was complete\n");
 		if (!serval_tcp_v4_check(skb->len, iph->saddr,
                                          iph->daddr, skb->csum)) {
 			skb->ip_summed = CHECKSUM_UNNECESSARY;
@@ -234,8 +221,6 @@ static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
 
 	skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
 				       skb->len, IPPROTO_TCP, 0);
-
-        LOG_DBG("receive tcpudp fold csum=%u nofold=%u\n", csum_fold(skb->csum), skb->csum);
 
 	if (skb->len <= 76) {
 		return __skb_checksum_complete(skb);
@@ -286,7 +271,8 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18], saddr[18], daddr[18];
-                LOG_DBG("iph->saddr=%s iph->daddr=%s inet_saddr=%s inet_daddr=%s\n",
+                LOG_DBG("iph->saddr=%s iph->daddr=%s "
+                        "inet_saddr=%s inet_daddr=%s\n",
                         inet_ntop(AF_INET, &iph->saddr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &iph->daddr, 
@@ -1895,18 +1881,7 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 {
 	struct tcphdr *th = tcp_hdr(skb);
         unsigned long len = skb_tail_pointer(skb) - skb_transport_header(skb);
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("saddr=%s daddr=%s len=%u skb->csum=%u\n",
-                        inet_ntop(AF_INET, &saddr, 
-                                  locstr, 18),
-                        inet_ntop(AF_INET, &daddr, 
-                                  rmtstr, 18),
-                        len,
-                        skb->csum);
-        }
-#endif
+
         if (!checksum_mode) {
                 /* Force checksum calculation by protocol */
                 skb->ip_summed = CHECKSUM_NONE;

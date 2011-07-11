@@ -63,13 +63,15 @@ static void sock_def_readable(struct sock *sk, int bytes)
         /* TODO should differentiate between write and read sleepers
          * in the wait queue */
         struct socket_wq *wq = sk->sk_wq;
+
         read_lock(&sk->sk_callback_lock);
         if (wq_has_sleeper(wq))
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
                                                 POLLRDNORM | POLLRDBAND);
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
-
-        client_send_have_data_msg((struct client *)sk->sk_socket);
+        
+        client_send_have_data_msg(sk->sk_socket->client);
+        
         read_unlock(&sk->sk_callback_lock);
 }
 
