@@ -3943,16 +3943,12 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPHPHITS);
 
-                                LOG_DBG("Bulk data transfer, receiver\n");
 				/* Bulk data transfer: receiver */
                                 __skb_pull(skb, tcp_header_len);
 				__skb_queue_tail(&sk->sk_receive_queue, skb);
 				skb_set_owner_r(skb, sk);
 				tp->rcv_nxt = TCP_SKB_CB(skb)->end_seq;
 			}
-
-                        LOG_DBG("Data eaten=%d copied_early=%d\n",
-                                eaten, copied_early);
 
 			serval_tcp_event_data_recv(sk, skb);
 
@@ -3974,10 +3970,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 #endif
                         {
                                 if (eaten) {
-                                        LOG_DBG("packet was eaten\n");
                                         __kfree_skb(skb);
                                 } else {
-                                        LOG_DBG("signal data ready 2!\n");
                                         sk->sk_data_ready(sk, 0);
                                 }
                         }
@@ -3986,14 +3980,13 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	}
 
 slow_path:
-        LOG_DBG("Slow path\n");
 
 	if (len < (th->doff << 2)) {
-                LOG_DBG("doff error\n");
+                LOG_PKT("doff error\n");
                 goto csum_error;
         }
         if (serval_tcp_checksum_complete_user(sk, skb)) {
-                LOG_DBG("checksum error\n");
+                LOG_PKT("checksum error\n");
                 goto csum_error;
         }
 	/*
@@ -4006,8 +3999,6 @@ slow_path:
 		return -1;
 
 step5:
-        LOG_DBG("Step 5\n");
-
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
 		goto discard;
 
@@ -4018,7 +4009,7 @@ step5:
 
 	/* step 7: process the segment text */
 
-        LOG_DBG("Queueing packet, skb->len=%u\n", 
+        LOG_PKT("Queueing packet, skb->len=%u\n", 
                 skb->len);
 
 	serval_tcp_data_queue(sk, skb);
