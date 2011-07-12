@@ -69,8 +69,9 @@ static void sock_def_readable(struct sock *sk, int bytes)
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
                                                 POLLRDNORM | POLLRDBAND);
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
-        
-        client_send_have_data_msg(sk->sk_socket->client);
+
+        if (sk->sk_socket)
+                client_send_have_data_msg(sk->sk_socket->client);
         
         read_unlock(&sk->sk_callback_lock);
 }
