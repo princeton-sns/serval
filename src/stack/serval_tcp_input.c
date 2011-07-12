@@ -1965,8 +1965,6 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
 	ktime_t last_ackt = net_invalid_timestamp();
 #endif
-        LOG_DBG("1. packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
-                tp->packets_out, tp->write_seq, tp->snd_una);
 
 	while ((skb = serval_tcp_write_queue_head(sk)) && 
                skb != serval_tcp_send_head(sk)) {
@@ -2105,9 +2103,6 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 			ca_ops->pkts_acked(sk, pkts_acked, rtt_us);
 		}
 	}
-
-        LOG_DBG("2. packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
-                tp->packets_out, tp->write_seq, tp->snd_una);
 
 	return flag;
 }

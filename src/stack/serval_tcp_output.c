@@ -281,9 +281,6 @@ static void serval_tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 
 	tp->packets_out += serval_tcp_skb_pcount(skb);
 
-        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
-                tp->packets_out, tp->write_seq, tp->snd_una);
-
 	if (!prior_packets)
 		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
                                             tp->rto, 
@@ -1258,8 +1255,11 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 		return -EAGAIN;
 
 	if (before(TCP_SKB_CB(skb)->seq, tp->snd_una)) {
-		if (before(TCP_SKB_CB(skb)->end_seq, tp->snd_una))
+		if (before(TCP_SKB_CB(skb)->end_seq, tp->snd_una)) {
+                        LOG_DBG("end_seq=%u snd_una=%u\n", 
+                                TCP_SKB_CB(skb)->end_seq, tp->snd_una);
 			BUG();
+                }
 		if (serval_tcp_trim_head(sk, skb, 
                                          tp->snd_una - TCP_SKB_CB(skb)->seq))
 			return -ENOMEM;
@@ -1687,9 +1687,6 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 		return 0;
 	}
 
-        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
-                tp->packets_out, tp->write_seq, tp->snd_una);
-
 	return !tp->packets_out && serval_tcp_send_head(sk);
 }
 
@@ -2080,6 +2077,9 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         /* From tcp_ipv4.c */
 	tp->rx_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
 
+        if (!tp->write_seq)
+                tp->write_seq = serval_tcp_random_sequence_number();
+
         serval_tcp_connect_init(sk);
 
         tcp_options_size = serval_tcp_syn_options(sk, skb, &opts, &md5);
@@ -2093,9 +2093,6 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         skb_reset_transport_header(skb);
 
         LOG_DBG("Transport header=%p\n", skb_transport_header(skb));
-
-        if (!tp->write_seq)
-                tp->write_seq = serval_tcp_random_sequence_number();
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq++, TCPH_SYN);
@@ -2125,9 +2122,6 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
            checksum */
 
 	serval_tcp_enter_cwr(sk, 1);
-
-        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
-                tp->packets_out, tp->write_seq, tp->snd_una);
 
         return 0;
 }
