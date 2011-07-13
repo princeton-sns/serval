@@ -103,7 +103,8 @@ static int packet_raw_recv(struct net_device *dev)
         /*
           LOG_DBG("Received %d bytes IP packet on device %s\n", 
                 ret, dev->name);
-        */
+        */        
+        __net_timestamp(skb);
         skb_put(skb, ret);
 	skb->dev = dev;
         /* Set network header offset */
