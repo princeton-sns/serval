@@ -2,6 +2,7 @@
 #ifndef _BITOPS_H_
 #define _BITOPS_H_
 
+#include <serval/platform.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/bitops.h>
 #endif
@@ -10,7 +11,6 @@
 #include <unistd.h>
 #include <serval/lock.h>
 
-#define BITS_PER_LONG (sizeof(long)*8)
 #define BIT(nr)                 (1UL << (nr))
 #define BIT_MASK(nr)            (1UL << ((nr) % BITS_PER_LONG))
 #define BIT_WORD(nr)            ((nr) / BITS_PER_LONG)

@@ -40,7 +40,7 @@ int gettime(struct timespec *ts)
 {
         int err = 0;
 
-#if defined(OS_LINUX)
+#if _POSIX_TIMERS > 0
         err = clock_gettime(CLOCK, ts);
 
 	if (err == -1) {

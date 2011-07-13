@@ -86,6 +86,14 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 #include <libio.h>
 #endif
 
+#if __WORDSIZE == 64
+#define BITS_PER_LONG 64
+#elif __WORDSIZE == 32
+#define BITS_PER_LONG 32
+#else
+#error "Could not detect word size of this machine!"
+#endif
+
 #ifndef U64__
 #define U64__
 typedef uint64_t u64;
@@ -181,21 +189,6 @@ typedef uint16_t be16;
 #endif
 
 #include <serval/checksum.h>
-
-union ktime {
-	s64	tv64;
-#if BITS_PER_LONG != 64
-	struct {
-#ifdef __BIG_ENDIAN
-	s32	sec, nsec;
-#else
-	s32	nsec, sec;
-#endif
-	} tv;
-#endif
-};
-
-typedef union ktime ktime_t;		/* Kill this */
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT) /* 4096 bytes */
@@ -443,6 +436,23 @@ static inline void put_unaligned_be64(u64 val, void *p)
 	 typecheck(unsigned long, b) && \
 	 ((long)(a) - (long)(b) >= 0))
 #define time_before_eq(a,b)	time_after_eq(b,a)
+
+
+/**
+ * ns_to_timespec - Convert nanoseconds to timespec
+ * @nsec:	the nanoseconds value to be converted
+ *
+ * Returns the timespec representation of the nsec parameter.
+ */
+struct timespec ns_to_timespec(const s64 nsec);
+
+/**
+ * ns_to_timeval - Convert nanoseconds to timeval
+ * @nsec:	the nanoseconds value to be converted
+ *
+ * Returns the timeval representation of the nsec parameter.
+ */
+struct timeval ns_to_timeval(const s64 nsec);
 
 #if !defined(HAVE_PPOLL)
 #include <poll.h>

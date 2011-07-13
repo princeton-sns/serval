@@ -43,6 +43,7 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 #include <serval/platform.h>
 #include <serval/atomic.h>
 #include <serval/lock.h>
+#include <serval/ktime.h>
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
@@ -688,9 +689,53 @@ static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
 	memcpy(skb->data + offset, from, len);
 }
 
-void skb_insert(struct sk_buff *old, struct sk_buff *newsk, struct sk_buff_head *list);
+static inline ktime_t skb_get_ktime(const struct sk_buff *skb)
+{
+	return skb->tstamp;
+}
+
+/**
+ *	skb_get_timestamp - get timestamp from a skb
+ *	@skb: skb to get stamp from
+ *	@stamp: pointer to struct timeval to store stamp in
+ *
+ *	Timestamps are stored in the skb as offsets to a base timestamp.
+ *	This function converts the offset back to a struct timeval and stores
+ *	it in stamp.
+ */
+static inline void skb_get_timestamp(const struct sk_buff *skb,
+				     struct timeval *stamp)
+{
+	*stamp = ktime_to_timeval(skb->tstamp);
+}
+
+static inline void skb_get_timestampns(const struct sk_buff *skb,
+				       struct timespec *stamp)
+{
+	*stamp = ktime_to_timespec(skb->tstamp);
+}
+
+static inline void __net_timestamp(struct sk_buff *skb)
+{
+	skb->tstamp = ktime_get_real();
+}
+
+static inline ktime_t net_timedelta(ktime_t t)
+{
+	return ktime_sub(ktime_get_real(), t);
+}
+
+static inline ktime_t net_invalid_timestamp(void)
+{
+	return ktime_set(0, 0);
+}
+
+void skb_insert(struct sk_buff *old, struct sk_buff *newsk, 
+                struct sk_buff_head *list);
+
 static inline void __skb_insert(struct sk_buff *newsk,
-				struct sk_buff *prev, struct sk_buff *next,
+				struct sk_buff *prev, 
+                                struct sk_buff *next,
 				struct sk_buff_head *list)
 {
 	newsk->next = next;

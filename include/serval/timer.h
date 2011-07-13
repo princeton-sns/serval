@@ -75,9 +75,11 @@ unsigned long gettime_jiffies(void);
 #define TICKS_PER_SEC  1000000000L
 #define TICKS_PER_NSEC 1L
 #define TICKS_PER_HZ   10000000L
-#define NSECS_PER_SEC  1000000000L
-#define USECS_PER_SEC  1000000L
-#define MSECS_PER_SEC  1000L
+#define NSEC_PER_SEC   1000000000L
+#define USEC_PER_SEC   1000000L
+#define MSEC_PER_SEC   1000L
+#define NSEC_PER_USEC  1000L
+#define USEC_PER_MSEC  1000L
 
 #define secs_to_jiffies(s) ((s) * HZ)
 #define msecs_to_jiffies(ms) ((ms) / 10)
@@ -98,18 +100,18 @@ static inline uint64_t jiffies_to_nsecs(unsigned long j)
 /* convenience functions (from RTLinux) */
 
 #define timespec_normalize(t) {                         \
-                if ((t)->tv_nsec >= NSECS_PER_SEC) {    \
-                        (t)->tv_nsec -= NSECS_PER_SEC;  \
+                if ((t)->tv_nsec >= NSEC_PER_SEC) {    \
+                        (t)->tv_nsec -= NSEC_PER_SEC;  \
                         (t)->tv_sec++;                  \
                 } else if ((t)->tv_nsec < 0) {          \
-                        (t)->tv_nsec += NSECS_PER_SEC;  \
+                        (t)->tv_nsec += NSEC_PER_SEC;  \
                         (t)->tv_sec--;                  \
                 }                                       \
         }
 
 #define timespec_add_nsec(t1, nsec) do {                                \
-                (t1)->tv_sec += nsec / NSECS_PER_SEC;                   \
-                (t1)->tv_nsec += nsec % NSECS_PER_SEC;                  \
+                (t1)->tv_sec += nsec / NSEC_PER_SEC;                   \
+                (t1)->tv_nsec += nsec % NSEC_PER_SEC;                  \
                 timespec_normalize(t1);                                 \
         } while (0)
 
