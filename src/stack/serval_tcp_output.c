@@ -982,7 +982,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 				   int clone_it, gfp_t gfp_mask)
 {
 	struct serval_sock *ssk = serval_sk(sk);
-	struct serval_tcp_sock *tp;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	struct tcp_skb_cb *tcb;
 	struct tcp_out_options opts;
 	unsigned tcp_options_size, tcp_header_size;
@@ -995,10 +995,9 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	/* If congestion control is doing timestamping, we must
 	 * take such a timestamp before we potentially clone/copy.
 	 */
-	/*
-	if (icsk->icsk_ca_ops->flags & TCP_CONG_RTT_STAMP)
+	if (tp->ca_ops->flags & TCP_CONG_RTT_STAMP)
 		__net_timestamp(skb);
-	*/
+
 	if (likely(clone_it)) {
 		if (unlikely(skb_cloned(skb)))
 			skb = pskb_copy(skb, gfp_mask);
@@ -1008,7 +1007,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			return -ENOBUFS;
 	}
 
-	tp = serval_tcp_sk(sk);
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
 

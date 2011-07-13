@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <serval/timer.h>
 #endif
 
 /* Taken from Click */
@@ -203,6 +204,142 @@ int memcpy_fromiovecend(unsigned char *kdata, const struct iovec *iov,
 	}
 
 	return 0;
+}
+
+#if BITS_PER_LONG == 64
+/**
+ * div_u64_rem - unsigned 64bit divide with 32bit divisor with remainder
+ *
+ * This is commonly provided by 32bit archs to provide an optimized 64bit
+ * divide.
+ */
+static inline u64 div_u64_rem(u64 dividend, u32 divisor, u32 *remainder)
+{
+	*remainder = dividend % divisor;
+	return dividend / divisor;
+}
+
+/**
+ * div_s64_rem - signed 64bit divide with 32bit divisor with remainder
+ */
+static inline s64 div_s64_rem(s64 dividend, s32 divisor, s32 *remainder)
+{
+	*remainder = dividend % divisor;
+	return dividend / divisor;
+}
+
+/**
+ * div64_u64 - unsigned 64bit divide with 64bit divisor
+ */
+static inline u64 div64_u64(u64 dividend, u64 divisor)
+{
+	return dividend / divisor;
+}
+
+/**
+ * div64_s64 - signed 64bit divide with 64bit divisor
+ */
+static inline s64 div64_s64(s64 dividend, s64 divisor)
+{
+	return dividend / divisor;
+}
+
+#elif BITS_PER_LONG == 32
+/**
+ * div64_u64 - unsigned 64bit divide with 64bit divisor
+ * @dividend:	64bit dividend
+ * @divisor:	64bit divisor
+ *
+ * This implementation is a modified version of the algorithm proposed
+ * by the book 'Hacker's Delight'.  The original source and full proof
+ * can be found here and is available for use without restriction.
+ *
+ * 'http://www.hackersdelight.org/HDcode/newCode/divDouble.c'
+ */
+#ifndef div64_u64
+static u64 div64_u64(u64 dividend, u64 divisor)
+{
+	u32 high = divisor >> 32;
+	u64 quot;
+
+	if (high == 0) {
+		quot = div_u64(dividend, divisor);
+	} else {
+		int n = 1 + fls(high);
+		quot = div_u64(dividend >> n, divisor >> n);
+
+		if (quot != 0)
+			quot--;
+		if ((dividend - quot * divisor) >= divisor)
+			quot++;
+	}
+
+	return quot;
+}
+#endif
+
+#ifndef div_s64_rem
+static s64 div_s64_rem(s64 dividend, s32 divisor, s32 *remainder)
+{
+	u64 quotient;
+
+	if (dividend < 0) {
+		quotient = div_u64_rem(-dividend, abs(divisor), 
+                                       (u32 *)remainder);
+		*remainder = -*remainder;
+		if (divisor > 0)
+			quotient = -quotient;
+	} else {
+		quotient = div_u64_rem(dividend, abs(divisor), 
+                                       (u32 *)remainder);
+		if (divisor < 0)
+			quotient = -quotient;
+	}
+	return quotient;
+}
+#endif
+
+#endif /* BITS_PER_LONG == 64 */
+
+/**
+ * ns_to_timespec - Convert nanoseconds to timespec
+ * @nsec:       the nanoseconds value to be converted
+ *
+ * Returns the timespec representation of the nsec parameter.
+ */
+struct timespec ns_to_timespec(const s64 nsec)
+{
+	struct timespec ts;
+	s32 rem;
+
+	if (!nsec)
+		return (struct timespec) {0, 0};
+
+	ts.tv_sec = div_s64_rem(nsec, NSEC_PER_SEC, &rem);
+	if (unlikely(rem < 0)) {
+		ts.tv_sec--;
+		rem += NSEC_PER_SEC;
+	}
+	ts.tv_nsec = rem;
+
+	return ts;
+}
+
+/**
+ * ns_to_timeval - Convert nanoseconds to timeval
+ * @nsec:       the nanoseconds value to be converted
+ *
+ * Returns the timeval representation of the nsec parameter.
+ */
+struct timeval ns_to_timeval(const s64 nsec)
+{
+	struct timespec ts = ns_to_timespec(nsec);
+	struct timeval tv;
+
+	tv.tv_sec = ts.tv_sec;
+	tv.tv_usec = (suseconds_t) ts.tv_nsec / 1000;
+
+	return tv;
 }
 
 #if !defined(HAVE_PPOLL)

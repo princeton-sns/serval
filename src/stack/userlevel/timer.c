@@ -36,12 +36,11 @@ static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 #endif
 
-
 int gettime(struct timespec *ts)
 {
         int err = 0;
 
-#if defined(OS_LINUX)
+#if _POSIX_TIMERS > 0
         err = clock_gettime(CLOCK, ts);
 
 	if (err == -1) {

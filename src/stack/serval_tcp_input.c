@@ -1962,9 +1962,7 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 	//u32 prior_sacked = tp->sacked_out;
 	s32 seq_rtt = -1;
 	s32 ca_seq_rtt = -1;
-#if defined(OS_LINUX_KERNEL)
 	ktime_t last_ackt = net_invalid_timestamp();
-#endif
 
 	while ((skb = serval_tcp_write_queue_head(sk)) && 
                skb != serval_tcp_send_head(sk)) {
@@ -2088,16 +2086,14 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 			/* Is the ACK triggering packet unambiguous? */
 			if (!(flag & FLAG_RETRANS_DATA_ACKED)) {
 				/* High resolution needed and available? */
-#if defined(OS_LINUX_KERNEL)
+
 				if (ca_ops->flags & TCP_CONG_RTT_STAMP &&
 				    !ktime_equal(last_ackt,
 						 net_invalid_timestamp()))
 					rtt_us = ktime_us_delta(ktime_get_real(),
 								last_ackt);
-				else 
-#endif
-                                        if (ca_seq_rtt > 0)
-                                                rtt_us = jiffies_to_usecs(ca_seq_rtt);
+				else if (ca_seq_rtt > 0)
+                                        rtt_us = jiffies_to_usecs(ca_seq_rtt);
 			}
 
 			ca_ops->pkts_acked(sk, pkts_acked, rtt_us);
