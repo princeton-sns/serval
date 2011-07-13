@@ -604,9 +604,11 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
                 return -1;
         }
         
-        LOG_DBG("%s -> %s\n",
+        LOG_INF("%s -> %s local_flowid=%s peer_flowid=%s\n",
                 sock_state_str[sk->sk_state],
-                sock_state_str[new_state]);
+                sock_state_str[new_state],
+                flow_id_to_str(&serval_sk(sk)->local_flowid),
+                flow_id_to_str(&serval_sk(sk)->peer_flowid));
         
         switch (new_state) {
         case SERVAL_CLOSED:

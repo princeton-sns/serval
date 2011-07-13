@@ -506,8 +506,9 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.iss;
         ssk->snd_seq.nxt = ssk->snd_seq.iss + 1;
 
-        LOG_DBG("Sending REQUEST seqno=%u srvid=%s\n",
-                SERVAL_SKB_CB(skb)->seqno, 
+        LOG_INF("Sending REQUEST seqno=%u local_flowid=%s srvid=%s\n",
+                SERVAL_SKB_CB(skb)->seqno,
+                flow_id_to_str(&ssk->local_flowid),
                 service_id_to_str(srvid));
 
         err = serval_sal_queue_and_push(sk, skb);
@@ -547,7 +548,7 @@ void serval_sal_close(struct sock *sk, long timeout)
         struct sk_buff *skb = NULL;
         int err = 0;
 
-        LOG_DBG("\n");
+        LOG_INF("Closing socket\n");
         
         if (sk->sk_state == SERVAL_CONNECTED ||
             sk->sk_state == SERVAL_RESPOND ||
@@ -1003,7 +1004,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                 (struct serval_control_ext *)(sh + 1);
         int err = 0;
 
-        LOG_DBG("received Close REQUEST\n");
+        LOG_INF("received Close REQUEST\n");
         
         if (!has_valid_control_extension(sk, sh)) {
                 LOG_ERR("Bad control extension\n");

@@ -79,14 +79,14 @@ unsigned long gettime_jiffies(void);
 #define USECS_PER_SEC  1000000L
 #define MSECS_PER_SEC  1000L
 
-#define secs_to_jiffies(s) (s * HZ)
-#define msecs_to_jiffies(ms) (ms / 10)
-#define ticks_to_jiffies(t) (t / TICKS_PER_HZ)
-#define nsecs_to_jiffies(ns) (ns / TICKS_PER_HZ)
+#define secs_to_jiffies(s) ((s) * HZ)
+#define msecs_to_jiffies(ms) ((ms) / 10)
+#define ticks_to_jiffies(t) ((t) / TICKS_PER_HZ)
+#define nsecs_to_jiffies(ns) ((ns) / TICKS_PER_HZ)
 #define timespec_to_jiffies(ts)                 \
         (secs_to_jiffies((ts)->tv_sec) +        \
          nsecs_to_jiffies((ts)->tv_nsec))
-#define jiffies_to_secs(j) (j / HZ)
+#define jiffies_to_secs(j) ((j) / HZ)
 #define jiffies_to_usecs(j) (jiffies_to_nsecs(j) / 1000)
 
 static inline uint64_t jiffies_to_nsecs(unsigned long j)

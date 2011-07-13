@@ -2107,7 +2107,6 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 	return flag;
 }
 
-
 static void serval_tcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);

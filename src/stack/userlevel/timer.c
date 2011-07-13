@@ -36,7 +36,6 @@ static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 #endif
 
-
 int gettime(struct timespec *ts)
 {
         int err = 0;
@@ -64,9 +63,11 @@ int gettime(struct timespec *ts)
 unsigned long gettime_jiffies(void)
 {
         struct timespec now;
+
         gettime(&now);
+
         timespec_sub(&now, &timer_list.start_time);
-        
+
         return timespec_to_jiffies(&now);
 }
 

@@ -1000,6 +1000,49 @@ static inline struct iphdr *ipip_hdr(const struct sk_buff *skb)
 	return (struct iphdr *)skb_transport_header(skb);
 }
 
+static inline ktime_t skb_get_ktime(const struct sk_buff *skb)
+{
+        return skb->tstamp;
+}
+
+/**
+ *skb_get_timestamp - get timestamp from a skb
+ *@skb: skb to get stamp from
+ *@stamp: pointer to struct timeval to store stamp in
+ *
+ *Timestamps are stored in the skb as offsets to a base timestamp.
+ *This function converts the offset back to a struct timeval and stores
+ *it in stamp.
+ */
+static inline void skb_get_timestamp(const struct sk_buff *skb,
+                                     struct timeval *stamp)
+{
+        *stamp = ktime_to_timeval(skb->tstamp);
+}
+
+static inline void skb_get_timestampns(const struct sk_buff *skb,
+                                       struct timespec *stamp)
+{
+        *stamp = ktime_to_timespec(skb->tstamp);
+}
+
+static inline void __net_timestamp(struct sk_buff *skb)
+{
+        skb->tstamp = ktime_get_real();
+}
+
+static inline ktime_t net_timedelta(ktime_t t)
+{
+        return ktime_sub(ktime_get_real(), t);
+}
+
+static inline ktime_t net_invalid_timestamp(void)
+{
+        return ktime_set(0, 0);
+}
+
+extern void skb_timestamping_init(void);
+
 extern __sum16 __skb_checksum_complete_head(struct sk_buff *skb, int len);
 extern __sum16 __skb_checksum_complete(struct sk_buff *skb);
 
