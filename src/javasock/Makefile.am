@@ -22,3 +22,4 @@ clean-local:
 	rm -f *~
 	rm -f $(JARFILE)
 	rm -f classes.list
+	rm -f sources.list
