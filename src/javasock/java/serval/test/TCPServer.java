@@ -3,8 +3,10 @@ package serval.test;
 
 import java.net.SocketTimeoutException;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.lang.System;
 import java.lang.Thread;
 import java.lang.Runnable;
@@ -30,30 +32,40 @@ public class TCPServer {
         public void run() {
             System.out.println("Client " + id + " running...");
             //sock.setSoTimeout(3000);
-            ObjectInputStream in;
-            ObjectOutputStream out;
-            
+            BufferedReader in;
+            BufferedWriter out;
+
 			try {
-				in = new ObjectInputStream(sock.getInputStream());
+				in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
 			} catch (IOException e) {
 				System.out.println("Could not open input stream");
 				return;
 			}
+			            
 			try {
-				out = new ObjectOutputStream(sock.getOutputStream());
+				out = new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
 			} catch (IOException e) {
 				System.out.println("Could not open output stream");
 				return;
 			}
-			
+
             while (true) {
                 try {
-                    String msg = in.readUTF();
+                    System.out.println("Waiting for client message");
+
+                    String msg = in.readLine();
+
+                    if (msg == null) {
+                        System.out.printf("Client %d closed\n", id);
+                        break;
+                    }
 
                     System.out.printf("Client %d received \'%s\'\n",
                                       id, msg);
                     
-                    out.writeUTF(msg.toUpperCase());
+                    out.write(msg.toUpperCase());
+                    out.newLine();
+                    out.flush();
 
                     System.out.printf("Client %d sent \'%s\'\n",
                                       id, msg);
