@@ -66,7 +66,6 @@ class ServalSocketOutputStream extends OutputStream {
     public void write(int oneByte) throws IOException {
         byte[] buffer = new byte[1];
         buffer[0] = (byte) (oneByte & 0xFF);
-
         socket.write(buffer, 0, 1);
     }
 }

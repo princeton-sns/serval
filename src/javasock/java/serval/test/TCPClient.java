@@ -2,8 +2,10 @@
 package serval.test;
 
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.lang.System;
 import java.lang.Thread;
 import java.lang.Runnable;
@@ -11,9 +13,9 @@ import serval.net.*;
 
 public class TCPClient {
     private ServalSocket sock;
-    private ObjectOutputStream out;
-    private ObjectInputStream in;
-    
+    private BufferedReader in;
+    private BufferedWriter out;
+
     public TCPClient() {
 
     }
@@ -22,9 +24,9 @@ public class TCPClient {
         public CloseThread() {
         }
         public void run() {
-            System.out.println("CloseThread running\n");
+            //System.out.println("CloseThread running\n");
             try {
-                Thread.sleep(1000);
+                Thread.sleep(4000);
             } catch (InterruptedException e) {
 
             }
@@ -47,11 +49,10 @@ public class TCPClient {
 		if (sock != null) {
 			
 			try {
-				out.writeUTF(msg);
-				// FIXME: Should not do a blocking receive in this function
-
-                System.out.println("Receiving...");
-				String rsp = in.readUTF();
+				out.write(msg);
+                out.newLine();
+                out.flush();
+				String rsp = in.readLine();
 				System.out.println("Response: " + rsp);
 			} catch (IOException e) {
                 System.err.println("Error: " + e.getMessage());
@@ -83,23 +84,10 @@ public class TCPClient {
 
         System.out.println("Connected!");
 
+		(new Thread(new CloseThread())).start();
+
         try {
-            System.out.println("Opening in");
-			in = new ObjectInputStream(sock.getInputStream());
-            System.out.println("Opened in");
-		} catch (IOException e) {
-			System.err.println("Could not open input stream");
-			try {
-				sock.close();
-			} catch (IOException e1) {
-				e1.printStackTrace();
-			}
-			return;
-		}
-        try {
-            System.out.println("Opening out");
-			out = new ObjectOutputStream(sock.getOutputStream());
-            System.out.println("Opened out");
+			out =  new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
 		} catch (IOException e) {
 			System.err.println("Could not open output stream");
 			try {
@@ -111,11 +99,21 @@ public class TCPClient {
 			return;
 		}
 
+        try {
+            in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+		} catch (IOException e) {
+			System.err.println("Could not open input stream");
+			try {
+				sock.close();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
+			return;
+		}
+        
         String msg = "Hello World!";
-
+       
         System.out.println("Sending: " + msg);
-
-		(new Thread(new CloseThread())).start();
 
 		sendMessage(msg);
 
@@ -124,7 +122,7 @@ public class TCPClient {
 			out.close();
 			sock.close();
 		} catch (IOException e) {
-			e.printStackTrace();
+			//e.printStackTrace();
 		}
 	}
 
