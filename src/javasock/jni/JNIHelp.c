@@ -16,7 +16,7 @@
  */
 
 /*
- * JNI helper functions taken from Andorid/Harmony.
+ * JNI helper functions taken from Android/Harmony.
  */
 #include "JNIHelp.h"
 /* Make sure we include a POSIX compliant strerror_r */
@@ -32,12 +32,12 @@
 * exception message.
 */
 static void getExceptionSummary(JNIEnv* env, jthrowable excep, char* buf,
-                                size_t bufLen)
+		size_t bufLen)
 {
-        if (excep == NULL)
-                return;
+	if (excep == NULL)
+		return;
 
-        /* get the name of the exception's class; none of these should fail */
+	/* get the name of the exception's class; none of these should fail */
         jclass clazz = (*env)->GetObjectClass(env, excep); // exception's class
         jclass jlc = (*env)->GetObjectClass(env, clazz);   // java.lang.Class
         jmethodID getNameMethod =

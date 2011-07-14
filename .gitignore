@@ -42,17 +42,15 @@ src/test/tcp_client
 src/test/tcp_clientn
 src/test/tcp_server
 src/test/tcp_servern
-<<<<<<< HEAD
 src/servd/messagetest
 src/servd/stabletest
 src/servd/tasktest
 src/servd/trietest
 src/servd/utiltest
 src/servd/servr
-=======
->>>>>>> 41a5c9dd147c5cd2a0c083b7d134ef24e0c0f0a0
 src/javasock/classes.list
 src/javasock/sources.list
+src/javasock/bin/
 android/ServalChat/bin/
 android/ServalChat/gen/
 stamp-h1

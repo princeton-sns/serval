@@ -5,6 +5,10 @@ import java.net.SocketAddress;
 import java.net.InetAddress;
 
 public class ServalSocketAddress extends SocketAddress {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 5342119614494820939L;
 	ServiceID serviceID;
     InetAddress address;
     int prefix_bits;

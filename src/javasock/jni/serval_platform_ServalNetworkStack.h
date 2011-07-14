@@ -50,10 +50,18 @@ JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_listen
 /*
  * Class:     serval_platform_ServalNetworkStack
  * Method:    accept
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServalDatagramSocketImpl;)Ljava/io/FileDescriptor;
+ * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServalDatagramSocketImpl;I)Ljava/io/FileDescriptor;
  */
-JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_accept
-  (JNIEnv *, jobject, jobject, jobject);
+JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalDatagramSocketImpl_2I
+  (JNIEnv *, jobject, jobject, jobject, jint);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    accept
+ * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServalSocketImpl;I)Ljava/io/FileDescriptor;
+ */
+JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalSocketImpl_2I
+  (JNIEnv *, jobject, jobject, jobject, jint);
 
 /*
  * Class:     serval_platform_ServalNetworkStack
@@ -70,6 +78,22 @@ JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_connect
  */
 JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_disconnect
   (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    write
+ * Signature: (Ljava/io/FileDescriptor;[BII)I
+ */
+JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_write
+  (JNIEnv *, jobject, jobject, jbyteArray, jint, jint);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    read
+ * Signature: (Ljava/io/FileDescriptor;[BIII)I
+ */
+JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_read
+  (JNIEnv *, jobject, jobject, jbyteArray, jint, jint, jint);
 
 /*
  * Class:     serval_platform_ServalNetworkStack
@@ -105,6 +129,14 @@ JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_getSocketLocal
 
 /*
  * Class:     serval_platform_ServalNetworkStack
+ * Method:    getSocketLocalAddress
+ * Signature: (Ljava/io/FileDescriptor;)Ljava/net/InetAddress;
+ */
+JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_getSocketLocalAddress
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
  * Method:    setOption
  * Signature: (Ljava/io/FileDescriptor;III)I
  */
@@ -126,6 +158,54 @@ JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_getOption
  */
 JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_getSocketFlags
   (JNIEnv *, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    availableStream
+ * Signature: (Ljava/io/FileDescriptor;)I
+ */
+JNIEXPORT jint JNICALL Java_serval_platform_ServalNetworkStack_availableStream
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    getServiceByName
+ * Signature: (Ljava/lang/String;)Lserval/net/ServiceID;
+ */
+JNIEXPORT jobject JNICALL Java_serval_platform_ServalNetworkStack_getServiceByName
+  (JNIEnv *, jobject, jstring);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    shutdownInput
+ * Signature: (Ljava/io/FileDescriptor;)V
+ */
+JNIEXPORT void JNICALL Java_serval_platform_ServalNetworkStack_shutdownInput
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    shutdownOutput
+ * Signature: (Ljava/io/FileDescriptor;)V
+ */
+JNIEXPORT void JNICALL Java_serval_platform_ServalNetworkStack_shutdownOutput
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    supportsUrgentData
+ * Signature: (Ljava/io/FileDescriptor;)Z
+ */
+JNIEXPORT jboolean JNICALL Java_serval_platform_ServalNetworkStack_supportsUrgentData
+  (JNIEnv *, jobject, jobject);
+
+/*
+ * Class:     serval_platform_ServalNetworkStack
+ * Method:    sendUrgentData
+ * Signature: (Ljava/io/FileDescriptor;B)V
+ */
+JNIEXPORT void JNICALL Java_serval_platform_ServalNetworkStack_sendUrgentData
+  (JNIEnv *, jobject, jobject, jbyte);
 
 #ifdef __cplusplus
 }

@@ -2,27 +2,27 @@
 package serval.test;
 
 import java.net.SocketTimeoutException;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.lang.System;
 import java.lang.Thread;
 import java.lang.Runnable;
 import serval.net.*;
 
-public class UDPServer {
-	private ServalServerDatagramSocket serverSock;
+public class TCPServer {
+	private ServalServerSocket serverSock;
 	private int num = 0;
 
-	public UDPServer() {
+	public TCPServer() {
 		
 	}
 	
 	private class Client implements Runnable {
-        ServalDatagramSocket sock;
+        ServalSocket sock;
         int id;
 
-        ServalDatagramPacket pack = 
-            new ServalDatagramPacket(new byte[1024], 1024);
-
-        public Client(ServalDatagramSocket sock, int num) {
+        public Client(ServalSocket sock, int num) {
             this.sock = sock;
             this.id = num;
         }
@@ -30,25 +30,30 @@ public class UDPServer {
         public void run() {
             System.out.println("Client " + id + " running...");
             //sock.setSoTimeout(3000);
+            ObjectInputStream in;
+            ObjectOutputStream out;
+            
+			try {
+				in = new ObjectInputStream(sock.getInputStream());
+			} catch (IOException e) {
+				System.out.println("Could not open input stream");
+				return;
+			}
+			try {
+				out = new ObjectOutputStream(sock.getOutputStream());
+			} catch (IOException e) {
+				System.out.println("Could not open output stream");
+				return;
+			}
+			
             while (true) {
                 try {
-                    int len = sock.receive(pack);
+                    String msg = in.readUTF();
 
-                    if (len == -1) {
-                        System.out.printf("Client %d other end closed\n", id);
-                        break;
-                    }
-                    
-                    String msg = new String(pack.getData(), 
-                                            0, pack.getLength());
-                    
                     System.out.printf("Client %d received \'%s\'\n",
                                       id, msg);
-                    msg = msg.toUpperCase();
-                    byte[] b = msg.getBytes("UTF-8");
-                    ServalDatagramPacket rsp = 
-                        new ServalDatagramPacket(b, b.length); 
-                    sock.send(rsp);
+                    
+                    out.writeUTF(msg.toUpperCase());
 
                     System.out.printf("Client %d sent \'%s\'\n",
                                       id, msg);
@@ -59,8 +64,14 @@ public class UDPServer {
                     System.err.println("Socket error: " + e.getMessage());
                     break;
                 }
-            }           
-            sock.close();
+            }    
+            try {
+				in.close();
+	            out.close();
+	            sock.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
             System.out.println("Client " + id + " exits...\n");
         }             
 	}
@@ -68,13 +79,13 @@ public class UDPServer {
     public void run() {
 	    try {
 		    serverSock = 
-                new ServalServerDatagramSocket(new ServiceID((short) 16385), 8);
+                new ServalServerSocket(new ServiceID((short) 16385), 8);
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
             return;
         }
 
-        System.out.println("UDP server listening...");
+        System.out.println("TCP server listening...");
         
         while (true) {
             try {
@@ -89,7 +100,7 @@ public class UDPServer {
     
     public static void main(String args[]) {
         System.out.println("UDPServer starting");
-        UDPServer s = new UDPServer();
+        TCPServer s = new TCPServer();
 
         s.run();
     }
