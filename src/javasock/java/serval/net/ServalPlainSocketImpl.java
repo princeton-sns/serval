@@ -203,8 +203,9 @@ public class ServalPlainSocketImpl extends ServalSocketImpl {
     }
 
     @Override
-    protected void connect(ServiceID aService, InetAddress anAddr) throws IOException {
-        connect(aService, anAddr, 0);
+    protected void connect(ServiceID aService, InetAddress anAddr) 
+        throws IOException {
+        connect(aService, anAddr, -1);
     }
 
     /**
@@ -219,23 +220,17 @@ public class ServalPlainSocketImpl extends ServalSocketImpl {
      * @throws IOException
      *             if an error occurs while connecting
      */
-    @SuppressWarnings("unused")
 	private void connect(ServiceID aService, InetAddress anAddr, int timeout)
             throws IOException {
 
-        InetAddress normalAddr = anAddr.isAnyLocalAddress() ? 
+        InetAddress normalAddr = null;
+        
+        if (anAddr != null)
+            normalAddr = anAddr.isAnyLocalAddress() ? 
         		InetAddress.getLocalHost() : anAddr;
         
         try {
-            if (streaming) {
-                if (false /* NetUtil.usingSocks(proxy) */) {
-                    //socksConnect(anAddr, aPort, 0);
-                } else {
-                        netImpl.connect(fd, aService, normalAddr, timeout);
-                }
-            } else {
-            	netImpl.connect(fd, aService, normalAddr, timeout);
-            }
+            netImpl.connect(fd, aService, normalAddr, timeout);
         } catch (ConnectException e) {
             throw new ConnectException(aService + ":" + anAddr + " - "
                     + e.getMessage());

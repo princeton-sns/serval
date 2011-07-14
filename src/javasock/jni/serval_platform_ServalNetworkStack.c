@@ -347,7 +347,7 @@ jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env,
                         /* Everything OK */
                 } else {
                         jniThrowSocketException(env, errno);
-                        LOG_DBG("Connect failure: %s\n", strerror(errno));
+                        LOG_ERR("Connect failure: %s\n", strerror(errno));
                         goto out;
                 }
 	}
@@ -357,7 +357,7 @@ jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env,
         fds.revents = 0;
 	
         ret = poll(&fds, 1, timeout);
-        
+
         if (ret == -1) {
                 LOG_ERR("poll fail: %s\n", strerror(errno));
                 jniThrowSocketException(env, errno);
@@ -574,6 +574,9 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 jint Java_serval_platform_ServalNetworkStack_write(JNIEnv *env, jobject obj,
 		jobject fd, jbyteArray data, jint offset, jint length)
 {
+        if (offset < 0 || length < 0)
+                jniThrowIllegalArgumentException(env, "Bad offset or length");
+
 	return Java_serval_platform_ServalNetworkStack_send(env, obj, fd, data,
 			offset, length);
 }
@@ -587,6 +590,9 @@ jint Java_serval_platform_ServalNetworkStack_read(JNIEnv *env, jobject obj,
 		jobject fd, jbyteArray buf, jint offset, jint length,
 		jint timeout)
 {
+        if (offset < 0 || length < 0)
+                jniThrowIllegalArgumentException(env, "Bad offset or length");
+
 	return Java_serval_platform_ServalNetworkStack_recv(env, obj, fd, buf,
 			offset, length, timeout, 0);
 }
@@ -810,7 +816,7 @@ jint Java_serval_platform_ServalNetworkStack_availableStream(JNIEnv *env,
 
 	if (sock == -1)
 		return -1;
-
+        
 	do {
 		struct timeval timeout = { 0, 1 };
 		fd_set fds;

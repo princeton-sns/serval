@@ -325,9 +325,8 @@ public class ServalSocket {
      *            the port on the destination host.
      */
     void checkDestination(ServiceID serviceID, InetAddress destAddr) {
-        // BEGIN android-changed
-        checkConnectPermission(destAddr.getHostAddress());
-        // END android-changed
+        if (destAddr != null)
+            checkConnectPermission(destAddr.getHostAddress());
     }
 
     /**
@@ -695,19 +694,19 @@ public class ServalSocket {
      *             operations.
      */
     void startupSocket(ServiceID dstService, InetAddress dstAddress, 
-    		ServiceID localService, InetAddress localAddress, boolean streaming)
+                       ServiceID localService, InetAddress localAddress, 
+                       boolean streaming)
             throws IOException {
-
-        InetAddress addr = localAddress == null ? 
-        		Inet4Address.getByAddress(new byte[] { 0, 0, 0, 0 }) : 
-        			localAddress;
         		
+        if (dstService == null)
+            throw new IOException("Bad serviceID");
+
         synchronized (this) {
             impl.create(streaming);
             isCreated = true;
             try {
                 if (!streaming) {
-                    impl.bind(localService, addr);
+                    impl.bind(localService, localAddress);
                 }
                 isBound = true;
                 impl.connect(dstService, dstAddress);

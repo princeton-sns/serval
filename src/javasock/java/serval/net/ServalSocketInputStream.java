@@ -76,7 +76,6 @@ class ServalSocketInputStream extends InputStream {
         }
 
         if (0 > offset || offset >= buffer.length) {
-            // K002e=Offset out of bounds \: {0}
             throw new ArrayIndexOutOfBoundsException("Out of bounds. Offset=" + offset);
         }
         if (0 > count || offset + count > buffer.length) {

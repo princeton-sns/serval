@@ -110,6 +110,13 @@ int jniThrowException(JNIEnv* env, const char* className, const char* msg)
         }
         return 0;
 }
+/*
+ * Throw a java.lang.IllegalArgumentException, with an optional message.
+ */
+int jniThrowIllegalArgumentException(JNIEnv* env, const char* msg)
+{
+        return jniThrowException(env, "java/lang/IllegalArgumentException", msg);
+}
 
 /*
  * Throw a java.lang.NullPointerException, with an optional message.

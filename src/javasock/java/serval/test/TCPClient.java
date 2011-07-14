@@ -54,7 +54,7 @@ public class TCPClient {
 				String rsp = in.readUTF();
 				System.out.println("Response: " + rsp);
 			} catch (IOException e) {
-                System.out.println("Error: " + e.getMessage());
+                System.err.println("Error: " + e.getMessage());
 				//msg += " - failed!";
                 return -1;
 			}
@@ -65,10 +65,10 @@ public class TCPClient {
         try {
         	//ServiceID localServiceID = new ServiceID((short) 32769)
             sock = new ServalSocket(new ServiceID((short) 16385));
-            sock.setSoTimeout(5000);
+            //sock.setSoTimeout(5000);
             //sock.connect(new ServiceID((short) 16385), 4000);
         } catch (Exception e) {
-            System.out.println("failure: " + e.getMessage());
+            System.err.println("connect failure: " + e.getMessage());
             
             if (sock != null) {
 				try {
@@ -81,8 +81,12 @@ public class TCPClient {
             return;
         }
 
+        System.out.println("Connected!");
+
         try {
+            System.out.println("Opening in");
 			in = new ObjectInputStream(sock.getInputStream());
+            System.out.println("Opened in");
 		} catch (IOException e) {
 			System.err.println("Could not open input stream");
 			try {
@@ -93,7 +97,9 @@ public class TCPClient {
 			return;
 		}
         try {
+            System.out.println("Opening out");
 			out = new ObjectOutputStream(sock.getOutputStream());
+            System.out.println("Opened out");
 		} catch (IOException e) {
 			System.err.println("Could not open output stream");
 			try {
