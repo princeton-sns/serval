@@ -21,83 +21,6 @@
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 #include <machine/endian.h>
 
-#ifndef U64__
-#define U64__
-typedef uint64_t u64;
-#endif
-#ifndef S64__
-#define S64__
-typedef int64_t s64;
-#endif
-#ifndef U32__
-#define U32__
-typedef uint32_t u32;
-#endif
-#ifndef __U32__
-#define __U32__
-typedef uint32_t __u32;
-#endif
-#ifndef S32__
-#define S32__
-typedef int32_t s32;
-#endif 
-#ifndef __S32__
-#define __S32__
-typedef int32_t __s32;
-#endif 
-#ifndef BE32__
-#define BE32__
-typedef uint32_t be32;
-#endif 
-#ifndef __BE32__
-#define __BE32__
-typedef uint32_t __be32;
-#endif 
-#ifndef U16__
-#define U16__
-typedef uint16_t u16;
-#endif 
-#ifndef __U16__
-#define __U16__
-typedef uint16_t __u16;
-#endif 
-#ifndef S16__
-#define S16__
-typedef int16_t s16;
-#endif 
-#ifndef __S16__
-#define __S16__
-typedef int16_t __s16;
-#endif 
-#ifndef __BE16__
-#define __BE16__
-typedef uint16_t __be16;
-#endif 
-#ifndef BE16__
-#define BE16__
-typedef uint16_t be16;
-#endif 
-#ifndef U8__
-#define U8__
-typedef uint8_t u8;
-#endif 
-#ifndef __U8__
-#define __U8__
-typedef uint8_t __u8;
-#endif 
-#ifndef S8__
-#define S8__
-typedef int8_t s8;
-#endif 
-#ifndef __S8__
-#define __S8__
-typedef int8_t __s8;
-#endif
-#ifndef __SUM16__
-#define __SUM16__
-typedef __u16 __sum16;
-#endif
-
 /* Setup byte order defines according to the Linux kernel */
 #if __BYTE_ORDER == __BIG_ENDIAN
 #ifdef __LITTLE_ENDIAN
@@ -133,14 +56,14 @@ typedef __u16 __sum16;
 struct service_id {
         union { 
                 struct {
-                        __u8 un_ss[4];
-                        __u8 un_local[4];
-                        __u8 un_group[4];
-                        __u8 un_selfcert[20];
+                        uint8_t un_ss[4];
+                        uint8_t un_local[4];
+                        uint8_t un_group[4];
+                        uint8_t un_selfcert[20];
                 };
-                __u8	un_id8[32];
-                __u16   un_id16[16];
-                __u32   un_id32[8];
+                uint8_t	 un_id8[32];
+                uint16_t un_id16[16];
+                uint32_t un_id32[8];
         } srv_un;
 #define s_ss srv_un.un_ss;
 #define s_local srv_un.un_local;
@@ -152,29 +75,34 @@ struct service_id {
 };
 
 enum sv_service_flags {
-    //bottom 2 bits reserved for scope - resolution and registration
-    SVSF_HOST_SCOPE = 0,
-    SVSF_LOCAL_SCOPE = 1,
-    SVSF_DOMAIN_SCOPE = 2,
-    SVSF_GLOBAL_SCOPE = 3,
-    SVSF_STRICT_SCOPE = 1 << 4, //interpret scope strictly, by default, scopes are inclusive
-    SVSF_ANYCAST = 1 << 5, //service instance can be anycasted, 0 = backup or strict match only
-    SVSF_MULTICAST = 1 << 6, //service instance can be multicasted
-    SVSF_INVALID = 0xFF
+        /* bottom 2 bits reserved for scope - resolution and
+         * registration */
+        SVSF_HOST_SCOPE = 0,
+        SVSF_LOCAL_SCOPE = 1,
+        SVSF_DOMAIN_SCOPE = 2,
+        SVSF_GLOBAL_SCOPE = 3,
+        SVSF_STRICT_SCOPE = 1 << 4, /* interpret scope strictly, by
+                                     * default, scopes are
+                                     * inclusive */
+        SVSF_ANYCAST = 1 << 5, /* service instance can be anycasted, 0
+                                * = backup or strict match */
+        SVSF_MULTICAST = 1 << 6, /* service instance can be
+                                  * multicasted */
+        SVSF_INVALID = 0xFF
 };
 
 struct sockaddr_sv {
         sa_family_t sv_family;
-        __u8 sv_flags;
-        __u8 sv_prefix_bits;
+        uint8_t sv_flags;
+        uint8_t sv_prefix_bits;
         struct service_id sv_srvid;
 };
 
 struct flow_id {
         union {
-                __u8 un_id8[4];
-                __be16 un_id16[2];
-                __be32 un_id32;
+                uint8_t  un_id8[4];
+                uint16_t un_id16[2];
+                uint32_t un_id32;
         } fl_un;
 #define s_id8  fl_un.un_id8
 #define s_id16 fl_un.un_id16
@@ -187,7 +115,7 @@ struct net_addr {
                    together with 256-bit service_id atm. */
                 /* struct in6_addr net_ip6; */
                 struct in_addr un_ip;
-                __u8 un_raw[4];
+                uint8_t un_raw[4];
         } net_un;
 #define net_ip net_un.un_ip
 #define net_raw net_un.un_raw
@@ -243,20 +171,20 @@ enum serval_packet_type {
 
 struct serval_hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8	res1:3,
+	uint8_t	res1:3,
                 ack:1,
 		type:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	type:4,
+	uint8_t	type:4,
   		ack:1,
                 res1:3;
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
-        __u8    protocol;
-        __sum16 check;
-        __be16  length;  
-        __be16  res2;       
+        uint8_t  protocol;
+        uint16_t check;
+        uint16_t length;  
+        uint16_t res2;       
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
 };
@@ -264,15 +192,15 @@ struct serval_hdr {
 /* Generic extension header */
 struct serval_ext {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	__u8	flags:4,
+	uint8_t	flags:4,
 		type:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	__u8	type:4,
+	uint8_t	type:4,
                 flags:4;
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
-        __u8 length;
+        uint8_t length;
 };
 /*
   These defines can be used for convenient access to the fields in the
@@ -285,9 +213,9 @@ struct serval_ext {
 
 struct serval_connection_ext {
         struct serval_ext exthdr;
-        __be32 seqno;
-        __be32 ackno;
-        __u8 nonce[8];
+        uint32_t seqno;
+        uint32_t ackno;
+        uint8_t  nonce[8];
         struct service_id srvid;
 };
 
@@ -297,9 +225,9 @@ struct serval_connection_ext {
 
 struct serval_control_ext {
         struct serval_ext exthdr;
-        __be32 seqno;
-        __be32 ackno;
-        __u8 nonce[8];
+        uint32_t seqno;
+        uint32_t ackno;
+        uint8_t  nonce[8];
 };
 
 #define SERVAL_SERVICE_EXT 3
@@ -321,7 +249,7 @@ struct serval_description_ext {
 
 struct serval_source_ext {
         struct serval_ext exthdr;
-        __u8 source[0];
+        uint8_t source[0];
 };
 
 #endif /* _SERVAL_H */
