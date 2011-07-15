@@ -20,6 +20,7 @@
 static unsigned int client_num = 0;
 
 struct client {
+        int family;
         unsigned int id;
         pthread_t thr;
         int inet_sock;
@@ -30,26 +31,32 @@ struct client {
 
 static ssize_t forward_data(int from, int to, int pipefd[2])
 {
-        ssize_t rlen, wlen;
+        ssize_t rlen, wlen = 0;
 
-        rlen = splice(from, NULL, pipefd[1], NULL, 
-                      INT_MAX, SPLICE_F_MOVE | SPLICE_F_MORE);
+         rlen = splice(from, NULL, pipefd[1], NULL, 
+                       INT_MAX, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
         
         if (rlen == -1) {
                 fprintf(stderr, "splice1: %s\n",
                         strerror(errno));
                 return rlen;
-        } 
+        } else if (rlen == 0) {
+                printf("Other end closed\n");
+        }
         
         /* printf("splice1 %zd bytes\n", rlen); */
         
-        wlen = splice(pipefd[0], NULL, to, NULL,
-                      rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
-        
-        if (wlen == -1) {
-                fprintf(stderr, "splice2: %s\n",
-                        strerror(errno));
-                return wlen;
+        while (rlen) {
+                ssize_t w = splice(pipefd[0], NULL, to, NULL,
+                                   rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
+                
+                if (w == -1) {
+                        fprintf(stderr, "splice2: %s\n",
+                                strerror(errno));
+                        break;
+                }
+                wlen += w;
+                rlen -= w;
         }
         
         /* printf("splice2 %zd bytes\n", wlen); */
@@ -67,7 +74,7 @@ static ssize_t serval_to_legacy(struct client *c)
         return forward_data(c->serval_sock, c->inet_sock, c->pipefd);
 }
 
-struct client *client_create(int inet_sock)
+struct client *client_create(int inet_sock, int family)
 {
         struct client *c;
         int ret;
@@ -79,6 +86,7 @@ struct client *client_create(int inet_sock)
                 c->id = client_num++;
                 c->inet_sock = inet_sock;
         }        
+        c->family = family;
 
         ret = pipe(c->pipefd);
 
@@ -88,7 +96,7 @@ struct client *client_create(int inet_sock)
                 goto fail_pipe;
         }
         
-        c->serval_sock = socket(AF_SERVAL, SOCK_STREAM, 0);
+        c->serval_sock = socket(family, SOCK_STREAM, 0);
         
 	if (c->serval_sock == -1) {
 		fprintf(stderr, "serval socket: %s\n",
@@ -115,18 +123,33 @@ void client_free(struct client *c)
         free(c);
 }
 
+static const char *server_ip = "192.168.56.101";
+
 void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
-        struct sockaddr_sv svaddr;
+        union {
+                struct sockaddr sa;
+                struct sockaddr_sv sv;
+                struct sockaddr_in in;
+        } addr;
+        socklen_t addrlen;
+        int inet_port = 49254;
         int ret;
 
-        memset(&svaddr, 0, sizeof(svaddr));
-        svaddr.sv_family = AF_SERVAL;
-        svaddr.sv_srvid.s_sid16[0] = htons(16385);
-
-        ret = connect(c->serval_sock, 
-                      (struct sockaddr *)&svaddr, sizeof(svaddr));
+        memset(&addr, 0, sizeof(addr));
+        
+        if (c->family == AF_SERVAL) {
+                addr.sv.sv_family = c->family;
+                addr.sv.sv_srvid.s_sid16[0] = htons(16385);
+                addrlen = sizeof(addr.sv);
+        } else {
+                addr.in.sin_family = c->family;
+                inet_pton(AF_INET, server_ip, &addr.in.sin_addr);
+                addr.in.sin_port = htons(inet_port);
+                addrlen = sizeof(addr.in);
+        }
+        ret = connect(c->serval_sock, &addr.sa, addrlen);
 
         if (ret == -1) {
                 fprintf(stderr, "client %u connect failed: %s\n",
@@ -134,9 +157,13 @@ void *client_thread(void *arg)
                 client_free(c);
                 return NULL;
         }
-        
-        printf("client %u connected to service %s\n",
-               c->id, service_id_to_str(&svaddr.sv_srvid));
+        if (c->family == AF_SERVAL) {
+                printf("client %u connected to service %s\n",
+                       c->id, service_id_to_str(&addr.sv.sv_srvid));
+        } else {
+                printf("client %u connected to %s:%u\n",
+                       c->id, server_ip, inet_port);
+        }
 
         while (!c->should_exit) {
                 fd_set fds;
@@ -198,7 +225,8 @@ int main(int argc, char **argv)
 	struct sigaction action;
 	int sock, ret = 0;
 	struct sockaddr_in saddr;
-	
+	int family = AF_SERVAL;
+
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         
@@ -239,6 +267,15 @@ int main(int argc, char **argv)
                 goto fail_bind_sock;
         }
 
+        ret = 1;
+        
+        ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ret, sizeof(ret));
+        
+        if (ret == -1) {
+                fprintf(stderr, "Could not set SO_REUSEADDR - %s\n",
+                        strerror(errno));
+        }
+
         while (1) {
                 int client_sock;
                 socklen_t addrlen = sizeof(saddr);
@@ -265,7 +302,7 @@ int main(int argc, char **argv)
 
                 printf("client connected\n");
 
-                c = client_create(client_sock);
+                c = client_create(client_sock, family);
 
                 if (!c) {
                         fprintf(stderr, "Could not create client\n");

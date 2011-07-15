@@ -1028,7 +1028,8 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                  * returns 1, the transport is ready to tell
                  * the user that the other end closed. */
                 if (err == 1) {
-                        sk->sk_shutdown |= SEND_SHUTDOWN;
+                        LOG_DBG("Transport is ready to close\n");
+                        sk->sk_shutdown |= RCV_SHUTDOWN;
                         sock_set_flag(sk, SOCK_DONE);
 
                         switch (sk->sk_state) {
@@ -1054,8 +1055,9 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                         }
 
                         if (!sock_flag(sk, SOCK_DEAD)) {
+                                LOG_DBG("Wake user\n");
                                 sk->sk_state_change(sk);
-                                
+
                                 /* Do not send POLL_HUP for half
                                    duplex close. */
                                 if (sk->sk_shutdown == SHUTDOWN_MASK ||
@@ -1094,7 +1096,7 @@ int serval_sal_rcv_transport_fin(struct sock *sk,
         if (sock_flag(sk, SOCK_DONE))
                 return 0;
 
-        sk->sk_shutdown |= SEND_SHUTDOWN;
+        sk->sk_shutdown |= RCV_SHUTDOWN;
         sock_set_flag(sk, SOCK_DONE);
         
         switch (sk->sk_state) {
@@ -1410,7 +1412,11 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 else
                         serval_sal_timewait(sk, SERVAL_CLOSING);
         } else if (ack_ok) {
+                sk->sk_shutdown |= SEND_SHUTDOWN;
                 serval_sal_timewait(sk, SERVAL_FINWAIT2);
+                if (!sock_flag(sk, SOCK_DEAD))
+                        /* Wake up lingering close() */
+                        sk->sk_state_change(sk);
         }
         
         if (packet_has_transport_hdr(skb, sh)) {
