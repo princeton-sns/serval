@@ -1575,7 +1575,8 @@ int serval_sal_state_process(struct sock *sk,
                 err = serval_sal_send_ack(sk, sh, skb);
                 goto drop;
         default:
-                LOG_ERR("bad socket state %u\n", sk->sk_state);
+                LOG_ERR("bad socket state %s %u\n", 
+                        serval_sock_state_str(sk), sk->sk_state);
                 goto drop;
         }
 

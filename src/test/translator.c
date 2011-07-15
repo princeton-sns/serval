@@ -88,7 +88,7 @@ struct client *client_create(int inet_sock)
                 goto fail_pipe;
         }
         
-        c->serval_sock = socket(AF_SERVAL, SOCK_DGRAM, 0);
+        c->serval_sock = socket(AF_SERVAL, SOCK_STREAM, 0);
         
 	if (c->serval_sock == -1) {
 		fprintf(stderr, "serval socket: %s\n",
