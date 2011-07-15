@@ -488,9 +488,6 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
-                LOG_PKT("Allocated skb size=%u skb->truesize=%u\n",
-                        size + sk->sk_prot->max_header, skb->truesize);
-                
                 skb_serval_tcp_set_owner(skb, sk);
 
 		if (sk_wmem_schedule(sk, skb->truesize)) {
@@ -501,7 +498,6 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 			skb_reserve(skb, skb_tailroom(skb) - size);
 			return skb;
 		}
-                LOG_ERR("sk_wmem_schedule=0\n");
 		__kfree_skb(skb);
 	} else {
 		sk->sk_prot->enter_memory_pressure(sk);
@@ -1297,7 +1293,6 @@ out:
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
 
-        LOG_DBG("Total copied=%u\n", copied);
 
 	return copied;
 

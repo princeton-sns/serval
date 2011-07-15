@@ -116,7 +116,7 @@ static int send_file(int sock, const char *filepath,
         static size_t total_bytes = 0;
         size_t total_bytes_session = 0, nread = 0;
         char sendbuf[SENDBUF_SIZE];
-        int has_migrated = 0;
+        int has_migrated = 0, stop_sending = 0;
         SHA_CTX ctx;
         FILE *f;
 
@@ -145,7 +145,7 @@ static int send_file(int sock, const char *filepath,
         printf("sending file %s, starting at offset %ld\n", 
                filepath, file_offset);
 
-        while (!should_exit && !has_migrated) {
+        while (!stop_sending && !has_migrated) {
                 long pos = ftell(f);
                 size_t count = fread(sendbuf, SENDBUF_SIZE, 1, f);
         
@@ -174,7 +174,7 @@ static int send_file(int sock, const char *filepath,
 
                 SHA1_Update(&ctx, sendbuf, nread);
 
-                while (!should_exit && !has_migrated && count < nread) {
+                while (!stop_sending && !has_migrated && count < nread) {
 
                         n = send_sv(sock, sendbuf + count, nread - count, 0);
 
@@ -183,11 +183,11 @@ static int send_file(int sock, const char *filepath,
                                         fprintf(stderr, 
                                                 "\rEAGAIN, continuing..\n");
                                         continue;
-                                }
+                                } 
                 
                                 fprintf(stderr, "\rerror sending data: %s\n",
                                         strerror_sv(errno));
-                                should_exit = 1;
+                                stop_sending = 1;
                                 break;
                         }
             
@@ -269,10 +269,14 @@ static int send_memory_buffer(int sock, size_t bytes_to_send,
                                         fprintf(stderr, 
                                                 "client: EAGAIN\n");
                                         continue;
-                                } 
+                                } else if (errno == EPIPE) {
+                                        printf("client closed abruptly\n");
+                                        break;
+                                }
                 
-                                fprintf(stderr, "client: error: %s\n",
-                                        strerror_sv(errno));
+                                fprintf(stderr, "client: error: %d - %s\n",
+                                        errno, strerror_sv(errno));
+
                                 should_exit = 1;
                                 break;
                         }
