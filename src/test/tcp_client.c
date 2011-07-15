@@ -284,9 +284,9 @@ static void print_help()
 {
         printf("Usage: %s [-hfm]\n", progname);
         printf("-h, --help              - Print this information.\n"
-               "-f, --file FILE         - Read data from FILE.\n"
+               "-f, --file FILE         - Write data to FILE.\n"
                "-m, --migration         - Handle migration.\n"
-               "-i, --inet IP_ADDR    - Use AF_INET\n");
+               "-i, --inet IP_ADDR      - Use AF_INET\n");
 }
 
 int
