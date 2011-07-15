@@ -229,52 +229,21 @@ static inline s64 div_s64_rem(s64 dividend, s32 divisor, s32 *remainder)
 }
 
 /**
- * div64_u64 - unsigned 64bit divide with 64bit divisor
- */
-static inline u64 div64_u64(u64 dividend, u64 divisor)
-{
-	return dividend / divisor;
-}
-
-/**
  * div64_s64 - signed 64bit divide with 64bit divisor
  */
 static inline s64 div64_s64(s64 dividend, s64 divisor)
 {
 	return dividend / divisor;
 }
+#endif /* BITS_PER_LONG == 64 */
 
-#elif BITS_PER_LONG == 32
-/**
- * div64_u64 - unsigned 64bit divide with 64bit divisor
- * @dividend:	64bit dividend
- * @divisor:	64bit divisor
- *
- * This implementation is a modified version of the algorithm proposed
- * by the book 'Hacker's Delight'.  The original source and full proof
- * can be found here and is available for use without restriction.
- *
- * 'http://www.hackersdelight.org/HDcode/newCode/divDouble.c'
- */
-#ifndef div64_u64
-static u64 div64_u64(u64 dividend, u64 divisor)
+#if BITS_PER_LONG == 32
+
+#ifndef div_u64_rem
+static inline u64 div_u64_rem(u64 dividend, u32 divisor, u32 *remainder)
 {
-	u32 high = divisor >> 32;
-	u64 quot;
-
-	if (high == 0) {
-		quot = div_u64(dividend, divisor);
-	} else {
-		int n = 1 + fls(high);
-		quot = div_u64(dividend >> n, divisor >> n);
-
-		if (quot != 0)
-			quot--;
-		if ((dividend - quot * divisor) >= divisor)
-			quot++;
-	}
-
-	return quot;
+	*remainder = do_div(dividend, divisor);
+	return dividend;
 }
 #endif
 
@@ -299,7 +268,22 @@ static s64 div_s64_rem(s64 dividend, s32 divisor, s32 *remainder)
 }
 #endif
 
-#endif /* BITS_PER_LONG == 64 */
+#endif /* BITS_PER_LONG == 32 */
+
+/**
+ * div_u64 - unsigned 64bit divide with 32bit divisor
+ *
+ * This is the most common 64bit divide and should be used if possible,
+ * as many 32bit archs can optimize this variant better than a full 64bit
+ * divide.
+ */
+#ifndef div_u64
+static inline u64 div_u64(u64 dividend, u32 divisor)
+{
+	u32 remainder;
+	return div_u64_rem(dividend, divisor, &remainder);
+}
+#endif
 
 /**
  * ns_to_timespec - Convert nanoseconds to timespec

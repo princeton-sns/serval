@@ -30,6 +30,7 @@
 
 #if defined(OS_USER)
 #include <serval/timer.h>
+#include <limits.h>
 /*
  * ktime_t:
  *

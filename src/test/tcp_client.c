@@ -25,6 +25,7 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -197,7 +198,7 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
 }
 
 static int client(const char *filepath, int handle_migration, 
-                  struct in_addr *srv_inetaddr)
+                  struct in_addr *srv_inetaddr, int port)
 {
         int sock, ret = EXIT_FAILURE;
         union {
@@ -207,7 +208,7 @@ static int client(const char *filepath, int handle_migration,
         } cliaddr, srvaddr;
         socklen_t addrlen = 0;
         unsigned char digest[SHA_DIGEST_LENGTH];
-        unsigned short srv_inetport = 49254;
+        unsigned short srv_inetport = (unsigned short)port;
         int family = AF_SERVAL;
 
         memset(&cliaddr, 0, sizeof(cliaddr));
@@ -289,6 +290,30 @@ static void print_help()
                "-i, --inet IP_ADDR      - Use AF_INET\n");
 }
 
+static int parse_inet_str(char *inet_str, 
+                          struct in_addr *ip, int *port)
+{
+        if (!ip)
+                return -1;
+        
+        if (port) {
+                char *p;
+                char *save;
+                /* Find out whether there is a port number */
+                p = strtok_r(inet_str, ":", &save);
+                
+                if (!p)
+                        goto out;
+
+                p = strtok_r(NULL, ":", &save);
+                
+                if (p != inet_str)
+                        *port = atoi(p);
+        }
+ out:
+        return inet_pton(AF_INET, inet_str, ip) == 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -296,6 +321,7 @@ main(int argc, char **argv)
         char *filepath = NULL;
         int handle_migration = 0;
         struct in_addr srv_inetaddr;
+        int port = DEFAULT_LISTEN_SID;
         int family = AF_SERVAL;
 
         listen_srvid.s_sid16[0] = htons(DEFAULT_LISTEN_SID);    
@@ -323,7 +349,8 @@ main(int argc, char **argv)
                 } else if (strcmp("-i", argv[0]) == 0 || 
                            strcmp("--inet", argv[0]) == 0) {
                         if (argv[1] && 
-                            inet_pton(AF_INET, argv[1], &srv_inetaddr) == 1) {
+                            parse_inet_str(argv[1], 
+                                           &srv_inetaddr, &port) == 1) {
                                 family = AF_INET;
                                 argc--;
                                 argv++;
@@ -357,5 +384,5 @@ main(int argc, char **argv)
         }
     
         return client(filepath, handle_migration, 
-                      family == AF_INET ? &srv_inetaddr : NULL);
+                      family == AF_INET ? &srv_inetaddr : NULL, port);
 }

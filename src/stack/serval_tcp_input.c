@@ -418,7 +418,7 @@ void serval_tcp_rcv_space_adjust(struct sock *sk)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int time;
 	int space;
-
+        
 	if (tp->rcvq_space.time == 0)
 		goto new_measure;
 
@@ -2474,7 +2474,6 @@ static inline void serval_tcp_data_snd_check(struct sock *sk)
 	serval_tcp_push_pending_frames(sk);
 	serval_tcp_check_space(sk);
 }
-
 
 /*
  * Check if sending an ack is needed.

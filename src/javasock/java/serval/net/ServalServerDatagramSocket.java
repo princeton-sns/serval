@@ -2,10 +2,8 @@
 package serval.net;
 
 import java.net.SocketAddress;
-import java.net.SocketException;
 import java.io.IOException;
 import java.io.FileDescriptor;
-import java.nio.channels.DatagramChannel;
 
 /*
   This code is based on the DatagramSocket implementation from the

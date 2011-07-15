@@ -438,6 +438,72 @@ static inline void put_unaligned_be64(u64 val, void *p)
 #define time_before_eq(a,b)	time_after_eq(b,a)
 
 
+#if BITS_PER_LONG == 64
+
+# define do_div(n,base) ({					\
+                        uint32_t __base = (base);               \
+                        uint32_t __rem;                         \
+                        __rem = ((uint64_t)(n)) % __base;       \
+                        (n) = ((uint64_t)(n)) / __base;         \
+                        __rem;                                  \
+                })
+
+#elif BITS_PER_LONG == 32
+
+static inline uint32_t __div64_32(uint64_t *n, uint32_t base)
+{
+	uint64_t rem = *n;
+	uint64_t b = base;
+	uint64_t res, d = 1;
+	uint32_t high = rem >> 32;
+
+	/* Reduce the thing a bit first */
+	res = 0;
+	if (high >= base) {
+		high /= base;
+		res = (uint64_t) high << 32;
+		rem -= (uint64_t) (high*base) << 32;
+	}
+
+	while ((int64_t)b > 0 && b < rem) {
+		b = b+b;
+		d = d+d;
+	}
+
+	do {
+		if (rem >= b) {
+			rem -= b;
+			res += d;
+		}
+		b >>= 1;
+		d >>= 1;
+	} while (d);
+
+	*n = res;
+	return rem;
+}
+
+/* The unnecessary pointer compare is there
+ * to check for type safety (n must be 64bit)
+ */
+# define do_div(n,base) ({                                              \
+                        uint32_t __base = (base);                       \
+                        uint32_t __rem;                                 \
+                        (void)(((typeof((n)) *)0) == ((uint64_t *)0));	\
+                        if (likely(((n) >> 32) == 0)) {			\
+                                __rem = (uint32_t)(n) % __base;		\
+                                (n) = (uint32_t)(n) / __base;		\
+                        } else 						\
+                                __rem = __div64_32(&(n), __base);	\
+                        __rem;						\
+                })
+
+#else /* BITS_PER_LONG == ?? */
+
+# error do_div() does not yet support the C64
+
+#endif /* BITS_PER_LONG */
+
 /**
  * ns_to_timespec - Convert nanoseconds to timespec
  * @nsec:	the nanoseconds value to be converted
@@ -461,7 +527,7 @@ struct timeval ns_to_timeval(const s64 nsec);
 
 int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *set);
 
-#endif /* OS_ANDROID */
+#endif /* HAVE_PPOLL */
 
 #include <assert.h>
 #ifndef BUG_ON
