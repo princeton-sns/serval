@@ -1064,7 +1064,7 @@ int serval_tcp_sendpage(struct sock *sk, struct page *page, int offset,
 	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM))
 		return sock_no_sendpage(sk->sk_socket, page, offset, size,
 					flags);
-        
+
 	lock_sock(sk);
 	TCP_CHECK_TIMER(sk);
 	res = serval_do_tcp_sendpages(sk, &page, offset, size, flags);
@@ -2224,6 +2224,9 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
+#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
+        .sendpage               = serval_tcp_sendpage,
+#endif
 	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,

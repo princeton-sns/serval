@@ -713,15 +713,15 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
 	return sk_stream_error(sk, flags, err);
 }
 
-ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
+int serval_udp_sendpage(struct sock *sk, struct page *page, int offset,
                             size_t size, int flags)
 {
 	ssize_t res;
-	struct sock *sk = sock->sk;
 
 	if (!(sk->sk_route_caps & NETIF_F_SG) ||
 	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM))
-		return sock_no_sendpage(sock, page, offset, size, flags);
+		return sock_no_sendpage(sk->sk_socket, page, 
+                                        offset, size, flags);
 
 	lock_sock(sk);
 	res = serval_udp_do_sendpages(sk, &page, offset, size, flags);
@@ -750,6 +750,9 @@ struct proto serval_udp_proto = {
         .connect                = serval_sal_connect,
 	.disconnect 		= serval_udp_disconnect,
 	.shutdown		= serval_udp_shutdown,
+#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
+        .sendpage               = serval_udp_sendpage,
+#endif
         .sendmsg                = serval_udp_sendmsg,
         .recvmsg                = serval_udp_recvmsg,
 	.backlog_rcv		= serval_sal_do_rcv,

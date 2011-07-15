@@ -199,6 +199,8 @@ struct proto {
 					   struct msghdr *msg,
 					size_t len, int noblock, int flags, 
 					int *addr_len);
+	int			(*sendpage)(struct sock *sk, struct page *page,
+					int offset, size_t size, int flags);
 	int			(*bind)(struct sock *sk, 
 					struct sockaddr *uaddr, int addr_len);
 
@@ -240,13 +242,21 @@ static inline int wq_has_sleeper(struct socket_wq *wq)
 static inline int sock_no_getsockopt(struct socket *s, int a, 
                                      int b, char __user *c, int __user *d)
 {
-        return -1;
+        return -EOPNOTSUPP;
 }
 
 static inline int sock_no_setsockopt(struct socket *s, int a, int b, 
                                      char __user *c, unsigned int d)
 {
-        return -1;
+        return -EOPNOTSUPP;
+}
+
+static inline ssize_t sock_no_sendpage(struct socket *sock,
+                                       struct page *page,
+                                       int offset, size_t size, 
+                                       int flags)
+{
+        return -EOPNOTSUPP;
 }
 
 extern int proto_register(struct proto *prot, int);
