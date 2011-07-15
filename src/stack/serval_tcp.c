@@ -488,8 +488,6 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
-                skb_serval_tcp_set_owner(skb, sk);
-
 		if (sk_wmem_schedule(sk, skb->truesize)) {
 			/*
 			 * Make sure that we have exactly size bytes
@@ -773,7 +771,9 @@ int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 				if (!len)
 					break;
 			}
+
 			used = recv_actor(desc, skb, offset, len);
+
 			if (used < 0) {
 				if (!copied)
 					copied = used;
@@ -794,6 +794,7 @@ int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 				break;
 		}
 		if (tcp_hdr(skb)->fin) {
+                        LOG_DBG("Read FIN\n");
 			sk_eat_skb(sk, skb, 0);
 			++seq;
 			break;
