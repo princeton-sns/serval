@@ -142,6 +142,7 @@ void *client_thread(void *arg)
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
                 addr.sv.sv_srvid.s_sid16[0] = htons(16385);
+                addr.sv.sv_srvid.s_sid16[0] = htons(8080);
                 addrlen = sizeof(addr.sv);
         } else {
                 addr.in.sin_family = c->family;
@@ -218,7 +219,7 @@ static void signal_handler(int sig)
         /* printf("signal caught! exiting...\n"); */
 }
 
-#define TRANSLATOR_PORT 5555
+#define TRANSLATOR_PORT 8080
 
 int main(int argc, char **argv)
 {       

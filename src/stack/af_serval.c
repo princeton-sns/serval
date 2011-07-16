@@ -749,6 +749,25 @@ int serval_release(struct socket *sock)
         return err;
 }
 
+ssize_t serval_sendpage(struct socket *sock, struct page *page, int offset,
+                        size_t size, int flags)
+{
+	struct sock *sk = sock->sk;
+
+	sock_rps_record_flow(sk);
+
+	/* We may need to bind the socket. */
+        
+	if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND) &&
+            serval_autobind(sk) < 0)
+		return -EAGAIN;
+
+	if (sk->sk_prot->sendpage)
+		return sk->sk_prot->sendpage(sk, page, offset, size, flags);
+
+	return sock_no_sendpage(sock, page, offset, size, flags);
+}
+
 #if defined(OS_LINUX_KERNEL)
 static unsigned int serval_poll(struct file *file, struct socket *sock,
                                 poll_table *wait)
@@ -842,14 +861,10 @@ extern unsigned int serval_tcp_poll(struct file *file,
 extern ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
                                       struct pipe_inode_info *pipe, size_t len,
                                       unsigned int flags);
-ssize_t serval_udp_sendpage(struct socket *sock, struct page *page, int offset,
-                            size_t size, int flags);
 
 extern ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
                                       struct pipe_inode_info *pipe, size_t len,
                                       unsigned int flags);
-ssize_t serval_tcp_sendpage(struct socket *sock, struct page *page, int offset,
-                            size_t size, int flags);
 
 #endif /* ENABLE_SPLICE */
 #endif /* OS_LINUX_KERNEL */
@@ -873,11 +888,9 @@ static const struct proto_ops serval_stream_ops = {
 	.poll =	        serval_tcp_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
+	.sendpage =	serval_sendpage,
 #if defined(ENABLE_SPLICE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	.splice_read =  serval_tcp_splice_read,
-	.sendpage =	serval_tcp_sendpage,
-#else
-	.sendpage =	sock_no_sendpage,
 #endif
 #endif
 };
@@ -901,11 +914,9 @@ static const struct proto_ops serval_dgram_ops = {
 	.poll =	        serval_poll,
 	.ioctl =	serval_ioctl,
 	.mmap =		sock_no_mmap,
+	.sendpage =	serval_sendpage,
 #if defined(ENABLE_SPLICE) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
 	.splice_read =  serval_udp_splice_read,
-	.sendpage =	serval_udp_sendpage,
-#else
-	.sendpage =	sock_no_sendpage,
 #endif
 #endif
 };

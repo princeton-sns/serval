@@ -1060,11 +1060,16 @@ int serval_tcp_sendpage(struct sock *sk, struct page *page, int offset,
 {
 	ssize_t res;
 
-	if (!(sk->sk_route_caps & NETIF_F_SG) ||
-	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM))
-		return sock_no_sendpage(sk->sk_socket, page, offset, size,
+        /* Using do_tcp_sendpages requires functioning hardware
+           checksum support, and that doesn't work for Serval
+           headers. Therefore, we must force use of normal sendmsg
+           (called by sock_no_sendpage. */
+	if (1 || !(sk->sk_route_caps & NETIF_F_SG) ||
+	    !(sk->sk_route_caps & NETIF_F_ALL_CSUM)) {
+                return sock_no_sendpage(sk->sk_socket, page, offset, size,
 					flags);
-        
+        }
+
 	lock_sock(sk);
 	TCP_CHECK_TIMER(sk);
 	res = serval_do_tcp_sendpages(sk, &page, offset, size, flags);
@@ -1881,6 +1886,7 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
         if (!checksum_mode) {
                 /* Force checksum calculation by protocol */
                 skb->ip_summed = CHECKSUM_NONE;
+                LOG_INF("checksumming packet\n");
                 th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
                                                              len,
@@ -2224,6 +2230,9 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
+#if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
+        .sendpage               = serval_tcp_sendpage,
+#endif
 	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
