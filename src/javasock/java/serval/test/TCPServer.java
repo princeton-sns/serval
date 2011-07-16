@@ -111,7 +111,7 @@ public class TCPServer {
     }
     
     public static void main(String args[]) {
-        System.out.println("UDPServer starting");
+        System.out.println("TCPServer starting");
         TCPServer s = new TCPServer();
 
         s.run();
