@@ -3918,7 +3918,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			}
 			if (!eaten) {
 				if (serval_tcp_checksum_complete_user(sk, skb)) {
-                                        LOG_ERR("Csum error! eaten\n");
+                                        LOG_ERR("Csum error!\n");
 					goto csum_error;
                                 }
 				/* Predicted packet is in window by definition.

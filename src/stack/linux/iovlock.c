@@ -24,7 +24,7 @@
  * This code allows the net stack to make use of a DMA engine for
  * skb to iovec copies.
  */
-
+#ifdef CONFIG_NET_DMA
 #include <linux/dmaengine.h>
 #include <linux/pagemap.h>
 #include <linux/slab.h>
@@ -278,3 +278,4 @@ dma_cookie_t dma_memcpy_pg_to_iovec(struct dma_chan *chan, struct iovec *iov,
 	BUG();
 	return -EFAULT;
 }
+#endif /* CONFIG_NET_DMA */
