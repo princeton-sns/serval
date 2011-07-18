@@ -194,7 +194,7 @@ static inline int has_valid_control_extension(struct sock *sk,
 static inline int has_valid_desc_extension(struct sock *sk,
                                            struct serval_hdr *sfh)
 {
-        struct serval_sock *ssk = serval_sk(sk);
+        /*struct serval_sock *ssk = serval_sk(sk);
         struct serval_description_ext *desc_ext =
                 (struct serval_description_ext *)(sfh + 1);
         unsigned int hdr_len = ntohs(sfh->length);
@@ -215,7 +215,7 @@ static inline int has_valid_desc_extension(struct sock *sk,
         if (addr_list_len < 1) {
         	    LOG_PKT("No desc extension, no list of addrs\n");
                 return 0;
-        }
+        }*/
 
         return 1;
 }

@@ -16,6 +16,23 @@ extern void netlink_init(void);
 extern void netlink_fini(void);
 #endif
 
+int libstack_migrate_interface(const char *from_if,
+		                       const char *to_if)
+{
+	    struct ctrlmsg_migrate cm;
+
+	    if (from_if || to_if)
+	    	return -1;
+
+	    memset(&cm, 0, sizeof(cm));
+	    cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
+	    cm.cmh.len = sizeof(cm);
+	    strncpy(cm.from_if, from_if, IFNAMSIZ - 1);
+	    strncpy(cm.to_if, to_if, IFNAMSIZ - 1);
+
+	    return event_sendmsg(&cm, cm.cmh.len);
+}
+
 int libstack_configure_interface(const char *ifname, 
                                  const struct net_addr *ipaddr,
                                  unsigned short flags)

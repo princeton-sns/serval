@@ -393,9 +393,8 @@ static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 
 static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
 {
-        struct ctrmsg_migrate *cmm = (struct ctrlmsg_migrate*)cm;
+        struct ctrlmsg_migrate *cmm = (struct ctrlmsg_migrate*)cm;
         struct net_device *old_dev, *new_dev;
-        int ret = 0;
 
         old_dev = dev_get_by_name(&init_net, cmm->from_if);
         new_dev = dev_get_by_name(&init_net, cmm->to_if);
