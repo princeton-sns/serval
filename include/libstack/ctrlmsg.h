@@ -22,6 +22,7 @@ enum ctrlmsg_type {
     CTRLMSG_TYPE_GET_SERVICE = 9,
     CTRLMSG_TYPE_SERVICE_STATS = 10,
     CTRLMSG_TYPE_CAPABILITIES = 11,
+    CTRLMSG_TYPE_MIGRATE = 12,
     CTRLMSG_TYPE_UNKNOWN = 1000,
 };
 
@@ -180,6 +181,14 @@ struct ctrlmsg_service {
 };
 
 #define CTRLMSG_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
+
+struct ctrlmsg_migrate {
+	struct ctrlmsg cmh;
+	char from_if[IFNAMSIZ];
+	char to_if[IFNAMSIZ];
+};
+
+#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_service))
 
 #if defined(__linux__)
 #include <linux/netlink.h>

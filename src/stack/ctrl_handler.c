@@ -391,6 +391,30 @@ static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
         return 0;
 }
 
+static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
+{
+        struct ctrmsg_migrate *cmm = (struct ctrlmsg_migrate*)cm;
+        struct net_device *old_dev, *new_dev;
+        int ret = 0;
+
+        old_dev = dev_get_by_name(&init_net, cmm->from_if);
+        new_dev = dev_get_by_name(&init_net, cmm->to_if);
+
+        if (!old_dev) {
+                LOG_ERR("No old interface %s\n", cmm->from_if);
+                return -1;
+        }
+
+        if (!new_dev) {
+        	    LOG_ERR("No new interface %s\n", cmm->to_if);
+        	    return -1;
+        }
+
+        LOG_DBG("migrate iface %s to iface %s\n", cmm->from_if, cmm->to_if);
+
+        return 0;
+}
+
 ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
@@ -403,5 +427,6 @@ ctrlmsg_handler_t handlers[] = {
         ctrl_handle_mod_service_msg,
         ctrl_handle_get_service_msg,
         ctrl_handle_service_stats_msg,
-        ctrl_handle_capabilities_msg
+        ctrl_handle_capabilities_msg,
+        ctrl_handle_migrate_msg
 };
