@@ -465,7 +465,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
         long timeo;
 
         if (addr->sa_family != AF_SERVAL) {
-                LOG_ERR("bad address family\n");
+                LOG_ERR("Bad address family %d!\n", addr->sa_family);
                 return -EAFNOSUPPORT;
         }
 
@@ -521,10 +521,8 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 /* Error code is set above */
                 LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
 
-                if (!timeo) {
-                        LOG_DBG("Zero timeout\n");
+                if (!timeo)
                         goto out;
-                }
 
                 err = sk_stream_wait_connect(sk, &timeo);
 
@@ -539,23 +537,6 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 if (signal_pending(current))
                         goto out;
         }
-
-        /*
-        if (!nonblock) {
-                long timeo = sock_sndtimeo(sk, nonblock);        
-        
-                LOG_DBG("waiting for connect\n");
-        
-                if ((1 << sk->sk_state) & SERVALF_REQUEST)
-                        err = sk_stream_wait_connect(sk, &timeo);
-                        
-                LOG_DBG("wait for connect returned=%d\n", err);
-        } else {
-        LOG_DBG("non-blocking connect\n");
-        err = -EINPROGRESS;
-                goto out;
-        }
-        */
 
         /* We must be in SERVAL_REQUEST or later state. All those
            states are valid "connected" states, except for CLOSED. */

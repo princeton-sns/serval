@@ -72,7 +72,6 @@ static int serval_tcp_disconnect(struct sock *sk, int flags)
 static void serval_tcp_shutdown(struct sock *sk, int how)
 {
         LOG_DBG("\n");
-        
 }
 
 __u32 serval_tcp_random_sequence_number(void)
@@ -1886,7 +1885,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
         if (!checksum_mode) {
                 /* Force checksum calculation by protocol */
                 skb->ip_summed = CHECKSUM_NONE;
-                LOG_INF("checksumming packet\n");
                 th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
                                                              len,
