@@ -1147,11 +1147,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
                                               struct serval_hdr *sh,
                                               struct sk_buff *skb)
 {
-        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
         
-        LOG_PKT("Processing\n");
-
         serval_sal_ack_process(sk, sh, skb);
 
         if (sh->type == SERVAL_PKT_CLOSE)
@@ -1161,6 +1158,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
          * its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, sh) || 
             sh->type == SERVAL_PKT_CLOSE) {
+                struct serval_sock *ssk = serval_sk(sk);
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
@@ -1174,6 +1172,35 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 LOG_PKT("Dropping packet\n");
                 kfree_skb(skb);
         }
+
+        return err;
+}
+
+static int serval_sal_closewait_state_process(struct sock *sk, 
+                                              struct serval_hdr *sh,
+                                              struct sk_buff *skb)
+{
+        int err = 0;
+
+        serval_sal_ack_process(sk, sh, skb);
+
+        /* Should also pass FIN to user, as it needs to pick it off
+         * its receive queue to notice EOF. */
+        if (packet_has_transport_hdr(skb, sh)) {
+                struct serval_sock *ssk = serval_sk(sk);
+                /* Set the received service id.
+
+                   NOTE: The transport protocol is free to overwrite
+                   the control block with its own information. TCP
+                   does this, for sure.
+                 */
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+
+                err = ssk->af_ops->receive(sk, skb);
+        } else {
+                kfree_skb(skb);
+        }
+
         return err;
 }
 
@@ -1420,14 +1447,16 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                         sk->sk_state_change(sk);
         }
         
-        if (packet_has_transport_hdr(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh) || 
+            sh->type == SERVAL_PKT_CLOSE) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
                 err = ssk->af_ops->receive(sk, skb);
-        } else  {
+        } else {
                 kfree_skb(skb);
         }
+
         return err;
 }
 
@@ -1447,7 +1476,8 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 }
         }
 
-        if (packet_has_transport_hdr(skb, sh)) {
+        if (packet_has_transport_hdr(skb, sh) ||
+            sh->type == SERVAL_PKT_CLOSE) {
                 /* Set the received service id */
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -1580,6 +1610,11 @@ int serval_sal_state_process(struct sock *sk,
         case SERVAL_TIMEWAIT:
                 /* Send ACK again */
                 err = serval_sal_send_ack(sk, sh, skb);
+                goto drop;
+        case SERVAL_CLOSEWAIT:
+                err = serval_sal_closewait_state_process(sk, sh, skb);
+                break;
+        case SERVAL_CLOSED:
                 goto drop;
         default:
                 LOG_ERR("bad socket state %s %u\n", 
@@ -2398,7 +2433,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
-                        cskb = skb_clone(skb, GFP_ATOMIC);
+                        cskb = skb_clone(skb, gfp_mask);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
