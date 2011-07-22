@@ -414,6 +414,23 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         return err;
 }
 
+static struct sk_buff *sk_sal_alloc_skb(struct sock *sk, int size, gfp_t gfp)
+{
+        struct sk_buff *skb;
+
+        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+
+        if (!skb)
+                return NULL;
+        
+        skb_reserve(skb, sk->sk_prot->max_header);
+        skb_serval_set_owner_w(skb, sk);
+        skb->protocol = IPPROTO_SERVAL;
+        skb->ip_summed = CHECKSUM_NONE;
+
+        return skb;
+}
+
 int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr, 
                        int addr_len)
 {
@@ -441,15 +458,10 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                 }
         }
 
-        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!skb)
                 return -ENOMEM;
-        
-        skb_reserve(skb, sk->sk_prot->max_header);
-        skb_serval_set_owner_w(skb, sk);
-        skb->protocol = IPPROTO_SERVAL;
-
 #if 0
         if (has_dst_ip) {
                 nexthop = daddr = usin->sin_addr.s_addr;
@@ -575,7 +587,8 @@ void serval_sal_close(struct sock *sk, long timeout)
                 /* We are under lock, so allocation must be atomic */
                 /* Socket is locked, keep trying until memory is available. */
                 for (;;) {
-                        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+                        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, 
+                                               GFP_ATOMIC);
                         
                         if (skb)
                                 break;
@@ -583,8 +596,6 @@ void serval_sal_close(struct sock *sk, long timeout)
                 }
                 
                 LOG_DBG("Sending Close REQUEST\n");
-                skb_reserve(skb, sk->sk_prot->max_header);
-                skb_serval_set_owner_w(skb, sk);
                 SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
                 SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
 
@@ -607,13 +618,11 @@ static int serval_sal_send_ack(struct sock *sk, struct serval_hdr *sh,
 
         LOG_DBG("Sending ACK\n");
 
-        skb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
                         
         if (!skb)
                 return -ENOMEM;
-        
-        skb_reserve(skb, sk->sk_prot->max_header);
-        skb_serval_set_owner_w(skb, sk);
+
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_DATA;
         SERVAL_SKB_CB(skb)->flags = SVH_ACK;
         /* Do not increment sequence numbers for pure ACKs */
@@ -721,16 +730,12 @@ static int serval_sal_syn_rcv(struct sock *sk,
         }
         
         /* Allocate RESPONSE reply */
-        rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!rskb) {
                 err = -ENOMEM;
                 goto drop;
         }
-        
-        skb_reserve(rskb, sk->sk_prot->max_header);
-        skb_serval_set_owner_w(rskb, sk);
-        rskb->protocol = 0;
 
 #if defined(OS_LINUX_KERNEL)
         /*
@@ -1316,17 +1321,13 @@ static int serval_sal_request_state_process(struct sock *sk,
         }
 
         /* Allocate ACK */
-        rskb = alloc_skb(sk->sk_prot->max_header, GFP_ATOMIC);
+        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
 
         if (!rskb) {
                 err = -ENOMEM;
                 goto drop;
         }
         
-        skb_reserve(rskb, sk->sk_prot->max_header);
-        skb_serval_set_owner_w(rskb, sk);
-        rskb->protocol = 0;
-
         /* Ask transport to fill in*/
         if (ssk->af_ops->conn_build_ack) {
                 err = ssk->af_ops->conn_build_ack(sk, rskb);
@@ -1977,6 +1978,8 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_DELAY:
                 case SAL_RESOLVE_ERROR:
                 default:
+                        if (sk)
+                                sock_put(sk);
                         goto drop;
                 }
         }
@@ -2106,10 +2109,12 @@ void serval_sal_rexmit_timeout(unsigned long data)
                 serval_sal_done(sk);
         } else {
                 LOG_DBG("Retransmitting and rescheduling timer\n");
-                sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
+
+                serval_sal_rexmit(sk);
+
+                sk_reset_timer(sk, &ssk->retransmit_timer,
                                jiffies + (msecs_to_jiffies(ssk->rto) * 
                                           backoff[ssk->retransmits]));
-                serval_sal_rexmit(sk);
                 
                 if (backoff[ssk->retransmits + 1] != 0)
                         ssk->retransmits++;
@@ -2469,7 +2474,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   packet. Normally, the checksum is calculated by the
                   transport protocol before being passed to SAL.
                 */
-                if (ssk->af_ops->send_check)
+                if (ssk->af_ops->send_check &&
+                    packet_has_transport_hdr(skb, sh))
                         ssk->af_ops->send_check(sk, cskb);
 
                 /* Compute SAL header checksum */
@@ -2493,6 +2499,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         if (__sk_dst_get(sk))
                 __sk_dst_reset(sk);
 
+        /* Zero the address again so that we do not confuse the
+           resolution in case of retransmission. */
+        memset(&inet_sk(sk)->inet_daddr, 0, 
+               sizeof(inet_sk(sk)->inet_daddr));
+                   
         service_resolution_iter_destroy(&iter);
 	service_entry_put(se);
 

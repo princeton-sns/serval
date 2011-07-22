@@ -1176,7 +1176,6 @@ new_segment:
 					copy = skb_tailroom(skb);
 
 				if ((err = skb_add_data(skb, from, copy)) != 0) {
-                                        LOG_ERR("skb_add_data() failed!\n");
 					goto do_fault;
                                 }
 			} else {
@@ -1250,7 +1249,6 @@ new_segment:
 
 				TCP_OFF(sk) = off + copy;
 #endif /* ENABLE_PAGE */
-                                LOG_PKT("No tailroom in skb, add page\n");
 			}
 
 			if (!copied)
@@ -1322,7 +1320,6 @@ out_err:
 	release_sock(sk);
 	return err;
 }
-
 /*
  *	Handle reading urgent data. BSD has very simple semantics for
  *	this, no blocking and very strange errors 8)

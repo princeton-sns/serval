@@ -2111,7 +2111,6 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
-
         LOG_DBG("Sending TCP SYN %s\n", tcphdr_to_str(th));
 
         /* On SYN the checksum is deferred until after
