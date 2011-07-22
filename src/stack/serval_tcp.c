@@ -283,10 +283,9 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 #endif
 
-        /* An explanation is required here, I think.
-	 * Packet length and doff are validated by header prediction,
-	 * provided case of th->doff==0 is eliminated.
-	 * So, we defer the checks. */
+        /* An explanation is required here, I think. Packet length and
+	 * doff are validated by header prediction, provided case of
+	 * th->doff==0 is eliminated.  So, we defer the checks. */
 	if (!skb_csum_unnecessary(skb) && 
             serval_tcp_v4_checksum_init(skb)) {
                 LOG_ERR("Checksum error!\n");

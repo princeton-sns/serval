@@ -1548,9 +1548,10 @@ int serval_sal_state_process(struct sock *sk,
 
         switch (sk->sk_state) {
         case SERVAL_INIT:
-                if (sk->sk_type == SOCK_STREAM) 
+                if (sk->sk_type == SOCK_DGRAM) 
+                        err = serval_sal_init_state_process(sk, sh, skb);
+                else
                         goto drop;
-                err = serval_sal_init_state_process(sk, sh, skb);
                 break;
         case SERVAL_CONNECTED:
                 err = serval_sal_connected_state_process(sk, sh, skb);
