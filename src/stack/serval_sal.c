@@ -672,7 +672,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         LOG_DBG("REQUEST seqno=%u\n", ntohl(conn_ext->seqno));
 
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
-                goto done;
+                goto drop;
 
 
         /* Try to figure out the source address for the incoming
@@ -685,15 +685,13 @@ static int serval_sal_syn_rcv(struct sock *sk,
         if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
                 LOG_ERR("No source address for interface %s\n",
                         skb->dev);
-                goto done;
+                goto drop;
         }
 
         rsk = serval_reqsk_alloc(sk->sk_prot->rsk_prot);
 
-        if (!rsk) {
-                err = -ENOMEM;
-                goto done;
-        }
+        if (!rsk)
+                goto drop;
 
         srsk = serval_rsk(rsk);
 
@@ -811,9 +809,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
         /* Free the REQUEST */
  drop:
         kfree_skb(skb);
-        return 0;
  done:
-        return err;
+        return 0;
  drop_and_release:
         dst_release(dst);
 #if defined(OS_LINUX_KERNEL)
@@ -1254,11 +1251,9 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                            struct serval_hdr *sh,
                                            struct sk_buff *skb)
 {
-        int err = 0;                         
-
         /* Is this a SYN? */
         if (sh->type == SERVAL_PKT_SYN) {
-                err = serval_sal_syn_rcv(sk, sh, skb);
+                return serval_sal_syn_rcv(sk, sh, skb);
         } else if (sh->ack) {
                         struct sock *nsk;
                         /* Processing for socket that has received SYN
@@ -1273,13 +1268,11 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                                                 sh, skb);
                         }
                         kfree_skb(skb);
-                        return 0;
         } else {
                 kfree_skb(skb);
-                return 0;
         }
 
-        return err;
+        return 0;
 }
 
 static int serval_sal_request_state_process(struct sock *sk, 
