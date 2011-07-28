@@ -1171,6 +1171,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         } else {
                 LOG_PKT("Dropping packet\n");
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1272,8 +1273,10 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                                                 sh, skb);
                         }
                         kfree_skb(skb);
+                        return 0;
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1352,7 +1355,7 @@ static int serval_sal_request_state_process(struct sock *sk,
 
         if (!rskb) {
                 err = -ENOMEM;
-                goto drop;
+                goto error;
         }
         
         /* Ask transport to fill in*/
@@ -1361,7 +1364,7 @@ static int serval_sal_request_state_process(struct sock *sk,
 
                 if (err) {
                         LOG_ERR("Transport drops packet on building ACK\n");
-                        goto drop;
+                        goto error;
                 }
         }
         
@@ -1377,6 +1380,8 @@ static int serval_sal_request_state_process(struct sock *sk,
 
 drop: 
         kfree_skb(skb);
+
+        return 0;
 error:
         return err;
 }
@@ -1402,7 +1407,9 @@ static int serval_sal_respond_state_process(struct sock *sk,
                        sizeof(inet_sk(sk)->inet_daddr));
 
                 if (ssk->af_ops->respond_state_process) {
-                        if (ssk->af_ops->respond_state_process(sk, skb)) {
+                        err = ssk->af_ops->respond_state_process(sk, skb);
+
+                        if (err) {
                                 LOG_WARN("Transport drops ACK\n");
                                 goto error;
                         }
@@ -1455,6 +1462,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1484,6 +1492,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1508,6 +1517,7 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1529,6 +1539,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         if (ack_ok) {
@@ -1564,6 +1575,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1610,7 +1622,7 @@ int serval_sal_state_process(struct sock *sk,
                 break;
         case SERVAL_TIMEWAIT:
                 /* Send ACK again */
-                err = serval_sal_send_ack(sk, sh, skb);
+                serval_sal_send_ack(sk, sh, skb);
                 goto drop;
         case SERVAL_CLOSEWAIT:
                 err = serval_sal_closewait_state_process(sk, sh, skb);
@@ -1623,10 +1635,14 @@ int serval_sal_state_process(struct sock *sk,
                 goto drop;
         }
 
-        return err;
+        if (err)
+                goto drop;
+                
+        return 0;
 drop:
         kfree_skb(skb);
-        return err;
+
+        return 0;
 }
 
 int serval_sal_do_rcv(struct sock *sk, 

@@ -168,8 +168,6 @@ static int serval_tcp_syn_recv_sock(struct sock *sk,
 
 int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
-        int err = 0;
-        
         if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		//sock_rps_save_rxhash(sk, skb->rxhash);
 		TCP_CHECK_TIMER(sk);
@@ -178,7 +176,6 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
               
 		if (serval_tcp_rcv_established(sk, skb, 
                                                tcp_hdr(skb), skb->len)) {
-                        err = -1;
 			goto reset;
 		}
 		TCP_CHECK_TIMER(sk);
@@ -192,7 +189,6 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_CHECK_TIMER(sk);
 
 	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
-                err = -1;
 		goto reset;
 	}
 	TCP_CHECK_TIMER(sk);
@@ -203,7 +199,7 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
  csum_err:
         //LOG_WARN("Should handle RESET in non-established state\n");
         kfree_skb(skb);
-        return err;
+        return 0;
 }
 
 static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
