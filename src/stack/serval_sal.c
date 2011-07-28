@@ -2519,7 +2519,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check &&
-                    packet_has_transport_hdr(skb, sh))
+                    packet_has_transport_hdr(cskb, sh))
                         ssk->af_ops->send_check(sk, cskb);
 
                 /* Compute SAL header checksum */
