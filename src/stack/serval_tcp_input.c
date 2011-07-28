@@ -4097,14 +4097,13 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 serval_tcp_initialize_rcv_mss(sk);
                 serval_tcp_init_buffer_space(sk);
                 serval_tcp_fast_path_on(tp);
-                err = 0;
         } else {
                 LOG_WARN("No ACK flag in packet!\n");
-                err = 1;
                 kfree_skb(skb);
+                return 1;
         }
 
-        return err;
+        return 0;
 }
 
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
@@ -4240,7 +4239,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 						  TCP_DELACK_MAX, TCP_RTO_MAX);
 
 discard:
-			__kfree_skb(skb);
+                        //	__kfree_skb(skb);
 			return 0;
 		} else {
                         tcp_send_ack(sk);

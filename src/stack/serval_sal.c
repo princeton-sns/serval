@@ -732,10 +732,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
         /* Allocate RESPONSE reply */
         rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
 
-        if (!rskb) {
-                err = -ENOMEM;
+        if (!rskb)
                 goto drop;
-        }
 
 #if defined(OS_LINUX_KERNEL)
         /*
@@ -813,6 +811,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         /* Free the REQUEST */
  drop:
         kfree_skb(skb);
+        return 0;
  done:
         return err;
  drop_and_release:
@@ -1200,6 +1199,7 @@ static int serval_sal_closewait_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
+                return 0;
         }
 
         return err;
@@ -1425,7 +1425,7 @@ static int serval_sal_respond_state_process(struct sock *sk,
 drop:
         kfree_skb(skb);
 error:
-        return err;
+        return 0;
 }
 
 static int serval_sal_finwait1_state_process(struct sock *sk, 
