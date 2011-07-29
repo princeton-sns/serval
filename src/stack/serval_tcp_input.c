@@ -3643,7 +3643,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (res <= 0) {
                 LOG_ERR("Incoming packet could not be validated\n");
-                return -1;
+                return -res;
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
@@ -3655,11 +3655,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
-#if 0
-				if (!sock_flag(sk, SOCK_DEAD))
-					/* Wake up lingering close() */
-					sk->sk_state_change(sk);
-				else {
+				if (sock_flag(sk, SOCK_DEAD)) {
 					int tmo;
 
 					if (tp->linger2 < 0 ||
@@ -3684,11 +3680,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 						 */
 						serval_tsk_reset_keepalive_timer(sk, tmo);
 					} else {
-						serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
+						//serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
 						goto discard;
 					}
 				}
-#endif /* 0 */
 			}
 			break;
 		case TCP_CLOSING:
@@ -3990,7 +3985,7 @@ slow_path:
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 
 	if (res <= 0)
-		return -1;
+		return -res;
 
 step5:
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
@@ -4045,7 +4040,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 /* serval_tcp_validate_incoming has dropped the
                    packet */
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
-		return -1;
+		return -err;
         }
 
 	if (th->ack) {
