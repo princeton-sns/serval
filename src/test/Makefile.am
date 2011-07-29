@@ -16,7 +16,8 @@ bin_PROGRAMS = \
 	tcp_server \
 	tcp_servern \
 	tcp_inet_client \
-	addservice
+	addservice \
+        migrate
 
 if OS_LINUX
 bin_PROGRAMS += \
@@ -30,6 +31,10 @@ translator_CPPFLAGS =-I$(top_srcdir)/include
 translator_LDFLAGS =-lpthread
 
 endif
+
+migrate_SOURCES = migrate.c
+migrate_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/src/libstack
+migrate_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
 
 addservice_SOURCES = addservice.c
 addservice_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack

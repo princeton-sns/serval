@@ -6,6 +6,9 @@
 #include "callback.h"
 #include "ctrlmsg.h"
 
+int libstack_migrate_interface(const char *from_if,
+		                       const char *to_if);
+
 int libstack_configure_interface(const char *ifname, 
                                  const struct net_addr *ipaddr,
 				 unsigned short flags);
