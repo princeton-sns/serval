@@ -5,7 +5,6 @@
 #include <service.h>
 #include "ctrl.h"
 
-extern int host_ctrl_mode;
 extern atomic_t serval_transit;
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
@@ -29,17 +28,7 @@ static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
 
         LOG_DBG("iface %s\n", ifcm->ifname);
 
-
-        /* TODO: Currently host control mode is on a per interface
-         * basis, but we have a global control flag. We need a better
-         * way to figure out the stack's control mode. */
-        if (ifcm->flags & IFFLAG_HOST_CTRL_MODE) {
-                LOG_DBG("setting host control mode\n");
-                host_ctrl_mode = 1;
-        } else {
-                host_ctrl_mode = 0;
-        }
-
+        /* Nothing really done here a.t.m. */
         dev_put(dev);
 
         return ret;
