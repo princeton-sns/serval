@@ -4016,7 +4016,6 @@ csum_error:
 	//TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
         LOG_ERR("Checksum error!\n");
 discard:
-        LOG_ERR("Discarding skb\n");
 	__kfree_skb(skb);
 	return 0;
 }

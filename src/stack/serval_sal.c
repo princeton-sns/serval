@@ -1627,10 +1627,11 @@ int serval_sal_state_process(struct sock *sk,
                         serval_sock_state_str(sk), sk->sk_state);
                 goto drop;
         }
-
-        if (err)
-                goto drop;
                 
+        if (err) {
+                LOG_ERR("Error on receive: %d\n", err);
+        }
+
         return 0;
 drop:
         kfree_skb(skb);
