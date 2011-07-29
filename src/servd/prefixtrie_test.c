@@ -4,7 +4,7 @@
  *  Created on: Mar 7, 2011
  *      Author: daveds
  */
-
+#include <assert.h>
 #include "prefixtrie.h"
 #include "service_util.h"
 #include "service_types.h"

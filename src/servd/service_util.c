@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <assert.h>
 #include "cmwc.h"
 #include "debug.h"
 

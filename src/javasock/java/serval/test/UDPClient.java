@@ -9,8 +9,7 @@ import serval.net.*;
 
 public class UDPClient {
     private ServalDatagramSocket sock;
-    private Thread closeThr = null;
-
+    
     public UDPClient() {
 
     }

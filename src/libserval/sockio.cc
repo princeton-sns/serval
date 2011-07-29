@@ -72,7 +72,8 @@ SockIO::readn(io_sock_t fd, void *vptr, int n)
         if ( (nr = ::read(fd, ptr, nleft)) < 0 &&
              errno != ECONNRESET) {
             if (errno == EINTR)
-                nr = 0;
+                //nr = 0;
+                return -1;
             else if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 //lerr("SockIO::readn only supports blocking IO (got %s)",
                 //strerror(errno));

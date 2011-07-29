@@ -64,6 +64,8 @@ int jniRegisterNativeMethods(JNIEnv* env, const char* className,
  */
 int jniThrowException(JNIEnv* env, const char* className, const char* msg);
 
+int jniThrowIllegalArgumentException(JNIEnv* env, const char* msg);
+
 /*
  * Throw a java.lang.NullPointerException, with an optional message.
  */

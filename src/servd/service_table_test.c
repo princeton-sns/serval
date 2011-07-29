@@ -13,6 +13,7 @@
 #include "service_util.h"
 #include "service_types.h"
 #include <sys/time.h>
+#include <assert.h>
 
 #define UNIQUE_SERVICE_IDS 5096
 #define SERVICE_REPLICATION_FACTOR 4

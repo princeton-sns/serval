@@ -3,12 +3,11 @@
 #include <serval/skbuff.h>
 #include <serval/debug.h>
 #include <serval/netdevice.h>
+#include <serval/checksum.h>
 #include <serval_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
 #include <input.h>
-#include <output.h>
-#include <neighbor.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
 #include <linux/inetdevice.h>
@@ -19,12 +18,6 @@
 #include <netinet/if_ether.h>
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
-#define route_dst(rt) &(rt)->u.dst
-#else
-#define route_dst(rt) &(rt)->dst
-#endif /* LINUX_VERSION_CODE */
-
 extern int serval_sal_rcv(struct sk_buff *);
 
 #if defined(OS_USER)
@@ -32,7 +25,7 @@ extern int serval_sal_rcv(struct sk_buff *);
 static inline void ip_send_check(struct iphdr *iph)
 {
         iph->check = 0;
-        /* iph->check = in_cksum(iph, iph->ihl << 2); */
+        iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);
 }
 
 int serval_ipv4_rcv(struct sk_buff *skb)
@@ -86,12 +79,18 @@ inhdr_error:
 
 int serval_ipv4_forward_out(struct sk_buff *skb)
 {
-        int err;
+        int err = -EHOSTUNREACH;
 
 #if defined(OS_LINUX_KERNEL)
+        //return dst_input(skb);
         /* Inject into stack again and let IP take care of
            business. */
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+        /* TODO: Figure out the right thing to do here. */
         err = dev_forward_skb(skb->dev, skb);
+#endif
+
 #else
         struct iphdr *iph = ip_hdr(skb);
         
@@ -123,18 +122,18 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
         err = NF_HOOK(PF_INET, NF_IP_LOCAL_OUT, skb, NULL, skb->dst->dev,
                       dst_output);
 #endif
-#else
+#else /* OS_USER */
+       
         /* Calculate checksum */
         ip_send_check(ip_hdr(skb));
 
         err = dev_queue_xmit(skb);
+#endif
 
         if (err < 0) {
-		LOG_ERR("packet_xmit failed\n");
+		LOG_ERR("packet_xmit failed err=%d\n", err);
 	}
-        
-        //err = serval_output(skb);
-#endif
+
         return err;
 }
 
@@ -158,10 +157,10 @@ int serval_ip_route_output_flow(struct net *net, struct rtable **rp,
   new connection.
  */
 struct dst_entry *serval_ipv4_req_route(struct sock *sk,
-                                        struct serval_request_sock *rsk,
+                                        struct request_sock *rsk,
                                         int protocol,
-                                        uint32_t saddr,
-                                        uint32_t daddr)
+                                        u32 saddr,
+                                        u32 daddr)
 {
 	struct rtable *rt;
 	struct ip_options *opt = NULL; /* inet_rsk(req)->opt; */
@@ -194,6 +193,7 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 		goto no_route;
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
 		goto route_err;
+
 	return route_dst(rt);
 
 route_err:
@@ -223,7 +223,7 @@ const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
 }
 
 int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
-                            uint32_t saddr, uint32_t daddr)
+                            u32 saddr, u32 daddr)
 {
 	struct inet_sock *inet = inet_sk(sk);
         struct iphdr *iph;
@@ -264,19 +264,12 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
                    char buf[256];
                    LOG_DBG("ip dump %s\n", ipv4_hdr_dump(iph, buf, 256));
                 */
-                if(skb->dev) {
-                    LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
-                            skb->dev->name,
-                            inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                            inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                            skb->len, iph_len, iph->ihl);
-                }
-                else {
-                    LOG_DBG("%s->%s tot_len=%u iph_len=[%u %u]\n",
-                            inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                            inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                            skb->len, iph_len, iph->ihl);
-                }
+
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
+                        skb->dev ? skb->dev->name : "no dev",
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph_len, iph->ihl);
         }
 #endif
         
@@ -284,7 +277,7 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 }
 
 int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
-                                   uint32_t saddr, uint32_t daddr, 
+                                   u32 saddr, u32 daddr, 
                                    struct ip_options *opt)
 {
         int err = 0;
@@ -319,7 +312,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 {
 	int ttl = inet->uc_ttl;
-        
+
         if (ttl < 0) {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
                 ttl = ip4_dst_hoplimit(dst);        
@@ -348,50 +341,83 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         struct rtable *rt;
         struct inet_sock *inet = inet_sk(sk);
 	struct ip_options *opt = inet->opt;
-        struct flowi fl = { .oif = sk->sk_bound_dev_if,
+        int ifindex;
+
+        /* 
+         * Skip all of this if the packet is already routed,
+         */
+        rcu_read_lock();
+
+        rt = skb_rtable(skb);
+
+        if (rt != NULL) {
+                LOG_PKT("Packet already routed\n");
+                goto packet_routed;
+        }
+        /* Make sure we can route this packet. */
+        rt = (struct rtable *)__sk_dst_check(sk, 0);
+
+        if (skb->dev) {
+                ifindex = skb->dev->ifindex;
+        } else {
+                ifindex = sk->sk_bound_dev_if;
+        }
+
+        if (rt == NULL) {
+                struct flowi fl = { .oif = ifindex,
+                                    .iif = ifindex,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-                            .mark = sk->sk_mark,
+                                    .mark = sk->sk_mark,
 #endif
-                            .nl_u = { .ip4_u =
-                                      { .daddr = SERVAL_SKB_CB(skb)->addr.net_ip.s_addr,
-                                        .saddr = inet->inet_saddr,
-                                        .tos = RT_CONN_FLAGS(sk) } },
+                                    .nl_u = { .ip4_u =
+                                              { .daddr = inet->inet_daddr,
+                                                /* .saddr = inet->inet_saddr, */
+                                                .tos = RT_CONN_FLAGS(sk) } },
                             .proto = skb->protocol,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                            .flags = inet_sk_flowi_flags(sk),
+                                    .flags = inet_sk_flowi_flags(sk),
 #endif
-        };
-        
-	rcu_read_lock();
-        
-        security_sk_classify_flow(sk, &fl);
+                };
+                
+                security_sk_classify_flow(sk, &fl);
+                
+                if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
+                        LOG_DBG("No route!\n");
+                        err = -EHOSTUNREACH;
+                        rcu_read_unlock();
+                        goto drop;
+                }
 
-        if (serval_ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0)) {
-                LOG_DBG("No route!\n");
-                err = -EHOSTUNREACH;
-                rcu_read_unlock();
-                goto drop;
+                /* Setup the socket to use this route in the future */
+                sk_setup_caps(sk, route_dst(rt));
+
         } else {
-#if defined(ENABLE_DEBUG)                
+                LOG_PKT("Using route already associated with socket\n");
+        }
+        
+#if defined(ENABLE_DEBUG)
+        {
                 char src[18], dst[18];
-                LOG_PKT("Route found - src %s dst %s\n",
+                LOG_PKT("Route found %s -> %s %s\n",
                         inet_ntop(AF_INET, &rt->rt_src, 
                                   src, sizeof(src)),
                         inet_ntop(AF_INET, &rt->rt_dst, 
-                                  dst, sizeof(dst)));
+                                  dst, sizeof(dst)),
+                        route_dst(rt)->dev ? 
+                        route_dst(rt)->dev->name : "(null)");
+        }
 #endif
-                sk_setup_caps(sk, route_dst(rt));
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
-                skb_dst_set(skb, dst_clone(route_dst(rt)));
+        skb_dst_set(skb, dst_clone(route_dst(rt)));
 #else
-                skb_dst_set_noref(skb, route_dst(rt));
+        skb_dst_set_noref(skb, route_dst(rt));
 #endif
-        }
-
+ packet_routed:              
         if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
                 err = -EHOSTUNREACH;
                 rcu_read_unlock();
+                LOG_DBG("dest is not gateway!\n");
                 goto drop;
         }
 
@@ -458,8 +484,8 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         }
         */
 
-        err = serval_ipv4_fill_in_hdr(sk, skb, INADDR_ANY,
-                                      SERVAL_SKB_CB(skb)->addr.net_ip.s_addr);
+        err = serval_ipv4_fill_in_hdr(sk, skb, inet_sk(sk)->inet_saddr,
+                                      inet_sk(sk)->inet_daddr);
         
         if (err < 0) {
                 LOG_ERR("hdr failed\n");
@@ -469,9 +495,9 @@ int serval_ipv4_xmit_skb(struct sk_buff *skb)
         /* Transmit */
         err = serval_ip_local_out(skb);
 #endif        
-out:
+ out:
         if (err < 0) {
-                LOG_ERR("xmit failed\n");
+                LOG_ERR("xmit failed: %d\n", err);
         }
 
         return err;

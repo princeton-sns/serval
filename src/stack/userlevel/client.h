@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
@@ -20,9 +21,9 @@ typedef enum {
 } client_state_t;
 
 
-enum client_signal{
-    CLIENT_EXIT = 1
-    //CLIENT_SIGNAL_DATA = 2
+enum client_signal {
+        CLIENT_EXIT = 1
+        //CLIENT_SIGNAL_DATA = 2
 };
 
 struct client_list {
@@ -30,11 +31,10 @@ struct client_list {
         pthread_mutex_t mutex;        
 };
 
-#define CLIENT_LIST(list) struct client_list list =		\
-	{							\
-		.head = { &list.head, &list.head },		\
-		.mutex = PTHREAD_MUTEX_INITIALIZER		\
-	}
+#define CLIENT_LIST(list) struct client_list list = {           \
+                .head = { &list.head, &list.head },             \
+                .mutex = PTHREAD_MUTEX_INITIALIZER              \
+        }
 
 struct client *client_create(client_type_t type, int sock, unsigned int id, 
 			     struct sockaddr_un *sa, sigset_t *sigset);
@@ -53,7 +53,8 @@ int client_signal_raise(struct client *c, enum client_signal s);
 int client_signal_exit(struct client *c);
 enum client_signal client_signal_lower(int fd);
 int client_start(struct client *c);
-struct client *client_get_by_socket(struct socket *sock, struct client_list *list);
+struct client *client_get_by_socket(struct socket *sock, 
+                                    struct client_list *list);
 void client_list_init(struct client_list *list);
 void client_list_add(struct client *c, struct client_list *list);
 struct client *__client_list_first_entry(struct client_list *list);
@@ -63,6 +64,7 @@ void client_list_unlock(struct client_list *list);
 void __client_list_del(struct client *c);
 void client_list_del(struct client *c, struct client_list *list);
 int test_client_start(struct client *c);
+int client_send_have_data_msg(struct client *c);
 
 /**
   client_get_by_context:

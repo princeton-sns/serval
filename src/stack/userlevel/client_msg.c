@@ -101,6 +101,8 @@ int client_msg_read(int sock, struct client_msg **msg)
 	if (!msg_tmp)
 		return -1;
 
+        memset(msg_tmp, 0, CLIENT_MSG_HDR_LEN);
+
 	len = recv(sock, msg_tmp, CLIENT_MSG_HDR_LEN, 0);
 
 	if (len == -1) {

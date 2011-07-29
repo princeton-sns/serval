@@ -422,7 +422,7 @@ public class ServalDatagramSocket {
 
                 // let's get sender's serviceID and address
                 try {
-                    int foo = impl.peekData(tempPack);
+                    impl.peekData(tempPack);
                     SocketAddress sa = tempPack.getSocketAddress();
 
                     if (!(sa instanceof ServalSocketAddress)) {

@@ -15,22 +15,18 @@
 #include <sys/endian.h>
 #endif
 #include <stdint.h>
-
-typedef uint8_t __u8;
-typedef uint16_t __sum16;
-typedef uint16_t __u16;
-typedef uint16_t __be16;
-typedef uint32_t __be32;
+#include <serval/checksum.h>
 
 /* From linux/ip.h */
 struct iphdr {
-#if BYTE_ORDER == LITTLE_ENDIAN
+#if defined(__LITTLE_ENDIAN_BITFIELD)
         __u8    ihl:4,
                 version:4;
-#endif
-#if BYTE_ORDER == BIG_ENDIAN
+#elif defined(__BIG_ENDIAN_BITFIELD)
         __u8    version:4,
                 ihl:4;
+#else
+#error "Undefined byte order!"
 #endif
 	__u8	tos;
 	__be16	tot_len;
@@ -56,7 +52,7 @@ struct tcphdr {
 	__be16	dest;
 	__be32	seq;
 	__be32	ack_seq;
-#if BYTE_ORDER == LITTLE_ENDIAN
+#if defined(__LITTLE_ENDIAN_BITFIELD)
 	__u16	res1:4,
 		doff:4,
 		fin:1,
@@ -67,8 +63,7 @@ struct tcphdr {
 		urg:1,
 		ece:1,
 		cwr:1;
-#endif
-#if BYTE_ORDER == BIG_ENDIAN
+#elif defined(__BIG_ENDIAN_BITFIELD)
 	__u16	doff:4,
 		res1:4,
 		cwr:1,

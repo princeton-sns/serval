@@ -63,8 +63,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 
         for (i = 0; i < num_res;i++) {
                 res = &cmr->resolution[i];
-                if (res->sv_prefix_bits > (sizeof(res->srvid)*8)) {
-                        res->sv_prefix_bits = (uint8_t)(sizeof(res->srvid) * 8);
+                if (res->sv_prefix_bits > (uint8_t)(sizeof(res->srvid)*8)) {
+                        res->sv_prefix_bits = (sizeof(res->srvid) * 8) & 0xff;
                 }
 
                 dev = dev_get_by_index(NULL, res->if_index);
@@ -158,8 +158,10 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         for (i = 0; i < num_res;i++) {
                 sres = &stats[i];
 
-                if (sres->res.sv_prefix_bits > (sizeof(sres->res.srvid)*8)) {
-                        sres->res.sv_prefix_bits = (uint8_t) (sizeof(sres->res.srvid) * 8);
+                if (sres->res.sv_prefix_bits > 
+                    (uint8_t)(sizeof(sres->res.srvid)*8)) {
+                        sres->res.sv_prefix_bits = 
+                                        (sizeof(sres->res.srvid) * 8) & 0xff;
                 }
 
                 if (memcmp(&sres->res.address, &null_ip, 
@@ -233,8 +235,8 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 
         for (i = 0; i < num_res;i++) {
                 res = &cmr->resolution[i];
-                if (res->sv_prefix_bits > (sizeof(res->srvid)*8)) {
-                        res->sv_prefix_bits = (uint8_t)(sizeof(res->srvid) * 8);
+                if (res->sv_prefix_bits > (uint8_t)(sizeof(res->srvid)*8)) {
+                        res->sv_prefix_bits = (sizeof(res->srvid) * 8) & 0xff;
                 }
 
                 if (memcmp(&res->address, &null_ip, 

@@ -5,6 +5,7 @@
 #include <serval/debug.h>
 #include <serval/net.h>
 #include <serval/wait.h>
+#include <serval/bitops.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,38 +103,74 @@ static void sock_free(struct socket *sock)
 	free(sock);
 }
 
+
+
+/*
+ *	Update the socket async list
+ *
+ *	Fasync_list locking strategy.
+ *
+ *	1. fasync_list is modified only under process context socket lock
+ *	   i.e. under semaphore.
+ *	2. fasync_list is used under read_lock(&sk->sk_callback_lock)
+ *	   or under socket lock
+ */
+/*
+static int sock_fasync(int fd, struct file *filp, int on)
+{
+	struct socket *sock = filp->private_data;
+	struct sock *sk = sock->sk;
+
+	if (sk == NULL)
+		return -EINVAL;
+
+	lock_sock(sk);
+
+	fasync_helper(fd, filp, on, &sock->wq->fasync_list);
+
+	if (!sock->wq->fasync_list)
+		sock_reset_flag(sk, SOCK_FASYNC);
+	else
+		sock_set_flag(sk, SOCK_FASYNC);
+
+	release_sock(sk);
+	return 0;
+}
+*/
+
 int sock_wake_async(struct socket *sock, int how, int band)
 {
-        LOG_ERR("not implemented\n");
-#if 0
         struct socket_wq *wq;
 
         if (!sock)
                 return -1;
-        rcu_read_lock();
-        wq = rcu_dereference(sock->wq);
+        
+        wq = sock->wq;
+        
         if (!wq || !wq->fasync_list) {
-                rcu_read_unlock();
                 return -1;
         }
         switch (how) {
         case SOCK_WAKE_WAITD:
                 if (test_bit(SOCK_ASYNC_WAITDATA, &sock->flags))
                         break;
-                goto call_kill;
+                //goto call_kill;
         case SOCK_WAKE_SPACE:
                 if (!test_and_clear_bit(SOCK_ASYNC_NOSPACE, &sock->flags))
                         break;
                 /* fall through */
+                /*
         case SOCK_WAKE_IO:
         call_kill:
                 kill_fasync(&wq->fasync_list, SIGIO, band);
                 break;
         case SOCK_WAKE_URG:
                 kill_fasync(&wq->fasync_list, SIGURG, band);
+                */
+
+                LOG_ERR("ASYNC IO not implemented!\n");
         }
-        rcu_read_unlock();
-#endif 
+
        return 0;
 }
 

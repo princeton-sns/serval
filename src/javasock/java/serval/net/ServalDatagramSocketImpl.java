@@ -93,8 +93,6 @@ public class ServalDatagramSocketImpl implements SocketOptions {
 
     public void bind(ServiceID serviceID, InetAddress addr, int bindBits) 
         throws SocketException {
-        //String prop = AccessController.doPrivileged(new PriviAction<String>("bindToDevice")); //$NON-NLS-1$
-        boolean useBindToDevice = false;
         //prop != null && prop.toLowerCase().equals("true"); //$NON-NLS-1$
         netImpl.bind(fd, serviceID, bindBits);
         if (serviceID != null) {
@@ -153,7 +151,7 @@ public class ServalDatagramSocketImpl implements SocketOptions {
             throw new IOException("socket not created");
         }
 
-        FileDescriptor clientFd = netImpl.accept(fd, s);
+        FileDescriptor clientFd = netImpl.accept(fd, s, 0);
 
         if (clientFd == null) {
             throw new IOException("client socket not created");

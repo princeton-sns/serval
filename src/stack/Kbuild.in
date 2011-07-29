@@ -1,6 +1,8 @@
 top_builddir := @top_dir@
 
-EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@
+EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) \
+	     -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@ \
+	     @KERNEL_EXTRA_CFLAGS@
 
 obj-m := serval.o 
 serval-y := \
@@ -10,6 +12,8 @@ serval-y := \
 	   linux/module.o \
 	   linux/log.o \
 	   linux/splice.o \
+	   linux/user_dma.o \
+	   linux/iovlock.o \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \
@@ -20,4 +24,9 @@ serval-y := \
 	   serval_sal.o \
 	   serval_ipv4.o \
 	   serval_udp.o \
-	   serval_tcp.o
+	   serval_tcp.o \
+	   serval_tcp_sock.o \
+	   serval_tcp_output.o \
+	   serval_tcp_input.o \
+	   serval_tcp_cong.o \
+	   serval_tcp_timer.o

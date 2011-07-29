@@ -34,7 +34,7 @@ public:
 
   int fd() const { return _fd; }
   bool is_null() const { return _fd < 0; }
-  
+  bool is_interrupted() const { return _interrupted; }
   bool is_blocking() const;
   bool is_non_blocking() const;
   bool is_connecting() const       { return _connect_in_progress; }
@@ -53,7 +53,7 @@ public:
   void set_state(State::Type s)    { _state = s; }
   void set_err(sv_err_t err)       { _err = err; }
   void set_connect_in_progress(bool v)   { _connect_in_progress = v; }
-
+  void set_interrupted(bool val = true) { _interrupted = val; }
   int set_sync();
   
   int save_flags();
@@ -82,6 +82,7 @@ private:
   State::Type _state;
   sv_err_t _err;
   bool _connect_in_progress;
+  bool _interrupted;
   int _flags;
   struct sockaddr_un _cli;      // local socket
   pthread_mutex_t _lock;
