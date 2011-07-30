@@ -3459,7 +3459,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	return 1;
 
 discard:
-        LOG_ERR("Discarding packet\n");
+        LOG_DBG("Discarding packet\n");
         kfree_skb(skb);
 	return 0;
 }
