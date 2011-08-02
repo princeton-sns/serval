@@ -69,7 +69,12 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                                 LOG_DBG("Address is not routable, ignoring.\n");
                                 continue;
                         }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
                         dev = rt->dst.dev;
+#else
+                        dev = rt->u.dst.dev;
+#endif
                         dev_hold(dev);
                         ip_rt_put(rt);
                 }
@@ -168,6 +173,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                         continue;
 
                 memset(&dstat, 0, sizeof(dstat));
+#if defined(ENABLE_DEBUG)
                 {
 
                         char buf[100];
@@ -175,7 +181,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                                 service_entry_print(se, buf, 1000),
                                             ip ? ip->s_addr : 0);
                 }
-
+#endif
                 err = service_entry_remove_dest(se, ip, ip ? 
                                                 sizeof(entry->address) : 0, 
                                                 &dstat);
