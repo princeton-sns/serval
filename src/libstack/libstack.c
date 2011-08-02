@@ -21,8 +21,10 @@ int libstack_migrate_interface(const char *from_if,
 {
 	    struct ctrlmsg_migrate cm;
 
-	    if (from_if || to_if)
+	    if (!from_if || !to_if) {
+                LOG_ERR("Undefined interface\n");
 	    	return -1;
+            }
 
 	    memset(&cm, 0, sizeof(cm));
 	    cm.cmh.type = CTRLMSG_TYPE_MIGRATE;

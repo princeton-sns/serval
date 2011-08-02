@@ -223,6 +223,8 @@ struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
 	return &table->hash[serval_hashfn_listen(net, key, keylen*8, table->mask)];
 }
 
+void serval_sock_migrate_iface(struct net_device *old_if, 
+                               struct net_device *new_if);
 struct sock *serval_sock_lookup_serviceid(struct service_id *);
 struct sock *serval_sock_lookup_flowid(struct flow_id *);
 

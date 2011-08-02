@@ -4,6 +4,7 @@
 #include <libstack/ctrlmsg.h>
 #include <service.h>
 #include "ctrl.h"
+#include "serval_sock.h"
 
 extern int host_ctrl_mode;
 extern atomic_t serval_transit;
@@ -412,6 +413,7 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
         }
 
         LOG_DBG("migrate iface %s to iface %s\n", cmm->from_if, cmm->to_if);
+        serval_sock_migrate_iface(old_dev, new_dev);
 
         return 0;
 }

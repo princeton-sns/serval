@@ -252,4 +252,11 @@ struct serval_source_ext {
         uint8_t source[0];
 };
 
+#define SERVAL_MIGRATE_EXT 6
+struct serval_migrate_ext {
+        struct serval_ext exthdr;
+        uint8_t nonce[8];
+        struct net_addr new_addr;
+};
+
 #endif /* _SERVAL_H */

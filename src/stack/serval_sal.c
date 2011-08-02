@@ -583,6 +583,34 @@ void serval_sal_done(struct sock *sk)
         serval_sock_done(sk);
 }
 
+void serval_sal_migrate(struct sock *sk)
+{
+        struct sk_buff *skb = NULL;
+        int err = 0;
+
+        if (sk->sk_state == SERVAL_CONNECTED) {
+                serval_sock_set_state(sk, SERVAL_MIGRATE);
+
+                for(;;) {
+                        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, 
+                                               GFP_ATOMIC);
+                        if (skb)
+                                break;
+                        yield();
+                }
+
+                LOG_DBG("Sending Migrate Request\n");
+                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_RSYN;
+                SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
+
+                err = serval_sal_queue_and_push(sk,skb);
+ 
+                if (err < 0) {
+                        LOG_ERR("queuing failed\n");
+                }
+        }    
+}
+
 /* Called as a result of user app close() */
 void serval_sal_close(struct sock *sk, long timeout)
 {

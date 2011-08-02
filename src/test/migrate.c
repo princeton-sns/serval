@@ -26,7 +26,7 @@ int main(int argc, char **argv)
 	}
 
 	
-	ret = libstack_migrate_interface(from_if, to_if);
+	ret = libstack_migrate_interface(&from_if, &to_if);
 
 	if (ret < 0) {
 		fprintf(stderr, "could not migrate\n");

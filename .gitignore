@@ -26,6 +26,7 @@ src/test/nltest
 src/test/translator
 src/test/tcp_inet_client
 src/test/addservice
+src/test/migrate
 src/test/send_udp_packet
 src/test/send_udp_packetn
 src/test/recv_udp_packet

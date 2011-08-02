@@ -101,6 +101,33 @@ void __exit serval_table_fini(struct serval_table *table)
         FREE(table->hash);
 }
 
+void serval_sock_migrate_iface(struct net_device *old_if,
+                               struct net_device *new_if)
+{
+        struct hlist_node *walk;
+        struct serval_hslot slot;
+        struct sock *sk = NULL;
+        int i;
+
+        for (i=0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+                slot = established_table.hash[i];
+                if (slot.count > 0) {
+                    hlist_for_each_entry(sk, walk, &slot.head, sk_node) {
+                        struct serval_sock *ssk = serval_sk(sk);
+                        LOG_DBG("Socket to migrate: %s\n", ssk->dev->name);
+                        if (memcmp(&ssk->dev->name,&old_if->name,IFNAMSIZ) == 0) {
+                            LOG_DBG("Socket matches old if\n");
+                            serval_sock_set_dev(sk, new_if);
+                            serval_sal_migrate(sk);
+                        }
+                    }
+                }
+        }
+
+        LOG_DBG("Hash table done\n");
+
+}
+
 static struct sock *serval_sock_lookup(struct serval_table *table,
                                        struct net *net, void *key, 
                                        size_t keylen)

@@ -232,6 +232,7 @@ static inline unsigned int serval_sal_ctrl_queue_len(struct sock *sk)
 
 int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 void serval_sal_close(struct sock *sk, long timeout);
+void serval_sal_migrate(struct sock *sk);
 int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);
