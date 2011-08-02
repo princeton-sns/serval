@@ -1,7 +1,8 @@
 top_builddir := @top_dir@
 
 EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) \
-	     -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@
+	     -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@ \
+	     @KERNEL_EXTRA_CFLAGS@
 
 obj-m := serval.o 
 serval-y := \

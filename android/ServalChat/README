@@ -1,0 +1,10 @@
+To build:
+
+Prerequisites: Android NDK and SDK, Eclipse with Android plugin.
+
+$ /path/to/android-ndk/ndk-build APP_ABI="armeabi armeabi-v7a" -j<num CPU>
+$ cp ../../src/javasock/serval-javasock.jar libs/
+
+Then open up the project in Eclipse and make sure that you add
+serval-javasock.jar into Project->Properties->Java build
+path->Libraries. The project should build as normal.

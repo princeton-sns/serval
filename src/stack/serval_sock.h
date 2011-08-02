@@ -268,7 +268,8 @@ void __exit serval_sock_tables_fini(void);
 void serval_sock_wfree(struct sk_buff *skb);
 void serval_sock_rfree(struct sk_buff *skb);
 
-static inline void skb_serval_set_owner_w(struct sk_buff *skb, struct sock *sk)
+static inline void skb_serval_set_owner_w(struct sk_buff *skb, 
+                                          struct sock *sk)
 {
 	skb_orphan(skb);
 	skb->sk = sk;
@@ -277,7 +278,8 @@ static inline void skb_serval_set_owner_w(struct sk_buff *skb, struct sock *sk)
         sock_hold(sk);
 }
 
-static inline void skb_serval_set_owner_r(struct sk_buff *skb, struct sock *sk)
+static inline void skb_serval_set_owner_r(struct sk_buff *skb, 
+                                          struct sock *sk)
 {
 	skb_orphan(skb);
 	skb->sk = sk;

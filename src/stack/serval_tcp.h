@@ -277,6 +277,18 @@ static inline u32 serval_keepalive_time_elapsed(const struct serval_tcp_sock *tp
 			  tcp_time_stamp - tp->rcv_tstamp);
 }
 
+static inline int serval_tcp_fin_time(const struct sock *sk)
+{
+	int fin_timeout = serval_tcp_sk(sk)->linger2 ? : sysctl_serval_tcp_fin_timeout;
+	const int rto = serval_tcp_sk(sk)->rto;
+
+	if (fin_timeout < (rto << 2) - (rto >> 1))
+		fin_timeout = (rto << 2) - (rto >> 1);
+
+	return fin_timeout;
+}
+
+
 static inline unsigned int serval_tcp_hdrlen(const struct sk_buff *skb)
 {
 	return tcp_hdr(skb)->doff * 4;

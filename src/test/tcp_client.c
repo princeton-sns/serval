@@ -200,7 +200,7 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
 static int client(const char *filepath, int handle_migration, 
                   struct in_addr *srv_inetaddr, int port)
 {
-        int sock, ret = EXIT_FAILURE;
+        int sock, ret = EXIT_FAILURE, flags = 0;
         union {
                 struct sockaddr_sv serval;
                 struct sockaddr_in inet;
@@ -256,7 +256,11 @@ static int client(const char *filepath, int handle_migration,
                 printf("Connecting to service id %s\n", 
                        service_id_to_str(&srvaddr.serval.sv_srvid));
         }
-
+#if 0
+        flags = fcntl(sock, F_GETFL);
+        
+        ret = fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+#endif
         ret = connect_sv(sock, &srvaddr.saddr, addrlen);
     
         if (ret < 0) {
@@ -265,6 +269,37 @@ static int client(const char *filepath, int handle_migration,
                 goto out;
         }
         
+#if 0
+        while (1) {
+                fd_set rfds;
+                int err = 0;
+                struct timeval t = { 2, 0 };
+
+                FD_ZERO(&rfds);
+                FD_SET(sock, &rfds);
+
+                ret = select(sock + 1, &rfds, NULL, NULL, &t);
+
+                if (ret == -1) {
+                        fprintf(stderr, "select error: %s\n",
+                                strerror(errno));
+                        goto out;
+                }
+                
+                printf("select returned %d\n", ret);
+
+                ret = getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, sizeof(err));
+
+                if (err != 0) {
+                        printf("Not connected yet!\n");
+                } else {
+                        printf("Successfully connected!\n");
+                        break;
+                }
+        }
+        
+        ret = fcntl(sock, F_SETFL, flags);        
+#endif
         printf("Connected successfully!\n");
         
         ret = recv_file(sock, filepath, handle_migration, digest);

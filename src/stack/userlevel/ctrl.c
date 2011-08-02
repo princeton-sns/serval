@@ -46,7 +46,7 @@ int ctrl_recvmsg(void)
 
 	LOG_DBG("Received ctrl msg(%i) of %d bytes\n", cm->type, nbytes);
 
-        if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
+        if (cm->type >= _CTRLMSG_TYPE_MAX) {
                 LOG_ERR("No handler for message type %u\n",
                         cm->type);
                 ret = -1;

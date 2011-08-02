@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 	int ret = 0, delete = 0;
 	struct service_id srvid;
 	char *ptr;
-	unsigned short sid;
+	unsigned long sid;
 	struct in_addr ipaddr, *ip = NULL;
 
 	ret = libstack_init();
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	}
 	
 	memset(&srvid, 0, sizeof(srvid));
-	srvid.s_sid16[0] = ntohs(sid);
+	srvid.s_sid32[0] = ntohl(sid);
 	
         if (argc == 3) {
                 ret = inet_pton(AF_INET, argv[2], &ipaddr);

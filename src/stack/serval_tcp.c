@@ -72,7 +72,6 @@ static int serval_tcp_disconnect(struct sock *sk, int flags)
 static void serval_tcp_shutdown(struct sock *sk, int how)
 {
         LOG_DBG("\n");
-        
 }
 
 __u32 serval_tcp_random_sequence_number(void)
@@ -169,8 +168,6 @@ static int serval_tcp_syn_recv_sock(struct sock *sk,
 
 int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
-        int err = 0;
-        
         if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		//sock_rps_save_rxhash(sk, skb->rxhash);
 		TCP_CHECK_TIMER(sk);
@@ -179,7 +176,6 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
               
 		if (serval_tcp_rcv_established(sk, skb, 
                                                tcp_hdr(skb), skb->len)) {
-                        err = -1;
 			goto reset;
 		}
 		TCP_CHECK_TIMER(sk);
@@ -193,7 +189,6 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 	TCP_CHECK_TIMER(sk);
 
 	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
-                err = -1;
 		goto reset;
 	}
 	TCP_CHECK_TIMER(sk);
@@ -204,7 +199,7 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
  csum_err:
         //LOG_WARN("Should handle RESET in non-established state\n");
         kfree_skb(skb);
-        return err;
+        return 0;
 }
 
 static __sum16 serval_tcp_v4_checksum_init(struct sk_buff *skb)
@@ -284,10 +279,9 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
         }
 #endif
 
-        /* An explanation is required here, I think.
-	 * Packet length and doff are validated by header prediction,
-	 * provided case of th->doff==0 is eliminated.
-	 * So, we defer the checks. */
+        /* An explanation is required here, I think. Packet length and
+	 * doff are validated by header prediction, provided case of
+	 * th->doff==0 is eliminated.  So, we defer the checks. */
 	if (!skb_csum_unnecessary(skb) && 
             serval_tcp_v4_checksum_init(skb)) {
                 LOG_ERR("Checksum error!\n");
@@ -1178,7 +1172,6 @@ new_segment:
 					copy = skb_tailroom(skb);
 
 				if ((err = skb_add_data(skb, from, copy)) != 0) {
-                                        LOG_ERR("skb_add_data() failed!\n");
 					goto do_fault;
                                 }
 			} else {
@@ -1252,7 +1245,6 @@ new_segment:
 
 				TCP_OFF(sk) = off + copy;
 #endif /* ENABLE_PAGE */
-                                LOG_PKT("No tailroom in skb, add page\n");
 			}
 
 			if (!copied)
@@ -1324,7 +1316,6 @@ out_err:
 	release_sock(sk);
 	return err;
 }
-
 /*
  *	Handle reading urgent data. BSD has very simple semantics for
  *	this, no blocking and very strange errors 8)
@@ -1886,7 +1877,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
         if (!checksum_mode) {
                 /* Force checksum calculation by protocol */
                 skb->ip_summed = CHECKSUM_NONE;
-                LOG_INF("checksumming packet\n");
                 th->check = serval_tcp_v4_check(len, saddr, daddr,
                                                 csum_partial(th,
                                                              len,

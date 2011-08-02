@@ -43,8 +43,6 @@ extern void __exit service_fini(void);
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
 
-int host_ctrl_mode = 0;
-
 static struct sock *serval_accept_dequeue(struct sock *parent,
                                             struct socket *newsock);
 
@@ -164,62 +162,63 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct sock *sk = sock->sk;
         struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
-        int ret = 0;
+        struct ctrlmsg_register cm;
 
         if ((unsigned int)addr_len < sizeof(*svaddr))
                 return -EINVAL;
         else if (addr_len % sizeof(*svaddr) != 0)
                 return -EINVAL;
 
-        LOG_INF("SERVAL bind on SID(%i:%i) %s\n", svaddr->sv_flags, svaddr->sv_prefix_bits, service_id_to_str(&svaddr->sv_srvid));
+        /* TODO: Handle binding to a serviceID and an IP address at
+           the same time */
 
+        LOG_INF("SERVAL bind on SID(%u:%u) %s\n", 
+                svaddr->sv_flags, 
+                svaddr->sv_prefix_bits, 
+                service_id_to_str(&svaddr->sv_srvid));
 
         /* Call the protocol's own bind, if it exists */
 	if (sk->sk_prot->bind) {
-                ret = sk->sk_prot->bind(sk, addr, addr_len);
-                /* Add to protocol hash chains. */
-                sk->sk_prot->hash(sk);
-
-                return ret;
-        }
-
-        /* Notify the service daemon */
-        if (!host_ctrl_mode) {
-                struct ctrlmsg_register cm;
-                memset(&cm, 0, sizeof(cm));
-                cm.cmh.type = CTRLMSG_TYPE_REGISTER;
-                cm.cmh.len = sizeof(cm);
-                cm.sv_flags = svaddr->sv_flags;
-                cm.sv_prefix_bits = svaddr->sv_prefix_bits;
-                memcpy(&cm.srvid, &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
-                ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
-
-                if (ret < 0) {
-                        LOG_INF("servd not running?\n");
-                }
-        }
-
-        lock_sock(sk);
-
-        /* Already bound? */
-        if (serval_sock_flag(ssk, SSK_FLAG_BOUND)) {
-                sk->sk_prot->unhash(sk);
+                int err = sk->sk_prot->bind(sk, addr, addr_len);
+               
+                if (err == 0) 
+                        return err;
         } else {
-                /* Mark socket as bound */
-                serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+                lock_sock(sk);
+                
+                /* Already bound? */
+                if (serval_sock_flag(ssk, SSK_FLAG_BOUND)) {
+                        sk->sk_prot->unhash(sk);
+                } else {
+                        /* Mark socket as bound */
+                        serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
+                }
+                
+                memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid,
+                       sizeof(svaddr->sv_srvid));
+                serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
+                serval_sk(sk)->srvid_flags = svaddr->sv_flags;
+                                
+                release_sock(sk);
         }
 
-        memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid,
-               sizeof(svaddr->sv_srvid));
-        serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
-        serval_sk(sk)->srvid_flags = svaddr->sv_flags;
-
-        /* Hash socket */
+        /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
+                
+        /* Notify the service daemon */
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_REGISTER;
+        cm.cmh.len = sizeof(cm);
+        cm.service.sv_flags = svaddr->sv_flags;
+        cm.service.sv_prefix_bits = svaddr->sv_prefix_bits;
+        memcpy(&cm.service.sv_srvid,
+               &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
 
-        release_sock(sk);
+        if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
+                LOG_INF("servd not running?\n");
+        }
 
-        return ret;
+        return 0;
 }
 
 static int serval_listen_start(struct sock *sk, int backlog)
@@ -465,7 +464,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
         long timeo;
 
         if (addr->sa_family != AF_SERVAL) {
-                LOG_ERR("bad address family\n");
+                LOG_ERR("Bad address family %d!\n", addr->sa_family);
                 return -EAFNOSUPPORT;
         }
 
@@ -521,10 +520,8 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 /* Error code is set above */
                 LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
 
-                if (!timeo) {
-                        LOG_DBG("Zero timeout\n");
+                if (!timeo)
                         goto out;
-                }
 
                 err = sk_stream_wait_connect(sk, &timeo);
 
@@ -539,23 +536,6 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 if (signal_pending(current))
                         goto out;
         }
-
-        /*
-        if (!nonblock) {
-                long timeo = sock_sndtimeo(sk, nonblock);        
-        
-                LOG_DBG("waiting for connect\n");
-        
-                if ((1 << sk->sk_state) & SERVALF_REQUEST)
-                        err = sk_stream_wait_connect(sk, &timeo);
-                        
-                LOG_DBG("wait for connect returned=%d\n", err);
-        } else {
-        LOG_DBG("non-blocking connect\n");
-        err = -EINPROGRESS;
-                goto out;
-        }
-        */
 
         /* We must be in SERVAL_REQUEST or later state. All those
            states are valid "connected" states, except for CLOSED. */
@@ -614,6 +594,7 @@ static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
 static int serval_shutdown(struct socket *sock, int how)
 {
 	struct sock *sk = sock->sk;
+        struct ctrlmsg_register cm;
 	int err = 0;
 
 	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
@@ -624,20 +605,18 @@ static int serval_shutdown(struct socket *sock, int how)
 
 	lock_sock(sk);
 
-	if (!host_ctrl_mode) {
-        struct ctrlmsg_register cm;
-        int ret = 0;
+        /* Notify user space */
         cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
         cm.cmh.len = sizeof(cm);
-        cm.sv_flags = serval_sk(sk)->srvid_flags;
-        cm.sv_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
-        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, sizeof(cm.srvid));
-        ret = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
+        cm.service.sv_flags = serval_sk(sk)->srvid_flags;
+        cm.service.sv_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
+        memcpy(&cm.service.sv_srvid, 
+               &serval_sk(sk)->local_srvid, sizeof(cm.service.sv_srvid));
+        err = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
 
-        if (ret < 0) {
+        if (err < 0) {
                 LOG_INF("servd not running?\n");
         }
-    }
 
 	if (sock->state == SS_CONNECTING) {
                 /*

@@ -19,7 +19,7 @@
  * The full GNU General Public License is included in this distribution in the
  * file called COPYING.
  */
-
+#ifdef CONFIG_NET_DMA
 /*
  * This code allows the net stack to make use of a DMA engine for
  * skb to iovec copies.
@@ -125,3 +125,5 @@ end:
 fault:
 	return -EFAULT;
 }
+
+#endif /* CONFIG_NET_DMA */

@@ -3459,7 +3459,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	return 1;
 
 discard:
-        LOG_ERR("Discarding packet\n");
+        LOG_DBG("Discarding packet\n");
         kfree_skb(skb);
 	return 0;
 }
@@ -3643,7 +3643,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (res <= 0) {
                 LOG_ERR("Incoming packet could not be validated\n");
-                return -1;
+                return -res;
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
@@ -3655,11 +3655,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
-#if 0
-				if (!sock_flag(sk, SOCK_DEAD))
-					/* Wake up lingering close() */
-					sk->sk_state_change(sk);
-				else {
+				if (sock_flag(sk, SOCK_DEAD)) {
 					int tmo;
 
 					if (tp->linger2 < 0 ||
@@ -3684,11 +3680,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 						 */
 						serval_tsk_reset_keepalive_timer(sk, tmo);
 					} else {
-						serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
+						//serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
 						goto discard;
 					}
 				}
-#endif /* 0 */
 			}
 			break;
 		case TCP_CLOSING:
@@ -3918,7 +3913,7 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			}
 			if (!eaten) {
 				if (serval_tcp_checksum_complete_user(sk, skb)) {
-                                        LOG_ERR("Csum error! eaten\n");
+                                        LOG_ERR("Csum error!\n");
 					goto csum_error;
                                 }
 				/* Predicted packet is in window by definition.
@@ -3990,7 +3985,7 @@ slow_path:
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 
 	if (res <= 0)
-		return -1;
+		return -res;
 
 step5:
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
@@ -4016,7 +4011,6 @@ csum_error:
 	//TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
         LOG_ERR("Checksum error!\n");
 discard:
-        LOG_ERR("Discarding skb\n");
 	__kfree_skb(skb);
 	return 0;
 }
@@ -4046,7 +4040,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 /* serval_tcp_validate_incoming has dropped the
                    packet */
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
-		return -1;
+		return -err;
         }
 
 	if (th->ack) {
@@ -4097,14 +4091,13 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 serval_tcp_initialize_rcv_mss(sk);
                 serval_tcp_init_buffer_space(sk);
                 serval_tcp_fast_path_on(tp);
-                err = 0;
         } else {
                 LOG_WARN("No ACK flag in packet!\n");
-                err = 1;
                 kfree_skb(skb);
+                return 1;
         }
 
-        return err;
+        return 0;
 }
 
 int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
@@ -4240,7 +4233,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 						  TCP_DELACK_MAX, TCP_RTO_MAX);
 
 discard:
-			__kfree_skb(skb);
+                        //	__kfree_skb(skb);
 			return 0;
 		} else {
                         tcp_send_ack(sk);

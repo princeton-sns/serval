@@ -84,7 +84,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh->dest = 0;
         uh->len = htons(skb->len);
         udp_checksum(tot_len, uh, &inet_sk(sk)->inet_saddr);
-        
+        skb->ip_summed = CHECKSUM_NONE;
         skb->protocol = IPPROTO_UDP;
         
         LOG_PKT("UDP pkt [s=%u d=%u len=%u]\n",
