@@ -79,30 +79,31 @@ inhdr_error:
 
 int serval_ipv4_forward_out(struct sk_buff *skb)
 {
-        int err = -EHOSTUNREACH;
-
-#if defined(OS_LINUX_KERNEL)
-        //return dst_input(skb);
-        /* Inject into stack again and let IP take care of
-           business. */
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        /* TODO: Figure out the right thing to do here. */
-        err = dev_forward_skb(skb->dev, skb);
-#endif
-
-#else
         struct iphdr *iph = ip_hdr(skb);
-        
-        iph->tot_len = htons(skb->len);
-        //ip_decrease_ttl(iph->ttl);
-        iph->ttl = iph->ttl - 1;
-        /* Calculate checksum */
-        ip_send_check(ip_hdr(skb));
-        /* err = serval_output(skb);*/
-        err = dev_queue_xmit(skb);
+#if defined(OS_LINUX_KERNEL)
+        struct rtable *rt = skb_rtable(skb);
+
+        if (!rt) {
+                kfree_skb(skb);
+                return NET_RX_DROP;
+        }
+        /* Update the IP addresses */
+        memcpy(&iph->daddr, &rt->rt_dst, sizeof(iph->daddr));
+        memcpy(&iph->saddr, &rt->rt_src, sizeof(iph->saddr));
+#else
+        /* TODO: Implement something useful here. */
+        kfree_skb(skb);
+        return NET_RX_DROP;
 #endif
-        return err;
+
+        /* Update tot_len, we might have added SAL extension
+           headers. */
+        iph->tot_len = htons(skb->len);
+
+        /* Update checksum */
+        ip_send_check(iph);
+        
+        return dst_input(skb);
 }
 
 
