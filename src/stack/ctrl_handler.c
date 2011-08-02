@@ -4,6 +4,9 @@
 #include <serval/netdevice.h>
 #include <libstack/ctrlmsg.h>
 #include <service.h>
+#if defined(OS_LINUX_KERNEL)
+#include <net/route.h>
+#endif
 #include "ctrl.h"
 
 extern atomic_t serval_transit;
@@ -47,15 +50,39 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 num_res, sizeof(*cmr));
 
         for (i = 0; i < num_res; i++) {
-                struct net_device* dev;
+                struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->services[i];
    
                 if (entry->service.sv_prefix_bits == 0) {
                         entry->service.sv_prefix_bits = 0xff;
                 }
 
-                dev = dev_get_by_index(NULL, entry->if_index);
+#if defined(OS_LINUX_KERNEL)
+                {
+                        struct rtable *rt;
+                        struct flowi fl = { 
+                                .oif = entry->if_index,
+                                .fl4_dst = entry->address.net_ip.s_addr,
+                        };                                   
 
+                        if (ip_route_output_key(&init_net, &rt, &fl)) {
+                                LOG_DBG("Address is not routable, ignoring.\n");
+                                continue;
+                        }
+                        dev = rt->dst.dev;
+                        dev_hold(dev);
+                        ip_rt_put(rt);
+                }
+#else
+                 dev = dev_get_by_index(&init_net, entry->if_index);
+
+                if (!dev) {                        
+                        LOG_ERR("No device with id=%d\n",
+                                entry->if_index);
+                        continue;
+                }
+#endif
+               
 #if defined(ENABLE_DEBUG)
                 {
                         char ipstr[18];
@@ -77,8 +104,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                                   sizeof(entry->address),
                                   dev, GFP_KERNEL);
 
-                if (dev)
-                        dev_put(dev);
+                dev_put(dev);
 
                 if (err > 0) {
                         if (index < i) {
@@ -110,7 +136,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         uint32_t null_ip = 0;
         unsigned int i = 0;
         int index = 0;
-        struct dest_stats dstat;
         int err = 0;
 
 #if defined(ENABLE_DEBUG)
@@ -121,6 +146,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         for (i = 0; i < num_res; i++) {
                 struct service_info *entry = &cmr->services[i];
                 struct service_info_stat *stat = &cms->services[index];
+                struct dest_stats dstat;
                 struct service_entry *se;
 
                 if (entry->service.sv_prefix_bits > 
@@ -131,7 +157,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 }
 
                 if (memcmp(&entry->address, &null_ip, 
-                           sizeof(entry->address)) != 0) {
+                           sizeof(null_ip)) != 0) {
                         ip = &entry->address.net_un.un_ip;
                 }
 
@@ -142,13 +168,19 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                         continue;
 
                 memset(&dstat, 0, sizeof(dstat));
+                {
+
+                        char buf[100];
+                        LOG_DBG("Found entry %s to modify ip=%u\n", 
+                                service_entry_print(se, buf, 1000),
+                                            ip ? ip->s_addr : 0);
+                }
+
                 err = service_entry_remove_dest(se, ip, ip ? 
                                                 sizeof(entry->address) : 0, 
                                                 &dstat);
 
                 if (err > 0) {
-                        //entry = &stats[j++];
-                        //memcpy(&entry->res, res, sizeof(*res));
                         stat->duration_sec = dstat.duration_sec;
                         stat->duration_nsec = dstat.duration_nsec;
                         //tokens too?
@@ -171,8 +203,9 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 service_entry_put(se);
         }
 
-        cm->len = sizeof(*cms) + (index-1) * sizeof(struct service_info_stat);
-        ctrl_sendmsg(cm, GFP_KERNEL);
+        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STATS;
+        cms->cmh.len = CTRLMSG_SERVICE_STAT_LEN(index);
+        ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
 
         return 0;
 }
