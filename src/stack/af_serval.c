@@ -209,10 +209,9 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_REGISTER;
         cm.cmh.len = sizeof(cm);
-        cm.service.sv_flags = svaddr->sv_flags;
-        cm.service.sv_prefix_bits = svaddr->sv_prefix_bits;
-        memcpy(&cm.service.sv_srvid,
-               &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
+        cm.srvid_flags = svaddr->sv_flags;
+        cm.srvid_prefix_bits = svaddr->sv_prefix_bits;
+        memcpy(&cm.srvid, &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
 
         if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
                 LOG_INF("servd not running?\n");
@@ -608,10 +607,9 @@ static int serval_shutdown(struct socket *sock, int how)
         /* Notify user space */
         cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
         cm.cmh.len = sizeof(cm);
-        cm.service.sv_flags = serval_sk(sk)->srvid_flags;
-        cm.service.sv_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
-        memcpy(&cm.service.sv_srvid, 
-               &serval_sk(sk)->local_srvid, sizeof(cm.service.sv_srvid));
+        cm.srvid_flags = serval_sk(sk)->srvid_flags;
+        cm.srvid_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
+        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, sizeof(cm.srvid));
         err = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
 
         if (err < 0) {

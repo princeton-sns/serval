@@ -32,23 +32,23 @@ static int configure_interface(resolution_path* path, const char *ifname,
 static int get_service_stats(resolution_path* path, struct service_stat* stats);
 static void set_capabilities(resolution_path* path, int capabilities);
 static int get_resolutions(resolution_path* path, struct service_desc* service,
-        struct service_resolution**resolutions);
+        struct service_info**resolutions);
 static int get_resolutions_async(resolution_path* path, struct service_desc* service,
         resolution_path_callback callback);
 
-static int add_resolutions(resolution_path* path, struct service_resolution* resolutions,
+static int add_resolutions(resolution_path* path, struct service_info* resolutions,
         size_t res_count);
-static int add_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
+static int add_resolutions_async(resolution_path* path, struct service_info* resolutions,
         size_t res_count, resolution_path_callback callback);
 
-static int remove_resolutions(resolution_path* path, struct service_resolution_stat* service,
+static int remove_resolutions(resolution_path* path, struct service_info_stat* service,
         size_t res_count);
-static int remove_resolutions_async(resolution_path* path, struct service_resolution_stat* service,
+static int remove_resolutions_async(resolution_path* path, struct service_info_stat* service,
         resolution_path_callback callback);
 
-static int modify_resolutions(resolution_path* path, struct service_resolution* resolutions,
+static int modify_resolutions(resolution_path* path, struct service_info* resolutions,
         size_t res_count);
-static int modify_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
+static int modify_resolutions_async(resolution_path* path, struct service_info* resolutions,
         size_t res_count, resolution_path_callback callback);
 
 /*resolution path prototype*/
@@ -79,7 +79,7 @@ struct sv_resolution_path_interface sv_res_path_interface = {
 struct get_resolution_barrier {
     struct message_barrier barrier;
     int count;
-    struct service_resolution* resolutions;
+    struct service_info* resolutions;
 };
 
 struct stat_resolution_barrier {
@@ -99,7 +99,7 @@ static void handle_unregister_message(resolution_path* spath, struct ctrlmsg_reg
         size_t length);
 static void handle_resolve_message(resolution_path* spath, struct ctrlmsg_resolve* message,
         size_t length);
-static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_resolution* message,
+static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_service_stats* message,
         size_t length);
 
 void init_resolution_path(resolution_path* spath) {
@@ -219,15 +219,15 @@ static void resolution_path_handle_success_get(struct message_barrier* barrier, 
     struct ctrlmsg* cmsg = (struct ctrlmsg*) msg;
 
     if(cmsg->len == CTRLMSG_GET_SERVICE_SIZE
-            && ((struct ctrlmsg_get_service*) cmsg)->sv_prefix_bits == SVSF_INVALID) {
+            && ((struct ctrlmsg_service*) cmsg)->service[0].srvid_prefix_bits == SVSF_INVALID) {
         //TODO - invalid service ID
         barrier->status = EINVAL;
         return;
     }
 
-    struct ctrlmsg_resolution* rmessage = (struct ctrlmsg_resolution*) msg;
+    struct ctrlmsg_service* rmessage = (struct ctrlmsg_service*) msg;
 
-    int rescount = CTRL_NUM_SERVICES(rmessage, len);
+    int rescount = CTRLMSG_SERVICE_NUM(rmessage);
 
     if(rescount == 0) {
         return;
@@ -235,16 +235,16 @@ static void resolution_path_handle_success_get(struct message_barrier* barrier, 
     /* not a great mem management tech here */
 
     if(gbarrier->count == 0) {
-        gbarrier->resolutions = (struct service_resolution*) malloc(rescount
-                * sizeof(struct service_resolution));
+        gbarrier->resolutions = (struct service_info*) malloc(rescount
+                * sizeof(struct service_info));
     } else {
-        gbarrier->resolutions = (struct service_resolution*) realloc(gbarrier, (gbarrier->count
-                + rescount) * sizeof(struct service_resolution));
+        gbarrier->resolutions = (struct service_info*) realloc(gbarrier, (gbarrier->count
+                + rescount) * sizeof(struct service_info));
     }
     int i = 0;
     for(; i < rescount; i++) {
-        memcpy(&gbarrier->resolutions[gbarrier->count++], &rmessage->resolution[i],
-                sizeof(struct service_resolution));
+        memcpy(&gbarrier->resolutions[gbarrier->count++], &rmessage->service[i],
+                sizeof(struct service_info));
     }
 
 }
@@ -259,7 +259,7 @@ static void resolution_path_handle_success_stat(struct message_barrier* barrier,
 
     struct stat_resolution_barrier* sbarrier = (struct stat_resolution_barrier*) barrier;
 
-    struct ctrlmsg_stats* smessage = (struct ctrlmsg_stats*) msg;
+    struct ctrlmsg_service_stats* smessage = (struct ctrlmsg_service_stats*) msg;
 
     /* not a great mem management tech here */
     memcpy(sbarrier->stats, &smessage->stats, sizeof(smessage->stats));
@@ -269,7 +269,7 @@ static int get_service_stats(resolution_path* spath, struct service_stat* stats)
     assert(spath);
 
     /* no copying, no resend */
-    struct ctrlmsg_stats cm;
+    struct ctrlmsg_service_stats cm;
 
     memset(&cm, 0, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_SERVICE_STATS;
@@ -326,22 +326,22 @@ static int configure_interface(resolution_path* spath, const char *ifname,
 }
 
 static int get_resolutions(resolution_path* spath, struct service_desc* service,
-        struct service_resolution**resolutions) {
+        struct service_info**resolutions) {
     assert(spath);
 
     /* no copying, no resend */
-    struct ctrlmsg_get_service cm;
+    struct ctrlmsg_service cm;
+    struct get_resolution_barrier barrier;
 
     memset(&cm, 0, sizeof(cm));
     cm.cmh.type = CTRLMSG_TYPE_GET_SERVICE;
     cm.cmh.len = sizeof(cm);
-    cm.sv_flags = service->flags;
-    cm.sv_prefix_bits = service->prefix;
+    cm.service[0].srvid_flags = service->flags;
+    cm.service[0].srvid_prefix_bits = service->prefix;
     cm.xid = atomic_add_return(1, &spath->path.request_xid);
 
-    memcpy(&cm.srvid, &service->service, sizeof(struct service_id));
+    memcpy(&cm.service[0].srvid, &service->service, sizeof(struct service_id));
 
-    struct get_resolution_barrier barrier;
     bzero(&barrier, sizeof(barrier));
 
     init_message_barrier(&barrier.barrier, spath, CTRLMSG_TYPE_GET_SERVICE,
@@ -368,7 +368,7 @@ static int get_resolutions_async(resolution_path* path, struct service_desc* ser
     return 0;
 }
 
-static int add_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+static int add_resolutions(resolution_path* spath, struct service_info* resolutions,
         size_t res_count) {
     assert(spath);
     if(resolutions == NULL) {
@@ -378,7 +378,7 @@ static int add_resolutions(resolution_path* spath, struct service_resolution* re
         return 0;
     }
 
-    struct ctrlmsg_resolution cm;
+    struct ctrlmsg_service cm;
     int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
     int batch_count = res_count / batch_size;
     int count = 0;
@@ -388,7 +388,7 @@ static int add_resolutions(resolution_path* spath, struct service_resolution* re
 
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    //struct ctrlmsg_service* cm = (struct ctrlmsg_service*) malloc(size);
     LOG_DBG("Adding %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
@@ -426,7 +426,7 @@ static int add_resolutions(resolution_path* spath, struct service_resolution* re
 }
 
 #if defined(ENABLE_DISABLED)
-static int _add_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+static int _add_resolutions(resolution_path* spath, struct service_info* resolutions,
         size_t res_count) {
     assert(spath);
     if(resolutions == NULL || res_count <= 0) {
@@ -452,7 +452,7 @@ static int _add_resolutions(resolution_path* spath, struct service_resolution* r
     return 0;
 }
 
-static int _remove_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+static int _remove_resolutions(resolution_path* spath, struct service_info* resolutions,
         size_t res_count) {
     assert(spath);
     if(resolutions == NULL || res_count <= 0) {
@@ -483,12 +483,12 @@ static int _remove_resolutions(resolution_path* spath, struct service_resolution
 }
 #endif /* ENABLE_DISABLED */
 
-static int add_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
+static int add_resolutions_async(resolution_path* path, struct service_info* resolutions,
         size_t res_count, resolution_path_callback callback) {
     return 0;
 }
 
-static int remove_resolutions(resolution_path* spath, struct service_resolution_stat* resolutions,
+static int remove_resolutions(resolution_path* spath, struct service_info_stat* resolutions,
         size_t res_count) {
 
     assert(spath);
@@ -499,7 +499,7 @@ static int remove_resolutions(resolution_path* spath, struct service_resolution_
         return 0;
     }
 
-    struct ctrlmsg_resolution cm;
+    struct ctrlmsg_service cm;
 
     int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
     int batch_count = res_count / batch_size;
@@ -510,7 +510,7 @@ static int remove_resolutions(resolution_path* spath, struct service_resolution_
 
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    //struct ctrlmsg_service* cm = (struct ctrlmsg_service*) malloc(size);
     LOG_DBG("Removing %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
@@ -544,7 +544,7 @@ static int remove_resolutions(resolution_path* spath, struct service_resolution_
     return sent;
 
 }
-static int remove_resolutions_async(resolution_path* path, struct service_resolution_stat* service,
+static int remove_resolutions_async(resolution_path* path, struct service_info_stat* service,
         resolution_path_callback callback) {
     return 0;
 }
@@ -579,7 +579,7 @@ static void set_capabilities(resolution_path* spath, int capabilities) {
 
 }
 
-static int modify_resolutions(resolution_path* spath, struct service_resolution* resolutions,
+static int modify_resolutions(resolution_path* spath, struct service_info* resolutions,
         size_t res_count) {
     assert(spath);
     if(resolutions == NULL) {
@@ -592,7 +592,7 @@ static int modify_resolutions(resolution_path* spath, struct service_resolution*
     LOG_DBG("Modifying %zu stack resolution rules\n", res_count);
     /* no copying, no resend */
 
-    struct ctrlmsg_resolution cm;
+    struct ctrlmsg_service cm;
 
     int batch_size = (MAX_MSG_SIZE - sizeof(cm)) / sizeof(*resolutions);
     int batch_count = res_count / batch_size;
@@ -603,7 +603,7 @@ static int modify_resolutions(resolution_path* spath, struct service_resolution*
 
     /* no copying, no resend */
     int size = sizeof(cm) + res_count * sizeof(*resolutions);
-    //struct ctrlmsg_resolution* cm = (struct ctrlmsg_resolution*) malloc(size);
+    //struct ctrlmsg_service* cm = (struct ctrlmsg_service*) malloc(size);
     LOG_DBG("Modifying %zu stack resolution rules, size %i, %zu\n", res_count, size, sizeof(cm));
 
     //cm.xid = atomic_add_return(1, &spath->request_xid);
@@ -637,7 +637,7 @@ static int modify_resolutions(resolution_path* spath, struct service_resolution*
     return count;
 
 }
-static int modify_resolutions_async(resolution_path* path, struct service_resolution* resolutions,
+static int modify_resolutions_async(resolution_path* path, struct service_info* resolutions,
         size_t res_count, resolution_path_callback callback) {
     return 0;
 }
@@ -645,12 +645,12 @@ static int modify_resolutions_async(resolution_path* path, struct service_resolu
 static void handle_register_message(resolution_path* spath, struct ctrlmsg_register* message,
         size_t length) {
     assert(spath);
-    LOG_DBG("Handling stack-local register: SID(%i:%i) %s\n", message->sv_flags, message->sv_prefix_bits, service_id_to_str(&message->srvid));
+    LOG_DBG("Handling stack-local register: SID(%i:%i) %s\n", message->srvid_flags, message->srvid_prefix_bits, service_id_to_str(&message->srvid));
 
     if(spath->path.path_callback.target) {
         struct service_desc sdesc;
-        sdesc.flags = message->sv_flags;
-        sdesc.prefix = message->sv_prefix_bits;
+        sdesc.flags = message->srvid_flags;
+        sdesc.prefix = message->srvid_prefix_bits;
 
         memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
         spath->path.path_callback.service_registered(&spath->path.path_callback, &sdesc);
@@ -660,11 +660,11 @@ static void handle_register_message(resolution_path* spath, struct ctrlmsg_regis
 static void handle_unregister_message(resolution_path* spath, struct ctrlmsg_register* message,
         size_t length) {
     assert(spath);
-    LOG_DBG("Handling stack-local unregister: SID(%i:%i) %s\n", message->sv_flags, message->sv_prefix_bits, service_id_to_str(&message->srvid));
+    LOG_DBG("Handling stack-local unregister: SID(%i:%i) %s\n", message->srvid_flags, message->srvid_prefix_bits, service_id_to_str(&message->srvid));
     if(spath->path.path_callback.target) {
         struct service_desc sdesc;
-        sdesc.flags = message->sv_flags;
-        sdesc.prefix = message->sv_prefix_bits;
+        sdesc.flags = message->srvid_flags;
+        sdesc.prefix = message->srvid_prefix_bits;
         memcpy(&sdesc.service, &message->srvid, sizeof(struct service_id));
         spath->path.path_callback.service_unregistered(&spath->path.path_callback, &sdesc);
     }
@@ -679,39 +679,39 @@ static void handle_resolve_message(resolution_path* spath, struct ctrlmsg_resolv
 
 }
 
-static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_resolution* message,
+static void handle_resolution_removed(resolution_path* spath, struct ctrlmsg_service_stats* message,
         size_t length) {
     assert(spath);
     /*TODO - big assumption that the resolutions here include stats */
-    int rcount = CTRL_NUM_STAT_SERVICES(message, length);
+    int rcount = CTRLMSG_SERVICE_STAT_NUM(message);
     LOG_DBG("Handling resolution removed: %i\n", rcount);
 
     if(rcount <= 0) {
-        LOG_ERR("Invalid resolution stats in remove message! len: %zu / %zu\n", length, sizeof(struct service_resolution_stat));
+        LOG_ERR("Invalid resolution stats in remove message! len: %zu / %zu\n", length, sizeof(struct service_info_stat));
     }
     if(spath->path.path_callback.target) {
 
-        spath->path.path_callback.stat_update(&spath->path.path_callback,
-                (struct service_resolution_stat*) message->resolution, rcount);
+      spath->path.path_callback.stat_update(&spath->path.path_callback,
+					    (struct service_info_stat*) &message->stats, rcount);
 
         //        stat_response resp;
         //                resp.count = rcount;
         //                resp.type = SVS_INSTANCE_STATS;
-        //                /*TODO this is rather dangerous to assume - full binary compatibilitye between service_resolution_stat == sv_instance_stats*/
+        //                /*TODO this is rather dangerous to assume - full binary compatibilitye between service_info_stat == sv_instance_stats*/
         //                resp.data = (uint8_t*) &message->resolution;
         //spath->path.resolver.interface->update_services(spath->path.resolver.target, NULL,
         //        SVS_INSTANCE_STATS, &resp);
     }
 }
 
-static void handle_resolution_added(resolution_path* spath, struct ctrlmsg_resolution* message,
+static void handle_resolution_added(resolution_path* spath, struct ctrlmsg_service* message,
         size_t length) {
     assert(spath);
     /*DO NOTHING for now - may need to verify actual resolutions added TODO*/
-    LOG_DBG("Handling resolution added: %zu\n", CTRL_NUM_SERVICES(message,length));
+    LOG_DBG("Handling resolution added: %zu\n", CTRLMSG_SERVICE_NUM(message));
 }
 
-static void handle_resolution_modified(resolution_path* spath, struct ctrlmsg_resolution* message,
+static void handle_resolution_modified(resolution_path* spath, struct ctrlmsg_service* message,
         size_t length) {
     /*DO NOTHING for now TODO*/
     assert(spath);
@@ -724,7 +724,7 @@ static int resolution_path_message_channel_cb(message_channel_callback* cb, cons
 
     resolution_path* spath = (resolution_path*) cb->target;
     struct ctrlmsg* cmsg = (struct ctrlmsg*) message;
-    struct ctrlmsg_resolution* amsg;
+    struct ctrlmsg_service* amsg;
     struct message_barrier* barrier = NULL;
 
     LOG_DBG("Recevied stack message of type %i\n", cmsg->type);
@@ -740,13 +740,13 @@ static int resolution_path_message_channel_cb(message_channel_callback* cb, cons
             handle_resolve_message(spath, (struct ctrlmsg_resolve*) message, length);
             break;
         case CTRLMSG_TYPE_ADD_SERVICE:
-            handle_resolution_added(spath, (struct ctrlmsg_resolution*) message, length);
+            handle_resolution_added(spath, (struct ctrlmsg_service*) message, length);
             break;
         case CTRLMSG_TYPE_DEL_SERVICE:
-            handle_resolution_removed(spath, (struct ctrlmsg_resolution*) message, length);
+            handle_resolution_removed(spath, (struct ctrlmsg_service_stats*) message, length);
             break;
         case CTRLMSG_TYPE_MOD_SERVICE:
-            handle_resolution_modified(spath, (struct ctrlmsg_resolution*) message, length);
+            handle_resolution_modified(spath, (struct ctrlmsg_service*) message, length);
             break;
         case CTRLMSG_TYPE_GET_SERVICE:
         case CTRLMSG_TYPE_SERVICE_STATS:
@@ -756,7 +756,7 @@ static int resolution_path_message_channel_cb(message_channel_callback* cb, cons
             /* TODO although it's a bit dangerous to cast solely to the resolution message,
              * the xid is in the same field position
              */
-            amsg = (struct ctrlmsg_resolution*) message;
+            amsg = (struct ctrlmsg_service*) message;
             barrier = (struct message_barrier*) g_hash_table_lookup(spath->path.message_table,
                     &amsg->xid);
 

@@ -58,7 +58,7 @@ int ctrlmsg_handle(struct ctrlmsg *cm, unsigned int len)
                 if (callbacks->srvregister) {
                         struct ctrlmsg_register *cmr = 
                                 (struct ctrlmsg_register *)cm;
-                        callbacks->srvregister(&cmr->service.sv_srvid);
+                        callbacks->srvregister(&cmr->srvid);
                 }
 		break;
 	default:

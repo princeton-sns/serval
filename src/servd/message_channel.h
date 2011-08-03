@@ -8,10 +8,10 @@
 #ifndef MESSAGE_CHANNEL_H_
 #define MESSAGE_CHANNEL_H_
 
-#include "netinet/serval.h"
-#include "libstack/resolver_protocol.h"
-#include "service_types.h"
+#include <netinet/serval.h>
+#include <libstack/resolver_protocol.h>
 #include <sys/socket.h>
+#include "service_types.h"
 
 #define MAX_MESSAGE_RETRIES 10
 

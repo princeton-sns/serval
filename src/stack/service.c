@@ -34,18 +34,6 @@ struct service_table {
 static int service_entry_init(struct bst_node *n);
 static void service_entry_destroy(struct bst_node *n);
 
-/*
-  static void dest_destroy(struct dest *dst)
-  {
-  service_entry_put((struct service_entry *)dst);
-  }
-
-  static struct dst_ops service_dst_ops = {
-  .family =		AF_SERVAL,
-  .protocol =		cpu_to_be16(ETH_P_IP),
-  .destroy =              dest_destroy
-  };
-*/
 static struct service_table srvtable;
 
 static struct dest *dest_create(const void *dst, int dstlen, 
@@ -123,18 +111,6 @@ static void dset_free(struct dest_set *dset)
         }
         FREE(dset);
 }
-
-/*
-  static void __service_entry_remove_dest(struct service_entry *se,
-  struct dest *de)
-  {
-  struct dest *de;
-
-  write_lock(&se->destlock);
-  list_del(&de->lh);
-  write_unlock(&se->destlock);
-  }
-*/
 
 static struct dest *__service_entry_get_dev(struct service_entry *se, 
                                             const char *ifname) 
@@ -462,9 +438,9 @@ int service_entry_remove_dest_by_dev(struct service_entry *se,
         write_lock(&srvtable.lock);
 
         if (list_empty(&se->dest_set)) {
+                /* Removing the node also puts the service entry */
                 bst_node_remove(se->node);
                 srvtable.services--;
-                service_entry_put(se);
         }
 
         write_unlock(&srvtable.lock);
@@ -527,9 +503,9 @@ int service_entry_remove_dest(struct service_entry *se,
         write_lock(&srvtable.lock);
 
         if (list_empty(&se->dest_set)) {
+                /* Removing the node also puts the service entry */
                 bst_node_remove(se->node);
                 srvtable.services--;
-                service_entry_put(se);
         }
 
         write_unlock(&srvtable.lock);
@@ -538,7 +514,6 @@ int service_entry_remove_dest(struct service_entry *se,
         return ret;
 }
 
-//static struct service_entry *service_entry_create(struct sock *sk, gfp_t alloc)
 static struct service_entry *service_entry_create(gfp_t alloc) 
 {
         struct service_entry *se;
@@ -553,14 +528,6 @@ static struct service_entry *service_entry_create(gfp_t alloc)
         INIT_LIST_HEAD(&se->dest_set);
         rwlock_init(&se->destlock);
         atomic_set(&se->refcnt, 1);
-        //se->dest_pos = NULL;
-
-        //        if (sk) {
-        //                se->sk = sk;
-        //                sock_hold(sk);
-        //        } else {
-        //                se->sk = NULL;
-        //        }
 
         return se;
 }
@@ -911,6 +878,7 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                 match = service_entry_local_match;
                 break;
         case SERVICE_ENTRY_GLOBAL:
+        case SERVICE_ENTRY_EXACT:
                 match = service_entry_global_match;
                 break;
         case SERVICE_ENTRY_ANY:
@@ -919,9 +887,15 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         }
 
         n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, match);
-
-        if (n)
-                se = get_service(n);
+        
+        if (n) {
+                LOG_DBG("service prefixes=%u:%u\n",
+                        bst_node_prefix_bits(n), prefix);
+                
+                if (type != SERVICE_ENTRY_EXACT ||
+                    bst_node_prefix_bits(n) == prefix)
+                        se = get_service(n);
+        }
 
         return se;
 }
@@ -1072,16 +1046,20 @@ static int service_table_add(struct service_table *tbl,
         int ret = 0;
 
         write_lock_bh(&tbl->lock);
-        /* 
-           NOTE: we ignore the alloc argument here and always use
-           GFP_ATOMIC since we hold a spinlock. If we want to allow
-           GFP_KERNEL, we should probably restructure the code so that
-           new memory is allocated before we lock the table.
-         */
+
         n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
 
         if (n && bst_node_prefix_bits(n) >= prefix_bits) {
                 if (dst || dstlen == 0) {
+                        /* 
+                           NOTE: we ignore the alloc argument here and
+                           always use GFP_ATOMIC since we hold a
+                           spinlock. If we want to allow GFP_KERNEL,
+                           we should probably restructure the code so
+                           that new memory is allocated before we lock
+                           the table.
+                        */
+
                         ret = __service_entry_add_dest(get_service(n), 
                                                        flags, priority, 
                                                        weight, dst, dstlen,
@@ -1201,6 +1179,7 @@ static void service_table_del_dest(struct service_table *tbl,
                 write_unlock(&get_service(n)->destlock);
 
                 if (list_empty(&get_service(n)->dest_set)) {
+                        /* Removing the node also puts the service entry */
                         bst_node_remove(n);
                         tbl->services--;
                 }
@@ -1241,6 +1220,7 @@ static int del_dev_func(struct bst_node *n, void *arg)
         }
 
         if (should_remove) {
+                /* Removing the node also puts the service entry */
                 bst_node_remove(n);
                 srvtable.services--;
         }
@@ -1293,6 +1273,7 @@ static int del_dest_func(struct bst_node *n, void *arg)
         }
 
         if (should_remove) {
+                /* Removing the node also puts the service entry */
                 bst_node_remove(n);
                 srvtable.services--;
         }

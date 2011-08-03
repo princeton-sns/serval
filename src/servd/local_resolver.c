@@ -319,16 +319,16 @@ static void purge_peer_resolution(struct sv_local_resolver*lres, service_resolve
                 resolver_get_address(peer, 0), NULL);
     }
 
-    struct service_resolution_stat res;
+    struct service_info_stat res;
     bzero(&res, sizeof(res));
 
     if(sdesc) {
-        res.res.sv_flags = sdesc->sv_flags;
-        res.res.sv_prefix_bits = sdesc->sv_prefix_bits;
-        memcpy(&res.res.srvid, &sdesc->sv_srvid, sizeof(struct service_id));
+        res.service.srvid_flags = sdesc->sv_flags;
+        res.service.srvid_prefix_bits = sdesc->sv_prefix_bits;
+        memcpy(&res.service.srvid, &sdesc->sv_srvid, sizeof(struct service_id));
     }
 
-    memcpy(&res.res.address, resolver_get_address(peer, 0), sizeof(struct net_addr));
+    memcpy(&res.service.address, resolver_get_address(peer, 0), sizeof(struct net_addr));
 
     //init_resolution_from_reference(&res, &ref);
 
@@ -467,7 +467,7 @@ static void local_expire_task(void* data) {
     service_table_iter_init(&iter, &lres->resolution_table);
 
     struct service_reference *ref;
-    struct service_resolution_stat resolution;
+    struct service_info_stat resolution;
     struct service_desc sdesc;
 
     GArray* svc_list = NULL;
@@ -491,7 +491,7 @@ static void local_expire_task(void* data) {
             //            sres.idle_timeout = ref->idle_timeout;
 
             bzero(&resolution, sizeof(resolution));
-            init_resolution_from_reference(&resolution.res, ref);
+            init_resolution_from_reference(&resolution.service, ref);
             g_array_append_val(ref_list, resolution);
 
             /* default policy is to not unregister until last */
@@ -519,7 +519,7 @@ static void local_expire_task(void* data) {
 
     if(ref_list->len > 0) {
         lres->rpath->interface->remove_resolutions(lres->rpath,
-                (struct service_resolution_stat*) ref_list->data, ref_list->len);
+                (struct service_info_stat*) ref_list->data, ref_list->len);
     }
     g_array_free(ref_list, TRUE);
 
@@ -583,7 +583,7 @@ static int local_handle_path_service_registered(resolution_path_callback* cb,
 static int local_handle_path_service_unregistered(resolution_path_callback* target,
         struct service_desc* service);
 static int local_handle_path_stat_update(resolution_path_callback* target,
-        struct service_resolution_stat* res_stats, size_t scount);
+        struct service_info_stat* res_stats, size_t scount);
 static int local_handle_path_resolve_service(resolution_path_callback* target,
         struct service_desc* service, struct net_addr* address);
 
@@ -651,14 +651,14 @@ static int local_handle_path_service_unregistered(resolution_path_callback* cb,
 }
 
 static int local_handle_path_stat_update(resolution_path_callback* cb,
-        struct service_resolution_stat* res_stats, size_t scount) {
+        struct service_info_stat* res_stats, size_t scount) {
     assert(cb);
     service_resolver* res = (service_resolver*) cb->target;
 
     stat_response resp;
     resp.count = scount;
     resp.type = SVS_INSTANCE_STATS;
-    /*TODO this is rather dangerous to assume - full binary compatibilitye between service_resolution_stat == sv_instance_stats*/
+    /*TODO this is rather dangerous to assume - full binary compatibilitye between service_info_stat == sv_instance_stats*/
     resp.data = (uint8_t*) res_stats;
     return res->interface->update_services(res, NULL, SVS_INSTANCE_STATS, &resp);
 }
@@ -854,7 +854,7 @@ static int local_register_services(service_resolver* resolver, service_resolver*
     GArray* ref_list = NULL;
     GArray* svc_list = g_array_new(FALSE, TRUE, sizeof(*services));
 
-    struct service_resolution sres;
+    struct service_info sres;
     if(peer) {
         ref_list = g_array_new(FALSE, TRUE, sizeof(sres));
     }
@@ -901,8 +901,8 @@ static int local_register_services(service_resolver* resolver, service_resolver*
             rcount++;
 
             if(ref_list) {
-                sres.sv_flags = sref->instance.service.sv_flags;
-                sres.sv_prefix_bits = sref->instance.service.sv_prefix_bits;
+	        sres.srvid_flags = sref->instance.service.sv_flags;
+                sres.srvid_prefix_bits = sref->instance.service.sv_prefix_bits;
                 memcpy(&sres.srvid, &sref->instance.service.sv_srvid, sizeof(struct service_id));
                 memcpy(&sres.address, &sref->instance.address.sin.sin_addr, sizeof(struct net_addr));
                 sres.priority = sref->priority;
@@ -931,7 +931,7 @@ static int local_register_services(service_resolver* resolver, service_resolver*
          * this should follow some sort of policy - along with the setting of default priority, weight, and timeouts
          * */
         lres->rpath->interface->add_resolutions(lres->rpath,
-                (struct service_resolution*) ref_list->data, ref_list->len);
+                (struct service_info*) ref_list->data, ref_list->len);
         g_array_free(ref_list, TRUE);
     }
 
@@ -988,7 +988,7 @@ static int local_unregister_services(service_resolver* resolver, service_resolve
     int rcount = 0;
     struct service_reference* sref = NULL;
     struct service_desc* sdesc = NULL;
-    struct service_resolution_stat sres;
+    struct service_info_stat sres;
 
     GArray* svc_list = NULL;
 
@@ -1017,7 +1017,7 @@ static int local_unregister_services(service_resolver* resolver, service_resolve
 
             if(ref_list) {
                 bzero(&sres, sizeof(sres));
-                init_resolution_from_reference(&sres.res, sref);
+                init_resolution_from_reference(&sres.service, sref);
                 g_array_append_val(ref_list, sres);
             }
 
@@ -1036,7 +1036,7 @@ static int local_unregister_services(service_resolver* resolver, service_resolve
 
     if(peer) {
         lres->rpath->interface->remove_resolutions(lres->rpath,
-                (struct service_resolution_stat*) ref_list->data, ref_list->len);
+                (struct service_info_stat*) ref_list->data, ref_list->len);
         g_array_free(ref_list, TRUE);
     }
 
@@ -1190,7 +1190,7 @@ static int local_get_service_updates(service_resolver* resolver, service_resolve
 
     struct sv_local_resolver* lres = (struct sv_local_resolver*) resolver;
     struct service_reference** sref = NULL;
-    struct service_resolution_stat* sres = NULL;
+    struct service_info_stat* sres = NULL;
     size_t count = 0;
     int stat_index = 0;
     int resolutions = 0;
@@ -1210,7 +1210,7 @@ static int local_get_service_updates(service_resolver* resolver, service_resolve
             for(; i < num_svc; i++) {
                 /* might need to specify resolutions vs. resolution stats*/
                 resolutions = lres->rpath->interface->get_resolutions(lres->rpath, &services[i],
-                        (struct service_resolution**) &sres);
+                        (struct service_info**) &sres);
 
                 if(sres) {
 
@@ -1220,17 +1220,17 @@ static int local_get_service_updates(service_resolver* resolver, service_resolve
                         istat->bytes_resolved = sres[j].bytes_resolved;
                         istat->duration_sec = sres[j].duration_sec;
                         istat->duration_nsec = sres[j].duration_nsec;
-                        istat->hard_timeout = sres[j].res.hard_timeout;
-                        istat->idle_timeout = sres[j].res.idle_timeout;
-                        istat->priority = sres[j].res.priority;
-                        istat->weight = sres[j].res.weight;
+                        istat->hard_timeout = sres[j].service.hard_timeout;
+                        istat->idle_timeout = sres[j].service.idle_timeout;
+                        istat->priority = sres[j].service.priority;
+                        istat->weight = sres[j].service.weight;
                         istat->packets_resolved = sres[j].packets_resolved;
                         istat->tokens_consumed = sres[j].tokens_consumed;
 
-                        memcpy(&istat->service.service, &sres[j].res.srvid,
+                        memcpy(&istat->service.service, &sres[j].service.srvid,
                                 sizeof(struct service_id));
-                        istat->service.flags = sres[j].res.sv_flags;
-                        istat->service.prefix = sres[j].res.sv_prefix_bits;
+                        istat->service.flags = sres[j].service.srvid_flags;
+                        istat->service.prefix = sres[j].service.srvid_prefix_bits;
 
                         stat_index++;
                     }
@@ -1470,7 +1470,7 @@ static void add_peer_resolution(struct sv_local_resolver* lres, service_resolver
 
     service_table_add_service_reference(&lres->resolution_table, ref);
 
-    struct service_resolution res;
+    struct service_info res;
     init_resolution_from_reference(&res, ref);
 
     lres ->rpath->interface->add_resolutions(lres->rpath, &res, 1);

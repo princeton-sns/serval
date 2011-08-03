@@ -16,26 +16,6 @@ extern void netlink_init(void);
 extern void netlink_fini(void);
 #endif
 
-int libstack_configure_interface(const char *ifname, 
-                                 const struct net_addr *ipaddr,
-                                 unsigned short flags)
-{
-	struct ctrlmsg_iface_conf cm;
-
-        if (ifname)
-                return -1;
-
-        memset(&cm, 0, sizeof(cm));
-	cm.cmh.type = CTRLMSG_TYPE_IFACE_CONF;
-	cm.cmh.len = sizeof(cm);
-	strncpy(cm.ifname, ifname, IFNAMSIZ - 1);
-        if (ipaddr)
-                memcpy(&cm.ipaddr, ipaddr, sizeof(*ipaddr));
-       	cm.flags = flags;
-
-	return event_sendmsg(&cm, cm.cmh.len);
-}
-
 int libstack_add_service(const struct service_id *srvid,
                          unsigned int prefix_bits,
                          const struct in_addr *ipaddr)
@@ -48,13 +28,14 @@ int libstack_add_service(const struct service_id *srvid,
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_ADD_SERVICE;
         cm.cmh.len = sizeof(cm);
-        cm.services[0].service.sv_prefix_bits = 
-                (prefix_bits > 255 || prefix_bits == 0) ? 255 : prefix_bits;
-        memcpy(&cm.services[0].service.sv_srvid, srvid, sizeof(*srvid));
-        memcpy(&cm.services[0].address, ipaddr, sizeof(*ipaddr));
+        cm.service[0].srvid_prefix_bits = 
+                (prefix_bits > SERVICE_ID_DEFAULT_PREFIX) ?
+                SERVICE_ID_DEFAULT_PREFIX : prefix_bits;
+        memcpy(&cm.service[0].srvid, srvid, sizeof(*srvid));
+        memcpy(&cm.service[0].address, ipaddr, sizeof(*ipaddr));
 	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
         
-        LOG_DBG("prefix_bits=%u\n", cm.services[0].service.sv_prefix_bits);
+        LOG_DBG("prefix_bits=%u\n", cm.service[0].srvid_prefix_bits);
         return event_sendmsg(&cm, cm.cmh.len);
 }
 
@@ -70,12 +51,13 @@ int libstack_del_service(const struct service_id *srvid,
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
         cm.cmh.len = CTRLMSG_SERVICE_LEN(1);
-        cm.services[0].service.sv_prefix_bits = 
-                (prefix_bits > 255 || prefix_bits == 0) ? 255 : prefix_bits;
-        memcpy(&cm.services[0].service.sv_srvid, srvid, sizeof(*srvid));
+        cm.service[0].srvid_prefix_bits = 
+                (prefix_bits > SERVICE_ID_DEFAULT_PREFIX) ? 
+                SERVICE_ID_DEFAULT_PREFIX : prefix_bits;
+        memcpy(&cm.service[0].srvid, srvid, sizeof(*srvid));
 
         if (ipaddr) {
-                memcpy(&cm.services[0].address, ipaddr, sizeof(*ipaddr));
+                memcpy(&cm.service[0].address, ipaddr, sizeof(*ipaddr));
         }
 	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
         

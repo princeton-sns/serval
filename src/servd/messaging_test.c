@@ -57,7 +57,7 @@ extern message_channel* create_udp_message_channel(struct sockaddr_sv* local,
 static int test_service_registered(resolution_path_callback* cb, struct service_desc* service);
 static int test_service_unregistered(resolution_path_callback* cb, struct service_desc* service);
 static int test_stat_update(resolution_path_callback* cb,
-        struct service_resolution_stat* res_stats, size_t scount);
+        struct service_info_stat* res_stats, size_t scount);
 
 static resolution_path_callback test_path_callback = {
 //eh?
@@ -125,15 +125,16 @@ static int test_service_unregistered(resolution_path_callback* cb, struct servic
 }
 
 static int test_stat_update(resolution_path_callback* cb,
-        struct service_resolution_stat* res_stats, size_t scount) {
-    struct service_resolution_stat* stat = NULL;
+        struct service_info_stat* res_stats, size_t scount) {
+    struct service_info_stat* stat = NULL;
 
     int i = 0;
     for(i = 0; i < scount; i++) {
         stat = &res_stats[i];
 
-        LOG_DBG("Resolution path services updated: %s @ %s\n", service_id_to_str(
-                        &stat->res.srvid), inet_ntoa(stat->res.address.net_un.un_ip));
+        LOG_DBG("Resolution path services updated: %s @ %s\n", 
+		service_id_to_str(&stat->service.srvid), 
+		inet_ntoa(stat->service.address.net_un.un_ip));
 
     }
     updated += scount;
@@ -272,8 +273,8 @@ void init_local_address_list(service_resolver* resolver) {
 
 }
 
-static int test_resolution_equality(struct service_resolution* test_res,
-        struct service_resolution* orig_res, int count) {
+static int test_resolution_equality(struct service_info* test_res,
+        struct service_info* orig_res, int count) {
 
     int tmatch = 0;
     int matched[count];
@@ -295,8 +296,8 @@ static int test_resolution_equality(struct service_resolution* test_res,
         if(tmatch == i) {
             printf(
                     "Could not match test res: %s prefix: %i flags: %i addr: %i weight: %i priority: %i\n",
-                    service_id_to_str(&test_res->srvid), test_res->sv_prefix_bits,
-                    test_res->sv_flags, test_res->address.net_un.un_ip.s_addr, test_res->weight,
+                    service_id_to_str(&test_res->srvid), test_res->srvid_prefix_bits,
+                    test_res->srvid_flags, test_res->address.net_un.un_ip.s_addr, test_res->weight,
                     test_res->priority);
             return 0;
         }
@@ -485,11 +486,11 @@ static void test_resolution_path(void* data) {
     assert(srv_stats.packets_resolved == packets_resolved);
 
     /*add resolutions*/
-    struct service_resolution resolutions[TEST_RESOLUTION_COUNT];
-    struct service_resolution_stat res_stats[TEST_RESOLUTION_COUNT];
+    struct service_info resolutions[TEST_RESOLUTION_COUNT];
+    struct service_info_stat res_stats[TEST_RESOLUTION_COUNT];
 
-    bzero(resolutions, TEST_RESOLUTION_COUNT * sizeof(struct service_resolution));
-    bzero(res_stats, TEST_RESOLUTION_COUNT * sizeof(struct service_resolution_stat));
+    bzero(resolutions, TEST_RESOLUTION_COUNT * sizeof(struct service_info));
+    bzero(res_stats, TEST_RESOLUTION_COUNT * sizeof(struct service_info_stat));
 
     bzero(&sdesc, sizeof(sdesc));
     sdesc.service.srv_un.un_id8[0] = 128;
@@ -507,18 +508,18 @@ static void test_resolution_path(void* data) {
         initialize_service_id(&sdesc.service, 8);
         sprintf(buffer + 8, "%i", i + 1);
         memcpy(&resolutions[i].srvid, &sdesc.service, sizeof(sdesc.service));
-        resolutions[i].sv_flags = sdesc.flags;
-        resolutions[i].sv_prefix_bits = sdesc.prefix;
+        resolutions[i].srvid_flags = sdesc.flags;
+        resolutions[i].srvid_prefix_bits = sdesc.prefix;
         resolutions[i].priority = i * 100;
         resolutions[i].weight = i * 5 + 37;
         inet_aton(buffer, &resolutions[i].address.net_un.un_ip);
 
         printf("Initialized res %i: %s addr(%s %u) flags(%i) prefix(%i) priority(%i) weight(%i)\n",
                 i, service_id_to_str(&resolutions[i].srvid), buffer,
-                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].sv_flags,
-                resolutions[i].sv_prefix_bits, resolutions[i].priority, resolutions[i].weight);
+                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].srvid_flags,
+                resolutions[i].srvid_prefix_bits, resolutions[i].priority, resolutions[i].weight);
 
-        memcpy(&res_stats[i].res, &resolutions[i], sizeof(*resolutions));
+        memcpy(&res_stats[i].service, &resolutions[i], sizeof(*resolutions));
     }
 
     retval = rpath->interface->add_resolutions(rpath, resolutions, TEST_RESOLUTION_COUNT);
@@ -530,16 +531,16 @@ static void test_resolution_path(void* data) {
     sdesc.flags = 0;
     sdesc.prefix = 8;
 
-    struct service_resolution* ret_res;
+    struct service_info* ret_res;
 
     for(i = 0; i < TEST_RESOLUTION_COUNT; i++) {
         memcpy(&sdesc.service, &resolutions[i].srvid, sizeof(sdesc.service));
-        sdesc.prefix = resolutions[i].sv_prefix_bits;
+        sdesc.prefix = resolutions[i].srvid_prefix_bits;
 
         //        printf("Initialized res %i: %s addr(%s %u) flags(%i) prefix(%i) priority(%i) weight(%i)\n",
         //                i, service_id_to_str(&resolutions[i].srvid), buffer,
         //                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].sv_flags,
-        //                resolutions[i].sv_prefix_bits, resolutions[i].priority, resolutions[i].weight);
+        //                resolutions[i].srvid_prefix_bits, resolutions[i].priority, resolutions[i].weight);
 
         retval = rpath->interface->get_resolutions(rpath, &sdesc, &ret_res);
         assert(retval == 1);
@@ -549,15 +550,15 @@ static void test_resolution_path(void* data) {
 
     /*modify resolutions*/
     for(i = 0; i < TEST_RESOLUTION_COUNT; i++) {
-        resolutions[i].sv_flags = sdesc.flags | SVSF_DOMAIN_SCOPE;
-        //resolutions[i].sv_prefix_bits = sdesc.prefix;
+        resolutions[i].srvid_flags = sdesc.flags | SVSF_DOMAIN_SCOPE;
+        //resolutions[i].srvid_prefix_bits = sdesc.prefix;
         resolutions[i].priority = i * 1000 + 5;
         resolutions[i].weight = i * 3 + 11;
 
         printf("Modified res %i: %s addr(%s %u) flags(%i) prefix(%i) priority(%i) weight(%i)\n", i,
                 service_id_to_str(&resolutions[i].srvid), buffer,
-                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].sv_flags,
-                resolutions[i].sv_prefix_bits, resolutions[i].priority, resolutions[i].weight);
+                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].srvid_flags,
+                resolutions[i].srvid_prefix_bits, resolutions[i].priority, resolutions[i].weight);
 
         //inet_aton(buffer, &resolutions[i].address.net_un.un_ip);
     }
@@ -568,12 +569,12 @@ static void test_resolution_path(void* data) {
 
     for(i = 0; i < TEST_RESOLUTION_COUNT; i++) {
         memcpy(&sdesc.service, &resolutions[i].srvid, sizeof(sdesc.service));
-        sdesc.prefix = resolutions[i].sv_prefix_bits;
+        sdesc.prefix = resolutions[i].srvid_prefix_bits;
 
         //        printf("Initialized res %i: %s addr(%s %u) flags(%i) prefix(%i) priority(%i) weight(%i)\n",
         //                i, service_id_to_str(&resolutions[i].srvid), buffer,
-        //                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].sv_flags,
-        //                resolutions[i].sv_prefix_bits, resolutions[i].priority, resolutions[i].weight);
+        //                resolutions[i].address.net_un.un_ip.s_addr, resolutions[i].srvid_flags,
+        //                resolutions[i].srvid_prefix_bits, resolutions[i].priority, resolutions[i].weight);
 
         retval = rpath->interface->get_resolutions(rpath, &sdesc, &ret_res);
         assert(retval == 1);
@@ -622,8 +623,8 @@ static void test_resolution_path(void* data) {
     for(i = 0; i < TEST_RESOLUTION_COUNT; i++) {
 
         memcpy(&instaddr.service.sv_srvid, &resolutions[i].srvid, sizeof(instaddr.service.sv_srvid));
-        instaddr.service.sv_prefix_bits = resolutions[i].sv_prefix_bits;
-        instaddr.service.sv_flags = resolutions[i].sv_flags;
+        instaddr.service.sv_prefix_bits = resolutions[i].srvid_prefix_bits;
+        instaddr.service.sv_flags = resolutions[i].srvid_flags;
         memcpy(&instaddr.address.sin.sin_addr, &resolutions[i].address.net_un.un_ip,
                 sizeof(instaddr.address.sin.sin_addr));
 
