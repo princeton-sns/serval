@@ -247,4 +247,7 @@ void serval_sal_done(struct sock *sk);
 
 #define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +           \
                                sizeof(struct serval_hdr))
+
+extern int serval_sal_forwarding;
+
 #endif /* _SERVAL_SAL_H_ */

@@ -889,9 +889,6 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, match);
         
         if (n) {
-                LOG_DBG("service prefixes=%u:%u\n",
-                        bst_node_prefix_bits(n), prefix);
-                
                 if (type != SERVICE_ENTRY_EXACT ||
                     bst_node_prefix_bits(n) == prefix)
                         se = get_service(n);

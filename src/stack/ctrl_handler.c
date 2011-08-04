@@ -8,8 +8,7 @@
 #include <net/route.h>
 #endif
 #include "ctrl.h"
-
-extern atomic_t serval_transit;
+#include "serval_sal.h"
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
@@ -211,7 +210,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 static int ctrl_handle_capabilities_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_capabilities *cmt = (struct ctrlmsg_capabilities*)cm;
-        atomic_set(&serval_transit, cmt->capabilities & SVSTK_TRANSIT);
+        serval_sal_forwarding = cmt->capabilities & SVSTK_TRANSIT;
         return 0;
 }
 
@@ -343,7 +342,7 @@ static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 
         memset(&cms->stats, 0, sizeof(cms->stats));
         
-        if (atomic_read(&serval_transit)) {
+        if (serval_sal_forwarding) {
                 cms->stats.capabilities = SVSTK_TRANSIT;
         }
 

@@ -93,6 +93,7 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
 #else
         /* TODO: Implement something useful here. */
         kfree_skb(skb);
+        LOG_INF("Dropping packet, not implemented!\n");
         return NET_RX_DROP;
 #endif
 

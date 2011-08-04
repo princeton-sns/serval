@@ -25,8 +25,6 @@
 #include <serval_request_sock.h>
 #include <service.h>
 
-extern int serval_tcp_rcv(struct sk_buff *);
-extern int serval_udp_rcv(struct sk_buff *);
 extern atomic_t serval_nr_socks;
 
 static struct net_addr local_addr = {
@@ -52,7 +50,7 @@ static const char *serval_pkt_names[] = {
 /* Backoff multipliers for retransmission, fail when reaching 0. */
 static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
-atomic_t serval_transit = ATOMIC_INIT(0);
+int serval_sal_forwarding __read_mostly = 1;
 
 static int serval_sal_state_process(struct sock *sk, 
                                     struct serval_hdr *sh, 
@@ -1754,22 +1752,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 }
 
                 next_dest = service_resolution_iter_next(&iter);
-
-                if (next_dest == NULL) {
-                        cskb = skb;
-                } else {
-                        cskb = skb_clone(skb, GFP_ATOMIC);
-
-                        if (!cskb) {
-                                LOG_ERR("Skb allocation failed\n");
-                                kfree_skb(skb);
-                                err = -ENOBUFS;
-                                break;
-                        }
-                        /* Cloned skb will have no socket set. */
-                        //skb_serval_set_owner_w(cskb, sk);
-                }
-
+                
                 if (is_sock_dest(dest)) {
                         /* local resolution */
                         *sk = dest->dest_out.sk;
@@ -1777,6 +1760,21 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         err = SAL_RESOLVE_DEMUX;
                         break;
                 } else {
+                        if (next_dest == NULL) {
+                                cskb = skb;
+                        } else {
+                                cskb = skb_clone(skb, GFP_ATOMIC);
+                                
+                                if (!cskb) {
+                                        LOG_ERR("Skb allocation failed\n");
+                                        kfree_skb(skb);
+                                        err = -ENOBUFS;
+                                        break;
+                                }
+                                /* Cloned skb will have no socket set. */
+                                //skb_serval_set_owner_w(cskb, sk);
+                        }
+                        
                         /* Need to drop dst since this packet is
                          * routed for input. Otherwise, kernel IP
                          * stack will be confused when transmitting
@@ -1787,6 +1785,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         iph_len = iph->ihl << 2;
                         skb_push(cskb, iph_len);
 
+                        LOG_DBG("Forwarding packet\n");
 #if defined(OS_LINUX_KERNEL)
                         err = ip_route_input(cskb, 
                                              iph->daddr, 
@@ -1820,8 +1819,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         serval_sal_add_source_ext(cskb, sh, 
                                                   iph, iph_len);
 
-                        //struct serval_sock *ssk = serval_sk(sk);
-                        //err = ssk->af_ops->queue_xmit(cskb);
                         err = serval_ipv4_forward_out(cskb);
 
                         if (err < 0) {
@@ -1935,7 +1932,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         if (!srvid)
                 return SAL_RESOLVE_ERROR;
 
-        if (atomic_read(&serval_transit)) {
+        if (serval_sal_forwarding) {
                 ret = serval_sal_resolve_service(skb, sh, srvid, sk);
         } else {
                 *sk = serval_sal_demux_service(skb, sh, srvid);
