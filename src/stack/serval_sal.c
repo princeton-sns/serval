@@ -1688,6 +1688,52 @@ enum {
         SAL_RESOLVE_DROP,
 };
 
+static int serval_sal_update_csum(struct sk_buff *skb,
+                                  unsigned int ip_len,
+                                  unsigned int serval_len)
+{
+        struct iphdr *iph = ip_hdr(skb);
+        struct serval_hdr *sh = serval_hdr(skb);
+        
+        pskb_pull(skb, serval_len);
+        skb_reset_transport_header(skb);
+        skb->ip_summed = CHECKSUM_NONE;
+        
+        switch (sh->protocol) {
+        case SERVAL_PROTO_TCP:
+                tcp_hdr(skb)->check = 0;
+                skb->csum = csum_partial(tcp_hdr(skb),
+                                         skb->len, 0);
+                tcp_hdr(skb)->check = 
+                        csum_tcpudp_magic(iph->saddr, 
+                                          iph->daddr, 
+                                          skb->len, 
+                                          IPPROTO_TCP, 
+                                          skb->csum);
+                break;
+        case SERVAL_PROTO_UDP:
+                udp_hdr(skb)->check = 0;
+                skb->csum = csum_partial(udp_hdr(skb),
+                                         skb->len, 0);
+                udp_hdr(skb)->check = 
+                        csum_tcpudp_magic(iph->saddr, 
+                                          iph->daddr, 
+                                          skb->len, 
+                                          IPPROTO_UDP, 
+                                          skb->csum);
+                break;
+        default:
+                LOG_INF("Unknown transport protocol %u, "
+                        "forgoing checksum calculation\n",
+                        sh->protocol);
+                break;
+        }
+        /* Push back to Serval header */
+        skb_push(skb, serval_len);
+        
+        return 0;
+}
+
 static int serval_sal_resolve_service(struct sk_buff *skb, 
                                       struct serval_hdr *sh,
                                       struct service_id *srvid,
@@ -1805,41 +1851,10 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         serval_sal_add_source_ext(cskb, sh, iph, iph_len);
 
                         /* Must recalculate transport checksum. */
-                        pskb_pull(skb, hdr_len);
-                        skb_reset_transport_header(skb);
-                        skb->ip_summed = CHECKSUM_NONE;
-                        
-                        switch (sh->protocol) {
-                        case SERVAL_PROTO_TCP:
-                                tcp_hdr(skb)->check = 0;
-                                skb->csum = csum_partial(tcp_hdr(skb),
-                                                         skb->len, 0);
-                                tcp_hdr(skb)->check = 
-                                        csum_tcpudp_magic(iph->saddr, 
-                                                          iph->daddr, 
-                                                          skb->len, 
-                                                          IPPROTO_TCP, 
-                                                          skb->csum);
-                                break;
-                        case SERVAL_PROTO_UDP:
-                                udp_hdr(skb)->check = 0;
-                                skb->csum = csum_partial(udp_hdr(skb),
-                                                         skb->len, 0);
-                                udp_hdr(skb)->check = 
-                                        csum_tcpudp_magic(iph->saddr, 
-                                                          iph->daddr, 
-                                                          skb->len, 
-                                                          IPPROTO_UDP, 
-                                                          skb->csum);
-                                break;
-                        default:
-                                LOG_INF("Unknown transport protocol %u, "
-                                        "forgoing checksum calculation\n",
-                                        sh->protocol);
-                                break;
-                        }
+                        serval_sal_update_csum(cskb, iph_len, hdr_len);
+        
                         /* Push back to IP header */
-                        skb_push(cskb, iph_len + hdr_len);
+                        skb_push(cskb, iph_len);
 
                         if (serval_ipv4_forward_out(cskb)) {
                                 /* serval_ipv4_forward_out has taken
