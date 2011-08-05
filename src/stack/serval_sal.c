@@ -1723,8 +1723,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 return SAL_RESOLVE_NO_MATCH;
         }
 
-        LOG_DBG("Service entry count=%u\n", se->count);
-
 	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
 
         /*
