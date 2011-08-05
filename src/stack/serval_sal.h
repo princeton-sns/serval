@@ -5,39 +5,58 @@
 #include <serval/skbuff.h>
 #include <serval/sock.h>
 #include <netinet/serval.h>
+#include <serval_sock.h>
 
 int serval_sal_xmit_skb(struct sk_buff *skb);
 
 struct service_entry;
 
 /* 
-   WARNING:
+   NOTE:
    
    We must be careful that this struct does not overflow the 48 bytes
    that the skb struct gives us in the cb field.
+   
+   Transport protocols (i.e., in most cases TCP) reserve some room for
+   lower layer control blocks (e.g., IPv4/IPv6) at the head of their
+   own control block. This is done in order to keep the lower layer
+   information when processing incoming packets. We should therefore
+   be careful not to overwrite the IP control block in incoming
+   packets in case TCP expects it to be there.
 
-   NOTE: Currently adds up to 44 bytes (non packed) on 64-bit platform.
-   Should probably find another solution for storing a reference to
-   the service id instead of a copy.
-*/
-struct serval_skb_cb {
-        enum serval_packet_type pkttype;
-	struct net_addr addr;
-        uint32_t seqno;
-        struct service_id srvid;
-};
+   For outgoing packets, we are free to overwrite the control block
+   with our own information. Any packets queued by the transport
+   protocol are cloned before transmission, so the original
+   information will be preserved in the queued packet.
+
+   We should be careful to do the same in the SAL layer when queuing
+   packets; i.e., we should always clone queued packets before we
+   transmit.
+ */
+ struct serval_skb_cb {
+         u8 pkttype;
+         u8 flags;
+#define SVH_ACK 0x01
+#define SVH_CONN_ACK 0x02
+         u32 seqno;
+         //struct serval_hdr *sh;
+         struct service_id *srvid;
+ };
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 {
-	struct serval_skb_cb * sscb = 
-		(struct serval_skb_cb *)&(skb)->cb[0];
+        struct serval_skb_cb * sscb = 
+                (struct serval_skb_cb *)&(skb)->cb[0];
 #if defined(ENABLE_DEBUG)
-        if (sizeof(struct serval_skb_cb) > sizeof(skb->cb)) {
-                LOG_WARN("serval_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
-                         "skb->cb may overflow!\n", 
-                         sizeof(struct serval_skb_cb), 
-                         sizeof(skb->cb));
-        } /*
+        /*
+          if (sizeof(struct serval_skb_cb) > sizeof(skb->cb)) {
+                 LOG_WARN("serval_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
+                          "skb->cb may overflow!\n", 
+                          sizeof(struct serval_skb_cb), 
+                          sizeof(skb->cb));
+         } 
+         */
+         /*
             else {
                 LOG_WARN("serval_skb_cb (%zu bytes) skb->cb (%zu bytes).\n", 
                          sizeof(struct serval_skb_cb), 
@@ -216,5 +235,24 @@ void serval_sal_close(struct sock *sk, long timeout);
 int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);
+int serval_sal_rcv_transport_fin(struct sock *sk, struct sk_buff *skb);
+void serval_sal_done(struct sock *sk);
+
+static inline struct serval_hdr *serval_hdr(struct sk_buff *skb)
+{
+        return (struct serval_hdr *)skb_transport_header(skb);
+}
+
+#define EXTRA_HDR_SIZE (20)
+#define IP_HDR_SIZE sizeof(struct iphdr)
+/* payload + LL + IP + extra */
+#define MAX_SERVAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
+                        sizeof(struct serval_hdr) +                 \
+                        sizeof(struct serval_connection_ext))
+
+#define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +           \
+                               sizeof(struct serval_hdr))
+
+extern int serval_sal_forwarding;
 
 #endif /* _SERVAL_SAL_H_ */

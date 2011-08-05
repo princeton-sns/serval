@@ -122,31 +122,31 @@ operator!=(const sv_proto_t &u, int v)
 }
 
 
-// sv_sock_t
+// struct flow_id
 
 inline bool
-operator==(const sv_sock_t &u, const sv_sock_t &v)
+operator==(const struct flow_id &u, const struct flow_id &v)
 {
     return memcmp(&u, &v, sizeof(u)) == 0;
 }
 
 inline bool
-operator!=(const sv_sock_t &u, const sv_sock_t &v)
+operator!=(const struct flow_id &u, const struct flow_id &v)
 {
     return !(u == v);
 }
 
 inline size_t
-hashcode(const sv_sock_t &v)
+hashcode(const struct flow_id &v)
 {
-    return v.s_id;
+    return (size_t)v.s_id32;
 }
 
-inline sv_sock_t
+inline struct flow_id
 ip_to_flow_id(uint32_t ip)
 {
-    sv_sock_t p;
-    p.s_id = ip & 0xffff;
+    struct flow_id p;
+    p.s_id32 = ip;
     return p;
 }
 

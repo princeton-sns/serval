@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #ifndef _LIBSTACK_CTRLMSG_H
 #define _LIBSTACK_CTRLMSG_H
 
@@ -7,86 +8,89 @@
 #include <netinet/in.h>
 #endif
 
+/*
+  Control message types.
+
+  NOTE: when adding a new type, also make sure the size array in
+  ctrlmsg.c is updated accordingly.
+*/
 enum ctrlmsg_type {
-
-    CTRLMSG_TYPE_JOIN = 0,
-    CTRLMSG_TYPE_LEAVE = 1,
-    CTRLMSG_TYPE_REGISTER = 2,
-    CTRLMSG_TYPE_UNREGISTER = 3,
-    CTRLMSG_TYPE_RESOLVE = 4,
-
-    CTRLMSG_TYPE_IFACE_CONF = 5,
-    CTRLMSG_TYPE_ADD_SERVICE = 6,
-    CTRLMSG_TYPE_DEL_SERVICE = 7,
-    CTRLMSG_TYPE_MOD_SERVICE = 8,
-    CTRLMSG_TYPE_GET_SERVICE = 9,
-    CTRLMSG_TYPE_SERVICE_STATS = 10,
-    CTRLMSG_TYPE_CAPABILITIES = 11,
-    CTRLMSG_TYPE_UNKNOWN = 1000,
+        CTRLMSG_TYPE_REGISTER = 0,
+        CTRLMSG_TYPE_UNREGISTER,
+        CTRLMSG_TYPE_RESOLVE,
+        CTRLMSG_TYPE_IFACE_CONF,
+        CTRLMSG_TYPE_ADD_SERVICE,
+        CTRLMSG_TYPE_DEL_SERVICE,
+        CTRLMSG_TYPE_MOD_SERVICE,
+        CTRLMSG_TYPE_GET_SERVICE,
+        CTRLMSG_TYPE_SERVICE_STATS,
+        CTRLMSG_TYPE_CAPABILITIES,
+        _CTRLMSG_TYPE_MAX,
 };
 
-/* this should simply use sv_instance_addr
- * and include an extension with stat values
- * */
-struct service_resolution {
-    /*service desc up top*/
-    uint16_t type;
-    uint8_t sv_prefix_bits;
-    uint8_t sv_flags;
-    struct service_id srvid;
-    struct net_addr address;
-    int if_index;
+struct service_info {
+        /*service desc up top*/
+        unsigned int type;
+        struct service_id srvid;
+        unsigned short srvid_prefix_bits;
+        unsigned short srvid_flags;
+        struct net_addr address;
+        int if_index;
 
-    uint32_t priority; /* Priority level of flow entry. */
-    uint32_t weight;
+        uint32_t priority; /* Priority level of flow entry. */
+        uint32_t weight;
 
-    uint32_t idle_timeout; /* Idle time before discarding (seconds). */
-    uint32_t hard_timeout; /* Max time before discarding (seconds). */
+        uint32_t idle_timeout; /* Idle time before discarding (seconds). */
+        uint32_t hard_timeout; /* Max time before discarding (seconds). */
 
-    //if address is zero'd out, then resolve "up" to the user-space process
-};
+        /* if address is zero'd out, then resolve "up" to the
+           user-space process */
+} __attribute__((packed));
 
-struct service_resolution_stat {
-    struct service_resolution res;
-    uint32_t duration_sec;
-    uint32_t duration_nsec;
-    uint32_t packets_resolved;
-    uint32_t bytes_resolved;
-    uint32_t packets_dropped;
-    uint32_t bytes_dropped;
-    uint32_t tokens_consumed;
-};
+struct service_info_stat {
+        struct service_info service;
+        uint32_t duration_sec;
+        uint32_t duration_nsec;
+        uint32_t packets_resolved;
+        uint32_t bytes_resolved;
+        uint32_t packets_dropped;
+        uint32_t bytes_dropped;
+        uint32_t tokens_consumed;
+} __attribute__((packed));
 
 enum sv_stack_capabilities {
-    SVSTK_TRANSIT = 1 << 0, /*Can perform resolution/redireciton - if not set, then the SR is terminal for non-specified prefixes*/
+        SVSTK_TRANSIT = 1 << 0, /*Can perform resolution/redireciton -
+                                 * if not set, then the SR is terminal
+                                 * for non-specified prefixes*/
 
 };
 
 struct service_stat {
-    uint32_t capabilities;
-    uint32_t services;
-    uint32_t instances;
-    uint32_t packets_resolved;
-    uint32_t bytes_resolved;
-    uint32_t bytes_dropped;
-    uint32_t packets_dropped;
-};
+        uint32_t capabilities;
+        uint32_t services;
+        uint32_t instances;
+        uint32_t packets_resolved;
+        uint32_t bytes_resolved;
+        uint32_t bytes_dropped;
+        uint32_t packets_dropped;
+} __attribute__((packed));
 
 struct ctrlmsg {
-    unsigned char type;
-    unsigned int len; /* Length, including header and payload */
-    unsigned char payload[0];
+        unsigned short type;
+        unsigned short len; /* Length, including header and payload */
+        unsigned char payload[0];
 }__attribute__((packed));
 
 #define CTRLMSG_SIZE (sizeof(struct ctrlmsg))
 
-/* this should probably include address as well - whatever was passed in to bind()*/
+/* this should probably include address as well - whatever was passed
+ * in to bind()*/
 struct ctrlmsg_register {
-    struct ctrlmsg cmh;
-    uint8_t sv_flags;
-    uint8_t sv_prefix_bits;
-    struct service_id srvid;
-};
+        struct ctrlmsg cmh;
+        struct service_id srvid;
+        unsigned short srvid_prefix_bits;
+        unsigned short srvid_flags;
+} __attribute__((packed));
 
 #define CTRLMSG_REGISTER_SIZE (sizeof(struct ctrlmsg_register))
 #define CTRLMSG_UNREGISTER_SIZE (sizeof(struct ctrlmsg_register))
@@ -96,62 +100,74 @@ struct ctrlmsg_register {
  * a buffer (skb) ID or the packet data
  */
 struct ctrlmsg_resolve {
-    struct ctrlmsg cmh;
-    uint32_t xid;
+        struct ctrlmsg cmh;
+        uint32_t xid;
 
-    uint8_t src_flags;
-    uint8_t src_prefix_bits;
-    struct service_id src_srvid;
-    struct net_addr src_address;
+        uint8_t src_flags;
+        uint8_t src_prefix_bits;
+        struct service_id src_srvid;
+        struct net_addr src_address;
 
-    /* address? */
-    uint8_t dst_flags;
-    uint8_t dst_prefix_bits;
-    struct service_id dst_srvid;
-};
+        /* address? */
+        uint8_t dst_flags;
+        uint8_t dst_prefix_bits;
+        struct service_id dst_srvid;
+} __attribute__((packed));
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 
 /* resolution lookup for a service id (prefix), returns all
  * matching resolutions
  */
-struct ctrlmsg_get_service {
-    struct ctrlmsg cmh;
-    uint32_t xid;
-    uint8_t sv_flags;
-    uint8_t sv_prefix_bits;
-    struct service_id srvid;
-};
+struct ctrlmsg_service {
+        struct ctrlmsg cmh;
+        uint32_t xid;
+        struct service_info service[1]; /* Always at least one
+                                            service entry */
+} __attribute__((packed));
 
-struct ctrlmsg_resolution {
-    struct ctrlmsg cmh;
-    uint32_t xid;
-    struct service_resolution resolution[0];
-};
+#define CTRLMSG_GET_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
+#define CTRLMSG_ADD_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
+#define CTRLMSG_DEL_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
+#define CTRLMSG_MOD_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
 
-#define CTRLMSG_GET_SERVICE_SIZE (sizeof(struct ctrlmsg_get_service))
-#define CTRLMSG_ADD_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
-#define CTRLMSG_REM_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
-#define CTRLMSG_MOD_SERVICE_SIZE (sizeof(struct ctrlmsg_resolution))
+#define CTRLMSG_SERVICE_LEN(num)                                        \
+        (sizeof(struct ctrlmsg_service) +                               \
+         ((num-1) * sizeof(struct service_info)))
 
-#define CTRL_NUM_SERVICES(ctrlmsg, size) ((size - sizeof(*ctrlmsg)) % sizeof(struct service_resolution) == 0 ? \
-        (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution) : 0)
+#define CTRLMSG_SERVICE_NUM(cmsg)                                   \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg_service) +        \
+          sizeof(struct service_info)) /                            \
+         sizeof(struct service_info))
 
-#define CTRL_NUM_STAT_SERVICES(ctrlmsg, size) ((size - sizeof(*ctrlmsg)) %  sizeof(struct service_resolution_stat) == 0 ? \
-        (size - sizeof(*ctrlmsg)) / sizeof(struct service_resolution_stat) : 0)
+struct ctrlmsg_service_stat {
+        struct ctrlmsg cmh;
+        uint32_t xid;
+        struct service_info_stat service[1]; /* Always at least one
+                                                 service entry */
+} __attribute__((packed));
 
-struct ctrlmsg_stats {
-    struct ctrlmsg cmh;
-    uint32_t xid;
-    struct service_stat stats;
-};
+#define CTRLMSG_SERVICE_STAT_LEN(num)                                   \
+        (sizeof(struct ctrlmsg_service) +                               \
+         ((num-1) * sizeof(struct service_info_stat)))
 
-#define CTRLMSG_STATS_SIZE (sizeof(struct ctrlmsg_stats))
+#define CTRLMSG_SERVICE_STAT_NUM(cmsg)                            \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg) +              \
+          sizeof(struct service_info_stat)) /                     \
+         sizeof(struct service_info_stat))
+
+struct ctrlmsg_service_stats {
+        struct ctrlmsg cmh;
+        uint32_t xid;
+        struct service_stat stats;
+} __attribute__((packed));
+
+#define CTRLMSG_SERVICE_STATS_SIZE (sizeof(struct ctrlmsg_service_stats))
 
 struct ctrlmsg_capabilities {
-    struct ctrlmsg cmh;
-    int capabilities;
-};
+        struct ctrlmsg cmh;
+        int capabilities;
+} __attribute__((packed));
 
 #define CTRLMSG_CAPABILITIES_SIZE (sizeof(struct ctrlmsg_capabilities))
 
@@ -159,27 +175,17 @@ struct ctrlmsg_capabilities {
 #define IFFLAG_HOST_CTRL_MODE 0x2
 
 struct ctrlmsg_iface_conf {
-    struct ctrlmsg cmh;
-    char ifname[IFNAMSIZ];
-    struct net_addr ipaddr;
-    unsigned short flags;
-};
+        struct ctrlmsg cmh;
+        char ifname[IFNAMSIZ];
+        struct net_addr ipaddr;
+        unsigned short flags;
+} __attribute__((packed));
 
 #define CTRLMSG_IFACE_CONF_SIZE (sizeof(struct ctrlmsg_iface_conf))
 
 enum {
-    CTRL_MODE_NET = 0, CTRL_MODE_HOST = 1
+        CTRL_MODE_NET = 0, CTRL_MODE_HOST = 1
 };
-
-struct ctrlmsg_service {
-    struct ctrlmsg cmh;
-    struct service_id srvid;
-    unsigned int prefix_bits;
-    struct in_addr ipaddr;
-    char ifname[IFNAMSIZ];
-};
-
-#define CTRLMSG_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
 
 #if defined(__linux__)
 #include <linux/netlink.h>

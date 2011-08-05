@@ -20,6 +20,7 @@
 #include <linux/hash.h>
 #else
 #include <stdint.h>
+#include "platform.h"
 
 #if defined(__BIONIC__)
 #if __SIZEOF_LONG__ == 8
@@ -43,9 +44,6 @@
 #else
 #error Wordsize not 32 or 64
 #endif
-
-typedef uint64_t u64;
-typedef uint32_t u32;
 
 static inline u64 hash_64(u64 val, unsigned int bits)
 {

@@ -15,10 +15,27 @@ MODULE_DESCRIPTION("Serval stack for Linux");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
 
-/* Debug defined in debug.c */
+/*
+  Module parameters
+  -----------------
+  Permissions (affect visibility in sysfs): 
+  0 = not visible in sysfs
+  S_IRUGO = world readable
+  S_IRUGO|S_IWUSR = root can change
+*/
+
+/* The debug parameter is defined in debug.c */
 extern unsigned int debug;
-module_param(debug, uint, 0);
+module_param(debug, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(debug, "Set debug level 0-6 (0=off).");
+
+unsigned int checksum_mode = 0;
+module_param(checksum_mode, uint, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(debug, "Set checksum mode (0=software, 1=hardware)");
+
+static char *ifname = NULL;
+module_param(ifname, charp, S_IRUGO);
+MODULE_PARM_DESC(ifname, "Resolve only on this device.");
 
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
@@ -31,6 +48,9 @@ static int dev_configuration(struct net_device *dev)
         */
         int ret;
         
+        if (ifname && strcmp(dev->name, ifname) != 0)
+                return 0;
+
         ret = dev_get_ipv4_broadcast(dev, &dst);
 
         if (ret == 1) {

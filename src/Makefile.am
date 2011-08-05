@@ -5,6 +5,6 @@ SUBDIRS = \
 	servd \
 	test
 
-if JAVA_BINDINGS
+if ENABLE_JAVA_BINDINGS
 SUBDIRS += javasock
 endif

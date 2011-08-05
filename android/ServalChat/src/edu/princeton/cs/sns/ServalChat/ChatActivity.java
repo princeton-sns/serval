@@ -1,13 +1,16 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package edu.princeton.cs.sns.ServalChat;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.InterruptedIOException;
+import java.io.OutputStreamWriter;
 import java.net.SocketTimeoutException;
 
 import edu.princeton.cs.sns.ServalChat.R;
-import serval.net.ServalDatagramSocket;
-import serval.net.ServalDatagramPacket;
+import serval.net.ServalSocket;
 import serval.net.ServiceID;
 import android.app.Activity;
 import android.os.Bundle;
@@ -27,7 +30,8 @@ public class ChatActivity extends Activity {
 	private EditText chatInput = null;
 	private Button sendButton = null;
 	private Button cancelButton = null;
-	private ServalDatagramSocket sock = null;
+	private ServalSocket sock = null;
+    private BufferedWriter out;
 	private TextReceiver textReceiver = null;
 	private Thread textReceiverThread = null;
 	
@@ -74,6 +78,8 @@ public class ChatActivity extends Activity {
 		textReceiver = new TextReceiver();
 		textReceiverThread = new Thread(textReceiver);
 		textReceiverThread.start();
+		
+
     }
     
     @Override
@@ -83,7 +89,11 @@ public class ChatActivity extends Activity {
 		
 		if (sock != null) {
 			Log.d("ServalChat", "Closing socket");
-			sock.close();
+			try {
+				sock.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 		if (textReceiverThread != null) {
 			textReceiver.signalExit();
@@ -103,9 +113,12 @@ public class ChatActivity extends Activity {
     
     private class TextReceiver implements Runnable {
 		private volatile boolean shouldExit = false;
-		private ServalDatagramPacket pack = 
-            new ServalDatagramPacket(new byte[1024], 1024);
+	    private BufferedReader in;
 		
+	    TextReceiver() {
+	    	
+	    }
+	    
 		private class ChatWindowUpdater implements Runnable {
 			String text;
 			
@@ -136,22 +149,27 @@ public class ChatActivity extends Activity {
 		
 		@Override
 		public void run() {
-			
 			Log.d("ServalChat", "Text receiver thread running");
 
 			try {
-				sock = new ServalDatagramSocket(new ServiceID((short) 32769));
+				sock = new ServalSocket();
+				Log.d("ServalChat", "Connected 1");
 				sock.setSoTimeout(3000);
 				statusText.post(new StatusUpdater("Connecting..."));
 				sock.connect(new ServiceID((short) 16385), 10000);
-				Log.d("ServalChat", "connected");
-				
+				Log.d("ServalChat", "connected 2");
 				statusText.post(new StatusUpdater("Connected"));
+				in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
+				out =  new BufferedWriter(new OutputStreamWriter(sock.getOutputStream()));
 			} catch (Exception e) {
 				Log.d("ServalChat", "Connection failed: " + e.getMessage());
 				statusText.post(new StatusUpdater("Connection failed: " + e.getMessage()));
 				if (sock != null) {
-					sock.close();
+					try {
+						sock.close();
+					} catch (IOException e1) {
+						e1.printStackTrace();
+					}
 					sock = null;
 				}
 				return;
@@ -160,15 +178,14 @@ public class ChatActivity extends Activity {
 			while (!shouldExit) {
 				try {
 					Log.d("ServalChat", "receiving...");
-					int len = sock.receive(pack);
+					
+					String rsp = in.readLine();
 
-					if (len == -1) {
-						// Other end closed
-						shouldExit = true;
+					if (rsp == null) {
+						// Other end closed.
 						break;
 					}
-					String rsp = new String(pack.getData(), 0, pack.getLength());
-					Log.d("ServalChat", "response length=" + pack.getLength());
+					
 					Log.d("ServalChat", rsp);
 					
 					chatWindow.post(new ChatWindowUpdater(rsp));
@@ -190,26 +207,28 @@ public class ChatActivity extends Activity {
 		Editable ed = chatInput.getText();
 		String msg = ed.toString();
 
-		if (msg.length() == 0) {
+		if (msg.length() == 0) 
 			return;
-		}
+		
         this.chatWindow.append("me: " + msg + "\n");
         
 		ed.clear();
 		
 		if (sock != null && sock.isConnected()) {
-			byte[] data = msg.getBytes();
-			
 			try {
-				ServalDatagramPacket pack = 
-                    new ServalDatagramPacket(data, data.length);
-				sock.send(pack);
+				out.write(msg);
+                out.newLine();
+                out.flush();
 			} catch (IOException e) {
-				// TODO Auto-generated catch block
 				e.printStackTrace();
 				Log.d("ServalChat", "Error: " + e.getMessage());
 				if (sock != null) {
-					sock.close();
+					try {
+						sock.close();
+					} catch (IOException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
 					sock = null;
 				}
 				//msg += " - failed!";

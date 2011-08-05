@@ -9,37 +9,28 @@
 #include <serval/bitops.h>
 #include <pthread.h>
 #include <serval_sock.h>
+#include "client.h"
 
 #define _SK_MEM_PACKETS		256
 #define _SK_MEM_OVERHEAD	(sizeof(struct sk_buff) + 256)
 #define SK_WMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
 #define SK_RMEM_MAX		(_SK_MEM_OVERHEAD * _SK_MEM_PACKETS)
 
+/* Run time adjustable parameters. */
+__u32 sysctl_wmem_max __read_mostly = SK_WMEM_MAX;
+__u32 sysctl_rmem_max __read_mostly = SK_RMEM_MAX;
+__u32 sysctl_wmem_default __read_mostly = SK_WMEM_MAX;
+__u32 sysctl_rmem_default __read_mostly = SK_RMEM_MAX;
+
+#if defined(OS_BSD)
+#define UIO_MAXIOV 1024
+#endif
+
+/* Maximal space eaten by iovec or ancilliary data plus some space */
+int sysctl_optmem_max __read_mostly = sizeof(unsigned long)*(2*UIO_MAXIOV+512);
+
 LIST_HEAD(proto_list);
 DEFINE_RWLOCK(proto_list_lock);
-
-/* From linux asm-generic/poll.h. Seems to be non-standardized */
-#ifndef POLLRDNORM 
-#define POLLRDNORM      0x0040
-#endif
-#ifndef POLLRDBAND
-#define POLLRDBAND      0x0080
-#endif
-#ifndef POLLWRNORM
-#define POLLWRNORM      0x0100
-#endif
-#ifndef POLLWRBAND
-#define POLLWRBAND      0x0200
-#endif
-#ifndef POLLMSG
-#define POLLMSG         0x0400
-#endif
-#ifndef POLLREMOVE
-#define POLLREMOVE      0x1000
-#endif
-#ifndef POLLRDHUP
-#define POLLRDHUP       0x2000
-#endif
 
 static void sock_def_destruct(struct sock *sk)
 {
@@ -49,13 +40,13 @@ static void sock_def_destruct(struct sock *sk)
 static void sock_def_wakeup(struct sock *sk)
 {
         struct socket_wq *wq = sk->sk_wq;
-
         read_lock(&sk->sk_callback_lock);
-        if (wq_has_sleeper(wq))
+        if (wq_has_sleeper(wq)) {
                 wake_up_interruptible_all(&wq->wait);
+        }
         read_unlock(&sk->sk_callback_lock);
 }
-/*
+
 static void sock_def_error_report(struct sock *sk)
 {
         struct socket_wq *wq = sk->sk_wq;
@@ -66,18 +57,22 @@ static void sock_def_error_report(struct sock *sk)
         sk_wake_async(sk, SOCK_WAKE_IO, POLL_ERR);
         read_unlock(&sk->sk_callback_lock);
 }
-*/
+
 static void sock_def_readable(struct sock *sk, int bytes)
 {
         /* TODO should differentiate between write and read sleepers
          * in the wait queue */
         struct socket_wq *wq = sk->sk_wq;
-        LOG_DBG("Sock readable, wake up sleepers? %i\n", wq_has_sleeper(wq));
+
         read_lock(&sk->sk_callback_lock);
         if (wq_has_sleeper(wq))
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
                                                 POLLRDNORM | POLLRDBAND);
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
+
+        if (sk->sk_socket)
+                client_send_have_data_msg(sk->sk_socket->client);
+        
         read_unlock(&sk->sk_callback_lock);
 }
 
@@ -134,13 +129,22 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_state_change	=	sock_def_wakeup;
 	sk->sk_data_ready	=	sock_def_readable;
 	sk->sk_write_space	=	sock_def_write_space;
+	sk->sk_error_report	=	sock_def_error_report;
 	sk->sk_destruct		=	sock_def_destruct;
 	sk->sk_backlog_rcv	=	sock_def_backlog_rcv;
 	sk->sk_write_pending	=	0;
 	sk->sk_rcvtimeo		=	MAX_SCHEDULE_TIMEOUT;
 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
 
+        spin_lock_init(&sk->sk_dst_lock);
         rwlock_init(&sk->sk_callback_lock);
+#if defined(OS_LINUX_KERNEL)
+	/*
+	 * Before updating sk_refcnt, we must commit prior changes to memory
+	 * (Documentation/RCU/rculist_nulls.txt for details)
+	 */
+	smp_wmb();
+#endif
 	atomic_set(&sk->sk_refcnt, 1);
 	atomic_set(&sk->sk_drops, 0);
 }
@@ -177,6 +181,25 @@ static void sock_net_set(struct sock *sk, struct net *net)
 	sk->sk_net = net;
 }
 
+void sk_setup_caps(struct sock *sk, struct dst_entry *dst)
+{
+        /*
+	__sk_dst_set(sk, dst);
+	sk->sk_route_caps = dst->dev->features;
+	if (sk->sk_route_caps & NETIF_F_GSO)
+		sk->sk_route_caps |= NETIF_F_GSO_SOFTWARE;
+	sk->sk_route_caps &= ~sk->sk_route_nocaps;
+	if (sk_can_gso(sk)) {
+		if (dst->header_len) {
+			sk->sk_route_caps &= ~NETIF_F_GSO_MASK;
+		} else {
+			sk->sk_route_caps |= NETIF_F_SG | NETIF_F_HW_CSUM;
+			sk->sk_gso_max_size = dst->dev->gso_max_size;
+		}
+	}
+        */
+}
+
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot)
 {
@@ -197,6 +220,34 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 	}
 
 	return sk;
+}
+
+struct dst_entry *__sk_dst_check(struct sock *sk, u32 cookie)
+{
+	struct dst_entry *dst = __sk_dst_get(sk);
+        
+        /*
+	if (dst && dst->obsolete && dst->ops->check(dst, cookie) == NULL) {
+		sk_tx_queue_clear(sk);
+		rcu_assign_pointer(sk->sk_dst_cache, NULL);
+		dst_release(dst);
+		return NULL;
+	}
+        */
+	return dst;
+}
+
+struct dst_entry *sk_dst_check(struct sock *sk, u32 cookie)
+{
+	struct dst_entry *dst = sk_dst_get(sk);
+        /*
+	if (dst && dst->obsolete && dst->ops->check(dst, cookie) == NULL) {
+		sk_dst_reset(sk);
+		dst_release(dst);
+		return NULL;
+	}
+        */
+	return dst;
 }
 
 struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
@@ -229,7 +280,7 @@ struct sock *sk_clone(const struct sock *sk, const gfp_t priority)
                 skb_queue_head_init(&newsk->sk_error_queue);
                 skb_queue_head_init(&newsk->sk_write_queue);
                 
-                //spin_lock_init(&newsk->sk_dst_lock);
+                spin_lock_init(&newsk->sk_dst_lock);
                 rwlock_init(&newsk->sk_callback_lock);
                 /*
                   lockdep_set_class_and_name(&newsk->sk_callback_lock,
@@ -377,23 +428,104 @@ int sk_wait_data(struct sock *sk, long *timeo)
 }
 
 /**
+ *	__sk_mem_schedule - increase sk_forward_alloc and memory_allocated
+ *	@sk: socket
+ *	@size: memory size to allocate
+ *	@kind: allocation type
+ *
+ *	If kind is SK_MEM_SEND, it means wmem allocation. Otherwise it means
+ *	rmem allocation. This function assumes that protocols which have
+ *	memory_pressure use sk_wmem_queued as write buffer accounting.
+ */
+int __sk_mem_schedule(struct sock *sk, int size, int kind)
+{
+	struct proto *prot = sk->sk_prot;
+	int amt = sk_mem_pages(size);
+	int allocated;
+
+	sk->sk_forward_alloc += amt * SK_MEM_QUANTUM;
+	allocated = atomic_add_return(amt, prot->memory_allocated);
+
+	/* Under limit. */
+	if (allocated <= prot->sysctl_mem[0]) {
+		if (prot->memory_pressure && *prot->memory_pressure)
+			*prot->memory_pressure = 0;
+		return 1;
+	}
+
+	/* Under pressure. */
+	if (allocated > prot->sysctl_mem[1])
+		if (prot->enter_memory_pressure)
+			prot->enter_memory_pressure(sk);
+
+	/* Over hard limit. */
+	if (allocated > prot->sysctl_mem[2])
+		goto suppress_allocation;
+
+	/* guarantee minimum buffer size under pressure */
+	if (kind == SK_MEM_RECV) {
+		if (atomic_read(&sk->sk_rmem_alloc) < prot->sysctl_rmem[0])
+			return 1;
+	} else { /* SK_MEM_SEND */
+		if (sk->sk_type == SOCK_STREAM) {
+			if (sk->sk_wmem_queued < prot->sysctl_wmem[0])
+				return 1;
+		} else if (atomic_read(&sk->sk_wmem_alloc) <
+			   prot->sysctl_wmem[0])
+				return 1;
+	}
+
+#if defined(OS_LINUX_KERNEL)
+        /* TODO: Implement this for user level */
+	if (prot->memory_pressure) {
+		int alloc;
+
+		if (!*prot->memory_pressure)
+			return 1;
+		alloc = percpu_counter_read_positive(prot->sockets_allocated);
+		if (prot->sysctl_mem[2] > alloc *
+		    sk_mem_pages(sk->sk_wmem_queued +
+				 atomic_read(&sk->sk_rmem_alloc) +
+				 sk->sk_forward_alloc))
+			return 1;
+	}
+#endif
+
+suppress_allocation:
+
+	if (kind == SK_MEM_SEND && sk->sk_type == SOCK_STREAM) {
+		sk_stream_moderate_sndbuf(sk);
+
+		/* Fail only if socket is _under_ its sndbuf.
+		 * In this case we cannot block, so that we have to fail.
+		 */
+		if (sk->sk_wmem_queued + size >= sk->sk_sndbuf)
+			return 1;
+	}
+
+	/* Alas. Undo changes. */
+	sk->sk_forward_alloc -= amt * SK_MEM_QUANTUM;
+	atomic_sub(amt, prot->memory_allocated);
+	return 0;
+}
+
+/**
  *	__sk_reclaim - reclaim memory_allocated
  *	@sk: socket
  */
 void __sk_mem_reclaim(struct sock *sk)
 {
-        /*
 	struct proto *prot = sk->sk_prot;
 
-          atomic_sub(sk->sk_forward_alloc >> SK_MEM_QUANTUM_SHIFT,
-          prot->memory_allocated);
-          sk->sk_forward_alloc &= SK_MEM_QUANTUM - 1;
-          
+	atomic_sub(sk->sk_forward_alloc >> SK_MEM_QUANTUM_SHIFT,
+		   prot->memory_allocated);
+	sk->sk_forward_alloc &= SK_MEM_QUANTUM - 1;
+
 	if (prot->memory_pressure && *prot->memory_pressure &&
-        (atomic_read(prot->memory_allocated) < prot->sysctl_mem[0]))
-        *prot->memory_pressure = 0;
-        */
+	    (atomic_read(prot->memory_allocated) < prot->sysctl_mem[0]))
+		*prot->memory_pressure = 0;
 }
+
 
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
                     unsigned long expires)
@@ -427,11 +559,12 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	if (err)
 		return err;
         
-	if (!sk_rmem_schedule(sk, skb->truesize)) {
+        */
+        if (!sk_rmem_schedule(sk, skb->truesize)) {
 		atomic_inc(&sk->sk_drops);
 		return -ENOBUFS;
 	}
-        */
+
 	LOG_DBG("Queuing in socket for receive\n");
 	skb->dev = NULL;
 	skb_set_owner_r(skb, sk);
@@ -460,6 +593,11 @@ int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb)
 {
         return 0;
+}
+
+void sk_reset_txq(struct sock *sk)
+{
+	sk_tx_queue_clear(sk);
 }
 
 /*
@@ -537,7 +675,7 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk,
 			goto failure;
 
 		if (atomic_read(&sk->sk_wmem_alloc) < sk->sk_sndbuf) {
-			skb = alloc_skb(header_len);
+			skb = alloc_skb(header_len, 0);
 			if (skb) {
 				/* Full success... */
 				break;
@@ -621,49 +759,3 @@ void release_sock(struct sock *sk)
         spin_unlock(&sk->sk_lock.slock);
 }
 
-/* From net/core/stream.c */
-/**
- * sk_stream_wait_connect - Wait for a socket to get into the connected state
- * @sk: sock to wait on
- * @timeo_p: for how long to wait
- *
- * Must be called with the socket locked.
- */
-int sk_stream_wait_connect(struct sock *sk, long *timeo_p)
-{
-	int done, err = 0;
-	DEFINE_WAIT(wait);
-
-	do {
-		err = sock_error(sk);
-		if (err)
-                        break;
-		if ((1 << sk->sk_state) & 
-                    ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
-			err = -EPIPE;
-                        break;
-                }
-		if (!*timeo_p) {
-			err = -EAGAIN;
-                        break;
-                }
-		if (signal_pending(current)) {
-			err = sock_intr_errno(*timeo_p);
-                        break;
-                }
-
-		prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
-		sk->sk_write_pending++;
-		done = sk_wait_event(sk, timeo_p,
-				     !sk->sk_err &&
-				     !((1 << sk->sk_state) &
-				       ~(SERVALF_CONNECTED | 
-                                         SERVALF_CLOSEWAIT)));
-		finish_wait(sk_sleep(sk), &wait);
-		sk->sk_write_pending--;
-	} while (!done);
-        
-        UNDEFINE_WAIT(&wait);
-
-	return err;
-}

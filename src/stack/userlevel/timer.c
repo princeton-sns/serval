@@ -36,12 +36,11 @@ static pthread_key_t timer_list_head_key;
 static pthread_once_t key_once = PTHREAD_ONCE_INIT;
 #endif
 
-
 int gettime(struct timespec *ts)
 {
         int err = 0;
 
-#if defined(OS_LINUX)
+#if _POSIX_TIMERS > 0
         err = clock_gettime(CLOCK, ts);
 
 	if (err == -1) {
@@ -64,9 +63,11 @@ int gettime(struct timespec *ts)
 unsigned long gettime_jiffies(void)
 {
         struct timespec now;
+
         gettime(&now);
+
         timespec_sub(&now, &timer_list.start_time);
-        
+
         return timespec_to_jiffies(&now);
 }
 
@@ -226,9 +227,9 @@ int timer_list_handle_timeout(void)
 	timer_list_unlock(tlh);
 
 	/* Call timer function, passing the data */
-        if (timer->function)
+        if (timer->function) {
                 timer->function(timer->data); 
-        else {
+        } else {
                 LOG_WARN("timer function is NULL\n");
         }
         
@@ -294,7 +295,6 @@ __attribute__((constructor))
 #endif
 void timer_list_init(void)
 {
-        LOG_DBG("timer list was initialized\n");
         gettime(&timer_list.start_time);
 }
 #endif
@@ -389,7 +389,7 @@ int mod_timer(struct timer_list *timer, unsigned long expires)
                         timer_list_signal_timer_change(tlh);
                 } 
 	}
-	
+       
 	timer_list_unlock(tlh);
 
 	return ret;

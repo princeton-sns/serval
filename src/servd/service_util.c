@@ -11,6 +11,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <assert.h>
 #include "cmwc.h"
 #include "debug.h"
 
@@ -165,11 +166,11 @@ uint16_t find_longest_common_prefix(uint8_t* strA, uint8_t* strB, uint16_t offse
 
     return prefix;
 }
-void init_resolution_from_reference(struct service_resolution*res, struct service_reference*ref) {
+void init_resolution_from_reference(struct service_info*res, struct service_reference*ref) {
     bzero(res, sizeof(*res));
 
-    res->sv_flags = ref->instance.service.sv_flags;
-    res->sv_prefix_bits = ref->instance.service.sv_prefix_bits;
+    res->srvid_flags = ref->instance.service.sv_flags;
+    res->srvid_prefix_bits = ref->instance.service.sv_prefix_bits;
     res->priority = ref->priority;
     res->weight = ref->weight;
     res->idle_timeout = ref->idle_timeout;

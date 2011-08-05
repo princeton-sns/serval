@@ -79,7 +79,7 @@ static int packet_raw_recv(struct net_device *dev)
         socklen_t addrlen = sizeof(addr);
 	int ret;
 
-	skb = alloc_skb(RCVLEN);
+	skb = alloc_skb(RCVLEN, 0);
         
 	if (!skb) {
 		LOG_ERR("could not allocate skb\n");
@@ -92,26 +92,28 @@ static int packet_raw_recv(struct net_device *dev)
 	if (ret == -1) {
 		LOG_ERR("recv: %s\n", 
 			strerror(errno));
-		free_skb(skb);
+		__kfree_skb(skb);
 		return -1;
 	} else if (ret == 0) {
 		/* Should not happen */
                 LOG_ERR("recv return 0\n");
-		free_skb(skb);
+		__kfree_skb(skb);
 		return -1;
 	}
-        
         /*
-        LOG_DBG("Received %d bytes IP packet on device %s\n", 
+          LOG_DBG("Received %d bytes IP packet on device %s\n", 
                 ret, dev->name);
-        */
-
+        */        
+        __net_timestamp(skb);
         skb_put(skb, ret);
 	skb->dev = dev;
         /* Set network header offset */
 	skb_reset_network_header(skb);
         /* skb->pkt_type = */
 	skb->protocol = IPPROTO_IP;
+
+        skb->csum = 0;
+        skb->ip_summed = CHECKSUM_NONE;
 
 	/* Packet should be freed by upper layers */
 	return serval_ipv4_rcv(skb);
@@ -129,7 +131,7 @@ static int packet_raw_xmit(struct sk_buff *skb)
 
 	if (!skb->dev) {
                 LOG_ERR("No device set in skb\n");
-		free_skb(skb);
+		kfree_skb(skb);
 		return -1;
 	}
 
@@ -149,7 +151,7 @@ static int packet_raw_xmit(struct sk_buff *skb)
                 err = NET_XMIT_SUCCESS;
         }
 
-	free_skb(skb);
+	kfree_skb(skb);
 
 	return err;
 }

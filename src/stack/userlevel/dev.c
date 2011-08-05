@@ -64,7 +64,7 @@ void dev_list_destroy(void)
                         break;
 
                 de = list_first_entry(&dev_list, struct dev_entry, lh);
-                list_del(&de->lh);
+                list_del(&de->lh);                
                 free(de);
         }
 }
@@ -474,6 +474,7 @@ int netdev_populate_table(int sizeof_priv,
                         free_netdev(dev);
                         goto out;
                 }
+
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                                 
@@ -499,6 +500,7 @@ int netdev_populate_table(int sizeof_priv,
 #else
                 memcpy(&dev->ipv4.netmask, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
+#endif
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -513,7 +515,7 @@ int netdev_populate_table(int sizeof_priv,
 
                 }       
 #endif       
-#endif
+
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
@@ -628,7 +630,7 @@ static inline void dev_queue_purge(struct net_device *dev)
 
 	while ((skb = skb_dequeue(&dev->tx_queue.q)) != NULL) {
 		LOG_DBG("Freeing skb %p\n", skb);
-		free_skb(skb);
+		kfree_skb(skb);
 	}
 }
 
@@ -648,7 +650,7 @@ int dev_xmit(struct net_device *dev)
                         }
                 } else {
                         LOG_ERR("No device set in skb\n");
-                        free_skb(skb);
+                        kfree_skb(skb);
                 }
         }
 
@@ -720,11 +722,57 @@ void *dev_thread(void *arg)
         return NULL;
 }
 
+/*
+ * Invalidate hardware checksum when packet is to be mangled, and
+ * complete checksum manually on outgoing path.
+ */
+static int skb_checksum_help(struct sk_buff *skb)
+{
+        __wsum csum;
+        int ret = 0, offset;
+
+        if (skb->ip_summed == CHECKSUM_COMPLETE)
+                goto out_set_summed;
+
+        offset = skb_checksum_start_offset(skb);
+        BUG_ON(offset >= skb_headlen(skb));
+        csum = skb_checksum(skb, offset, skb->len - offset, 0);
+
+        offset += skb->csum_offset;
+
+        BUG_ON(offset + sizeof(__sum16) > skb_headlen(skb));
+
+        if (skb_cloned(skb) &&
+            !skb_clone_writable(skb, offset + sizeof(__sum16))) {
+                ret = pskb_expand_head(skb, 0, 0, GFP_ATOMIC);
+                if (ret)
+                        goto out;
+        }
+
+        *(__sum16 *)(skb->data + offset) = csum_fold(csum);
+
+ out_set_summed:
+        skb->ip_summed = CHECKSUM_NONE;
+ out:
+        return ret;
+}
+
 #define DIRECT_TX 1
 
 int dev_queue_xmit(struct sk_buff *skb)
 {
         struct net_device *dev = skb->dev;
+
+        /*
+          Calculate final checksum if partial 
+        */
+        if (skb->ip_summed == CHECKSUM_PARTIAL) {
+                skb_set_transport_header(skb,
+                                         skb_checksum_start_offset(skb));
+                if (skb_checksum_help(skb))
+                        goto out_kfree_skb;
+        }
+
 #if defined(DIRECT_TX)
         dev->pack_ops->xmit(skb);
 #else
@@ -732,13 +780,13 @@ int dev_queue_xmit(struct sk_buff *skb)
             !dev->pack_ops || 
             !dev->pack_ops->xmit) {
                 LOG_ERR("No device or packet ops\n");
-                free_skb(skb);
+                kfree_skb(skb);
                 return -1;
         }
         
         if (dev->tx_queue_len == dev->tx_queue.q.qlen) {
                 LOG_ERR("Max tx_queue_len reached, dropping packet\n");
-                free_skb(skb);
+                kfree_skb(skb);
                 return 0;
         }
         
@@ -752,6 +800,9 @@ int dev_queue_xmit(struct sk_buff *skb)
         dev_signal(dev, SIGNAL_TXQUEUE);
 #endif
         return 0;
+ out_kfree_skb:
+        kfree_skb(skb);
+        return -1;
 }
 
 int netdev_init(void)
@@ -815,6 +866,7 @@ void netdev_fini(void)
                 } else {
                         LOG_DBG("join successful\n");
                 }
+                LOG_DBG("%s refcnt=%d\n", dev->name, atomic_read(&dev->refcnt));
                 dev_put(dev);
         }
         

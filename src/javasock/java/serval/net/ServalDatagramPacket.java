@@ -1,10 +1,9 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package serval.net;
 
-import java.net.DatagramPacket;
 import java.net.InetAddress;
-import java.net.SocketException;
 import java.net.SocketAddress;
+import java.net.SocketException;
 
 /**
  * A datagram packet supporting SevalSocketAddress based on the

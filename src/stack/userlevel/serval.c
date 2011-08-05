@@ -26,10 +26,12 @@
 struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
+static char *progname = NULL;
 
 extern int telnet_init(void);
 extern void telnet_fini(void);
 extern unsigned int debug;
+unsigned int checksum_mode = 1;
 extern int stackid;
 
 #define MAX(x, y) (x >= y ? x : y)
@@ -157,40 +159,38 @@ static int server_run(void)
 	sigset_t sigset, orig_sigset;
 	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
-    int timer_list_signal[2];
-    char tcp_buffer[128];
-    char udp_buffer[128];
-
-    /* pipe/signal to tell us when a new timer timeout must be
-     * scheduled */
-    ret = pipe(timer_list_signal);
-
-    if (ret == -1) {
-            LOG_ERR("could not open signal pipe: %s\n",
-                    strerror(errno));
-            return -1;
-    }
-
+        int timer_list_signal[2];
+        char tcp_buffer[128];
+        char udp_buffer[128];
+        
+        /* pipe/signal to tell us when a new timer timeout must be
+         * scheduled */
+        ret = pipe(timer_list_signal);
+        
+        if (ret == -1) {
+                LOG_ERR("could not open signal pipe: %s\n",
+                        strerror(errno));
+                return -1;
+        }
+        
 	sigemptyset(&sigset);
-    sigaddset(&sigset, SIGTERM);
-    sigaddset(&sigset, SIGHUP);
-    sigaddset(&sigset, SIGINT);
-
-    /* Block the signals we are watching here so that we can
-     * handle them in pselect instead. */
-    sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
+        sigaddset(&sigset, SIGTERM);
+        sigaddset(&sigset, SIGHUP);
+        sigaddset(&sigset, SIGINT);
+        
+        /* Block the signals we are watching here so that we can
+         * handle them in pselect instead. */
+        sigprocmask(SIG_BLOCK, &sigset, &orig_sigset);
 	
 	if (should_exit) {
-        goto out_close_pipe;
-    }
-
+                goto out_close_pipe;
+        }
+        
 	if(stackid > 0) {
-
-	    sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
-	    sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
-
-	    server_sock_path[0] = udp_buffer;
-	    server_sock_path[1] = tcp_buffer;
+                sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
+                sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
+                server_sock_path[0] = udp_buffer;
+                server_sock_path[1] = tcp_buffer;
 	}
 
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
@@ -257,6 +257,9 @@ static int server_run(void)
 		ret = timer_list_get_next_timeout(&timeout, 
                                                   timer_list_signal);
 
+                if (timeout.tv_sec < 0)
+                        goto handle_timeout;
+
 		if (ret == -1) {
 			/* Timer list error. Exit? */
 			break;
@@ -271,7 +274,8 @@ static int server_run(void)
 			      NULL, NULL, to, &orig_sigset);		
 #else
 		{
-			/* Emulate pselect behavior */
+			/* Emulate pselect behavior. Potential
+                           problem: these calls are not atomic. */
 			struct timeval tv, *t = NULL;
 			sigset_t old_set;
 
@@ -297,18 +301,26 @@ static int server_run(void)
 			if (errno == EINTR) {
 				LOG_INF("select interrupted\n");
 				continue;
-			}
-			LOG_ERR("select error...\n");
+			} else if (errno == EINVAL) {
+                                LOG_ERR("Ivalid timeout or negative ndfs\n");
+                                LOG_ERR("Timeout is %ld %ld\n", 
+                                        to->tv_sec, to->tv_nsec);
+                        }
+                       
+			LOG_ERR("select : %s\n", 
+                                strerror(errno));
+                        LOG_ERR("Exiting due to error!!!\n");
 			break;                                        
 		} else if (ret == 0) {
+                handle_timeout:
 			/* Timeout, handle timers */
 			timer_list_handle_timeout();
 			continue;
 		}
 		
-        if (FD_ISSET(timer_list_signal[0], &readfds)) {
-                timer_list_signal_lower();
-        }
+                if (FD_ISSET(timer_list_signal[0], &readfds)) {
+                        timer_list_signal_lower();
+                }
 		if (FD_ISSET(ctrl_getfd(), &readfds)) {
 			ret = ctrl_recvmsg();
 
@@ -345,7 +357,7 @@ static int server_run(void)
 				if (!c) {
 					close(client_sock);
 				} else {
-					LOG_INF("accepted new client\n");
+					LOG_INF("accepted new client %u\n", client_get_id(c));
 					
 					client_list_add(c, &client_list);
 					
@@ -361,7 +373,7 @@ static int server_run(void)
 		}
 	}
 	
-    client_list_lock(&client_list);
+        client_list_lock(&client_list);
 
 	while (!list_empty(&client_list.head)) {
 		struct client *c = __client_list_first_entry(&client_list);
@@ -381,7 +393,7 @@ static int server_run(void)
                 __client_list_del(c);
 		client_put(c);
 	}
-    client_list_unlock(&client_list);
+        client_list_unlock(&client_list);
 
 out_close_socks:
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
@@ -396,6 +408,95 @@ out_close_pipe:
 
 extern void dev_list_add(const char *name);
 
+#define PID_FILE "/tmp/serval.pid"
+
+static int write_pid_file(void)
+{
+        FILE *f;
+
+        f = fopen(PID_FILE, "w");
+        
+        if (!f) {
+                fprintf(stderr, "Could not write PID file to %s : %s\n",
+                        PID_FILE, strerror(errno));
+                return -1;
+        }
+
+        fprintf(f, "%u\n", getpid());
+
+        fclose(f);
+
+        return 0;
+}
+
+#define BUFLEN 256
+
+enum {
+        SERVAL_NOT_RUNNING = 0,
+        SERVAL_RUNNING,
+        SERVAL_BAD_PID,
+        SERVAL_CRASHED,
+};
+
+static int check_pid_file(void)
+{
+        FILE *f;
+        pid_t pid;
+        int res = SERVAL_NOT_RUNNING;
+
+        f = fopen(PID_FILE, "r");
+        
+        if (!f) {
+                switch (errno) {
+                case ENOENT:
+                        /* File probably doesn't exist */
+                        return SERVAL_NOT_RUNNING;
+                case EACCES:
+                case EPERM:
+                        /* Probably not owner and lack permissions */
+                        return SERVAL_RUNNING;
+                case EISDIR:
+                default:
+                        fprintf(stderr, "Pid file error: %s\n",
+                                strerror(errno));
+                }
+                return SERVAL_BAD_PID;
+        }
+        
+        if (fscanf(f, "%u", (unsigned *)&pid) == 0) {
+                fprintf(stderr, "Could not read PID file %s\n",
+                        PID_FILE);
+                return SERVAL_BAD_PID;
+        }
+        
+        LOG_DBG("Pid is %u\n", pid);
+
+        fclose(f);
+
+#if defined(OS_LINUX)
+        {
+                char buf[BUFLEN];
+                snprintf(buf, BUFLEN, "/proc/%d/cmdline", pid);
+                
+                res = SERVAL_CRASHED;
+                
+                f = fopen(buf, "r");
+
+                if (f) {
+                        size_t nitems = fread(buf, 1, BUFLEN, f);
+                        if (nitems && strstr(buf, progname) != NULL) 
+                        res = SERVAL_RUNNING;
+                        fclose(f);
+                }
+        }
+#endif
+        return res;
+}
+
+extern atomic_t num_skb_alloc;
+extern atomic_t num_skb_free;
+extern atomic_t num_skb_clone;
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -403,108 +504,135 @@ int main(int argc, char **argv)
 	int ret;
         struct timeval now;
         
+        progname = basename(argv[0]);
+
+        ret = check_pid_file();
+
+        if (ret == SERVAL_RUNNING) {
+                LOG_ERR("A Serval instance is already running!\n");
+                return -1;
+        } else if (ret == SERVAL_CRASHED) {
+                LOG_DBG("A previous Serval instance seems to have crashed!\n");
+                unlink(PID_FILE);
+
+                /* Cleanup old stuff from crashed instance */
+                unlink(SERVAL_STACK_CTRL_PATH);
+                unlink(SERVAL_SERVD_CTRL_PATH);
+                unlink(TCP_SERVER_PATH);
+                unlink(UDP_SERVER_PATH);
+        }
+
+        if (write_pid_file() != 0) {
+                LOG_ERR("Could not write PID file!\n");
+                return -1;
+        }
+	
 	if (getuid() != 0 && geteuid() != 0) {
-		fprintf(stderr, "%s must run as uid=0 (root)\n",
-			basename(argv[0]));
+		LOG_ERR("%s must run as uid=0 (root)\n", progname);
 			return -1;
 	}
-	
+
+        if (write_pid_file() != 0)
+                return -1;
+
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         
 	/* The server should shut down on these signals. */
-    sigaction(SIGTERM, &action, 0);
-	sigaction(SIGHUP, &action, 0);
+        sigaction(SIGTERM, &action, 0);
+        sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
 	
-    client_list_init(&client_list);
-
-    /* Seed random number generator */
-    gettimeofday(&now, NULL);
-
-    srandom((unsigned int)now.tv_sec);
-
+        client_list_init(&client_list);
+        
+        /* Seed random number generator */
+        gettimeofday(&now, NULL);
+        
+        srandom((unsigned int)now.tv_sec);
+        
 	argc--;
 	argv++;
         
 	while (argc) {
-        if (strcmp(argv[0], "-i") == 0 ||
+                if (strcmp(argv[0], "-i") == 0 ||
 		    strcmp(argv[0], "--interface") == 0) {
 			dev_list_add(argv[1]);
 			argv++;
 			argc--;
 		} else if (strcmp(argv[0], "-d") == 0 ||
-                    strcmp(argv[0], "--daemon") == 0) {
-		    daemon = 1;
-		} else if (strcmp(argv[0], "-dl") == 0 ||
+                           strcmp(argv[0], "--daemon") == 0) {
+                        daemon = 1;
+                } else if (strcmp(argv[0], "-dl") == 0 ||
                            strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--debug-level") == 0) {
-            char *p = NULL;
-            unsigned int d = strtoul(argv[1], &p, 10);
-
-            if (*argv[1] != '\0' && *p == '\0') {
-                    argv++;
-                    argc--;
-                    LOG_DBG("Setting debug to %u\n", d);
-                    debug = d;
-            } else {
-                    fprintf(stderr, "Invalid debug setting %s\n",
-                            argv[1]);
-            }
-		} 
-		else if (strcmp(argv[0], "-s") == 0 || strcmp(argv[0], "-stackid")) {
-		    stackid = atoi(argv[1]);
-		    if(stackid < 0) {
-		        stackid = 0;
-		    }
-		    argv++;
-		    argc--;
+                        char *p = NULL;
+                        unsigned int d = strtoul(argv[1], &p, 10);
+                        
+                        if (*argv[1] != '\0' && *p == '\0') {
+                                argv++;
+                                argc--;
+                                LOG_INF("Setting debug to %u\n", d);
+                                debug = d;
+                        } else {
+                                fprintf(stderr, "Invalid debug setting %s\n",
+                                        argv[1]);
+                        }
+                } else if (strcmp(argv[0], "-s") == 0 || 
+                           strcmp(argv[0], "-stackid")) {
+                        stackid = atoi(argv[1]);
+                        if (stackid < 0) {
+                                stackid = 0;
+                        }
+                        argv++;
+                        argc--;
 		}
 		argc--;
 		argv++;
 	}	
-      
-    if (daemon) {
-        ret = daemonize();
-
-        if (ret < 0) {
-                LOG_ERR("Could not make daemon\n");
-                return -1;
+        
+        if (daemon) {
+                ret = daemonize();
+                
+                if (ret < 0) {
+                        LOG_ERR("Could not make daemon\n");
+                        return -1;
+                }
         }
-    }
 
 	ret = serval_init();
 
 	if (ret == -1) {
-		LOG_ERR("Could not initialize af_serval\n");
-                netdev_fini();
-		return -1;
+		LOG_ERR("Could not initialize af_serval\n");   
+                goto cleanup_pid;
 	}
 	
 	ret = ctrl_init();
 	
 	if (ret == -1) {
-		LOG_ERR("Could not initialize ctrl socket\n");
-                netdev_fini();
-		serval_fini();
-		return -1;
+		LOG_ERR("Could not initialize ctrl socket\n");   
+                goto cleanup_serval;
 	}
 	
         ret = telnet_init();
 
         if (ret == -1) {
 		LOG_ERR("Could not initialize telnet server\n");
-                ctrl_fini();
-                netdev_fini();
-		serval_fini();
-		return -1;
+                goto cleanup_ctrl;
 	}
 
 	ret = server_run();
 
         telnet_fini();
+ cleanup_ctrl:
 	ctrl_fini();
+ cleanup_serval:
 	serval_fini();
+ cleanup_pid:
+        unlink(PID_FILE);
+
+        LOG_DBG("num_skb_alloc=%u\n", atomic_read(&num_skb_alloc));
+        LOG_DBG("num_skb_clone=%u\n", atomic_read(&num_skb_clone));
+        LOG_DBG("num_skb_free=%u\n", atomic_read(&num_skb_free));
 
 	return ret;
 }

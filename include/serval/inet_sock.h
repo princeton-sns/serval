@@ -18,6 +18,7 @@
 #endif /* OS_LINUX_KERNEL */
 #if defined(OS_USER)
 #include <serval/sock.h>
+#include <serval/request_sock.h>
 
 struct ip_options {
         /* Nothing here now. */
@@ -58,6 +59,30 @@ struct inet_sock {
 static inline struct inet_sock *inet_sk(const struct sock *sk)
 {
 	return (struct inet_sock *)sk;
+}
+
+#define optlength(opt) (sizeof(struct ip_options) + opt->optlen)
+
+struct inet_request_sock {
+	struct request_sock	req;
+	__be16			loc_port;
+	__be32			loc_addr;
+	__be32			rmt_addr;
+	__be16			rmt_port;
+	u16			snd_wscale : 4,
+				rcv_wscale : 4,
+				tstamp_ok  : 1,
+				sack_ok	   : 1,
+				wscale_ok  : 1,
+				ecn_ok	   : 1,
+				acked	   : 1,
+				no_srccheck: 1;
+	struct ip_options	*opt;
+};
+
+static inline struct inet_request_sock *inet_rsk(const struct request_sock *sk)
+{
+	return (struct inet_request_sock *)sk;
 }
 
 #endif /* OS_USER */

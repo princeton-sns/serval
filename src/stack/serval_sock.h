@@ -7,32 +7,17 @@
 #include <serval/lock.h>
 #include <serval/hash.h>
 #include <serval/sock.h>
+#include <serval/dst.h>
 #include <serval/inet_sock.h>
 #include <serval/net.h>
 #include <serval/timer.h>
+#include <serval/request_sock.h>
 #if defined(OS_USER)
 #include <string.h>
 #endif
 #if defined(OS_LINUX_KERNEL)
 #include <net/tcp_states.h>
 #endif
-
-struct serval_request_sock;
-
-enum serval_packet_type { 
-        SERVAL_PKT_DATA = 1,
-        SERVAL_PKT_CONN_SYN,
-        SERVAL_PKT_CONN_SYNACK,
-        SERVAL_PKT_CONN_ACK,
-        SERVAL_PKT_ACK,
-        SERVAL_PKT_RESET,
-        SERVAL_PKT_CLOSE,
-        SERVAL_PKT_CLOSEACK,
-        SERVAL_PKT_MIG,
-        SERVAL_PKT_RSYN,
-        SERVAL_PKT_MIGDATA,
-        SERVAL_PKT_RSYNACK
-};
 
 /*
   TCP states from net/tcp_states.h, should be as compatible as
@@ -98,12 +83,31 @@ struct serval_sock_af_ops {
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
-	int	        (*conn_request)(struct sock *sk, struct sk_buff *skb);
-        void            (*conn_child_sock)(struct sock *sk, struct sk_buff *skb,
+        int             (*conn_build_syn)(struct sock *sk, struct sk_buff *skb);
+        int             (*conn_build_synack)(struct sock *sk,
+                                             struct dst_entry *dst,
+                                             struct request_sock *rsk,
+                                             struct sk_buff *skb);
+        int             (*conn_build_ack)(struct sock *sk, struct sk_buff *skb);        
+	int	        (*conn_request)(struct sock *sk, 
+                                        struct request_sock *rsk, 
+                                        struct sk_buff *skb);
+	int	        (*conn_close)(struct sock *sk);
+	int	        (*request_state_process)(struct sock *sk, 
+                                                 struct sk_buff *skb);
+	int	        (*respond_state_process)(struct sock *sk, 
+                                                 struct sk_buff *skb);
+        int             (*conn_child_sock)(struct sock *sk, 
+                                           struct sk_buff *skb,
+                                           struct request_sock *rsk,
                                            struct sock *child,
                                            struct dst_entry *dst);
+	u16	        net_header_len;
+	u16	        sockaddr_len;
+        int             (*recv_fin)(struct sock *sk, struct sk_buff *skb);
         int             (*close_request)(struct sock *sk, struct sk_buff *skb);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
+        void            (*done)(struct sock *sk);
 };
 
 /* The AF_SERVAL socket */
@@ -114,11 +118,13 @@ struct serval_sock {
         struct client           *client;
 #endif
         struct net_device       *dev; /* TX device for connected flows */
-        unsigned char           flags;
+        u8      close_received : 1,
+                flags : 7;
         void                    *hash_key;
         unsigned int            hash_key_len;  /* Keylen in bytes */
         unsigned short          srvid_prefix_bits;
         unsigned short          srvid_flags;
+        struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;        
@@ -131,18 +137,19 @@ struct serval_sock {
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
-        uint8_t                 local_nonce[SERVAL_NONCE_SIZE];
-        uint8_t                 peer_nonce[SERVAL_NONCE_SIZE];
+        u8                      local_nonce[SERVAL_NONCE_SIZE];
+        u8                      peer_nonce[SERVAL_NONCE_SIZE];
+        u16                     ext_hdr_len;
         struct {
-                uint32_t        una;
-                uint32_t        nxt;
-                uint32_t        wnd;
-                uint32_t        iss;
+                u32        una;
+                u32        nxt;
+                u32        wnd;
+                u32        iss;
         } snd_seq;
         struct {
-                uint32_t        nxt;
-                uint32_t        wnd;
-                uint32_t        iss;
+                u32        nxt;
+                u32        wnd;
+                u32        iss;
         } rcv_seq;
         unsigned short          retransmits;
         unsigned long           rto;
@@ -173,6 +180,11 @@ struct serval_table {
                                          size_t keylen);
 	unsigned int mask;
 };
+
+static inline int serval_sock_is_master(struct sock *sk)
+{
+        return 1;
+}
 
 int serval_sock_get_flowid(struct flow_id *sid);
 
@@ -257,7 +269,8 @@ void __exit serval_sock_tables_fini(void);
 void serval_sock_wfree(struct sk_buff *skb);
 void serval_sock_rfree(struct sk_buff *skb);
 
-static inline void skb_serval_set_owner_w(struct sk_buff *skb, struct sock *sk)
+static inline void skb_serval_set_owner_w(struct sk_buff *skb, 
+                                          struct sock *sk)
 {
 	skb_orphan(skb);
 	skb->sk = sk;
@@ -266,12 +279,17 @@ static inline void skb_serval_set_owner_w(struct sk_buff *skb, struct sock *sk)
         sock_hold(sk);
 }
 
-static inline void skb_serval_set_owner_r(struct sk_buff *skb, struct sock *sk)
+static inline void skb_serval_set_owner_r(struct sk_buff *skb, 
+                                          struct sock *sk)
 {
 	skb_orphan(skb);
 	skb->sk = sk;
 	skb->destructor = serval_sock_rfree;
 }
 
+struct dst_entry *serval_sock_route_req(struct sock *sk,
+                                        const struct request_sock *req);
+
+int serval_sock_rebuild_header(struct sock *sk);
 
 #endif /* _SERVAL_SOCK_H */

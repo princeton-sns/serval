@@ -199,7 +199,7 @@ void *telnet_runloop(void *arg)
 {
 	struct telnet_client *tc, *tmp;
 
-	LOG_DBG("TELNET SERVER - you can connect to %s:%u\n",
+	LOG_INF("TELNET SERVER - you can connect to %s:%u\n",
 		TELNET_ADDR, TELNET_PORT);
 
 	while (1) {

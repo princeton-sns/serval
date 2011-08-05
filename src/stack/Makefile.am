@@ -1,6 +1,6 @@
 bin_PROGRAMS = serval
 
-serval_SOURCES = \
+serval_common_SRC = \
 	debug.c \
 	platform.c \
 	bst.c \
@@ -12,14 +12,27 @@ serval_SOURCES = \
 	serval_ipv4.c \
 	serval_udp.c \
 	serval_tcp.c \
+	serval_tcp_sock.c \
+	serval_tcp_input.c \
+	serval_tcp_output.c \
+	serval_tcp_cong.c \
+	serval_tcp_timer.c
+
+serval_SOURCES = \
+	$(serval_common_SRC) \
 	userlevel/dst.c \
 	userlevel/dev.c \
 	userlevel/packet_raw.c \
 	userlevel/sock.c \
+	userlevel/stream.c \
 	userlevel/socket.c \
 	userlevel/skbuff.c \
+	userlevel/checksum.c \
 	userlevel/timer.c \
+	userlevel/ktime.c \
 	userlevel/wait.c \
+	userlevel/bitops.c \
+	userlevel/serval_tcp_user.c \
 	userlevel/client_msg.c \
 	userlevel/client.c \
 	userlevel/ctrl.c \
@@ -39,6 +52,8 @@ SERVAL_HDR = \
 	serval_tcp_sock.h \
 	serval_ipv4.h \
 	serval_sal.h \
+	serval_tcp.h \
+	userlevel/serval_tcp_user.h \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
 	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
 	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \
@@ -54,6 +69,7 @@ SERVAL_HDR = \
 	$(SERVAL_INCLUDE_DIR)/serval/netdevice.h \
 	$(SERVAL_INCLUDE_DIR)/serval/sock.h \
 	$(SERVAL_INCLUDE_DIR)/serval/skbuff.h \
+	$(SERVAL_INCLUDE_DIR)/serval/checksum.h \
 	$(SERVAL_INCLUDE_DIR)/serval/timer.h \
 	$(SERVAL_INCLUDE_DIR)/serval/wait.h
 
@@ -84,23 +100,15 @@ SERVAL_KERNEL_HDR = \
 	linux/log.h
 
 SERVAL_KERNEL_SRC = \
+	$(serval_common_SRC) \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
 	linux/module.c \
 	linux/log.c \
 	linux/splice.c \
-	debug.c \
-	platform.c \
-	bst.c \
-	service.c \
-	ctrl_handler.c \
-	af_serval.c \
-	serval_sock.c \
-	serval_sal.c \
-	serval_ipv4.c \
-	serval_udp.c \
-	serval_tcp.c
+	linux/user_dma.c \
+	linux/iovlock.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
@@ -113,7 +121,7 @@ EXTRA_DIST = \
 	$(SERVAL_KERNEL_HDR) \
 	$(SERVAL_KERNEL_SRC)
 
-if LINUX_KERNEL
+if ENABLE_LINUX_MODULE
 all: serval.ko
 endif
 
@@ -121,7 +129,7 @@ serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 clean-local:
-if LINUX_KERNEL
+if ENABLE_LINUX_MODULE
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 endif
 	rm -f *~

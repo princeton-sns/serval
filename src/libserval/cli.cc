@@ -34,7 +34,8 @@ char Cli::strbuf[STRBUFLEN] = { 0 };
 
 Cli::Cli(int fd)
   : _unix_id(_UNIX_ID), _fd(fd), _rcv_lowat(0), _snd_lowat(0),
-    _state(State::CLOSED), _err(0), _connect_in_progress(false), _flags(0)
+    _state(State::CLOSED), _err(0), _connect_in_progress(false), 
+    _interrupted(false), _flags(0)
 {
   _err = 0;
   bzero(&_cli, sizeof(_cli));
@@ -48,7 +49,7 @@ Cli::Cli(const Cli &c)
     : _unix_id(c._unix_id), _fd(c._fd), _rcv_lowat(c._rcv_lowat), 
       _snd_lowat(c._snd_lowat), _state(c._state), 
       _err(c._err), _connect_in_progress(c._connect_in_progress),
-      _flags(c._flags)
+      _interrupted(false), _flags(c._flags)
 {
   _cli.sun_family = c._cli.sun_family;
   // sun_path is never anonymous; we always bind

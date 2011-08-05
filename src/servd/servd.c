@@ -87,17 +87,12 @@ static ssize_t servd_recvfrom(int sock, void *buf, size_t len, int flags,
 
 int join_timeout(struct timer *t)
 {
-        int ret;
-        
-        LOG_DBG("Join timeout for %s. Setting host control mode\n",
+         LOG_DBG("Join timeout for %s.\n",
                 (char *)t->data);
-
-        ret = libstack_configure_interface((char *)t->data, 
-                                           NULL, IFFLAG_HOST_CTRL_MODE);
 
         timer_destroy(t);
 
-        return ret;
+        return 0;
 }
 
 void join_timer_destroy(struct timer *t)

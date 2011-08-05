@@ -169,6 +169,7 @@ struct client *client_create(client_type_t type,
                 return NULL;
         }
         
+        c->sock->client = c;
         c->id = id;
 	c->should_exit = 0;
 	memcpy(&c->sa, sa, sizeof(*sa));
@@ -512,7 +513,6 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
                 struct sockaddr_in in;
         } addr;
         socklen_t addrlen = sizeof(addr.sv);
-        struct in_addr ip;
         int ret;
         
         memset(&addr, 0, sizeof(addr));
@@ -534,13 +534,17 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
         iov.iov_base = req->data;
         iov.iov_len = req->data_len;
         
-        ip.s_addr = req->ipaddr;
-
-	LOG_DBG("Client %u data_len=%u dest: %s @ %s\n", 
-                c->id, req->data_len, 
-                service_id_to_str(&req->srvid), 
-                inet_ntoa(ip));
-        
+#if defined(ENABLE_DEBUG)
+        {
+                struct in_addr ip;
+                ip.s_addr = req->ipaddr;
+                
+                LOG_DBG("Client %u data_len=%u dest: %s @ %s\n", 
+                        c->id, req->data_len, 
+                        service_id_to_str(&req->srvid), 
+                        inet_ntoa(ip));
+        }
+#endif
         ret = sock->ops->sendmsg(NULL, sock, &mh, req->data_len);
         
         if (ret < 0) {
@@ -573,6 +577,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         memset(&saddr, 0, sizeof(saddr));
         client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));
+        memset(&iov, 0, sizeof(iov));
+        memset(&saddr, 0, sizeof(saddr));
         mh.msg_name = &saddr;
         mh.msg_namelen = sizeof(saddr);
         mh.msg_iov = &iov;
@@ -598,6 +604,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
                 r.data[ret] = '\0';
         }
         
+        LOG_DBG("Client %u read data len=%u\n", r.rsp.data_len);
+
         ret = client_msg_write(c->fd, &r.rsp.msghdr);
         
         return ret;
@@ -642,7 +650,12 @@ int client_handle_have_data_msg(struct client *c, struct client_msg *msg)
 int client_send_have_data_msg(struct client *c)
 {
         struct client_msg_have_data hd;
+
+        if (c->has_data)
+                return 0;
         
+        c->has_data = 1;
+
         LOG_DBG("Client %u sending have data msg to application\n", c->id);
         memset(&hd, 0, sizeof(hd));
         client_msg_hdr_init(&hd.msghdr, MSG_HAVE_DATA);
@@ -720,9 +733,15 @@ static void *client_thread(void *arg)
 
 		if (c->fd != -1)
 			FD_SET(c->fd, &readfds);
+
                 
 		maxfd = MAX(c->fd, c->pipefd[0]);
-#if 0 /* Disabled for now... doesn't work properly a.t.m. */
+#if 0
+                /*
+                  This doesn't work well for me. It breaks normal wake
+                  up. I think this should be implemented throught the
+                  sock_wake_async() function in userlevel/socket.c
+                */
 		if (!c->has_data) {
                         /* wait for a data signal on the pipe
                          */

@@ -3,12 +3,14 @@ package serval.net;
 
 public class ServiceID {
     private byte[] identifier = null;
+    public static final int SERVICE_ID_MAX_BITS = 256;
+    public static final int SERVICE_ID_MAX_LENGTH = 20;
 
     public ServiceID() {
         // Creates an invalid serviceID
     }
     public ServiceID(byte[] id) {
-        if (id.length != 20) {
+        if (id.length != SERVICE_ID_MAX_LENGTH) {
             throw new IllegalArgumentException("Bad serviceID length");
         }
         this.identifier = id;

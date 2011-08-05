@@ -16,7 +16,7 @@ int main(int argc, char **argv)
 	int ret = 0, delete = 0;
 	struct service_id srvid;
 	char *ptr;
-	unsigned short sid;
+	unsigned long sid;
 	struct in_addr ipaddr, *ip = NULL;
 
 	ret = libstack_init();
@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 	}
 	
 	memset(&srvid, 0, sizeof(srvid));
-	srvid.s_sid16[0] = ntohs(sid);
+	srvid.s_sid32[0] = ntohl(sid);
 	
         if (argc == 3) {
                 ret = inet_pton(AF_INET, argv[2], &ipaddr);
@@ -69,12 +69,14 @@ int main(int argc, char **argv)
                  printf("deleting service %s\n",
                         service_id_to_str(&srvid));
                 
-                 ret = libstack_del_service(&srvid, 0, ip);
+                 ret = libstack_del_service(&srvid, 
+                                            SERVICE_ID_MAX_PREFIX_BITS, ip);
         } else {
-                printf("adding service %s\n",
-                       service_id_to_str(&srvid));
+                printf("adding service %s:%u\n",
+                       service_id_to_str(&srvid), SERVICE_ID_MAX_PREFIX_BITS);
                 
-                ret = libstack_add_service(&srvid, 0, &ipaddr);
+                ret = libstack_add_service(&srvid, 
+                                           SERVICE_ID_MAX_PREFIX_BITS, &ipaddr);
         }
 	if (ret < 0) {
 		fprintf(stderr, "could not add/delete service\n");

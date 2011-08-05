@@ -46,7 +46,7 @@ int ctrl_recvmsg(void)
 
 	LOG_DBG("Received ctrl msg(%i) of %d bytes\n", cm->type, nbytes);
 
-        if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
+        if (cm->type >= _CTRLMSG_TYPE_MAX) {
                 LOG_ERR("No handler for message type %u\n",
                         cm->type);
                 ret = -1;
@@ -64,7 +64,7 @@ int ctrl_recvmsg(void)
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 {
 	struct msghdr *mh = (struct msghdr *)sbuf;
-	struct iovec iov = { (void *) msg, msg->len };
+	struct iovec iov = { msg, msg->len };
 	int ret;
 
 	memset(mh, 0, sizeof(*mh));
@@ -130,15 +130,12 @@ int ctrl_init(void)
 		goto out_unbind;
 	}
 	/* Now set the address to point to scafd */
-
 	if (stackid <= 0) {
                 strcpy(unaddr.sun_path, SERVAL_SERVD_CTRL_PATH);
         } else {
                 sprintf(unaddr.sun_path, 
-                        "/tmp/serval-libstack-ctrl-%i.sock", 
-                        stackid);
+                        "/tmp/serval-libstack-ctrl-%i.sock", stackid);
         }
-
 out:
 	return ret;
 out_unbind:

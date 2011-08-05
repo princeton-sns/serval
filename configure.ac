@@ -22,6 +22,7 @@ dnl Set some decent default flags
 CFLAGS="$CFLAGS -Wall -O2"
 CXXFLAGS="$CXXFLAGS -Wall -O2"
 EXTRA_DEFINES=
+KERNEL_EXTRA_CFLAGS=
 
 top_dir=${PWD}
 AC_SUBST(top_dir)
@@ -120,6 +121,7 @@ then
      EXTRA_DEFINES="${EXTRA_DEFINES} -DENABLE_DEBUG"
      CFLAGS="$CFLAGS -g"  
      CXXFLAGS="$CXXFLAGS -g"
+     KERNEL_EXTRA_CFLAGS="-g3 -ggdb3 -O0 -fno-inline"
 fi
 
 dnl Option to set gprof
@@ -133,7 +135,16 @@ if test "$enable_gprof" = "yes" ; then
 fi
 
 dnl Check for Java
-java_bindings=no;
+
+dnl Allow the user to force Java bindings
+AC_ARG_ENABLE([java_bindings], 
+AS_HELP_STRING([--disable-java-bindings], [Disable libhaggle Java bindings]),
+[case "${enableval}" in
+  yes) java_bindings=yes ;;
+  no)  java_bindings=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-java-bindings]) ;;
+esac],[java_bindings=yes])
+
 have_jni=no;
 
 AC_ARG_VAR([JAVA_HOME], [Java Runtime Environment (JRE) location])
@@ -159,7 +170,6 @@ do
 		if test -r "${java_dir}/${java_inc_dir}/jni.h"; 
 		then
 			have_jni=yes
-			java_bindings=yes
 			JAVA_PATH=${java_dir}
   			break
        		fi
@@ -176,30 +186,23 @@ JAVA_INCLUDE="-I${JAVA_PATH}/${java_inc_dir} -I${JAVA_PATH}/${java_inc_dir}/${PL
 
 AC_SUBST(JAVA_INCLUDE)
 
-dnl Allow the user to force Java bindings
-AC_ARG_ENABLE([java_bindings], 
-AS_HELP_STRING([--disable-java-bindings], [Disable libhaggle Java bindings]),
-[case "${enableval}" in
-  yes) java_bindings=yes ;;
-  no)  java_bindings=no ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --disable-java-bindings]) ;;
-esac],)
-
-dnl Java bindings were detected or was forced
+dnl Check if we support java bindings
 if test x$java_bindings = xyes; 
 then
    	if test x$have_jni = xno; 
 	then
-   	   	AC_MSG_ERROR([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
+   	   	AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
+		java_bindings=no
 	else
 		if test "x$JAVA" == 'x'; 
 		then
-			AC_MSG_ERROR([Java bindings require java and javac. Check your PATH or disable with --disable-java-bindings])
+			AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
+			java_bindings=no
 		fi
 	fi
 fi
 
-AM_CONDITIONAL([JAVA_BINDINGS], [test x$java_bindings = xyes])
+AM_CONDITIONAL([ENABLE_JAVA_BINDINGS], [test x$java_bindings = xyes])
 
 AC_ARG_ENABLE([native_api],
 AS_HELP_STRING([--enable-native-api],[Use native kernel sockets API for clients]),
@@ -229,8 +232,15 @@ AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
   *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
 esac],[kernel=yes])
 
-AM_CONDITIONAL([LINUX_KERNEL], [test x$kernel = xyes && test x$serval_os_linux = xyes])
+AM_CONDITIONAL([ENABLE_LINUX_MODULE], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
+AC_ARG_ENABLE([service_router],
+AS_HELP_STRING([--disable-service-router],[Turn off service router support]),
+[case "${enableval}" in
+  yes) service_router=yes ;;
+  no)  service_router=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-service-router]) ;;
+esac],[service_router=yes])
 
 dnl Check for PCL library
 have_pcl=no
@@ -247,13 +257,11 @@ PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
 
 AM_CONDITIONAL([HAVE_GLIB2], [test x$have_glib2 = xyes])
 
-if test "$have_glib2" = yes && test "$have_pcl" = yes; then
-	enable_service_router=yes
-else	
-	enable_service_router=no
+if test "$service_router" = yes && [ test "$have_glib2" = no || test "$have_pcl" = no ]; then
+	service_router=no
 fi
 
-AM_CONDITIONAL([ENABLE_SERVICE_ROUTER], [test x$enable_service_router = xyes])
+AM_CONDITIONAL([ENABLE_SERVICE_ROUTER], [test x$service_router = xyes])
 
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
@@ -270,6 +278,7 @@ CPPFLAGS="${CPPFLAGS} ${EXTRA_DEFINES}"
 #CXXFLAGS="${CXXFLAGS} ${EXTRA_DEFINES}"
 
 AC_SUBST(EXTRA_DEFINES)
+AC_SUBST(KERNEL_EXTRA_CFLAGS)
 #AC_SUBST(CFLAGS)
 #AC_SUBST(CXXFLAGS)
 #AC_SUBST(LDFLAGS)
@@ -297,8 +306,9 @@ AC_OUTPUT
 echo
 #echo "Build user level.........................$userlevel"
 echo "Build Linux kernel module.................$kernel"
+echo "Build service router......................$service_router"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"
-echo "Build service router......................$enable_service_router"
+echo "Enable Java bindings......................$java_bindings"
 #echo "Enable GPROF.............................$enable_gprof"
 echo

@@ -17,6 +17,8 @@
 
 typedef pthread_mutex_t spinlock_t;
 
+#define SPIN_LOCK_UNLOCKED PTHREAD_MUTEX_INITIALIZER
+
 #define DEFINE_SPINLOCK(x) spinlock_t x = PTHREAD_MUTEX_INITIALIZER
 
 #define spin_lock_init(x) pthread_mutex_init(x, NULL)

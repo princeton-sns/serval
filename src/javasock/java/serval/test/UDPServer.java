@@ -1,8 +1,6 @@
 /* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package serval.test;
 
-import java.io.IOException;
-import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.lang.System;
 import java.lang.Thread;

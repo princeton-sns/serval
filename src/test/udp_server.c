@@ -41,7 +41,7 @@ void server(void)
   
         bzero((void *)&servaddr, sizeof(servaddr));
         servaddr.sv_family = AF_SERVAL;
-        servaddr.sv_srvid.s_sid16[0] = htons(ECHO_OBJECT_ID);
+        servaddr.sv_srvid.s_sid32[0] = htonl(ECHO_OBJECT_ID);
         servaddr.sv_prefix_bits = 8;
   
         set_reuse_ok(sock);
@@ -70,7 +70,7 @@ void server(void)
         
                 int k = 0;
                 do {
-                        unsigned N = 512;
+                        unsigned N = 2000;
                         char buf[N];
                         int n;
       
