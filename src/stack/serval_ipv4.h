@@ -22,4 +22,6 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 				   struct ip_options *opt);
 int serval_ipv4_xmit_skb(struct sk_buff *skb);
 
+const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen);
+
 #endif /* _SERVAL_IPV4_H_ */

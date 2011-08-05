@@ -156,7 +156,7 @@ struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
 //        struct service_entry *se = service_find_type(srvid,
 //                                                     SERVICE_ENTRY_LOCAL);
 
-        return service_find_sock(srvid, sizeof(*srvid) * 8);
+        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,
@@ -249,7 +249,7 @@ void serval_sock_hash(struct sock *sk)
 
                 ssk->hash_key = &ssk->local_srvid;
                 ssk->hash_key_len = ssk->srvid_prefix_bits == 0 ? 
-                        sizeof(ssk->local_srvid) * 8 : 
+                        SERVICE_ID_MAX_PREFIX_BITS : 
                         ssk->srvid_prefix_bits;
 
                 err = service_add(ssk->hash_key, 
@@ -298,7 +298,7 @@ void serval_sock_unhash(struct sock *sk)
 
                 service_del_dest(&ssk->local_srvid,
                             ssk->srvid_prefix_bits == 0 ?
-                            sizeof(ssk->local_srvid) * 8 :
+                            SERVICE_ID_MAX_PREFIX_BITS :
                             ssk->srvid_prefix_bits, NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)

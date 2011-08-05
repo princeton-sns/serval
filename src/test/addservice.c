@@ -70,13 +70,13 @@ int main(int argc, char **argv)
                         service_id_to_str(&srvid));
                 
                  ret = libstack_del_service(&srvid, 
-                                            SERVICE_ID_DEFAULT_PREFIX, ip);
+                                            SERVICE_ID_MAX_PREFIX_BITS, ip);
         } else {
-                printf("adding service %s:%lu\n",
-                       service_id_to_str(&srvid), SERVICE_ID_DEFAULT_PREFIX);
+                printf("adding service %s:%u\n",
+                       service_id_to_str(&srvid), SERVICE_ID_MAX_PREFIX_BITS);
                 
                 ret = libstack_add_service(&srvid, 
-                                           SERVICE_ID_DEFAULT_PREFIX, &ipaddr);
+                                           SERVICE_ID_MAX_PREFIX_BITS, &ipaddr);
         }
 	if (ret < 0) {
 		fprintf(stderr, "could not add/delete service\n");

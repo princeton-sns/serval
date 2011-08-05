@@ -583,39 +583,31 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
 {
         /* lock the se, take the top priority entry and determine the
          * extent of iteration */
-        struct dest_set* dset;
-        int sumweight = 0;
-        struct dest* dst = NULL;
+        struct dest_set *dset;
 
         memset(iter, 0, sizeof(*iter));
         iter->entry = se;
         read_lock_bh(&se->destlock);
 
-        if (se->count == 0)
+        if (se->count == 0 || list_empty(&se->dest_set))
                 return;
 
         dset = list_first_entry(&se->dest_set, struct dest_set, ds);
-
-        if (dset == NULL)
-                return;
 
         if (mode == SERVICE_ITER_ALL || (dset->flags & SVSF_MULTICAST)) {
                 iter->dest_pos = dset->dest_list.next;
                 iter->destset = dset;
         } else {
-                /*round robin or sample*/
-                uint32_t sample = 0;
+                struct dest *dst = NULL;
+                /* round robin or sample */
+                unsigned int sample = 0;
+                unsigned int sumweight = 0;
 #if defined(OS_LINUX_KERNEL)
                 get_random_bytes(&sample, sizeof(sample));
-                /* FIXME: Floating point not allowed in kernel */
-                /* sample = (uint32_t) ((float) sample / 
-                                     0xFFFFFFFF * dset->normalizer);
-                */
 #else
-
-                sample = (uint32_t) ((float) rand() / 
-                                     RAND_MAX * dset->normalizer);
+                sample = rand();
 #endif
+                sample = sample % (dset->normalizer + 1);
 
                 list_for_each_entry(dst, &dset->dest_list, lh) {
                         sumweight += dst->weight;
@@ -625,6 +617,7 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
                                 return;
                         }
                 }
+                
                 if (dst) {
                         iter->dest_pos = &dst->lh;
                         iter->destset = NULL;
@@ -641,7 +634,7 @@ void service_resolution_iter_destroy(struct service_resolution_iter* iter)
 
 struct dest *service_resolution_iter_next(struct service_resolution_iter* iter)
 {
-        struct dest* dst = NULL;
+        struct dest *dst;
 
         iter->last_pos = iter->dest_pos;
 
@@ -666,7 +659,7 @@ struct dest *service_resolution_iter_next(struct service_resolution_iter* iter)
 void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, 
                                        int packets, int bytes) 
 {
-        struct dest* dst = NULL;
+        struct dest *dst = NULL;
 
         if (iter == NULL)
                 return;

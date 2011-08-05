@@ -52,8 +52,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
    
-                if (entry->srvid_prefix_bits > SERVICE_ID_DEFAULT_PREFIX)
-                        entry->srvid_prefix_bits = SERVICE_ID_DEFAULT_PREFIX;
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
 #if defined(OS_LINUX_KERNEL)
                 {
@@ -152,10 +152,8 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 struct dest_stats dstat;
                 struct service_entry *se;
 
-                if (entry->srvid_prefix_bits > 
-                    SERVICE_ID_DEFAULT_PREFIX) {
-                        entry->srvid_prefix_bits = SERVICE_ID_DEFAULT_PREFIX;
-                }
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(null_ip)) != 0) {
@@ -230,8 +228,9 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 
         for (i = 0; i < num_res; i++) {
                 struct service_info *entry = &cmr->service[i];
-                if (entry->srvid_prefix_bits > SERVICE_ID_DEFAULT_PREFIX)
-                        entry->srvid_prefix_bits = SERVICE_ID_DEFAULT_PREFIX;
+
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(entry->address)) != 0) {

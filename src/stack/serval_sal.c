@@ -1685,7 +1685,7 @@ static int serval_sal_add_source_ext(struct sk_buff *skb,
 /* Resolution return values. */
 enum {
         SAL_RESOLVE_ERROR = -1,
-        SAL_RESOLVE_FAIL, /* No match */
+        SAL_RESOLVE_NO_MATCH,
         SAL_RESOLVE_DEMUX,
         SAL_RESOLVE_FORWARD,
         SAL_RESOLVE_DELAY,
@@ -1700,29 +1700,40 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
         struct service_entry* se = NULL;
         struct service_resolution_iter iter;
         struct dest* dest = NULL;
-        unsigned int num_forward = 0;
+        struct iphdr *iph = ip_hdr(skb);
+        unsigned int iph_len = iph->ihl << 2;
         unsigned int hdr_len = ntohs(sh->length);
-        struct iphdr *iph = NULL;
-        unsigned int iph_len = 0;
-        struct sk_buff *cskb = NULL;
-        int err = SAL_RESOLVE_FAIL;
+        unsigned int num_forward = 0;
+        unsigned int data_len = skb->len - hdr_len;
+        int err = SAL_RESOLVE_NO_MATCH;
 
         *sk = NULL;
 
         LOG_DBG("Resolve or demux inbound packet on serviceID %s\n", 
                 service_id_to_str(srvid));
-        
+
+#if defined(ENABLE_DEBUG)
+        {
+                char srcstr[18], dststr[18];
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
+                        skb->dev ? skb->dev->name : "no dev",
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph_len, iph->ihl);
+        }
+#endif
+
         /* Match on the highest priority srvid rule, even if it's not
          * the sock TODO - use flags/prefix in resolution This should
          * probably be in a separate function call
          * serval_sal_transit_rcv or resolve something
          */
-        se = service_find(srvid, sizeof(*srvid) * 8);
+        se = service_find(srvid, SERVICE_ID_MAX_PREFIX_BITS);
 
         if (!se) {
                 LOG_INF("No matching service entry for serviceID %s\n",
                         service_id_to_str(srvid));
-                return SAL_RESOLVE_FAIL;
+                return SAL_RESOLVE_NO_MATCH;
         }
 
         LOG_DBG("Service entry count=%u\n", se->count);
@@ -1736,23 +1747,27 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
         if (!dest) {
                 LOG_INF("No dest to forward on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, 
-                                                  -(skb->len - hdr_len));
+                service_resolution_iter_inc_stats(&iter, -1, data_len);
                 service_resolution_iter_destroy(&iter);
                 service_entry_put(se);
-                return SAL_RESOLVE_FAIL;
+                return SAL_RESOLVE_NO_MATCH;
         }
 
+        service_resolution_iter_inc_stats(&iter, 1, data_len);
+                
         while (dest) {
                 struct dest *next_dest;
 
-                if (cskb == NULL) {
-                        service_resolution_iter_inc_stats(&iter, 1, 
-                                                          skb->len - hdr_len);
-                }
-
                 next_dest = service_resolution_iter_next(&iter);
-                
+
+                /* It is kind of unclear how to handle DEMUX vs
+                   FORWARD rules here. Does it make sense to have both
+                   a socket and forward rule for one single serviceID?
+                   It seems that if we have a socket, we shouldn't
+                   forward at all. But what if the socket is not first
+                   in the iteration? I guess for now we just forward
+                   until we hit a socket, and then break (i.e., DEMUX
+                   to socket but stop forwarding). */
                 if (is_sock_dest(dest)) {
                         /* local resolution */
                         *sk = dest->dest_out.sk;
@@ -1760,89 +1775,88 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         err = SAL_RESOLVE_DEMUX;
                         break;
                 } else {
+                        struct sk_buff *cskb;
+
+                        err = SAL_RESOLVE_FORWARD;
+    
+                        if (skb->pkt_type == PACKET_BROADCAST) {
+                                /* Do not forward broadcast packets as they
+                                   may cause resolution loops. */
+                                kfree_skb(skb);
+                                break;
+                        }
+                        
                         if (next_dest == NULL) {
                                 cskb = skb;
                         } else {
-                                cskb = skb_clone(skb, GFP_ATOMIC);
+                                if (skb_cloned(skb))
+                                        cskb = pskb_copy(skb, GFP_ATOMIC);
+                                else
+                                        cskb = skb_clone(skb, GFP_ATOMIC);
                                 
                                 if (!cskb) {
                                         LOG_ERR("Skb allocation failed\n");
                                         kfree_skb(skb);
-                                        err = -ENOBUFS;
                                         break;
                                 }
-                                /* Cloned skb will have no socket set. */
-                                //skb_serval_set_owner_w(cskb, sk);
                         }
+
+                        if (ip_hdr(skb) == NULL) {
+                                LOG_ERR("2. skb ip header is null\n");
+                        }
+                        if (ip_hdr(cskb) == NULL) {
+                                LOG_ERR("cskb ip header is null\n");
+                                kfree_skb(cskb);
+                                goto next_dest;
+                        }
+
+                        iph_len = iph->ihl << 2;
+                        skb_push(cskb, iph_len);
                         
                         /* Need to drop dst since this packet is
                          * routed for input. Otherwise, kernel IP
                          * stack will be confused when transmitting
                          * this packet. */
-                        skb_dst_drop(cskb);
+                        //skb_dst_drop(cskb);
 
-                        iph = (struct iphdr *)skb_network_header(cskb);
-                        iph_len = iph->ihl << 2;
-                        skb_push(cskb, iph_len);
-
-                        LOG_DBG("Forwarding packet\n");
-#if defined(OS_LINUX_KERNEL)
-                        err = ip_route_input(cskb, 
-                                             iph->daddr, 
-                                             iph->saddr, 
-                                             iph->tos, 
-                                             cskb->dev);
-
-                        if (err < 0) {
-                                //LOG_ERR("Could not route resolution packet from %s to %s\n", inet_ntoa(iph->saddr), inet_ntoa(iph->daddr));
-                                LOG_ERR("Could not forward SAL packet\n");
-                                kfree_skb(cskb);
-                                continue;
-                        }
-
-#else
+                        memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
+                   
+#if !defined(OS_LINUX_KERNEL)
                         /* Set the output device - ip_forward uses the
                          * out device specified in the dst_entry route
                          * and assumes that skb->dev is the input
                          * interface*/
                         if (dest->dest_out.dev)
-                                skb_set_dev(cskb, 
-                                            dest->dest_out.dev);
-
+                                skb_set_dev(cskb, dest->dest_out.dev);
+                        
 #endif /* OS_LINUX_KERNEL */
-
+                        
                         /* TODO Set the true overlay source address if
                          * the packet may be ingress-filtered
                          * user-level raw socket forwarding may drop
                          * the packet if the source address is
                          * invalid */
-                        serval_sal_add_source_ext(cskb, sh, 
-                                                  iph, iph_len);
+                        serval_sal_add_source_ext(cskb, sh, iph, iph_len);
+                        
+                        LOG_DBG("Forwarding\n");
 
-                        err = serval_ipv4_forward_out(cskb);
-
-                        if (err < 0) {
-                                LOG_ERR("SAL forwarding failed\n");
-                                err = SAL_RESOLVE_ERROR;
-                        } else {
+                        if (serval_ipv4_forward_out(cskb)) {
+                                /* serval_ipv4_forward_out has taken
+                                   custody of packet, no need to
+                                   free. */
+                                LOG_ERR("Forwarding failed\n");
+                        } else 
                                 num_forward++;
-                        }
                 }
+        next_dest:
                 dest = next_dest;
         }
 
-        if (!cskb) {
-                /* TODO this is not going to work since it needs to be
-                 * called PRIOR to hitting the end*/
-                service_resolution_iter_inc_stats(&iter, -1, 
-                                                  -(skb->len - hdr_len));
-        }
+        if (num_forward == 0)
+                service_resolution_iter_inc_stats(&iter, -1, -data_len);
 
         service_resolution_iter_destroy(&iter);
         service_entry_put(se);
-        
-        if (num_forward) 
-                err = SAL_RESOLVE_FORWARD;
 
         return err;
 }
@@ -1938,7 +1952,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
                 *sk = serval_sal_demux_service(skb, sh, srvid);
                 
                 if (!(*sk))
-                        ret = SAL_RESOLVE_FAIL;
+                        ret = SAL_RESOLVE_NO_MATCH;
                 else 
                         ret = SAL_RESOLVE_DEMUX;
         }
@@ -1949,8 +1963,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
 int serval_sal_rcv(struct sk_buff *skb)
 {
         struct sock *sk = NULL;
-        struct serval_hdr *sh = 
-                (struct serval_hdr *)skb_transport_header(skb);
+        struct serval_hdr *sh = serval_hdr(skb);
         unsigned int hdr_len = 0;
         int err = 0;
 
@@ -2011,9 +2024,9 @@ int serval_sal_rcv(struct sk_buff *skb)
                 switch (err) {
                 case SAL_RESOLVE_DEMUX:
                         break;
-                case SAL_RESOLVE_FORWARD:
+                case SAL_RESOLVE_FORWARD:                        
                         return 0;
-                case SAL_RESOLVE_FAIL:
+                case SAL_RESOLVE_NO_MATCH:
                         /* TODO: fix error codes for this function */
                         err = -EHOSTUNREACH;
                 case SAL_RESOLVE_DROP:
@@ -2441,7 +2454,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
-                        cskb = skb_clone(skb, gfp_mask);
+                        if (unlikely(skb_cloned(skb)))
+                                cskb = pskb_copy(skb, GFP_ATOMIC);
+                        else
+                                cskb = skb_clone(skb, GFP_ATOMIC);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");

@@ -29,8 +29,8 @@ int libstack_add_service(const struct service_id *srvid,
         cm.cmh.type = CTRLMSG_TYPE_ADD_SERVICE;
         cm.cmh.len = sizeof(cm);
         cm.service[0].srvid_prefix_bits = 
-                (prefix_bits > SERVICE_ID_DEFAULT_PREFIX) ?
-                SERVICE_ID_DEFAULT_PREFIX : prefix_bits;
+                (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
+                SERVICE_ID_MAX_PREFIX_BITS : prefix_bits;
         memcpy(&cm.service[0].srvid, srvid, sizeof(*srvid));
         memcpy(&cm.service[0].address, ipaddr, sizeof(*ipaddr));
 	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
@@ -52,8 +52,8 @@ int libstack_del_service(const struct service_id *srvid,
         cm.cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
         cm.cmh.len = CTRLMSG_SERVICE_LEN(1);
         cm.service[0].srvid_prefix_bits = 
-                (prefix_bits > SERVICE_ID_DEFAULT_PREFIX) ? 
-                SERVICE_ID_DEFAULT_PREFIX : prefix_bits;
+                (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ? 
+                SERVICE_ID_MAX_PREFIX_BITS : prefix_bits;
         memcpy(&cm.service[0].srvid, srvid, sizeof(*srvid));
 
         if (ipaddr) {
