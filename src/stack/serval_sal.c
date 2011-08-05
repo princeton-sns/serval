@@ -1704,8 +1704,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
         struct service_entry* se = NULL;
         struct service_resolution_iter iter;
         struct dest* dest = NULL;
-        struct iphdr *iph = ip_hdr(skb);
-        unsigned int iph_len = iph->ihl << 2;
         unsigned int hdr_len = ntohs(sh->length);
         unsigned int num_forward = 0;
         unsigned int data_len = skb->len - hdr_len;
@@ -1715,17 +1713,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
         LOG_DBG("Resolve or demux inbound packet on serviceID %s\n", 
                 service_id_to_str(srvid));
-
-#if defined(ENABLE_DEBUG)
-        {
-                char srcstr[18], dststr[18];
-                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
-                        skb->dev ? skb->dev->name : "no dev",
-                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                        skb->len, iph_len, iph->ihl);
-        }
-#endif
 
         /* Match on the highest priority srvid rule, even if it's not
          * the sock TODO - use flags/prefix in resolution This should
@@ -1780,6 +1767,8 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         break;
                 } else {
                         struct sk_buff *cskb;
+                        struct iphdr *iph;
+                        unsigned int iph_len;
 
                         err = SAL_RESOLVE_FORWARD;
     
@@ -1805,6 +1794,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 }
                         }
 
+                        iph = ip_hdr(cskb);
                         iph_len = iph->ihl << 2;
 
                         memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
