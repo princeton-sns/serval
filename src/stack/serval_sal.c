@@ -1165,7 +1165,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         } else {
                 LOG_PKT("Dropping packet\n");
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1194,7 +1194,6 @@ static int serval_sal_closewait_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
         }
 
         return err;
@@ -1453,7 +1452,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1483,7 +1482,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1508,7 +1507,6 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
         }
 
         return err;
@@ -1530,7 +1528,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         if (ack_ok) {
@@ -1553,9 +1551,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                 (struct serval_service_ext *)(sh + 1);
         int err = 0;
 
-        if (ssk->hash_key && srv_ext && srv_ext){
-                //LOG_DBG("Receiving unconnected datagram for service %s at %i from service %s at %s\n", service_id_to_str((struct service_id*) ssk->hash_key),
-                //    ip_hdr(skb)->daddr, service_id_to_str(&srv_ext->src_srvid), ip_hdr(skb)->saddr);
+        if (ssk->hash_key && srv_ext && srv_ext) {
                 LOG_DBG("Receiving unconnected datagram for service %s\n", 
                         service_id_to_str((struct service_id*) ssk->hash_key));
         }
@@ -1566,7 +1562,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
