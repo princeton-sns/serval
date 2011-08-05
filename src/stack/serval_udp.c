@@ -49,19 +49,18 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .conn_child_sock = serval_udp_connection_respond_sock,
 };
 
-/* from fastudpsrc */
-void udp_checksum(struct udphdr *uh, void *data, unsigned int len)
+/*
+ *	Generic checksumming routines for UDP(-Lite) v4 and v6
+ */
+static inline __sum16 __udp_checksum_complete(struct sk_buff *skb)
 {
-        uint32_t src = *(uint32_t *)data;
-        unsigned csum = 0; 
-        uh->check = 0;
-        /* FIXME: Do not assume IP header lacks options */
-        csum = ~in_cksum((unsigned char *)uh, len) & 0xFFFF;
-        csum += src & 0xFFFF;
-        csum += (src >> 16) & 0xFFFF;
-        csum += htons(SERVAL_PROTO_UDP) + htons(len);
-        csum = (csum & 0xFFFF) + (csum >> 16);
-        uh->check = ~csum & 0xFFFF;
+	return __skb_checksum_complete_head(skb, 0);
+}
+
+static inline int udp_checksum_complete(struct sk_buff *skb)
+{
+	return !skb_csum_unnecessary(skb) &&
+		__udp_checksum_complete(skb);
 }
 
 static int serval_udp_transmit_skb(struct sock *sk, 
@@ -78,8 +77,14 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(uh, &inet_sk(sk)->inet_saddr, skb->len);
         skb->ip_summed = CHECKSUM_NONE;
+        uh->check = 0;
+        uh->check = csum_tcpudp_magic(inet_sk(sk)->inet_saddr,
+                                      inet_sk(sk)->inet_daddr, 
+                                      skb->len,
+                                      IPPROTO_UDP,
+                                      csum_partial(uh, skb->len, 0));
+
         skb->protocol = IPPROTO_UDP;
         
         LOG_PKT("UDP pkt [s=%u d=%u len=%u]\n",
@@ -186,6 +191,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
    	/*
 	 *  Validate the packet.
 	 */
+
         if (SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
                 struct udphdr *udph = udp_hdr(skb);
                 unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
@@ -197,7 +203,11 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                       * not a FIN */
                 if (datalen == 0) 
                         goto drop;
-                /* FIXME: Should verify checksum */
+        }
+            
+        if (udp_checksum_complete(skb)) {
+                LOG_DBG("Checksum error, dropping.\n");
+                goto drop;
         }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))

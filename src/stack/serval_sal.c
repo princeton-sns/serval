@@ -1692,10 +1692,6 @@ enum {
         SAL_RESOLVE_DROP,
 };
 
-extern void udp_checksum(struct udphdr *uh, void *data, unsigned int len);
-extern void __serval_tcp_v4_send_check(struct sk_buff *skb,
-                                       __be32 saddr, __be32 daddr);
-
 static int serval_sal_resolve_service(struct sk_buff *skb, 
                                       struct serval_hdr *sh,
                                       struct service_id *srvid,
@@ -1813,18 +1809,34 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * the packet if the source address is
                          * invalid */
                         serval_sal_add_source_ext(cskb, sh, iph, iph_len);
-                        
-                        /* Must recalculate transport checksum. */
-                        skb_set_transport_header(skb, hdr_len);
 
+                        /* Must recalculate transport checksum. */
+                        pskb_pull(skb, hdr_len);
+                        skb_reset_transport_header(skb);
+                        skb->ip_summed = CHECKSUM_NONE;
+                        
                         switch (sh->protocol) {
                         case SERVAL_PROTO_TCP:
-                                __serval_tcp_v4_send_check(skb, iph->saddr, 
-                                                           iph->daddr);
+                                tcp_hdr(skb)->check = 0;
+                                skb->csum = csum_partial(tcp_hdr(skb),
+                                                         skb->len, 0);
+                                tcp_hdr(skb)->check = 
+                                        csum_tcpudp_magic(iph->saddr, 
+                                                          iph->daddr, 
+                                                          skb->len, 
+                                                          IPPROTO_TCP, 
+                                                          skb->csum);
                                 break;
                         case SERVAL_PROTO_UDP:
-                                udp_checksum(udp_hdr(skb), &iph->saddr, 
-                                             skb->len - hdr_len);
+                                udp_hdr(skb)->check = 0;
+                                skb->csum = csum_partial(udp_hdr(skb),
+                                                         skb->len, 0);
+                                udp_hdr(skb)->check = 
+                                        csum_tcpudp_magic(iph->saddr, 
+                                                          iph->daddr, 
+                                                          skb->len, 
+                                                          IPPROTO_UDP, 
+                                                          skb->csum);
                                 break;
                         default:
                                 LOG_INF("Unknown transport protocol %u, "
@@ -1832,9 +1844,8 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                         sh->protocol);
                                 break;
                         }
-
-                        /* Push back IP header */
-                        skb_push(cskb, iph_len);
+                        /* Push back to IP header */
+                        skb_push(cskb, iph_len + hdr_len);
 
                         if (serval_ipv4_forward_out(cskb)) {
                                 /* serval_ipv4_forward_out has taken
