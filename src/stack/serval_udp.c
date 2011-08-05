@@ -68,20 +68,17 @@ static int serval_udp_transmit_skb(struct sock *sk,
                                    struct sk_buff *skb)
 {
         int err;
-        unsigned short tot_len;
         struct udphdr *uh;
 
         /* Push back to make space for transport header */
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 
-        tot_len = skb->len + 20 + 14;
-        
         /* Build UDP header */
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(skb->len, uh, &inet_sk(sk)->inet_saddr);
+        udp_checksum(uh, &inet_sk(sk)->inet_saddr, skb->len);
         skb->ip_summed = CHECKSUM_NONE;
         skb->protocol = IPPROTO_UDP;
         
