@@ -225,7 +225,7 @@ static int client(const char *filepath, int handle_migration,
                 addrlen = sizeof(cliaddr.inet);
         } else {
                 cliaddr.serval.sv_family = family;
-                cliaddr.serval.sv_srvid.s_sid16[0] = htons(getpid());
+                cliaddr.serval.sv_srvid.s_sid32[0] = htonl(getpid());
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
                        &listen_srvid, sizeof(listen_srvid));
@@ -323,7 +323,7 @@ main(int argc, char **argv)
         int port = DEFAULT_LISTEN_SID;
         int family = AF_SERVAL;
 
-        listen_srvid.s_sid16[0] = htons(DEFAULT_LISTEN_SID);    
+        listen_srvid.s_sid32[0] = htonl(DEFAULT_LISTEN_SID);    
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -368,7 +368,7 @@ main(int argc, char **argv)
                                 fprintf(stderr, "invalid service id %ld", v);
                                 return EXIT_FAILURE;
                         } else  {
-                                listen_srvid.s_sid16[0] = htons((short)v);
+                                listen_srvid.s_sid32[0] = htonl((short)v);
                                 printf("listen service id: %s\n", 
                                        service_id_to_str(&listen_srvid));
                         }
