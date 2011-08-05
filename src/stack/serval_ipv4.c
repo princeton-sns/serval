@@ -28,13 +28,6 @@ static inline void ip_send_check(struct iphdr *iph)
         iph->check = ip_fast_csum((unsigned char *)iph, iph->ihl);
 }
 
-static int ip_forward(struct sk_buff *skb)
-{
-        LOG_ERR("Not implemented!\n");
-        kfree_skb(skb);
-        return NET_RX_DROP;
-}
-
 int serval_ipv4_rcv(struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
@@ -104,10 +97,7 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                 return NET_RX_DROP;
         }
 #else
-        /* TODO: Implement something useful here. */
-        kfree_skb(skb);
-        LOG_INF("Not implemented! Dropping packet.\n");
-        return NET_RX_DROP;
+        iph->ttl = iph->ttl - 1;
 #endif
 
 #if defined(ENABLE_DEBUG)
@@ -136,11 +126,12 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
            point to ip_forward. The ip_forward function will
            eventually call dst_output, after having updated TTL, etc.
         */
-        //kfree_skb(skb);
-        //return NET_RX_SUCCESS;
+#if defined(OS_LINUX_KERNEL)
         return dst_input(skb);
+#else
+        return dev_queue_xmit(skb);
+#endif
 }
-
 
 static inline int serval_ip_local_out(struct sk_buff *skb)
 {
