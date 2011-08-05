@@ -50,11 +50,9 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
 };
 
 /* from fastudpsrc */
-static void udp_checksum(uint16_t total_len,
-                         struct udphdr *uh, void *data) 
+void udp_checksum(struct udphdr *uh, void *data, unsigned int len)
 {
         uint32_t src = *(uint32_t *)data;
-        unsigned short len = total_len - 14 - sizeof(struct iphdr);
         unsigned csum = 0; 
         uh->check = 0;
         /* FIXME: Do not assume IP header lacks options */
@@ -83,7 +81,7 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, &inet_sk(sk)->inet_saddr);
+        udp_checksum(skb->len, uh, &inet_sk(sk)->inet_saddr);
         skb->ip_summed = CHECKSUM_NONE;
         skb->protocol = IPPROTO_UDP;
         

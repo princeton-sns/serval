@@ -1692,6 +1692,10 @@ enum {
         SAL_RESOLVE_DROP,
 };
 
+extern void udp_checksum(struct udphdr *uh, void *data, unsigned int len);
+extern void __serval_tcp_v4_send_check(struct sk_buff *skb,
+                                       __be32 saddr, __be32 daddr);
+
 static int serval_sal_resolve_service(struct sk_buff *skb, 
                                       struct serval_hdr *sh,
                                       struct service_id *srvid,
@@ -1801,34 +1805,16 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 }
                         }
 
-                        if (ip_hdr(skb) == NULL) {
-                                LOG_ERR("2. skb ip header is null\n");
-                        }
-                        if (ip_hdr(cskb) == NULL) {
-                                LOG_ERR("cskb ip header is null\n");
-                                kfree_skb(cskb);
-                                goto next_dest;
-                        }
-
                         iph_len = iph->ihl << 2;
-                        skb_push(cskb, iph_len);
-                        
-                        /* Need to drop dst since this packet is
-                         * routed for input. Otherwise, kernel IP
-                         * stack will be confused when transmitting
-                         * this packet. */
-                        //skb_dst_drop(cskb);
 
                         memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
-                   
-#if !defined(OS_LINUX_KERNEL)
+#if defined(OS_USER)
                         /* Set the output device - ip_forward uses the
                          * out device specified in the dst_entry route
                          * and assumes that skb->dev is the input
                          * interface*/
                         if (dest->dest_out.dev)
                                 skb_set_dev(cskb, dest->dest_out.dev);
-                        
 #endif /* OS_LINUX_KERNEL */
                         
                         /* TODO Set the true overlay source address if
@@ -1838,7 +1824,27 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * invalid */
                         serval_sal_add_source_ext(cskb, sh, iph, iph_len);
                         
-                        LOG_DBG("Forwarding\n");
+                        /* Must recalculate transport checksum. */
+                        skb_set_transport_header(skb, hdr_len);
+
+                        switch (sh->protocol) {
+                        case SERVAL_PROTO_TCP:
+                                __serval_tcp_v4_send_check(skb, iph->saddr, 
+                                                           iph->daddr);
+                                break;
+                        case SERVAL_PROTO_UDP:
+                                udp_checksum(udp_hdr(skb), &iph->saddr, 
+                                             skb->len - hdr_len);
+                                break;
+                        default:
+                                LOG_INF("Unknown transport protocol %u, "
+                                        "forgoing checksum calculation\n",
+                                        sh->protocol);
+                                break;
+                        }
+
+                        /* Push back IP header */
+                        skb_push(cskb, iph_len);
 
                         if (serval_ipv4_forward_out(cskb)) {
                                 /* serval_ipv4_forward_out has taken
@@ -1848,7 +1854,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         } else 
                                 num_forward++;
                 }
-        next_dest:
                 dest = next_dest;
         }
 
@@ -2359,7 +2364,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
         sh->type = SERVAL_SKB_CB(skb)->pkttype;
         sh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK;
-        sh->protocol = skb->protocol;
+        sh->protocol = sk->sk_protocol;
         sh->length = htons(hdr_len);
         memcpy(&sh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
