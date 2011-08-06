@@ -361,9 +361,12 @@ int bst_subtree_func(struct bst_node *n,
         
         while (!list_empty(&stack)) {
                 n = stack_pop(&stack);
+
                 if (n) {
+                        struct bst_node *left = n->left, 
+                                *right = n->right;
+                        
                         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
-                                
                                 ret = func(n, arg);
                                 
                                 if (ret < 0)
@@ -371,11 +374,11 @@ int bst_subtree_func(struct bst_node *n,
                                 
                                 count += ret;
                         }
-                        if (n->right)
-                                stack_push(&stack, n->right);
+                        if (right)
+                                stack_push(&stack, right);
                         
-                        if (n->left)
-                                stack_push(&stack, n->left);
+                        if (left)
+                                stack_push(&stack, left);
                 }
         }
         return count;
