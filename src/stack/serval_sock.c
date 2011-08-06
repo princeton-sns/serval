@@ -24,7 +24,7 @@ atomic_t serval_nr_socks = ATOMIC_INIT(0);
 static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
 static struct serval_table listen_table;
-static LIST_HEAD(sock_list);
+static struct list_head sock_list = { &sock_list, &sock_list };
 static DEFINE_RWLOCK(sock_list_lock);
 
 /* The number of (prefix) bytes to hash on in the serviceID */

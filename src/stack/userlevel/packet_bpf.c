@@ -159,7 +159,7 @@ static int packet_bpf_recv(struct net_device *dev)
         struct sk_buff *skb;
         unsigned char *ep;
         struct bpf_hdr *bh = (struct bpf_hdr *)priv->buf;
-        int ret;
+	ssize_t len;
 
         /* Unfortunately, bpf mandates that we read buflen bytes data
            each time, which may include several packets. Therefore, we
@@ -167,23 +167,24 @@ static int packet_bpf_recv(struct net_device *dev)
            an skb for each individual packet followed by a copy of its
            data to the skb.
         */
-        ret = read(dev->fd, priv->buf, priv->buflen);
+        len = read(dev->fd, priv->buf, priv->buflen);
         
-        if (ret == -1) {
+        if (len == -1) {
                 LOG_ERR("read header: %s\n", 
                         strerror(errno));
                 return -1;
-        } else if (ret < sizeof(*bh)) {
+        } else if (len < sizeof(*bh)) {
                 LOG_ERR("read too small\n");
                 return -1;
         }
         
-        ep = priv->buf + ret;
+        ep = priv->buf + len;
         
         while ((unsigned char *)bh < ep) {
+		int ret;
                 unsigned long data_len = bh->bh_caplen + 20;
 
-                skb = alloc_skb(data_len);
+                skb = alloc_skb(data_len, GFP_KERNEL);
                 
                 if (!skb) {
                         LOG_ERR("could not allocate skb\n");

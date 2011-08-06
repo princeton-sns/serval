@@ -558,24 +558,24 @@ int client_handle_send_req_msg(struct client *c, struct client_msg *msg)
 int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
 {
 	struct client_msg_recv_req *req = (struct client_msg_recv_req *)msg;
-        struct {
-                struct client_msg_recv_rsp rsp;
-                unsigned char data[req->data_len];
-        } r;
-        struct socket *sock = c->sock;
+        struct client_msg_recv_rsp *rsp;
+	struct socket *sock = c->sock;
         struct msghdr mh;
         struct iovec iov;
-
         struct {
                 struct sockaddr_sv serv;
                 struct sockaddr_in addr;
         } saddr;
-
         int ret;
+	
+	rsp = malloc(sizeof(*rsp) + req->data_len);
 
-        memset(&r, 0, sizeof(r));
+	if (!rsp)
+		return -ENOMEM;
+	
+        memset(&rsp, 0, sizeof(*rsp) + req->data_len);
         memset(&saddr, 0, sizeof(saddr));
-        client_msg_hdr_init(&r.rsp.msghdr, MSG_RECV_RSP);
+        client_msg_hdr_init(&rsp->msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));
         memset(&iov, 0, sizeof(iov));
         memset(&saddr, 0, sizeof(saddr));
@@ -583,8 +583,8 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         mh.msg_namelen = sizeof(saddr);
         mh.msg_iov = &iov;
         mh.msg_iovlen = 1;
-        
-        iov.iov_base = r.data;
+	
+        iov.iov_base = rsp->data;
         iov.iov_len = req->data_len;
 
         LOG_DBG("Client %u data_len=%u flags=%u\n", 
@@ -593,21 +593,23 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         ret = sock->ops->recvmsg(NULL, sock, &mh, req->data_len, req->flags);
         
         if (ret < 0) {
-                r.rsp.error = KERN_ERR(ret);
+                rsp->error = KERN_ERR(ret);
                 LOG_ERR("recvmsg: %s\n", KERN_STRERROR(ret));
         } else {
-                memcpy(&r.rsp.srvid, &saddr.serv.sv_srvid, 
+                memcpy(&rsp->srvid, &saddr.serv.sv_srvid, 
                        sizeof(saddr.serv.sv_srvid));
-                r.rsp.ipaddr = saddr.addr.sin_addr.s_addr;
-                r.rsp.data_len = ret;
-                r.rsp.msghdr.payload_length += ret;
-                r.data[ret] = '\0';
+                rsp->ipaddr = saddr.addr.sin_addr.s_addr;
+                rsp->data_len = ret;
+                rsp->msghdr.payload_length += ret;
+                rsp->data[ret] = '\0';
         }
         
-        LOG_DBG("Client %u read data len=%u\n", r.rsp.data_len);
+        LOG_DBG("Client %u read data len=%u\n", rsp->data_len);
 
-        ret = client_msg_write(c->fd, &r.rsp.msghdr);
+        ret = client_msg_write(c->fd, &rsp->msghdr);
         
+	free(rsp);
+	
         return ret;
 }
 
