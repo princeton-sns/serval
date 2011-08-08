@@ -216,7 +216,7 @@ void *client_thread(void *arg)
 
 static void signal_handler(int sig)
 {
-        /* printf("signal caught! exiting...\n"); */
+        printf("signal %u caught!\n", sig);
 }
 
 #define TRANSLATOR_PORT 8080
@@ -235,6 +235,7 @@ int main(int argc, char **argv)
         sigaction(SIGTERM, &action, 0);
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
+        sigaction(SIGPIPE, &action, 0);
 	
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 
