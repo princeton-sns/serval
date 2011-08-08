@@ -74,6 +74,8 @@ struct service_id {
 #define s_sid32 srv_un.un_id32
 };
 
+#define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
+
 enum sv_service_flags {
         /* bottom 2 bits reserved for scope - resolution and
          * registration */

@@ -49,7 +49,7 @@ struct sv_instance_addr {
 
 //TODO what is the size of this thing, esp. with sockaddr_sv having 3 bytes before the serviceID
 struct service_reference {
-    /*top attributes correspond to service_resolution*/
+    /*top attributes correspond to service_info*/
     struct sv_instance_addr instance;
     //flags should include: backup, mcast, private/scope, etc
     uint64_t registered;

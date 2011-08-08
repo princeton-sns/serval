@@ -30,8 +30,10 @@ enum ctrlmsg_type {
 
 struct service_info {
         /*service desc up top*/
-        uint16_t type;
-        struct sockaddr_sv service;
+        unsigned int type;
+        struct service_id srvid;
+        unsigned short srvid_prefix_bits;
+        unsigned short srvid_flags;
         struct net_addr address;
         int if_index;
 
@@ -85,7 +87,9 @@ struct ctrlmsg {
  * in to bind()*/
 struct ctrlmsg_register {
         struct ctrlmsg cmh;
-        struct sockaddr_sv service;
+        struct service_id srvid;
+        unsigned short srvid_prefix_bits;
+        unsigned short srvid_flags;
 } __attribute__((packed));
 
 #define CTRLMSG_REGISTER_SIZE (sizeof(struct ctrlmsg_register))
@@ -118,7 +122,7 @@ struct ctrlmsg_resolve {
 struct ctrlmsg_service {
         struct ctrlmsg cmh;
         uint32_t xid;
-        struct service_info services[1]; /* Always at least one
+        struct service_info service[1]; /* Always at least one
                                             service entry */
 } __attribute__((packed));
 
@@ -139,7 +143,7 @@ struct ctrlmsg_service {
 struct ctrlmsg_service_stat {
         struct ctrlmsg cmh;
         uint32_t xid;
-        struct service_info_stat services[1]; /* Always at least one
+        struct service_info_stat service[1]; /* Always at least one
                                                  service entry */
 } __attribute__((packed));
 

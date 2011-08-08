@@ -70,7 +70,7 @@ out:
 	return ret;
 inhdr_error:
         LOG_ERR("header error\n");
-        FREE_SKB(skb);
+        kfree_skb(skb);
 
         return ret;
 }
@@ -79,32 +79,59 @@ inhdr_error:
 
 int serval_ipv4_forward_out(struct sk_buff *skb)
 {
-        int err = -EHOSTUNREACH;
-
-#if defined(OS_LINUX_KERNEL)
-        //return dst_input(skb);
-        /* Inject into stack again and let IP take care of
-           business. */
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        /* TODO: Figure out the right thing to do here. */
-        err = dev_forward_skb(skb->dev, skb);
-#endif
-
-#else
         struct iphdr *iph = ip_hdr(skb);
-        
-        iph->tot_len = htons(skb->len);
-        //ip_decrease_ttl(iph->ttl);
-        iph->ttl = iph->ttl - 1;
-        /* Calculate checksum */
-        ip_send_check(ip_hdr(skb));
-        /* err = serval_output(skb);*/
-        err = dev_queue_xmit(skb);
-#endif
-        return err;
-}
+#if defined(OS_LINUX_KERNEL)
+        int err;
 
+        /* IP forwarding must be enabled for this to
+           work. */
+        err = ip_route_input_noref(skb, 
+                                   iph->daddr, 
+                                   iph->saddr, 
+                                   iph->tos, 
+                                   skb->dev);
+        
+        if (err < 0) {
+                LOG_ERR("Could not forward SAL packet, err=%d\n", err);
+                kfree_skb(skb);
+                return NET_RX_DROP;
+        }
+#else
+        iph->ttl = iph->ttl - 1;
+#endif
+
+#if defined(ENABLE_DEBUG)
+        {
+                char srcstr[18], dststr[18];
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
+                        skb->dev ? skb->dev->name : "no dev",
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph->ihl << 2, iph->ihl);
+        }
+#endif
+
+        /* Update tot_len, we might have added SAL extension
+           headers. */
+        iph->tot_len = htons(skb->len);
+
+        /* Update checksum */
+        ip_send_check(iph);
+
+        /* It may seem counter intuitive that we call dst_input
+           here. The reason is that we want to call ip_forward, but
+           that function is not exported in the kernel. However, if we
+           re-route the packet in the kernel (using a new dst
+           address), the input function (as called by dst_input) will
+           point to ip_forward. The ip_forward function will
+           eventually call dst_output, after having updated TTL, etc.
+        */
+#if defined(OS_LINUX_KERNEL)
+        return dst_input(skb);
+#else
+        return dev_queue_xmit(skb);
+#endif
+}
 
 static inline int serval_ip_local_out(struct sk_buff *skb)
 {

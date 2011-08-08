@@ -25,8 +25,6 @@
 #include <serval_request_sock.h>
 #include <service.h>
 
-extern int serval_tcp_rcv(struct sk_buff *);
-extern int serval_udp_rcv(struct sk_buff *);
 extern atomic_t serval_nr_socks;
 
 static struct net_addr local_addr = {
@@ -52,7 +50,7 @@ static const char *serval_pkt_names[] = {
 /* Backoff multipliers for retransmission, fail when reaching 0. */
 static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
-atomic_t serval_transit = ATOMIC_INIT(0);
+int serval_sal_forwarding __read_mostly = 1;
 
 static int serval_sal_state_process(struct sock *sk, 
                                     struct serval_hdr *sh, 
@@ -1167,7 +1165,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         } else {
                 LOG_PKT("Dropping packet\n");
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1196,7 +1194,6 @@ static int serval_sal_closewait_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
         }
 
         return err;
@@ -1455,7 +1452,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1485,7 +1482,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1510,7 +1507,6 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
         }
 
         return err;
@@ -1532,7 +1528,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         if (ack_ok) {
@@ -1555,9 +1551,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                 (struct serval_service_ext *)(sh + 1);
         int err = 0;
 
-        if (ssk->hash_key && srv_ext && srv_ext){
-                //LOG_DBG("Receiving unconnected datagram for service %s at %i from service %s at %s\n", service_id_to_str((struct service_id*) ssk->hash_key),
-                //    ip_hdr(skb)->daddr, service_id_to_str(&srv_ext->src_srvid), ip_hdr(skb)->saddr);
+        if (ssk->hash_key && srv_ext && srv_ext) {
                 LOG_DBG("Receiving unconnected datagram for service %s\n", 
                         service_id_to_str((struct service_id*) ssk->hash_key));
         }
@@ -1568,7 +1562,7 @@ static int serval_sal_init_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
-                return 0;
+                err = 0;
         }
 
         return err;
@@ -1687,12 +1681,58 @@ static int serval_sal_add_source_ext(struct sk_buff *skb,
 /* Resolution return values. */
 enum {
         SAL_RESOLVE_ERROR = -1,
-        SAL_RESOLVE_FAIL, /* No match */
+        SAL_RESOLVE_NO_MATCH,
         SAL_RESOLVE_DEMUX,
         SAL_RESOLVE_FORWARD,
         SAL_RESOLVE_DELAY,
         SAL_RESOLVE_DROP,
 };
+
+static int serval_sal_update_csum(struct sk_buff *skb,
+                                  unsigned int ip_len,
+                                  unsigned int serval_len)
+{
+        struct iphdr *iph = ip_hdr(skb);
+        struct serval_hdr *sh = serval_hdr(skb);
+        
+        pskb_pull(skb, serval_len);
+        skb_reset_transport_header(skb);
+        skb->ip_summed = CHECKSUM_NONE;
+        
+        switch (sh->protocol) {
+        case SERVAL_PROTO_TCP:
+                tcp_hdr(skb)->check = 0;
+                skb->csum = csum_partial(tcp_hdr(skb),
+                                         skb->len, 0);
+                tcp_hdr(skb)->check = 
+                        csum_tcpudp_magic(iph->saddr, 
+                                          iph->daddr, 
+                                          skb->len, 
+                                          IPPROTO_TCP, 
+                                          skb->csum);
+                break;
+        case SERVAL_PROTO_UDP:
+                udp_hdr(skb)->check = 0;
+                skb->csum = csum_partial(udp_hdr(skb),
+                                         skb->len, 0);
+                udp_hdr(skb)->check = 
+                        csum_tcpudp_magic(iph->saddr, 
+                                          iph->daddr, 
+                                          skb->len, 
+                                          IPPROTO_UDP, 
+                                          skb->csum);
+                break;
+        default:
+                LOG_INF("Unknown transport protocol %u, "
+                        "forgoing checksum calculation\n",
+                        sh->protocol);
+                break;
+        }
+        /* Push back to Serval header */
+        skb_push(skb, serval_len);
+        
+        return 0;
+}
 
 static int serval_sal_resolve_service(struct sk_buff *skb, 
                                       struct serval_hdr *sh,
@@ -1702,32 +1742,28 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
         struct service_entry* se = NULL;
         struct service_resolution_iter iter;
         struct dest* dest = NULL;
-        unsigned int num_forward = 0;
         unsigned int hdr_len = ntohs(sh->length);
-        struct iphdr *iph = NULL;
-        unsigned int iph_len = 0;
-        struct sk_buff *cskb = NULL;
-        int err = SAL_RESOLVE_FAIL;
+        unsigned int num_forward = 0;
+        unsigned int data_len = skb->len - hdr_len;
+        int err = SAL_RESOLVE_NO_MATCH;
 
         *sk = NULL;
 
         LOG_DBG("Resolve or demux inbound packet on serviceID %s\n", 
                 service_id_to_str(srvid));
-        
+
         /* Match on the highest priority srvid rule, even if it's not
          * the sock TODO - use flags/prefix in resolution This should
          * probably be in a separate function call
          * serval_sal_transit_rcv or resolve something
          */
-        se = service_find(srvid, sizeof(*srvid) * 8);
+        se = service_find(srvid, SERVICE_ID_MAX_PREFIX_BITS);
 
         if (!se) {
                 LOG_INF("No matching service entry for serviceID %s\n",
                         service_id_to_str(srvid));
-                return SAL_RESOLVE_FAIL;
+                return SAL_RESOLVE_NO_MATCH;
         }
-
-        LOG_DBG("Service entry count=%u\n", se->count);
 
 	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
 
@@ -1738,38 +1774,27 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
         if (!dest) {
                 LOG_INF("No dest to forward on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, 
-                                                  -(skb->len - hdr_len));
+                service_resolution_iter_inc_stats(&iter, -1, data_len);
                 service_resolution_iter_destroy(&iter);
                 service_entry_put(se);
-                return SAL_RESOLVE_FAIL;
+                return SAL_RESOLVE_NO_MATCH;
         }
 
+        service_resolution_iter_inc_stats(&iter, 1, data_len);
+                
         while (dest) {
                 struct dest *next_dest;
 
-                if (cskb == NULL) {
-                        service_resolution_iter_inc_stats(&iter, 1, 
-                                                          skb->len - hdr_len);
-                }
-
                 next_dest = service_resolution_iter_next(&iter);
 
-                if (next_dest == NULL) {
-                        cskb = skb;
-                } else {
-                        cskb = skb_clone(skb, GFP_ATOMIC);
-
-                        if (!cskb) {
-                                LOG_ERR("Skb allocation failed\n");
-                                kfree_skb(skb);
-                                err = -ENOBUFS;
-                                break;
-                        }
-                        /* Cloned skb will have no socket set. */
-                        //skb_serval_set_owner_w(cskb, sk);
-                }
-
+                /* It is kind of unclear how to handle DEMUX vs
+                   FORWARD rules here. Does it make sense to have both
+                   a socket and forward rule for one single serviceID?
+                   It seems that if we have a socket, we shouldn't
+                   forward at all. But what if the socket is not first
+                   in the iteration? I guess for now we just forward
+                   until we hit a socket, and then break (i.e., DEMUX
+                   to socket but stop forwarding). */
                 if (is_sock_dest(dest)) {
                         /* local resolution */
                         *sk = dest->dest_out.sk;
@@ -1777,75 +1802,76 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         err = SAL_RESOLVE_DEMUX;
                         break;
                 } else {
-                        /* Need to drop dst since this packet is
-                         * routed for input. Otherwise, kernel IP
-                         * stack will be confused when transmitting
-                         * this packet. */
-                        skb_dst_drop(cskb);
+                        struct sk_buff *cskb;
+                        struct iphdr *iph;
+                        unsigned int iph_len;
 
-                        iph = (struct iphdr *)skb_network_header(cskb);
-                        iph_len = iph->ihl << 2;
-                        skb_push(cskb, iph_len);
-
-#if defined(OS_LINUX_KERNEL)
-                        err = ip_route_input(cskb, 
-                                             iph->daddr, 
-                                             iph->saddr, 
-                                             iph->tos, 
-                                             cskb->dev);
-
-                        if (err < 0) {
-                                //LOG_ERR("Could not route resolution packet from %s to %s\n", inet_ntoa(iph->saddr), inet_ntoa(iph->daddr));
-                                LOG_ERR("Could not forward SAL packet\n");
-                                kfree_skb(cskb);
-                                continue;
+                        err = SAL_RESOLVE_FORWARD;
+    
+                        if (skb->pkt_type == PACKET_BROADCAST) {
+                                /* Do not forward broadcast packets as they
+                                   may cause resolution loops. */
+                                kfree_skb(skb);
+                                break;
+                        }
+                        
+                        if (next_dest == NULL) {
+                                cskb = skb;
+                        } else {
+                                if (skb_cloned(skb))
+                                        cskb = pskb_copy(skb, GFP_ATOMIC);
+                                else
+                                        cskb = skb_clone(skb, GFP_ATOMIC);
+                                
+                                if (!cskb) {
+                                        LOG_ERR("Skb allocation failed\n");
+                                        kfree_skb(skb);
+                                        break;
+                                }
                         }
 
-#else
+                        iph = ip_hdr(cskb);
+                        iph_len = iph->ihl << 2;
+
+                        memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
+#if defined(OS_USER)
                         /* Set the output device - ip_forward uses the
                          * out device specified in the dst_entry route
                          * and assumes that skb->dev is the input
                          * interface*/
                         if (dest->dest_out.dev)
-                                skb_set_dev(cskb, 
-                                            dest->dest_out.dev);
-
+                                skb_set_dev(cskb, dest->dest_out.dev);
 #endif /* OS_LINUX_KERNEL */
-
+                        
                         /* TODO Set the true overlay source address if
                          * the packet may be ingress-filtered
                          * user-level raw socket forwarding may drop
                          * the packet if the source address is
                          * invalid */
-                        serval_sal_add_source_ext(cskb, sh, 
-                                                  iph, iph_len);
+                        serval_sal_add_source_ext(cskb, sh, iph, iph_len);
 
-                        //struct serval_sock *ssk = serval_sk(sk);
-                        //err = ssk->af_ops->queue_xmit(cskb);
-                        err = serval_ipv4_forward_out(cskb);
+                        /* Must recalculate transport checksum. */
+                        serval_sal_update_csum(cskb, iph_len, hdr_len);
+        
+                        /* Push back to IP header */
+                        skb_push(cskb, iph_len);
 
-                        if (err < 0) {
-                                LOG_ERR("SAL forwarding failed\n");
-                                err = SAL_RESOLVE_ERROR;
-                        } else {
+                        if (serval_ipv4_forward_out(cskb)) {
+                                /* serval_ipv4_forward_out has taken
+                                   custody of packet, no need to
+                                   free. */
+                                LOG_ERR("Forwarding failed\n");
+                        } else 
                                 num_forward++;
-                        }
                 }
                 dest = next_dest;
         }
 
-        if (!cskb) {
-                /* TODO this is not going to work since it needs to be
-                 * called PRIOR to hitting the end*/
-                service_resolution_iter_inc_stats(&iter, -1, 
-                                                  -(skb->len - hdr_len));
-        }
+        if (num_forward == 0)
+                service_resolution_iter_inc_stats(&iter, -1, -data_len);
 
         service_resolution_iter_destroy(&iter);
         service_entry_put(se);
-        
-        if (num_forward) 
-                err = SAL_RESOLVE_FORWARD;
 
         return err;
 }
@@ -1935,13 +1961,13 @@ static int serval_sal_resolve(struct sk_buff *skb,
         if (!srvid)
                 return SAL_RESOLVE_ERROR;
 
-        if (atomic_read(&serval_transit)) {
+        if (serval_sal_forwarding) {
                 ret = serval_sal_resolve_service(skb, sh, srvid, sk);
         } else {
                 *sk = serval_sal_demux_service(skb, sh, srvid);
                 
                 if (!(*sk))
-                        ret = SAL_RESOLVE_FAIL;
+                        ret = SAL_RESOLVE_NO_MATCH;
                 else 
                         ret = SAL_RESOLVE_DEMUX;
         }
@@ -1952,8 +1978,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
 int serval_sal_rcv(struct sk_buff *skb)
 {
         struct sock *sk = NULL;
-        struct serval_hdr *sh = 
-                (struct serval_hdr *)skb_transport_header(skb);
+        struct serval_hdr *sh = serval_hdr(skb);
         unsigned int hdr_len = 0;
         int err = 0;
 
@@ -2014,9 +2039,9 @@ int serval_sal_rcv(struct sk_buff *skb)
                 switch (err) {
                 case SAL_RESOLVE_DEMUX:
                         break;
-                case SAL_RESOLVE_FORWARD:
+                case SAL_RESOLVE_FORWARD:                        
                         return 0;
-                case SAL_RESOLVE_FAIL:
+                case SAL_RESOLVE_NO_MATCH:
                         /* TODO: fix error codes for this function */
                         err = -EHOSTUNREACH;
                 case SAL_RESOLVE_DROP:
@@ -2349,7 +2374,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
         sh->type = SERVAL_SKB_CB(skb)->pkttype;
         sh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK;
-        sh->protocol = skb->protocol;
+        sh->protocol = sk->sk_protocol;
         sh->length = htons(hdr_len);
         memcpy(&sh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
@@ -2444,7 +2469,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
-                        cskb = skb_clone(skb, gfp_mask);
+                        if (unlikely(skb_cloned(skb)))
+                                cskb = pskb_copy(skb, GFP_ATOMIC);
+                        else
+                                cskb = skb_clone(skb, GFP_ATOMIC);
 			
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");

@@ -49,42 +49,61 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .conn_child_sock = serval_udp_connection_respond_sock,
 };
 
-/* from fastudpsrc */
-static void udp_checksum(uint16_t total_len,
-                         struct udphdr *uh, void *data) 
+/*
+ *	Generic checksumming routines for UDP(-Lite) v4 and v6
+ */
+static inline __sum16 __udp_checksum_complete(struct sk_buff *skb)
 {
-        uint32_t src = *(uint32_t *)data;
-        unsigned short len = total_len - 14 - sizeof(struct iphdr);
-        unsigned csum = 0; 
-        uh->check = 0;
-        /* FIXME: Do not assume IP header lacks options */
-        csum = ~in_cksum((unsigned char *)uh, len) & 0xFFFF;
-        csum += src & 0xFFFF;
-        csum += (src >> 16) & 0xFFFF;
-        csum += htons(SERVAL_PROTO_UDP) + htons(len);
-        csum = (csum & 0xFFFF) + (csum >> 16);
-        uh->check = ~csum & 0xFFFF;
+	return __skb_checksum_complete(skb);
+}
+
+static inline int udp_checksum_complete(struct sk_buff *skb)
+{
+	return !skb_csum_unnecessary(skb) &&
+		__udp_checksum_complete(skb);
+}
+
+static inline int udp_csum_init(struct sk_buff *skb, 
+                                struct udphdr *uh,
+                                int proto)
+{
+	const struct iphdr *iph = ip_hdr(skb);
+
+	if (uh->check == 0) {
+		skb->ip_summed = CHECKSUM_UNNECESSARY;
+	} else if (skb->ip_summed == CHECKSUM_COMPLETE) {
+		if (!csum_tcpudp_magic(iph->saddr, iph->daddr, skb->len,
+				      proto, skb->csum))
+			skb->ip_summed = CHECKSUM_UNNECESSARY;
+	}
+	if (!skb_csum_unnecessary(skb))
+		skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
+					       skb->len, proto, 0);
+	return 0;
 }
 
 static int serval_udp_transmit_skb(struct sock *sk, 
                                    struct sk_buff *skb)
 {
         int err;
-        unsigned short tot_len;
         struct udphdr *uh;
 
         /* Push back to make space for transport header */
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
 	skb_reset_transport_header(skb);
 
-        tot_len = skb->len + 20 + 14;
-        
         /* Build UDP header */
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        udp_checksum(tot_len, uh, &inet_sk(sk)->inet_saddr);
         skb->ip_summed = CHECKSUM_NONE;
+        uh->check = 0;
+        uh->check = csum_tcpudp_magic(inet_sk(sk)->inet_saddr,
+                                      inet_sk(sk)->inet_daddr, 
+                                      skb->len,
+                                      IPPROTO_UDP,
+                                      csum_partial(uh, skb->len, 0));
+
         skb->protocol = IPPROTO_UDP;
         
         LOG_PKT("UDP pkt [s=%u d=%u len=%u]\n",
@@ -160,6 +179,12 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("data len=%u skb->len=%u\n",
                 ntohs(udp_hdr(skb)->len) - sizeof(struct udphdr), skb->len); 
 
+        if (udp_checksum_complete(skb)) {
+                LOG_DBG("Checksum error, dropping.\n");
+                kfree_skb(skb);
+                return 0;
+        }
+
         /* Strip UDP header before queueing */
 	skb_dst_drop(skb);
 	__skb_pull(skb, sizeof(struct udphdr));
@@ -188,12 +213,13 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
 */
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
+        struct udphdr *uh = udp_hdr(skb);
    	/*
 	 *  Validate the packet.
 	 */
+
         if (SERVAL_SKB_CB(skb)->pkttype != SERVAL_PKT_CLOSE) {
-                struct udphdr *udph = udp_hdr(skb);
-                unsigned short datalen = ntohs(udph->len) - sizeof(*udph);
+                unsigned short datalen = ntohs(uh->len) - sizeof(*uh);
                 
                 if (!pskb_may_pull(skb, sizeof(struct udphdr)))
                         goto drop;		
@@ -202,7 +228,11 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                       * not a FIN */
                 if (datalen == 0) 
                         goto drop;
-                /* FIXME: Should verify checksum */
+        }
+
+        if (udp_csum_init(skb, uh, IPPROTO_UDP)) {
+                LOG_DBG("Checksum init error, dropping.\n");
+                goto drop;
         }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))

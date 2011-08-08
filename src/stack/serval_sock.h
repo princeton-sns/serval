@@ -124,6 +124,7 @@ struct serval_sock {
         unsigned int            hash_key_len;  /* Keylen in bytes */
         unsigned short          srvid_prefix_bits;
         unsigned short          srvid_flags;
+        struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;        

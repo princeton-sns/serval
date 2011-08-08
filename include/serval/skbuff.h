@@ -48,6 +48,10 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 #include <string.h>
 #include <errno.h>
 
+#if defined(OS_LINUX)
+#include <netpacket/packet.h>
+#endif
+
 #if !defined(OS_LINUX)
 #define PACKET_HOST             0               /* To us.  */
 #define PACKET_BROADCAST        1               /* To all.  */
@@ -57,6 +61,7 @@ static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 #define PACKET_LOOPBACK         5
 #define PACKET_FASTROUTE        6
 #endif /* !OS_LINUX */
+
 
 //#define SKB_REFCNT_DEBUG 1
 

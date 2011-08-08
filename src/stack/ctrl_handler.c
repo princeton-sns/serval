@@ -4,9 +4,11 @@
 #include <serval/netdevice.h>
 #include <libstack/ctrlmsg.h>
 #include <service.h>
+#if defined(OS_LINUX_KERNEL)
+#include <net/route.h>
+#endif
 #include "ctrl.h"
-
-extern atomic_t serval_transit;
+#include "serval_sal.h"
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
@@ -47,43 +49,70 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 num_res, sizeof(*cmr));
 
         for (i = 0; i < num_res; i++) {
-                struct net_device* dev;
-                struct service_info *entry = &cmr->services[i];
+                struct net_device *dev = NULL;
+                struct service_info *entry = &cmr->service[i];
    
-                if (entry->service.sv_prefix_bits == 0) {
-                        entry->service.sv_prefix_bits = 0xff;
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+
+#if defined(OS_LINUX_KERNEL)
+                {
+                        struct rtable *rt;
+                        struct flowi fl = { 
+                                .oif = entry->if_index,
+                                .fl4_dst = entry->address.net_ip.s_addr,
+                        };                                   
+
+                        if (ip_route_output_key(&init_net, &rt, &fl)) {
+                                LOG_DBG("Address is not routable, ignoring.\n");
+                                continue;
+                        }
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
+                        dev = rt->dst.dev;
+#else
+                        dev = rt->u.dst.dev;
+#endif
+                        dev_hold(dev);
+                        ip_rt_put(rt);
                 }
+#else
+                 dev = dev_get_by_index(&init_net, entry->if_index);
 
-                dev = dev_get_by_index(NULL, entry->if_index);
-
+                if (!dev) {                        
+                        LOG_ERR("No device with id=%d\n",
+                                entry->if_index);
+                        continue;
+                }
+#endif
+               
 #if defined(ENABLE_DEBUG)
                 {
                         char ipstr[18];
                         LOG_DBG("Adding service id: %s(%u) "
                                 "@ address %s, priority %u, weight %u\n", 
-                                service_id_to_str(&entry->service.sv_srvid), 
-                                entry->service.sv_prefix_bits, 
+                                service_id_to_str(&entry->srvid), 
+                                entry->srvid_prefix_bits, 
                                 inet_ntop(AF_INET, &entry->address,
                                           ipstr, sizeof(ipstr)),
                                 entry->priority, entry->weight);
                 }
 #endif
-                err = service_add(&entry->service.sv_srvid, 
-                                  entry->service.sv_prefix_bits, 
-                                  entry->service.sv_flags, 
+                err = service_add(&entry->srvid, 
+                                  entry->srvid_prefix_bits, 
+                                  entry->srvid_flags, 
                                   entry->priority, 
                                   entry->weight,
                                   &entry->address, 
                                   sizeof(entry->address),
                                   dev, GFP_KERNEL);
 
-                if (dev)
-                        dev_put(dev);
+                dev_put(dev);
 
                 if (err > 0) {
                         if (index < i) {
                                 /*copy it over */
-                                memcpy(&cmr->services[index], 
+                                memcpy(&cmr->service[index], 
                                        entry, sizeof(*entry));
                         }
                         index++;
@@ -106,11 +135,10 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                              sizeof(struct service_info_stat) * (num_res - 1)];
         struct ctrlmsg_service_stat *cms = 
                 (struct ctrlmsg_service_stat *)buffer;
-        struct in_addr *ip = NULL;
-        uint32_t null_ip = 0;
+        struct in_addr null_ip = { 0 };
+        struct in_addr *ip = &null_ip;
         unsigned int i = 0;
         int index = 0;
-        struct dest_stats dstat;
         int err = 0;
 
 #if defined(ENABLE_DEBUG)
@@ -119,36 +147,35 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 #endif
 
         for (i = 0; i < num_res; i++) {
-                struct service_info *entry = &cmr->services[i];
-                struct service_info_stat *stat = &cms->services[index];
+                struct service_info *entry = &cmr->service[i];
+                struct service_info_stat *stat = &cms->service[index];
+                struct dest_stats dstat;
                 struct service_entry *se;
 
-                if (entry->service.sv_prefix_bits > 
-                    (uint8_t)(sizeof(entry->service.sv_srvid)*8)) {
-                        entry->service.sv_prefix_bits = 
-                                (sizeof(entry->service.sv_srvid) * 8) 
-                                & 0xff;
-                }
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
-                           sizeof(entry->address)) != 0) {
+                           sizeof(null_ip)) != 0) {
                         ip = &entry->address.net_un.un_ip;
                 }
 
-                se = service_find(&entry->service.sv_srvid, 
-                                  entry->service.sv_prefix_bits);
+                se = service_find_exact(&entry->srvid, 
+                                        entry->srvid_prefix_bits);
 
-                if (!se)
+                if (!se) {
+                        LOG_DBG("No match for serviceID %s:(%u)\n",
+                                service_id_to_str(&entry->srvid),
+                                entry->srvid_prefix_bits);
                         continue;
-
+                }
                 memset(&dstat, 0, sizeof(dstat));
+
                 err = service_entry_remove_dest(se, ip, ip ? 
                                                 sizeof(entry->address) : 0, 
                                                 &dstat);
 
                 if (err > 0) {
-                        //entry = &stats[j++];
-                        //memcpy(&entry->res, res, sizeof(*res));
                         stat->duration_sec = dstat.duration_sec;
                         stat->duration_nsec = dstat.duration_nsec;
                         //tokens too?
@@ -164,15 +191,16 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                         index++;
                 } else {
                         LOG_ERR("Could not remove service %s: %d\n", 
-                                service_id_to_str(&entry->service.sv_srvid), 
+                                service_id_to_str(&entry->srvid), 
                                 err);
                 }
 
                 service_entry_put(se);
         }
 
-        cm->len = sizeof(*cms) + (index-1) * sizeof(struct service_info_stat);
-        ctrl_sendmsg(cm, GFP_KERNEL);
+        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STATS;
+        cms->cmh.len = CTRLMSG_SERVICE_STAT_LEN(index);
+        ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
 
         return 0;
 }
@@ -180,7 +208,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 static int ctrl_handle_capabilities_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_capabilities *cmt = (struct ctrlmsg_capabilities*)cm;
-        atomic_set(&serval_transit, cmt->capabilities & SVSTK_TRANSIT);
+        serval_sal_forwarding = cmt->capabilities & SVSTK_TRANSIT;
         return 0;
 }
 
@@ -189,22 +217,20 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
         struct in_addr *ip = NULL;
         uint32_t null_ip = 0;
-        int num_res = CTRLMSG_SERVICE_NUM(cmr);
-        int i, index = 0;
+        unsigned int num_res = CTRLMSG_SERVICE_NUM(cmr);
+        unsigned int i, index = 0;
         int err = 0;
 
 #if defined(ENABLE_DEBUG)
         //char ipstr[20];
-        LOG_DBG("modifying %i services\n", num_res);
+        LOG_DBG("modifying %u services\n", num_res);
 #endif
 
         for (i = 0; i < num_res; i++) {
-                struct service_info *entry = &cmr->services[i];
-                if (entry->service.sv_prefix_bits > 
-                    (uint8_t)(sizeof(entry->service.sv_srvid)*8)) {
-                        entry->service.sv_prefix_bits = 
-                                (sizeof(entry->service.sv_srvid) * 8) & 0xff;
-                }
+                struct service_info *entry = &cmr->service[i];
+
+                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
+                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(entry->address)) != 0) {
@@ -212,13 +238,13 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                 }
 
                 LOG_DBG("Modifying: %s flags(%i) bits(%i)\n", 
-                        service_id_to_str(&entry->service.sv_srvid), 
-                        entry->service.sv_flags, 
-                        entry->service.sv_prefix_bits);
+                        service_id_to_str(&entry->srvid), 
+                        entry->srvid_flags, 
+                        entry->srvid_prefix_bits);
                 
-                err = service_modify(&entry->service.sv_srvid, 
-                                     entry->service.sv_prefix_bits, 
-                                     entry->service.sv_flags, 
+                err = service_modify(&entry->srvid, 
+                                     entry->srvid_prefix_bits, 
+                                     entry->srvid_flags, 
                                      entry->priority, 
                                      entry->weight, 
                                      ip, 
@@ -226,13 +252,13 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                 if (err > 0) {
                         if (index < i) {
                                 /*copy it over */
-                                memcpy(&cmr->services[index], 
+                                memcpy(&cmr->service[index], 
                                        entry, sizeof(*entry));
                         }
                         index++;
                 } else {
                         LOG_ERR("Could not modify service %s: %i\n", 
-                                service_id_to_str(&entry->service.sv_srvid), 
+                                service_id_to_str(&entry->srvid), 
                                 err);
                 }
         }
@@ -254,10 +280,10 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 #if defined(ENABLE_DEBUG)
         //char ipstr[20];
         LOG_DBG("getting service: %s\n",
-                service_id_to_str(&cmg->services[0].service.sv_srvid));
+                service_id_to_str(&cmg->service[0].srvid));
 #endif
-        se = service_find(&cmg->services[0].service.sv_srvid, 
-                          cmg->services[0].service.sv_prefix_bits);
+        se = service_find(&cmg->service[0].srvid, 
+                          cmg->service[0].srvid_prefix_bits);
 
         if (se) {
                 int size = sizeof(struct ctrlmsg_service) + 
@@ -279,16 +305,16 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                 service_resolution_iter_init(&iter, se, 1);
 
                 while ((dst = service_resolution_iter_next(&iter)) != NULL) {
-                        struct service_info *entry = &cres->services[i++];
+                        struct service_info *entry = &cres->service[i++];
                         
-                        memcpy(&entry->service.sv_srvid, 
-                               &cmg->services[0].service.sv_srvid, 
-                               sizeof(cmg->services[0].service.sv_srvid));
+                        memcpy(&entry->srvid, 
+                               &cmg->service[0].srvid, 
+                               sizeof(cmg->service[0].srvid));
                         memcpy(&entry->address, 
                                dst->dst, dst->dstlen);
-                        entry->service.sv_prefix_bits = 
-                                cmg->services[0].service.sv_prefix_bits;
-                        entry->service.sv_flags = 
+                        entry->srvid_prefix_bits = 
+                                cmg->service[0].srvid_prefix_bits;
+                        entry->srvid_flags = 
                                 service_resolution_iter_get_flags(&iter);
                         entry->weight = dst->weight;
                         entry->priority = 
@@ -301,7 +327,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);
                 FREE(cres);
         } else {
-                cmg->services[0].service.sv_flags = SVSF_INVALID;
+                cmg->service[0].srvid_flags = SVSF_INVALID;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
         }
 
@@ -315,7 +341,7 @@ static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 
         memset(&cms->stats, 0, sizeof(cms->stats));
         
-        if (atomic_read(&serval_transit)) {
+        if (serval_sal_forwarding) {
                 cms->stats.capabilities = SVSTK_TRANSIT;
         }
 

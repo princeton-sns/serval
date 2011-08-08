@@ -8,22 +8,23 @@
 #ifndef SERVICE_UTIL_H_
 #define SERVICE_UTIL_H_
 
-#include "serval/hash.h"
-#include "netinet/serval.h"
-#include "libstack/resolver_protocol.h"
-#include "service_types.h"
-#include "service_table.h"
-#include "libstack/ctrlmsg.h"
+#include <netinet/serval.h>
+#include <serval/hash.h>
+#include <libstack/resolver_protocol.h>
+#include <libstack/ctrlmsg.h>
 #include <errno.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <sys/types.h>
 
+#include "service_types.h"
+#include "service_table.h"
+
 #define SERVICE_HASH_PREFIX 96
 
 void init_rand(unsigned int seed);
 void init_description_from_reference(struct service_desc*sdesc, struct service_reference*ref);
-void init_resolution_from_reference(struct service_resolution*res, struct service_reference*ref);
+void init_resolution_from_reference(struct service_info*res, struct service_reference*ref);
 
 uint32_t service_id_prefix_hash(const void* key);
 
