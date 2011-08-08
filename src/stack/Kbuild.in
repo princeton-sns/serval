@@ -14,6 +14,7 @@ serval-y := \
 	   linux/splice.o \
 	   linux/user_dma.o \
 	   linux/iovlock.o \
+	   linux/udp_encap.o \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \

@@ -13,6 +13,9 @@
 #include <linux/string.h>
 #include <net/protocol.h>
 
+extern int serval_udp_encap_transmit(struct sk_buff *skb);
+int serval_udp_encap __read_mostly = 0;
+
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
@@ -898,6 +901,7 @@ static const struct proto_ops serval_dgram_ops = {
 #endif
 };
 
+
 /**
    Create a new Serval socket.
  */
@@ -961,7 +965,7 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
 	inet->mc_ttl	= 1;
 	/* inet->mc_all	= 1; */
 	inet->mc_index	= 0;
-	inet->mc_list	= NULL;
+	inet->mc_list	= NULL;        
 #endif
 
         if (sk->sk_prot->init) {
@@ -971,6 +975,12 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
 		if (ret < 0)
 			sk_common_release(sk);
 	}
+#if defined(OS_LINUX_KERNEL)
+        if (serval_udp_encap) {
+                serval_sk(sk)->af_ops->queue_xmit = &serval_udp_encap_transmit;
+                serval_sk(sk)->af_ops->net_header_len += sizeof(struct udphdr);
+        }
+#endif
 out:
         return ret;
 }
@@ -980,6 +990,11 @@ static struct net_proto_family serval_family_ops = {
 	.create = serval_create,
 	.owner	= THIS_MODULE,
 };
+
+#if defined(OS_LINUX_KERNEL)
+extern int udp_encap_init(void);
+extern void udp_encap_fini(void);
+#endif
 
 int __init serval_init(void)
 {
@@ -1029,9 +1044,21 @@ int __init serval_init(void)
                 LOG_CRIT("Cannot register socket family\n");
                 goto fail_sock_register;
         }
+
+#if defined(OS_LINUX_KERNEL)
+        err = udp_encap_init();
+        
+        if (err != 0) {
+                LOG_CRIT("UDP encapsulation init failed\n");
+                goto fail_udp_encap;
+        }
+#endif
+
 out:
         return err;
-
+#if defined(OS_LINUX_KERNEL)
+fail_udp_encap:
+#endif
 	sock_unregister(PF_SERVAL);
 fail_sock_register:
 	proto_unregister(&serval_tcp_proto);     
@@ -1053,6 +1080,9 @@ fail_service:
 
 void __exit serval_fini(void)
 {
+#if defined(OS_LINUX_KERNEL)
+        udp_encap_fini();
+#endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);

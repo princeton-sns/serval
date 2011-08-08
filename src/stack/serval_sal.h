@@ -237,6 +237,7 @@ void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);
 int serval_sal_rcv_transport_fin(struct sock *sk, struct sk_buff *skb);
 void serval_sal_done(struct sock *sk);
+int serval_sal_rcv(struct sk_buff *skb);
 
 static inline struct serval_hdr *serval_hdr(struct sk_buff *skb)
 {
