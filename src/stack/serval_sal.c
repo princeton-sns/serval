@@ -1808,9 +1808,11 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
                         err = SAL_RESOLVE_FORWARD;
     
-                        if (skb->pkt_type == PACKET_BROADCAST) {
-                                /* Do not forward broadcast packets as they
-                                   may cause resolution loops. */
+                        if (skb->pkt_type != PACKET_HOST &&
+                            skb->pkt_type != PACKET_OTHERHOST) {
+                                /* Do not forward, e.g., broadcast
+                                   packets as they may cause
+                                   resolution loops. */
                                 kfree_skb(skb);
                                 break;
                         }

@@ -524,7 +524,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
                 err = sk_stream_wait_connect(sk, &timeo);
 
-                if (!err) {
+                if (err) {
                         LOG_ERR("sk_stream_wait_connect returned err=%d\n",
                                 err);
                         goto out;

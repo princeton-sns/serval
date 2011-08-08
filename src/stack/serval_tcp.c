@@ -244,20 +244,20 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 #endif
 
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr))) {
-                LOG_ERR("No TCP header -- discarding\n");
+                LOG_DBG("No TCP header -- discarding\n");
                 goto bad_packet;
         }
 
 	th = tcp_hdr(skb);
 
 	if (th->doff < sizeof(struct tcphdr) / 4) {
-                LOG_ERR("TCP packet has bad data offset=%u!\n",
+                LOG_DBG("TCP packet has bad data offset=%u!\n",
                         th->doff << 2);
 		goto bad_packet;
         }
 
 	if (!pskb_may_pull(skb, th->doff << 2)) {
-                LOG_ERR("Cannot pull tcp header!\n");
+                LOG_DBG("Cannot pull tcp header!\n");
 		goto bad_packet;
         }
 
@@ -304,8 +304,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 
         return 0;
 bad_packet:
-        LOG_ERR("Bad TCP packet\n");
-
         return -1;
 }
 

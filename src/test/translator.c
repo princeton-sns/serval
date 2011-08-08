@@ -141,8 +141,8 @@ void *client_thread(void *arg)
         
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
-                addr.sv.sv_srvid.s_sid16[0] = htons(16385);
-                addr.sv.sv_srvid.s_sid16[0] = htons(8080);
+                /* addr.sv.sv_srvid.s_sid32[0] = htonl(16385); */
+                addr.sv.sv_srvid.s_sid32[0] = htonl(8080);
                 addrlen = sizeof(addr.sv);
         } else {
                 addr.in.sin_family = c->family;
@@ -150,6 +150,7 @@ void *client_thread(void *arg)
                 addr.in.sin_port = htons(inet_port);
                 addrlen = sizeof(addr.in);
         }
+
         ret = connect(c->serval_sock, &addr.sa, addrlen);
 
         if (ret == -1) {
