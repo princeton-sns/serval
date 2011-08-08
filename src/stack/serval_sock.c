@@ -794,3 +794,42 @@ int serval_sock_rebuild_header(struct sock *sk)
 #endif /* OS_LINUX_KERNEL */
 	return err;
 }
+
+static int serval_sock_flow_table_print(struct list_head *list,
+                                        char *buf, int buflen) 
+{
+        int len = 0;
+        struct serval_sock *ssk;
+
+        read_lock_bh(&sock_list_lock);
+
+        len = snprintf(buf, buflen, "%-10s %-10s %-17s %-17s %-10s %s\n",
+                       "srcFlowID", "dstFlowID", 
+                       "srcIP", "dstIP", "state", "dev");
+        
+        list_for_each_entry(ssk, list, sock_node) {
+                char src[18], dst[18];
+                struct sock *sk = (struct sock *)ssk;
+                len += snprintf(buf + len, buflen - len, 
+                                "%-10s %-10s %-17s %-17s %-10s %s\n",
+                                flow_id_to_str(&ssk->local_flowid), 
+                                flow_id_to_str(&ssk->peer_flowid),
+                                inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
+                                          src, 18),
+                                inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
+                                          dst, 18),
+                                serval_sock_state_str(sk),
+                                ssk->dev ? ssk->dev->name : "unbound");
+                if (len <= 0)
+                        break;
+        }
+        read_unlock_bh(&sock_list_lock);
+
+        return len;
+}
+
+int flows_print(char *buf, int buflen)
+{
+        return serval_sock_flow_table_print(&sock_list, buf, buflen);
+}
+
