@@ -96,8 +96,18 @@ Start any clients, e.g.,:
 
 > ./src/test/udp_servern
 
-Access internal state and debug output through /proc/net/serval/.
+Access internal state and debug output through /proc/net/serval/ and
+configuration parameters through /proc/sys/net/serval/.
 
 When done, shut down all clients and servd, then remove Serval module:
 
 > rmmod serval
+
+
+Configuration Options
+---------------------
+
+/proc/sys/net/serval/sal_forward   - Enable/Disable forwarding in SAL
+
+/proc/sys/net/serval/udp_encap     - Enable/Disable UDP encapsulation.
+
