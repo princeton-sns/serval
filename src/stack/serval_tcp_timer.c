@@ -30,6 +30,7 @@ static void serval_tcp_write_err(struct sock *sk)
 	sk->sk_err = sk->sk_err_soft ? : ETIMEDOUT;
 	sk->sk_error_report(sk);
 
+        LOG_DBG("Write ERROR, socket DONE\n");
 	serval_tcp_done(sk);
 	//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONTIMEOUT);
 }
@@ -72,6 +73,8 @@ static int serval_tcp_out_of_resources(struct sock *sk, int do_reset)
 			do_reset = 1;
 		if (do_reset)
 			serval_tcp_send_active_reset(sk, GFP_ATOMIC);
+
+                LOG_DBG("Too many orphans, TCP done!\n");
 		serval_tcp_done(sk);
 		//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONMEMORY);
 		return 1;
@@ -166,6 +169,8 @@ static int serval_tcp_write_timeout(struct sock *sk)
 	int retry_until = 0;
 	int do_reset, syn_set = 0;
 
+        LOG_DBG("write timeout\n");
+
 	if (!((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))) {
 		if (retransmits_timed_out(sk, sysctl_serval_tcp_retries1, 0)) {
 			/* Black hole detection */
@@ -182,6 +187,8 @@ static int serval_tcp_write_timeout(struct sock *sk)
 			retry_until = serval_tcp_orphan_retries(sk, alive);
 			do_reset = alive ||
 				   !retransmits_timed_out(sk, retry_until, 0);
+                        
+                        LOD_DBG("do_reset=%d\n", do_reset);
 
 			if (serval_tcp_out_of_resources(sk, do_reset))
 				return 1;
@@ -291,7 +298,8 @@ static void serval_tcp_probe_timer(struct sock *sk)
 
 		max_probes = serval_tcp_orphan_retries(sk, alive);
 
-		if (serval_tcp_out_of_resources(sk, alive || tp->probes_out <= max_probes))
+		if (serval_tcp_out_of_resources(sk, alive || 
+                                                tp->probes_out <= max_probes))
 			return;
 	}
 

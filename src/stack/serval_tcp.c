@@ -199,6 +199,7 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
         return 0;
  reset:
         /* send reset? */
+        LOG_DBG("TODO: send reset?\n");
  csum_err:
         //LOG_WARN("Should handle RESET in non-established state\n");
         kfree_skb(skb);
@@ -362,11 +363,13 @@ discard_it:
 
 static void __serval_tcp_done(struct sock *sk)
 {
+        LOG_DBG("socket done!\n");
 	serval_tcp_clear_xmit_timers(sk);
 }
 
 void serval_tcp_done(struct sock *sk)
 {
+        LOG_DBG("calling serval_sal_done\n");
 	serval_sal_done(sk);
 }
 

@@ -551,6 +551,8 @@ static void serval_sal_timewait(struct sock *sk, int state)
 
 void serval_sal_done(struct sock *sk)
 {
+        LOG_DBG("socket DONE!\n");
+
         if (serval_sk(sk)->af_ops->done)
                 serval_sk(sk)->af_ops->done(sk);
         
@@ -608,6 +610,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                         LOG_ERR("queuing failed\n");
                 }
         } else {
+                LOG_DBG("Closing socket\n");
                 serval_sal_done(sk);
         }
 }
@@ -1558,6 +1561,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
 
         if (ack_ok) {
                 /* ACK was valid */
+                LOG_DBG("Valid ACK, closing socket\n");
                 serval_sal_done(sk);
         }
 
@@ -2201,7 +2205,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
         
         if (backoff[ssk->retransmits + 1] == 0) {
                 /* TODO: check error values here */
-                LOG_DBG("NOT rescheduling timer!\n");
+                LOG_DBG("NOT rescheduling timer! Closing socket\n");
                 sk->sk_err = ETIMEDOUT;
                 serval_sal_done(sk);
         } else {

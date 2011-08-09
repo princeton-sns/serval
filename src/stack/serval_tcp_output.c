@@ -2278,6 +2278,8 @@ void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority)
 {
 	struct sk_buff *skb;
 
+        LOG_DBG("Sending Active RESET\n");
+
 	/* NOTE: No TCP options attached and we never retransmit this. */
 	skb = alloc_skb(MAX_SERVAL_TCP_HEADER, priority);
 	if (!skb) {

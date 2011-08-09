@@ -2512,6 +2512,8 @@ static inline void serval_tcp_ack_snd_check(struct sock *sk)
 /* When we get a reset we do this. */
 static void serval_tcp_reset(struct sock *sk)
 {
+        LOG_DBG("RESET received\n");
+
 	/* We want the right error as BSD sees it (and indeed as we do). */
 	switch (sk->sk_state) {
 	case TCP_SYN_SENT:
@@ -2724,7 +2726,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 	__skb_queue_purge(&tp->out_of_order_queue);
 #if defined(ENABLE_TCP_SACK)
 	if (serval_tcp_is_sack(tp))
-		tcp_sack_reset(&tp->rx_opt);
+		serval_tcp_sack_reset(&tp->rx_opt);
 #endif
 	sk_mem_reclaim(sk);
 #if 0
