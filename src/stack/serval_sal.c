@@ -1117,13 +1117,17 @@ int serval_sal_rcv_transport_fin(struct sock *sk,
         LOG_DBG("Transport FIN received. Serval close received=%d\n", 
                 ssk->close_received);
 
+        /* Set receive shutdown even though we might not have received
+           the SAL close, as this is the end of the transport stream
+           in any case. */
+        sk->sk_shutdown |= RCV_SHUTDOWN;
+
         if (!ssk->close_received)
                 return 0;
         
         if (sock_flag(sk, SOCK_DONE))
                 return 0;
 
-        sk->sk_shutdown |= RCV_SHUTDOWN;
         sock_set_flag(sk, SOCK_DONE);
         
         switch (sk->sk_state) {

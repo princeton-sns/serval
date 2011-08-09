@@ -3454,6 +3454,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 			TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONSYN);
                 */
+                LOG_DBG("SYN out of window. Handling as RESET\n");
 		serval_tcp_reset(sk);
 		return -1;
 	}
@@ -3654,21 +3655,24 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
+                                sk->sk_shutdown |= SEND_SHUTDOWN;
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
+
 				if (sock_flag(sk, SOCK_DEAD)) {
 					int tmo;
-
+#if 0
 					if (tp->linger2 < 0 ||
 					    (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
+                                                LOG_DBG("TCP Done!\n");
 						serval_tcp_done(sk);
 						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
-                                                LOG_DBG("TCP Done!\n");
+                           
 						return 1;
 					}
-
+#endif /* 0 */
 					tmo = serval_tcp_fin_time(sk);
 
 					if (tmo > TCP_TIMEWAIT_LEN) {
@@ -3732,8 +3736,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
+                                LOG_DBG("received seqno after rcv_nxt. Handling as RESET\n");
 				serval_tcp_reset(sk);
-                                LOG_DBG("Sent reset!\n");
                                 /* FIXME: free_skb here, or handle in
                                    calling func? */
 				return 1;
