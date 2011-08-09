@@ -21,6 +21,7 @@ struct serval_request_sock {
         u32 iss_seq;
         u8 local_nonce[SERVAL_NONCE_SIZE];
         u8 peer_nonce[SERVAL_NONCE_SIZE];
+        u16 udp_encap_port;
         struct list_head lh;
 };
 

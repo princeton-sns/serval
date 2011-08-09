@@ -21,38 +21,52 @@ struct udp_encap {
 
 static struct sock *encap_sk = NULL;
 
-int serval_udp_encap_transmit(struct sk_buff *skb)
+int serval_udp_encap_skb(struct sk_buff *skb, 
+                         __u32 saddr, __u32 daddr, 
+                         u16 dport)
 {
-        struct sock *sk = skb->sk;
         struct udphdr *uh;
 
-        if (!sk) {
-                kfree_skb(skb);
-                return NET_RX_DROP;
-        }
-                
         uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
         
-        if (!uh) {
-                kfree_skb(skb);
-                return NET_RX_DROP;
-        }
-        
+        if (!uh)
+                return -1;
+
         skb_reset_transport_header(skb);
         
         /* Build UDP header */
         uh->source = htons(UDP_ENCAP_PORT);
-        uh->dest = htons(UDP_ENCAP_PORT);
+        uh->dest = htons(dport == 0 ? UDP_ENCAP_PORT : dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;
         uh->check = 0;
-        uh->check = csum_tcpudp_magic(inet_sk(sk)->inet_saddr,
-                                      inet_sk(sk)->inet_daddr, 
+        uh->check = csum_tcpudp_magic(saddr,
+                                      daddr, 
                                       skb->len,
                                       IPPROTO_UDP,
                                       csum_partial(uh, skb->len, 0));
         skb->protocol = IPPROTO_UDP;
 
+        return 0;
+}
+
+int serval_udp_encap_transmit(struct sk_buff *skb)
+{ 
+        struct sock *sk = skb->sk;
+
+        if (!sk)
+                return -1;
+
+        LOG_DBG("Transmitting UDP packet len=%u\n", skb->len);
+
+        if (serval_udp_encap_skb(skb, 
+                                 inet_sk(sk)->inet_saddr, 
+                                 inet_sk(sk)->inet_daddr,
+                                 serval_sk(sk)->udp_encap_port)) {
+                kfree_skb(skb);
+                return NET_RX_DROP;
+        }
+        
         return serval_ipv4_xmit_skb(skb);
 }
 
@@ -96,6 +110,7 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	/* UDP always verifies the packet length. */
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
+        skb->protocol = IPPROTO_UDP;
 
         return serval_sal_rcv(skb);
 

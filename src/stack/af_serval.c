@@ -14,7 +14,7 @@
 #include <net/protocol.h>
 
 extern int serval_udp_encap_transmit(struct sk_buff *skb);
-int serval_udp_encap __read_mostly = 0;
+int serval_udp_encap __read_mostly = 1;
 
 #elif defined(OS_USER)
 /* User-level declarations */

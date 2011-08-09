@@ -52,6 +52,14 @@ static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
 int serval_sal_forwarding __read_mostly = 1;
 
+#if defined(OS_LINUX_KERNEL)
+extern int serval_udp_encap;
+
+extern int serval_udp_encap_skb(struct sk_buff *skb, 
+                                __u32 saddr, __u32 daddr, 
+                                u16 dport);
+#endif
+
 static int serval_sal_state_process(struct sock *sk, 
                                     struct serval_hdr *sh, 
                                     struct sk_buff *skb);
@@ -650,6 +658,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         struct net_addr saddr;
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
+        struct serval_hdr *rsh;
         int err = 0;
 
         /* Make compiler be quiet */
@@ -770,16 +779,16 @@ static int serval_sal_syn_rcv(struct sock *sk,
         memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
         
         /* Add Serval header */
-        sh = (struct serval_hdr *)skb_push(rskb, sizeof(*sh));
-        sh->type = SERVAL_PKT_SYN;
-        sh->ack = 1;
-        sh->protocol = rskb->protocol;
-        sh->length = htons(sizeof(*sh) + sizeof(*conn_ext));
+        rsh = (struct serval_hdr *)skb_push(rskb, sizeof(*rsh));
+        rsh->type = SERVAL_PKT_SYN;
+        rsh->ack = 1;
+        rsh->protocol = rskb->protocol;
+        rsh->length = htons(sizeof(*rsh) + sizeof(*conn_ext));
 
         /* Update info in packet */
-        memcpy(&sh->dst_flowid, &srsk->peer_flowid, 
-               sizeof(sh->dst_flowid));
-        memcpy(&sh->src_flowid, &srsk->local_flowid, 
+        memcpy(&rsh->dst_flowid, &srsk->peer_flowid, 
+               sizeof(rsh->dst_flowid));
+        memcpy(&rsh->src_flowid, &srsk->local_flowid, 
                sizeof(srsk->local_flowid));
         memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
                sizeof(srsk->peer_srvid));
@@ -791,11 +800,29 @@ static int serval_sal_syn_rcv(struct sock *sk,
         skb_reset_transport_header(skb);
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
-                serval_hdr_to_str(sh), rskb->len);
+                serval_hdr_to_str(rsh), rskb->len);
         
         /* Calculate SAL header checksum. */
-        serval_sal_send_check(sh);
+        serval_sal_send_check(rsh);
 
+#if defined(OS_LINUX_KERNEL)
+        if (serval_udp_encap && skb->protocol == IPPROTO_UDP) {
+                struct udphdr *uh = (struct udphdr *)((unsigned char *)sh - 
+                                                      sizeof(struct udphdr));
+                /* We should perform UDP encapsulation */
+                srsk->udp_encap_port = ntohs(uh->source);
+                
+                LOG_DBG("UDP-encapsulating SYN-ACK, dest port %u\n",
+                        srsk->udp_encap_port);
+
+                if (serval_udp_encap_skb(rskb, inet_rsk(rsk)->loc_addr,
+                                         inet_rsk(rsk)->rmt_addr,
+                                         srsk->udp_encap_port)) {
+                        LOG_ERR("SYN-ACK encapsulation failed\n");
+                        goto drop_and_release;
+                }
+        }
+#endif
         /* 
            Cannot use serval_sal_transmit_skb here since we do not yet
            have a full accepted socket (sk is the listening sock). 
@@ -938,8 +965,9 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         nssk->snd_seq.nxt = srsk->iss_seq + 1;
                         nssk->rcv_seq.iss = srsk->rcv_seq;
                         nssk->rcv_seq.nxt = srsk->rcv_seq + 1;
+                        nssk->udp_encap_port = srsk->udp_encap_port;
                         rsk->sk = nsk;
-
+                        
                         /* Hash the sock to make it available */
                         nsk->sk_prot->hash(nsk);
 
