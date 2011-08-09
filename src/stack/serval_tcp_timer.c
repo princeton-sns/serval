@@ -188,7 +188,7 @@ static int serval_tcp_write_timeout(struct sock *sk)
 			do_reset = alive ||
 				   !retransmits_timed_out(sk, retry_until, 0);
                         
-                        LOD_DBG("do_reset=%d\n", do_reset);
+                        LOG_DBG("do_reset=%d\n", do_reset);
 
 			if (serval_tcp_out_of_resources(sk, do_reset))
 				return 1;
