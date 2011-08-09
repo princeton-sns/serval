@@ -80,6 +80,7 @@ enum serval_sock_flags {
 
 struct serval_sock_af_ops {
 	int	        (*queue_xmit)(struct sk_buff *skb);
+	int	        (*encap_queue_xmit)(struct sk_buff *skb);
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);

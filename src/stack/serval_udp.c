@@ -9,6 +9,7 @@
 #include <serval_request_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
+#include <af_serval.h>
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
@@ -28,6 +29,8 @@
 /* payload + LL + IP + extra */
 #define MAX_SERVAL_UDP_HDR (MAX_SERVAL_HDR + sizeof(struct udphdr)) 
 
+extern int serval_udp_encap_xmit(struct sk_buff *skb);
+
 static int serval_udp_connection_request(struct sock *sk,
                                          struct request_sock *rsk,
                                          struct sk_buff *skb);
@@ -42,7 +45,17 @@ static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
 
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
-        .queue_xmit = serval_ipv4_xmit_skb,
+        .queue_xmit = serval_ipv4_xmit,
+        .receive = serval_udp_rcv,
+        .net_header_len = SERVAL_NET_HEADER_LEN,
+        .conn_request = serval_udp_connection_request,
+        .conn_child_sock = serval_udp_connection_respond_sock,
+};
+
+static struct serval_sock_af_ops serval_udp_encap_af_ops = {
+        .rebuild_header = serval_sock_rebuild_header,
+        .encap_queue_xmit = serval_ipv4_xmit,
+        .queue_xmit = serval_udp_encap_xmit,
         .receive = serval_udp_rcv,
         .net_header_len = SERVAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
@@ -124,7 +137,10 @@ static int serval_udp_init_sock(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        ssk->af_ops = &serval_udp_af_ops;
+        if (net_serval.sysctl_udp_encap)
+                ssk->af_ops = &serval_udp_encap_af_ops;
+        else
+                ssk->af_ops = &serval_udp_af_ops;
 
         LOG_DBG("\n");
         
@@ -168,7 +184,11 @@ int serval_udp_connection_respond_sock(struct sock *sk,
                                        struct sock *child,
                                        struct dst_entry *dst)
 {
-        serval_sk(sk)->af_ops = &serval_udp_af_ops;
+        if (serval_rsk(rsk)->udp_encap_port)
+                serval_sk(sk)->af_ops = &serval_udp_encap_af_ops;
+        else
+                serval_sk(sk)->af_ops = &serval_udp_af_ops;
+
         return 0;
 }
 

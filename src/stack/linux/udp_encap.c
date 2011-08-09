@@ -50,14 +50,14 @@ int serval_udp_encap_skb(struct sk_buff *skb,
         return 0;
 }
 
-int serval_udp_encap_transmit(struct sk_buff *skb)
+int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
 
         if (!sk)
                 return -1;
 
-        LOG_DBG("Transmitting UDP packet len=%u\n", skb->len);
+        LOG_PKT("Transmitting UDP packet len=%u\n", skb->len);
 
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
@@ -67,7 +67,7 @@ int serval_udp_encap_transmit(struct sk_buff *skb)
                 return NET_RX_DROP;
         }
         
-        return serval_ipv4_xmit_skb(skb);
+        return serval_sk(sk)->af_ops->encap_queue_xmit(skb);
 }
 
 static inline struct udp_encap *sock_to_encap(struct sock *sk)
@@ -79,6 +79,7 @@ static inline struct udp_encap *sock_to_encap(struct sock *sk)
 
 	//sock_hold(sk);
 	encap = (struct udp_encap *)(sk->sk_user_data);
+
 	if (encap == NULL) {
 		//sock_put(sk);
 		goto out;
@@ -99,9 +100,9 @@ out:
 int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
 	struct udp_encap *encap;
-
-        LOG_DBG("Received encapsulated Serval packet\n");
-
+        
+        LOG_PKT("Received encapsulated Serval packet\n");
+        
 	encap = sock_to_encap(sk);
 
 	if (encap == NULL)
@@ -110,6 +111,8 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	/* UDP always verifies the packet length. */
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
+
+        /* Tell SAL that this was an encapsulated packet. */
         skb->protocol = IPPROTO_UDP;
 
         return serval_sal_rcv(skb);

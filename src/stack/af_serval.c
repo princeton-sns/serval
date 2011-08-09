@@ -13,9 +13,6 @@
 #include <linux/string.h>
 #include <net/protocol.h>
 
-extern int serval_udp_encap_transmit(struct sk_buff *skb);
-int serval_udp_encap __read_mostly = 1;
-
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
@@ -37,6 +34,7 @@ extern void serval_tcp_init(void);
 #include <serval_udp_sock.h>
 #include <serval_tcp_sock.h>
 #include <ctrl.h>
+#include <af_serval.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -45,6 +43,8 @@ extern void __exit service_fini(void);
 
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
+
+struct netns_serval net_serval;
 
 static struct sock *serval_accept_dequeue(struct sock *parent,
                                             struct socket *newsock);
@@ -528,7 +528,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 err = sk_stream_wait_connect(sk, &timeo);
 
                 if (err) {
-                        LOG_ERR("sk_stream_wait_connect returned err=%d\n",
+                        LOG_DBG("sk_stream_wait_connect returned err=%d\n",
                                 err);
                         goto out;
                 }
@@ -975,12 +975,6 @@ static int serval_create(struct net *net, struct socket *sock, int protocol
 		if (ret < 0)
 			sk_common_release(sk);
 	}
-#if defined(OS_LINUX_KERNEL)
-        if (serval_udp_encap) {
-                serval_sk(sk)->af_ops->queue_xmit = &serval_udp_encap_transmit;
-                serval_sk(sk)->af_ops->net_header_len += sizeof(struct udphdr);
-        }
-#endif
 out:
         return ret;
 }
@@ -991,17 +985,13 @@ static struct net_proto_family serval_family_ops = {
 	.owner	= THIS_MODULE,
 };
 
-#if defined(OS_LINUX_KERNEL)
-extern int udp_encap_init(void);
-extern void udp_encap_fini(void);
-#endif
-
 int __init serval_init(void)
 {
         int err = 0;
 
 #if defined(OS_USER)
         serval_tcp_init();
+        memset(&net_serval, 0, sizeof(net_serval));
 #endif
         err = service_init();
 
@@ -1045,21 +1035,8 @@ int __init serval_init(void)
                 goto fail_sock_register;
         }
 
-#if defined(OS_LINUX_KERNEL)
-        err = udp_encap_init();
-        
-        if (err != 0) {
-                LOG_CRIT("UDP encapsulation init failed\n");
-                goto fail_udp_encap;
-        }
-#endif
-
 out:
         return err;
-#if defined(OS_LINUX_KERNEL)
-fail_udp_encap:
-#endif
-	sock_unregister(PF_SERVAL);
 fail_sock_register:
 	proto_unregister(&serval_tcp_proto);     
 fail_tcp_proto:
@@ -1080,9 +1057,6 @@ fail_service:
 
 void __exit serval_fini(void)
 {
-#if defined(OS_LINUX_KERNEL)
-        udp_encap_fini();
-#endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);

@@ -109,7 +109,8 @@ SERVAL_KERNEL_SRC = \
 	linux/splice.c \
 	linux/user_dma.c \
 	linux/iovlock.c \
-	linux/udp_encap.c
+	linux/udp_encap.c \
+	linux/sysctl_net_serval.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \

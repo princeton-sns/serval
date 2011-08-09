@@ -12,11 +12,14 @@
 #include <serval_sal.h>
 #include <serval_ipv4.h>
 #include <serval_tcp.h>
+#include <af_serval.h>
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/netdma.h>
 #define ENABLE_PAGE 1
 #endif
+
+extern int serval_udp_encap_xmit(struct sk_buff *skb);
 
 int sysctl_serval_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
 
@@ -1900,7 +1903,7 @@ void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 }
 
 static struct serval_sock_af_ops serval_tcp_af_ops = {
-        .queue_xmit = serval_ipv4_xmit_skb,
+        .queue_xmit = serval_ipv4_xmit,
         .receive = serval_tcp_rcv,
         .send_check = serval_tcp_v4_send_check,
         .rebuild_header = serval_sock_rebuild_header,
@@ -1910,6 +1913,26 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .net_header_len = SERVAL_NET_HEADER_LEN,
+        .close_request = serval_tcp_connection_close_request,
+        .request_state_process = serval_tcp_syn_sent_state_process,
+        .respond_state_process = serval_tcp_syn_recv_state_process,
+        .conn_child_sock = serval_tcp_syn_recv_sock,
+        .recv_fin = serval_sal_rcv_transport_fin,
+        .done = __serval_tcp_done,
+};
+
+static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
+        .encap_queue_xmit = serval_ipv4_xmit,
+        .queue_xmit = serval_udp_encap_xmit,
+        .receive = serval_tcp_rcv,
+        .send_check = serval_tcp_v4_send_check,
+        .rebuild_header = serval_sock_rebuild_header,
+        .conn_build_syn = serval_tcp_connection_build_syn,
+        .conn_build_synack = serval_tcp_connection_build_synack,
+        .conn_build_ack = serval_tcp_connection_build_ack,
+        .conn_request = serval_tcp_connection_request,
+        .conn_close = serval_tcp_connection_close,
+        .net_header_len = SERVAL_NET_HEADER_LEN + 8 /* sizeof(struct udphdr) */,
         .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
@@ -1932,7 +1955,10 @@ static struct sock *serval_tcp_create_openreq_child(struct sock *sk,
         struct serval_tcp_sock *newtp = serval_tcp_sk(newsk);
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
 
-        newssk->af_ops = &serval_tcp_af_ops;
+        if (serval_rsk(req)->udp_encap_port)
+                newssk->af_ops = &serval_tcp_encap_af_ops;
+        else
+                newssk->af_ops = &serval_tcp_af_ops;
 
         /* Now setup serval_tcp_sock */
         newtp->pred_flags = 0;
@@ -2141,7 +2167,10 @@ static int serval_tcp_init_sock(struct sock *sk)
 	sk->sk_write_space = sk_stream_write_space;
 	sock_set_flag(sk, SOCK_USE_WRITE_QUEUE);
 
-        ssk->af_ops = &serval_tcp_af_ops;
+        if (net_serval.sysctl_udp_encap)
+                ssk->af_ops = &serval_tcp_encap_af_ops;
+        else
+                ssk->af_ops = &serval_tcp_af_ops;
 
 	sk->sk_sndbuf = sysctl_tcp_wmem[1];
 	sk->sk_rcvbuf = sysctl_tcp_rmem[1];

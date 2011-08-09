@@ -351,7 +351,7 @@ static inline int ip_select_ttl(struct inet_sock *inet, struct dst_entry *dst)
 }
 #endif
 
-int serval_ipv4_xmit_skb(struct sk_buff *skb)
+int serval_ipv4_xmit(struct sk_buff *skb)
 {
         struct sock *sk = skb->sk;
         int err = 0;

@@ -15,6 +15,7 @@ serval-y := \
 	   linux/user_dma.o \
 	   linux/iovlock.o \
 	   linux/udp_encap.o \
+	   linux/sysctl_net_serval.o \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \

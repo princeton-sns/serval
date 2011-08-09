@@ -7,6 +7,7 @@
 #if defined(OS_LINUX_KERNEL)
 #include <net/route.h>
 #endif
+#include "af_serval.h"
 #include "ctrl.h"
 #include "serval_sal.h"
 
@@ -208,7 +209,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 static int ctrl_handle_capabilities_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_capabilities *cmt = (struct ctrlmsg_capabilities*)cm;
-        serval_sal_forwarding = cmt->capabilities & SVSTK_TRANSIT;
+        net_serval.sysctl_sal_forward = cmt->capabilities & SVSTK_TRANSIT;
         return 0;
 }
 
@@ -341,7 +342,7 @@ static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 
         memset(&cms->stats, 0, sizeof(cms->stats));
         
-        if (serval_sal_forwarding) {
+        if (net_serval.sysctl_sal_forward) {
                 cms->stats.capabilities = SVSTK_TRANSIT;
         }
 

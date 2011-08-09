@@ -24,6 +24,7 @@
 #endif
 #include <serval_request_sock.h>
 #include <service.h>
+#include <af_serval.h>
 
 extern atomic_t serval_nr_socks;
 
@@ -50,11 +51,7 @@ static const char *serval_pkt_names[] = {
 /* Backoff multipliers for retransmission, fail when reaching 0. */
 static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
-int serval_sal_forwarding __read_mostly = 1;
-
 #if defined(OS_LINUX_KERNEL)
-extern int serval_udp_encap;
-
 extern int serval_udp_encap_skb(struct sk_buff *skb, 
                                 __u32 saddr, __u32 daddr, 
                                 u16 dport);
@@ -806,13 +803,13 @@ static int serval_sal_syn_rcv(struct sock *sk,
         serval_sal_send_check(rsh);
 
 #if defined(OS_LINUX_KERNEL)
-        if (serval_udp_encap && skb->protocol == IPPROTO_UDP) {
+        if (skb->protocol == IPPROTO_UDP) {
                 struct udphdr *uh = (struct udphdr *)((unsigned char *)sh - 
                                                       sizeof(struct udphdr));
                 /* We should perform UDP encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
                 
-                LOG_DBG("UDP-encapsulating SYN-ACK, dest port %u\n",
+                LOG_PKT("UDP-encapsulating SYN-ACK, dest port %u\n",
                         srsk->udp_encap_port);
 
                 if (serval_udp_encap_skb(rskb, inet_rsk(rsk)->loc_addr,
@@ -1991,7 +1988,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         if (!srvid)
                 return SAL_RESOLVE_ERROR;
 
-        if (serval_sal_forwarding) {
+        if (net_serval.sysctl_sal_forward) {
                 ret = serval_sal_resolve_service(skb, sh, srvid, sk);
         } else {
                 *sk = serval_sal_demux_service(skb, sh, srvid);

@@ -7,4 +7,15 @@
 int __init serval_init(void);
 void __exit serval_fini(void);
 
+struct ctl_table_header;
+
+/* Control variables for Serval. */
+struct netns_serval {
+	int sysctl_sal_forward;
+	int sysctl_udp_encap;
+	struct ctl_table_header *ctl;
+};
+
+extern struct netns_serval net_serval;
+
 #endif /* AF_SERVAL_H */

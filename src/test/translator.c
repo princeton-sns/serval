@@ -151,21 +151,24 @@ void *client_thread(void *arg)
                 addrlen = sizeof(addr.in);
         }
 
+        if (c->family == AF_SERVAL) {
+                printf("client %u connecting to service %s... ",
+                       c->id, service_id_to_str(&addr.sv.sv_srvid));
+        } else {
+                printf("client %u connecting to %s:%u... ",
+                       c->id, server_ip, inet_port);
+        }
+
         ret = connect(c->serval_sock, &addr.sa, addrlen);
 
         if (ret == -1) {
-                fprintf(stderr, "client %u connect failed: %s\n",
-                        c->id, strerror(errno));
+                fprintf(stderr, "connect failed: %s\n",
+                        strerror(errno));
                 client_free(c);
                 return NULL;
         }
-        if (c->family == AF_SERVAL) {
-                printf("client %u connected to service %s\n",
-                       c->id, service_id_to_str(&addr.sv.sv_srvid));
-        } else {
-                printf("client %u connected to %s:%u\n",
-                       c->id, server_ip, inet_port);
-        }
+
+        printf("success!\n");
 
         while (!c->should_exit) {
                 fd_set fds;
