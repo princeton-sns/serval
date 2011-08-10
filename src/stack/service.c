@@ -600,14 +600,16 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
         } else {
                 struct dest *dst = NULL;
                 /* round robin or sample */
-                unsigned int sample = 0;
-                unsigned int sumweight = 0;
+                unsigned long sample, sumweight = 0;
 #if defined(OS_LINUX_KERNEL)
-                get_random_bytes(&sample, sizeof(sample));
+                uint64_t rand;
+                get_random_bytes(&rand, 32);
+                rand = ((rand << 32) / 0xffffffff) * dset->normalizer;
+                sample = (unsigned long)(rand >> 32);
 #else
-                sample = rand();
+                sample = (unsigned long)(((double)random() / RAND_MAX) * 
+                                         dset->normalizer);
 #endif
-                sample = sample % (dset->normalizer + 1);
 
                 list_for_each_entry(dst, &dset->dest_list, lh) {
                         sumweight += dst->weight;
@@ -1018,7 +1020,8 @@ int service_modify(struct service_id *srvid,
                    const void* dest_out) 
 {
         return service_table_modify(&srvtable, srvid, prefix_bits, flags,
-                                    priority, weight, dst, dstlen, dest_out);
+                                    priority, weight == 0 ? 1 : weight, 
+                                    dst, dstlen, dest_out);
 }
 
 static int service_table_add(struct service_table *tbl, 
@@ -1119,7 +1122,7 @@ int service_add(struct service_id *srvid,
 {
         return service_table_add(&srvtable, srvid, 
                                  prefix_bits, flags, priority, 
-                                 weight, dst, dstlen,
+                                 weight == 0 ? 1 : weight, dst, dstlen,
                                  dest_out, alloc);
 }
 

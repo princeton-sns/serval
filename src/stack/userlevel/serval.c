@@ -548,7 +548,7 @@ int main(int argc, char **argv)
         /* Seed random number generator */
         gettimeofday(&now, NULL);
         
-        srandom((unsigned int)now.tv_sec);
+        srandom((unsigned int)now.tv_usec);
         
 	argc--;
 	argv++;
