@@ -782,7 +782,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         rsh = (struct serval_hdr *)skb_push(rskb, sizeof(*rsh));
         rsh->type = SERVAL_PKT_SYN;
         rsh->ack = 1;
-        rsh->protocol = rskb->protocol;
+        rsh->protocol = sh->protocol;
         rsh->length = htons(sizeof(*rsh) + sizeof(*conn_ext));
 
         /* Update info in packet */
@@ -806,7 +806,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         serval_sal_send_check(rsh);
 
 #if defined(OS_LINUX_KERNEL)
-        if (skb->protocol == IPPROTO_UDP) {
+        if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
                 struct udphdr *uh = (struct udphdr *)((unsigned char *)sh - 
                                                       sizeof(struct udphdr));
                 /* We should perform UDP encapsulation */
@@ -1763,7 +1763,27 @@ static int serval_sal_update_csum(struct sk_buff *skb,
         }
         /* Push back to Serval header */
         skb_push(skb, serval_len);
-        
+
+#if defined(OS_LINUX_KERNEL)
+        /* Is this packet UDP encapsulated? We might need to
+         * recalculate the encapsulation header's checksum too. */
+        if (skb->protocol == IPPROTO_UDP) {
+                struct udphdr *uh;
+                
+                skb_push(skb, sizeof(struct udphdr));
+                skb_reset_transport_header(skb);
+                
+                uh = udp_hdr(skb);
+                uh->check = 0;
+                uh->check = csum_tcpudp_magic(iph->saddr,
+                                              iph->daddr, 
+                                              skb->len,
+                                              IPPROTO_UDP,
+                                              csum_partial(uh, skb->len, 0));
+                pskb_pull(skb, sizeof(struct udphdr));
+                skb_reset_transport_header(skb);
+        }
+#endif
         return 0;
 }
 
@@ -1889,6 +1909,12 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         serval_sal_update_csum(cskb, iph_len, hdr_len);
         
                         /* Push back to IP header */
+#if defined(OS_LINUX_KERNEL)
+                        /* Packet is UDP encapsulated, push back UDP
+                         * encapsulation header */
+                        if (ip_hdr(skb)->protocol == IPPROTO_UDP)
+                                skb_push(cskb, sizeof(struct udphdr));
+#endif
                         skb_push(cskb, iph_len);
 
                         if (serval_ipv4_forward_out(cskb)) {

@@ -112,9 +112,6 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
 
-        /* Tell SAL that this was an encapsulated packet. */
-        skb->protocol = IPPROTO_UDP;
-
         return serval_sal_rcv(skb);
 
         //pass_up_put:

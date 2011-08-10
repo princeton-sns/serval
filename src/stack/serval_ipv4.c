@@ -80,8 +80,21 @@ inhdr_error:
 int serval_ipv4_forward_out(struct sk_buff *skb)
 {
         struct iphdr *iph = ip_hdr(skb);
-#if defined(OS_LINUX_KERNEL)
         int err;
+
+#if defined(ENABLE_DEBUG)
+        {
+                char srcstr[18], dststr[18];
+                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u] %u\n",
+                        skb->dev ? skb->dev->name : "no dev",
+                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
+                        skb->len, iph->ihl << 2, iph->tos);
+        }
+#endif
+	//skb->protocol = htons(ETH_P_IP);
+
+#if defined(OS_LINUX_KERNEL)
 
         /* IP forwarding must be enabled for this to
            work. */
@@ -92,23 +105,12 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                                    skb->dev);
         
         if (err < 0) {
-                LOG_ERR("Could not forward SAL packet, err=%d\n", err);
+                LOG_ERR("Could not forward SAL packet, NO route [err=%d]\n", err);
                 kfree_skb(skb);
                 return NET_RX_DROP;
         }
 #else
         iph->ttl = iph->ttl - 1;
-#endif
-
-#if defined(ENABLE_DEBUG)
-        {
-                char srcstr[18], dststr[18];
-                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u %u]\n",
-                        skb->dev ? skb->dev->name : "no dev",
-                        inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
-                        inet_ntop(AF_INET, &iph->daddr, dststr, 18),
-                        skb->len, iph->ihl << 2, iph->ihl);
-        }
 #endif
 
         /* Update tot_len, we might have added SAL extension
@@ -127,10 +129,11 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
            eventually call dst_output, after having updated TTL, etc.
         */
 #if defined(OS_LINUX_KERNEL)
-        return dst_input(skb);
+        err = dst_input(skb);
 #else
-        return dev_queue_xmit(skb);
+        err = dev_queue_xmit(skb);
 #endif
+        return err;
 }
 
 static inline int serval_ip_local_out(struct sk_buff *skb)
