@@ -53,6 +53,7 @@ enum {
         SERVAL_MIGRATE,
         SERVAL_RECONNECT,
         SERVAL_RRESPOND,
+        SERVAL_RMIGRATE,
         SERVAL_MAX_STATE
 };
 
@@ -70,7 +71,8 @@ enum {
         SERVALF_CLOSING   = (1 << 11),
         SERVALF_MIGRATE   = (1 << 12),
         SERVALF_RECONNECT = (1 << 13),
-        SERVALF_RRESPOND  = (1 << 14)
+        SERVALF_RRESPOND  = (1 << 14),
+        SERVALF_RMIGRATE  = (1 << 15)
 };
 
 enum serval_sock_flags {

@@ -1053,6 +1053,16 @@ done:
         return err;
 }
 
+static int serval_sal_rcv_mig_req(struct sock *sk,
+                                  struct serval_hdr *sh,
+                                  struct sk_buff *skb)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        
+
+        return 0;
+}
+
 static int serval_sal_rcv_close_req(struct sock *sk, 
                                     struct serval_hdr *sh,
                                     struct sk_buff *skb)
@@ -1206,6 +1216,9 @@ static int serval_sal_connected_state_process(struct sock *sk,
 
         if (sh->type == SERVAL_PKT_CLOSE)
                 err = serval_sal_rcv_close_req(sk, sh, skb);
+
+        if (sh->type == SERVAL_PKT_RSYN)
+                err = serval_sal_rcv_mig_req(sk, sh, skb);
 
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
@@ -1595,6 +1608,41 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         if (ack_ok) {
                 /* ACK was valid */
                 serval_sal_done(sk);
+        }
+
+        return err;
+}
+
+static int serval_sal_migrate_state_process(struct sock *sk,
+                                            struct serval_hdr *sh,
+                                            struct sk_buff *skb)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        int ack_ok = 0, err = 0;
+
+        ack_ok = (sh->ack && serval_sal_ack_process(sk, sh, skb) == 0);
+
+        if (packet_has_transport_hdr(skb, sh)) {
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+
+                err = ssk->af_ops->receive(sk, skb);
+        }
+
+        return err;
+}
+
+static int serval_sal_rmigrate_state_process(struct sock *sk,
+                                             struct serval_hdr *sh,
+                                             struct sk_buff *skb)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        int ack_ok = 0, err = 0;
+
+        ack_ok = (sh->ack && serval_sal_ack_process(sk, sh, skb) == 0);
+
+        if (packet_has_transport_hdr(skb,sh)) {
+                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
+                err = ssk->af_ops->receive(sk,skb);
         }
 
         return err;
@@ -2332,6 +2380,23 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
         return sizeof(*srv_ext);
 }
 
+static inline int serval_sal_add_migrate_ext(struct sock *sk,
+                                             struct sk_buff *skb,
+                                             int flags)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_migrate_ext *mig_ext;
+        
+        mig_ext = (struct serval_migrate_ext *)
+                  skb_push(skb, sizeof(*mig_ext));
+        mig_ext->exthdr.type = SERVAL_MIGRATE_EXT;
+        mig_ext->exthdr.length = sizeof(*mig_ext);
+        mig_ext->exthdr.flags = flags;
+        memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        
+        return sizeof(*mig_ext);
+}
+
 int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                             int clone_it, gfp_t gfp_mask)
 {
@@ -2384,6 +2449,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 break;
         case SERVAL_PKT_CLOSE:
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
+                break;
+        case SERVAL_PKT_RSYN:
+                hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_DATA:
                 /* Unconnected datagram, add service extension */
