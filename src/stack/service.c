@@ -604,9 +604,14 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
                 uint64_t sample, sumweight = 0;
 #if defined(OS_LINUX_KERNEL)
                 uint32_t rand;
+                unsigned long rem;
                 get_random_bytes(&rand, sizeof(rand));
                 sample = rand;
-                sample = (sample << SAMPLE_SHIFT) / 0xffffffff;
+                sample = sample << SAMPLE_SHIFT;
+                rem = 0xffffffff;
+                rem = do_div(sample, rem);
+
+                /*sample = (sample << SAMPLE_SHIFT) / 0xffffffff; */
 #else
                 sample = random();
                 sample = (sample << SAMPLE_SHIFT) / RAND_MAX;

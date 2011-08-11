@@ -550,6 +550,9 @@ int main(int argc, char **argv)
         
         srandom((unsigned int)now.tv_usec);
         
+        /* Init configuration parameters */
+        memset(&net_serval, 0, sizeof(net_serval));
+        
 	argc--;
 	argv++;
         
@@ -564,6 +567,7 @@ int main(int argc, char **argv)
                         /* How do we set this? */
                 } else if (strcmp(argv[0], "-sf") == 0 ||
                            strcmp(argv[0], "--sal-forward") == 0) {
+                        LOG_DBG("Enabling SAL forwarding\n");
                         net_serval.sysctl_sal_forward = 1;
                 } else if (strcmp(argv[0], "-encap") == 0 ||
                            strcmp(argv[0], "--udp-encap") == 0) {

@@ -991,7 +991,6 @@ int __init serval_init(void)
 
 #if defined(OS_USER)
         serval_tcp_init();
-        memset(&net_serval, 0, sizeof(net_serval));
 #endif
         err = service_init();
 

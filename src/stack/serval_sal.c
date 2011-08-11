@@ -108,6 +108,16 @@ static char* serval_ext_name[] = {
 
 #if defined(ENABLE_DEBUG)
 
+static int print_base_hdr(struct serval_hdr *sh, char *buf, int buflen)
+{
+        return snprintf(buf, buflen,
+                        "%s ack=%u len=%u proto=%u src_fl=%s dst_fl=%s",
+                        serval_pkt_names[sh->type], sh->ack, 
+                        ntohs(sh->length), sh->protocol,
+                        flow_id_to_str(&sh->src_flowid), 
+                        flow_id_to_str(&sh->dst_flowid));
+}
+
 static int print_base_ext(struct serval_ext *xt, char *buf, int buflen)
 {
         return snprintf(buf, buflen, "%s length=%u",
@@ -194,7 +204,7 @@ static int print_ext(struct serval_ext *xt, char *buf, int buflen)
 {
         int len;
 
-        len = snprintf(buf, buflen, "{ ");
+        len = snprintf(buf, buflen, "{");
         len += print_base_ext(xt, buf + len, buflen - len);
         len += snprintf(buf + len, buflen - len, " ");
         len += print_ext_func[xt->type](xt, buf + len, buflen - len);
@@ -311,13 +321,14 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
         struct serval_ext *ext;
         int len = 0;
         
-        buf[0] = '\0';
+        buf[len++] = '[';
         
-        len = snprintf(buf + len, HDR_BUFLEN - len, 
-                       "[ %s ack=%u len=%u src_fl=%s dst_fl=%s ",
-                       serval_pkt_names[sh->type], sh->ack, hdr_len,
-                       flow_id_to_str(&sh->src_flowid), 
-                       flow_id_to_str(&sh->dst_flowid));
+        len += print_base_hdr(sh, buf + len, HDR_BUFLEN - len);
+        
+        if (len < (HDR_BUFLEN - 1)) {
+                buf[len++] = ']';
+                buf[len] = '\0';
+        }
         
         hdr_len -= sizeof(*sh);
         ext = SERVAL_EXT_FIRST(sh);
@@ -887,23 +898,43 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         struct iphdr *iph;
         struct serval_hdr *sh;
         struct serval_source_ext *sxt = ctx ? ctx->src_ext : NULL;
-        unsigned int size, ext_len;
-        
+        unsigned int size, extra_len, serval_len, ext_len;
+        unsigned char *ptr;
+
         iph = ip_hdr(*in_skb);
         sh = serval_hdr(*in_skb);
 
-        if (ctx && ctx->src_ext) {
+
+        LOG_DBG("New hdr(-1): %s\n",
+                serval_hdr_to_str(sh));
+
+        if (!ctx) {
+                LOG_ERR("No header context\n");
+                return -1;
+        }
+
+        if (ctx->src_ext) {
                 /* We just add another IP address. */
-                ext_len = ctx->src_ext->sv_ext_length + 4; 
-        } else
-                ext_len = SERVAL_SOURCE_EXT_IPV4_LEN;
+                LOG_DBG("Appending address to SOURCE extension\n");
+                extra_len = 4;
+                ext_len = ctx->src_ext->sv_ext_length + extra_len;
+        } else {
+                LOG_DBG("Adding new SOURCE extension\n");
+                extra_len = SERVAL_SOURCE_EXT_IPV4_LEN;
+                ext_len = extra_len;
+        }
+        
+        serval_len = ctx->length + extra_len;
+        size = (char *)sh - (char *)iph;
+        
+        /* Push back to IP header */
+        skb_push(skb, size);
 
-        size = (unsigned char *)sh - (unsigned char *)iph;
-
-        if (skb_headroom(skb) < (ext_len + size + 
+        if (skb_headroom(skb) < (extra_len + size + 
                                  skb->dev->hard_header_len)) {
+                LOG_DBG("Expanding SKB headroom\n");
                 skb = skb_copy_expand(skb, skb_headroom(skb) + 
-                                      ext_len,
+                                      extra_len,
                                       skb_tailroom(skb),
                                       GFP_ATOMIC);
 
@@ -913,13 +944,39 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 kfree_skb(*in_skb);
                 *in_skb = skb;
         }
-
+        
         iph = ip_hdr(skb);
+        skb_set_transport_header(skb, size);
         sh = serval_hdr(skb);
 
+        LOG_DBG("New hdr0: %s\n",
+                serval_hdr_to_str(sh));
+
         /* Move back everything which is behind Serval header */
-        memmove(skb_push(skb, size + ext_len), iph, 
-                size + sizeof(struct serval_hdr));
+        LOG_DBG("pushing %u + %u ([IP + ENCAP] + [EXT EXTRA]) bytes\n", 
+                size, extra_len);
+
+        if (ctx->src_ext) {
+                /* Point to just after source extension in the new skb */
+                unsigned int off = (SERVAL_SOURCE_EXT_GET_LAST_ADDR(ctx->src_ext) - 
+                                    (unsigned char *)ctx->hdr) + 4;
+                ptr = ((unsigned char *)sh + off);
+        } else {
+                /* No previous source extension. Append new header. */
+                ptr = ((unsigned char *)sh + ctx->length);
+        }
+
+        /* Check if we need to linearize */
+        if (skb_is_nonlinear(skb)) {
+                if (skb_linearize(skb))
+                        return -ENOMEM;
+        }
+
+        memmove(skb_push(skb, extra_len), iph,
+                ptr - (unsigned char *)iph);
+        
+        LOG_DBG("Moving %u bytes ctx->length=%u\n",
+                ptr - (unsigned char *)iph, ctx->length);
 
         /* Update header pointers */
         skb_reset_network_header(skb);
@@ -928,25 +985,28 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         skb_reset_transport_header(skb);
         sh = serval_hdr(skb);
 
-        if (ctx && ctx->src_ext) {
-                /* Point to the old source extension in the new skb */
-                size = (char *)ctx->src_ext - (char *)ctx->hdr;
-                sxt = (struct serval_source_ext *)((char *)sh + size);
-                size = ctx->hdr->length + 4;
+        LOG_DBG("New hdr1: %s\n",
+                serval_hdr_to_str(sh));
+
+        if (ctx->src_ext) {
+                sxt = (struct serval_source_ext *)((char *)sh + 
+                                                   ((char *)ctx->src_ext - 
+                                                    (char *)ctx->hdr));
         } else {
-                /* No previous source extension. Put first. */
-                sxt = (struct serval_source_ext *)SERVAL_EXT_FIRST(sh);
-                size = (ctx ? ctx->hdr->length : ntohs(sh->length)) + 
-                        SERVAL_SOURCE_EXT_IPV4_LEN;
+                sxt = (struct serval_source_ext *)ptr;
         }
+
         sxt->sv_ext_type = SERVAL_SOURCE_EXT;
         sxt->sv_ext_length = ext_len;
         sxt->sv_ext_flags = 0;
-        memcpy(sxt->source + (SERVAL_SOURCE_EXT_IPV4_LEN - ext_len), 
+        memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
                &iph->saddr, sizeof(iph->saddr));
         
         sh->check = 0;
-        sh->length = htons(size);
+        sh->length = htons(serval_len);
+
+        LOG_DBG("New hdr2: %s\n",
+                serval_hdr_to_str(sh));
 
         return 0;
 }

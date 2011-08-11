@@ -189,7 +189,7 @@ struct serval_hdr {
         uint16_t res2;       
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
-};
+} __attribute__((packed));
 
 /* Generic extension header */
 struct serval_ext {
@@ -203,7 +203,7 @@ struct serval_ext {
 #error	"Please fix <asm/byteorder.h>"
 #endif
         uint8_t length;
-};
+} __attribute__((packed));
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
@@ -224,7 +224,7 @@ enum serval_ext_type {
         SERVAL_DESCRIPTION_EXT,
         SERVAL_SOURCE_EXT,
         __SERVAL_EXT_TYPE_MAX,
-};
+} __attribute__((packed));
 
 struct serval_connection_ext {
         struct serval_ext exthdr;
@@ -232,7 +232,7 @@ struct serval_connection_ext {
         uint32_t ackno;
         uint8_t  nonce[8];
         struct service_id srvid;
-};
+} __attribute__((packed));
 
 #define SERVAL_NONCE_SIZE 8
 
@@ -241,23 +241,23 @@ struct serval_control_ext {
         uint32_t seqno;
         uint32_t ackno;
         uint8_t  nonce[8];
-};
+} __attribute__((packed));
 
 struct serval_service_ext {
         struct serval_ext exthdr;
         struct service_id src_srvid;
         struct service_id dst_srvid;
-};
+} __attribute__((packed));
 
 struct serval_description_ext {
         struct serval_ext exthdr;
         struct net_addr addrs[0];
-};
+} __attribute__((packed));
 
 struct serval_source_ext {
         struct serval_ext exthdr;
         uint8_t source[0];
-};
+} __attribute__((packed));
 
 #define __SERVAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct serval_source_ext))
@@ -268,6 +268,9 @@ struct serval_source_ext {
         (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
 
 #define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)                              \
-        ((ext)->source + (SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-n-1)*4)
+        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-n-1)*4])
+
+#define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
+        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-1)*4])
 
 #endif /* _SERVAL_H */
