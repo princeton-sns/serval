@@ -594,25 +594,34 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
 
         dset = list_first_entry(&se->dest_set, struct dest_set, ds);
 
+        /* round robin or sample */
         if (mode == SERVICE_ITER_ALL || (dset->flags & SVSF_MULTICAST)) {
                 iter->dest_pos = dset->dest_list.next;
                 iter->destset = dset;
         } else {
+#define SAMPLE_SHIFT 32
                 struct dest *dst = NULL;
-                /* round robin or sample */
-                unsigned long sample, sumweight = 0;
+                uint64_t sample, sumweight = 0;
 #if defined(OS_LINUX_KERNEL)
-                uint64_t rand;
-                get_random_bytes(&rand, 32);
-                rand = ((rand << 32) / 0xffffffff) * dset->normalizer;
-                sample = (unsigned long)(rand >> 32);
+                uint32_t rand;
+                get_random_bytes(&rand, sizeof(rand));
+                sample = rand;
+                sample = (sample << SAMPLE_SHIFT) / 0xffffffff;
 #else
-                sample = (unsigned long)(((double)random() / RAND_MAX) * 
-                                         dset->normalizer);
+                sample = random();
+                sample = (sample << SAMPLE_SHIFT) / RAND_MAX;
 #endif
+                sample = sample * dset->normalizer;
 
+                /*
+                  LOG_DBG("sample=%llu normalizer=%u\n", 
+                        sample, dset->normalizer);
+                */
                 list_for_each_entry(dst, &dset->dest_list, lh) {
-                        sumweight += dst->weight;
+                        uint64_t weight = dst->weight;
+                        
+                        sumweight += (weight << SAMPLE_SHIFT);
+
                         if (sample <= sumweight) {
                                 iter->dest_pos = &dst->lh;
                                 iter->destset = NULL;

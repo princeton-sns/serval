@@ -211,7 +211,14 @@ struct serval_ext {
 #define sv_ext_flags exthdr.flags
 #define sv_ext_length exthdr.length
 
-#define SERVAL_CONNECTION_EXT 1
+enum serval_ext_type {
+        SERVAL_CONNECTION_EXT = 1,
+        SERVAL_CONTROL_EXT,
+        SERVAL_SERVICE_EXT,
+        SERVAL_DESCRIPTION_EXT,
+        SERVAL_SOURCE_EXT,
+        __SERVAL_EXT_TYPE_MAX,
+};
 
 struct serval_connection_ext {
         struct serval_ext exthdr;
@@ -220,8 +227,6 @@ struct serval_connection_ext {
         uint8_t  nonce[8];
         struct service_id srvid;
 };
-
-#define SERVAL_CONTROL_EXT 2
 
 #define SERVAL_NONCE_SIZE 8
 
@@ -232,26 +237,31 @@ struct serval_control_ext {
         uint8_t  nonce[8];
 };
 
-#define SERVAL_SERVICE_EXT 3
-
 struct serval_service_ext {
         struct serval_ext exthdr;
         struct service_id src_srvid;
         struct service_id dst_srvid;
 };
 
-#define SERVAL_DESCRIPTION_EXT 4
-
 struct serval_description_ext {
         struct serval_ext exthdr;
         struct net_addr addrs[0];
 };
 
-#define SERVAL_SOURCE_EXT 5
-
 struct serval_source_ext {
         struct serval_ext exthdr;
         uint8_t source[0];
 };
+
+#define __SERVAL_SOURCE_EXT_LEN(sz)             \
+        (sz + sizeof(struct serval_source_ext))
+
+#define SERVAL_SOURCE_EXT_IPV4_LEN __SERVAL_SOURCE_EXT_LEN(4)
+
+#define SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)                           \
+        (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
+
+#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)                              \
+        ((ext)->source + (SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-n-1)*4)
 
 #endif /* _SERVAL_H */
