@@ -559,7 +559,16 @@ int main(int argc, char **argv)
 			dev_list_add(argv[1]);
 			argv++;
 			argc--;
-		} else if (strcmp(argv[0], "-d") == 0 ||
+		} else if (strcmp(argv[0], "-ipf") == 0 ||
+                           strcmp(argv[0], "--ip-forward") == 0) {
+                        /* How do we set this? */
+                } else if (strcmp(argv[0], "-sf") == 0 ||
+                           strcmp(argv[0], "--sal-forward") == 0) {
+                        net_serval.sysctl_sal_forward = 1;
+                } else if (strcmp(argv[0], "-encap") == 0 ||
+                           strcmp(argv[0], "--udp-encap") == 0) {
+                        net_serval.sysctl_udp_encap = 1;
+                } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
                 } else if (strcmp(argv[0], "-dl") == 0 ||
