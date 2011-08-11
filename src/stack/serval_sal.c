@@ -901,16 +901,12 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         unsigned int size, extra_len, serval_len, ext_len;
         unsigned char *ptr;
 
-        iph = ip_hdr(*in_skb);
-        sh = serval_hdr(*in_skb);
-
-
-        LOG_DBG("New hdr(-1): %s\n",
-                serval_hdr_to_str(sh));
+        iph = ip_hdr(skb);
+        sh = serval_hdr(skb);
 
         if (!ctx) {
                 LOG_ERR("No header context\n");
-                return -1;
+                return -EINVAL;
         }
 
         if (ctx->src_ext) {
@@ -926,7 +922,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         
         serval_len = ctx->length + extra_len;
         size = (char *)sh - (char *)iph;
-        
+
         /* Push back to IP header */
         skb_push(skb, size);
 
@@ -945,16 +941,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 *in_skb = skb;
         }
         
+        skb_reset_network_header(skb);
         iph = ip_hdr(skb);
         skb_set_transport_header(skb, size);
         sh = serval_hdr(skb);
-
-        LOG_DBG("New hdr0: %s\n",
-                serval_hdr_to_str(sh));
-
-        /* Move back everything which is behind Serval header */
-        LOG_DBG("pushing %u + %u ([IP + ENCAP] + [EXT EXTRA]) bytes\n", 
-                size, extra_len);
 
         if (ctx->src_ext) {
                 /* Point to just after source extension in the new skb */
@@ -972,12 +962,11 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                         return -ENOMEM;
         }
 
+        /* Move back everything from the point of insertion, making
+           room for extra_len bytes */
         memmove(skb_push(skb, extra_len), iph,
                 ptr - (unsigned char *)iph);
         
-        LOG_DBG("Moving %u bytes ctx->length=%u\n",
-                ptr - (unsigned char *)iph, ctx->length);
-
         /* Update header pointers */
         skb_reset_network_header(skb);
         iph = ip_hdr(skb);
@@ -985,15 +974,13 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         skb_reset_transport_header(skb);
         sh = serval_hdr(skb);
 
-        LOG_DBG("New hdr1: %s\n",
-                serval_hdr_to_str(sh));
-
         if (ctx->src_ext) {
-                sxt = (struct serval_source_ext *)((char *)sh + 
-                                                   ((char *)ctx->src_ext - 
-                                                    (char *)ctx->hdr));
+                sxt = (struct serval_source_ext *)
+                        ((char *)sh + ((char *)ctx->src_ext - 
+                                       (char *)ctx->hdr));
         } else {
-                sxt = (struct serval_source_ext *)ptr;
+                sxt = (struct serval_source_ext *)
+                        ((unsigned char *)sh + ctx->length);
         }
 
         sxt->sv_ext_type = SERVAL_SOURCE_EXT;
@@ -1004,11 +991,11 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         
         sh->check = 0;
         sh->length = htons(serval_len);
-
-        LOG_DBG("New hdr2: %s\n",
+        
+        LOG_DBG("New hdr: %s\n",
                 serval_hdr_to_str(sh));
 
-        return 0;
+        return extra_len;
 }
 
 static int serval_sal_syn_rcv(struct sock *sk, 
@@ -1172,7 +1159,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                   as source to comply with ingress filtering (e.g.,
                   for clients behind NATs).
                 */
-                if (serval_sal_add_source_ext(&rskb, ctx)) {
+                if (serval_sal_add_source_ext(&rskb, ctx) < 0) {
                         LOG_DBG("Could not add source extenions\n");
                         goto drop_and_release;
                 }
@@ -1195,8 +1182,10 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
 #if defined(OS_LINUX_KERNEL)
         if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
-                struct udphdr *uh = (struct udphdr *)((unsigned char *)ctx->hdr - 
-                                                      sizeof(struct udphdr));
+                struct iphdr *iph = ip_hdr(rskb);
+                struct udphdr *uh = (struct udphdr *)
+                        ((char *)iph + (iph->ihl << 2));
+
                 /* We should perform UDP encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
                 
@@ -2218,6 +2207,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         struct sk_buff *cskb;
                         struct iphdr *iph;
                         unsigned int iph_len;
+                        int len = 0;
 
                         err = SAL_RESOLVE_FORWARD;
     
@@ -2259,14 +2249,23 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * packet may be ingress-filtered user-level
                          * raw socket forwarding may drop the packet
                          * if the source address is invalid */
-                        if (serval_sal_add_source_ext(&cskb, ctx)) {
+                        len = serval_sal_add_source_ext(&cskb, ctx);
+                        
+                        if (len < 0) {
                                 LOG_ERR("Failed to add source extension\n");
                                 kfree_skb(cskb);
                                 break;
                         }
-                        
+                        iph = ip_hdr(cskb);
+                        hdr_len += len;
+
+                        LOG_DBG("new serval header len=%u\n", hdr_len);
+
                         /* Update destination address */
                         memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
+
+                        /* Recalculate SAL checksum */
+                        serval_sal_send_check(serval_hdr(cskb));
 
                         /* Must recalculate transport checksum. */
                         serval_sal_update_csum(cskb, iph_len, hdr_len);
@@ -2275,7 +2274,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 #if defined(OS_LINUX_KERNEL)
                         /* Packet is UDP encapsulated, push back UDP
                          * encapsulation header */
-                        if (ip_hdr(skb)->protocol == IPPROTO_UDP)
+                        if (ip_hdr(cskb)->protocol == IPPROTO_UDP)
                                 skb_push(cskb, sizeof(struct udphdr));
 #endif
                         skb_push(cskb, iph_len);
@@ -2769,7 +2768,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #if defined(OS_USER)
                 skb_set_dev(skb, dev_get_by_index(NULL, 0));
 #endif
-
                 serval_sal_send_check(sh);
                 
                 /* note that the service resolution stats
