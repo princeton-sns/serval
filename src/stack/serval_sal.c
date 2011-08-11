@@ -271,6 +271,35 @@ static inline int has_valid_control_extension(struct sock *sk,
         return 1;
 }
 
+static inline int has_valid_migrate_extension(struct sock *sk,
+		                                      struct serval_hdr *sh)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct serval_migrate_ext *mig_ext =
+        		(struct serval_migrate_ext *)(sh + 1);
+        unsigned int hdr_len =ntohs(sh->length);
+
+        if (hdr_len < sizeof(*sh) + sizeof(*mig_ext)) {
+        	   LOG_PKT("No migrate extension, hdr_len=%u\n",
+        			   hdr_len);
+        	   return 0;
+        }
+
+        if (mig_ext->exthdr.type != SERVAL_MIGRATE_EXT ||
+        	mig_ext->exthdr.length != sizeof(*mig_ext)) {
+        	   LOG_PKT("No migrate extension, bad type\n");
+        	   return 0;
+        }
+
+        if (memcmp(mig_ext->nonce, ssk->peer_nonce,
+        		SERVAL_NONCE_SIZE) != 0) {
+        	   LOG_PKT("Migrate extension has bad nonce\n");
+        	   return 0;
+        }
+
+	    return 1;
+}
+
 static inline int has_valid_desc_extension(struct sock *sk,
                                            struct serval_hdr *sfh)
 {
@@ -1058,9 +1087,33 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
                                   struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct serval_migrate_ext *mig_ext =
+        		(struct serval_migrate_ext *)(sh + 1);
+        int err = 0;
+        LOG_INF("received Migrate REQUEST\n");
         
+        if (!has_valid_migrate_extension(sk, sh)) {
+        	    LOG_ERR("Bad migration extension\n");
+        	    return -1;
+        }
 
-        return 0;
+        if (has_valid_seqno(ntohl(mig_ext->seqno), ssk)) {
+        	    ssk->rcv_seq.nxt = ntohl(mig_ext->seqno) + 1;
+
+        	    LOG_DBG("Attempting to migrate...\n");
+        	    switch (sk->sk_state) {
+        	    case SERVAL_CONNECTED:
+        	    	serval_sock_set_state(sk, SERVAL_RMIGRATE);
+                    err = serval_sal_send_ack(sk, sh, skb);
+                    LOG_DBG("Sending RSYNACK: %d\n", err);
+                    break;
+        	    default:
+        	    	/* FIXME: What to do in other states? */
+        	    	break;
+        	    }
+        }
+
+        return err;
 }
 
 static int serval_sal_rcv_close_req(struct sock *sk, 
@@ -2392,7 +2445,10 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         mig_ext->exthdr.type = SERVAL_MIGRATE_EXT;
         mig_ext->exthdr.length = sizeof(*mig_ext);
         mig_ext->exthdr.flags = flags;
+        mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
+        mig_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
+        dev_get_ipv4_addr(skb->dev, &mig_ext->new_addr);
         
         return sizeof(*mig_ext);
 }
