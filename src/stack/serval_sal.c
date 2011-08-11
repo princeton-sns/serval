@@ -98,7 +98,7 @@ static size_t min_ext_length[] = {
 };
 
 static char* serval_ext_name[] = {
-        [0] = "INVALID EXTENSION",
+        [0] = "INVALID",
         [SERVAL_CONNECTION_EXT] = "CONNECTION",
         [SERVAL_CONTROL_EXT] = "CONTROL",
         [SERVAL_SERVICE_EXT] = "SERVICE",
@@ -108,14 +108,20 @@ static char* serval_ext_name[] = {
 
 #if defined(ENABLE_DEBUG)
 
+static int print_base_ext(struct serval_ext *xt, char *buf, int buflen)
+{
+        return snprintf(buf, buflen, "%s length=%u",
+                        serval_ext_name[xt->type],
+                        xt->length);
+}
+
 static int print_connection_ext(struct serval_ext *xt, char *buf, int buflen)
 {
         struct serval_connection_ext *cxt = 
                 (struct serval_connection_ext *)xt;
         
         return snprintf(buf, buflen,
-                        "%s {seqno=%u ackno=%u srvid=%s} ",
-                        serval_ext_name[xt->type],
+                        "seqno=%u ackno=%u srvid=%s",
                         ntohl(cxt->seqno),
                         ntohl(cxt->ackno),
                         service_id_to_str(&cxt->srvid));
@@ -127,8 +133,7 @@ static int print_control_ext(struct serval_ext *xt, char *buf, int buflen)
                 (struct serval_control_ext *)xt;
         
         return snprintf(buf, buflen,
-                        "%s {seqno=%u ackno=%u} ",
-                        serval_ext_name[xt->type],
+                        "seqno=%u ackno=%u",
                         ntohl(cxt->seqno),
                         ntohl(cxt->ackno));
 }
@@ -139,8 +144,7 @@ static int print_service_ext(struct serval_ext *xt, char *buf, int buflen)
                 (struct serval_service_ext *)xt;
         
         return snprintf(buf, buflen,
-                        "%s {src_srvid=%s dst_srvid=%s} ",
-                        serval_ext_name[xt->type],
+                        "src_srvid=%s dst_srvid=%s",
                         service_id_to_str(&sxt->src_srvid),
                         service_id_to_str(&sxt->dst_srvid));
 }
@@ -150,8 +154,7 @@ static int print_description_ext(struct serval_ext *xt, char *buf, int buflen)
         /* struct serval_description_ext *dxt = 
            (struct serval_description_ext *)xt; */
                 
-        return snprintf(buf, buflen, "%s ",
-                        serval_ext_name[xt->type]);
+        return 0;
 }
 
 static int print_source_ext(struct serval_ext *xt, char *buf, int buflen)
@@ -163,33 +166,40 @@ static int print_source_ext(struct serval_ext *xt, char *buf, int buflen)
         char addr[18];
         int len = 0;
 
-        len = snprintf(buf, buflen, "%s ", serval_ext_name[xt->type]);
-
         while (n > 0) {
-                len += snprintf(buf + len, buflen - len, "source addr=%s\n",
+                len += snprintf(buf + len, buflen - len, "%s ",
                                 inet_ntop(AF_INET, a, addr, 18));
                 a += 4;
                 n--;
         }
-
+        if (len) {
+                /* Remove trailing white space */
+                buf[--len] = '\0';
+        }
         return len;
-}
-
-static int print_ext_dummy(struct serval_ext *xt, char *buf, int buflen)
-{
-        return 0;
 }
 
 typedef int (*print_ext_func_t)(struct serval_ext *, char *, int);
 
 static print_ext_func_t print_ext_func[] = {
-        [0] = &print_ext_dummy,
+        [0] = &print_base_ext,
         [SERVAL_CONNECTION_EXT] = &print_connection_ext,
         [SERVAL_CONTROL_EXT] = &print_control_ext,
         [SERVAL_SERVICE_EXT] = &print_service_ext,
         [SERVAL_DESCRIPTION_EXT] = &print_description_ext,
         [SERVAL_SOURCE_EXT] = &print_source_ext,
 };
+
+static int print_ext(struct serval_ext *xt, char *buf, int buflen)
+{
+        int len;
+
+        len = snprintf(buf, buflen, "{ ");
+        len += print_base_ext(xt, buf + len, buflen - len);
+        len += snprintf(buf + len, buflen - len, " ");
+        len += print_ext_func[xt->type](xt, buf + len, buflen - len);
+        return snprintf(buf + len, buflen - len, "}") + len;
+}
 
 #endif /* ENABLE_DEBUG */
 
@@ -204,13 +214,13 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
 {
         struct serval_ext *ext;
         unsigned int i = 0;
-        unsigned int hdr_len;
+        int hdr_len;
 
         memset(ctx, 0, sizeof(struct serval_context));
         
         ctx->hdr = serval_hdr(skb);
         ctx->length = ntohs(ctx->hdr->length);
-        ext = (struct serval_ext *)(ctx->hdr + 1);
+        ext = SERVAL_EXT_FIRST(ctx->hdr);
         
         if (ctx->hdr->type > __SERVAL_PKT_MAX) {
                 LOG_ERR("Bad Serval packet type\n");
@@ -223,13 +233,12 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
 
         /* Only base header parse, return */
         if (mode == SERVAL_PARSE_BASE)
-                return -0;
+                return 0;
 
         /* Parse extensions */
-        hdr_len = ctx->length;
-        hdr_len -= sizeof(*ctx->hdr);
+        hdr_len = ctx->length - sizeof(*ctx->hdr);
 
-        while (hdr_len && i < MAX_NUM_SERVAL_EXTENSIONS) {
+        while (hdr_len > 0 && i < MAX_NUM_SERVAL_EXTENSIONS) {
                 if (ext->type >= __SERVAL_EXT_TYPE_MAX) {
                         LOG_DBG("Bad extension type (=%u)\n",
                                 ext->type);
@@ -242,12 +251,15 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
                         return -1;
                 }
 
-                LOG_DBG("Serval extension %s length=%u\n",
-                        serval_ext_name[ext->type], ext->length);
+                LOG_DBG("EXT %s length=%u (hdr_len=%d)\n",
+                        serval_ext_name[ext->type], 
+                        ext->length,
+                        hdr_len);
 
                 switch (ext->type) {
                 case SERVAL_CONNECTION_EXT:
-                        if (ctx->conn_ext || SERVAL_CTX_FLAG_SEQNO & ctx->flags)
+                        if (ctx->conn_ext || 
+                            SERVAL_CTX_FLAG_SEQNO & ctx->flags)
                                 return -1;
 
                         ctx->conn_ext = (struct serval_connection_ext *)ext;
@@ -256,10 +268,11 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
                         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
                         break;
                 case SERVAL_CONTROL_EXT:
-                        if (ctx->ctrl_ext || SERVAL_CTX_FLAG_SEQNO & ctx->flags)
+                        if (ctx->ctrl_ext || 
+                            SERVAL_CTX_FLAG_SEQNO & ctx->flags)
                                 return -1;
 
-                        ctx->ctrl_ext = (struct serval_control_ext *)ext;                        
+                        ctx->ctrl_ext = (struct serval_control_ext *)ext;
                         ctx->seqno = ntohl(ctx->ctrl_ext->seqno);
                         ctx->ackno = ntohl(ctx->ctrl_ext->ackno);
                         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
@@ -273,23 +286,20 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
                 case SERVAL_SOURCE_EXT:
                         if (ctx->src_ext)
                                 return -1;
-                        /* TODO: Should we allow more than one source extension? */
+
                         ctx->src_ext = (struct serval_source_ext *)ext;
-#if defined(ENABLE_DEBUG)
-                        {
-                        }
-#endif
                         break;
                 default:
                         /* Skip */
                         break;
                 }
-                ctx->ext[i++] = ext;
-                ext = (struct serval_ext *)((unsigned char *)ext + ext->length);
+                ctx->ext[i++] = ext;                
                 hdr_len -= ext->length;
-        }       
+                ext = SERVAL_EXT_NEXT(ext);
+        }
 
-        return 0;
+        /* hdr_len should be zero if everything was OK */
+        return hdr_len;
 }
 
 #if defined(ENABLE_DEBUG)
@@ -297,7 +307,7 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
 {
 #define HDR_BUFLEN 512
         static char buf[HDR_BUFLEN];
-        unsigned int hdr_len = ntohs(sh->length);
+        int hdr_len = ntohs(sh->length);
         struct serval_ext *ext;
         int len = 0;
         
@@ -310,16 +320,35 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
                        flow_id_to_str(&sh->dst_flowid));
         
         hdr_len -= sizeof(*sh);
-        ext = (struct serval_ext *)(sh + 1);
+        ext = SERVAL_EXT_FIRST(sh);
                 
-        while (hdr_len) {
-                if (ext->type < __SERVAL_EXT_TYPE_MAX) {
-                        len += print_ext_func[ext->type](ext, buf + len, 
-                                                         HDR_BUFLEN - len);
+        while (hdr_len > 0) {
+                if (ext->type >= __SERVAL_EXT_TYPE_MAX) {
+                        LOG_DBG("Bad extension type (=%u)\n",
+                                ext->type);
+                        return buf;
                 }
-                ext = (struct serval_ext *)((unsigned char *)ext + ext->length);
+
+                if (ext->length < min_ext_length[ext->type]) {
+                        LOG_DBG("Bad extension \'%s\' hdr_len=%d "
+                                "ext->length=%u\n",
+                                serval_ext_name[ext->type], 
+                                hdr_len,
+                                ext->length);
+                        return buf;
+                }
+
+                len += print_ext(ext, buf + len, 
+                                 HDR_BUFLEN - len);
+
                 hdr_len -= ext->length;
+                ext = SERVAL_EXT_NEXT(ext);
         }       
+
+        if (hdr_len) {
+                LOG_DBG("hdr_len=%d is not 0, bad header?\n",
+                        hdr_len);
+        }
 
         len += snprintf(buf + len, HDR_BUFLEN - len, "]");
 
@@ -906,7 +935,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 size = ctx->hdr->length + 4;
         } else {
                 /* No previous source extension. Put first. */
-                sxt = (struct serval_source_ext *)(sh + 1);
+                sxt = (struct serval_source_ext *)SERVAL_EXT_FIRST(sh);
                 size = (ctx ? ctx->hdr->length : ntohs(sh->length)) + 
                         SERVAL_SOURCE_EXT_IPV4_LEN;
         }
@@ -2296,8 +2325,9 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop;
         }
 
-        if (!serval_sal_parse_hdr(skb, &ctx, SERVAL_PARSE_ALL)) {
-                LOG_ERR("Bad Serval header\n");
+        if (serval_sal_parse_hdr(skb, &ctx, SERVAL_PARSE_ALL)) {
+                LOG_ERR("Bad Serval header %s\n",
+                        ctx.hdr ? serval_hdr_to_str(ctx.hdr) : "NULL");
                 goto drop;
         }
         

@@ -211,6 +211,12 @@ struct serval_ext {
 #define sv_ext_flags exthdr.flags
 #define sv_ext_length exthdr.length
 
+#define SERVAL_EXT_FIRST(sh) \
+        ((struct serval_ext *)((char *)sh + sizeof(struct serval_hdr)))
+
+#define SERVAL_EXT_NEXT(ext) \
+        ((struct serval_ext *)((char *)ext + ext->length))
+
 enum serval_ext_type {
         SERVAL_CONNECTION_EXT = 1,
         SERVAL_CONTROL_EXT,
