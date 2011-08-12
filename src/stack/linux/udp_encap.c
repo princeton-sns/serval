@@ -34,9 +34,14 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 
         skb_reset_transport_header(skb);
         
+        dport = dport == 0 ? UDP_ENCAP_PORT : dport;
+
+        LOG_DBG("UDP encapsulating [%u:%u] skb->len=%u\n",
+                UDP_ENCAP_PORT, dport, skb->len);
+
         /* Build UDP header */
         uh->source = htons(UDP_ENCAP_PORT);
-        uh->dest = htons(dport == 0 ? UDP_ENCAP_PORT : dport);
+        uh->dest = htons(dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;
         uh->check = 0;
@@ -56,8 +61,6 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
 
         if (!sk)
                 return -1;
-
-        LOG_PKT("Transmitting UDP packet len=%u\n", skb->len);
 
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
@@ -101,7 +104,9 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
 	struct udp_encap *encap;
         
-        LOG_PKT("Received encapsulated Serval packet\n");
+        LOG_PKT("UDP encapsulated packet [%u:%u]\n",
+                ntohs(udp_hdr(skb)->source),
+                ntohs(udp_hdr(skb)->dest));
         
 	encap = sock_to_encap(sk);
 

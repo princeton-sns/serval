@@ -1100,7 +1100,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
         struct serval_hdr *rsh;
-        unsigned int serval_len;
+        unsigned int serval_len = 0;
         int err = 0;
 
         /* Make compiler be quiet */
@@ -1229,39 +1229,12 @@ static int serval_sal_syn_rcv(struct sock *sk,
         }
 
         rskb->protocol = IPPROTO_SERVAL;
-        conn_ext = (struct serval_connection_ext *)
-                skb_push(rskb, sizeof(*conn_ext));
-        conn_ext->exthdr.type = SERVAL_CONNECTION_EXT;
-        conn_ext->exthdr.length = sizeof(*conn_ext);
-        conn_ext->exthdr.flags = 0;
-        conn_ext->seqno = htonl(srsk->iss_seq);
-        conn_ext->ackno = htonl(srsk->rcv_seq + 1);
-        memcpy(&conn_ext->srvid, &ssk->peer_srvid, 
-               sizeof(ssk->peer_srvid));
-        /* Copy our nonce to connection extension */
-        memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
-        
-        /* Add Serval header */
-        rsh = (struct serval_hdr *)skb_push(rskb, sizeof(*rsh));
-        rsh->type = SERVAL_PKT_SYN;
-        rsh->ack = 1;
-        rsh->protocol = ctx->hdr->protocol;
-        serval_len = sizeof(*rsh) + sizeof(*conn_ext);
-        
-        /* Update info in packet */
-        memcpy(&rsh->dst_flowid, &srsk->peer_flowid, 
-               sizeof(rsh->dst_flowid));
-        memcpy(&rsh->src_flowid, &srsk->local_flowid, 
-               sizeof(srsk->local_flowid));
-        memcpy(&conn_ext->srvid, &srsk->peer_srvid,            
-               sizeof(srsk->peer_srvid));
-
         skb_dst_set(rskb, dst);
-
         rskb->dev = skb->dev;
         
         skb_reset_transport_header(rskb);
 
+        /* Add source extension, if necessary */
         if (ctx->src_ext) {
                 struct serval_source_ext *sxt;
 
@@ -1303,8 +1276,32 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 memcpy(&saddr, &inet_rsk(rsk)->loc_addr, 
                        sizeof(inet_rsk(rsk)->loc_addr));
         }
-        
-        rsh->length = htons(serval_len);
+
+        /* Add connection extension */
+        conn_ext = (struct serval_connection_ext *)
+                skb_push(rskb, sizeof(*conn_ext));
+        conn_ext->exthdr.type = SERVAL_CONNECTION_EXT;
+        conn_ext->exthdr.length = sizeof(*conn_ext);
+        conn_ext->exthdr.flags = 0;
+        conn_ext->seqno = htonl(srsk->iss_seq);
+        conn_ext->ackno = htonl(srsk->rcv_seq + 1);
+        memcpy(&conn_ext->srvid, &srsk->peer_srvid, 
+               sizeof(srsk->peer_srvid));
+
+        /* Copy our nonce to connection extension */
+        memcpy(conn_ext->nonce, srsk->local_nonce, SERVAL_NONCE_SIZE);
+        serval_len += sizeof(*conn_ext);
+ 
+        /* Add Serval header */
+        rsh = (struct serval_hdr *)skb_push(rskb, sizeof(*rsh));
+        rsh->type = SERVAL_PKT_SYN;
+        rsh->ack = 1;
+        rsh->protocol = ctx->hdr->protocol;
+        rsh->length = htons(serval_len + sizeof(*rsh));
+        memcpy(&rsh->dst_flowid, &srsk->peer_flowid, 
+               sizeof(rsh->dst_flowid));
+        memcpy(&rsh->src_flowid, &srsk->local_flowid, 
+               sizeof(srsk->local_flowid));
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(rsh), rskb->len);
@@ -1321,9 +1318,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 /* We should perform UDP encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
                 
-                LOG_PKT("UDP-encapsulating SYN-ACK, dest port %u\n",
-                        srsk->udp_encap_port);
-
                 if (serval_udp_encap_skb(rskb, srsk->orig_dst_addr,
                                          inet_rsk(rsk)->rmt_addr,
                                          srsk->udp_encap_port)) {
