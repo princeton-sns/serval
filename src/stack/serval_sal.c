@@ -1147,6 +1147,10 @@ static int serval_sal_syn_rcv(struct sock *sk,
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &ctx->hdr->src_flowid, 
                sizeof(ctx->hdr->src_flowid));
+        memcpy(&srsk->peer_srvid, &ctx->conn_ext->srvid,
+               sizeof(ctx->conn_ext->srvid));
+        memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
+        srsk->rcv_seq = ctx->seqno;
 
         if (ctx->src_ext) {
                 memcpy(&inet_rsk(rsk)->rmt_addr,
@@ -1172,9 +1176,6 @@ static int serval_sal_syn_rcv(struct sock *sk,
         
         memcpy(&inet_rsk(rsk)->loc_addr, &myaddr,
                sizeof(inet_rsk(rsk)->loc_addr));
-
-        memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
-        srsk->rcv_seq = ctx->seqno;
 
 #if defined(ENABLE_DEBUG)
         {
@@ -2313,6 +2314,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         struct sk_buff *cskb;
                         struct iphdr *iph;
                         unsigned int iph_len;
+                        unsigned int protocol = serval_hdr(skb)->protocol;
                         int len = 0;
 
                         err = SAL_RESOLVE_FORWARD;
@@ -2377,7 +2379,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         skb_reset_transport_header(cskb);
                         
                         serval_sal_update_transport_csum(cskb,
-                                                         serval_hdr(cskb)->protocol);
+                                                         protocol);
                         
                         /* Push back to Serval header */
                         skb_push(cskb, hdr_len);
