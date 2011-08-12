@@ -97,6 +97,8 @@ static size_t min_ext_length[] = {
         [SERVAL_SOURCE_EXT] = sizeof(struct serval_source_ext),
 };
 
+#if defined(ENABLE_DEBUG)
+
 static char* serval_ext_name[] = {
         [0] = "INVALID",
         [SERVAL_CONNECTION_EXT] = "CONNECTION",
@@ -105,8 +107,6 @@ static char* serval_ext_name[] = {
         [SERVAL_DESCRIPTION_EXT] = "DESCRIPTION",
         [SERVAL_SOURCE_EXT] = "SOURCE",
 };
-
-#if defined(ENABLE_DEBUG)
 
 static int print_base_hdr(struct serval_hdr *sh, char *buf, int buflen)
 {
@@ -1096,7 +1096,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         struct serval_connection_ext *conn_ext = ctx->conn_ext;
         struct request_sock *rsk;
         struct serval_request_sock *srsk;
-        struct net_addr saddr;
+        struct net_addr myaddr;
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
         struct serval_hdr *rsh;
@@ -1104,7 +1104,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         int err = 0;
 
         /* Make compiler be quiet */
-        memset(&saddr, 0, sizeof(saddr));
+        memset(&myaddr, 0, sizeof(myaddr));
 
         /* Cache this service. FIXME, need to garbage this entry at
          * some point so that we aren't always redirected to same
@@ -1131,7 +1131,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
          * should probably route the reply here somehow in case we
          * want to reply on another interface than the incoming one.
          */
-        if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
+        if (!dev_get_ipv4_addr(skb->dev, &myaddr)) {
                 LOG_ERR("No source address for interface %s\n",
                         skb->dev);
                 goto drop;
@@ -1153,24 +1153,24 @@ static int serval_sal_syn_rcv(struct sock *sk,
                        SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 0),
                        sizeof(inet_rsk(rsk)->rmt_addr));
 
-                if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2) {
-                        memcpy(&srsk->orig_dst_addr,
-                               SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
-                               sizeof(srsk->orig_dst_addr));
-                } else {
-                        memcpy(&srsk->orig_dst_addr,
-                               &ip_hdr(skb)->saddr,
-                               sizeof(srsk->orig_dst_addr));
-                }
+                memcpy(&srsk->orig_dst_addr,
+                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
+                       sizeof(srsk->orig_dst_addr));
         } else {
                 memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
                        sizeof(inet_rsk(rsk)->rmt_addr));
-                memcpy(&srsk->orig_dst_addr,
-                       &ip_hdr(skb)->daddr,
-                       sizeof(srsk->orig_dst_addr));
+                
+                if (skb->pkt_type == PACKET_BROADCAST)
+                        memcpy(&srsk->orig_dst_addr,
+                               &myaddr,
+                               sizeof(srsk->orig_dst_addr));
+                else 
+                        memcpy(&srsk->orig_dst_addr,
+                               &ip_hdr(skb)->daddr,
+                               sizeof(srsk->orig_dst_addr));
         }
-
-        memcpy(&inet_rsk(rsk)->loc_addr, &saddr,
+        
+        memcpy(&inet_rsk(rsk)->loc_addr, &myaddr,
                sizeof(inet_rsk(rsk)->loc_addr));
 
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
@@ -1263,19 +1263,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                        &inet_rsk(rsk)->loc_addr,
                        sizeof(inet_rsk(rsk)->loc_addr));
                 serval_len += sxt->sv_ext_length;
-
-                if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2)
-                        memcpy(&saddr, 
-                               SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
-                               4);
-                else 
-                        memcpy(&saddr, &ip_hdr(skb)->saddr, 
-                               sizeof(ip_hdr(skb)->saddr));
-        } else {
-                /* Use our own source address in reply */
-                memcpy(&saddr, &inet_rsk(rsk)->loc_addr, 
-                       sizeof(inet_rsk(rsk)->loc_addr));
-        }
+        } 
 
         /* Add connection extension */
         conn_ext = (struct serval_connection_ext *)
@@ -2514,25 +2502,25 @@ int serval_sal_rcv(struct sk_buff *skb)
         int err = 0;
         
         if (skb->len < sizeof(struct serval_hdr)) {
-                LOG_ERR("skb length too short (%u bytes)\n", 
+                LOG_DBG("skb length too short (%u bytes)\n", 
                         skb->len);
                 goto drop;
         }
 
         if (serval_sal_parse_hdr(skb, &ctx, SERVAL_PARSE_ALL)) {
-                LOG_ERR("Bad Serval header %s\n",
+                LOG_DBG("Bad Serval header %s\n",
                         ctx.hdr ? serval_hdr_to_str(ctx.hdr) : "NULL");
                 goto drop;
         }
         
         if (!pskb_may_pull(skb, ctx.length)) {
-                LOG_ERR("Cannot pull header (hdr_len=%u)\n",
+                LOG_DBG("Cannot pull header (hdr_len=%u)\n",
                         ctx.length);
                 goto drop;
         }
         
         if (unlikely(serval_sal_csum(ctx.hdr, ctx.length))) {
-                LOG_ERR("SAL checksum error!\n");
+                LOG_DBG("SAL checksum error!\n");
                 goto drop;
         }
         

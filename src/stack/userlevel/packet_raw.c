@@ -87,6 +87,8 @@ static int packet_raw_recv(struct net_device *dev)
 		return -1;
 	}
         
+	LOG_DBG("Receiving RAW IP message\n");
+
 	ret = recvfrom(dev->fd, skb->data, RCVLEN, 0, 
                        (struct sockaddr *)&addr, &addrlen);
 	
