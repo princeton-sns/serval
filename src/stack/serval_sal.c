@@ -320,9 +320,10 @@ static int parse_description_ext(struct serval_ext *ext, struct sk_buff *skb,
 static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
                             struct serval_context *ctx)
 {
+        /*
         int i;
         __u32 addr;
-                
+        */      
         if (ctx->src_ext)
                 return -1;
         
@@ -332,8 +333,9 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
         if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) < 2)
                 return -1;
 
+        /*
         dev_get_ipv4_addr(skb->dev, &addr);
-                
+
         for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
                 if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
                            &addr, sizeof(addr)) == 0) {
@@ -341,7 +343,7 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
                         return -1;
                 }
         }
-                            
+        */                  
         return ext->length;
 }
 
