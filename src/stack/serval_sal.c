@@ -1817,10 +1817,10 @@ static int serval_sal_request_state_process(struct sock *sk,
 
         /* Save IP addresses. These are important for checksumming in
            transport protocols */
-        if (ctx->src_ext && SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2) {
+        if (ctx->src_ext) {
                 /* The previous source address is our true destination. */
                 memcpy(&inet_sk(sk)->inet_daddr, 
-                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1), 
+                       SERVAL_SOURCE_EXT_GET_LAST_ADDR(ctx->src_ext), 
                        sizeof(inet_sk(sk)->inet_daddr));
 #if defined(ENABLE_DEBUG)
                 {
