@@ -568,12 +568,12 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
         } saddr;
         int ret;
 	
-	rsp = malloc(sizeof(*rsp) + req->data_len);
+	rsp = malloc(CLIENT_MSG_RECV_RSP_LEN + req->data_len);
 
 	if (!rsp)
 		return -ENOMEM;
 	
-        memset(&rsp, 0, sizeof(*rsp) + req->data_len);
+        memset(rsp, 0, CLIENT_MSG_RECV_RSP_LEN + req->data_len);
         memset(&saddr, 0, sizeof(saddr));
         client_msg_hdr_init(&rsp->msghdr, MSG_RECV_RSP);
         memset(&mh, 0, sizeof(mh));

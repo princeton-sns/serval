@@ -148,12 +148,16 @@ static int packet_raw_xmit(struct sk_buff *skb)
 		kfree_skb(skb);
 		return -1;
 	}
-
-        LOG_DBG("sending message len=%u iph=%p skb->data=%p\n", 
-                skb->len,
-                iph,
-                skb->data); 
-
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[18];
+                LOG_DBG("%s XMIT len=%u dest=%s\n",
+                        skb->dev->name,
+                        skb->len,
+                        inet_ntop(AF_INET, &iph->daddr,
+                                  buf, 18));
+        }
+#endif
 	err = sendto(skb->dev->fd, skb->data, skb->len, 0, 
 		     (struct sockaddr *)&addr, sizeof(addr));
 
