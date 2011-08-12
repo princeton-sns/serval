@@ -85,7 +85,7 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
 #if defined(ENABLE_DEBUG)
         {
                 char srcstr[18], dststr[18];
-                LOG_DBG("%s %s->%s tot_len=%u iph_len=[%u] %u\n",
+                LOG_DBG("%s %s->%s skb->len=%u iph_len=[%u] %u\n",
                         skb->dev ? skb->dev->name : "no dev",
                         inet_ntop(AF_INET, &iph->saddr, srcstr, 18),
                         inet_ntop(AF_INET, &iph->daddr, dststr, 18),
@@ -116,6 +116,9 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
         /* Update tot_len, we might have added SAL extension
            headers. */
         iph->tot_len = htons(skb->len);
+
+        LOG_DBG("Forwarding skb->len=%u\n",
+                skb->len);
 
         /* Update checksum */
         ip_send_check(iph);

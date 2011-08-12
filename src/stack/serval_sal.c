@@ -211,108 +211,6 @@ static int print_ext(struct serval_ext *xt, char *buf, int buflen)
         return snprintf(buf + len, buflen - len, "}") + len;
 }
 
-#endif /* ENABLE_DEBUG */
-
-enum serval_parse_mode {
-        SERVAL_PARSE_BASE,
-        SERVAL_PARSE_ALL,
-};
-
-static int serval_sal_parse_hdr(struct sk_buff *skb, 
-                                struct serval_context *ctx,
-                                enum serval_parse_mode mode)
-{
-        struct serval_ext *ext;
-        unsigned int i = 0;
-        int hdr_len;
-
-        memset(ctx, 0, sizeof(struct serval_context));
-        
-        ctx->hdr = serval_hdr(skb);
-        ctx->length = ntohs(ctx->hdr->length);
-        ext = SERVAL_EXT_FIRST(ctx->hdr);
-        
-        if (ctx->hdr->type > __SERVAL_PKT_MAX) {
-                LOG_ERR("Bad Serval packet type\n");
-                return -1;
-        }
-
-        /* Sanity checks */
-        if (ctx->length < sizeof(struct serval_hdr))
-                return -1;
-
-        /* Only base header parse, return */
-        if (mode == SERVAL_PARSE_BASE)
-                return 0;
-
-        /* Parse extensions */
-        hdr_len = ctx->length - sizeof(*ctx->hdr);
-
-        while (hdr_len > 0 && i < MAX_NUM_SERVAL_EXTENSIONS) {
-                if (ext->type >= __SERVAL_EXT_TYPE_MAX) {
-                        LOG_DBG("Bad extension type (=%u)\n",
-                                ext->type);
-                        return -1;
-                }
-                
-                if (ext->length < min_ext_length[ext->type]) {
-                        LOG_DBG("Bad extension \'%s\' length (=%u)\n",
-                                serval_ext_name[ext->type], ext->length);
-                        return -1;
-                }
-
-                LOG_DBG("EXT %s length=%u (hdr_len=%d)\n",
-                        serval_ext_name[ext->type], 
-                        ext->length,
-                        hdr_len);
-
-                switch (ext->type) {
-                case SERVAL_CONNECTION_EXT:
-                        if (ctx->conn_ext || 
-                            SERVAL_CTX_FLAG_SEQNO & ctx->flags)
-                                return -1;
-
-                        ctx->conn_ext = (struct serval_connection_ext *)ext;
-                        ctx->seqno = ntohl(ctx->conn_ext->seqno);
-                        ctx->ackno = ntohl(ctx->conn_ext->ackno);
-                        ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
-                        break;
-                case SERVAL_CONTROL_EXT:
-                        if (ctx->ctrl_ext || 
-                            SERVAL_CTX_FLAG_SEQNO & ctx->flags)
-                                return -1;
-
-                        ctx->ctrl_ext = (struct serval_control_ext *)ext;
-                        ctx->seqno = ntohl(ctx->ctrl_ext->seqno);
-                        ctx->ackno = ntohl(ctx->ctrl_ext->ackno);
-                        ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
-                        break;
-                case SERVAL_SERVICE_EXT:
-                        if (ctx->srv_ext)
-                                return -1;
-
-                        ctx->srv_ext = (struct serval_service_ext *)ext;
-                        break;
-                case SERVAL_SOURCE_EXT:
-                        if (ctx->src_ext)
-                                return -1;
-
-                        ctx->src_ext = (struct serval_source_ext *)ext;
-                        break;
-                default:
-                        /* Skip */
-                        break;
-                }
-                ctx->ext[i++] = ext;                
-                hdr_len -= ext->length;
-                ext = SERVAL_EXT_NEXT(ext);
-        }
-
-        /* hdr_len should be zero if everything was OK */
-        return hdr_len;
-}
-
-#if defined(ENABLE_DEBUG)
 static const char *serval_hdr_to_str(struct serval_hdr *sh) 
 {
 #define HDR_BUFLEN 512
@@ -365,7 +263,178 @@ static const char *serval_hdr_to_str(struct serval_hdr *sh)
 
         return buf;
 }
+
 #endif /* ENABLE_DEBUG */
+
+static int parse_base_ext(struct serval_ext *ext, struct sk_buff *skb,
+                          struct serval_context *ctx)
+{
+        return 0;
+}
+
+static int parse_connection_ext(struct serval_ext *ext, struct sk_buff *skb,
+                                struct serval_context *ctx)
+{
+        if (ctx->conn_ext || SERVAL_CTX_FLAG_SEQNO & ctx->flags)
+                return -1;
+        
+        ctx->conn_ext = (struct serval_connection_ext *)ext;
+        ctx->seqno = ntohl(ctx->conn_ext->seqno);
+        ctx->ackno = ntohl(ctx->conn_ext->ackno);
+        ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
+                        
+        return ext->length;
+}
+
+static int parse_control_ext(struct serval_ext *ext, struct sk_buff *skb,
+                             struct serval_context *ctx)
+{
+        if (ctx->ctrl_ext || SERVAL_CTX_FLAG_SEQNO & ctx->flags)
+                return -1;
+        
+        ctx->ctrl_ext = (struct serval_control_ext *)ext;
+        ctx->seqno = ntohl(ctx->ctrl_ext->seqno);
+        ctx->ackno = ntohl(ctx->ctrl_ext->ackno);
+        ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
+        
+        return ext->length;
+}
+
+static int parse_service_ext(struct serval_ext *ext, struct sk_buff *skb,
+                             struct serval_context *ctx)
+{
+        if (ctx->srv_ext)
+                return -1;
+        
+        ctx->srv_ext = (struct serval_service_ext *)ext;
+
+        return ext->length;
+}
+
+static int parse_description_ext(struct serval_ext *ext, struct sk_buff *skb,
+                                 struct serval_context *ctx)
+{
+        return ext->length;
+}
+
+static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
+                            struct serval_context *ctx)
+{
+        int i;
+        __u32 addr;
+                
+        if (ctx->src_ext)
+                return -1;
+        
+        ctx->src_ext = (struct serval_source_ext *)ext;
+        
+        dev_get_ipv4_addr(skb->dev, &addr);
+                
+        for (i = 0; i < SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ctx->src_ext); i++) {
+                if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
+                           &addr, sizeof(addr)) == 0) {
+                        LOG_DBG("Our address already in SOURCE ext. Possible loop!\n");
+                        return -1;
+                }
+
+                if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
+                           &ip_hdr(skb)->saddr, 
+                           sizeof(ip_hdr(skb)->saddr)) == 0) {
+                        LOG_DBG("IP source address already in SOURCE ext. Possible loop!\n");
+                        return -1;
+                }
+        }
+                            
+        return ext->length;
+}
+
+
+typedef int (*parse_ext_func_t)(struct serval_ext *, struct sk_buff *, 
+                                struct serval_context *ctx);
+
+static parse_ext_func_t parse_ext_func[] = {
+        [0] = &parse_base_ext,
+        [SERVAL_CONNECTION_EXT] = &parse_connection_ext,
+        [SERVAL_CONTROL_EXT] = &parse_control_ext,
+        [SERVAL_SERVICE_EXT] = &parse_service_ext,
+        [SERVAL_DESCRIPTION_EXT] = &parse_description_ext,
+        [SERVAL_SOURCE_EXT] = &parse_source_ext,
+};
+
+static inline int parse_ext(struct serval_ext *ext, struct sk_buff *skb,
+                            struct serval_context *ctx)
+{
+        if (ext->type >= __SERVAL_EXT_TYPE_MAX) {
+                LOG_DBG("Bad extension type (=%u)\n",
+                        ext->type);
+                return -1;
+        }
+        
+        if (ext->length < min_ext_length[ext->type]) {
+                LOG_DBG("Bad extension \'%s\' length (=%u)\n",
+                        serval_ext_name[ext->type], ext->length);
+                return -1;
+        }
+        
+        LOG_DBG("EXT %s length=%u\n",
+                serval_ext_name[ext->type], 
+                ext->length);
+        
+        return parse_ext_func[ext->type](ext, skb, ctx);
+}
+
+enum serval_parse_mode {
+        SERVAL_PARSE_BASE,
+        SERVAL_PARSE_ALL,
+};
+
+/**
+   Parse Serval header and all extension, doing basic sanity checks.
+
+   Returns: 0 on success.
+*/
+static int serval_sal_parse_hdr(struct sk_buff *skb, 
+                                struct serval_context *ctx,
+                                enum serval_parse_mode mode)
+{
+        struct serval_ext *ext;
+        unsigned int i = 0;
+        int hdr_len;
+
+        memset(ctx, 0, sizeof(struct serval_context));
+        
+        ctx->hdr = serval_hdr(skb);
+        ctx->length = ntohs(ctx->hdr->length);
+        ext = SERVAL_EXT_FIRST(ctx->hdr);
+        
+        if (ctx->hdr->type > __SERVAL_PKT_MAX) {
+                LOG_ERR("Bad Serval packet type\n");
+                return -1;
+        }
+
+        /* Sanity checks */
+        if (ctx->length < sizeof(struct serval_hdr))
+                return -1;
+
+        /* Only base header parse, return */
+        if (mode == SERVAL_PARSE_BASE)
+                return 0;
+
+        /* Parse extensions */
+        hdr_len = ctx->length - sizeof(*ctx->hdr);
+
+        while (hdr_len > 0 && i < MAX_NUM_SERVAL_EXTENSIONS) {
+                if (parse_ext(ext, skb, ctx) < 0)
+                        return -1;
+
+                ctx->ext[i++] = ext;                
+                hdr_len -= ext->length;
+                ext = SERVAL_EXT_NEXT(ext);
+        }
+
+        /* hdr_len should be zero if everything was OK */
+        return hdr_len;
+}
 
 /* FIXME: should find a better way to distinguish between control
  * packets and data */
@@ -968,6 +1037,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 ptr - (unsigned char *)iph);
         
         /* Update header pointers */
+        skb_set_mac_header(skb, -skb->dev->hard_header_len);
         skb_reset_network_header(skb);
         iph = ip_hdr(skb);
         pskb_pull(skb, size);
@@ -992,7 +1062,8 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         sh->check = 0;
         sh->length = htons(serval_len);
         
-        LOG_DBG("New hdr: %s\n",
+        LOG_DBG("New hdr: skb->len=%u %s\n",
+                skb->len,
                 serval_hdr_to_str(sh));
 
         return extra_len;
@@ -1151,6 +1222,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         skb_reset_transport_header(rskb);
 
         if (ctx->src_ext) {
+                struct serval_source_ext *sxt;
                 /*
                   The SYN had a source extension, which means we were
                   not the first hop in this resolution and we must
@@ -1159,15 +1231,30 @@ static int serval_sal_syn_rcv(struct sock *sk,
                   as source to comply with ingress filtering (e.g.,
                   for clients behind NATs).
                 */
-                if (serval_sal_add_source_ext(&rskb, ctx) < 0) {
-                        LOG_DBG("Could not add source extenions\n");
+                sxt = (struct serval_source_ext *)
+                        skb_push(rskb, ctx->src_ext->sv_ext_length + 4);
+
+                if (!sxt) {
+                        LOG_DBG("Could not add source extensions\n");
                         goto drop_and_release;
                 }
+
+                memcpy(sxt, ctx->src_ext, ctx->src_ext->sv_ext_length);
+                sxt->sv_ext_type = SERVAL_SOURCE_EXT;
+                sxt->sv_ext_length = ctx->src_ext->sv_ext_length + 4;
+                memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
+                       &inet_sk(sk)->inet_saddr,
+                       sizeof(inet_sk(sk)->inet_saddr));
                 /* Update header pointers in case rskb was copied */
                 rsh = serval_hdr(rskb);
-                memcpy(&saddr, 
-                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 0),
-                       4);
+
+                if (SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ctx->src_ext) >= 2)
+                        memcpy(&saddr, 
+                               SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
+                               4);
+                else 
+                        memcpy(&saddr, &ip_hdr(skb)->saddr, 
+                               sizeof(ip_hdr(skb)->saddr));
         } else {
                 /* Use our own source address in reply */
                 memcpy(&saddr, &inet_rsk(rsk)->loc_addr, 
@@ -2070,18 +2157,14 @@ enum {
         SAL_RESOLVE_DROP,
 };
 
-static int serval_sal_update_csum(struct sk_buff *skb,
-                                  unsigned int ip_len,
-                                  unsigned int serval_len)
+static int serval_sal_update_transport_csum(struct sk_buff *skb,
+                                            int protocol)
 {
         struct iphdr *iph = ip_hdr(skb);
-        struct serval_hdr *sh = serval_hdr(skb);
-        
-        pskb_pull(skb, serval_len);
-        skb_reset_transport_header(skb);
+
         skb->ip_summed = CHECKSUM_NONE;
         
-        switch (sh->protocol) {
+        switch (protocol) {
         case SERVAL_PROTO_TCP:
                 tcp_hdr(skb)->check = 0;
                 skb->csum = csum_partial(tcp_hdr(skb),
@@ -2107,34 +2190,28 @@ static int serval_sal_update_csum(struct sk_buff *skb,
         default:
                 LOG_INF("Unknown transport protocol %u, "
                         "forgoing checksum calculation\n",
-                        sh->protocol);
+                        protocol);
                 break;
         }
-        /* Push back to Serval header */
-        skb_push(skb, serval_len);
-
-#if defined(OS_LINUX_KERNEL)
-        /* Is this packet UDP encapsulated? We might need to
-         * recalculate the encapsulation header's checksum too. */
-        if (skb->protocol == IPPROTO_UDP) {
-                struct udphdr *uh;
-                
-                skb_push(skb, sizeof(struct udphdr));
-                skb_reset_transport_header(skb);
-                
-                uh = udp_hdr(skb);
-                uh->check = 0;
-                uh->check = csum_tcpudp_magic(iph->saddr,
-                                              iph->daddr, 
-                                              skb->len,
-                                              IPPROTO_UDP,
-                                              csum_partial(uh, skb->len, 0));
-                pskb_pull(skb, sizeof(struct udphdr));
-                skb_reset_transport_header(skb);
-        }
-#endif
+        
         return 0;
 }
+
+#if defined(OS_LINUX_KERNEL)
+static int serval_sal_update_encap_csum(struct sk_buff *skb)
+{
+        struct udphdr *uh;
+        
+        uh = udp_hdr(skb);
+        uh->check = 0;
+        uh->check = csum_tcpudp_magic(ip_hdr(skb)->saddr,
+                                      ip_hdr(skb)->daddr, 
+                                      skb->len,
+                                      IPPROTO_UDP,
+                                      csum_partial(uh, skb->len, 0));
+        return 0;
+}
+#endif /* OS_LINUX_KERNEL */
 
 static int serval_sal_resolve_service(struct sk_buff *skb, 
                                       struct serval_context *ctx,
@@ -2265,19 +2342,33 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         /* Update destination address */
                         memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
 
+                        /* Must recalculate transport checksum. Pull
+                           to reveal transport header */
+                        pskb_pull(cskb, hdr_len);
+                        skb_reset_transport_header(cskb);
+                        
+                        serval_sal_update_transport_csum(cskb,
+                                                         serval_hdr(cskb)->protocol);
+                        
+                        /* Push back to Serval header */
+                        skb_push(cskb, hdr_len);
+                        skb_reset_transport_header(cskb);
+
                         /* Recalculate SAL checksum */
                         serval_sal_send_check(serval_hdr(cskb));
 
-                        /* Must recalculate transport checksum. */
-                        serval_sal_update_csum(cskb, iph_len, hdr_len);
-                                
-                        /* Push back to IP header */
 #if defined(OS_LINUX_KERNEL)
                         /* Packet is UDP encapsulated, push back UDP
                          * encapsulation header */
-                        if (ip_hdr(cskb)->protocol == IPPROTO_UDP)
+                        if (ip_hdr(cskb)->protocol == IPPROTO_UDP) {
+                                LOG_DBG("Pushing back UDP encapsulation header\n");
                                 skb_push(cskb, sizeof(struct udphdr));
+                                skb_reset_transport_header(cskb);
+                                udp_hdr(cskb)->len = htons(cskb->len);
+                                serval_sal_update_encap_csum(cskb);
+                        }
 #endif
+                        /* Push back to IP header */
                         skb_push(cskb, iph_len);
 
                         if (serval_ipv4_forward_out(cskb)) {
