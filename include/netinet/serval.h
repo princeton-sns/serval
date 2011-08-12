@@ -262,15 +262,15 @@ struct serval_source_ext {
 #define __SERVAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct serval_source_ext))
 
-#define SERVAL_SOURCE_EXT_IPV4_LEN __SERVAL_SOURCE_EXT_LEN(4)
+#define SERVAL_SOURCE_EXT_LEN __SERVAL_SOURCE_EXT_LEN(4)
 
-#define SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)                           \
+#define SERVAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
         (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
 
 #define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)                              \
-        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-n-1)*4])
+        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-n-1)*4])
 
 #define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
-        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ext)-1)*4])
+        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
 
 #endif /* _SERVAL_H */

@@ -172,7 +172,7 @@ static int print_source_ext(struct serval_ext *xt, char *buf, int buflen)
         struct serval_source_ext *sxt = 
                 (struct serval_source_ext *)xt;
         unsigned char *a = sxt->source;
-        int n = SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(sxt);
+        int n = SERVAL_SOURCE_EXT_NUM_ADDRS(sxt);
         char addr[18];
         int len = 0;
 
@@ -330,17 +330,10 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
         
         dev_get_ipv4_addr(skb->dev, &addr);
                 
-        for (i = 0; i < SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ctx->src_ext); i++) {
+        for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
                 if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
                            &addr, sizeof(addr)) == 0) {
                         LOG_DBG("Our address already in SOURCE ext. Possible loop!\n");
-                        return -1;
-                }
-
-                if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
-                           &ip_hdr(skb)->saddr, 
-                           sizeof(ip_hdr(skb)->saddr)) == 0) {
-                        LOG_DBG("IP source address already in SOURCE ext. Possible loop!\n");
                         return -1;
                 }
         }
@@ -979,13 +972,27 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         }
 
         if (ctx->src_ext) {
+                int i;
+
+                /* First check that we are not adding an address
+                 * twice */
+                for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
+                        if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
+                                   &iph->saddr, 
+                                   sizeof(iph->saddr)) == 0) {
+                                LOG_DBG("IP src address already in "
+                                        "SOURCE ext. Possible loop!\n");
+                                return -1;
+                        }
+                }
+
                 /* We just add another IP address. */
                 LOG_DBG("Appending address to SOURCE extension\n");
                 extra_len = 4;
                 ext_len = ctx->src_ext->sv_ext_length + extra_len;
         } else {
                 LOG_DBG("Adding new SOURCE extension\n");
-                extra_len = SERVAL_SOURCE_EXT_IPV4_LEN;
+                extra_len = SERVAL_SOURCE_EXT_LEN;
                 ext_len = extra_len;
         }
         
@@ -1248,7 +1255,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 /* Update header pointers in case rskb was copied */
                 rsh = serval_hdr(rskb);
 
-                if (SERVAL_SOURCE_EXT_NUM_IPV4_ADDRS(ctx->src_ext) >= 2)
+                if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2)
                         memcpy(&saddr, 
                                SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
                                4);
@@ -1760,8 +1767,7 @@ static int serval_sal_request_state_process(struct sock *sk,
                 LOG_ERR("packet is not a RESPONSE\n");
                 goto drop;
         }
-        /* Process potential ACK 
-         */
+        /* Process potential ACK */
         if (serval_sal_ack_process(sk, skb, ctx) != 0) {
                 LOG_DBG("ACK is invalid\n");
                 goto drop;
@@ -1777,9 +1783,10 @@ static int serval_sal_request_state_process(struct sock *sk,
 
         /* Save IP addresses. These are important for checksumming in
            transport protocols */
-        if (ctx->src_ext) {
+        if (ctx->src_ext && SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2) {
                 /* The previous source address is our true destination. */
-                memcpy(&inet_sk(sk)->inet_daddr, &ctx->src_ext->source, 
+                memcpy(&inet_sk(sk)->inet_daddr, 
+                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1), 
                        sizeof(inet_sk(sk)->inet_daddr));
 #if defined(ENABLE_DEBUG)
                 {

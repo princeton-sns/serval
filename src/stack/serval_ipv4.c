@@ -108,6 +108,9 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                 LOG_ERR("Could not forward SAL packet, NO route [err=%d]\n", err);
                 kfree_skb(skb);
                 return NET_RX_DROP;
+        } else {
+                struct rtable *rt = skb_rtable(skb);
+                iph->saddr = rt->rt_src;
         }
 #else
         iph->ttl = iph->ttl - 1;
