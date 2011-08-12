@@ -2216,6 +2216,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 /* Do not forward, e.g., broadcast
                                    packets as they may cause
                                    resolution loops. */
+                                LOG_DBG("Broadcast packet. Not forwarding\n");
                                 kfree_skb(skb);
                                 break;
                         }

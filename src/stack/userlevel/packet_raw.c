@@ -1,3 +1,4 @@
+
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <serval/netdevice.h>
 #include <serval/skbuff.h>
@@ -105,10 +106,23 @@ static int packet_raw_recv(struct net_device *dev)
                 ret, dev->name);
         */        
         __net_timestamp(skb);
+        skb->pkt_type = PACKET_OTHERHOST;
         skb_put(skb, ret);
 	skb->dev = dev;
         /* Set network header offset */
 	skb_reset_network_header(skb);
+
+        if (memcmp(&ip_hdr(skb)->daddr, 
+                   &dev->ipv4.addr, 
+                   sizeof(dev->ipv4.addr)) == 0) {
+                skb->pkt_type = PACKET_HOST;
+        } else if (memcmp(&ip_hdr(skb)->daddr, 
+                          &dev->ipv4.broadcast, 
+                          sizeof(dev->ipv4.broadcast)) == 0 || 
+                   ip_hdr(skb)->daddr == 0xffffffff) {
+                skb->pkt_type = PACKET_BROADCAST;
+        }
+                
         /* skb->pkt_type = */
 	skb->protocol = IPPROTO_IP;
 
