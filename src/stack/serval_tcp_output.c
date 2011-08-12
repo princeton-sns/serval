@@ -2211,7 +2211,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         LOG_DBG("2. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
 
-        __serval_tcp_v4_send_check(skb, ireq->loc_addr, ireq->rmt_addr);
+        __serval_tcp_v4_send_check(skb, serval_rsk(req)->orig_dst_addr, 
+                                   ireq->rmt_addr);
 
         /*
           FIXME: call serval_tcp_event_ack_sent? Not sure, since we

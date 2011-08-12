@@ -1100,6 +1100,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         struct dst_entry *dst = NULL;
         struct sk_buff *rskb;
         struct serval_hdr *rsh;
+        unsigned int serval_len;
         int err = 0;
 
         /* Make compiler be quiet */
@@ -1146,10 +1147,31 @@ static int serval_sal_syn_rcv(struct sock *sk,
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &ctx->hdr->src_flowid, 
                sizeof(ctx->hdr->src_flowid));
-        memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
-               sizeof(inet_rsk(rsk)->rmt_addr));
+
+        if (ctx->src_ext) {
+                memcpy(&inet_rsk(rsk)->rmt_addr,
+                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 0),
+                       sizeof(inet_rsk(rsk)->rmt_addr));
+
+                if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2) {
+                        memcpy(&srsk->orig_dst_addr,
+                               SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
+                               sizeof(srsk->orig_dst_addr));
+                } else {
+                        memcpy(&srsk->orig_dst_addr,
+                               &ip_hdr(skb)->saddr,
+                               sizeof(srsk->orig_dst_addr));
+                }
+        } else {
+                memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
+                       sizeof(inet_rsk(rsk)->rmt_addr));
+                memcpy(&srsk->orig_dst_addr,
+                       &ip_hdr(skb)->daddr,
+                       sizeof(srsk->orig_dst_addr));
+        }
+
         memcpy(&inet_rsk(rsk)->loc_addr, &saddr,
-               sizeof(inet_rsk(rsk)->rmt_addr));
+               sizeof(inet_rsk(rsk)->loc_addr));
 
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->seqno;
@@ -1224,7 +1246,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
         rsh->type = SERVAL_PKT_SYN;
         rsh->ack = 1;
         rsh->protocol = ctx->hdr->protocol;
-        rsh->length = htons(sizeof(*rsh) + sizeof(*conn_ext));
+        serval_len = sizeof(*rsh) + sizeof(*conn_ext);
         
         /* Update info in packet */
         memcpy(&rsh->dst_flowid, &srsk->peer_flowid, 
@@ -1242,6 +1264,9 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         if (ctx->src_ext) {
                 struct serval_source_ext *sxt;
+
+                LOG_DBG("Adding SOURCE ext to response\n");
+
                 /*
                   The SYN had a source extension, which means we were
                   not the first hop in this resolution and we must
@@ -1264,8 +1289,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
                        &inet_rsk(rsk)->loc_addr,
                        sizeof(inet_rsk(rsk)->loc_addr));
-                /* Update header pointers in case rskb was copied */
-                rsh = serval_hdr(rskb);
+                serval_len += sxt->sv_ext_length;
 
                 if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) >= 2)
                         memcpy(&saddr, 
@@ -1279,10 +1303,12 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 memcpy(&saddr, &inet_rsk(rsk)->loc_addr, 
                        sizeof(inet_rsk(rsk)->loc_addr));
         }
+        
+        rsh->length = htons(serval_len);
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(rsh), rskb->len);
-        
+
         /* Calculate SAL header checksum. */
         serval_sal_send_check(rsh);
 
@@ -1298,7 +1324,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 LOG_PKT("UDP-encapsulating SYN-ACK, dest port %u\n",
                         srsk->udp_encap_port);
 
-                if (serval_udp_encap_skb(rskb, inet_rsk(rsk)->loc_addr,
+                if (serval_udp_encap_skb(rskb, srsk->orig_dst_addr,
                                          inet_rsk(rsk)->rmt_addr,
                                          srsk->udp_encap_port)) {
                         LOG_ERR("SYN-ACK encapsulation failed\n");
@@ -1311,7 +1337,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
            have a full accepted socket (sk is the listening sock). 
         */
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
-                                             saddr.net_ip.s_addr,
+                                             srsk->orig_dst_addr,
                                              inet_rsk(rsk)->rmt_addr, NULL);
         
         /* Free the REQUEST */

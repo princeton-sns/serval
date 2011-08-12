@@ -17,6 +17,7 @@ struct serval_request_sock {
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
+        __u32 orig_dst_addr;
         u32 rcv_seq;
         u32 iss_seq;
         u8 local_nonce[SERVAL_NONCE_SIZE];
