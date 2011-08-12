@@ -327,7 +327,11 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
                 return -1;
         
         ctx->src_ext = (struct serval_source_ext *)ext;
-        
+
+        /* Should be two addresses minimum */
+        if (SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) < 2)
+                return -1;
+
         dev_get_ipv4_addr(skb->dev, &addr);
                 
         for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
@@ -978,9 +982,9 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                  * twice */
                 for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
                         if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
-                                   &iph->saddr, 
-                                   sizeof(iph->saddr)) == 0) {
-                                LOG_DBG("IP src address already in "
+                                   &iph->daddr, 
+                                   sizeof(iph->daddr)) == 0) {
+                                LOG_DBG("IP dst address already in "
                                         "SOURCE ext. Possible loop!\n");
                                 return -1;
                         }
@@ -992,7 +996,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 ext_len = ctx->src_ext->sv_ext_length + extra_len;
         } else {
                 LOG_DBG("Adding new SOURCE extension\n");
-                extra_len = SERVAL_SOURCE_EXT_LEN;
+                extra_len = SERVAL_SOURCE_EXT_LEN + 4;
                 ext_len = extra_len;
         }
         
@@ -1063,8 +1067,16 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         sxt->sv_ext_type = SERVAL_SOURCE_EXT;
         sxt->sv_ext_length = ext_len;
         sxt->sv_ext_flags = 0;
-        memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
-               &iph->saddr, sizeof(iph->saddr));
+
+        if (ctx->src_ext) {
+                memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
+                       &iph->daddr, sizeof(iph->daddr));
+        } else {
+                memcpy(SERVAL_SOURCE_EXT_GET_ADDR(sxt, 0), 
+                       &iph->saddr, sizeof(iph->saddr));
+                memcpy(SERVAL_SOURCE_EXT_GET_ADDR(sxt, 1), 
+                       &iph->daddr, sizeof(iph->daddr));
+        }
         
         sh->check = 0;
         sh->length = htons(serval_len);
@@ -1250,8 +1262,8 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 sxt->sv_ext_type = SERVAL_SOURCE_EXT;
                 sxt->sv_ext_length = ctx->src_ext->sv_ext_length + 4;
                 memcpy(SERVAL_SOURCE_EXT_GET_LAST_ADDR(sxt), 
-                       &inet_sk(sk)->inet_saddr,
-                       sizeof(inet_sk(sk)->inet_saddr));
+                       &inet_rsk(rsk)->loc_addr,
+                       sizeof(inet_rsk(rsk)->loc_addr));
                 /* Update header pointers in case rskb was copied */
                 rsh = serval_hdr(rskb);
 
