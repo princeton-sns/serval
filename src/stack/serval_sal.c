@@ -1305,13 +1305,15 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 serval_hdr_to_str(rsh), rskb->len);
+        
+        skb_reset_transport_header(skb);
 
         /* Calculate SAL header checksum. */
         serval_sal_send_check(rsh);
 
 #if defined(OS_LINUX_KERNEL)
         if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
-                struct iphdr *iph = ip_hdr(rskb);
+                struct iphdr *iph = ip_hdr(skb);
                 struct udphdr *uh = (struct udphdr *)
                         ((char *)iph + (iph->ihl << 2));
 
@@ -2400,10 +2402,12 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         /* Packet is UDP encapsulated, push back UDP
                          * encapsulation header */
                         if (ip_hdr(cskb)->protocol == IPPROTO_UDP) {
-                                LOG_DBG("Pushing back UDP encapsulation header\n");
                                 skb_push(cskb, sizeof(struct udphdr));
                                 skb_reset_transport_header(cskb);
                                 udp_hdr(cskb)->len = htons(cskb->len);
+                                LOG_DBG("Pushed back UDP encapsulation [%u:%u]\n",
+                                        ntohs(udp_hdr(skb)->source),
+                                        ntohs(udp_hdr(skb)->dest));
                                 serval_sal_update_encap_csum(cskb);
                         }
 #endif
