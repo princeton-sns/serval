@@ -267,8 +267,8 @@ struct serval_source_ext {
 #define SERVAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
         (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
 
-#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)                              \
-        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-n-1)*4])
+#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)      \
+        (&(ext)->source[n*4])
 
 #define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
         (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
