@@ -419,7 +419,6 @@ int client_handle_listen_req_msg(struct client *c, struct client_msg *msg)
 */
 int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
 {
-        //struct client_msg_accept_req *req = (struct client_msg_accept_req *)msg;
         struct client_msg_accept_rsp rsp;
         struct serval_sock *ssk = serval_sk(c->sock->sk);
         int err = 0;

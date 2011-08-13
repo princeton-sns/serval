@@ -103,8 +103,6 @@ static void sock_free(struct socket *sock)
 	free(sock);
 }
 
-
-
 /*
  *	Update the socket async list
  *
