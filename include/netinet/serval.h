@@ -20,7 +20,7 @@
 #include <endian.h>
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 #include <machine/endian.h>
-
+#define HAS_SOCKADDR_LEN 1
 /* Setup byte order defines according to the Linux kernel */
 #if __BYTE_ORDER == __BIG_ENDIAN
 #ifdef __LITTLE_ENDIAN
@@ -94,6 +94,9 @@ enum sv_service_flags {
 };
 
 struct sockaddr_sv {
+#if defined(HAS_SOCKADDR_LEN)
+        uint8_t sv_len;
+#endif
         sa_family_t sv_family;
         uint8_t sv_flags;
         uint8_t sv_prefix_bits;

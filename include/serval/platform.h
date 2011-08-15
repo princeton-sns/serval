@@ -81,6 +81,9 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 #include <endian.h>
 #elif defined(OS_MACOSX)
 #include <machine/endian.h>
+#define __BYTE_ORDER __DARWIN_BYTE_ORDER
+#define __BIG_ENDIAN __DARWIN_BIG_ENDIAN
+#define __LITTLE_ENDIAN __DARWIN_LITTLE_ENDIAN
 #endif
 #if HAVE_LIBIO
 #include <libio.h>

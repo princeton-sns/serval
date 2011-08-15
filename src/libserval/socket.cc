@@ -285,7 +285,7 @@ SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_len,
 {
   Cli &cli = get_cli(soc, err);
 
-  lerr("connecting with address family %d", addr->sa_family);
+  info("connecting with address family %d", addr->sa_family);
 
   if (cli.is_null() ||
       basic_checks(soc, addr, addr_len, false, err) < 0) {

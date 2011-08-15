@@ -252,17 +252,16 @@ struct net_device *__dev_get_by_index(struct net *net, int ifindex)
 {
 	struct hlist_node *p;
 	struct net_device *dev;
+	struct hlist_head *head = dev_index_hash(net, ifindex);
 
-	if(ifindex == 0) {
+	if (ifindex == 0) {
 	    /*return the first device*/
-	    if(list_empty(&dev_base_head)) {
+	    if (list_empty(&dev_base_head)) {
 	        return NULL;
 	    }
 	    dev = list_entry(dev_base_head.next, struct net_device, dev_list);
 	    return dev;
 	}
-
-	struct hlist_head *head = dev_index_hash(net, ifindex);
 
 	hlist_for_each_entry(dev, p, head, index_hlist)
 		if (dev->ifindex == ifindex)
@@ -446,9 +445,9 @@ int netdev_populate_table(int sizeof_priv,
                 }
                 
                 /* Ignore loopback device */
-                if (strncmp(name, "lo", 2) == 0)
+                /* if (strncmp(name, "lo", 2) == 0)
                         continue;
-               
+                */
                 dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
                 if (!dev)
@@ -472,17 +471,18 @@ int netdev_populate_table(int sizeof_priv,
                         LOG_ERR("SIOCGIFADDR: %s\n",
                                 strerror(errno));
                         free_netdev(dev);
-                        goto out;
+                        continue;
                 }
 
                 memcpy(&dev->ipv4.addr, 
                        &((struct sockaddr_in *)&ifr->ifr_addr)->sin_addr, 4);
                                 
-                if (ioctl(fd, SIOCGIFBRDADDR, ifr) == -1) {
+                if (strncmp(name, "lo", 2) != 0 && 
+                    ioctl(fd, SIOCGIFBRDADDR, ifr) == -1) {
                         LOG_ERR("SIOCGIFBRDADDR: %s\n",
                                 strerror(errno));
                         free_netdev(dev);
-                        goto out;
+                        continue;
                 }
 
                 memcpy(&dev->ipv4.broadcast, 
@@ -492,7 +492,7 @@ int netdev_populate_table(int sizeof_priv,
                         LOG_ERR("SIOCGIFNETMASK: %s\n",
                                 strerror(errno));
                         free_netdev(dev);
-                        goto out;
+                        continue;
                 }
 #if defined(OS_LINUX)
                 memcpy(&dev->ipv4.netmask, 
@@ -512,21 +512,23 @@ int netdev_populate_table(int sizeof_priv,
                                           broad, 18),
                                 inet_ntop(AF_INET, &dev->ipv4.netmask,
                                           netmask, sizeof(netmask)));
-
-                }       
+                }
 #endif       
 
                 ret = register_netdev(dev);
 
                 if (ret < 0) {
                         free_netdev(dev);
-                        goto out;
+                        continue;
                 }
 
                 while (dev->ipv4.netmask & (0x1 << prefix_len))
                        prefix_len++;
              
-                service_add(NULL, 0, 0, BROADCAST_SERVICE_DEFAULT_PRIORITY,BROADCAST_SERVICE_DEFAULT_WEIGHT,  &dev->ipv4.broadcast, 4, dev, 0);
+                service_add(NULL, 0, 0, 
+                            BROADCAST_SERVICE_DEFAULT_PRIORITY,
+                            BROADCAST_SERVICE_DEFAULT_WEIGHT,  
+                            &dev->ipv4.broadcast, 4, dev, 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
@@ -535,7 +537,6 @@ int netdev_populate_table(int sizeof_priv,
                         strerror(errno));
                         unregister_netdev(dev);
                         free_netdev(dev);
-                        goto out;
                 }
         }
 /*
