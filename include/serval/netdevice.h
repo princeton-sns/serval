@@ -272,6 +272,8 @@ static inline void dev_hold(struct net_device *dev)
 	atomic_inc(&dev->refcnt);
 }
 
+struct net_device *__dev_get_by_name(struct net *net, const char *name);
+struct net_device *__dev_get_by_index(struct net *net, int ifindex);
 struct net_device *dev_get_by_name(struct net *net, const char *name);
 struct net_device *dev_get_by_index(struct net *net, int ifindex);
 

@@ -2893,7 +2893,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 /* for user-space, need to specify a device - the
                  * kernel will route */
 #if defined(OS_USER)
-                skb_set_dev(skb, dev_get_by_index(NULL, 0));
+                skb_set_dev(skb, __dev_get_by_index(NULL, 0));
 #endif
                 serval_sal_send_check(sh);
                 
@@ -2979,7 +2979,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * appropriate for kernel operation as well
                          */
 #if defined(OS_USER)
-                        dev = dev_get_by_index(NULL, 0);
+                        dev = __dev_get_by_index(NULL, 0);
 #else
                         /* FIXME: not sure about getting the device
                            without a refcount here... */

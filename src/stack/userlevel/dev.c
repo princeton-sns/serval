@@ -199,7 +199,6 @@ void free_netdev(struct net_device *dev)
  *	reference counters are not incremented so the caller must be
  *	careful with locks.
  */
-
 struct net_device *__dev_get_by_name(struct net *net, const char *name)
 {
 	struct hlist_node *p;
@@ -867,7 +866,8 @@ void netdev_fini(void)
                 } else {
                         LOG_DBG("join successful\n");
                 }
-                LOG_DBG("%s refcnt=%d\n", dev->name, atomic_read(&dev->refcnt));
+                LOG_DBG("%s refcnt=%d\n", 
+                        dev->name, atomic_read(&dev->refcnt));
                 dev_put(dev);
         }
         
