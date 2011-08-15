@@ -1154,42 +1154,91 @@ static int serval_sal_syn_rcv(struct sock *sk,
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->seqno;
 
-        if (ctx->src_ext) {
-                memcpy(&inet_rsk(rsk)->rmt_addr,
-                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 0),
-                       sizeof(inet_rsk(rsk)->rmt_addr));
 
-                memcpy(&srsk->orig_dst_addr,
-                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
-                       sizeof(srsk->orig_dst_addr));
-        } else {
-                memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
-                       sizeof(inet_rsk(rsk)->rmt_addr));
-                
-                if (skb->pkt_type == PACKET_BROADCAST)
-                        memcpy(&srsk->orig_dst_addr,
-                               &myaddr,
-                               sizeof(srsk->orig_dst_addr));
-                else 
-                        memcpy(&srsk->orig_dst_addr,
-                               &ip_hdr(skb)->daddr,
-                               sizeof(srsk->orig_dst_addr));
-        }
-        
+        /* Save our local address that we grabbed from the incoming
+         * interface. This address should in most cases be the same
+         * address as the IP header destination of the incoming
+         * packet, unless the SYN was broadcast. */
         memcpy(&inet_rsk(rsk)->loc_addr, &myaddr,
                sizeof(inet_rsk(rsk)->loc_addr));
 
+        /* 
+           Here we need to figure out which addresses to save in our
+           sockets, and which ones to use in our reply.
+           
+           This decision may vary depending on whether we are dealing
+           with a client behind a NAT or not. For a NAT'd client we
+           need to spoof the source address in the reply to ensure it
+           carries the source expected by the NAT (i.e., the
+           destination address that the client initially
+           targeted---this would be the first SAL forwarder/hop).
+
+           Further, if the request carried a source extension it means
+           that the packet was forwarded in the SAL. Then we will find
+           the true source address in the extension and otherwise in
+           the IP header.
+
+           A source extension should always carry at least two
+           addresses: the original source, and the first forwarder.
+        */
+        if (ctx->src_ext) {
+                /* Get the original source and save in our request
+                 * socket */
+                memcpy(&inet_rsk(rsk)->rmt_addr,
+                       SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 0),
+                       sizeof(inet_rsk(rsk)->rmt_addr));
+                
+                /* If the request was UDP encapsulated due to NAT, we
+                 * should spoof our source address in the reply to
+                 * make sure we can traverse the NAT on the way
+                 * back. */
+                if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
+                        /* Get the first hop SAL forwarder, i.e., the original
+                         * destination in the request that the client
+                         * sent. Save this in our request sock and use in our
+                         * reply.  */
+                        memcpy(&srsk->reply_saddr,
+                               SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, 1),
+                               sizeof(srsk->reply_saddr));
+                } else {
+                        /* No NAT, use our own address in the reply. */
+                        memcpy(&srsk->reply_saddr,
+                               &myaddr,
+                               sizeof(srsk->reply_saddr));
+                }
+        } else {
+                /* There was no source extension, so we will find the
+                 * addresses in the IP header. */
+                memcpy(&inet_rsk(rsk)->rmt_addr, &ip_hdr(skb)->saddr,
+                       sizeof(inet_rsk(rsk)->rmt_addr));
+                
+                /* Packet was broadcasted, so we cannot use the
+                 * incoming destination address to figure out which
+                 * interface address to use. */
+                if (skb->pkt_type == PACKET_BROADCAST)
+                        memcpy(&srsk->reply_saddr,
+                               &myaddr,
+                               sizeof(srsk->reply_saddr));
+                else 
+                        memcpy(&srsk->reply_saddr,
+                               &ip_hdr(skb)->daddr,
+                               sizeof(srsk->reply_saddr));
+        }
+        
 #if defined(ENABLE_DEBUG)
         {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s\n",
+                char rmtstr[18], locstr[18], replystr[18];
+                LOG_DBG("rmt_addr=%s loc_addr=%s reply_saddr=%s\n",
                         inet_ntop(AF_INET, &inet_rsk(rsk)->rmt_addr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &inet_rsk(rsk)->loc_addr, 
-                                  locstr, 18));
+                                  locstr, 18),
+                        inet_ntop(AF_INET, &srsk->reply_saddr, 
+                                  replystr, 18));
         }
 #endif
 
+        /* Add the new request socket to the SYN queue. */
         list_add(&srsk->lh, &ssk->syn_queue);
         
         /* Call upper transport protocol handler */
@@ -1311,7 +1360,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 /* We should perform UDP encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
                 
-                if (serval_udp_encap_skb(rskb, srsk->orig_dst_addr,
+                if (serval_udp_encap_skb(rskb, srsk->reply_saddr,
                                          inet_rsk(rsk)->rmt_addr,
                                          srsk->udp_encap_port)) {
                         LOG_ERR("SYN-ACK encapsulation failed\n");
@@ -1324,7 +1373,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
            have a full accepted socket (sk is the listening sock). 
         */
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
-                                             srsk->orig_dst_addr,
+                                             srsk->reply_saddr,
                                              inet_rsk(rsk)->rmt_addr, NULL);
         
         /* Free the REQUEST */
