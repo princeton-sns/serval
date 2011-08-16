@@ -1681,6 +1681,12 @@ static int serval_sal_migrate_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         }
 
+        if (ack_ok) {
+        	    LOG_INF("Migrated, back to connected.\n");
+                serval_sock_set_state(sk, SERVAL_CONNECTED);
+                err = serval_sal_send_ack(sk, sh, skb);
+        }
+
         return err;
 }
 
@@ -1696,6 +1702,11 @@ static int serval_sal_rmigrate_state_process(struct sock *sk,
         if (packet_has_transport_hdr(skb,sh)) {
                 SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 err = ssk->af_ops->receive(sk,skb);
+        }
+
+        if (ack_ok) {
+        	    LOG_INF("Successful migration\n");
+        	    serval_sock_set_state(sk, SERVAL_CONNECTED);
         }
 
         return err;
@@ -1780,6 +1791,9 @@ int serval_sal_state_process(struct sock *sk,
                 break;
         case SERVAL_CLOSED:
                 goto drop;
+        case SERVAL_MIGRATE:
+        	    err = serval_sal_migrate_state_process(sk, sh, skb);
+        	    break;
         default:
                 LOG_ERR("bad socket state %s %u\n", 
                         serval_sock_state_str(sk), sk->sk_state);

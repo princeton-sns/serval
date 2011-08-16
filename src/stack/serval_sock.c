@@ -118,6 +118,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                         if (memcmp(&ssk->dev->name,&old_if->name,IFNAMSIZ) == 0) {
                             LOG_DBG("Socket matches old if\n");
                             serval_sock_set_dev(sk, new_if);
+                            dev_get_ipv4_addr(sk->dev, &inet_sk(sk)->inet_saddr);
                             serval_sal_migrate(sk);
                         }
                     }
