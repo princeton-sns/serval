@@ -3011,6 +3011,7 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_migrate_ext *mig_ext;
         
+        LOG_DBG("Adding migrate ext\n");
         mig_ext = (struct serval_migrate_ext *)
                   skb_push(skb, sizeof(*mig_ext));
         mig_ext->exthdr.type = SERVAL_MIGRATE_EXT;
@@ -3019,7 +3020,7 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
         mig_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-        dev_get_ipv4_addr(skb->dev, &mig_ext->new_addr);
+        //dev_get_ipv4_addr(skb->dev, &mig_ext->new_addr);
         
         return sizeof(*mig_ext);
 }
@@ -3079,6 +3080,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 break;
         case SERVAL_PKT_RSYN:
                 hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
+                LOG_DBG("Sending RSYN...\n");
                 break;
         case SERVAL_PKT_DATA:
                 /* Unconnected datagram, add service extension */
