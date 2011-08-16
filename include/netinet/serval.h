@@ -226,6 +226,7 @@ enum serval_ext_type {
         SERVAL_SERVICE_EXT,
         SERVAL_DESCRIPTION_EXT,
         SERVAL_SOURCE_EXT,
+        SERVAL_MIGRATE_EXT,
         __SERVAL_EXT_TYPE_MAX,
 } __attribute__((packed));
 
@@ -262,6 +263,14 @@ struct serval_source_ext {
         uint8_t source[0];
 } __attribute__((packed));
 
+struct serval_migrate_ext {
+        struct serval_ext exthdr;
+        uint32_t seqno;
+        uint32_t ackno;
+        uint8_t nonce[8];
+        struct net_addr new_addr;
+} __attribute__((packed));
+
 #define __SERVAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct serval_source_ext))
 
@@ -275,14 +284,5 @@ struct serval_source_ext {
 
 #define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
         (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
-
-#define SERVAL_MIGRATE_EXT 6
-struct serval_migrate_ext {
-        struct serval_ext exthdr;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t nonce[8];
-        struct net_addr new_addr;
-};
 
 #endif /* _SERVAL_H */
