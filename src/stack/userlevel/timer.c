@@ -156,7 +156,7 @@ static int __timer_list_signal_lower(struct timer_list_head *tlh)
                 sz = read(tlh->signal[0], &r, 1);
 	}
 
-	return sz;
+	return (int)sz;
 }
 
 int timer_list_signal_lower(void)
@@ -174,7 +174,7 @@ static int timer_list_signal_timer_change(struct timer_list_head *tlh)
         if (__timer_list_signal_pending(tlh))
                 return 0;
 
-	return write(tlh->signal[1], &w, 1);
+	return (int)write(tlh->signal[1], &w, 1);
 }
 
 int timer_list_get_next_timeout(struct timespec *timeout, int signal[2])

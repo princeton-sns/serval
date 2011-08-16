@@ -82,6 +82,7 @@ enum serval_sock_flags {
 
 struct serval_sock_af_ops {
 	int	        (*queue_xmit)(struct sk_buff *skb);
+	int	        (*encap_queue_xmit)(struct sk_buff *skb);
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
@@ -126,6 +127,7 @@ struct serval_sock {
         unsigned int            hash_key_len;  /* Keylen in bytes */
         unsigned short          srvid_prefix_bits;
         unsigned short          srvid_flags;
+        struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
  	struct timer_list	retransmit_timer;        
@@ -141,6 +143,7 @@ struct serval_sock {
         u8                      local_nonce[SERVAL_NONCE_SIZE];
         u8                      peer_nonce[SERVAL_NONCE_SIZE];
         u16                     ext_hdr_len;
+        u16                     udp_encap_port;
         struct {
                 u32        una;
                 u32        nxt;
@@ -294,5 +297,7 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
                                         const struct request_sock *req);
 
 int serval_sock_rebuild_header(struct sock *sk);
+
+int flows_print(char *buf, int buflen);
 
 #endif /* _SERVAL_SOCK_H */

@@ -81,9 +81,16 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 #include <endian.h>
 #elif defined(OS_MACOSX)
 #include <machine/endian.h>
+#define __BYTE_ORDER __DARWIN_BYTE_ORDER
+#define __BIG_ENDIAN __DARWIN_BIG_ENDIAN
+#define __LITTLE_ENDIAN __DARWIN_LITTLE_ENDIAN
 #endif
 #if HAVE_LIBIO
 #include <libio.h>
+#endif
+
+#if defined(OS_ANDROID)
+#define __WORDSIZE 32
 #endif
 
 #if __WORDSIZE == 64
@@ -106,50 +113,62 @@ typedef int64_t s64;
 #define U32__
 typedef uint32_t u32;
 #endif
+#ifndef OS_ANDROID
 #ifndef __U32__
 #define __U32__
 typedef uint32_t __u32;
 #endif
+#endif /* OS_ANDROID */
 #ifndef S32__
 #define S32__
 typedef int32_t s32;
 #endif 
+#ifndef OS_ANDROID
 #ifndef __S32__
 #define __S32__
 typedef int32_t __s32;
 #endif 
+#endif /* OS_ANDROID */
 #ifndef U16__
 #define U16__
 typedef uint16_t u16;
-#endif 
+#endif
+#ifndef OS_ANDROID 
 #ifndef __U16__
 #define __U16__
 typedef uint16_t __u16;
-#endif 
+#endif
+#endif /* OS_ANDROID */
 #ifndef S16__
 #define S16__
 typedef int16_t s16;
-#endif 
+#endif
+#ifndef OS_ANDROID
 #ifndef __S16__
 #define __S16__
 typedef int16_t __s16;
-#endif 
+#endif
+#endif /* OS_ANDROID */
 #ifndef U8__
 #define U8__
 typedef uint8_t u8;
 #endif 
+#ifndef OS_ANDROID
 #ifndef __U8__
 #define __U8__
 typedef uint8_t __u8;
-#endif 
+#endif
+#endif /* OS_ANDROID */
 #ifndef S8__
 #define S8__
 typedef int8_t s8;
-#endif 
+#endif
+#ifndef OS_ANDROID
 #ifndef __S8__
 #define __S8__
 typedef int8_t __s8;
 #endif
+#endif /* OS_ANDROID */
 
 /* Setup byte order defines according to the Linux kernel */
 #if __BYTE_ORDER == __BIG_ENDIAN

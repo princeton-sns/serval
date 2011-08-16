@@ -70,7 +70,7 @@ static void sock_def_readable(struct sock *sk, int bytes)
                                                 POLLRDNORM | POLLRDBAND);
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 
-        if (sk->sk_socket)
+        if (sk->sk_socket && skb_queue_len(&sk->sk_receive_queue))
                 client_send_have_data_msg(sk->sk_socket->client);
         
         read_unlock(&sk->sk_callback_lock);

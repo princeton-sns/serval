@@ -109,6 +109,10 @@ struct packet_ops;
 #define LL_MAX_HEADER 32
 #define MAX_HEADER LL_MAX_HEADER
 
+/* Backlog congestion levels */
+#define NET_RX_SUCCESS		0	/* keep 'em coming, baby */
+#define NET_RX_DROP		1	/* packet dropped */
+
 #define NET_XMIT_SUCCESS	0x00
 #define NET_XMIT_DROP		0x01	/* skb dropped			*/
 #define NET_XMIT_CN		0x02	/* congestion notification	*/
@@ -268,6 +272,8 @@ static inline void dev_hold(struct net_device *dev)
 	atomic_inc(&dev->refcnt);
 }
 
+struct net_device *__dev_get_by_name(struct net *net, const char *name);
+struct net_device *__dev_get_by_index(struct net *net, int ifindex);
 struct net_device *dev_get_by_name(struct net *net, const char *name);
 struct net_device *dev_get_by_index(struct net *net, int ifindex);
 

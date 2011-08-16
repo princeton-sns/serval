@@ -3,6 +3,7 @@
 #include <serval/skbuff.h>
 #include <serval/list.h>
 #include <serval/debug.h>
+#include <serval/lock.h>
 #include <serval/timer.h>
 #include <serval/netdevice.h>
 #include <netinet/serval.h>
@@ -23,6 +24,8 @@ atomic_t serval_nr_socks = ATOMIC_INIT(0);
 static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
 static struct serval_table listen_table;
+static struct list_head sock_list = { &sock_list, &sock_list };
+static DEFINE_RWLOCK(sock_list_lock);
 
 /* The number of (prefix) bytes to hash on in the serviceID */
 #define SERVICE_KEY_LEN (8)
@@ -118,7 +121,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                         if (memcmp(&ssk->dev->name,&old_if->name,IFNAMSIZ) == 0) {
                             LOG_DBG("Socket matches old if\n");
                             serval_sock_set_dev(sk, new_if);
-                            dev_get_ipv4_addr(sk->dev, &inet_sk(sk)->inet_saddr);
+                            dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
                             serval_sal_migrate(sk);
                         }
                     }
@@ -181,7 +184,7 @@ struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
 //        struct service_entry *se = service_find_type(srvid,
 //                                                     SERVICE_ENTRY_LOCAL);
 
-        return service_find_sock(srvid, sizeof(*srvid) * 8);
+        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,
@@ -274,7 +277,7 @@ void serval_sock_hash(struct sock *sk)
 
                 ssk->hash_key = &ssk->local_srvid;
                 ssk->hash_key_len = ssk->srvid_prefix_bits == 0 ? 
-                        sizeof(ssk->local_srvid) * 8: 
+                        SERVICE_ID_MAX_PREFIX_BITS : 
                         ssk->srvid_prefix_bits;
 
                 err = service_add(ssk->hash_key, 
@@ -323,7 +326,7 @@ void serval_sock_unhash(struct sock *sk)
 
                 service_del_dest(&ssk->local_srvid,
                             ssk->srvid_prefix_bits == 0 ?
-                            sizeof(ssk->local_srvid) * 8 :
+                            SERVICE_ID_MAX_PREFIX_BITS :
                             ssk->srvid_prefix_bits, NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -443,6 +446,7 @@ void serval_sock_init(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         sk->sk_state = 0;
+        INIT_LIST_HEAD(&ssk->sock_node);
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
         setup_timer(&ssk->retransmit_timer, 
@@ -480,6 +484,10 @@ void serval_sock_init(struct sock *sk)
         ssk->snd_seq.wnd = 1;
         ssk->srtt = 0;
         ssk->rto = SERVAL_INITIAL_RTO;
+
+        write_lock_bh(&sock_list_lock);
+        list_add_tail(&ssk->sock_node, &sock_list);
+        write_unlock_bh(&sock_list_lock);
 }
 
 void serval_sock_destroy(struct sock *sk)
@@ -588,6 +596,10 @@ void serval_sock_destruct(struct sock *sk)
         }
 
 	atomic_dec(&serval_nr_socks);
+
+        write_lock_bh(&sock_list_lock);
+        list_del(&serval_sk(sk)->sock_node);
+        write_unlock_bh(&sock_list_lock);
 
 	LOG_DBG("SERVAL socket %p destroyed, %d are still alive.\n", 
                 sk, atomic_read(&serval_nr_socks));
@@ -810,3 +822,42 @@ int serval_sock_rebuild_header(struct sock *sk)
 #endif /* OS_LINUX_KERNEL */
 	return err;
 }
+
+static int serval_sock_flow_table_print(struct list_head *list,
+                                        char *buf, int buflen) 
+{
+        int len = 0;
+        struct serval_sock *ssk;
+
+        read_lock_bh(&sock_list_lock);
+
+        len = snprintf(buf, buflen, "%-10s %-10s %-17s %-17s %-10s %s\n",
+                       "srcFlowID", "dstFlowID", 
+                       "srcIP", "dstIP", "state", "dev");
+        
+        list_for_each_entry(ssk, list, sock_node) {
+                char src[18], dst[18];
+                struct sock *sk = (struct sock *)ssk;
+                len += snprintf(buf + len, buflen - len, 
+                                "%-10s %-10s %-17s %-17s %-10s %s\n",
+                                flow_id_to_str(&ssk->local_flowid), 
+                                flow_id_to_str(&ssk->peer_flowid),
+                                inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
+                                          src, 18),
+                                inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
+                                          dst, 18),
+                                serval_sock_state_str(sk),
+                                ssk->dev ? ssk->dev->name : "unbound");
+                if (len <= 0)
+                        break;
+        }
+        read_unlock_bh(&sock_list_lock);
+
+        return len;
+}
+
+int flows_print(char *buf, int buflen)
+{
+        return serval_sock_flow_table_print(&sock_list, buf, buflen);
+}
+

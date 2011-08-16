@@ -56,6 +56,7 @@ connect_sv(int soc, const struct sockaddr *address, socklen_t address_len)
   sv_err_t err;
 
   if (address->sa_family != AF_SERVAL) {
+    info("connecting with non-Serval socket.");
     return ::connect(soc, address, address_len);
   }
   int n = sock.connect_sv(soc, address, address_len, err);

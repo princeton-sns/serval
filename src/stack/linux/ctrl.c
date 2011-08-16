@@ -33,12 +33,9 @@ static void ctrl_recv_skb(struct sk_buff *skb)
         peer_pid = nlh->nlmsg_pid;
         flags = nlh->nlmsg_flags;
 
-	if (flags & NLM_F_ACK)
-                netlink_ack(skb, nlh, 0);
-
         cm = (struct ctrlmsg *)NLMSG_DATA(nlh);
         
-        if (cm->type >= CTRLMSG_TYPE_UNKNOWN) {
+        if (cm->type >= _CTRLMSG_TYPE_MAX) {
                 LOG_ERR("bad message type %u\n",
                         cm->type);
                 ret = -1;
@@ -55,6 +52,9 @@ static void ctrl_recv_skb(struct sk_buff *skb)
                                 cm->type);
                 }
         }
+
+	if (flags & NLM_F_ACK)
+                netlink_ack(skb, nlh, 0);
 }
 
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)

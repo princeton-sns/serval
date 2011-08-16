@@ -42,6 +42,7 @@ typedef pthread_mutex_t spinlock_t;
 
 typedef pthread_mutex_t rwlock_t;
 
+#define __RW_LOCK_UNLOCKED(x) PTHREA_MUTEX_INITIALIZER
 #define DEFINE_RWLOCK(x) rwlock_t x = PTHREAD_MUTEX_INITIALIZER
 
 #define rwlock_init(x) pthread_mutex_init(x, NULL)

@@ -1,5 +1,19 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include "serval_tcp.h"
+#include <serval/netdevice.h>
+
+/* Dummy function for encapsulation in user mode */
+int serval_udp_encap_xmit(struct sk_buff *skb)
+{
+        struct sock *sk = skb->sk;
+
+        if (!sk) {
+                kfree_skb(skb);
+                return NET_RX_DROP;
+        }
+
+        return serval_sk(sk)->af_ops->encap_queue_xmit(skb);
+}
 
 /* tcp.c */
 

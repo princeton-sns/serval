@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include <linux/poll.h>
 #include <service.h>
+#include <serval_sock.h>
 #include "log.h"
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
@@ -17,6 +18,7 @@
 #define SERVAL_PROC_DIR "serval"
 #define SERVAL_PROC_DBG "dbg"
 #define SERVAL_PROC_FILE_SERVICE_TBL "service_table"
+#define SERVAL_PROC_FILE_FLOW_TBL "flow_table"
 
 static struct proc_dir_entry *serval_dir = NULL;
 
@@ -28,6 +30,30 @@ static int serval_proc_service_table_read(char *page, char **start,
         len = 0;
 
         len = services_print(page, count);
+
+        if (len <= off + count) 
+                *eof = 1;
+        
+        *start = page + off;
+        len -= off;
+        
+        if (len > count) 
+                len = count;
+
+        if (len < 0) 
+                len = 0;
+
+        return len;
+}
+
+static int serval_proc_flow_table_read(char *page, char **start, 
+                                       off_t off, int count, 
+                                       int *eof, void *data)
+{
+	int len;
+        len = 0;
+
+        len = flows_print(page, count);
 
         if (len <= off + count) 
                 *eof = 1;
@@ -133,22 +159,21 @@ int __init proc_init(void)
 
         if (!proc)
                 goto fail_service_tbl;
-        /*
-        proc = create_proc_read_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, 0, 
+
+        proc = create_proc_read_entry(SERVAL_PROC_FILE_FLOW_TBL, 0, 
                                       serval_dir, 
-                                      serval_proc_neighbor_table_read, 
+                                      serval_proc_flow_table_read, 
                                       NULL);
 
         if (!proc)
-                goto fail_neighbor_tbl;
-        */
+                goto fail_flow_tbl;
+        
         ret = 0;
 out:        
         return ret;
-/*
-fail_neighbor_tbl:
+
+fail_flow_tbl:
         remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
-*/
 fail_service_tbl:
         remove_proc_entry(SERVAL_PROC_DBG, serval_dir);
 fail_dbg:
@@ -162,9 +187,7 @@ void proc_fini(void)
                 return;
 
         remove_proc_entry(SERVAL_PROC_FILE_SERVICE_TBL, serval_dir);
-        /*
-        remove_proc_entry(SERVAL_PROC_FILE_NEIGHBOR_TBL, serval_dir);
-        */
+        remove_proc_entry(SERVAL_PROC_FILE_FLOW_TBL, serval_dir);
         remove_proc_entry(SERVAL_PROC_DBG, serval_dir);
 	remove_proc_entry(SERVAL_PROC_DIR, proc_net);
 }

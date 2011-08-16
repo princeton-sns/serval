@@ -17,10 +17,13 @@ struct serval_request_sock {
         struct service_id peer_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
+        __u32 reply_saddr; /* The address to use as source in the
+                               * reply */
         u32 rcv_seq;
         u32 iss_seq;
         u8 local_nonce[SERVAL_NONCE_SIZE];
         u8 peer_nonce[SERVAL_NONCE_SIZE];
+        u16 udp_encap_port;
         struct list_head lh;
 };
 

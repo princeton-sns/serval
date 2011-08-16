@@ -145,7 +145,8 @@ static int netlink_getfd(struct event_handler *eh)
 	return nlh->sock;
 }
 
-static int netlink_send(struct event_handler *eh, const void *data, size_t datalen)
+static int netlink_send(struct event_handler *eh, 
+                        const void *data, size_t datalen)
 {
         struct netlink_handle *nlh = (struct netlink_handle *)eh->private;
         struct nlmsghdr nh;

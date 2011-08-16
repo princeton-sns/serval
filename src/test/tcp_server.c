@@ -445,7 +445,7 @@ main(int argc, char **argv)
         unsigned long migrate_offset = 0;
         int family = AF_SERVAL;
 
-        listen_srvid.s_sid16[0] = htons(DEFAULT_LISTEN_SID);
+        listen_srvid.s_sid32[0] = htonl(DEFAULT_LISTEN_SID);
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -528,7 +528,7 @@ main(int argc, char **argv)
                                 fprintf(stderr, "invalid object id %ld", v);
                                 return EXIT_FAILURE;
                         } else 
-                                listen_srvid.s_sid16[0] = htons((short)v);
+                                listen_srvid.s_sid32[0] = htonl((short)v);
                         argc--;
                         argv++;
                 } else {

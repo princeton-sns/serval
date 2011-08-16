@@ -30,7 +30,7 @@ typedef struct sv_path_callback {
     void* target;
     int (*service_registered)(struct sv_path_callback* target, struct service_desc* service);
     int (*service_unregistered)(struct sv_path_callback* target, struct service_desc* service);
-    int (*stat_update)(struct sv_path_callback* target, struct service_resolution_stat* res_stats, size_t scount);
+    int (*stat_update)(struct sv_path_callback* target, struct service_info_stat* res_stats, size_t scount);
     int (*resolve_service)(struct sv_path_callback* target, struct service_desc* service, struct net_addr* address);
     //two more callback funcs for modified/added TODO
 } resolution_path_callback;
@@ -74,24 +74,24 @@ struct sv_resolution_path_interface {
     void (*set_capabilities)(resolution_path* path, int capabilities);
 
     int (* get_resolutions)(resolution_path* path, struct service_desc* service,
-            struct service_resolution**resolutions);
+            struct service_info**resolutions);
     int (* get_resolutions_async)(resolution_path* path, struct service_desc* service,
             resolution_path_callback callback);
 
-    int (* add_resolutions)(resolution_path* path, struct service_resolution* resolutions,
+    int (* add_resolutions)(resolution_path* path, struct service_info* resolutions,
             size_t res_count);
-    int (* add_resolutions_async)(resolution_path* path, struct service_resolution* resolutions,
+    int (* add_resolutions_async)(resolution_path* path, struct service_info* resolutions,
             size_t res_count, resolution_path_callback callback);
 
-    int (* remove_resolutions)(resolution_path* path, struct service_resolution_stat* service,
+    int (* remove_resolutions)(resolution_path* path, struct service_info_stat* service,
             size_t res_count);
     int (* remove_resolutions_async)(resolution_path* path,
-            struct service_resolution_stat* service, resolution_path_callback callback);
+            struct service_info_stat* service, resolution_path_callback callback);
 
     int
-    (* modify_resolutions)(resolution_path* path, struct service_resolution* resolutions,
+    (* modify_resolutions)(resolution_path* path, struct service_info* resolutions,
             size_t res_count);
-    int (* modify_resolutions_async)(resolution_path* path, struct service_resolution* resolutions,
+    int (* modify_resolutions_async)(resolution_path* path, struct service_info* resolutions,
             size_t res_count, resolution_path_callback callback);
 
     //to-kernel messages

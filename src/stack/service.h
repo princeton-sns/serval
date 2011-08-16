@@ -112,6 +112,7 @@ typedef enum {
         SERVICE_ENTRY_LOCAL,
         SERVICE_ENTRY_GLOBAL,
         SERVICE_ENTRY_ANY,
+        SERVICE_ENTRY_EXACT,
 } service_entry_type_t;
 
 void service_inc_stats(int packets, int bytes);
@@ -182,10 +183,18 @@ struct service_entry *service_find_type(struct service_id *srvid,
                                         int prefix,
                                         service_entry_type_t type);
 
-static inline struct service_entry *service_find(struct service_id *srvid, 
-                                                 int prefix)
+static 
+inline struct service_entry *service_find(struct service_id *srvid, 
+                                          int prefix)
 {
         return service_find_type(srvid, prefix, SERVICE_ENTRY_ANY);
+}
+
+static 
+inline struct service_entry *service_find_exact(struct service_id *srvid, 
+                                                int prefix)
+{
+        return service_find_type(srvid, prefix, SERVICE_ENTRY_EXACT);
 }
 
 struct sock *service_find_sock(struct service_id *srvid, int prefix);

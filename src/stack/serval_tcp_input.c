@@ -2512,6 +2512,8 @@ static inline void serval_tcp_ack_snd_check(struct sock *sk)
 /* When we get a reset we do this. */
 static void serval_tcp_reset(struct sock *sk)
 {
+        LOG_DBG("RESET received\n");
+
 	/* We want the right error as BSD sees it (and indeed as we do). */
 	switch (sk->sk_state) {
 	case TCP_SYN_SENT:
@@ -2724,7 +2726,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 	__skb_queue_purge(&tp->out_of_order_queue);
 #if defined(ENABLE_TCP_SACK)
 	if (serval_tcp_is_sack(tp))
-		tcp_sack_reset(&tp->rx_opt);
+		serval_tcp_sack_reset(&tp->rx_opt);
 #endif
 	sk_mem_reclaim(sk);
 #if 0
@@ -3452,6 +3454,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 			TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONSYN);
                 */
+                LOG_DBG("SYN out of window. Handling as RESET\n");
 		serval_tcp_reset(sk);
 		return -1;
 	}
@@ -3459,7 +3462,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	return 1;
 
 discard:
-        LOG_ERR("Discarding packet\n");
+        LOG_DBG("Discarding packet\n");
         kfree_skb(skb);
 	return 0;
 }
@@ -3643,7 +3646,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 
 	if (res <= 0) {
                 LOG_ERR("Incoming packet could not be validated\n");
-                return -1;
+                return -res;
         }
 	/* step 5: check the ACK field */
 	if (th->ack) {
@@ -3652,25 +3655,24 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
+                                sk->sk_shutdown |= SEND_SHUTDOWN;
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
-#if 0
-				if (!sock_flag(sk, SOCK_DEAD))
-					/* Wake up lingering close() */
-					sk->sk_state_change(sk);
-				else {
-					int tmo;
 
+				if (sock_flag(sk, SOCK_DEAD)) {
+					int tmo;
+#if 0
 					if (tp->linger2 < 0 ||
 					    (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
+                                                LOG_DBG("TCP Done!\n");
 						serval_tcp_done(sk);
 						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
-                                                LOG_DBG("TCP Done!\n");
+                           
 						return 1;
 					}
-
+#endif /* 0 */
 					tmo = serval_tcp_fin_time(sk);
 
 					if (tmo > TCP_TIMEWAIT_LEN) {
@@ -3684,11 +3686,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 						 */
 						serval_tsk_reset_keepalive_timer(sk, tmo);
 					} else {
-						serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
+						//serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
 						goto discard;
 					}
 				}
-#endif /* 0 */
 			}
 			break;
 		case TCP_CLOSING:
@@ -3735,8 +3736,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
+                                LOG_DBG("received seqno after rcv_nxt. Handling as RESET\n");
 				serval_tcp_reset(sk);
-                                LOG_DBG("Sent reset!\n");
                                 /* FIXME: free_skb here, or handle in
                                    calling func? */
 				return 1;
@@ -3990,7 +3991,7 @@ slow_path:
 	res = serval_tcp_validate_incoming(sk, skb, th, 1);
 
 	if (res <= 0)
-		return -1;
+		return -res;
 
 step5:
 	if (th->ack && serval_tcp_ack(sk, skb, FLAG_SLOWPATH) < 0)
@@ -4016,7 +4017,6 @@ csum_error:
 	//TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
         LOG_ERR("Checksum error!\n");
 discard:
-        LOG_ERR("Discarding skb\n");
 	__kfree_skb(skb);
 	return 0;
 }
@@ -4046,7 +4046,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                 /* serval_tcp_validate_incoming has dropped the
                    packet */
                 LOG_ERR("Bad ACK in SYN-RECV state\n");
-		return -1;
+		return -err;
         }
 
 	if (th->ack) {

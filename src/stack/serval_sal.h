@@ -238,6 +238,12 @@ void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);
 int serval_sal_rcv_transport_fin(struct sock *sk, struct sk_buff *skb);
 void serval_sal_done(struct sock *sk);
+int serval_sal_rcv(struct sk_buff *skb);
+
+static inline struct serval_hdr *serval_hdr(struct sk_buff *skb)
+{
+        return (struct serval_hdr *)skb_transport_header(skb);
+}
 
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE sizeof(struct iphdr)
@@ -248,4 +254,7 @@ void serval_sal_done(struct sock *sk);
 
 #define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +           \
                                sizeof(struct serval_hdr))
+
+extern int serval_sal_forwarding;
+
 #endif /* _SERVAL_SAL_H_ */

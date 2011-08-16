@@ -132,7 +132,8 @@ AcceptRsp::print(const char *label) const
 {
     Message::print(label);
     info("%s: local_obj_id=%s, remote_obj_id=%s, flow_id = %s, err=%s",
-         label, service_id_to_str(&_local_obj_id), service_id_to_str(&_remote_obj_id),
+         label, service_id_to_str(&_local_obj_id), 
+         service_id_to_str(&_remote_obj_id),
          flow_id_to_str(&_flow_id), _err.v ? "t" : "f");
 }
 

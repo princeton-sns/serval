@@ -1,0 +1,1157 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4D03BD1613EDB5A2007A4193 /* af_serval.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC7813EDB5A2007A4193 /* af_serval.c */; };
+		4D03BD1713EDB5A2007A4193 /* bst.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC7B13EDB5A2007A4193 /* bst.c */; };
+		4D03BD1813EDB5A2007A4193 /* ctrl_handler.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC7E13EDB5A2007A4193 /* ctrl_handler.c */; };
+		4D03BD1913EDB5A2007A4193 /* debug.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC7F13EDB5A2007A4193 /* debug.c */; };
+		4D03BD2213EDB5A2007A4193 /* platform.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC8E13EDB5A2007A4193 /* platform.c */; };
+		4D03BD2313EDB5A2007A4193 /* serval_ipv4.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC8F13EDB5A2007A4193 /* serval_ipv4.c */; };
+		4D03BD2413EDB5A2007A4193 /* serval_sal.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9213EDB5A2007A4193 /* serval_sal.c */; };
+		4D03BD2513EDB5A2007A4193 /* serval_sock.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9413EDB5A2007A4193 /* serval_sock.c */; };
+		4D03BD2613EDB5A2007A4193 /* serval_tcp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9613EDB5A2007A4193 /* serval_tcp.c */; };
+		4D03BD2713EDB5A2007A4193 /* serval_tcp_cong.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9813EDB5A2007A4193 /* serval_tcp_cong.c */; };
+		4D03BD2813EDB5A2007A4193 /* serval_tcp_input.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9913EDB5A2007A4193 /* serval_tcp_input.c */; };
+		4D03BD2913EDB5A2007A4193 /* serval_tcp_output.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9A13EDB5A2007A4193 /* serval_tcp_output.c */; };
+		4D03BD2A13EDB5A2007A4193 /* serval_tcp_sock.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9C13EDB5A2007A4193 /* serval_tcp_sock.c */; };
+		4D03BD2B13EDB5A2007A4193 /* serval_tcp_timer.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9E13EDB5A2007A4193 /* serval_tcp_timer.c */; };
+		4D03BD2C13EDB5A2007A4193 /* serval_udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC9F13EDB5A2007A4193 /* serval_udp.c */; };
+		4D03BD2D13EDB5A2007A4193 /* service.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCA113EDB5A2007A4193 /* service.c */; };
+		4D03BD2E13EDB5A2007A4193 /* bitops.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCA413EDB5A2007A4193 /* bitops.c */; };
+		4D03BD2F13EDB5A2007A4193 /* checksum.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCA513EDB5A2007A4193 /* checksum.c */; };
+		4D03BD3013EDB5A2007A4193 /* client.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCA613EDB5A2007A4193 /* client.c */; };
+		4D03BD3113EDB5A2007A4193 /* client_msg.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCA813EDB5A2007A4193 /* client_msg.c */; };
+		4D03BD3213EDB5A2007A4193 /* ctrl.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCAA13EDB5A2007A4193 /* ctrl.c */; };
+		4D03BD3313EDB5A2007A4193 /* dev.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCAB13EDB5A2007A4193 /* dev.c */; };
+		4D03BD3413EDB5A2007A4193 /* dst.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCAC13EDB5A2007A4193 /* dst.c */; };
+		4D03BD3513EDB5A2007A4193 /* ktime.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCAD13EDB5A2007A4193 /* ktime.c */; };
+		4D03BD3813EDB5A2007A4193 /* packet_raw.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB113EDB5A2007A4193 /* packet_raw.c */; };
+		4D03BD3913EDB5A2007A4193 /* serval.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB213EDB5A2007A4193 /* serval.c */; };
+		4D03BD3A13EDB5A2007A4193 /* serval_tcp_user.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB313EDB5A2007A4193 /* serval_tcp_user.c */; };
+		4D03BD3B13EDB5A2007A4193 /* skbuff.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB513EDB5A2007A4193 /* skbuff.c */; };
+		4D03BD3C13EDB5A2007A4193 /* sock.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB613EDB5A2007A4193 /* sock.c */; };
+		4D03BD3D13EDB5A2007A4193 /* socket.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB713EDB5A2007A4193 /* socket.c */; };
+		4D03BD3E13EDB5A2007A4193 /* stream.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB813EDB5A2007A4193 /* stream.c */; };
+		4D03BD3F13EDB5A2007A4193 /* telnet.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCB913EDB5A2007A4193 /* telnet.c */; };
+		4D03BD4013EDB5A2007A4193 /* timer.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCBA13EDB5A2007A4193 /* timer.c */; };
+		4D03BD4113EDB5A2007A4193 /* wait.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BCBB13EDB5A2007A4193 /* wait.c */; };
+		4D03BD6713EDBCBC007A4193 /* ctrlmsg.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3813EDB5A1007A4193 /* ctrlmsg.c */; };
+		4D03BD6813EDBCBC007A4193 /* debug.h in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3913EDB5A1007A4193 /* debug.h */; };
+		4D03BD6913EDBCBC007A4193 /* event.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3A13EDB5A1007A4193 /* event.c */; };
+		4D03BD6A13EDBCBC007A4193 /* event.h in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3B13EDB5A1007A4193 /* event.h */; };
+		4D03BD6B13EDBCBC007A4193 /* init.h in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3C13EDB5A1007A4193 /* init.h */; };
+		4D03BD6C13EDBCBC007A4193 /* libstack.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC3D13EDB5A1007A4193 /* libstack.c */; };
+		4D03BD6D13EDBCBC007A4193 /* netlink.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC4013EDB5A1007A4193 /* netlink.c */; };
+		4D03BD6E13EDBCBC007A4193 /* unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D03BC4113EDB5A1007A4193 /* unix.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4D03BA9513EDB48D007A4193 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		4D03BA9713EDB48E007A4193 /* Serval */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Serval; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D03BB8413EDB578007A4193 /* serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval.h; sourceTree = "<group>"; };
+		4D03BB8613EDB578007A4193 /* callback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = callback.h; sourceTree = "<group>"; };
+		4D03BB8713EDB578007A4193 /* ctrlmsg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ctrlmsg.h; sourceTree = "<group>"; };
+		4D03BB8813EDB578007A4193 /* resolver_protocol.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resolver_protocol.h; sourceTree = "<group>"; };
+		4D03BB8913EDB578007A4193 /* stack.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stack.h; sourceTree = "<group>"; };
+		4D03BB8B13EDB578007A4193 /* serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval.h; sourceTree = "<group>"; };
+		4D03BB8D13EDB578007A4193 /* atomic.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = atomic.h; sourceTree = "<group>"; };
+		4D03BB8E13EDB578007A4193 /* bitops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bitops.h; sourceTree = "<group>"; };
+		4D03BB8F13EDB578007A4193 /* checksum.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = checksum.h; sourceTree = "<group>"; };
+		4D03BB9013EDB578007A4193 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
+		4D03BB9113EDB578007A4193 /* dst.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = dst.h; sourceTree = "<group>"; };
+		4D03BB9213EDB578007A4193 /* hash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hash.h; sourceTree = "<group>"; };
+		4D03BB9313EDB578007A4193 /* inet_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = inet_sock.h; sourceTree = "<group>"; };
+		4D03BB9413EDB578007A4193 /* ktime.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ktime.h; sourceTree = "<group>"; };
+		4D03BB9513EDB578007A4193 /* list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = list.h; sourceTree = "<group>"; };
+		4D03BB9613EDB578007A4193 /* lock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = lock.h; sourceTree = "<group>"; };
+		4D03BB9713EDB578007A4193 /* net.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = net.h; sourceTree = "<group>"; };
+		4D03BB9813EDB578007A4193 /* netdevice.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = netdevice.h; sourceTree = "<group>"; };
+		4D03BB9913EDB578007A4193 /* platform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = platform.h; sourceTree = "<group>"; };
+		4D03BB9A13EDB578007A4193 /* platform_tcpip.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = platform_tcpip.h; sourceTree = "<group>"; };
+		4D03BB9B13EDB578007A4193 /* request_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = request_sock.h; sourceTree = "<group>"; };
+		4D03BB9C13EDB578007A4193 /* skbuff.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = skbuff.h; sourceTree = "<group>"; };
+		4D03BB9D13EDB578007A4193 /* sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sock.h; sourceTree = "<group>"; };
+		4D03BB9E13EDB578007A4193 /* timer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = timer.h; sourceTree = "<group>"; };
+		4D03BB9F13EDB578007A4193 /* wait.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wait.h; sourceTree = "<group>"; };
+		4D03BBA313EDB5A1007A4193 /* .project */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.xml; path = .project; sourceTree = "<group>"; };
+		4D03BBA513EDB5A1007A4193 /* classnoinst.stamp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = classnoinst.stamp; sourceTree = "<group>"; };
+		4D03BBA613EDB5A1007A4193 /* Makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; path = Makefile; sourceTree = "<group>"; };
+		4D03BBA713EDB5A1007A4193 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		4D03BBA813EDB5A1007A4193 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		4D03BBAB13EDB5A1007A4193 /* ServalDatagramPacket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramPacket.class; sourceTree = "<group>"; };
+		4D03BBAC13EDB5A1007A4193 /* ServalDatagramSocket$Lock.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocket$Lock.class; sourceTree = "<group>"; };
+		4D03BBAD13EDB5A1007A4193 /* ServalDatagramSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocket.class; sourceTree = "<group>"; };
+		4D03BBAE13EDB5A1007A4193 /* ServalDatagramSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBAF13EDB5A1007A4193 /* ServalDatagramSocketImplFactory.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocketImplFactory.class; sourceTree = "<group>"; };
+		4D03BBB013EDB5A1007A4193 /* ServalPlainServerSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainServerSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBB113EDB5A1007A4193 /* ServalPlainSocketImpl$1.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainSocketImpl$1.class; sourceTree = "<group>"; };
+		4D03BBB213EDB5A1007A4193 /* ServalPlainSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBB313EDB5A1007A4193 /* ServalServerDatagramSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalServerDatagramSocket.class; sourceTree = "<group>"; };
+		4D03BBB413EDB5A1007A4193 /* ServalServerSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalServerSocket.class; sourceTree = "<group>"; };
+		4D03BBB513EDB5A1007A4193 /* ServalSocket$ConnectLock.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocket$ConnectLock.class; sourceTree = "<group>"; };
+		4D03BBB613EDB5A1007A4193 /* ServalSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocket.class; sourceTree = "<group>"; };
+		4D03BBB713EDB5A1007A4193 /* ServalSocketAddress.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketAddress.class; sourceTree = "<group>"; };
+		4D03BBB813EDB5A1007A4193 /* ServalSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBB913EDB5A1007A4193 /* ServalSocketImplFactory.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketImplFactory.class; sourceTree = "<group>"; };
+		4D03BBBA13EDB5A1007A4193 /* ServalSocketInputStream.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketInputStream.class; sourceTree = "<group>"; };
+		4D03BBBB13EDB5A1007A4193 /* ServalSocketOutputStream.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketOutputStream.class; sourceTree = "<group>"; };
+		4D03BBBC13EDB5A1007A4193 /* ServiceID.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServiceID.class; sourceTree = "<group>"; };
+		4D03BBBE13EDB5A1007A4193 /* ServalNetworkStack.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalNetworkStack.class; sourceTree = "<group>"; };
+		4D03BBC013EDB5A1007A4193 /* TCPClient$CloseThread.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPClient$CloseThread.class; sourceTree = "<group>"; };
+		4D03BBC113EDB5A1007A4193 /* TCPClient.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPClient.class; sourceTree = "<group>"; };
+		4D03BBC213EDB5A1007A4193 /* TCPServer$Client.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPServer$Client.class; sourceTree = "<group>"; };
+		4D03BBC313EDB5A1007A4193 /* TCPServer.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPServer.class; sourceTree = "<group>"; };
+		4D03BBC413EDB5A1007A4193 /* UDPClient.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPClient.class; sourceTree = "<group>"; };
+		4D03BBC513EDB5A1007A4193 /* UDPServer.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPServer.class; sourceTree = "<group>"; };
+		4D03BBC713EDB5A1007A4193 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		4D03BBC813EDB5A1007A4193 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		4D03BBCB13EDB5A1007A4193 /* ServalDatagramPacket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramPacket.class; sourceTree = "<group>"; };
+		4D03BBCC13EDB5A1007A4193 /* ServalDatagramPacket.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalDatagramPacket.java; sourceTree = "<group>"; };
+		4D03BBCD13EDB5A1007A4193 /* ServalDatagramSocket$1.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocket$1.class; sourceTree = "<group>"; };
+		4D03BBCE13EDB5A1007A4193 /* ServalDatagramSocket$Lock.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocket$Lock.class; sourceTree = "<group>"; };
+		4D03BBCF13EDB5A1007A4193 /* ServalDatagramSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocket.class; sourceTree = "<group>"; };
+		4D03BBD013EDB5A1007A4193 /* ServalDatagramSocket.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalDatagramSocket.java; sourceTree = "<group>"; };
+		4D03BBD113EDB5A1007A4193 /* ServalDatagramSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBD213EDB5A1007A4193 /* ServalDatagramSocketImpl.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalDatagramSocketImpl.java; sourceTree = "<group>"; };
+		4D03BBD313EDB5A1007A4193 /* ServalDatagramSocketImplFactory.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalDatagramSocketImplFactory.class; sourceTree = "<group>"; };
+		4D03BBD413EDB5A1007A4193 /* ServalDatagramSocketImplFactory.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalDatagramSocketImplFactory.java; sourceTree = "<group>"; };
+		4D03BBD513EDB5A1007A4193 /* ServalPlainServerSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainServerSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBD613EDB5A1007A4193 /* ServalPlainServerSocketImpl.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalPlainServerSocketImpl.java; sourceTree = "<group>"; };
+		4D03BBD713EDB5A1007A4193 /* ServalPlainSocketImpl$1.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainSocketImpl$1.class; sourceTree = "<group>"; };
+		4D03BBD813EDB5A1007A4193 /* ServalPlainSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalPlainSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBD913EDB5A1007A4193 /* ServalPlainSocketImpl.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalPlainSocketImpl.java; sourceTree = "<group>"; };
+		4D03BBDA13EDB5A1007A4193 /* ServalServerDatagramSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalServerDatagramSocket.class; sourceTree = "<group>"; };
+		4D03BBDB13EDB5A1007A4193 /* ServalServerDatagramSocket.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalServerDatagramSocket.java; sourceTree = "<group>"; };
+		4D03BBDC13EDB5A1007A4193 /* ServalServerSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalServerSocket.class; sourceTree = "<group>"; };
+		4D03BBDD13EDB5A1007A4193 /* ServalServerSocket.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalServerSocket.java; sourceTree = "<group>"; };
+		4D03BBDE13EDB5A1007A4193 /* ServalSocket$1.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocket$1.class; sourceTree = "<group>"; };
+		4D03BBDF13EDB5A1007A4193 /* ServalSocket$ConnectLock.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocket$ConnectLock.class; sourceTree = "<group>"; };
+		4D03BBE013EDB5A1007A4193 /* ServalSocket.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocket.class; sourceTree = "<group>"; };
+		4D03BBE113EDB5A1007A4193 /* ServalSocket.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocket.java; sourceTree = "<group>"; };
+		4D03BBE213EDB5A1007A4193 /* ServalSocketAddress.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketAddress.class; sourceTree = "<group>"; };
+		4D03BBE313EDB5A1007A4193 /* ServalSocketAddress.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocketAddress.java; sourceTree = "<group>"; };
+		4D03BBE413EDB5A1007A4193 /* ServalSocketImpl.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketImpl.class; sourceTree = "<group>"; };
+		4D03BBE513EDB5A1007A4193 /* ServalSocketImpl.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocketImpl.java; sourceTree = "<group>"; };
+		4D03BBE613EDB5A1007A4193 /* ServalSocketImplFactory.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketImplFactory.class; sourceTree = "<group>"; };
+		4D03BBE713EDB5A1007A4193 /* ServalSocketImplFactory.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocketImplFactory.java; sourceTree = "<group>"; };
+		4D03BBE813EDB5A1007A4193 /* ServalSocketInputStream.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketInputStream.class; sourceTree = "<group>"; };
+		4D03BBE913EDB5A1007A4193 /* ServalSocketInputStream.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocketInputStream.java; sourceTree = "<group>"; };
+		4D03BBEA13EDB5A1007A4193 /* ServalSocketOutputStream.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalSocketOutputStream.class; sourceTree = "<group>"; };
+		4D03BBEB13EDB5A1007A4193 /* ServalSocketOutputStream.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalSocketOutputStream.java; sourceTree = "<group>"; };
+		4D03BBEC13EDB5A1007A4193 /* ServiceID.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServiceID.class; sourceTree = "<group>"; };
+		4D03BBED13EDB5A1007A4193 /* ServiceID.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServiceID.java; sourceTree = "<group>"; };
+		4D03BBEF13EDB5A1007A4193 /* ServalNetworkStack.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = ServalNetworkStack.class; sourceTree = "<group>"; };
+		4D03BBF013EDB5A1007A4193 /* ServalNetworkStack.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = ServalNetworkStack.java; sourceTree = "<group>"; };
+		4D03BBF213EDB5A1007A4193 /* TCPClient$CloseThread.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPClient$CloseThread.class; sourceTree = "<group>"; };
+		4D03BBF313EDB5A1007A4193 /* TCPClient.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPClient.class; sourceTree = "<group>"; };
+		4D03BBF413EDB5A1007A4193 /* TCPClient.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = TCPClient.java; sourceTree = "<group>"; };
+		4D03BBF513EDB5A1007A4193 /* TCPServer$Client.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPServer$Client.class; sourceTree = "<group>"; };
+		4D03BBF613EDB5A1007A4193 /* TCPServer.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = TCPServer.class; sourceTree = "<group>"; };
+		4D03BBF713EDB5A1007A4193 /* TCPServer.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = TCPServer.java; sourceTree = "<group>"; };
+		4D03BBF813EDB5A1007A4193 /* UDPClient$CloseThread.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPClient$CloseThread.class; sourceTree = "<group>"; };
+		4D03BBF913EDB5A1007A4193 /* UDPClient.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPClient.class; sourceTree = "<group>"; };
+		4D03BBFA13EDB5A1007A4193 /* UDPClient.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = UDPClient.java; sourceTree = "<group>"; };
+		4D03BBFB13EDB5A1007A4193 /* UDPServer$Client.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPServer$Client.class; sourceTree = "<group>"; };
+		4D03BBFC13EDB5A1007A4193 /* UDPServer.class */ = {isa = PBXFileReference; lastKnownFileType = compiled.javaclass; path = UDPServer.class; sourceTree = "<group>"; };
+		4D03BBFD13EDB5A1007A4193 /* UDPServer.java */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.java; path = UDPServer.java; sourceTree = "<group>"; };
+		4D03BBFF13EDB5A1007A4193 /* Android.mk */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Android.mk; sourceTree = "<group>"; };
+		4D03BC0013EDB5A1007A4193 /* JNIHelp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = JNIHelp.c; sourceTree = "<group>"; };
+		4D03BC0113EDB5A1007A4193 /* JNIHelp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = JNIHelp.h; sourceTree = "<group>"; };
+		4D03BC0213EDB5A1007A4193 /* Makefile.am */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.am; sourceTree = "<group>"; };
+		4D03BC0313EDB5A1007A4193 /* Makefile.in */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Makefile.in; sourceTree = "<group>"; };
+		4D03BC0413EDB5A1007A4193 /* serval_platform_ServalNetworkStack.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_platform_ServalNetworkStack.c; sourceTree = "<group>"; };
+		4D03BC0513EDB5A1007A4193 /* serval_platform_ServalNetworkStack.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_platform_ServalNetworkStack.h; sourceTree = "<group>"; };
+		4D03BC0A13EDB5A1007A4193 /* Manifest.txt */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = Manifest.txt; sourceTree = "<group>"; };
+		4D03BC1013EDB5A1007A4193 /* README */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = README; sourceTree = "<group>"; };
+		4D03BC1213EDB5A1007A4193 /* accept.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = accept.cc; sourceTree = "<group>"; };
+		4D03BC1313EDB5A1007A4193 /* accept.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = accept.hh; sourceTree = "<group>"; };
+		4D03BC1513EDB5A1007A4193 /* bind.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = bind.cc; sourceTree = "<group>"; };
+		4D03BC1613EDB5A1007A4193 /* bind.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = bind.hh; sourceTree = "<group>"; };
+		4D03BC1713EDB5A1007A4193 /* cli.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = cli.cc; sourceTree = "<group>"; };
+		4D03BC1813EDB5A1007A4193 /* cli.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = cli.hh; sourceTree = "<group>"; };
+		4D03BC1913EDB5A1007A4193 /* close.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = close.cc; sourceTree = "<group>"; };
+		4D03BC1A13EDB5A1007A4193 /* close.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = close.hh; sourceTree = "<group>"; };
+		4D03BC1B13EDB5A1007A4193 /* connect.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = connect.cc; sourceTree = "<group>"; };
+		4D03BC1C13EDB5A1007A4193 /* connect.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = connect.hh; sourceTree = "<group>"; };
+		4D03BC1D13EDB5A1007A4193 /* listen.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = listen.cc; sourceTree = "<group>"; };
+		4D03BC1E13EDB5A1007A4193 /* listen.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = listen.hh; sourceTree = "<group>"; };
+		4D03BC1F13EDB5A1007A4193 /* lock.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = lock.hh; sourceTree = "<group>"; };
+		4D03BC2013EDB5A1007A4193 /* log.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = log.cc; sourceTree = "<group>"; };
+		4D03BC2113EDB5A1007A4193 /* log.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = log.hh; sourceTree = "<group>"; };
+		4D03BC2413EDB5A1007A4193 /* message.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = message.cc; sourceTree = "<group>"; };
+		4D03BC2513EDB5A1007A4193 /* message.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = message.hh; sourceTree = "<group>"; };
+		4D03BC2613EDB5A1007A4193 /* migrate.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = migrate.cc; sourceTree = "<group>"; };
+		4D03BC2713EDB5A1007A4193 /* migrate.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = migrate.hh; sourceTree = "<group>"; };
+		4D03BC2813EDB5A1007A4193 /* recv.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = recv.cc; sourceTree = "<group>"; };
+		4D03BC2913EDB5A1007A4193 /* recv.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = recv.hh; sourceTree = "<group>"; };
+		4D03BC2A13EDB5A1007A4193 /* select.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = select.cc; sourceTree = "<group>"; };
+		4D03BC2B13EDB5A1007A4193 /* select.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = select.hh; sourceTree = "<group>"; };
+		4D03BC2C13EDB5A1007A4193 /* send.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = send.cc; sourceTree = "<group>"; };
+		4D03BC2D13EDB5A1007A4193 /* send.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = send.hh; sourceTree = "<group>"; };
+		4D03BC2E13EDB5A1007A4193 /* sf.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sf.cc; sourceTree = "<group>"; };
+		4D03BC2F13EDB5A1007A4193 /* socket.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = socket.cc; sourceTree = "<group>"; };
+		4D03BC3013EDB5A1007A4193 /* socket.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = socket.hh; sourceTree = "<group>"; };
+		4D03BC3113EDB5A1007A4193 /* sockio.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = sockio.cc; sourceTree = "<group>"; };
+		4D03BC3213EDB5A1007A4193 /* sockio.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = sockio.hh; sourceTree = "<group>"; };
+		4D03BC3313EDB5A1007A4193 /* state.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = state.cc; sourceTree = "<group>"; };
+		4D03BC3413EDB5A1007A4193 /* state.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; path = state.hh; sourceTree = "<group>"; };
+		4D03BC3513EDB5A1007A4193 /* types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = types.h; sourceTree = "<group>"; };
+		4D03BC3813EDB5A1007A4193 /* ctrlmsg.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ctrlmsg.c; sourceTree = "<group>"; };
+		4D03BC3913EDB5A1007A4193 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
+		4D03BC3A13EDB5A1007A4193 /* event.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = event.c; sourceTree = "<group>"; };
+		4D03BC3B13EDB5A1007A4193 /* event.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = event.h; sourceTree = "<group>"; };
+		4D03BC3C13EDB5A1007A4193 /* init.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = init.h; sourceTree = "<group>"; };
+		4D03BC3D13EDB5A1007A4193 /* libstack.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = libstack.c; sourceTree = "<group>"; };
+		4D03BC4013EDB5A1007A4193 /* netlink.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = netlink.c; sourceTree = "<group>"; };
+		4D03BC4113EDB5A1007A4193 /* unix.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = unix.c; sourceTree = "<group>"; };
+		4D03BC4613EDB5A1007A4193 /* client_resolver.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = client_resolver.c; sourceTree = "<group>"; };
+		4D03BC4713EDB5A1007A4193 /* cmwc.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cmwc.c; sourceTree = "<group>"; };
+		4D03BC4813EDB5A1007A4193 /* cmwc.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cmwc.h; sourceTree = "<group>"; };
+		4D03BC4913EDB5A1007A4193 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = debug.h; sourceTree = "<group>"; };
+		4D03BC4A13EDB5A1007A4193 /* ifa.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ifa.c; sourceTree = "<group>"; };
+		4D03BC4B13EDB5A1007A4193 /* ifa.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ifa.h; sourceTree = "<group>"; };
+		4D03BC4C13EDB5A1007A4193 /* local_resolver.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = local_resolver.c; sourceTree = "<group>"; };
+		4D03BC4F13EDB5A1007A4193 /* message_channel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = message_channel.h; sourceTree = "<group>"; };
+		4D03BC5013EDB5A1007A4193 /* message_channel_base.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = message_channel_base.c; sourceTree = "<group>"; };
+		4D03BC5113EDB5A1007A4193 /* message_channel_base.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = message_channel_base.h; sourceTree = "<group>"; };
+		4D03BC5213EDB5A1007A4193 /* messaging_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = messaging_test.c; sourceTree = "<group>"; };
+		4D03BC5313EDB5A1007A4193 /* netlink_message_channel.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = netlink_message_channel.c; sourceTree = "<group>"; };
+		4D03BC5413EDB5A1007A4193 /* poll_reactor.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = poll_reactor.c; sourceTree = "<group>"; };
+		4D03BC5513EDB5A1007A4193 /* poll_reactor.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = poll_reactor.h; sourceTree = "<group>"; };
+		4D03BC5613EDB5A1007A4193 /* prefixtrie.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = prefixtrie.c; sourceTree = "<group>"; };
+		4D03BC5713EDB5A1007A4193 /* prefixtrie.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = prefixtrie.h; sourceTree = "<group>"; };
+		4D03BC5813EDB5A1007A4193 /* prefixtrie_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = prefixtrie_test.c; sourceTree = "<group>"; };
+		4D03BC5913EDB5A1007A4193 /* resolution_path.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = resolution_path.c; sourceTree = "<group>"; };
+		4D03BC5A13EDB5A1007A4193 /* resolution_path.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resolution_path.h; sourceTree = "<group>"; };
+		4D03BC5B13EDB5A1007A4193 /* resolver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resolver.h; sourceTree = "<group>"; };
+		4D03BC5C13EDB5A1007A4193 /* resolver_base.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = resolver_base.c; sourceTree = "<group>"; };
+		4D03BC5D13EDB5A1007A4193 /* resolver_base.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resolver_base.h; sourceTree = "<group>"; };
+		4D03BC5E13EDB5A1007A4193 /* resolver_messaging.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = resolver_messaging.c; sourceTree = "<group>"; };
+		4D03BC5F13EDB5A1007A4193 /* resolver_messaging.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = resolver_messaging.h; sourceTree = "<group>"; };
+		4D03BC6013EDB5A1007A4193 /* rtnl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = rtnl.c; sourceTree = "<group>"; };
+		4D03BC6113EDB5A1007A4193 /* rtnl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = rtnl.h; sourceTree = "<group>"; };
+		4D03BC6213EDB5A1007A4193 /* servd.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = servd.c; sourceTree = "<group>"; };
+		4D03BC6313EDB5A1007A4193 /* server_resolver.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = server_resolver.c; sourceTree = "<group>"; };
+		4D03BC6413EDB5A1007A4193 /* server_resolver.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = server_resolver.h; sourceTree = "<group>"; };
+		4D03BC6513EDB5A1007A4193 /* service_router.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service_router.c; sourceTree = "<group>"; };
+		4D03BC6613EDB5A1007A4193 /* service_table.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service_table.c; sourceTree = "<group>"; };
+		4D03BC6713EDB5A1007A4193 /* service_table.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = service_table.h; sourceTree = "<group>"; };
+		4D03BC6813EDB5A1007A4193 /* service_table_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service_table_test.c; sourceTree = "<group>"; };
+		4D03BC6913EDB5A1007A4193 /* service_types.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service_types.c; sourceTree = "<group>"; };
+		4D03BC6A13EDB5A1007A4193 /* service_types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = service_types.h; sourceTree = "<group>"; };
+		4D03BC6B13EDB5A1007A4193 /* service_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service_util.c; sourceTree = "<group>"; };
+		4D03BC6C13EDB5A1007A4193 /* service_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = service_util.h; sourceTree = "<group>"; };
+		4D03BC6D13EDB5A1007A4193 /* task.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = task.c; sourceTree = "<group>"; };
+		4D03BC6E13EDB5A1007A4193 /* task.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = task.h; sourceTree = "<group>"; };
+		4D03BC6F13EDB5A1007A4193 /* task_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = task_test.c; sourceTree = "<group>"; };
+		4D03BC7013EDB5A1007A4193 /* time_util.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = time_util.c; sourceTree = "<group>"; };
+		4D03BC7113EDB5A1007A4193 /* time_util.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = time_util.h; sourceTree = "<group>"; };
+		4D03BC7213EDB5A1007A4193 /* timer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = timer.c; sourceTree = "<group>"; };
+		4D03BC7313EDB5A1007A4193 /* timer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = timer.h; sourceTree = "<group>"; };
+		4D03BC7413EDB5A1007A4193 /* udp_message_channel.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = udp_message_channel.c; sourceTree = "<group>"; };
+		4D03BC7513EDB5A1007A4193 /* unix_message_channel.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = unix_message_channel.c; sourceTree = "<group>"; };
+		4D03BC7613EDB5A1007A4193 /* util_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = util_test.c; sourceTree = "<group>"; };
+		4D03BC7813EDB5A2007A4193 /* af_serval.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = af_serval.c; sourceTree = "<group>"; };
+		4D03BC7913EDB5A2007A4193 /* af_serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = af_serval.h; sourceTree = "<group>"; };
+		4D03BC7B13EDB5A2007A4193 /* bst.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = bst.c; sourceTree = "<group>"; };
+		4D03BC7C13EDB5A2007A4193 /* bst.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bst.h; sourceTree = "<group>"; };
+		4D03BC7D13EDB5A2007A4193 /* ctrl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ctrl.h; sourceTree = "<group>"; };
+		4D03BC7E13EDB5A2007A4193 /* ctrl_handler.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ctrl_handler.c; sourceTree = "<group>"; };
+		4D03BC7F13EDB5A2007A4193 /* debug.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = debug.c; sourceTree = "<group>"; };
+		4D03BC8013EDB5A2007A4193 /* input.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = input.h; sourceTree = "<group>"; };
+		4D03BC8E13EDB5A2007A4193 /* platform.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = platform.c; sourceTree = "<group>"; };
+		4D03BC8F13EDB5A2007A4193 /* serval_ipv4.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_ipv4.c; sourceTree = "<group>"; };
+		4D03BC9013EDB5A2007A4193 /* serval_ipv4.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_ipv4.h; sourceTree = "<group>"; };
+		4D03BC9113EDB5A2007A4193 /* serval_request_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_request_sock.h; sourceTree = "<group>"; };
+		4D03BC9213EDB5A2007A4193 /* serval_sal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_sal.c; sourceTree = "<group>"; };
+		4D03BC9313EDB5A2007A4193 /* serval_sal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_sal.h; sourceTree = "<group>"; };
+		4D03BC9413EDB5A2007A4193 /* serval_sock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_sock.c; sourceTree = "<group>"; };
+		4D03BC9513EDB5A2007A4193 /* serval_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_sock.h; sourceTree = "<group>"; };
+		4D03BC9613EDB5A2007A4193 /* serval_tcp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp.c; sourceTree = "<group>"; };
+		4D03BC9713EDB5A2007A4193 /* serval_tcp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_tcp.h; sourceTree = "<group>"; };
+		4D03BC9813EDB5A2007A4193 /* serval_tcp_cong.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_cong.c; sourceTree = "<group>"; };
+		4D03BC9913EDB5A2007A4193 /* serval_tcp_input.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_input.c; sourceTree = "<group>"; };
+		4D03BC9A13EDB5A2007A4193 /* serval_tcp_output.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_output.c; sourceTree = "<group>"; };
+		4D03BC9B13EDB5A2007A4193 /* serval_tcp_request_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_tcp_request_sock.h; sourceTree = "<group>"; };
+		4D03BC9C13EDB5A2007A4193 /* serval_tcp_sock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_sock.c; sourceTree = "<group>"; };
+		4D03BC9D13EDB5A2007A4193 /* serval_tcp_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_tcp_sock.h; sourceTree = "<group>"; };
+		4D03BC9E13EDB5A2007A4193 /* serval_tcp_timer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_timer.c; sourceTree = "<group>"; };
+		4D03BC9F13EDB5A2007A4193 /* serval_udp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_udp.c; sourceTree = "<group>"; };
+		4D03BCA013EDB5A2007A4193 /* serval_udp_sock.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_udp_sock.h; sourceTree = "<group>"; };
+		4D03BCA113EDB5A2007A4193 /* service.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = service.c; sourceTree = "<group>"; };
+		4D03BCA213EDB5A2007A4193 /* service.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = service.h; sourceTree = "<group>"; };
+		4D03BCA413EDB5A2007A4193 /* bitops.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = bitops.c; sourceTree = "<group>"; };
+		4D03BCA513EDB5A2007A4193 /* checksum.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = checksum.c; sourceTree = "<group>"; };
+		4D03BCA613EDB5A2007A4193 /* client.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = client.c; sourceTree = "<group>"; };
+		4D03BCA713EDB5A2007A4193 /* client.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = client.h; sourceTree = "<group>"; };
+		4D03BCA813EDB5A2007A4193 /* client_msg.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = client_msg.c; sourceTree = "<group>"; };
+		4D03BCA913EDB5A2007A4193 /* client_msg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = client_msg.h; sourceTree = "<group>"; };
+		4D03BCAA13EDB5A2007A4193 /* ctrl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ctrl.c; sourceTree = "<group>"; };
+		4D03BCAB13EDB5A2007A4193 /* dev.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = dev.c; sourceTree = "<group>"; };
+		4D03BCAC13EDB5A2007A4193 /* dst.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = dst.c; sourceTree = "<group>"; };
+		4D03BCAD13EDB5A2007A4193 /* ktime.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ktime.c; sourceTree = "<group>"; };
+		4D03BCAE13EDB5A2007A4193 /* packet.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = packet.h; sourceTree = "<group>"; };
+		4D03BCAF13EDB5A2007A4193 /* packet_bpf.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = packet_bpf.c; sourceTree = "<group>"; };
+		4D03BCB013EDB5A2007A4193 /* packet_linux.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = packet_linux.c; sourceTree = "<group>"; };
+		4D03BCB113EDB5A2007A4193 /* packet_raw.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = packet_raw.c; sourceTree = "<group>"; };
+		4D03BCB213EDB5A2007A4193 /* serval.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval.c; sourceTree = "<group>"; };
+		4D03BCB313EDB5A2007A4193 /* serval_tcp_user.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = serval_tcp_user.c; sourceTree = "<group>"; };
+		4D03BCB413EDB5A2007A4193 /* serval_tcp_user.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval_tcp_user.h; sourceTree = "<group>"; };
+		4D03BCB513EDB5A2007A4193 /* skbuff.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = skbuff.c; sourceTree = "<group>"; };
+		4D03BCB613EDB5A2007A4193 /* sock.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = sock.c; sourceTree = "<group>"; };
+		4D03BCB713EDB5A2007A4193 /* socket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = socket.c; sourceTree = "<group>"; };
+		4D03BCB813EDB5A2007A4193 /* stream.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = stream.c; sourceTree = "<group>"; };
+		4D03BCB913EDB5A2007A4193 /* telnet.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = telnet.c; sourceTree = "<group>"; };
+		4D03BCBA13EDB5A2007A4193 /* timer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = timer.c; sourceTree = "<group>"; };
+		4D03BCBB13EDB5A2007A4193 /* wait.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = wait.c; sourceTree = "<group>"; };
+		4D03BCBD13EDB5A2007A4193 /* addservice.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = addservice.c; sourceTree = "<group>"; };
+		4D03BCBF13EDB5A2007A4193 /* bindtest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = bindtest.c; sourceTree = "<group>"; };
+		4D03BCC013EDB5A2007A4193 /* common.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = common.c; sourceTree = "<group>"; };
+		4D03BCC113EDB5A2007A4193 /* common.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = common.h; sourceTree = "<group>"; };
+		4D03BCC213EDB5A2007A4193 /* listentest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = listentest.c; sourceTree = "<group>"; };
+		4D03BCC513EDB5A2007A4193 /* nltest.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = nltest.c; sourceTree = "<group>"; };
+		4D03BCC613EDB5A2007A4193 /* recv_udp_packet.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = recv_udp_packet.c; sourceTree = "<group>"; };
+		4D03BCC713EDB5A2007A4193 /* send_udp_packet.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = send_udp_packet.c; sourceTree = "<group>"; };
+		4D03BCC813EDB5A2007A4193 /* tcp_client.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = tcp_client.c; sourceTree = "<group>"; };
+		4D03BCC913EDB5A2007A4193 /* tcp_inet_client.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = tcp_inet_client.c; sourceTree = "<group>"; };
+		4D03BCCA13EDB5A2007A4193 /* tcp_server.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = tcp_server.c; sourceTree = "<group>"; };
+		4D03BCCB13EDB5A2007A4193 /* translator.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = translator.c; sourceTree = "<group>"; };
+		4D03BCCC13EDB5A2007A4193 /* udp_client.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = udp_client.c; sourceTree = "<group>"; };
+		4D03BCCD13EDB5A2007A4193 /* udp_server.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = udp_server.c; sourceTree = "<group>"; };
+		4D03BD6313EDBC9C007A4193 /* libstack.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libstack.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4D03BA9413EDB48D007A4193 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4D03BD6013EDBC9C007A4193 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4D03BA8C13EDB48D007A4193 = {
+			isa = PBXGroup;
+			children = (
+				4D03BA9A13EDB48E007A4193 /* Serval */,
+				4D03BA9813EDB48E007A4193 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4D03BA9813EDB48E007A4193 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BA9713EDB48E007A4193 /* Serval */,
+				4D03BD6313EDBC9C007A4193 /* libstack.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4D03BA9A13EDB48E007A4193 /* Serval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBA013EDB5A1007A4193 /* src */,
+				4D03BB8213EDB578007A4193 /* include */,
+			);
+			path = Serval;
+			sourceTree = "<group>";
+		};
+		4D03BB8213EDB578007A4193 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BB8313EDB578007A4193 /* libserval */,
+				4D03BB8513EDB578007A4193 /* libstack */,
+				4D03BB8A13EDB578007A4193 /* netinet */,
+				4D03BB8C13EDB578007A4193 /* serval */,
+			);
+			name = include;
+			path = ../../../include;
+			sourceTree = "<group>";
+		};
+		4D03BB8313EDB578007A4193 /* libserval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BB8413EDB578007A4193 /* serval.h */,
+			);
+			path = libserval;
+			sourceTree = "<group>";
+		};
+		4D03BB8513EDB578007A4193 /* libstack */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BB8613EDB578007A4193 /* callback.h */,
+				4D03BB8713EDB578007A4193 /* ctrlmsg.h */,
+				4D03BB8813EDB578007A4193 /* resolver_protocol.h */,
+				4D03BB8913EDB578007A4193 /* stack.h */,
+			);
+			path = libstack;
+			sourceTree = "<group>";
+		};
+		4D03BB8A13EDB578007A4193 /* netinet */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BB8B13EDB578007A4193 /* serval.h */,
+			);
+			path = netinet;
+			sourceTree = "<group>";
+		};
+		4D03BB8C13EDB578007A4193 /* serval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BB8D13EDB578007A4193 /* atomic.h */,
+				4D03BB8E13EDB578007A4193 /* bitops.h */,
+				4D03BB8F13EDB578007A4193 /* checksum.h */,
+				4D03BB9013EDB578007A4193 /* debug.h */,
+				4D03BB9113EDB578007A4193 /* dst.h */,
+				4D03BB9213EDB578007A4193 /* hash.h */,
+				4D03BB9313EDB578007A4193 /* inet_sock.h */,
+				4D03BB9413EDB578007A4193 /* ktime.h */,
+				4D03BB9513EDB578007A4193 /* list.h */,
+				4D03BB9613EDB578007A4193 /* lock.h */,
+				4D03BB9713EDB578007A4193 /* net.h */,
+				4D03BB9813EDB578007A4193 /* netdevice.h */,
+				4D03BB9913EDB578007A4193 /* platform.h */,
+				4D03BB9A13EDB578007A4193 /* platform_tcpip.h */,
+				4D03BB9B13EDB578007A4193 /* request_sock.h */,
+				4D03BB9C13EDB578007A4193 /* skbuff.h */,
+				4D03BB9D13EDB578007A4193 /* sock.h */,
+				4D03BB9E13EDB578007A4193 /* timer.h */,
+				4D03BB9F13EDB578007A4193 /* wait.h */,
+			);
+			path = serval;
+			sourceTree = "<group>";
+		};
+		4D03BBA013EDB5A1007A4193 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBA113EDB5A1007A4193 /* javasock */,
+				4D03BC1113EDB5A1007A4193 /* libserval */,
+				4D03BC3613EDB5A1007A4193 /* libstack */,
+				4D03BC4413EDB5A1007A4193 /* servd */,
+				4D03BC7713EDB5A1007A4193 /* stack */,
+				4D03BCBC13EDB5A2007A4193 /* test */,
+			);
+			name = src;
+			path = ../../../src;
+			sourceTree = "<group>";
+		};
+		4D03BBA113EDB5A1007A4193 /* javasock */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBA313EDB5A1007A4193 /* .project */,
+				4D03BBA413EDB5A1007A4193 /* bin */,
+				4D03BBC613EDB5A1007A4193 /* java */,
+				4D03BBFE13EDB5A1007A4193 /* jni */,
+				4D03BC0613EDB5A1007A4193 /* libs */,
+				4D03BC0A13EDB5A1007A4193 /* Manifest.txt */,
+				4D03BC0B13EDB5A1007A4193 /* obj */,
+				4D03BC1013EDB5A1007A4193 /* README */,
+			);
+			path = javasock;
+			sourceTree = "<group>";
+		};
+		4D03BBA413EDB5A1007A4193 /* bin */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBA513EDB5A1007A4193 /* classnoinst.stamp */,
+				4D03BBA613EDB5A1007A4193 /* Makefile */,
+				4D03BBA713EDB5A1007A4193 /* Makefile.am */,
+				4D03BBA813EDB5A1007A4193 /* Makefile.in */,
+				4D03BBA913EDB5A1007A4193 /* serval */,
+			);
+			path = bin;
+			sourceTree = "<group>";
+		};
+		4D03BBA913EDB5A1007A4193 /* serval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBAA13EDB5A1007A4193 /* net */,
+				4D03BBBD13EDB5A1007A4193 /* platform */,
+				4D03BBBF13EDB5A1007A4193 /* test */,
+			);
+			path = serval;
+			sourceTree = "<group>";
+		};
+		4D03BBAA13EDB5A1007A4193 /* net */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBAB13EDB5A1007A4193 /* ServalDatagramPacket.class */,
+				4D03BBAC13EDB5A1007A4193 /* ServalDatagramSocket$Lock.class */,
+				4D03BBAD13EDB5A1007A4193 /* ServalDatagramSocket.class */,
+				4D03BBAE13EDB5A1007A4193 /* ServalDatagramSocketImpl.class */,
+				4D03BBAF13EDB5A1007A4193 /* ServalDatagramSocketImplFactory.class */,
+				4D03BBB013EDB5A1007A4193 /* ServalPlainServerSocketImpl.class */,
+				4D03BBB113EDB5A1007A4193 /* ServalPlainSocketImpl$1.class */,
+				4D03BBB213EDB5A1007A4193 /* ServalPlainSocketImpl.class */,
+				4D03BBB313EDB5A1007A4193 /* ServalServerDatagramSocket.class */,
+				4D03BBB413EDB5A1007A4193 /* ServalServerSocket.class */,
+				4D03BBB513EDB5A1007A4193 /* ServalSocket$ConnectLock.class */,
+				4D03BBB613EDB5A1007A4193 /* ServalSocket.class */,
+				4D03BBB713EDB5A1007A4193 /* ServalSocketAddress.class */,
+				4D03BBB813EDB5A1007A4193 /* ServalSocketImpl.class */,
+				4D03BBB913EDB5A1007A4193 /* ServalSocketImplFactory.class */,
+				4D03BBBA13EDB5A1007A4193 /* ServalSocketInputStream.class */,
+				4D03BBBB13EDB5A1007A4193 /* ServalSocketOutputStream.class */,
+				4D03BBBC13EDB5A1007A4193 /* ServiceID.class */,
+			);
+			path = net;
+			sourceTree = "<group>";
+		};
+		4D03BBBD13EDB5A1007A4193 /* platform */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBBE13EDB5A1007A4193 /* ServalNetworkStack.class */,
+			);
+			path = platform;
+			sourceTree = "<group>";
+		};
+		4D03BBBF13EDB5A1007A4193 /* test */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBC013EDB5A1007A4193 /* TCPClient$CloseThread.class */,
+				4D03BBC113EDB5A1007A4193 /* TCPClient.class */,
+				4D03BBC213EDB5A1007A4193 /* TCPServer$Client.class */,
+				4D03BBC313EDB5A1007A4193 /* TCPServer.class */,
+				4D03BBC413EDB5A1007A4193 /* UDPClient.class */,
+				4D03BBC513EDB5A1007A4193 /* UDPServer.class */,
+			);
+			path = test;
+			sourceTree = "<group>";
+		};
+		4D03BBC613EDB5A1007A4193 /* java */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBC713EDB5A1007A4193 /* Makefile.am */,
+				4D03BBC813EDB5A1007A4193 /* Makefile.in */,
+				4D03BBC913EDB5A1007A4193 /* serval */,
+			);
+			path = java;
+			sourceTree = "<group>";
+		};
+		4D03BBC913EDB5A1007A4193 /* serval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBCA13EDB5A1007A4193 /* net */,
+				4D03BBEE13EDB5A1007A4193 /* platform */,
+				4D03BBF113EDB5A1007A4193 /* test */,
+			);
+			path = serval;
+			sourceTree = "<group>";
+		};
+		4D03BBCA13EDB5A1007A4193 /* net */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBCB13EDB5A1007A4193 /* ServalDatagramPacket.class */,
+				4D03BBCC13EDB5A1007A4193 /* ServalDatagramPacket.java */,
+				4D03BBCD13EDB5A1007A4193 /* ServalDatagramSocket$1.class */,
+				4D03BBCE13EDB5A1007A4193 /* ServalDatagramSocket$Lock.class */,
+				4D03BBCF13EDB5A1007A4193 /* ServalDatagramSocket.class */,
+				4D03BBD013EDB5A1007A4193 /* ServalDatagramSocket.java */,
+				4D03BBD113EDB5A1007A4193 /* ServalDatagramSocketImpl.class */,
+				4D03BBD213EDB5A1007A4193 /* ServalDatagramSocketImpl.java */,
+				4D03BBD313EDB5A1007A4193 /* ServalDatagramSocketImplFactory.class */,
+				4D03BBD413EDB5A1007A4193 /* ServalDatagramSocketImplFactory.java */,
+				4D03BBD513EDB5A1007A4193 /* ServalPlainServerSocketImpl.class */,
+				4D03BBD613EDB5A1007A4193 /* ServalPlainServerSocketImpl.java */,
+				4D03BBD713EDB5A1007A4193 /* ServalPlainSocketImpl$1.class */,
+				4D03BBD813EDB5A1007A4193 /* ServalPlainSocketImpl.class */,
+				4D03BBD913EDB5A1007A4193 /* ServalPlainSocketImpl.java */,
+				4D03BBDA13EDB5A1007A4193 /* ServalServerDatagramSocket.class */,
+				4D03BBDB13EDB5A1007A4193 /* ServalServerDatagramSocket.java */,
+				4D03BBDC13EDB5A1007A4193 /* ServalServerSocket.class */,
+				4D03BBDD13EDB5A1007A4193 /* ServalServerSocket.java */,
+				4D03BBDE13EDB5A1007A4193 /* ServalSocket$1.class */,
+				4D03BBDF13EDB5A1007A4193 /* ServalSocket$ConnectLock.class */,
+				4D03BBE013EDB5A1007A4193 /* ServalSocket.class */,
+				4D03BBE113EDB5A1007A4193 /* ServalSocket.java */,
+				4D03BBE213EDB5A1007A4193 /* ServalSocketAddress.class */,
+				4D03BBE313EDB5A1007A4193 /* ServalSocketAddress.java */,
+				4D03BBE413EDB5A1007A4193 /* ServalSocketImpl.class */,
+				4D03BBE513EDB5A1007A4193 /* ServalSocketImpl.java */,
+				4D03BBE613EDB5A1007A4193 /* ServalSocketImplFactory.class */,
+				4D03BBE713EDB5A1007A4193 /* ServalSocketImplFactory.java */,
+				4D03BBE813EDB5A1007A4193 /* ServalSocketInputStream.class */,
+				4D03BBE913EDB5A1007A4193 /* ServalSocketInputStream.java */,
+				4D03BBEA13EDB5A1007A4193 /* ServalSocketOutputStream.class */,
+				4D03BBEB13EDB5A1007A4193 /* ServalSocketOutputStream.java */,
+				4D03BBEC13EDB5A1007A4193 /* ServiceID.class */,
+				4D03BBED13EDB5A1007A4193 /* ServiceID.java */,
+			);
+			path = net;
+			sourceTree = "<group>";
+		};
+		4D03BBEE13EDB5A1007A4193 /* platform */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBEF13EDB5A1007A4193 /* ServalNetworkStack.class */,
+				4D03BBF013EDB5A1007A4193 /* ServalNetworkStack.java */,
+			);
+			path = platform;
+			sourceTree = "<group>";
+		};
+		4D03BBF113EDB5A1007A4193 /* test */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBF213EDB5A1007A4193 /* TCPClient$CloseThread.class */,
+				4D03BBF313EDB5A1007A4193 /* TCPClient.class */,
+				4D03BBF413EDB5A1007A4193 /* TCPClient.java */,
+				4D03BBF513EDB5A1007A4193 /* TCPServer$Client.class */,
+				4D03BBF613EDB5A1007A4193 /* TCPServer.class */,
+				4D03BBF713EDB5A1007A4193 /* TCPServer.java */,
+				4D03BBF813EDB5A1007A4193 /* UDPClient$CloseThread.class */,
+				4D03BBF913EDB5A1007A4193 /* UDPClient.class */,
+				4D03BBFA13EDB5A1007A4193 /* UDPClient.java */,
+				4D03BBFB13EDB5A1007A4193 /* UDPServer$Client.class */,
+				4D03BBFC13EDB5A1007A4193 /* UDPServer.class */,
+				4D03BBFD13EDB5A1007A4193 /* UDPServer.java */,
+			);
+			path = test;
+			sourceTree = "<group>";
+		};
+		4D03BBFE13EDB5A1007A4193 /* jni */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BBFF13EDB5A1007A4193 /* Android.mk */,
+				4D03BC0013EDB5A1007A4193 /* JNIHelp.c */,
+				4D03BC0113EDB5A1007A4193 /* JNIHelp.h */,
+				4D03BC0213EDB5A1007A4193 /* Makefile.am */,
+				4D03BC0313EDB5A1007A4193 /* Makefile.in */,
+				4D03BC0413EDB5A1007A4193 /* serval_platform_ServalNetworkStack.c */,
+				4D03BC0513EDB5A1007A4193 /* serval_platform_ServalNetworkStack.h */,
+			);
+			path = jni;
+			sourceTree = "<group>";
+		};
+		4D03BC0613EDB5A1007A4193 /* libs */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC0713EDB5A1007A4193 /* x86 */,
+			);
+			path = libs;
+			sourceTree = "<group>";
+		};
+		4D03BC0713EDB5A1007A4193 /* x86 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86;
+			sourceTree = "<group>";
+		};
+		4D03BC0B13EDB5A1007A4193 /* obj */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC0C13EDB5A1007A4193 /* local */,
+			);
+			path = obj;
+			sourceTree = "<group>";
+		};
+		4D03BC0C13EDB5A1007A4193 /* local */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC0D13EDB5A1007A4193 /* armeabi */,
+				4D03BC0E13EDB5A1007A4193 /* armeabi-v7a */,
+				4D03BC0F13EDB5A1007A4193 /* x86 */,
+			);
+			path = local;
+			sourceTree = "<group>";
+		};
+		4D03BC0D13EDB5A1007A4193 /* armeabi */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = armeabi;
+			sourceTree = "<group>";
+		};
+		4D03BC0E13EDB5A1007A4193 /* armeabi-v7a */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = "armeabi-v7a";
+			sourceTree = "<group>";
+		};
+		4D03BC0F13EDB5A1007A4193 /* x86 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86;
+			sourceTree = "<group>";
+		};
+		4D03BC1113EDB5A1007A4193 /* libserval */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC1213EDB5A1007A4193 /* accept.cc */,
+				4D03BC1313EDB5A1007A4193 /* accept.hh */,
+				4D03BC1513EDB5A1007A4193 /* bind.cc */,
+				4D03BC1613EDB5A1007A4193 /* bind.hh */,
+				4D03BC1713EDB5A1007A4193 /* cli.cc */,
+				4D03BC1813EDB5A1007A4193 /* cli.hh */,
+				4D03BC1913EDB5A1007A4193 /* close.cc */,
+				4D03BC1A13EDB5A1007A4193 /* close.hh */,
+				4D03BC1B13EDB5A1007A4193 /* connect.cc */,
+				4D03BC1C13EDB5A1007A4193 /* connect.hh */,
+				4D03BC1D13EDB5A1007A4193 /* listen.cc */,
+				4D03BC1E13EDB5A1007A4193 /* listen.hh */,
+				4D03BC1F13EDB5A1007A4193 /* lock.hh */,
+				4D03BC2013EDB5A1007A4193 /* log.cc */,
+				4D03BC2113EDB5A1007A4193 /* log.hh */,
+				4D03BC2413EDB5A1007A4193 /* message.cc */,
+				4D03BC2513EDB5A1007A4193 /* message.hh */,
+				4D03BC2613EDB5A1007A4193 /* migrate.cc */,
+				4D03BC2713EDB5A1007A4193 /* migrate.hh */,
+				4D03BC2813EDB5A1007A4193 /* recv.cc */,
+				4D03BC2913EDB5A1007A4193 /* recv.hh */,
+				4D03BC2A13EDB5A1007A4193 /* select.cc */,
+				4D03BC2B13EDB5A1007A4193 /* select.hh */,
+				4D03BC2C13EDB5A1007A4193 /* send.cc */,
+				4D03BC2D13EDB5A1007A4193 /* send.hh */,
+				4D03BC2E13EDB5A1007A4193 /* sf.cc */,
+				4D03BC2F13EDB5A1007A4193 /* socket.cc */,
+				4D03BC3013EDB5A1007A4193 /* socket.hh */,
+				4D03BC3113EDB5A1007A4193 /* sockio.cc */,
+				4D03BC3213EDB5A1007A4193 /* sockio.hh */,
+				4D03BC3313EDB5A1007A4193 /* state.cc */,
+				4D03BC3413EDB5A1007A4193 /* state.hh */,
+				4D03BC3513EDB5A1007A4193 /* types.h */,
+			);
+			path = libserval;
+			sourceTree = "<group>";
+		};
+		4D03BC3613EDB5A1007A4193 /* libstack */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC3813EDB5A1007A4193 /* ctrlmsg.c */,
+				4D03BC3913EDB5A1007A4193 /* debug.h */,
+				4D03BC3A13EDB5A1007A4193 /* event.c */,
+				4D03BC3B13EDB5A1007A4193 /* event.h */,
+				4D03BC3C13EDB5A1007A4193 /* init.h */,
+				4D03BC3D13EDB5A1007A4193 /* libstack.c */,
+				4D03BC4013EDB5A1007A4193 /* netlink.c */,
+				4D03BC4113EDB5A1007A4193 /* unix.c */,
+			);
+			path = libstack;
+			sourceTree = "<group>";
+		};
+		4D03BC4413EDB5A1007A4193 /* servd */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC4613EDB5A1007A4193 /* client_resolver.c */,
+				4D03BC4713EDB5A1007A4193 /* cmwc.c */,
+				4D03BC4813EDB5A1007A4193 /* cmwc.h */,
+				4D03BC4913EDB5A1007A4193 /* debug.h */,
+				4D03BC4A13EDB5A1007A4193 /* ifa.c */,
+				4D03BC4B13EDB5A1007A4193 /* ifa.h */,
+				4D03BC4C13EDB5A1007A4193 /* local_resolver.c */,
+				4D03BC4F13EDB5A1007A4193 /* message_channel.h */,
+				4D03BC5013EDB5A1007A4193 /* message_channel_base.c */,
+				4D03BC5113EDB5A1007A4193 /* message_channel_base.h */,
+				4D03BC5213EDB5A1007A4193 /* messaging_test.c */,
+				4D03BC5313EDB5A1007A4193 /* netlink_message_channel.c */,
+				4D03BC5413EDB5A1007A4193 /* poll_reactor.c */,
+				4D03BC5513EDB5A1007A4193 /* poll_reactor.h */,
+				4D03BC5613EDB5A1007A4193 /* prefixtrie.c */,
+				4D03BC5713EDB5A1007A4193 /* prefixtrie.h */,
+				4D03BC5813EDB5A1007A4193 /* prefixtrie_test.c */,
+				4D03BC5913EDB5A1007A4193 /* resolution_path.c */,
+				4D03BC5A13EDB5A1007A4193 /* resolution_path.h */,
+				4D03BC5B13EDB5A1007A4193 /* resolver.h */,
+				4D03BC5C13EDB5A1007A4193 /* resolver_base.c */,
+				4D03BC5D13EDB5A1007A4193 /* resolver_base.h */,
+				4D03BC5E13EDB5A1007A4193 /* resolver_messaging.c */,
+				4D03BC5F13EDB5A1007A4193 /* resolver_messaging.h */,
+				4D03BC6013EDB5A1007A4193 /* rtnl.c */,
+				4D03BC6113EDB5A1007A4193 /* rtnl.h */,
+				4D03BC6213EDB5A1007A4193 /* servd.c */,
+				4D03BC6313EDB5A1007A4193 /* server_resolver.c */,
+				4D03BC6413EDB5A1007A4193 /* server_resolver.h */,
+				4D03BC6513EDB5A1007A4193 /* service_router.c */,
+				4D03BC6613EDB5A1007A4193 /* service_table.c */,
+				4D03BC6713EDB5A1007A4193 /* service_table.h */,
+				4D03BC6813EDB5A1007A4193 /* service_table_test.c */,
+				4D03BC6913EDB5A1007A4193 /* service_types.c */,
+				4D03BC6A13EDB5A1007A4193 /* service_types.h */,
+				4D03BC6B13EDB5A1007A4193 /* service_util.c */,
+				4D03BC6C13EDB5A1007A4193 /* service_util.h */,
+				4D03BC6D13EDB5A1007A4193 /* task.c */,
+				4D03BC6E13EDB5A1007A4193 /* task.h */,
+				4D03BC6F13EDB5A1007A4193 /* task_test.c */,
+				4D03BC7013EDB5A1007A4193 /* time_util.c */,
+				4D03BC7113EDB5A1007A4193 /* time_util.h */,
+				4D03BC7213EDB5A1007A4193 /* timer.c */,
+				4D03BC7313EDB5A1007A4193 /* timer.h */,
+				4D03BC7413EDB5A1007A4193 /* udp_message_channel.c */,
+				4D03BC7513EDB5A1007A4193 /* unix_message_channel.c */,
+				4D03BC7613EDB5A1007A4193 /* util_test.c */,
+			);
+			path = servd;
+			sourceTree = "<group>";
+		};
+		4D03BC7713EDB5A1007A4193 /* stack */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BC7813EDB5A2007A4193 /* af_serval.c */,
+				4D03BC7913EDB5A2007A4193 /* af_serval.h */,
+				4D03BC7B13EDB5A2007A4193 /* bst.c */,
+				4D03BC7C13EDB5A2007A4193 /* bst.h */,
+				4D03BC7D13EDB5A2007A4193 /* ctrl.h */,
+				4D03BC7E13EDB5A2007A4193 /* ctrl_handler.c */,
+				4D03BC7F13EDB5A2007A4193 /* debug.c */,
+				4D03BC8013EDB5A2007A4193 /* input.h */,
+				4D03BC8E13EDB5A2007A4193 /* platform.c */,
+				4D03BC8F13EDB5A2007A4193 /* serval_ipv4.c */,
+				4D03BC9013EDB5A2007A4193 /* serval_ipv4.h */,
+				4D03BC9113EDB5A2007A4193 /* serval_request_sock.h */,
+				4D03BC9213EDB5A2007A4193 /* serval_sal.c */,
+				4D03BC9313EDB5A2007A4193 /* serval_sal.h */,
+				4D03BC9413EDB5A2007A4193 /* serval_sock.c */,
+				4D03BC9513EDB5A2007A4193 /* serval_sock.h */,
+				4D03BC9613EDB5A2007A4193 /* serval_tcp.c */,
+				4D03BC9713EDB5A2007A4193 /* serval_tcp.h */,
+				4D03BC9813EDB5A2007A4193 /* serval_tcp_cong.c */,
+				4D03BC9913EDB5A2007A4193 /* serval_tcp_input.c */,
+				4D03BC9A13EDB5A2007A4193 /* serval_tcp_output.c */,
+				4D03BC9B13EDB5A2007A4193 /* serval_tcp_request_sock.h */,
+				4D03BC9C13EDB5A2007A4193 /* serval_tcp_sock.c */,
+				4D03BC9D13EDB5A2007A4193 /* serval_tcp_sock.h */,
+				4D03BC9E13EDB5A2007A4193 /* serval_tcp_timer.c */,
+				4D03BC9F13EDB5A2007A4193 /* serval_udp.c */,
+				4D03BCA013EDB5A2007A4193 /* serval_udp_sock.h */,
+				4D03BCA113EDB5A2007A4193 /* service.c */,
+				4D03BCA213EDB5A2007A4193 /* service.h */,
+				4D03BCA313EDB5A2007A4193 /* userlevel */,
+			);
+			path = stack;
+			sourceTree = "<group>";
+		};
+		4D03BCA313EDB5A2007A4193 /* userlevel */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BCA413EDB5A2007A4193 /* bitops.c */,
+				4D03BCA513EDB5A2007A4193 /* checksum.c */,
+				4D03BCA613EDB5A2007A4193 /* client.c */,
+				4D03BCA713EDB5A2007A4193 /* client.h */,
+				4D03BCA813EDB5A2007A4193 /* client_msg.c */,
+				4D03BCA913EDB5A2007A4193 /* client_msg.h */,
+				4D03BCAA13EDB5A2007A4193 /* ctrl.c */,
+				4D03BCAB13EDB5A2007A4193 /* dev.c */,
+				4D03BCAC13EDB5A2007A4193 /* dst.c */,
+				4D03BCAD13EDB5A2007A4193 /* ktime.c */,
+				4D03BCAE13EDB5A2007A4193 /* packet.h */,
+				4D03BCAF13EDB5A2007A4193 /* packet_bpf.c */,
+				4D03BCB013EDB5A2007A4193 /* packet_linux.c */,
+				4D03BCB113EDB5A2007A4193 /* packet_raw.c */,
+				4D03BCB213EDB5A2007A4193 /* serval.c */,
+				4D03BCB313EDB5A2007A4193 /* serval_tcp_user.c */,
+				4D03BCB413EDB5A2007A4193 /* serval_tcp_user.h */,
+				4D03BCB513EDB5A2007A4193 /* skbuff.c */,
+				4D03BCB613EDB5A2007A4193 /* sock.c */,
+				4D03BCB713EDB5A2007A4193 /* socket.c */,
+				4D03BCB813EDB5A2007A4193 /* stream.c */,
+				4D03BCB913EDB5A2007A4193 /* telnet.c */,
+				4D03BCBA13EDB5A2007A4193 /* timer.c */,
+				4D03BCBB13EDB5A2007A4193 /* wait.c */,
+			);
+			path = userlevel;
+			sourceTree = "<group>";
+		};
+		4D03BCBC13EDB5A2007A4193 /* test */ = {
+			isa = PBXGroup;
+			children = (
+				4D03BCBD13EDB5A2007A4193 /* addservice.c */,
+				4D03BCBF13EDB5A2007A4193 /* bindtest.c */,
+				4D03BCC013EDB5A2007A4193 /* common.c */,
+				4D03BCC113EDB5A2007A4193 /* common.h */,
+				4D03BCC213EDB5A2007A4193 /* listentest.c */,
+				4D03BCC513EDB5A2007A4193 /* nltest.c */,
+				4D03BCC613EDB5A2007A4193 /* recv_udp_packet.c */,
+				4D03BCC713EDB5A2007A4193 /* send_udp_packet.c */,
+				4D03BCC813EDB5A2007A4193 /* tcp_client.c */,
+				4D03BCC913EDB5A2007A4193 /* tcp_inet_client.c */,
+				4D03BCCA13EDB5A2007A4193 /* tcp_server.c */,
+				4D03BCCB13EDB5A2007A4193 /* translator.c */,
+				4D03BCCC13EDB5A2007A4193 /* udp_client.c */,
+				4D03BCCD13EDB5A2007A4193 /* udp_server.c */,
+			);
+			path = test;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		4D03BD6113EDBC9C007A4193 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		4D03BA9613EDB48D007A4193 /* Serval */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D03BAA113EDB48E007A4193 /* Build configuration list for PBXNativeTarget "Serval" */;
+			buildPhases = (
+				4D03BA9313EDB48D007A4193 /* Sources */,
+				4D03BA9413EDB48D007A4193 /* Frameworks */,
+				4D03BA9513EDB48D007A4193 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Serval;
+			productName = Serval;
+			productReference = 4D03BA9713EDB48E007A4193 /* Serval */;
+			productType = "com.apple.product-type.tool";
+		};
+		4D03BD6213EDBC9C007A4193 /* stack */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D03BD6413EDBC9C007A4193 /* Build configuration list for PBXNativeTarget "stack" */;
+			buildPhases = (
+				4D03BD5F13EDBC9C007A4193 /* Sources */,
+				4D03BD6013EDBC9C007A4193 /* Frameworks */,
+				4D03BD6113EDBC9C007A4193 /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = stack;
+			productName = stack;
+			productReference = 4D03BD6313EDBC9C007A4193 /* libstack.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4D03BA8E13EDB48D007A4193 /* Project object */ = {
+			isa = PBXProject;
+			buildConfigurationList = 4D03BA9113EDB48D007A4193 /* Build configuration list for PBXProject "Serval" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 4D03BA8C13EDB48D007A4193;
+			productRefGroup = 4D03BA9813EDB48E007A4193 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D03BA9613EDB48D007A4193 /* Serval */,
+				4D03BD6213EDBC9C007A4193 /* stack */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4D03BA9313EDB48D007A4193 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D03BD1613EDB5A2007A4193 /* af_serval.c in Sources */,
+				4D03BD1713EDB5A2007A4193 /* bst.c in Sources */,
+				4D03BD1813EDB5A2007A4193 /* ctrl_handler.c in Sources */,
+				4D03BD1913EDB5A2007A4193 /* debug.c in Sources */,
+				4D03BD2213EDB5A2007A4193 /* platform.c in Sources */,
+				4D03BD2313EDB5A2007A4193 /* serval_ipv4.c in Sources */,
+				4D03BD2413EDB5A2007A4193 /* serval_sal.c in Sources */,
+				4D03BD2513EDB5A2007A4193 /* serval_sock.c in Sources */,
+				4D03BD2613EDB5A2007A4193 /* serval_tcp.c in Sources */,
+				4D03BD2713EDB5A2007A4193 /* serval_tcp_cong.c in Sources */,
+				4D03BD2813EDB5A2007A4193 /* serval_tcp_input.c in Sources */,
+				4D03BD2913EDB5A2007A4193 /* serval_tcp_output.c in Sources */,
+				4D03BD2A13EDB5A2007A4193 /* serval_tcp_sock.c in Sources */,
+				4D03BD2B13EDB5A2007A4193 /* serval_tcp_timer.c in Sources */,
+				4D03BD2C13EDB5A2007A4193 /* serval_udp.c in Sources */,
+				4D03BD2D13EDB5A2007A4193 /* service.c in Sources */,
+				4D03BD2E13EDB5A2007A4193 /* bitops.c in Sources */,
+				4D03BD2F13EDB5A2007A4193 /* checksum.c in Sources */,
+				4D03BD3013EDB5A2007A4193 /* client.c in Sources */,
+				4D03BD3113EDB5A2007A4193 /* client_msg.c in Sources */,
+				4D03BD3213EDB5A2007A4193 /* ctrl.c in Sources */,
+				4D03BD3313EDB5A2007A4193 /* dev.c in Sources */,
+				4D03BD3413EDB5A2007A4193 /* dst.c in Sources */,
+				4D03BD3513EDB5A2007A4193 /* ktime.c in Sources */,
+				4D03BD3813EDB5A2007A4193 /* packet_raw.c in Sources */,
+				4D03BD3913EDB5A2007A4193 /* serval.c in Sources */,
+				4D03BD3A13EDB5A2007A4193 /* serval_tcp_user.c in Sources */,
+				4D03BD3B13EDB5A2007A4193 /* skbuff.c in Sources */,
+				4D03BD3C13EDB5A2007A4193 /* sock.c in Sources */,
+				4D03BD3D13EDB5A2007A4193 /* socket.c in Sources */,
+				4D03BD3E13EDB5A2007A4193 /* stream.c in Sources */,
+				4D03BD3F13EDB5A2007A4193 /* telnet.c in Sources */,
+				4D03BD4013EDB5A2007A4193 /* timer.c in Sources */,
+				4D03BD4113EDB5A2007A4193 /* wait.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		4D03BD5F13EDBC9C007A4193 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D03BD6713EDBCBC007A4193 /* ctrlmsg.c in Sources */,
+				4D03BD6813EDBCBC007A4193 /* debug.h in Sources */,
+				4D03BD6913EDBCBC007A4193 /* event.c in Sources */,
+				4D03BD6A13EDBCBC007A4193 /* event.h in Sources */,
+				4D03BD6B13EDBCBC007A4193 /* init.h in Sources */,
+				4D03BD6C13EDBCBC007A4193 /* libstack.c in Sources */,
+				4D03BD6D13EDBCBC007A4193 /* netlink.c in Sources */,
+				4D03BD6E13EDBCBC007A4193 /* unix.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D03BA9F13EDB48E007A4193 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4D03BAA013EDB48E007A4193 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_MISSING_PROTOTYPES = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4D03BAA213EDB48E007A4193 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../src/stack",
+					"$(PROJECT_DIR)/../../include",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = "";
+			};
+			name = Debug;
+		};
+		4D03BAA313EDB48E007A4193 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../src/stack",
+					"$(PROJECT_DIR)/../../include",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = "";
+			};
+			name = Release;
+		};
+		4D03BD6513EDBC9C007A4193 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libstack",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		4D03BD6613EDBC9C007A4193 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libstack",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D03BA9113EDB48D007A4193 /* Build configuration list for PBXProject "Serval" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D03BA9F13EDB48E007A4193 /* Debug */,
+				4D03BAA013EDB48E007A4193 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4D03BAA113EDB48E007A4193 /* Build configuration list for PBXNativeTarget "Serval" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D03BAA213EDB48E007A4193 /* Debug */,
+				4D03BAA313EDB48E007A4193 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+		4D03BD6413EDBC9C007A4193 /* Build configuration list for PBXNativeTarget "stack" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D03BD6513EDBC9C007A4193 /* Debug */,
+				4D03BD6613EDBC9C007A4193 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4D03BA8E13EDB48D007A4193 /* Project object */;
+}

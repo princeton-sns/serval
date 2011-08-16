@@ -39,6 +39,10 @@ MODULE_PARM_DESC(ifname, "Resolve only on this device.");
 
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);
+extern int __net_init serval_sysctl_register(struct net *net);
+extern void serval_sysctl_unregister(struct net *net);
+extern int udp_encap_init(void);
+extern void udp_encap_fini(void);
 
 static int dev_configuration(struct net_device *dev)
 {
@@ -197,9 +201,29 @@ int serval_module_init(void)
 	if (err < 0) {
                 LOG_CRIT("Cannot register inetaddr notifier\n");
                 goto fail_inetaddr_notifier;
-        }        
+        }
+
+        err = serval_sysctl_register(&init_net);
+
+        if (err < 0) {
+                LOG_CRIT("Cannot register Serval sysctl interface\n");
+                goto fail_sysctl;
+
+        }
+
+        err = udp_encap_init();
+        
+        if (err != 0) {
+                LOG_CRIT("UDP encapsulation init failed\n");
+                goto fail_udp_encap;
+        }
+
 out:
 	return err;
+fail_udp_encap:
+        serval_sysctl_unregister(&init_net);
+fail_sysctl:
+        unregister_inetaddr_notifier(&inetaddr_notifier);
 fail_inetaddr_notifier:
         unregister_netdevice_notifier(&netdev_notifier);
 fail_netdev_notifier:
@@ -214,6 +238,8 @@ fail_proc:
 
 void __exit serval_module_fini(void)
 {
+        udp_encap_fini();
+        serval_sysctl_unregister(&init_net);
         unregister_inetaddr_notifier(&inetaddr_notifier);
         unregister_netdevice_notifier(&netdev_notifier);
 	serval_fini();

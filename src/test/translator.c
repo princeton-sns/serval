@@ -141,8 +141,8 @@ void *client_thread(void *arg)
         
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
-                addr.sv.sv_srvid.s_sid16[0] = htons(16385);
-                addr.sv.sv_srvid.s_sid16[0] = htons(8080);
+                /* addr.sv.sv_srvid.s_sid32[0] = htonl(16385); */
+                addr.sv.sv_srvid.s_sid32[0] = htonl(8080);
                 addrlen = sizeof(addr.sv);
         } else {
                 addr.in.sin_family = c->family;
@@ -150,21 +150,25 @@ void *client_thread(void *arg)
                 addr.in.sin_port = htons(inet_port);
                 addrlen = sizeof(addr.in);
         }
+
+        if (c->family == AF_SERVAL) {
+                printf("client %u connecting to service %s... ",
+                       c->id, service_id_to_str(&addr.sv.sv_srvid));
+        } else {
+                printf("client %u connecting to %s:%u... ",
+                       c->id, server_ip, inet_port);
+        }
+
         ret = connect(c->serval_sock, &addr.sa, addrlen);
 
         if (ret == -1) {
-                fprintf(stderr, "client %u connect failed: %s\n",
-                        c->id, strerror(errno));
+                fprintf(stderr, "connect failed: %s\n",
+                        strerror(errno));
                 client_free(c);
                 return NULL;
         }
-        if (c->family == AF_SERVAL) {
-                printf("client %u connected to service %s\n",
-                       c->id, service_id_to_str(&addr.sv.sv_srvid));
-        } else {
-                printf("client %u connected to %s:%u\n",
-                       c->id, server_ip, inet_port);
-        }
+
+        printf("success!\n");
 
         while (!c->should_exit) {
                 fd_set fds;
@@ -216,7 +220,7 @@ void *client_thread(void *arg)
 
 static void signal_handler(int sig)
 {
-        /* printf("signal caught! exiting...\n"); */
+        printf("signal %u caught!\n", sig);
 }
 
 #define TRANSLATOR_PORT 8080
@@ -235,6 +239,7 @@ int main(int argc, char **argv)
         sigaction(SIGTERM, &action, 0);
 	sigaction(SIGHUP, &action, 0);
 	sigaction(SIGINT, &action, 0);
+        sigaction(SIGPIPE, &action, 0);
 	
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 

@@ -20,7 +20,7 @@
 #include <endian.h>
 #elif defined(__APPLE__) || defined(__OpenBSD__) || defined(__FreeBSD__)
 #include <machine/endian.h>
-
+#define HAS_SOCKADDR_LEN 1
 /* Setup byte order defines according to the Linux kernel */
 #if __BYTE_ORDER == __BIG_ENDIAN
 #ifdef __LITTLE_ENDIAN
@@ -74,6 +74,8 @@ struct service_id {
 #define s_sid32 srv_un.un_id32
 };
 
+#define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
+
 enum sv_service_flags {
         /* bottom 2 bits reserved for scope - resolution and
          * registration */
@@ -92,6 +94,9 @@ enum sv_service_flags {
 };
 
 struct sockaddr_sv {
+#if defined(HAS_SOCKADDR_LEN)
+        uint8_t sv_len;
+#endif
         sa_family_t sv_family;
         uint8_t sv_flags;
         uint8_t sv_prefix_bits;
@@ -187,7 +192,7 @@ struct serval_hdr {
         uint16_t res2;       
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
-};
+} __attribute__((packed));
 
 /* Generic extension header */
 struct serval_ext {
@@ -201,7 +206,7 @@ struct serval_ext {
 #error	"Please fix <asm/byteorder.h>"
 #endif
         uint8_t length;
-};
+} __attribute__((packed));
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
@@ -209,7 +214,20 @@ struct serval_ext {
 #define sv_ext_flags exthdr.flags
 #define sv_ext_length exthdr.length
 
-#define SERVAL_CONNECTION_EXT 1
+#define SERVAL_EXT_FIRST(sh) \
+        ((struct serval_ext *)((char *)sh + sizeof(struct serval_hdr)))
+
+#define SERVAL_EXT_NEXT(ext) \
+        ((struct serval_ext *)((char *)ext + ext->length))
+
+enum serval_ext_type {
+        SERVAL_CONNECTION_EXT = 1,
+        SERVAL_CONTROL_EXT,
+        SERVAL_SERVICE_EXT,
+        SERVAL_DESCRIPTION_EXT,
+        SERVAL_SOURCE_EXT,
+        __SERVAL_EXT_TYPE_MAX,
+} __attribute__((packed));
 
 struct serval_connection_ext {
         struct serval_ext exthdr;
@@ -217,9 +235,7 @@ struct serval_connection_ext {
         uint32_t ackno;
         uint8_t  nonce[8];
         struct service_id srvid;
-};
-
-#define SERVAL_CONTROL_EXT 2
+} __attribute__((packed));
 
 #define SERVAL_NONCE_SIZE 8
 
@@ -228,29 +244,37 @@ struct serval_control_ext {
         uint32_t seqno;
         uint32_t ackno;
         uint8_t  nonce[8];
-};
-
-#define SERVAL_SERVICE_EXT 3
+} __attribute__((packed));
 
 struct serval_service_ext {
         struct serval_ext exthdr;
         struct service_id src_srvid;
         struct service_id dst_srvid;
-};
-
-#define SERVAL_DESCRIPTION_EXT 4
+} __attribute__((packed));
 
 struct serval_description_ext {
         struct serval_ext exthdr;
         struct net_addr addrs[0];
-};
-
-#define SERVAL_SOURCE_EXT 5
+} __attribute__((packed));
 
 struct serval_source_ext {
         struct serval_ext exthdr;
         uint8_t source[0];
-};
+} __attribute__((packed));
+
+#define __SERVAL_SOURCE_EXT_LEN(sz)             \
+        (sz + sizeof(struct serval_source_ext))
+
+#define SERVAL_SOURCE_EXT_LEN __SERVAL_SOURCE_EXT_LEN(4)
+
+#define SERVAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
+        (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
+
+#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)      \
+        (&(ext)->source[n*4])
+
+#define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
+        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
 
 #define SERVAL_MIGRATE_EXT 6
 struct serval_migrate_ext {

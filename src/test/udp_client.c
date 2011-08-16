@@ -57,11 +57,11 @@ int client(void) {
 
 	bzero(&cliaddr, sizeof(cliaddr));
 	cliaddr.sv_family = AF_SERVAL;
-	cliaddr.sv_srvid.s_sid16[0] = htons(CLIENT_OBJECT_ID);
+	cliaddr.sv_srvid.s_sid32[0] = htonl(CLIENT_OBJECT_ID);
 
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sv_family = AF_SERVAL;
-	srvaddr.sv_srvid.s_sid16[0] = htons(ECHO_OBJECT_ID);
+	srvaddr.sv_srvid.s_sid32[0] = htonl(ECHO_OBJECT_ID);
   
 	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
 

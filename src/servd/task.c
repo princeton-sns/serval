@@ -7,8 +7,8 @@
 
 #include "task.h"
 #include "poll_reactor.h"
-#include "serval/list.h"
-#include "serval/atomic.h"
+#include <serval/list.h>
+#include <serval/atomic.h>
 
 #include <pthread.h>
 #include <signal.h>

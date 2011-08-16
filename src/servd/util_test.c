@@ -169,7 +169,7 @@ static void test_service_utils() {
     sref.idle_timeout = 1001201;
     sref.hard_timeout = 86400;
 
-    struct service_resolution sres;
+    struct service_info sres;
 
     init_resolution_from_reference(&sres, &sref);
 
@@ -177,8 +177,8 @@ static void test_service_utils() {
     printf("refereince sid: %s\n", service_id_to_str(&sref.instance.service.sv_srvid));
     assert(sres.address.net_un.un_ip.s_addr == sref.instance.address.sin.sin_addr.s_addr);
     assert(memcmp(&sres.srvid, &sref.instance.service.sv_srvid, sizeof(struct service_id)) == 0);
-    assert(sres.sv_prefix_bits == sref.instance.service.sv_prefix_bits);
-    assert(sres.sv_flags== sref.instance.service.sv_flags);
+    assert(sres.srvid_prefix_bits == sref.instance.service.sv_prefix_bits);
+    assert(sres.srvid_flags== sref.instance.service.sv_flags);
     assert(sres.priority == sref.priority);
 
     assert(sres.idle_timeout == sref.idle_timeout);

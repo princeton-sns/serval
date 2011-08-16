@@ -61,6 +61,7 @@ enum wait_signal wait_signal_lower(int fd)
 
         return (enum wait_signal) (sz == -1 ? -1 : sig);
 }
+
 int default_wake_function(wait_queue_t *curr, unsigned mode, 
                           int wake_flags, void *key)
 {
@@ -121,7 +122,7 @@ int default_wake_function(wait_queue_t *curr, unsigned mode,
                 LOG_ERR("Could not write in signal to pipe: %u\n", 
                         curr->pipefd[1]);
         }
-        
+
 	return ret;
 }
 

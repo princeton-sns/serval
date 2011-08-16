@@ -195,7 +195,7 @@ static void telnet_client_handle(struct telnet_client *tc)
 	}
 }
 
-void *telnet_runloop(void *arg)
+static void *telnet_runloop(void *arg)
 {
 	struct telnet_client *tc, *tmp;
 
