@@ -96,6 +96,7 @@ static size_t min_ext_length[] = {
         [SERVAL_SERVICE_EXT] = sizeof(struct serval_service_ext),
         [SERVAL_DESCRIPTION_EXT] = sizeof(struct serval_description_ext),
         [SERVAL_SOURCE_EXT] = sizeof(struct serval_source_ext),
+        [SERVAL_MIGRATE_EXT] = sizeof(struct serval_migrate_ext),
 };
 
 #if defined(ENABLE_DEBUG)
@@ -107,6 +108,7 @@ static char* serval_ext_name[] = {
         [SERVAL_SERVICE_EXT] = "SERVICE",
         [SERVAL_DESCRIPTION_EXT] = "DESCRIPTION",
         [SERVAL_SOURCE_EXT] = "SOURCE",
+        [SERVAL_MIGRATE_EXT] = "MIGRATE",
 };
 
 static int print_base_hdr(struct serval_hdr *sh, char *buf, int buflen)
@@ -190,6 +192,13 @@ static int print_source_ext(struct serval_ext *xt, char *buf, int buflen)
         return len;
 }
 
+static int print_migrate_ext(struct serval_ext *xt, char *buf, int buflen)
+{
+	   struct serval_migrate_ext *mxt =
+			   (struct serval_migrate_ext *)xt;
+	   return snprintf(buf, buflen, "migrate ext");
+}
+
 typedef int (*print_ext_func_t)(struct serval_ext *, char *, int);
 
 static print_ext_func_t print_ext_func[] = {
@@ -199,6 +208,7 @@ static print_ext_func_t print_ext_func[] = {
         [SERVAL_SERVICE_EXT] = &print_service_ext,
         [SERVAL_DESCRIPTION_EXT] = &print_description_ext,
         [SERVAL_SOURCE_EXT] = &print_source_ext,
+        [SERVAL_MIGRATE_EXT] = &print_migrate_ext,
 };
 
 static int print_ext(struct serval_ext *xt, char *buf, int buflen)
@@ -348,6 +358,20 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
         return ext->length;
 }
 
+static int parse_migrate_ext(struct serval_ext *ext, struct sk_buff *skb,
+		                     struct serval_context *ctx)
+{
+        if (ctx->mig_ext)
+	            return -1;
+
+        ctx->mig_ext = (struct serval_migrate_ext *)ext;
+	    ctx->seqno = ntohl(ctx->mig_ext->seqno);
+	    ctx->ackno = ntohl(ctx->mig_ext->ackno);
+	    ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
+
+	    return ext->length;
+}
+
 
 typedef int (*parse_ext_func_t)(struct serval_ext *, struct sk_buff *, 
                                 struct serval_context *ctx);
@@ -359,6 +383,7 @@ static parse_ext_func_t parse_ext_func[] = {
         [SERVAL_SERVICE_EXT] = &parse_service_ext,
         [SERVAL_DESCRIPTION_EXT] = &parse_description_ext,
         [SERVAL_SOURCE_EXT] = &parse_source_ext,
+        [SERVAL_MIGRATE_EXT] = &parse_migrate_ext,
 };
 
 static inline int parse_ext(struct serval_ext *ext, struct sk_buff *skb,
