@@ -194,8 +194,6 @@ static int print_source_ext(struct serval_ext *xt, char *buf, int buflen)
 
 static int print_migrate_ext(struct serval_ext *xt, char *buf, int buflen)
 {
-	   struct serval_migrate_ext *mxt =
-			   (struct serval_migrate_ext *)xt;
 	   return snprintf(buf, buflen, "migrate ext");
 }
 
@@ -365,11 +363,11 @@ static int parse_migrate_ext(struct serval_ext *ext, struct sk_buff *skb,
 	            return -1;
 
         ctx->mig_ext = (struct serval_migrate_ext *)ext;
-	    ctx->seqno = ntohl(ctx->mig_ext->seqno);
-	    ctx->ackno = ntohl(ctx->mig_ext->ackno);
-	    ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
+        ctx->seqno = ntohl(ctx->mig_ext->seqno);
+        ctx->ackno = ntohl(ctx->mig_ext->ackno);
+        ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
 
-	    return ext->length;
+        return ext->length;
 }
 
 
@@ -536,7 +534,7 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
                 ret = 1;
         }
         if (ret == 0) {
-                LOG_PKT("Seqno not in sequence received=%u next=%u."
+                LOG_DBG("Seqno not in sequence received=%u next=%u."
                         " Could be ACK though...\n",
                         seg_seq, ssk->rcv_seq.nxt);
         }
@@ -628,7 +626,7 @@ static inline int has_valid_migrate_extension(struct sock *sk,
         	   return 0;
         }
 
-	    return 1;
+        return 1;
 }
 
 static inline int has_valid_desc_extension(struct sock *sk,
@@ -1649,7 +1647,7 @@ static int serval_sal_ack_process(struct sock *sk,
                         ctx->ackno);
                 err = 0;
         } else {
-                LOG_PKT("ackno %u out of sequence, expected %u\n",
+                LOG_DBG("ackno %u out of sequence, expected %u\n",
                         ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
         }
 
@@ -1660,7 +1658,9 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
                                   struct sk_buff *skb,
                                   struct serval_context *ctx)
 {
+        struct inet_sock *isk = inet_sk(sk);
         struct serval_sock *ssk = serval_sk(sk);
+        struct sk_buff *rskb = NULL;
         int err = 0;
         LOG_INF("received Migrate REQUEST\n");
         
@@ -1669,16 +1669,27 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
         	    return -1;
         }
 
-        if (has_valid_seqno(ntohl(ctx->seqno), ssk)) {
-        	    ssk->rcv_seq.nxt = ntohl(ctx->seqno) + 1;
+        if (has_valid_seqno(ctx->seqno, ssk)) {
+        	    ssk->rcv_seq.nxt = ctx->seqno + 1;
 
         	    LOG_DBG("Attempting to migrate...\n");
         	    switch (sk->sk_state) {
         	    case SERVAL_CONNECTED:
         	    	serval_sock_set_state(sk, SERVAL_RMIGRATE);
-                    err = serval_sal_send_ack(sk);
-                    LOG_DBG("Sending RSYNACK: %d\n", err);
-                    break;
+                        memcpy(&isk->inet_daddr, &ctx->mig_ext->new_addr, 4);
+                        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+                                                GFP_ATOMIC);
+                        if (!rskb)
+                                return -ENOMEM;
+
+                        LOG_DBG("Setting flags\n");
+                        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
+                        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
+                        LOG_DBG("Queueing...\n");
+                        err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);
+                        LOG_DBG("Sending RSYNACK: %d\n", err);
+                        break;
         	    default:
         	    	/* FIXME: What to do in other states? */
         	    	break;
@@ -2294,6 +2305,7 @@ static int serval_sal_rmigrate_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int ack_ok = 0, err = 0;
+        LOG_INF("Processing RMIGRATE state...\n");
 
         ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
 
@@ -2389,8 +2401,11 @@ int serval_sal_state_process(struct sock *sk,
         case SERVAL_CLOSED:
                 goto drop;
         case SERVAL_MIGRATE:
-        	    err = serval_sal_migrate_state_process(sk, skb, ctx);
-        	    break;
+                err = serval_sal_migrate_state_process(sk, skb, ctx);
+                break;
+        case SERVAL_RMIGRATE:
+                err = serval_sal_rmigrate_state_process(sk, skb, ctx);
+                break; 
         default:
                 LOG_ERR("bad socket state %s %u\n", 
                         serval_sock_state_str(sk), sk->sk_state);
@@ -3119,8 +3134,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_RSYN:
-                hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
                 LOG_DBG("Sending RSYN...\n");
+                if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)
+                        hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
+                else
+                        hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_DATA:
                 /* Unconnected datagram, add service extension */
