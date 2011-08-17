@@ -2259,6 +2259,7 @@ static int serval_sal_migrate_state_process(struct sock *sk,
                                             struct serval_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct sk_buff *rskb;
         int ack_ok = 0, err = 0;
 
         ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
@@ -2272,7 +2273,16 @@ static int serval_sal_migrate_state_process(struct sock *sk,
         if (ack_ok) {
         	    LOG_INF("Migrated, back to connected.\n");
                 serval_sock_set_state(sk, SERVAL_CONNECTED);
-                err = serval_sal_send_ack(sk);
+                ssk->rcv_seq.nxt = ctx->seqno + 1;
+                rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+                                        GFP_ATOMIC);
+                if (!rskb)
+                         return -ENOMEM;
+
+                SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
+                SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
+                err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
         }
 
         return err;
@@ -3035,7 +3045,8 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_migrate_ext *mig_ext;
-        
+        char addr[18];        
+
         LOG_DBG("Adding migrate ext\n");
         mig_ext = (struct serval_migrate_ext *)
                   skb_push(skb, sizeof(*mig_ext));
@@ -3045,8 +3056,12 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
         mig_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-        //dev_get_ipv4_addr(skb->dev, &mig_ext->new_addr);
-        
+        if (!dev_get_ipv4_addr(ssk->dev, &mig_ext->new_addr)) {
+                LOG_ERR("Could not copy addr\n");
+        }
+        LOG_DBG("New addr: %s\n", inet_ntop(AF_INET, &mig_ext->new_addr, 
+                addr, 18));     
+
         return sizeof(*mig_ext);
 }
 
