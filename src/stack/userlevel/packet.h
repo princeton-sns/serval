@@ -5,6 +5,8 @@
 #include <serval/netdevice.h>
 #include <serval/skbuff.h>
 
+#define SKB_HEADROOM_RESERVE (20+14)
+
 struct packet_ops {
 	int (*init)(struct net_device *);
 	void (*destroy)(struct net_device *);

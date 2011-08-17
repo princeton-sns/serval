@@ -144,12 +144,6 @@ static int serval_tcp_connection_request(struct sock *sk,
                 return -1;
         }
 
-        LOG_DBG("TCP SYN received seq=%u src=%u dst=%u skb->len=%u\n", 
-                ntohl(tcp_hdr(skb)->seq),
-                ntohs(tcp_hdr(skb)->source),
-                ntohs(tcp_hdr(skb)->dest),
-                skb->len);
-
         memset(&tmp_opt, 0, sizeof(tmp_opt));
 	serval_tcp_clear_options(&tmp_opt);
 	tmp_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
@@ -231,7 +225,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 {
         struct tcphdr *th;
         struct iphdr *iph;
-        
+
 #if defined(OS_LINUX_KERNEL)
 	if (is_syn) {
                 /* SYN packets can be broadcast and we should accept
@@ -301,8 +295,10 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;        
         
-        LOG_PKT("Received TCP %s end_seq=%u datalen=%u\n",
+        LOG_PKT("Received TCP %s rcv_nxt=%u snd_wnd=%u end_seq=%u datalen=%u\n",
                 tcphdr_to_str(th),
+                serval_tcp_sk(sk)->rcv_nxt,
+                serval_tcp_sk(sk)->snd_wnd,
                 TCP_SKB_CB(skb)->end_seq,
                 skb->len - (th->doff << 2));
 

@@ -2817,8 +2817,10 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
         LOG_PKT("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
                 skb->len, skb->data_len, th->doff * 4);
 
-	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
-		goto drop;
+	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
+		LOG_DBG("seq is end_seq, dropping\n");
+                goto drop;
+        }
 
 	skb_dst_drop(skb);
 	__skb_pull(skb, th->doff * 4);
@@ -2832,7 +2834,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	 *  Out of sequence packets to the out_of_order_queue.
 	 */
 	if (TCP_SKB_CB(skb)->seq == tp->rcv_nxt) {
-		if (serval_tcp_receive_window(tp) == 0)
+		if (serval_tcp_receive_window(tp) == 0)                        
 			goto out_of_window;
 
 		/* Ok. In sequence. In window. */
@@ -2901,7 +2903,7 @@ queue_and_out:
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, 
                                      TCP_SKB_CB(skb)->end_seq);
         out_of_window:
-                LOG_PKT("Segment out of window!\n");
+                LOG_DBG("Segment out of window!\n");
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
         drop:
@@ -2934,8 +2936,10 @@ queue_and_out:
 
 	//TCP_ECN_check_ce(tp, skb);
 
-	if (serval_tcp_try_rmem_schedule(sk, skb->truesize))
+	if (serval_tcp_try_rmem_schedule(sk, skb->truesize)) {
+                LOG_DBG("rmem schedule failed\n");
 		goto drop;
+        }
 
 	/* Disable header prediction. */
 	tp->pred_flags = 0;
