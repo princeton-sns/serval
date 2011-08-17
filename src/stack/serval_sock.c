@@ -45,7 +45,8 @@ static const char *sock_state_str[] = {
         [ SERVAL_CLOSING ]   = "CLOSING",
         [ SERVAL_MIGRATE ]   = "MIGRATE",
         [ SERVAL_RECONNECT ] = "RECONNECT",
-        [ SERVAL_RRESPOND ]  = "RRESPOND"
+        [ SERVAL_RRESPOND ]  = "RRESPOND",
+        [ SERVAL_RMIGRATE ]  = "RMIGRATE"
 };
 
 static void serval_sock_destruct(struct sock *sk);
@@ -637,7 +638,8 @@ const char *serval_state_str(unsigned int state)
 }
 
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
-{ 
+{
+ 
         if (new_state == SERVAL_MIN_STATE ||
             new_state >= SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
