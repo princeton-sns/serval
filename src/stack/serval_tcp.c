@@ -1911,6 +1911,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
+        .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };
@@ -1930,6 +1931,7 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
+        .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };

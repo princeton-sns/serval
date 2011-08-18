@@ -2668,6 +2668,11 @@ static void serval_tcp_fin(struct sk_buff *skb,
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	serval_tsk_schedule_ack(sk);
 
+
+        /* Tell service access layer this stream is closed at other
+         * end */
+        serval_sk(sk)->af_ops->recv_shutdown(sk);
+
 	/*sk->sk_shutdown |= RCV_SHUTDOWN;
           sock_set_flag(sk, SOCK_DONE);
         */
@@ -2713,10 +2718,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
                         sk->sk_state);
 		break;
 	}
-
-        /* Tell service access layer this stream is closed at other
-         * end */
-        serval_sk(sk)->af_ops->recv_shutdown(sk);
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.
@@ -3690,15 +3691,12 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 				}
 			}
 			break;
-		case TCP_CLOSING:
-                        /* Time wait handled by SAL */
-                        /*
-			if (tp->snd_una == tp->write_seq) {
-				serval_tcp_time_wait(sk, TCP_TIME_WAIT, 0);
-				goto discard;
-			}
-                        */
-			break;
+                case TCP_CLOSING:
+                case TCP_CLOSE_WAIT:
+                        if (tp->snd_una == tp->write_seq) {
+                                serval_sk(sk)->af_ops->send_shutdown(sk);
+                        }
+                        break;
 		case TCP_LAST_ACK:
 			if (tp->snd_una == tp->write_seq) {
 				serval_tcp_update_metrics(sk);

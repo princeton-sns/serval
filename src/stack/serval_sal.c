@@ -521,9 +521,13 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
                                            struct serval_hdr *sh)
 {
         /* We might have pulled the serval header already. */
-        if ((unsigned char *)sh == skb_transport_header(skb))
+        if ((unsigned char *)sh == skb_transport_header(skb)) {
+                LOG_DBG("skb->len=%u sh->length=%u\n", 
+                        skb->len, ntohs(sh->length));
                 return skb->len > ntohs(sh->length);
+        }
             
+        LOG_DBG("skb->len=%u\n", skb->len);
         return skb->len > 0;
 }
 
@@ -882,7 +886,7 @@ static int serval_sal_send_close(struct sock *sk)
                 yield();
         }
         
-        LOG_DBG("Sending Close REQUEST\n");
+        LOG_DBG("Sending SAL FIN\n");
         SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
         SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
         
@@ -911,9 +915,9 @@ void serval_sal_close(struct sock *sk, long timeout)
                         serval_sock_set_sal_state(sk, SAL_CLOSING);
                 */
                 if (sk->sk_state == SERVAL_CLOSEWAIT) {
-                        serval_sock_set_state(sk, SERVAL_LASTACK);
+                        serval_sal_timewait(sk, SERVAL_LASTACK);
                 } else {
-                        serval_sock_set_state(sk, SERVAL_FINWAIT1);
+                        serval_sal_timewait(sk, SERVAL_FINWAIT1);
                 }
 
                 if (ssk->af_ops->conn_close) {
@@ -1566,7 +1570,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        LOG_INF("received Close REQUEST\n");
+        LOG_INF("received SAL FIN\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
                 LOG_ERR("Bad control extension\n");
@@ -1578,7 +1582,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                 /* Just ignore this close request in case transport
                    has not yet indicated it is ready. */
                 if (!(sk->sk_shutdown & RCV_SHUTDOWN))
-                        return 0;
+                        return 1;
 
                 ssk->rcv_seq.nxt = ctx->seqno + 1;
 
@@ -1586,28 +1590,6 @@ static int serval_sal_rcv_close_req(struct sock *sk,
 
                 sock_set_flag(sk, SOCK_DONE);
                 
-                switch (sk->sk_state) {
-                case SERVAL_REQUEST:
-                        /* FIXME: check correct processing here in
-                         * REQUEST state. */
-                case SERVAL_RESPOND:
-                case SERVAL_CONNECTED:
-                        serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                        break;
-                case SERVAL_CLOSING:
-                        break;
-                case SERVAL_CLOSEWAIT:
-                        /* Must be retransmitted FIN */
-                        break;
-                case SERVAL_FINWAIT1:
-                                /* Simultaneous close */
-                        serval_sock_set_state(sk, SERVAL_CLOSING);
-                case SERVAL_FINWAIT2:
-                        // Time-wait
-                default:
-                        break;
-                }
-
                 /* If there is still an application attached to the
                    sock, then wake it up. */
                 if (!sock_flag(sk, SOCK_DEAD)) {
@@ -1632,6 +1614,8 @@ static int serval_sal_rcv_close_req(struct sock *sk,
 
 int serval_sal_send_shutdown(struct sock *sk)
 {
+        LOG_DBG("SEND_SHUTDOWN\n");
+
         sk->sk_shutdown |= SEND_SHUTDOWN;
         
         /* SOCK_DEAD would mean there is no user app attached
@@ -1649,38 +1633,14 @@ int serval_sal_send_shutdown(struct sock *sk)
  */
 int serval_sal_recv_shutdown(struct sock *sk)
 {
+        LOG_DBG("RCV_SHUTDOWN\n");
+
         sk->sk_shutdown |= RCV_SHUTDOWN;
-#if 0
+
         if (sock_flag(sk, SOCK_DONE))
                 return 0;
 
         sock_set_flag(sk, SOCK_DONE);
-        
-        switch (sk->sk_state) {
-        case SERVAL_REQUEST:
-                /* FIXME: check correct processing here in
-                 * REQUEST state. */
-        case SERVAL_RESPOND:
-        case SERVAL_CONNECTED:
-                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                break;
-        case SERVAL_CLOSING:
-                break;
-        case SERVAL_CLOSEWAIT:
-                /* Must be retransmitted FIN */
-                                
-                /* FIXME: is this the right place for async
-                 * wake? */
-                break;
-        case SERVAL_FINWAIT1:
-                /* Simultaneous close */
-                serval_sock_set_state(sk, SERVAL_CLOSING);
-        case SERVAL_FINWAIT2:
-                // Time-wait
-        default:
-                break;
-        }
-#endif
 
         /* If there is still an application attached to the sock,
            notify it. */
@@ -1705,8 +1665,13 @@ static int serval_sal_connected_state_process(struct sock *sk,
         
         serval_sal_ack_process(sk, skb, ctx);
 
-        if (ctx->hdr->type == SERVAL_PKT_CLOSE)
+        if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
                 err = serval_sal_rcv_close_req(sk, skb, ctx);
+                
+                if (err == 0) {
+                        serval_sal_timewait(sk, SERVAL_FINWAIT1);
+                }
+        }
         
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
