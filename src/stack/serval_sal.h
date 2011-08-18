@@ -11,6 +11,16 @@ int serval_sal_xmit_skb(struct sk_buff *skb);
 
 struct service_entry;
 
+
+enum serval_packet_type {
+        SERVAL_PKT_DATA = 0,
+        SERVAL_PKT_SYN,
+        SERVAL_PKT_RESET,
+        SERVAL_PKT_CLOSE,
+        SERVAL_PKT_RSYN,
+        __SERVAL_PKT_MAX = SERVAL_PKT_RSYN, 
+};
+
 /* 
    NOTE:
    

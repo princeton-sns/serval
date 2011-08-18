@@ -72,9 +72,9 @@ enum {
  */
 enum {
         __SAL_MIN_STATE = 0,
-        SAL_NORMAL = __SAL_MIN_STATE,
-        SAL_MIGRATE,
-        SAL_CLOSING,
+        SAL_INITIAL = __SAL_MIN_STATE,
+        SAL_RSYN_SENT,
+        SAL_RSYN_RECV,
         __SAL_MAX_STATE,
 };
 
@@ -123,6 +123,7 @@ struct serval_sock {
 #if defined(OS_USER)
         struct client           *client;
 #endif
+        /* SAL state, used for, e.g., migration */
         unsigned char           sal_state;
         struct net_device       *dev; /* TX device for connected flows */
         u8      close_received : 1,

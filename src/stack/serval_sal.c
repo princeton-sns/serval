@@ -66,9 +66,7 @@ static const char *serval_pkt_names[] = {
         [SERVAL_PKT_SYN]     = "SERVAL_PKT_SYN",
         [SERVAL_PKT_RESET]   = "SERVAL_PKT_RESET",
         [SERVAL_PKT_CLOSE]   = "SERVAL_PKT_CLOSE",
-        [SERVAL_PKT_MIG]     = "SERVAL_PKT_MIG",
         [SERVAL_PKT_RSYN]    = "SERVAL_PKT_RSYN",
-        [SERVAL_PKT_MIGDATA] = "SERVAL_PKT_MIGDATA",        
 };
 #endif /* ENABLE_DEBUG */
 
@@ -2715,7 +2713,16 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
         
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
+                /* Modify inet_sk(sk)->daddr to use migration
+                   address */
+        }
+        
         err = ssk->af_ops->queue_xmit(skb);
+        
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
+                /* Restore inet_sk(sk)->daddr */
+        }
 
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
@@ -2836,6 +2843,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         case SERVAL_PKT_SYN:
                 hdr_len += serval_sal_add_conn_ext(sk, skb, 0);           
                 break;
+        case SERVAL_PKT_RSYN:
+                /* Add migration extensions */
+                break;
         case SERVAL_PKT_CLOSE:
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
@@ -2876,6 +2886,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_CLOSING | 
                                    SERVALF_CLOSEWAIT)) {
                 serval_sal_send_check(sh);
+
                 return serval_sal_do_xmit(skb);
         }
         
