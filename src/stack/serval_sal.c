@@ -1374,8 +1374,11 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 struct udphdr *uh = (struct udphdr *)
                         ((char *)iph + (iph->ihl << 2));
 
-                /* We should perform UDP encapsulation */
+                /* Remember that we should perform UDP
+                   encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
+                
+                LOG_DBG("Sending UDP encapsulated response\n");
                 
                 if (serval_udp_encap_skb(rskb, srsk->reply_saddr,
                                          inet_rsk(rsk)->rmt_addr,

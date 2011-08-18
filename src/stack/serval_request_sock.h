@@ -46,7 +46,8 @@ serval_reqsk_alloc(const struct request_sock_ops *ops)
         srsk = serval_rsk(rsk);
 
         INIT_LIST_HEAD(&srsk->lh);
-        
+        srsk->udp_encap_port = 0;
+
         serval_sock_get_flowid(&srsk->local_flowid);
 
 #if defined(OS_LINUX_KERNEL)
