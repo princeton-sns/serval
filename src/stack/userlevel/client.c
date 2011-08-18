@@ -29,7 +29,8 @@ struct client {
         struct client *parent;
 	unsigned int id;
 	int has_data;
-	int pipefd[2];
+	int exit_pipe[2];
+        int data_pipe[2];
 	int should_exit;
         pthread_t thr;
         sigset_t sigset;
@@ -177,16 +178,26 @@ struct client *client_create(client_type_t type,
 	if (sigset)
 		memcpy(&c->sigset, sigset, sizeof(*sigset));
 	
-	if (pipe(c->pipefd) != 0) {
-		LOG_ERR("could not open client pipe : %s\n",
+	if (pipe(c->exit_pipe) != 0) {
+		LOG_ERR("could not open client exit pipe : %s\n",
 			strerror(errno));
+		free(c);
+		return NULL;
+	}
+
+	if (pipe(c->data_pipe) != 0) {
+		LOG_ERR("could not open client data pipe : %s\n",
+			strerror(errno));
+                close(c->exit_pipe[0]);
+                close(c->exit_pipe[1]);
 		free(c);
 		return NULL;
 	}
 
         /* Set non-blocking so that we can lower signal without
          * blocking */
-        fcntl(c->pipefd[0], F_SETFL, O_NONBLOCK);
+        fcntl(c->exit_pipe[0], F_SETFL, O_NONBLOCK);
+        fcntl(c->data_pipe[0], F_SETFL, O_NONBLOCK);
 
 	/* Init a timer for test purposes. */
 	c->timer.function = dummy_timer_callback;
@@ -221,6 +232,11 @@ void client_unlock(struct client *c)
         pthread_mutex_unlock(&c->lock);
 }
 
+int client_has_data(struct client *c)
+{
+        return c->has_data;
+}
+
 client_type_t client_get_type(struct client *c)
 {
 	return c->type;
@@ -248,7 +264,7 @@ int client_get_sockfd(struct client *c)
 
 int client_get_signalfd(struct client *c)
 {
-        return c->pipefd[0];
+        return c->exit_pipe[0];
 }
 
 static int client_close(struct client *c)
@@ -264,6 +280,27 @@ static int client_close(struct client *c)
                 sock_release(c->sock);
                 c->sock = NULL;
         }
+
+        if (c->exit_pipe[0] != -1) {
+                close(c->exit_pipe[0]);
+                c->exit_pipe[0] = -1;
+        }
+
+        if (c->exit_pipe[1] != -1) {
+                close(c->exit_pipe[1]);
+                c->exit_pipe[1] = -1;
+        }
+
+        if (c->data_pipe[0] != -1) {
+                close(c->data_pipe[0]);
+                c->data_pipe[0] = -1;
+        }
+
+        if (c->data_pipe[1] != -1) {
+                close(c->data_pipe[1]);
+                c->data_pipe[1] = -1;
+        }
+
 	return ret;
 }
 
@@ -279,7 +316,7 @@ int client_signal_pending(struct client *c)
         int ret;
         struct pollfd fds;
 
-        fds.fd = c->pipefd[0];
+        fds.fd = c->exit_pipe[0];
         fds.events = POLLIN | POLLHUP;
         fds.revents = 0;
 
@@ -294,16 +331,18 @@ int client_signal_pending(struct client *c)
 
 int client_signal_raise(struct client *c, enum client_signal s)
 {
-        /*char w = 'w';
-          return write(c->pipefd[1], &w, 1); */
-        uint8_t sig = s & 0xff;
-        return write(c->pipefd[1], &sig, 1);
+        unsigned char sig = s & 0xff;
+        
+        if (s == CLIENT_SIG_EXIT)
+                return write(c->exit_pipe[1], &sig, sizeof(sig));
+        
+        return write(c->data_pipe[1], &sig, sizeof(sig));
 }
 
 int client_signal_exit(struct client *c)
 {
         c->should_exit = 1;
-        return client_signal_raise(c, CLIENT_EXIT);
+        return client_signal_raise(c, CLIENT_SIG_EXIT);
 }
 
 enum client_signal client_signal_lower(int fd)
@@ -658,6 +697,7 @@ int client_send_have_data_msg(struct client *c)
         c->has_data = 1;
 
         LOG_DBG("Client %u sending have data msg to application\n", c->id);
+
         memset(&hd, 0, sizeof(hd));
         client_msg_hdr_init(&hd.msghdr, MSG_HAVE_DATA);
         return client_msg_write(c->fd, &hd.msghdr);
@@ -702,7 +742,6 @@ static void *client_thread(void *arg)
 	struct sigaction action;
 	struct client *c = (struct client *)arg;
 	int ret;
-        DEFINE_WAIT(wait);
 
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -725,57 +764,22 @@ static void *client_thread(void *arg)
 
 	while (!c->should_exit) {
 		fd_set readfds;
-		int maxfd;
+		int maxfd = -1;
 		enum client_signal csig;
-		enum wait_signal wsig;
 
 		FD_ZERO(&readfds);
-		FD_SET(c->pipefd[0], &readfds);
-
-		if (c->fd != -1)
-			FD_SET(c->fd, &readfds);
-
                 
-		maxfd = MAX(c->fd, c->pipefd[0]);
-#if 0
-                /*
-                  This doesn't work well for me. It breaks normal wake
-                  up. I think this should be implemented throught the
-                  sock_wake_async() function in userlevel/socket.c
-                */
-		if (!c->has_data) {
-                        /* wait for a data signal on the pipe
-                         */
-                        lock_sock(c->sock->sk);
+		FD_SET(c->exit_pipe[0], &readfds);
+		maxfd = MAX(maxfd, c->exit_pipe[0]);
 
-                        /* TODO prevent bh from triggering writeable
-                         * notifications all the time: let the wait
-                         * flags dictate the interest notification
-                         * sets
-                         */
-                        if (skb_peek(&c->sock->sk->sk_receive_queue)) {
-                                /* data exists on the queue already */
-                                release_sock(c->sock->sk);
-                                c->has_data = 1;
-                                client_send_have_data_msg(c);
-                        }
-                        else {
-                                /* prepare_to_wait(sk_sleep(c->sock->sk), &wait, TASK_INTERRUPTIBLE); */
-                                /* LOG_DBG("Adding wait queue fd %i to the client %u fd set\n", wait.pipefd[0], c->id); */
-                                wait.flags &= ~WQ_FLAG_EXCLUSIVE;
-                                pthread_mutex_lock(&sk_sleep(c->sock->sk)->lock);
-                                if (list_empty(&wait.thread_list))
-                                        list_add(&wait.thread_list, &sk_sleep(c->sock->sk)->thread_list);
-                                pthread_mutex_unlock(&sk_sleep(c->sock->sk)->lock);
+		FD_SET(c->data_pipe[0], &readfds);
+		maxfd = MAX(maxfd, c->data_pipe[0]);
 
-                                set_bit(SOCK_ASYNC_WAITDATA, &c->sock->sk->sk_socket->flags);
-                                release_sock(c->sock->sk);
+		if (c->fd != -1) {
+			FD_SET(c->fd, &readfds);
+                        maxfd = MAX(maxfd, c->fd);
+                }
 
-                                FD_SET(wait.pipefd[0], &readfds);
-                                maxfd = MAX(maxfd, wait.pipefd[0]);
-                        }
-		}
-#endif
 		ret = select(maxfd + 1, &readfds, NULL, NULL, NULL);
 
 		if (ret == -1) {
@@ -790,14 +794,11 @@ static void *client_thread(void *arg)
 			/* Timeout */
 			/* LOG_DBG("Client %u timeout\n", c->id);*/
 		} else {
-                        /* LOG_DBG("Is wait queue fd set: %i, has data: %i\n", 
-                           FD_ISSET(wait.pipefd[0], &readfds), c->has_data);*/
-
-			if (FD_ISSET(c->pipefd[0], &readfds)) {
+			if (FD_ISSET(c->exit_pipe[0], &readfds)) {
                                 /* Signal received - determine message type
                                  * exit or data ready
                                  */
-                                csig = client_signal_lower(c->pipefd[0]);
+                                csig = client_signal_lower(c->exit_pipe[0]);
 
 				/*LOG_DBG("Client %u signal received: %u\n", 
                                   c->id, sig); 
@@ -808,50 +809,41 @@ static void *client_thread(void *arg)
 				}
 
 				switch (csig) {
-                                case CLIENT_EXIT:
+                                case CLIENT_SIG_EXIT:
 				        c->should_exit = 1;
 				        break;
+                                default:
+                                        break;
+				}
+			}
+
+                        if (FD_ISSET(c->data_pipe[0], &readfds)) {
+                                /* Signal received - determine message type
+                                 * exit or data ready
+                                 */
+                                csig = client_signal_lower(c->data_pipe[0]);
+
+				/*LOG_DBG("Client %u signal received: %u\n", 
+                                  c->id, sig); 
+                                */
+
+				if (csig < 0) {
+                                        continue;
 				}
 
-                                continue;
-			}
-
-			if (!c->has_data && FD_ISSET(wait.pipefd[0], &readfds)) {
-
-                                wsig = wait_signal_lower(wait.pipefd[0]);
-
-                                /* LOG_DBG("Client %u wait queue signal received: %u\n", c->id, sig); */
-
-                                if (wsig < 0) {
-                                        continue;
-                                }
-
-                                switch (wsig) {
-			        case WAIT_READ_DATA:
-                                        lock_sock(c->sock->sk);
-                                        clear_bit(SOCK_ASYNC_WAITDATA, &c->sock->sk->sk_socket->flags);
-                                        /* Don't destroy the wait until the end
-                                         * finish_wait(sk_sleep(c->sock->sk), &wait); */
-
-                                        if (!list_empty(&wait.thread_list)) {
-                                                pthread_mutex_lock(&sk_sleep(c->sock->sk)->lock);
-                                                list_del_init(&wait.thread_list);
-                                                pthread_mutex_unlock(&sk_sleep(c->sock->sk)->lock);
-                                        }
-
-                                        release_sock(c->sock->sk);
-                                        c->has_data = 1;
+				switch (csig) {
+                                case CLIENT_SIG_READ:
                                         client_send_have_data_msg(c);
                                         break;
-			        case WAIT_WRITE_DATA:
-                                        /* ignore socket writable*/
+                                case CLIENT_SIG_WRITE:
                                         break;
-                                }
-			}
-
+                                default:
+                                        break;
+				}
+                        }
+		
 			if (FD_ISSET(c->fd, &readfds)) {
 				/* Socket readable */
-				/* LOG_DBG("Client %u socket %i readable\n", c->id, c->fd); */
 				ret = client_handle_msg(c);
 
 				if (ret == 0) {
@@ -863,7 +855,6 @@ static void *client_thread(void *arg)
 		}
 	}
 
-        destroy_wait(&wait);
 	LOG_DBG("Client %u exiting\n", c->id);
 	client_close(c);
 	c->state = CLIENT_STATE_GARBAGE;

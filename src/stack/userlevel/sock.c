@@ -68,10 +68,12 @@ static void sock_def_readable(struct sock *sk, int bytes)
         if (wq_has_sleeper(wq))
                 wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
                                                 POLLRDNORM | POLLRDBAND);
+
         sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 
-        if (sk->sk_socket && skb_queue_len(&sk->sk_receive_queue))
-                client_send_have_data_msg(sk->sk_socket->client);
+        if (skb_queue_len(&sk->sk_receive_queue) && 
+            !client_has_data(sk->sk_socket->client))
+                client_signal_raise(sk->sk_socket->client, CLIENT_SIG_READ);
         
         read_unlock(&sk->sk_callback_lock);
 }

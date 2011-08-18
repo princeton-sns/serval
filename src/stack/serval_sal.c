@@ -1595,7 +1595,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                 if (!sock_flag(sk, SOCK_DEAD)) {
                         LOG_DBG("Wake user\n");
                         sk->sk_state_change(sk);
-                        
+         
                         /* Do not send POLL_HUP for half
                            duplex close. */
                         if (sk->sk_shutdown == SHUTDOWN_MASK ||
@@ -1603,8 +1603,8 @@ static int serval_sal_rcv_close_req(struct sock *sk,
                                 sk_wake_async(sk, SOCK_WAKE_WAITD, 
                                               POLL_HUP);
                         else
-                                        sk_wake_async(sk, SOCK_WAKE_WAITD, 
-                                                      POLL_IN);
+                                sk_wake_async(sk, SOCK_WAKE_WAITD, 
+                                              POLL_IN);
                 }
                 err = serval_sal_send_ack(sk);
         }
@@ -1642,18 +1642,6 @@ int serval_sal_recv_shutdown(struct sock *sk)
 
         sock_set_flag(sk, SOCK_DONE);
 
-        /* If there is still an application attached to the sock,
-           notify it. */
-	if (!sock_flag(sk, SOCK_DEAD)) {
-		sk->sk_state_change(sk);
-
-		/* Do not send POLL_HUP for half duplex close. */
-		if (sk->sk_shutdown == SHUTDOWN_MASK ||
-		    sk->sk_state == SERVAL_CLOSED)
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
-		else
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
-	}
         return 0;
 }
 

@@ -1530,6 +1530,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			if (signal_pending(current)) {
 				copied = timeo ? sock_intr_errno(timeo) : 
                                         -EAGAIN;
+                                LOG_DBG("Signal is pending, copied=%d\n",
+                                        copied);
 				break;
 			}
 		}
@@ -1576,6 +1578,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 				break;
 
 			if (sk->sk_err) {
+                                LOG_DBG("socket has error %d\n", 
+                                        sock_error(sk));
 				copied = sock_error(sk);
 				break;
 			}
@@ -1601,6 +1605,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 			if (signal_pending(current)) {
 				copied = sock_intr_errno(timeo);
+                                LOG_DBG("sock_intr_errno=%d\n",
+                                        copied);
 				break;
 			}
 		}
@@ -1850,11 +1856,13 @@ skip_copy:
 
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
+        LOG_DBG("copied=%d\n", copied);
 	return copied;
 
 out:
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
+        LOG_DBG("err=%d\n", err);
 	return err;
 
 recv_urg:

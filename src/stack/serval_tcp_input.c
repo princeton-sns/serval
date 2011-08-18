@@ -2666,8 +2666,10 @@ static void serval_tcp_fin(struct sk_buff *skb,
                            struct sock *sk, struct tcphdr *th)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	serval_tsk_schedule_ack(sk);
 
+        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
+
+	serval_tsk_schedule_ack(sk);
 
         /* Tell service access layer this stream is closed at other
          * end */
@@ -2676,8 +2678,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
 	/*sk->sk_shutdown |= RCV_SHUTDOWN;
           sock_set_flag(sk, SOCK_DONE);
         */
-
-        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
 
 	switch (sk->sk_state) {
 	case TCP_SYN_RECV:
@@ -2813,8 +2813,8 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_PKT("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
-                skb->len, skb->data_len, th->doff * 4);
+        LOG_PKT("Incoming segment skb->len=%u doff=%u\n", 
+                skb->len, th->doff * 4);
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
 		goto drop;

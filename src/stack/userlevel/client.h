@@ -22,8 +22,9 @@ typedef enum {
 
 
 enum client_signal {
-        CLIENT_EXIT = 1
-        //CLIENT_SIGNAL_DATA = 2
+        CLIENT_SIG_EXIT  = 1,
+        CLIENT_SIG_READ  = 2,
+        CLIENT_SIG_WRITE = 3,
 };
 
 struct client_list {
@@ -44,6 +45,7 @@ unsigned int client_get_id(struct client *c);
 pthread_t client_get_thread(struct client *c);
 int client_get_sockfd(struct client *c);
 int client_get_signalfd(struct client *c);
+int client_has_data(struct client *c);
 void client_hold(struct client *c);
 void client_put(struct client *c);
 int client_lock(struct client *c);
