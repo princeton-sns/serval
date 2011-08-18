@@ -373,14 +373,6 @@ void serval_tcp_done(struct sock *sk)
 	serval_sal_done(sk);
 }
 
-static int serval_tcp_connection_close_request(struct sock *sk,
-                                               struct sk_buff *skb)
-{
-        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        
-        return tp->fin_recvd;
-}
-
 static int serval_tcp_connection_close(struct sock *sk)
 {
         struct sk_buff *skb;
@@ -1916,11 +1908,10 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .net_header_len = SERVAL_NET_HEADER_LEN,
-        .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .recv_fin = serval_sal_rcv_transport_fin,
+        .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };
 
@@ -1936,11 +1927,10 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .net_header_len = SERVAL_NET_HEADER_LEN + 8 /* sizeof(struct udphdr) */,
-        .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .recv_fin = serval_sal_rcv_transport_fin,
+        .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };
 

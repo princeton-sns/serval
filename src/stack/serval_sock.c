@@ -43,9 +43,12 @@ static const char *sock_state_str[] = {
         [ SERVAL_LASTACK ]   = "LASTACK",
         [ SERVAL_LISTEN ]    = "LISTEN",
         [ SERVAL_CLOSING ]   = "CLOSING",
-        [ SERVAL_MIGRATE ]   = "MIGRATE",
-        [ SERVAL_RECONNECT ] = "RECONNECT",
-        [ SERVAL_RRESPOND ]  = "RRESPOND"
+};
+
+static const char *sock_sal_state_str[] = {
+        [ SAL_NORMAL ]      = "SAL_NORMAL",
+        [ SAL_MIGRATE ]     = "SAL_MIGRATE",
+        [ SAL_CLOSING ]     = "SAL_CLOSING",
 };
 
 static void serval_sock_destruct(struct sock *sk);
@@ -418,6 +421,7 @@ void serval_sock_init(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         sk->sk_state = 0;
+        ssk->sal_state = SAL_NORMAL;
         INIT_LIST_HEAD(&ssk->sock_node);
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
@@ -592,7 +596,7 @@ void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
 
 const char *serval_sock_state_str(struct sock *sk)
 {
-        if (sk->sk_state >= SERVAL_MAX_STATE) {
+        if (sk->sk_state >= __SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -601,7 +605,7 @@ const char *serval_sock_state_str(struct sock *sk)
 
 const char *serval_state_str(unsigned int state)
 {
-        if (state >= SERVAL_MAX_STATE) {
+        if (state >= __SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -610,8 +614,8 @@ const char *serval_state_str(unsigned int state)
 
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state == SERVAL_MIN_STATE ||
-            new_state >= SERVAL_MAX_STATE) {
+        if (new_state == __SERVAL_MIN_STATE ||
+            new_state >= __SERVAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
@@ -631,6 +635,44 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
         }
 
         sk->sk_state = new_state;
+
+        return new_state;
+}
+
+const char *serval_sock_sal_state_str(struct sock *sk)
+{
+        if (serval_sk(sk)->sal_state >= __SAL_MAX_STATE) {
+                LOG_ERR("invalid state %u\n",
+                        serval_sk(sk)->sal_state);
+                return sock_sal_state_str[0];
+        }
+        return sock_sal_state_str[serval_sk(sk)->sal_state];
+}
+
+const char *serval_sal_state_str(unsigned int state)
+{
+        if (state >= __SAL_MAX_STATE) {
+                LOG_ERR("invalid state %u\n", state);
+                return sock_sal_state_str[0];
+        }
+        return sock_sal_state_str[state];
+}
+
+int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
+{ 
+        if (new_state == __SAL_MIN_STATE ||
+            new_state >= __SAL_MAX_STATE) {
+                LOG_ERR("invalid state %u\n", new_state);
+                return -1;
+        }
+        
+        LOG_INF("SAL %s -> %s local_flowid=%s peer_flowid=%s\n",
+                sock_sal_state_str[serval_sk(sk)->sal_state],
+                sock_sal_state_str[new_state],
+                flow_id_to_str(&serval_sk(sk)->local_flowid),
+                flow_id_to_str(&serval_sk(sk)->peer_flowid));
+        
+        serval_sk(sk)->sal_state = new_state;
 
         return new_state;
 }

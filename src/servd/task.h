@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*
  * task.h
  *
@@ -86,25 +87,25 @@ typedef struct task_cond_t task_cond;
 void initialize_tasks(int threads);
 void finalize_tasks();
 
-int task_cond_init(task_cond* cond);
-int task_cond_destroy(task_cond* cond);
-int task_cond_wait(task_cond* cond, task_mutex* mutex);
-int task_cond_notify(task_cond* cond);
-int task_cond_notify_all(task_cond* cond);
+int task_cond_init(task_cond * cond);
+int task_cond_destroy(task_cond * cond);
+int task_cond_wait(task_cond * cond, task_mutex * mutex);
+int task_cond_notify(task_cond * cond);
+int task_cond_notify_all(task_cond * cond);
 
 int task_join(task_handle_t handle);
 int task_kill(task_handle_t handle, int sig);
 
-typedef void (*task_func)(void* data);
+typedef void (*task_func) (void *data);
 
 /*who owns/is responsible for the data? TODO */
-task_handle_t task_add(void* data, task_func tfunc);
+task_handle_t task_add(void *data, task_func tfunc);
 int task_remove(task_handle_t handle);
 int is_valid_task(task_handle_t handle);
 int task_count();
 
 /*perhaps a simple recurring task should be added as well*/
-task_handle_t add_timer_task(void* data, task_func tfunc, struct timeval* tval);
+task_handle_t add_timer_task(void *data, task_func tfunc, struct timeval *tval);
 int remove_timer_task(task_handle_t handle);
 int is_valid_timer_task(task_handle_t handle);
 
@@ -115,8 +116,8 @@ enum task_block {
 int task_free_count();
 void task_yield();
 void task_block(int fd, int flags);
-task_handle_t add_task_block(int fd, int flags, void* data, task_func tfunc);
+task_handle_t add_task_block(int fd, int flags, void *data, task_func tfunc);
 task_handle_t task_unblock(int fd, int flags);
 void task_sleep(int ms);
 
-#endif /* TASK_H_ */
+#endif				/* TASK_H_ */
