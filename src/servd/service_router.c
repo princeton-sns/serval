@@ -1,9 +1,9 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/socket.h>
-#include <sys/ioctl.h> 
+#include <sys/ioctl.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
 #include <sys/stat.h>
@@ -43,39 +43,51 @@ static volatile int router_running = FALSE;
 static stack_t signal_stack;
 
 static struct sockaddr_sv resolver_id;
-static resolution_path* rpath = NULL;
-static service_resolver* def_resolver = NULL;
-static service_resolver* resolver = NULL;
-static struct server_rpc_handler* rpc_handler = NULL;
+static resolution_path *rpath = NULL;
+static service_resolver *def_resolver = NULL;
+static service_resolver *resolver = NULL;
+static struct server_rpc_handler *rpc_handler = NULL;
 
 extern void udp_channel_destroy();
 extern void udp_channel_create();
-extern resolution_path* create_resolution_path();
+extern resolution_path *create_resolution_path();
 
-extern service_resolver* create_client_service_resolver(struct sockaddr_sv* local,
-        struct sv_instance_addr* remote, uint32_t uptime, uint32_t capabilities, uint32_t capacity,
-        uint8_t relation);
+extern service_resolver *create_client_service_resolver(struct sockaddr_sv
+                                                        *local, 
+                                                        struct							sv_instance_addr
+                                                        *remote,
+                                                        uint32_t uptime,
+                                                        uint32_t
+                                                        capabilities,
+                                                        uint32_t capacity,
+                                                        uint8_t relation);
 
-extern service_resolver* create_local_service_resolver(struct sockaddr_sv* local,
-        uint32_t capabilities, uint32_t capacity, service_resolver* default_res,
-        resolution_path* spath);
-extern resolver_rpc* client_get_messaging(service_resolver* resolver);
+extern service_resolver *create_local_service_resolver(struct sockaddr_sv
+                                                       *local,
+                                                       uint32_t
+                                                       capabilities,
+                                                       uint32_t capacity,
+                                                       service_resolver *
+                                                       default_res,
+                                                       resolution_path * spath);
+extern resolver_rpc *client_get_messaging(service_resolver * resolver);
 
-static int daemonize(void) {
+static int daemonize(void)
+{
     int i, sid;
     FILE *f;
 
     /* check if already a daemon */
-    if(getppid() == 1)
+    if (getppid() == 1)
         return -1;
 
     i = fork();
 
-    if(i < 0) {
+    if (i < 0) {
         fprintf(stderr, "Fork error...\n");
         return -1;
     }
-    if(i > 0) {
+    if (i > 0) {
         //printf("Parent done... pid=%u\n", getpid());
         exit(EXIT_SUCCESS);
     }
@@ -87,62 +99,65 @@ static int daemonize(void) {
     /* Create a new SID for the child process */
     sid = setsid();
 
-    if(sid < 0)
+    if (sid < 0)
         return -1;
 
     /*
-     Change the current working directory. This prevents the current
-     directory from being locked; hence not being able to remove it.
-     */
+      Change the current working directory. This prevents the current
+      directory from being locked; hence not being able to remove it.
+    */
     if (chdir("/") < 0) {
-            return -1;
+        return -1;
     }
 
     /* Redirect standard files to /dev/null */
     f = freopen("/dev/null", "r", stdin);
-    
+
     if (!f) {
-            LOG_ERR("stdin redirection failed\n");
+        LOG_ERR("stdin redirection failed\n");
     }
 
     f = freopen("/dev/null", "w", stdout);
-    
+
     if (!f) {
-            LOG_ERR("stdout redirection failed\n");
+        LOG_ERR("stdout redirection failed\n");
     }
-    
+
     f = freopen("/dev/null", "w", stderr);
-    
+
     if (!f) {
-            LOG_ERR("stderr redirection failed\n");
+        LOG_ERR("stderr redirection failed\n");
     }
 
     return 0;
 }
 
-static void terminate_handler(int sig) {
-    /*set running to 0 cleanup code*/
+static void terminate_handler(int sig)
+{
+    /*set running to 0 cleanup code */
     printf("Terminating servie router\n");
     router_running = FALSE;
 }
 
-static void interrupt_handler(int sig) {
-    /*just continue on*/
-
+static void interrupt_handler(int sig)
+{
+    /*just continue on */
+    router_running = FALSE;
 }
 
-static void initialize_signals() {
-    /*all signal handling should occur on a separate stack*/
+static void initialize_signals()
+{
+    /*all signal handling should occur on a separate stack */
     bzero(&signal_stack, sizeof(signal_stack));
     signal_stack.ss_size = SIGSTKSZ;
     signal_stack.ss_flags = 0;
 
-    if((signal_stack.ss_sp = malloc(SIGSTKSZ)) == NULL) {
+    if ((signal_stack.ss_sp = malloc(SIGSTKSZ)) == NULL) {
         perror("Could not allocated signal stack");
         exit(1);
     }
 
-    if(sigaltstack(&signal_stack, NULL)) {
+    if (sigaltstack(&signal_stack, NULL)) {
         perror("Could not set the signal stack");
         exit(1);
     }
@@ -154,7 +169,7 @@ static void initialize_signals() {
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = SA_ONSTACK;
 
-    /*termination cleanup signal handlers - should be non-interruptible*/
+    /*termination cleanup signal handlers - should be non-interruptible */
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGHUP, &sa, NULL);
 
@@ -167,7 +182,7 @@ static void initialize_signals() {
 
     sigaction(SIGINT, &sa, NULL);
 
-    /*ignore sigpipe - for those pesky TCP/connected UDP socket breaks*/
+    /*ignore sigpipe - for those pesky TCP/connected UDP socket breaks */
     bzero(&sa, sizeof(struct sigaction));
     sa.sa_handler = SIG_IGN;
     sigemptyset(&sa.sa_mask);
@@ -175,7 +190,8 @@ static void initialize_signals() {
     sigaction(SIGPIPE, &sa, NULL);
 }
 
-static void initialize_system() {
+static void initialize_system()
+{
     init_time(DEFAULT_RESOLUTION_INTERVAL);
     init_rand(get_current_time());
     co_thread_init();
@@ -183,14 +199,15 @@ static void initialize_system() {
     udp_channel_create();
 }
 
-static void terminate_system() {
-    if(rpc_handler)
+static void terminate_system()
+{
+    if (rpc_handler)
         free(rpc_handler);
-    if(resolver)
+    if (resolver)
         free(resolver);
-    if(def_resolver)
+    if (def_resolver)
         free(def_resolver);
-    if(rpath)
+    if (rpath)
         free(rpath);
 
     finalize_tasks();
@@ -201,63 +218,65 @@ static void terminate_system() {
 
 struct option router_options[4] = {
 
-{ "daemon", 0, NULL, 'd' }, { "mode", 1, NULL, 'm' }, { "config", 1, NULL, 'c' }, {
-        NULL,
-        0,
-        NULL,
-        0 }
-
+    {"daemon", 0, NULL, 'd'}, 
+    {"mode", 1, NULL, 'm'}, 
+    {"config", 1, NULL, 'c'}, 
+    { NULL, 0, NULL, 0}
 };
 
-void init_local_address_list(service_resolver* resolver) {
+void init_local_address_list(service_resolver * resolver)
+{
 
 #if defined(OS_LINUX)
     struct ifconf iconf;
     iconf.ifc_len = sizeof(struct ifreq) * 20;
-    iconf.ifc_buf = (char*) malloc(iconf.ifc_len);
+    iconf.ifc_buf = (char *) malloc(iconf.ifc_len);
 
     int sfd = socket(AF_INET, SOCK_DGRAM, 0);
 
-    if(sfd < 0) {
+    if (sfd < 0) {
         LOG_ERR("Could not open dgram socket: %s\n", strerror(errno));
         return;
     }
 
-    if(ioctl(sfd, SIOCGIFCONF, &iconf)) {
+    if (ioctl(sfd, SIOCGIFCONF, &iconf)) {
         //error!
         LOG_ERR("ioctl(SIOCGIFHWADDR) error: %s\n", strerror(errno));
         close(sfd);
         return;
     }
     int i = 0;
-    for(; i < iconf.ifc_len / sizeof(struct ifreq); i++) {
-        if(iconf.ifc_req[i].ifr_addr.sa_family == AF_INET) {
-            if(ntohl(((struct sockaddr_in*) &iconf.ifc_req[i].ifr_addr)->sin_addr.s_addr) >> 24 == 127) {
+    for (; i < iconf.ifc_len / sizeof(struct ifreq); i++) {
+        if (iconf.ifc_req[i].ifr_addr.sa_family == AF_INET) {
+            if (ntohl(((struct sockaddr_in *) &iconf.ifc_req[i].ifr_addr)->sin_addr.
+                      s_addr) >> 24 == 127) {
                 continue;
             }
 
-            resolver_add_address(resolver,
-                    (struct net_addr*) &((struct sockaddr_in*) &iconf.ifc_req[i].ifr_addr)->sin_addr);
+            resolver_add_address(resolver, (struct net_addr *)
+                                 &((struct sockaddr_in *) &iconf.ifc_req[i].
+                                   ifr_addr)->sin_addr);
         }
     }
-
+    
     close(sfd);
-
+    
 #endif
 
 #if defined(OS_BSD)
-    struct ifaddrs * addrs;
+    struct ifaddrs *addrs;
 
-    if(getifaddrs(&addrs)) {
+    if (getifaddrs(&addrs)) {
         LOG_ERR("Could not get interface addresses: %s\n", strerror(errno));
         return;
     }
 
-    while(addrs) {
+    while (addrs) {
 
-        if(addrs->ifa_addr->sa_family == AF_INET) {
-            resolver_add_address(resolver,
-                    (struct net_addr*) &((struct sockaddr_in*) addrs->ifa_addr)->sin_addr);
+        if (addrs->ifa_addr->sa_family == AF_INET) {
+            resolver_add_address(resolver, (struct net_addr *)
+                                 &((struct sockaddr_in *) addrs->ifa_addr)->
+                                 sin_addr);
         } else {
 
         }
@@ -270,18 +289,19 @@ void init_local_address_list(service_resolver* resolver) {
 
 }
 
-static int parse_service_desc(char* sid_str, struct sockaddr_sv* service) {
+static int parse_service_desc(char *sid_str, struct sockaddr_sv *service)
+{
     //TODO
     return 0;
 }
 
-static int load_config(const char* config_path) 
+static int load_config(const char *config_path)
 {
     char line_buffer[1024];
-    char* temp;
-    service_resolver* peer = NULL;
-    GPtrArray* peer_list; 
-    FILE* config_file;
+    char *temp;
+    service_resolver *peer = NULL;
+    GPtrArray *peer_list;
+    FILE *config_file;
     struct sv_instance_addr peer_addr;
     char sid_str[96];
     char addr_str[96];
@@ -292,14 +312,14 @@ static int load_config(const char* config_path)
 
     //#peerSID peerAddress peerCapabilities peerCapacity peerRelation
     //first entry is always the local resolver - peerRelation = SELF
-    if(!config_path) {
+    if (!config_path) {
         return -1;
     }
 
     LOG_DBG("Loading config file: %s\n", config_path);
     config_file = fopen(config_path, "r");
 
-    if(!config_file) {
+    if (!config_file) {
         return -1;
     }
 
@@ -308,75 +328,83 @@ static int load_config(const char* config_path)
     bzero(&peer_addr, sizeof(peer_addr));
 
     peer_addr.service.sv_family = AF_SERVAL;
-    peer_addr.service.sv_prefix_bits = 255;
+    peer_addr.service.sv_prefix_bits = 256;
     peer_addr.address.sin.sin_family = AF_INET;
 
-    while(fgets(line_buffer, 1024, config_file)) {
+    while (fgets(line_buffer, 1024, config_file)) {
         temp = strchr(line_buffer, '#');
 
-        if(temp) {
+        if (temp) {
             temp[0] = '\0';
         }
 
-        tok_read = sscanf(line_buffer, "%s %s %u %u %u\n", sid_str, addr_str, &capabilities,
-                &capacity, &relation);
+        tok_read =
+            sscanf(line_buffer, "%s %s %u %u %u\n", sid_str, addr_str,
+                   &capabilities, &capacity, &relation);
 
-        if(tok_read == 0) {
+        if (tok_read == 0) {
             continue;
         }
 
-        if(tok_read != 5) {
-            LOG_DBG("Invalid peer configuration format. Expected 5 fields, parsed only %i: %s\n", tok_read, line_buffer);
+        if (tok_read != 5) {
+            LOG_DBG
+                ("Invalid peer configuration format. Expected 5 fields, parsed only %i: %s\n",
+                 tok_read, line_buffer);
         }
-
         //verify the input values
-        if(parse_service_desc(sid_str, &peer_addr.service)) {
+        if (parse_service_desc(sid_str, &peer_addr.service)) {
             //TODO error handling
         }
 
-        if(!inet_aton(addr_str, &peer_addr.address.sin.sin_addr)) {
+        if (!inet_aton(addr_str, &peer_addr.address.sin.sin_addr)) {
             //TODO error handling
         }
 
-        if(relation > RELATION_PARENT && relation != RELATION_SELF) {
+        if (relation > RELATION_PARENT && relation != RELATION_SELF) {
 
             //TODO error handling
         }
 
-        if(relation == RELATION_SELF) {
-            /* probably need special handling of m-threading for incoming resolution path and server resolver events*/
+        if (relation == RELATION_SELF) {
+            /* probably need special handling of m-threading for incoming resolution path and server resolver events */
             resolver->interface->set_capabilities(resolver, capabilities);
             resolver->resolver.capacity = capacity;
-            rpc_handler->def_callback.rpc->interface->set_local_address(
-                    rpc_handler->def_callback.rpc, (struct sockaddr*) &peer_addr.service,
-                    sizeof(struct sockaddr_sv));
-        } else if((peer = resolver->interface->get_peer(resolver, &peer_addr.service.sv_srvid))) {
-            /*TODO - make these functions to signal the local resolver that relations have changed?*/
-            peer->resolver.relation = relation;
-            peer->resolver.capabilities = capabilities;
-            g_ptr_array_add(peer_list, peer);
-        } else {
-            peer = create_client_service_resolver(&resolver_id, &peer_addr, 0, capabilities,
-                    capacity, relation);
-            /*initialize and start?*/
-            g_ptr_array_add(peer_list, peer);
-        }
+            rpc_handler->def_callback.rpc->
+                interface->set_local_address(rpc_handler->def_callback.rpc,
+                                             (struct sockaddr *) &peer_addr.
+                                             service,
+                                             sizeof(struct sockaddr_sv));
+        } else
+            if ((peer = resolver->interface->get_peer(resolver,
+                                                      &peer_addr.service.sv_srvid))) {
+                /*TODO - make these functions to signal the local resolver that relations have changed? */
+                peer->resolver.relation = relation;
+                peer->resolver.capabilities = capabilities;
+                g_ptr_array_add(peer_list, peer);
+            } else {
+                peer = create_client_service_resolver(&resolver_id, &peer_addr, 0,
+                                                      capabilities, capacity,
+                                                      relation);
+                /*initialize and start? */
+                g_ptr_array_add(peer_list, peer);
+            }
     }
 
-    if(ferror(config_file)) {
-        LOG_ERR("Error reading peer config file %s: %s\n", 
+    if (ferror(config_file)) {
+        LOG_ERR("Error reading peer config file %s: %s\n",
                 config_path, strerror(errno));
         goto error;
     }
 
-    /*wholesale update - stop/start the local resolver: server resolver?*/
+    /*wholesale update - stop/start the local resolver: server resolver? */
     resolver->interface->clear_peers(resolver);
 
     int i = 0;
-    for(i = 0; i < peer_list->len; i++) {
-        peer = (service_resolver*) g_ptr_array_index(peer_list, i);
+    for (i = 0; i < peer_list->len; i++) {
+        peer = (service_resolver *) g_ptr_array_index(peer_list, i);
 
-        if(peer->resolver.state == CREATED && resolver->resolver.state == ACTIVE) {
+        if (peer->resolver.state == CREATED &&
+            resolver->resolver.state == ACTIVE) {
             peer->interface->initialize(peer);
             peer->interface->start(peer);
         }
@@ -387,13 +415,13 @@ static int load_config(const char* config_path)
     g_ptr_array_free(peer_list, 1);
     return 0;
 
-    error:
+ error:
     /*remove the peers, if any
      */
-    for(i = 0; i < peer_list->len; i++) {
-        peer = (service_resolver*) g_ptr_array_index(peer_list, i);
+    for (i = 0; i < peer_list->len; i++) {
+        peer = (service_resolver *) g_ptr_array_index(peer_list, i);
 
-        if(peer->resolver.state == CREATED) {
+        if (peer->resolver.state == CREATED) {
             free(peer);
         }
     }
@@ -403,55 +431,60 @@ static int load_config(const char* config_path)
 
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 
     int daemon = FALSE;
     int stackid = 0;
     int capabilities = SVPF_STUB;
-    char* config = NULL;
+    char *config = NULL;
     int ret = EXIT_SUCCESS;
 
     initialize_signals();
 
     int opt = 0;
     int longind = 0;
-    while((opt = getopt_long(argc, argv, "dm:c:s:", router_options, &longind)) != -1) {
+    while ((opt =
+            getopt_long(argc, argv, "dm:c:s:", router_options,
+                        &longind)) != -1) {
         //printf("opt: %c\n", opt);
-        switch(opt) {
-            case 'd':
-                daemon = TRUE;
-                break;
-            case 'm':
-                if(strcasecmp(optarg, "stub") == 0) {
-                    capabilities |= SVPF_STUB;
-                } else if(strcasecmp(optarg, "transit") == 0) {
-                    capabilities |= SVPF_TRANSIT;
-                } else {
-                    fprintf(stderr, "Invalid mode: %s, should be one of <stub, transit>", optarg);
-                    return -1;
-                }
-                break;
-            case 'c':
-                config = optarg;
-                break;
-            case 's':
-                stackid = atoi(optarg);
-                if(stackid < 0) {
-                    stackid = 0;
-                }
-                break;
-            case '?':
-                break;
+        switch (opt) {
+        case 'd':
+            daemon = TRUE;
+            break;
+        case 'm':
+            if (strcasecmp(optarg, "stub") == 0) {
+                capabilities |= SVPF_STUB;
+            } else if (strcasecmp(optarg, "transit") == 0) {
+                capabilities |= SVPF_TRANSIT;
+            } else {
+                fprintf(stderr,
+                        "Invalid mode: %s, should be one of <stub, transit>",
+                        optarg);
+                return -1;
+            }
+            break;
+        case 'c':
+            config = optarg;
+            break;
+        case 's':
+            stackid = atoi(optarg);
+            if (stackid < 0) {
+                stackid = 0;
+            }
+            break;
+        case '?':
+            break;
         }
     }
-    /*command line options*/
+    /*command line options */
     opt = optind;
 
-    if(daemon) {
+    if (daemon) {
         LOG_DBG("Daemonizing...\n");
         ret = daemonize();
 
-        if(ret < 0) {
+        if (ret < 0) {
             LOG_ERR("Could not daemonize\n");
             return ret;
         }
@@ -459,9 +492,9 @@ int main(int argc, char **argv) {
 
     initialize_system();
 
-    /* create the resolution path - must establish the stack-path first before binding any service IDs*/
+    /* create the resolution path - must establish the stack-path first before binding any service IDs */
     rpath = create_resolution_path();
-    if(!rpath) {
+    if (!rpath) {
         LOG_ERR("Could not create resolution path - stack control\n");
         terminate_system();
         exit(1);
@@ -469,64 +502,70 @@ int main(int argc, char **argv) {
 
     rpath->path.stack_id = stackid;
 
-    /*create local resolver and prototype remote(client) resolver for discovery*/
+    /*create local resolver and prototype remote(client) resolver for discovery */
     memcpy(&resolver_id, &service_router_prefix, sizeof(service_router_prefix));
     initialize_service_id(&resolver_id.sv_srvid, resolver_id.sv_prefix_bits);
     resolver_id.sv_prefix_bits = 255;
 
     struct sv_instance_addr def_resolver_id;
     bzero(&def_resolver_id, sizeof(def_resolver_id));
-    memcpy(&def_resolver_id.service, &service_router_prefix, sizeof(service_router_prefix));
+    memcpy(&def_resolver_id.service, &service_router_prefix,
+           sizeof(service_router_prefix));
     //def_resolver_id.service.sv_flags = SVSF_LOCAL_SCOPE | SVSF_STRICT_SCOPE;
     def_resolver_id.address.sin.sin_family = AF_INET;
     def_resolver_id.address.sin.sin_addr.s_addr = 0xFFFFFFFF;
 
-    LOG_DBG("Generated resolver service ID: %s\n", service_id_to_str(&resolver_id.sv_srvid));
+    LOG_DBG("Generated resolver service ID: %s\n",
+            service_id_to_str(&resolver_id.sv_srvid));
 
     //def_resolver = create_client_service_resolver(&resolver_id, &def_resolver_id, 0, SVPF_STUB,
-    def_resolver = create_client_service_resolver(&def_resolver_id.service, &def_resolver_id, 0,
-            SVPF_STUB, DEFAULT_CAPACITY, RELATION_UNKNOWN);
-    /*no instance address for the default resolver*/
-    if(!def_resolver) {
+    def_resolver =
+        create_client_service_resolver(&def_resolver_id.service,
+                                       &def_resolver_id, 0, SVPF_STUB,
+                                       DEFAULT_CAPACITY, RELATION_UNKNOWN);
+    /*no instance address for the default resolver */
+    if (!def_resolver) {
         LOG_ERR("Could not create default client resolver!\n");
         terminate_system();
         exit(1);
     }
 
-    resolver = create_local_service_resolver(&resolver_id, capabilities, DEFAULT_CAPACITY,
-            def_resolver, rpath);
+    resolver =
+        create_local_service_resolver(&resolver_id, capabilities,
+                                      DEFAULT_CAPACITY, def_resolver, rpath);
 
-    if(!resolver) {
+    if (!resolver) {
         LOG_ERR("Could not create local service resolver!\n");
         terminate_system();
         exit(1);
     }
 
-    /*add the local addresses to the resolver*/
+    /*add the local addresses to the resolver */
     init_local_address_list(resolver);
 
     /*
-    int count = resolver_get_address_count(resolver);
+      int count = resolver_get_address_count(resolver);
 
-    int i = 0;
-    struct net_addr* address;
-    for(i = 0; i < count; i++) {
-        address = resolver_get_address(resolver, i);
-        printf("Local resolver address: %s\n", inet_ntoa(address->net_un.un_ip));
-    }
+      int i = 0;
+      struct net_addr* address;
+      for(i = 0; i < count; i++) {
+      address = resolver_get_address(resolver, i);
+      printf("Local resolver address: %s\n", inet_ntoa(address->net_un.un_ip));
+      }
     */
-    /* create the rpc handler for receiving incoming remote requests*/
+    /* create the rpc handler for receiving incoming remote requests */
     rpc_handler = create_server_rpc_handler(resolver);
 
-    if(!rpc_handler) {
+    if (!rpc_handler) {
         LOG_ERR("Could not create rpc handler!\n");
         terminate_system();
         exit(1);
     }
 
-    /*hook the rpc handler to the def_resolver for incoming discovery messages*/
-    client_get_messaging(def_resolver)->interface->set_callback(client_get_messaging(def_resolver),
-            &rpc_handler->callback);
+    /*hook the rpc handler to the def_resolver for incoming discovery messages */
+    client_get_messaging(def_resolver)->
+        interface->set_callback(client_get_messaging(def_resolver),
+                                &rpc_handler->callback);
 
     /*the stack-path must be initialized and started prior to registering any services */
     rpath->interface->initialize(rpath);
@@ -544,35 +583,31 @@ int main(int argc, char **argv) {
 
     server_rpc_handler_initialize(rpc_handler);
 
-    /* if the config exists, load it*/
-    if(config) {
+    /* if the config exists, load it */
+    if (config) {
         load_config(config);
     }
 
     /* command line capabilities overrides config */
-    if(capabilities != 0) {
+    if (capabilities != 0) {
         rpath->interface->set_capabilities(rpath, capabilities);
     }
 
     printf("STARTING RESOLVERS\n");
-    /* starts the service ID listening tasks*/
+    /* starts the service ID listening tasks */
     def_resolver->interface->start(def_resolver);
     server_rpc_handler_start(rpc_handler);
 
-    /*starts various local resolver tasks*/
+    /*starts various local resolver tasks */
     resolver->interface->start(resolver);
 
-
-    struct timespec nap;
-    bzero(&nap, sizeof(nap));
-    nap.tv_sec = 10;
-    int retval;
     router_running = 1;
-    while(router_running) {
-        retval = nanosleep(&nap, NULL);
 
-        if(retval) {
-            /*interrupted*/
+    while (router_running) {
+        int retval = sleep(10);
+
+        if (retval) {
+            /*interrupted */
             //LOG_DBG("Service router main thread interrupted: %s\n", strerror(errno));
         }
     }

@@ -11,6 +11,16 @@ int serval_sal_xmit_skb(struct sk_buff *skb);
 
 struct service_entry;
 
+
+enum serval_packet_type {
+        SERVAL_PKT_DATA = 0,
+        SERVAL_PKT_SYN,
+        SERVAL_PKT_RESET,
+        SERVAL_PKT_CLOSE,
+        SERVAL_PKT_RSYN,
+        __SERVAL_PKT_MAX = SERVAL_PKT_RSYN, 
+};
+
 /* 
    NOTE:
    
@@ -235,7 +245,8 @@ void serval_sal_close(struct sock *sk, long timeout);
 int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);
-int serval_sal_rcv_transport_fin(struct sock *sk, struct sk_buff *skb);
+int serval_sal_send_shutdown(struct sock *sk);
+int serval_sal_recv_shutdown(struct sock *sk);
 void serval_sal_done(struct sock *sk);
 int serval_sal_rcv(struct sk_buff *skb);
 

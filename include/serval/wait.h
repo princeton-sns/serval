@@ -69,11 +69,6 @@ typedef struct __wait_queue_head wait_queue_head_t;
 #define DECLARE_WAIT_QUEUE_HEAD(name) \
 	wait_queue_head_t name = __WAIT_QUEUE_HEAD_INITIALIZER(name)
 
-enum wait_signal{
-    WAIT_READ_DATA = 1 << 0,
-    WAIT_WRITE_DATA = 1 << 1
-};
-enum wait_signal wait_signal_lower(int fd);
 void prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state);
 void prepare_to_wait_exclusive(wait_queue_head_t *q,
                                wait_queue_t *wait, int state);
@@ -162,7 +157,7 @@ static inline void __remove_wait_queue(wait_queue_head_t *head,
 #define set_current_state(x)
 #define __set_current_state(x)
 #define MAX_SCHEDULE_TIMEOUT LONG_MAX
-#define ERESTARTSYS 200
+#define ERESTARTSYS 512
 
 int signal_pending(struct task_struct *task);
 

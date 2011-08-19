@@ -29,6 +29,23 @@ libservr_a_SOURCES = \
 	resolution_path.c \
 	resolver_base.c
 
+
+libservr_headers = \
+	cmwc.h \
+	message_channel_base.h \
+	message_channel.h \
+	poll_reactor.h \
+	prefixtrie.h \
+	resolution_path.h \
+	resolver_base.h \
+	resolver.h \
+	resolver_messaging.h \
+	service_table.h \
+	service_types.h \
+	service_util.h \
+	task.h \
+	time_util.h
+
 libservr_a_CPPFLAGS = \
 	-I$(top_srcdir)/include \
 	-I$(top_srcdir)/src/servd \
@@ -147,6 +164,9 @@ servr_SOURCES = \
 	local_resolver.c \
 	service_router.c
 
+servr_headers = \
+	server_resolver.h
+
 servr_LDADD = \
 	libservr.a
 
@@ -182,7 +202,7 @@ servd_SOURCES += \
 	ifa.c
 endif
 
-noinst_HEADERS = \
+servd_headers = \
 	debug.h \
 	timer.h \
 	ifa.h \
@@ -199,5 +219,16 @@ servd_LDFLAGS = \
 	-lserval \
 	-lpthread
 
+noinst_HEADERS = \
+	$(servd_headers) \
+	$(servr_headers)
+
 clean-local:
 	rm -f *~
+
+indent:
+	indent -kr -i4 -lc80 \
+	$(libservr_a_SOURCES) \
+	$(servr_SOURCES) \
+	$(libservr_headers) \
+	$(servr_headers)

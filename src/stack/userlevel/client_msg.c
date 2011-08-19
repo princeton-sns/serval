@@ -165,7 +165,9 @@ int client_msg_read(int sock, struct client_msg **msg)
 
 int client_msg_write(int sock, struct client_msg *msg)
 {
-        LOG_DBG("writing msg payload=%u\n", msg->payload_length);
+        LOG_DBG("%s msg payload=%u\n", 
+                client_msg_str[msg->type],
+                msg->payload_length);
 
 	int ret = send(sock, msg, CLIENT_MSG_HDR_LEN + 
                        msg->payload_length, MSG_DONTWAIT);

@@ -19,8 +19,8 @@ CFLAGS=
 CXXFLAGS=
 
 dnl Set some decent default flags
-CFLAGS="$CFLAGS -Wall -O2"
-CXXFLAGS="$CXXFLAGS -Wall -O2"
+CFLAGS="$CFLAGS -Wall"
+CXXFLAGS="$CXXFLAGS -Wall"
 EXTRA_DEFINES=
 KERNEL_EXTRA_CFLAGS=
 
@@ -119,9 +119,13 @@ AM_CONDITIONAL([DEBUG], [test x$debug = xyes])
 if test x$debug = xyes
 then      
      EXTRA_DEFINES="${EXTRA_DEFINES} -DENABLE_DEBUG"
-     CFLAGS="$CFLAGS -g"  
-     CXXFLAGS="$CXXFLAGS -g"
-     KERNEL_EXTRA_CFLAGS="-g3 -ggdb3 -O0 -fno-inline"
+     CFLAGS="$CFLAGS -g -O0 -fno-inline"  
+     CXXFLAGS="$CXXFLAGS -g -O0 -fno-inline"
+     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -g3 -ggdb3 -O0 -fno-inline"
+else
+     CFLAGS="$CFLAGS -O2"  
+     CXXFLAGS="$CXXFLAGS -O2"
+     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -O2"
 fi
 
 dnl Option to set gprof
