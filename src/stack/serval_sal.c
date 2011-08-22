@@ -67,9 +67,7 @@ static const char *serval_pkt_names[] = {
         [SERVAL_PKT_SYN]     = "SERVAL_PKT_SYN",
         [SERVAL_PKT_RESET]   = "SERVAL_PKT_RESET",
         [SERVAL_PKT_CLOSE]   = "SERVAL_PKT_CLOSE",
-        [SERVAL_PKT_MIG]     = "SERVAL_PKT_MIG",
         [SERVAL_PKT_RSYN]    = "SERVAL_PKT_RSYN",
-        [SERVAL_PKT_MIGDATA] = "SERVAL_PKT_MIGDATA",        
 };
 #endif /* ENABLE_DEBUG */
 
@@ -545,9 +543,13 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
                                            struct serval_hdr *sh)
 {
         /* We might have pulled the serval header already. */
-        if ((unsigned char *)sh == skb_transport_header(skb))
+        if ((unsigned char *)sh == skb_transport_header(skb)) {
+                LOG_DBG("skb->len=%u sh->length=%u\n", 
+                        skb->len, ntohs(sh->length));
                 return skb->len > ntohs(sh->length);
+        }
             
+        LOG_DBG("skb->len=%u\n", skb->len);
         return skb->len > 0;
 }
 
@@ -973,10 +975,41 @@ void serval_sal_migrate(struct sock *sk)
         }    
 }
 
+static int serval_sal_send_close(struct sock *sk)
+{
+        struct sk_buff *skb;
+        int err;
+
+        //if (serval_sk(sk)->sal_state != SAL_CLOSING)
+        //      return 0;
+        
+        /* We are under lock, so allocation must be atomic */
+        /* Socket is locked, keep trying until memory is available. */
+        for (;;) {
+                skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, 
+                                       GFP_ATOMIC);
+                
+                if (skb)
+                        break;
+                yield();
+        }
+        
+        LOG_DBG("Sending SAL FIN\n");
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
+        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
+        
+        err = serval_sal_queue_and_push(sk, skb);
+        
+        if (err < 0) {
+                LOG_ERR("queuing failed\n");
+        }
+
+        return err;
+}
+
 /* Called as a result of user app close() */
 void serval_sal_close(struct sock *sk, long timeout)
 {
-        struct sk_buff *skb = NULL;
         int err = 0;
 
         LOG_INF("Closing socket\n");
@@ -985,43 +1018,27 @@ void serval_sal_close(struct sock *sk, long timeout)
             sk->sk_state == SERVAL_RESPOND ||
             sk->sk_state == SERVAL_CLOSEWAIT) {
                 struct serval_sock *ssk = serval_sk(sk);
-                
-                if (ssk->close_received && 
-                    sk->sk_state != SERVAL_CLOSEWAIT)
-                        serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
+                /*                
+                if (sk->sk_state != SERVAL_CLOSEWAIT)
+                        serval_sock_set_sal_state(sk, SAL_CLOSING);
+                */
+                if (sk->sk_state == SERVAL_CLOSEWAIT) {
+                        serval_sal_timewait(sk, SERVAL_LASTACK);
+                } else {
+                        serval_sal_timewait(sk, SERVAL_FINWAIT1);
+                }
 
                 if (ssk->af_ops->conn_close) {
+                        /* Tell transport to, e.g., schedule
+                           end-of-stream (i.e., put FIN in the last
+                           queued transport segment) */
                         err = ssk->af_ops->conn_close(sk);
 
                         if (err != 0) {
                                 LOG_ERR("Transport error %d\n", err);
                         }
-                }
-
-                if (sk->sk_state == SERVAL_CLOSEWAIT) {
-                        serval_sock_set_state(sk, SERVAL_LASTACK);
                 } else {
-                        serval_sock_set_state(sk, SERVAL_FINWAIT1);
-                }
-                /* We are under lock, so allocation must be atomic */
-                /* Socket is locked, keep trying until memory is available. */
-                for (;;) {
-                        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, 
-                                               GFP_ATOMIC);
-                        
-                        if (skb)
-                                break;
-                        yield();
-                }
-                
-                LOG_DBG("Sending Close REQUEST\n");
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_CLOSE;
-                SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
-
-                err = serval_sal_queue_and_push(sk, skb);
-                
-                if (err < 0) {
-                        LOG_ERR("queuing failed\n");
+                        err = serval_sal_send_shutdown(sk);
                 }
         } else {
                 LOG_DBG("Closing socket\n");
@@ -1467,8 +1484,11 @@ static int serval_sal_syn_rcv(struct sock *sk,
                 struct udphdr *uh = (struct udphdr *)
                         ((char *)iph + (iph->ihl << 2));
 
-                /* We should perform UDP encapsulation */
+                /* Remember that we should perform UDP
+                   encapsulation */
                 srsk->udp_encap_port = ntohs(uh->source);
+                
+                LOG_DBG("Sending UDP encapsulated response\n");
                 
                 if (serval_udp_encap_skb(rskb, srsk->reply_saddr,
                                          inet_rsk(rsk)->rmt_addr,
@@ -1706,7 +1726,7 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        LOG_INF("received Close REQUEST\n");
+        LOG_INF("received SAL FIN\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
                 LOG_ERR("Bad control extension\n");
@@ -1714,65 +1734,33 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         }
         
         if (has_valid_seqno(ctx->seqno, ssk)) {
-                ssk->rcv_seq.nxt = ctx->seqno + 1;                
-                ssk->close_received = 1;
 
-                /* Give transport a chance to chip in */ 
-                if (ssk->af_ops->close_request) {
-                        err = ssk->af_ops->close_request(sk, skb);
-                } else {
-                        /* If transport has no close_request function,
-                           assume 1 */
-                        err = 1;
-                }
+                /* Just ignore this close request in case transport
+                   has not yet indicated it is ready. */
+                if (!(sk->sk_shutdown & RCV_SHUTDOWN))
+                        return 1;
 
-                /* FIXME: This is a HACK! If close_request
-                 * returns 1, the transport is ready to tell
-                 * the user that the other end closed. */
-                if (err == 1) {
-                        LOG_DBG("Transport is ready to close\n");
-                        sk->sk_shutdown |= RCV_SHUTDOWN;
-                        sock_set_flag(sk, SOCK_DONE);
+                ssk->rcv_seq.nxt = ctx->seqno + 1;
 
-                        switch (sk->sk_state) {
-                        case SERVAL_REQUEST:
-                                /* FIXME: check correct processing here in
-                                 * REQUEST state. */
-                        case SERVAL_RESPOND:
-                        case SERVAL_CONNECTED:
-                                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                                break;
-                        case SERVAL_CLOSING:
-                                break;
-                        case SERVAL_CLOSEWAIT:
-                                /* Must be retransmitted FIN */
-                                break;
-                        case SERVAL_FINWAIT1:
-                                /* Simultaneous close */
-                                serval_sock_set_state(sk, SERVAL_CLOSING);
-                        case SERVAL_FINWAIT2:
-                                // Time-wait
-                        default:
-                                break;
-                        }
+                LOG_DBG("Transport is ready to close\n");
 
-                        if (!sock_flag(sk, SOCK_DEAD)) {
-                                LOG_DBG("Wake user\n");
-                                sk->sk_state_change(sk);
-
-                                /* Do not send POLL_HUP for half
-                                   duplex close. */
-                                if (sk->sk_shutdown == SHUTDOWN_MASK ||
-                                    sk->sk_state == SERVAL_CLOSED)
-                                        sk_wake_async(sk, SOCK_WAKE_WAITD, 
-                                                      POLL_HUP);
-                                else
-                                        sk_wake_async(sk, SOCK_WAKE_WAITD, 
-                                                      POLL_IN);
-                        }
-                        
-                } else {
-                        LOG_DBG("Transport not ready to close\n");
+                sock_set_flag(sk, SOCK_DONE);
+                
+                /* If there is still an application attached to the
+                   sock, then wake it up. */
+                if (!sock_flag(sk, SOCK_DEAD)) {
+                        LOG_DBG("Wake user\n");
+                        sk->sk_state_change(sk);
+         
+                        /* Do not send POLL_HUP for half
+                           duplex close. */
+                        if (sk->sk_shutdown == SHUTDOWN_MASK ||
+                            sk->sk_state == SERVAL_CLOSED)
+                                sk_wake_async(sk, SOCK_WAKE_WAITD, 
+                                              POLL_HUP);
+                        else
+                                sk_wake_async(sk, SOCK_WAKE_WAITD, 
+                                              POLL_IN);
                 }
                 err = serval_sal_send_ack(sk);
         }
@@ -1780,68 +1768,37 @@ static int serval_sal_rcv_close_req(struct sock *sk,
         return err;
 }
 
-/**
-   Called by transport when it has finished.
- */
-int serval_sal_rcv_transport_fin(struct sock *sk,
-                                 struct sk_buff *skb)
+int serval_sal_send_shutdown(struct sock *sk)
 {
-        int err = 0;
-        struct serval_sock *ssk = serval_sk(sk);
-        
-        LOG_DBG("Transport FIN received. Serval close received=%d\n", 
-                ssk->close_received);
+        LOG_DBG("SEND_SHUTDOWN\n");
 
-        /* Set receive shutdown even though we might not have received
-           the SAL close, as this is the end of the transport stream
-           in any case. */
+        sk->sk_shutdown |= SEND_SHUTDOWN;
+        
+        /* SOCK_DEAD would mean there is no user app attached
+           anymore */
+        if (!sock_flag(sk, SOCK_DEAD))
+                /* Wake up lingering close() */
+                sk->sk_state_change(sk);
+        
+        return serval_sal_send_close(sk);
+}
+
+/* 
+   Called by transport protocol when it wants to indicate that it has
+   stopped receiving data.
+ */
+int serval_sal_recv_shutdown(struct sock *sk)
+{
+        LOG_DBG("RCV_SHUTDOWN\n");
+
         sk->sk_shutdown |= RCV_SHUTDOWN;
 
-        if (!ssk->close_received)
-                return 0;
-        
         if (sock_flag(sk, SOCK_DONE))
                 return 0;
 
         sock_set_flag(sk, SOCK_DONE);
-        
-        switch (sk->sk_state) {
-        case SERVAL_REQUEST:
-                /* FIXME: check correct processing here in
-                 * REQUEST state. */
-        case SERVAL_RESPOND:
-        case SERVAL_CONNECTED:
-                serval_sock_set_state(sk, SERVAL_CLOSEWAIT);
-                break;
-        case SERVAL_CLOSING:
-                break;
-        case SERVAL_CLOSEWAIT:
-                /* Must be retransmitted FIN */
-                                
-                /* FIXME: is this the right place for async
-                 * wake? */
-                break;
-        case SERVAL_FINWAIT1:
-                /* Simultaneous close */
-                serval_sock_set_state(sk, SERVAL_CLOSING);
-        case SERVAL_FINWAIT2:
-                // Time-wait
-        default:
-                break;
-        }
 
-	if (!sock_flag(sk, SOCK_DEAD)) {
-		sk->sk_state_change(sk);
-
-		/* Do not send POLL_HUP for half duplex close. */
-		if (sk->sk_shutdown == SHUTDOWN_MASK ||
-		    sk->sk_state == SERVAL_CLOSED)
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
-		else
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
-	}
-        
-        return err;
+        return 0;
 }
 
 static int serval_sal_connected_state_process(struct sock *sk,
@@ -1855,9 +1812,15 @@ static int serval_sal_connected_state_process(struct sock *sk,
         if (ctx->hdr->type == SERVAL_PKT_RSYN)
                 err = serval_sal_rcv_mig_req(sk, skb, ctx);
 
-        if (ctx->hdr->type == SERVAL_PKT_CLOSE)
-                err = serval_sal_rcv_close_req(sk, skb, ctx);
 
+        if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
+                err = serval_sal_rcv_close_req(sk, skb, ctx);
+                
+                if (err == 0) {
+                        serval_sal_timewait(sk, SERVAL_FINWAIT1);
+                }
+        }
+        
         /* Should also pass FIN to user, as it needs to pick it off
          * its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
@@ -2059,7 +2022,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         /* Move to connected state */
         serval_sock_set_state(sk, SERVAL_CONNECTED);
         
-        /* Let user know we are connected. */
+        /* Let application know we are connected. */
 	if (!sock_flag(sk, SOCK_DEAD)) {
                 sk->sk_state_change(sk);
                 sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
@@ -2155,18 +2118,10 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 ack_ok = 1;
 
         if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
-                serval_sal_rcv_close_req(sk, skb, ctx);
-
-                if (ack_ok)
-                        serval_sal_timewait(sk, SERVAL_TIMEWAIT);
-                else
+                if (serval_sal_rcv_close_req(sk, skb, ctx) == 0)
                         serval_sal_timewait(sk, SERVAL_CLOSING);
         } else if (ack_ok) {
-                sk->sk_shutdown |= SEND_SHUTDOWN;
                 serval_sal_timewait(sk, SERVAL_FINWAIT2);
-                if (!sock_flag(sk, SOCK_DEAD))
-                        /* Wake up lingering close() */
-                        sk->sk_state_change(sk);
         }
         
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
@@ -2983,7 +2938,16 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
         
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
+                /* Modify inet_sk(sk)->daddr to use migration
+                   address */
+        }
+        
         err = ssk->af_ops->queue_xmit(skb);
+        
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
+                /* Restore inet_sk(sk)->daddr */
+        }
 
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
@@ -3130,6 +3094,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         case SERVAL_PKT_SYN:
                 hdr_len += serval_sal_add_conn_ext(sk, skb, 0);           
                 break;
+        case SERVAL_PKT_RSYN:
+                /* Add migration extensions */
+                break;
         case SERVAL_PKT_CLOSE:
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
@@ -3177,6 +3144,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_CLOSING | 
                                    SERVALF_CLOSEWAIT)) {
                 serval_sal_send_check(sh);
+
                 return serval_sal_do_xmit(skb);
         }
         

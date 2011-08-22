@@ -92,9 +92,18 @@ Message::check_buf(const unsigned char *buf,
 inline int
 Message::check_hdr() const
 {
-    if (_version != version || check_type() < 0 ||
-        check_len() < 0)
+    if (_version != version) {
+        lerr("bad version");
         return -1;
+    }
+    if (check_type() < 0) {
+        lerr("bad type %u", _type);
+    }
+    if (check_len() < 0) {
+        lerr("bad len expceted %d vs %d\n",
+             _pld_len_v >= pld_len());
+        return -1;
+    }
     return 0;
 }
 

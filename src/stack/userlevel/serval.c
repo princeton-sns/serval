@@ -406,7 +406,7 @@ out_close_pipe:
 	return ret;
 }
 
-extern void dev_list_add(const char *name);
+extern void dev_list_add(char *name);
 
 #define PID_FILE "/tmp/serval.pid"
 

@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*
  * Copyright 2010 Andrea Mazzoleni. All rights reserved.
  *
@@ -66,33 +67,33 @@ struct prefix_trie_data;
 struct prefix_trie_node;
 
 struct prefix_trie_iter_node {
-    struct prefix_trie_iter_node* prev;
-    struct prefix_trie_node* node;
+    struct prefix_trie_iter_node *prev;
+    struct prefix_trie_node *node;
     int level;
-    struct prefix_trie_data** branches;
+    struct prefix_trie_data **branches;
     int limit;
     int branch;
     int last_branch;
     int len;
-    struct prefix_trie_data* prefix;
+    struct prefix_trie_data *prefix;
 };
 struct prefix_trie_struct {
     size_t key_len;
     size_t count; /** leaves (values, including conflicting prefixes) */
     size_t node_count; /** internal nodes */
-    void* def_value; /** default value - * match */
+    void *def_value; /** default value - * match */
     float fill_factor; /** >= fill_factor means expand the branch, < ff/2 means split*/
     size_t max_depth;
     uint16_t shortest;
     uint16_t branch_fill;
-    struct prefix_trie_data* root_branch[PREFIX_TRIE_ROOT_BRANCH];
+    struct prefix_trie_data *root_branch[PREFIX_TRIE_ROOT_BRANCH];
     /* density, expanse? */
     //tommy_allocator* alloc; /**< Allocator for internal nodes. */
 };
 struct prefix_trie_iter {
-    struct prefix_trie_iter_node* iter_node;
+    struct prefix_trie_iter_node *iter_node;
     struct prefix_trie_iter_node last_iter_node;
-    struct prefix_trie_struct* trie;
+    struct prefix_trie_struct *trie;
 };
 
 /**
@@ -101,12 +102,13 @@ struct prefix_trie_iter {
  * You can share this allocator with other tries.
  * \param alloc Allocator initialized with *both* the size and align with TOMMY_TRIE_BLOCK_SIZE.
  */
-int prefix_trie_initialize(struct prefix_trie_struct* trie, size_t keylen, float fill_factor);
+int prefix_trie_initialize(struct prefix_trie_struct *trie, size_t keylen,
+			   float fill_factor);
 
 /**
  * Deinitializes the trie.
  */
-int prefix_trie_finalize(struct prefix_trie_struct* trie);
+int prefix_trie_finalize(struct prefix_trie_struct *trie);
 
 /**
  * Inserts an element in the trie.
@@ -117,7 +119,8 @@ int prefix_trie_finalize(struct prefix_trie_struct* trie);
  * \param key Key to use to insert the object.
  */
 void
-* prefix_trie_insert(struct prefix_trie_struct* trie, uint8_t* key, uint16_t prefix, void* data);
+*prefix_trie_insert(struct prefix_trie_struct *trie, uint8_t * key,
+		    uint16_t prefix, void *data);
 
 /**
  * Searches and removes the first element with the specified key.
@@ -127,7 +130,8 @@ void
  * \param key Key of the element to find and remove.
  * \return The removed element, or 0 if not found.
  */
-void* prefix_trie_remove(struct prefix_trie_struct* trie, uint8_t* key, uint16_t prefix);
+void *prefix_trie_remove(struct prefix_trie_struct *trie, uint8_t * key,
+			 uint16_t prefix);
 
 /**
  * Searches an element in the trie.
@@ -136,27 +140,30 @@ void* prefix_trie_remove(struct prefix_trie_struct* trie, uint8_t* key, uint16_t
  * \param key Key of the element to find.
  * \return The first element found, or 0 if none.
  */
-void* prefix_trie_find(struct prefix_trie_struct* trie, uint8_t* key, uint16_t prefix);
-void* prefix_trie_find_exact(struct prefix_trie_struct* trie, uint8_t* key, uint16_t prefix);
-int prefix_trie_has_key(struct prefix_trie_struct* trie, uint8_t* key, uint16_t prefix);
+void *prefix_trie_find(struct prefix_trie_struct *trie, uint8_t * key,
+		       uint16_t prefix);
+void *prefix_trie_find_exact(struct prefix_trie_struct *trie,
+			     uint8_t * key, uint16_t prefix);
+int prefix_trie_has_key(struct prefix_trie_struct *trie, uint8_t * key,
+			uint16_t prefix);
 
-void prefix_trie_iter_init(struct prefix_trie_iter* iter, struct prefix_trie_struct* trie);
-int prefix_trie_iter_next(struct prefix_trie_iter* iter, uint8_t** key, uint16_t* prefix,
-        void** data);
-int prefix_trie_iter_next_print(struct prefix_trie_iter* iter, uint8_t** key, uint16_t* prefix,
-        void** data);
-int prefix_trie_iter_remove(struct prefix_trie_iter* iter);
+void prefix_trie_iter_init(struct prefix_trie_iter *iter,
+			   struct prefix_trie_struct *trie);
+int prefix_trie_iter_next(struct prefix_trie_iter *iter, uint8_t ** key,
+			  uint16_t * prefix, void **data);
+int prefix_trie_iter_next_print(struct prefix_trie_iter *iter,
+				uint8_t ** key, uint16_t * prefix, void **data);
+int prefix_trie_iter_remove(struct prefix_trie_iter *iter);
 
-void prefix_trie_iter_destroy(struct prefix_trie_iter* iter);
+void prefix_trie_iter_destroy(struct prefix_trie_iter *iter);
 
-void print_trie(struct prefix_trie_struct* trie);
-char* print_trie_data(struct prefix_trie_data* dnode);
-char* print_trie_node(struct prefix_trie_node* node, uint8_t offset);
+void print_trie(struct prefix_trie_struct *trie);
+char *print_trie_data(struct prefix_trie_data *dnode);
+char *print_trie_node(struct prefix_trie_node *node, uint8_t offset);
 
 /**
  * Returns the number of elements.
  */
-uint32_t prefix_trie_count(struct prefix_trie_struct* trie);
-uint32_t prefix_trie_node_count(struct prefix_trie_struct* trie);
+uint32_t prefix_trie_count(struct prefix_trie_struct *trie);
+uint32_t prefix_trie_node_count(struct prefix_trie_struct *trie);
 #endif
-

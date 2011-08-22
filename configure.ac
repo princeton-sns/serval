@@ -19,8 +19,8 @@ CFLAGS=
 CXXFLAGS=
 
 dnl Set some decent default flags
-CFLAGS="$CFLAGS -Wall -O2"
-CXXFLAGS="$CXXFLAGS -Wall -O2"
+CFLAGS="$CFLAGS -Wall"
+CXXFLAGS="$CXXFLAGS -Wall"
 EXTRA_DEFINES=
 KERNEL_EXTRA_CFLAGS=
 
@@ -54,23 +54,10 @@ esac
 
 AC_MSG_RESULT([$serval_os_macosx])
 
-serval_os_iphoneos=no
-
-AC_MSG_CHECKING([for iPhoneOS])
-case $host in
-  arm-*-darwin*)
-	serval_os_iphoneos=yes
-	PLATFORM=darwin
-	;;
-esac
-
-AC_MSG_RESULT([$serval_os_iphoneos])
-
 # Set some automake variables
 AM_CONDITIONAL(OS_LINUX, [test x$serval_os_linux = xyes])
 AM_CONDITIONAL(OS_MACOSX, [test x$serval_os_macosx = xyes])
 AM_CONDITIONAL(OS_BSD, [test x$serval_os_bsd = xyes])
-AM_CONDITIONAL(OS_IPHONEOS, [test x$serval_os_iphoneos = xyes])
 
 # Platform define could be set here or detected in platform.h header
 #if test x$serval_os_linux = xyes
@@ -80,10 +67,6 @@ AM_CONDITIONAL(OS_IPHONEOS, [test x$serval_os_iphoneos = xyes])
 #if test x$serval_os_macosx = xyes
 #then
 #	CPPFLAGS="${CPPFLAGS} -DOS_MACOSX"
-#fi
-#if test x$serval_os_iphoneos = xyes
-#then
-#	CPPFLAGS="${CPPFLAGS} -DOS_IPHONEOS"
 #fi
 
 dnl In the future, we might want to override the SERVAL_DIR,
@@ -100,6 +83,8 @@ AC_SUBST(SERVAL_LDFLAGS)
 dnl Put in config.h
 AC_DEFINE_UNQUOTED([SERVAL_LDFLAGS], "${SERVAL_LDFLAGS}", [Library and include paths for Serval])
 
+dnl Check for OpenSSL development headers
+AC_CHECK_HEADER(openssl/ssl.h,, AC_MSG_ERROR([could not find OpenSSL development headers]),)
 
 dnl Preset $prefix and $exec_prefix.
 test "x$prefix" = xNONE && prefix=$ac_default_prefix
@@ -119,9 +104,13 @@ AM_CONDITIONAL([DEBUG], [test x$debug = xyes])
 if test x$debug = xyes
 then      
      EXTRA_DEFINES="${EXTRA_DEFINES} -DENABLE_DEBUG"
-     CFLAGS="$CFLAGS -g"  
-     CXXFLAGS="$CXXFLAGS -g"
-     KERNEL_EXTRA_CFLAGS="-g3 -ggdb3 -O0 -fno-inline"
+     CFLAGS="$CFLAGS -g -O0 -fno-inline"  
+     CXXFLAGS="$CXXFLAGS -g -O0 -fno-inline"
+     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -g3 -ggdb3 -O0 -fno-inline"
+else
+     CFLAGS="$CFLAGS -O2"  
+     CXXFLAGS="$CXXFLAGS -O2"
+     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -O2"
 fi
 
 dnl Option to set gprof

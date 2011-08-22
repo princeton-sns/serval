@@ -42,15 +42,20 @@
 int
 Message::read_hdr(const unsigned char *buf)
 {
-    if (check_buf(buf, __FILE__, __LINE__) < 0)
+    if (check_buf(buf, __FILE__, __LINE__) < 0) {
+        lerr("check_buf failed");
         return -1;
+    }
+
     const unsigned char *p = buf;
     p += serial_read(&_version, p);
     p += serial_read(&_type, p);
     p += serial_read(&_pld_len_v, p);
 
-    if (check_hdr() < 0)
+    if (check_hdr() < 0) {
+        lerr("check header failed");
         return -1;
+    }
 
     info("Message::read (hdr) version = %d, type = %d, len = %d",
          _version, _type, _pld_len_v);
@@ -169,7 +174,7 @@ Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
 
     if (n < 0 || read_hdr(buf) < 0) {
         delete[] buf;
-        lerr("Message::read_hdr_from_stream_soc failed");
+        lerr("Message::read_hdr_from_stream_soc failed n=%d", n);
         err = errno;
         return -1;
     }

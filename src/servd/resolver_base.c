@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*
  * resolver_base.c
  *
@@ -12,75 +13,85 @@
 #include "stdlib.h"
 #include "unistd.h"
 
-static void destroy_service_desc(void* value) {
-    if(value == NULL) {
+static void destroy_service_desc(void *value)
+{
+    if (value == NULL) {
         return;
     }
 
-    struct service_desc* sdesc = (struct service_desc*) value;
+    struct service_desc *sdesc = (struct service_desc *) value;
     free(sdesc);
 }
 
 /*
-static void destroy_net_addr(void* value) {
-    if(value == NULL) {
-        return;
-    }
+  static void destroy_net_addr(void* value) {
+  if(value == NULL) {
+  return;
+  }
 
-    struct net_addr* addr = (struct net_addr*) value;
-    free(addr);
-}
+  struct net_addr* addr = (struct net_addr*) value;
+  free(addr);
+  }
 */
 
-void init_base_resolver(struct sv_base_service_resolver *base) {
+void init_base_resolver(struct sv_base_service_resolver *base)
+{
     assert(base);
     base->addresses = g_array_new(FALSE, TRUE, sizeof(struct net_addr));
     base->service_descs = g_ptr_array_new_with_free_func(destroy_service_desc);
-    base->peer_status_callbacks = g_array_new(FALSE, TRUE, sizeof(peer_status_callback));
+    base->peer_status_callbacks =
+        g_array_new(FALSE, TRUE, sizeof(peer_status_callback));
 }
 
-void base_set_capabilities(service_resolver* resolver, uint32_t capabilities) {
+void base_set_capabilities(service_resolver * resolver, uint32_t capabilities)
+{
     assert(resolver);
     resolver->resolver.capabilities = capabilities;
 }
 
-int base_resolver_initialize(service_resolver* resolver) {
+int base_resolver_initialize(service_resolver * resolver)
+{
     assert(resolver);
-    if(resolver->resolver.state != CREATED) {
+    if (resolver->resolver.state != CREATED) {
         return -1;
     }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     //base->resolver.resolver.state = INITIALIZED;
-    if(base->addresses == NULL) {
+    if (base->addresses == NULL) {
         base->addresses = g_array_new(FALSE, TRUE, sizeof(struct net_addr));
     }
-    if(base->service_descs == NULL) {
-        base->service_descs = g_ptr_array_new_with_free_func(destroy_service_desc);
+    if (base->service_descs == NULL) {
+        base->service_descs =
+            g_ptr_array_new_with_free_func(destroy_service_desc);
     }
-    if(base->peer_status_callbacks == NULL) {
-        base->peer_status_callbacks = g_array_new(FALSE, TRUE, sizeof(peer_status_callback));
+    if (base->peer_status_callbacks == NULL) {
+        base->peer_status_callbacks =
+            g_array_new(FALSE, TRUE, sizeof(peer_status_callback));
     }
 
     resolver->resolver.state = INITIALIZED;
     return 0;
 }
 
-int base_resolver_finalize(service_resolver* resolver) {
+int base_resolver_finalize(service_resolver * resolver)
+{
     assert(resolver);
 
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
-    if(base->addresses) {
+    if (base->addresses) {
         g_array_free(base->addresses, TRUE);
         base->addresses = NULL;
     }
-    if(base->service_descs) {
+    if (base->service_descs) {
         g_ptr_array_free(base->service_descs, TRUE);
         base->service_descs = NULL;
     }
 
-    if(base->peer_status_callbacks) {
+    if (base->peer_status_callbacks) {
         g_array_free(base->peer_status_callbacks, TRUE);
         base->peer_status_callbacks = NULL;
     }
@@ -89,194 +100,245 @@ int base_resolver_finalize(service_resolver* resolver) {
     return 0;
 }
 
-void base_resolver_incref(service_resolver* resolver) {
+void base_resolver_incref(service_resolver * resolver)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     atomic_inc(&base->ref_count);
 }
 
-struct net_addr* resolver_get_address(service_resolver* resolver, int index) {
+struct net_addr *resolver_get_address(service_resolver * resolver, int index)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
-    if(index < 0 || index > base->addresses->len) {
+    if (index < 0 || index > base->addresses->len) {
         return NULL;
     }
 
     return &g_array_index(base->addresses, struct net_addr, index);
 }
 
-void resolver_add_address(service_resolver* resolver, struct net_addr* addr) {
+void resolver_add_address(service_resolver * resolver, struct net_addr *addr)
+{
     assert(resolver);
-    if(addr == NULL) {
+    if (addr == NULL) {
         return;
     }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     g_array_append_val(base->addresses, *addr);
 }
 
-static int resolver_find_address_index(struct sv_base_service_resolver* resolver,
-        struct net_addr* addr) {
+static int resolver_find_address_index(struct sv_base_service_resolver
+                                       *resolver, struct net_addr *addr)
+{
     int i = 0;
-    for(; i < resolver->addresses->len; i++) {
-        if(!memcmp(&g_array_index(resolver->addresses, struct net_addr, i), addr,
-                sizeof(struct net_addr))) {
+    for (; i < resolver->addresses->len; i++) {
+        if (!memcmp
+            (&g_array_index(resolver->addresses, struct net_addr, i), addr,
+             sizeof(struct net_addr))) {
             return i;
         }
     }
     return -1;
 }
 
-int resolver_remove_address(service_resolver* resolver, struct net_addr* addr) {
+int resolver_remove_address(service_resolver *resolver, struct net_addr *addr)
+{
     assert(resolver);
-    if(addr == NULL) {
+    if (addr == NULL) {
         return -1;
     }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     int index = resolver_find_address_index(base, addr);
-    if(index >= 0) {
+    if (index >= 0) {
         g_array_remove_index(base->addresses, index);
     }
     return index;
 }
 
-int resolver_get_address_count(service_resolver* resolver) {
+int resolver_get_address_count(service_resolver *resolver)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     return base->addresses->len;
 }
-void resolver_clear_addresses(service_resolver* resolver) {
+
+void resolver_clear_addresses(service_resolver *resolver)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     g_array_remove_range(base->addresses, 0, base->addresses->len);
 }
 
-void resolver_register_peer_status_callback(service_resolver* resolver, peer_status_callback* cb) {
+void resolver_register_peer_status_callback(service_resolver *resolver,
+                                            peer_status_callback *cb)
+{
     assert(resolver);
-    if(cb == NULL) {
+    if (cb == NULL) {
         return;
     }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     g_array_append_val(base->peer_status_callbacks, *cb);
 }
 
-static int resolver_find_peer_status_callback_index(struct sv_base_service_resolver* resolver,
-        peer_status_callback* cb) {
+static int resolver_find_peer_status_callback_index(struct sv_base_service_resolver *resolver, peer_status_callback *cb)
+{
     int i = 0;
-    for(; i < resolver->addresses->len; i++) {
-        if(!memcmp(&g_array_index(resolver->peer_status_callbacks, peer_status_callback, i), cb,
-                sizeof(*cb))) {
+    for (; i < resolver->addresses->len; i++) {
+        if (!memcmp(&g_array_index(resolver->peer_status_callbacks, 
+                                   peer_status_callback, i),
+                    cb, sizeof(*cb))) {
             return i;
         }
     }
     return -1;
 }
 
-void resolver_unregister_peer_status_callback(service_resolver* resolver, peer_status_callback* cb) {
-    assert(resolver);
-    if(cb == NULL) {
-        return;
-    }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+void resolver_unregister_peer_status_callback(service_resolver *resolver,
+                                              peer_status_callback *cb)
+{
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *)resolver;
+    int index;
 
-    int index = resolver_find_peer_status_callback_index(base, cb);
-    if(index >= 0) {
+    assert(resolver);
+
+    if (cb == NULL)
+        return;
+
+    index = resolver_find_peer_status_callback_index(base, cb);
+
+    if (index >= 0) {
         g_array_remove_index(base->peer_status_callbacks, index);
     }
 }
 
-void notify_peer_status_callbacks(service_resolver* resolver, service_resolver* peer,
-        enum resolver_state status) {
+void notify_peer_status_callbacks(service_resolver *resolver,
+                                  service_resolver *peer,
+                                  enum resolver_state status)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
     int i = 0;
-    peer_status_callback* cb;
-    for(i = 0; i < base->peer_status_callbacks->len; i++) {
-        cb = &g_array_index(base->peer_status_callbacks, peer_status_callback, i);
+    peer_status_callback *cb;
+    for (i = 0; i < base->peer_status_callbacks->len; i++) {
+        cb = &g_array_index(base->peer_status_callbacks,
+                            peer_status_callback, i);
         cb->peer_status_cb(cb, peer, status);
     }
 }
 
-struct service_desc* resolver_get_service_desc(service_resolver* resolver, int index) {
+struct service_desc *resolver_get_service_desc(service_resolver *resolver,
+                                               int index)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
-    if(index < 0 || index >= base->service_descs->len) {
+    if (index < 0 || index >= base->service_descs->len) {
         return NULL;
     }
 
     return g_ptr_array_index(base->service_descs, index);
 }
 
-void resolver_add_service_desc(service_resolver* resolver, struct service_desc* sdesc) {
+void resolver_add_service_desc(service_resolver *resolver,
+                               struct service_desc *sdesc)
+{
     assert(resolver);
 
-    if(sdesc == NULL) {
+    if (sdesc == NULL) {
         return;
     }
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     /*TODO - check for dups? */
     g_ptr_array_add(base->service_descs, sdesc);
 }
 
-static int resolver_find_service_desc_index(struct sv_base_service_resolver* resolver,
-        struct service_desc* service) {
-    struct service_desc* desc;
+static int resolver_find_service_desc_index(struct sv_base_service_resolver
+                                            *resolver,
+                                            struct service_desc *service)
+{
+    struct service_desc *desc;
 
     int i = 0;
-    for(; i < resolver->service_descs->len; i++) {
+    for (; i < resolver->service_descs->len; i++) {
         desc = g_ptr_array_index(resolver->service_descs, i);
-        if(desc->prefix == service->prefix && !memcmp(&desc->service, &service->service,
-                desc->prefix)) {
+        if (desc->prefix == service->prefix
+            && !memcmp(&desc->service, &service->service, desc->prefix)) {
             return i;
         }
     }
     return -1;
 }
 
-int resolver_remove_service_desc(service_resolver* resolver, struct service_desc* sdesc) {
+int resolver_remove_service_desc(service_resolver *resolver,
+                                 struct service_desc *sdesc)
+{
     assert(resolver);
 
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     int index = resolver_find_service_desc_index(base, sdesc);
-    if(index >= 0) {
+    if (index >= 0) {
         g_ptr_array_remove_index(base->service_descs, index);
     }
 
     return index;
 }
-int resolver_get_service_desc_count(service_resolver* resolver) {
+
+int resolver_get_service_desc_count(service_resolver *resolver)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     return base->service_descs->len;
 }
-void resolver_clear_service_descs(service_resolver* resolver) {
+
+void resolver_clear_service_descs(service_resolver *resolver)
+{
     assert(resolver);
-    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
 
     g_ptr_array_remove_range(base->service_descs, 0, base->service_descs->len);
 }
 
-void base_resolver_set_address(service_resolver* resolver, struct sockaddr* saddr, size_t len) {
+void base_resolver_set_address(service_resolver *resolver,
+                               struct sockaddr *saddr, size_t len)
+{
     assert(resolver);
 
-    if(len == sizeof(struct sockaddr_sv)) {
-        memcpy(&resolver->resolver.resolver_id.sv_srvid, &((struct sockaddr_sv*) saddr)->sv_srvid,
-                sizeof(struct service_id));
-    } else if(len >= sizeof(struct sv_instance_addr)) {
+    if (len == sizeof(struct sockaddr_sv)) {
         memcpy(&resolver->resolver.resolver_id.sv_srvid,
-                &((struct sv_instance_addr*) saddr)->service.sv_srvid, sizeof(struct service_id));
+               &((struct sockaddr_sv *) saddr)->sv_srvid,
+               sizeof(struct service_id));
+    } else if (len >= sizeof(struct sv_instance_addr)) {
+        memcpy(&resolver->resolver.resolver_id.sv_srvid,
+               &((struct sv_instance_addr *) saddr)->service.sv_srvid,
+               sizeof(struct service_id));
     }
 }
+
 //service_resolver* resolver_incref(service_resolver* resolver) {
 //    assert(resolver);
 //    struct sv_base_service_resolver *base = (struct sv_base_service_resolver *) resolver;
@@ -298,160 +360,165 @@ void base_resolver_set_address(service_resolver* resolver, struct sockaddr* sadd
 //    return FALSE;
 //}
 
-void prep_stats_for_host(uint16_t type, void* host, void* net) {
-    struct sv_instance_stats* istats = NULL;
-    struct sv_instance_stats* ristats = NULL;
+void prep_stats_for_host(uint16_t type, void *host, void *net)
+{
+    struct sv_instance_stats *istats = NULL;
+    struct sv_instance_stats *ristats = NULL;
 
-    struct sv_service_stats* sstats = NULL;
-    struct sv_service_stats* rsstats = NULL;
+    struct sv_service_stats *sstats = NULL;
+    struct sv_service_stats *rsstats = NULL;
 
-    struct sv_table_stats* tstats = NULL;
-    struct sv_table_stats* rtstats = NULL;
+    struct sv_table_stats *tstats = NULL;
+    struct sv_table_stats *rtstats = NULL;
 
-    struct sv_router_stats* rstats = NULL;
-    struct sv_router_stats* rrstats = NULL;
+    struct sv_router_stats *rstats = NULL;
+    struct sv_router_stats *rrstats = NULL;
 
-    switch(type) {
-        case SVS_INSTANCE_STATS:
-            istats = (struct sv_instance_stats*) host;
-            ristats = (struct sv_instance_stats*) net;
+    switch (type) {
+    case SVS_INSTANCE_STATS:
+        istats = (struct sv_instance_stats *) host;
+        ristats = (struct sv_instance_stats *) net;
 
-            memcpy(&istats->service, &ristats->service, sizeof(struct service_desc));
-            istats->service.type = ntohs(ristats->service.type);
-            memcpy(&istats->address, &ristats->address, sizeof(struct net_addr));
-            istats->priority = ntohs(ristats->priority);
-            istats->weight = ntohs(ristats->weight);
-            istats->idle_timeout = ntohs(ristats->idle_timeout);
-            istats->hard_timeout = ntohs(ristats->hard_timeout);
-            istats->duration_sec = ntohl(ristats->duration_sec);
-            istats->duration_nsec = ntohl(ristats->duration_nsec);
-            istats->packets_resolved = ntohl(ristats->packets_resolved);
-            istats->bytes_resolved = ntohl(ristats->bytes_resolved);
-            istats->tokens_consumed = ntohl(ristats->tokens_consumed);
-            break;
-        case SVS_SERVICE_STATS:
-            sstats = (struct sv_service_stats*) host;
-            rsstats = (struct sv_service_stats*) net;
+        memcpy(&istats->service, &ristats->service,
+               sizeof(struct service_desc));
+        istats->service.type = ntohs(ristats->service.type);
+        memcpy(&istats->address, &ristats->address, sizeof(struct net_addr));
+        istats->priority = ntohs(ristats->priority);
+        istats->weight = ntohs(ristats->weight);
+        istats->idle_timeout = ntohs(ristats->idle_timeout);
+        istats->hard_timeout = ntohs(ristats->hard_timeout);
+        istats->duration_sec = ntohl(ristats->duration_sec);
+        istats->duration_nsec = ntohl(ristats->duration_nsec);
+        istats->packets_resolved = ntohl(ristats->packets_resolved);
+        istats->bytes_resolved = ntohl(ristats->bytes_resolved);
+        istats->tokens_consumed = ntohl(ristats->tokens_consumed);
+        break;
+    case SVS_SERVICE_STATS:
+        sstats = (struct sv_service_stats *) host;
+        rsstats = (struct sv_service_stats *) net;
 
-            memcpy(&sstats->service, &rsstats->service, sizeof(struct service_desc));
-            sstats->service.type = ntohs(rsstats->service.type);
-            sstats->bytes_dropped = ntohl(rsstats->bytes_dropped);
-            sstats->packets_dropped = ntohl(rsstats->packets_dropped);
-            sstats->instance_count = ntohl(rsstats->instance_count);
-            sstats->duration_sec = ntohl(rsstats->duration_sec);
-            sstats->duration_nsec = ntohl(rsstats->duration_nsec);
-            sstats->packets_resolved = ntohl(rsstats->packets_resolved);
-            sstats->bytes_resolved = ntohl(rsstats->bytes_resolved);
-            sstats->tokens_consumed = ntohl(rsstats->tokens_consumed);
-            break;
+        memcpy(&sstats->service, &rsstats->service,
+               sizeof(struct service_desc));
+        sstats->service.type = ntohs(rsstats->service.type);
+        sstats->bytes_dropped = ntohl(rsstats->bytes_dropped);
+        sstats->packets_dropped = ntohl(rsstats->packets_dropped);
+        sstats->instance_count = ntohl(rsstats->instance_count);
+        sstats->duration_sec = ntohl(rsstats->duration_sec);
+        sstats->duration_nsec = ntohl(rsstats->duration_nsec);
+        sstats->packets_resolved = ntohl(rsstats->packets_resolved);
+        sstats->bytes_resolved = ntohl(rsstats->bytes_resolved);
+        sstats->tokens_consumed = ntohl(rsstats->tokens_consumed);
+        break;
 
-        case SVS_TABLE_STATS:
-            tstats = (struct sv_table_stats*) host;
-            rtstats = (struct sv_table_stats*) net;
+    case SVS_TABLE_STATS:
+        tstats = (struct sv_table_stats *) host;
+        rtstats = (struct sv_table_stats *) net;
 
-            tstats->bytes_dropped = ntohl(rtstats->bytes_dropped);
-            tstats->packets_dropped = ntohl(rtstats->packets_dropped);
-            tstats->instance_count = ntohl(rtstats->instance_count);
-            tstats->packets_resolved = ntohl(rtstats->packets_resolved);
-            tstats->bytes_resolved = ntohl(rtstats->bytes_resolved);
-            tstats->service_count = ntohl(rtstats->service_count);
-            tstats->max_entries = ntohl(rtstats->max_entries);
-            break;
+        tstats->bytes_dropped = ntohl(rtstats->bytes_dropped);
+        tstats->packets_dropped = ntohl(rtstats->packets_dropped);
+        tstats->instance_count = ntohl(rtstats->instance_count);
+        tstats->packets_resolved = ntohl(rtstats->packets_resolved);
+        tstats->bytes_resolved = ntohl(rtstats->bytes_resolved);
+        tstats->service_count = ntohl(rtstats->service_count);
+        tstats->max_entries = ntohl(rtstats->max_entries);
+        break;
 
-        case SVS_ROUTER_STATS:
-            rstats = (struct sv_router_stats*) host;
-            rrstats = (struct sv_router_stats*) net;
+    case SVS_ROUTER_STATS:
+        rstats = (struct sv_router_stats *) host;
+        rrstats = (struct sv_router_stats *) net;
 
-            rstats->bytes_dropped = ntohl(rrstats->bytes_dropped);
-            rstats->packets_dropped = ntohl(rrstats->packets_dropped);
-            rstats->instance_count = ntohl(rrstats->instance_count);
-            rstats->packets_resolved = ntohl(rrstats->packets_resolved);
-            rstats->bytes_resolved = ntohl(rrstats->bytes_resolved);
-            rstats->service_count = ntohl(rrstats->service_count);
-            rstats->peers = ntohs(rrstats->peers);
-            rstats->tables = ntohs(rrstats->tables);
-            break;
-            /* error! TODO */
+        rstats->bytes_dropped = ntohl(rrstats->bytes_dropped);
+        rstats->packets_dropped = ntohl(rrstats->packets_dropped);
+        rstats->instance_count = ntohl(rrstats->instance_count);
+        rstats->packets_resolved = ntohl(rrstats->packets_resolved);
+        rstats->bytes_resolved = ntohl(rrstats->bytes_resolved);
+        rstats->service_count = ntohl(rrstats->service_count);
+        rstats->peers = ntohs(rrstats->peers);
+        rstats->tables = ntohs(rrstats->tables);
+        break;
+        /* error! TODO */
 
     }
 
 }
 
-void prep_stats_for_network(uint16_t type, void* net, void* host) {
+void prep_stats_for_network(uint16_t type, void *net, void *host)
+{
 
-    struct sv_instance_stats* istats = NULL;
-    struct sv_instance_stats* ristats = NULL;
+    struct sv_instance_stats *istats = NULL;
+    struct sv_instance_stats *ristats = NULL;
 
-    struct sv_service_stats* sstats = NULL;
-    struct sv_service_stats* rsstats = NULL;
+    struct sv_service_stats *sstats = NULL;
+    struct sv_service_stats *rsstats = NULL;
 
-    struct sv_table_stats* tstats = NULL;
-    struct sv_table_stats* rtstats = NULL;
-    struct sv_router_stats* rstats = NULL;
-    struct sv_router_stats* rrstats = NULL;
+    struct sv_table_stats *tstats = NULL;
+    struct sv_table_stats *rtstats = NULL;
+    struct sv_router_stats *rstats = NULL;
+    struct sv_router_stats *rrstats = NULL;
 
-    switch(type) {
-        case SVS_INSTANCE_STATS:
-            istats = (struct sv_instance_stats*) net;
-            ristats = (struct sv_instance_stats*) host;
+    switch (type) {
+    case SVS_INSTANCE_STATS:
+        istats = (struct sv_instance_stats *) net;
+        ristats = (struct sv_instance_stats *) host;
 
-            memcpy(&istats->service, &ristats->service, sizeof(struct service_desc));
-            istats->service.type = htons(ristats->service.type);
-            memcpy(&istats->address, &ristats->address, sizeof(struct net_addr));
-            istats->priority = htons(ristats->priority);
-            istats->weight = htons(ristats->weight);
-            istats->idle_timeout = htons(ristats->idle_timeout);
-            istats->hard_timeout = htons(ristats->hard_timeout);
-            istats->duration_sec = htonl(ristats->duration_sec);
-            istats->duration_nsec = htonl(ristats->duration_nsec);
-            istats->packets_resolved = htonl(ristats->packets_resolved);
-            istats->bytes_resolved = htonl(ristats->bytes_resolved);
-            istats->tokens_consumed = htonl(ristats->tokens_consumed);
-            break;
-        case SVS_SERVICE_STATS:
-            sstats = (struct sv_service_stats*) net;
-            rsstats = (struct sv_service_stats*) host;
+        memcpy(&istats->service, &ristats->service,
+               sizeof(struct service_desc));
+        istats->service.type = htons(ristats->service.type);
+        memcpy(&istats->address, &ristats->address, sizeof(struct net_addr));
+        istats->priority = htons(ristats->priority);
+        istats->weight = htons(ristats->weight);
+        istats->idle_timeout = htons(ristats->idle_timeout);
+        istats->hard_timeout = htons(ristats->hard_timeout);
+        istats->duration_sec = htonl(ristats->duration_sec);
+        istats->duration_nsec = htonl(ristats->duration_nsec);
+        istats->packets_resolved = htonl(ristats->packets_resolved);
+        istats->bytes_resolved = htonl(ristats->bytes_resolved);
+        istats->tokens_consumed = htonl(ristats->tokens_consumed);
+        break;
+    case SVS_SERVICE_STATS:
+        sstats = (struct sv_service_stats *) net;
+        rsstats = (struct sv_service_stats *) host;
 
-            memcpy(&sstats->service, &rsstats->service, sizeof(struct service_desc));
-            sstats->service.type = htons(rsstats->service.type);
-            sstats->bytes_dropped = htonl(rsstats->bytes_dropped);
-            sstats->packets_dropped = htonl(rsstats->packets_dropped);
-            sstats->instance_count = htonl(rsstats->instance_count);
-            sstats->duration_sec = htonl(rsstats->duration_sec);
-            sstats->duration_nsec = htonl(rsstats->duration_nsec);
-            sstats->packets_resolved = htonl(rsstats->packets_resolved);
-            sstats->bytes_resolved = htonl(rsstats->bytes_resolved);
-            sstats->tokens_consumed = htonl(rsstats->tokens_consumed);
-            break;
+        memcpy(&sstats->service, &rsstats->service,
+               sizeof(struct service_desc));
+        sstats->service.type = htons(rsstats->service.type);
+        sstats->bytes_dropped = htonl(rsstats->bytes_dropped);
+        sstats->packets_dropped = htonl(rsstats->packets_dropped);
+        sstats->instance_count = htonl(rsstats->instance_count);
+        sstats->duration_sec = htonl(rsstats->duration_sec);
+        sstats->duration_nsec = htonl(rsstats->duration_nsec);
+        sstats->packets_resolved = htonl(rsstats->packets_resolved);
+        sstats->bytes_resolved = htonl(rsstats->bytes_resolved);
+        sstats->tokens_consumed = htonl(rsstats->tokens_consumed);
+        break;
 
-        case SVS_TABLE_STATS:
-            tstats = (struct sv_table_stats*) net;
-            rtstats = (struct sv_table_stats*) host;
+    case SVS_TABLE_STATS:
+        tstats = (struct sv_table_stats *) net;
+        rtstats = (struct sv_table_stats *) host;
 
-            tstats->bytes_dropped = htonl(rtstats->bytes_dropped);
-            tstats->packets_dropped = htonl(rtstats->packets_dropped);
-            tstats->instance_count = htonl(rtstats->instance_count);
-            tstats->packets_resolved = htonl(rtstats->packets_resolved);
-            tstats->bytes_resolved = htonl(rtstats->bytes_resolved);
-            tstats->service_count = htonl(rtstats->service_count);
-            tstats->max_entries = htonl(rtstats->max_entries);
-            break;
+        tstats->bytes_dropped = htonl(rtstats->bytes_dropped);
+        tstats->packets_dropped = htonl(rtstats->packets_dropped);
+        tstats->instance_count = htonl(rtstats->instance_count);
+        tstats->packets_resolved = htonl(rtstats->packets_resolved);
+        tstats->bytes_resolved = htonl(rtstats->bytes_resolved);
+        tstats->service_count = htonl(rtstats->service_count);
+        tstats->max_entries = htonl(rtstats->max_entries);
+        break;
 
-        case SVS_ROUTER_STATS:
-            rstats = (struct sv_router_stats*) net;
-            rrstats = (struct sv_router_stats*) host;
+    case SVS_ROUTER_STATS:
+        rstats = (struct sv_router_stats *) net;
+        rrstats = (struct sv_router_stats *) host;
 
-            rstats->bytes_dropped = htonl(rrstats->bytes_dropped);
-            rstats->packets_dropped = htonl(rrstats->packets_dropped);
-            rstats->instance_count = htonl(rrstats->instance_count);
-            rstats->packets_resolved = htonl(rrstats->packets_resolved);
-            rstats->bytes_resolved = htonl(rrstats->bytes_resolved);
-            rstats->service_count = htonl(rrstats->service_count);
-            rstats->peers = htons(rrstats->peers);
-            rstats->tables = htons(rrstats->tables);
-            break;
-            /* error! TODO */
+        rstats->bytes_dropped = htonl(rrstats->bytes_dropped);
+        rstats->packets_dropped = htonl(rrstats->packets_dropped);
+        rstats->instance_count = htonl(rrstats->instance_count);
+        rstats->packets_resolved = htonl(rrstats->packets_resolved);
+        rstats->bytes_resolved = htonl(rrstats->bytes_resolved);
+        rstats->service_count = htonl(rrstats->service_count);
+        rstats->peers = htons(rrstats->peers);
+        rstats->tables = htons(rrstats->tables);
+        break;
+        /* error! TODO */
 
     }
 }
-

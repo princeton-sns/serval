@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*
  * service_types.h
  *
@@ -40,16 +41,16 @@ enum component_state {
 struct sv_instance_addr {
     struct sockaddr_sv service;
     union {
-        struct sockaddr sa;
-        struct sockaddr_in sin;
-        struct sockaddr_in6 sin6;
+	struct sockaddr sa;
+	struct sockaddr_in sin;
+	struct sockaddr_in6 sin6;
     } address;
 };
 
 
 //TODO what is the size of this thing, esp. with sockaddr_sv having 3 bytes before the serviceID
 struct service_reference {
-    /*top attributes correspond to service_info*/
+    /*top attributes correspond to service_info */
     struct sv_instance_addr instance;
     //flags should include: backup, mcast, private/scope, etc
     uint64_t registered;
@@ -67,7 +68,7 @@ struct service_reference {
     uint32_t tokens_consumed;
 
     /* source resolver? */
-    service_resolver* resolver;
+    service_resolver *resolver;
 
     /* data from the actual instance/source SR */
     uint32_t peer_instance_count;
@@ -83,22 +84,23 @@ struct service_reference {
 
 struct sv_component_interface {
     /*component interface */
-    int (*initialize)(void* target);
-    int (*finalize)(void* target);
-    int (*start)(void* target);
-    int (*stop)(void* target);
+    int (*initialize) (void *target);
+    int (*finalize) (void *target);
+    int (*start) (void *target);
+    int (*stop) (void *target);
 };
 
 typedef struct {
-    void* target;
-    struct sv_component_interface* interface;
+    void *target;
+    struct sv_component_interface *interface;
 
 } component;
 
 struct message_barrier;
 
-typedef void (*barrier_handler)(struct message_barrier* barrier, const void* message, size_t len);
-typedef void (*callback_trigger)(struct message_barrier* barrier);
+typedef void (*barrier_handler) (struct message_barrier * barrier,
+				 const void *message, size_t len);
+typedef void (*callback_trigger) (struct message_barrier * barrier);
 
 struct message_barrier {
     atomic_t message_count;
@@ -107,10 +109,10 @@ struct message_barrier {
     int successes;
     int failures;
 
-    void* callback;
+    void *callback;
     callback_trigger trigger;
-    void* linger_data;
-    void* private;
+    void *linger_data;
+    void *private;
 
     task_mutex barrier_mutex;
     task_cond barrier_cond;
@@ -120,33 +122,37 @@ struct message_barrier {
 
 };
 
-void init_message_barrier(struct message_barrier* barrier,
-        void* priv_data, uint16_t type, barrier_handler sh,
-        barrier_handler fh, callback_trigger cbt);
+void init_message_barrier(struct message_barrier *barrier,
+			  void *priv_data, uint16_t type,
+			  barrier_handler sh, barrier_handler fh,
+			  callback_trigger cbt);
 
-static inline int get_stat_size(uint16_t type) {
-    switch(type) {
-        case SVS_INSTANCE_STATS:
-            return sizeof(struct sv_instance_stats);
-        case SVS_SERVICE_STATS:
-            return sizeof(struct sv_service_stats);
-        case SVS_TABLE_STATS:
-            return sizeof(struct sv_table_stats);
-        case SVS_ROUTER_STATS:
-            return sizeof(struct sv_router_stats);
-        default:
-            return 0;
+static inline int get_stat_size(uint16_t type)
+{
+    switch (type) {
+    case SVS_INSTANCE_STATS:
+	return sizeof(struct sv_instance_stats);
+    case SVS_SERVICE_STATS:
+	return sizeof(struct sv_service_stats);
+    case SVS_TABLE_STATS:
+	return sizeof(struct sv_table_stats);
+    case SVS_ROUTER_STATS:
+	return sizeof(struct sv_router_stats);
+    default:
+	return 0;
     }
 }
 
-void message_barrier_default_cb(struct message_barrier* barrier, uint16_t type, const void* message,
-        size_t len);
-void wait_for_message_barrier(struct message_barrier* barrier);
-void message_barrier_handle_success_default(struct message_barrier* barrier, const void* message,
-        size_t len);
-void message_barrier_handle_failure_default(struct message_barrier* barrier, const void* message,
-        size_t len);
+void message_barrier_default_cb(struct message_barrier *barrier,
+				uint16_t type, const void *message, size_t len);
+void wait_for_message_barrier(struct message_barrier *barrier);
+void message_barrier_handle_success_default(struct message_barrier
+					    *barrier, const void *message,
+					    size_t len);
+void message_barrier_handle_failure_default(struct message_barrier
+					    *barrier, const void *message,
+					    size_t len);
 
-void destroy_int_key(void* data);
+void destroy_int_key(void *data);
 
-#endif /* SERVICE_TYPES_H_ */
+#endif				/* SERVICE_TYPES_H_ */

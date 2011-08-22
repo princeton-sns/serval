@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 #include "time_util.h"
 #include "debug.h"
 
@@ -41,9 +42,13 @@ struct ticked_clock {
     struct timespec now;
 };
 
-static struct ticked_clock global_clock = { .ms_res = 0, .avg_res_per_tick = 0, .recurring = 0 };
+static struct ticked_clock global_clock = {.ms_res = 0,.avg_res_per_tick =
+	0,.recurring = 0
+};
+
 static void resolve_time();
-void init_time(uint32_t res_interval) {
+void init_time(uint32_t res_interval)
+{
 
     bzero(&global_clock.prev, sizeof(struct timespec));
     bzero(&global_clock.now, sizeof(struct timespec));
@@ -52,134 +57,153 @@ void init_time(uint32_t res_interval) {
     initialize_signal(SA_RESTART);
 }
 
-static uint32_t time_diff_in_ms(struct timespec* now, struct timespec* prev) {
+static uint32_t time_diff_in_ms(struct timespec *now, struct timespec *prev)
+{
 
     long int sdiff = (now->tv_sec - prev->tv_sec) * 1000;
 
-    if(now->tv_nsec > prev->tv_nsec) {
-        sdiff += (1000000000 - prev->tv_nsec + now->tv_nsec) / 1000000 - 1000;
+    if (now->tv_nsec > prev->tv_nsec) {
+	sdiff += (1000000000 - prev->tv_nsec + now->tv_nsec) / 1000000 - 1000;
     } else {
-        sdiff += now->tv_nsec - prev->tv_nsec;
+	sdiff += now->tv_nsec - prev->tv_nsec;
     }
     return sdiff;
 }
 
-static int resolve_time_if_ticked() {
-    /*does this need locking?*/
-    if(resolve) {
+static int resolve_time_if_ticked()
+{
+    /*does this need locking? */
+    if (resolve) {
 
-        pthread_mutex_lock(&clock_mutex);
-        if(resolve) {
-            resolve_time();
-            //track the ewma average
-            uint32_t tdiff = time_diff_in_ms(&global_clock.now, &global_clock.prev);
-            if(tdiff > 0) {
-                global_clock.avg_res_per_tick = (((resolution_since_last_tick << 4) * 32) / (tdiff
-                        / global_clock.ms_res) + global_clock.avg_res_per_tick * 96 + 64) / 128;
-            }
-            //reset the current tick count
+	pthread_mutex_lock(&clock_mutex);
+	if (resolve) {
+	    resolve_time();
+	    //track the ewma average
+	    uint32_t tdiff =
+		time_diff_in_ms(&global_clock.now, &global_clock.prev);
+	    if (tdiff > 0) {
+		global_clock.avg_res_per_tick =
+		    (((resolution_since_last_tick << 4) * 32) /
+		     (tdiff / global_clock.ms_res) +
+		     global_clock.avg_res_per_tick * 96 + 64) / 128;
+	    }
+	    //reset the current tick count
 
-            reschedule_timer();
+	    reschedule_timer();
 
-            //LOG_DBG("Time resolved: %llu ms Resolutions: %i Avg resolutions per tick (16x): %u\n",
-            //        global_clock.now.tv_sec * 1000LL + global_clock.now.tv_nsec / 1000000, resolution_since_last_tick, global_clock.avg_res_per_tick);
-            resolution_since_last_tick = 0;
-            resolve = FALSE;
-        }
+	    //LOG_DBG("Time resolved: %llu ms Resolutions: %i Avg resolutions per tick (16x): %u\n",
+	    //        global_clock.now.tv_sec * 1000LL + global_clock.now.tv_nsec / 1000000, resolution_since_last_tick, global_clock.avg_res_per_tick);
+	    resolution_since_last_tick = 0;
+	    resolve = FALSE;
+	}
 
-        pthread_mutex_unlock(&clock_mutex);
+	pthread_mutex_unlock(&clock_mutex);
     }
     resolution_since_last_tick++;
     return 0;
 }
 
-static void reschedule_timer() {
+static void reschedule_timer()
+{
     //LOG_DBG("Rescheduling timer: recurrent: %i resolution: %i\n", global_clock.recurring, global_clock.ms_res);
-    if(global_clock.recurring) {
-        if(global_clock.avg_res_per_tick < LOW_RES_PER_TICK_MARK) {
-            //LOG_DBG("Avg resolutions per tick: %u < %i - change to on demand scheduling.\n", global_clock.avg_res_per_tick, LOW_RES_PER_TICK_MARK);
-            struct itimerval itimer;
-            bzero(&itimer, sizeof(itimer));
+    if (global_clock.recurring) {
+	if (global_clock.avg_res_per_tick < LOW_RES_PER_TICK_MARK) {
+	    //LOG_DBG("Avg resolutions per tick: %u < %i - change to on demand scheduling.\n", global_clock.avg_res_per_tick, LOW_RES_PER_TICK_MARK);
+	    struct itimerval itimer;
+	    bzero(&itimer, sizeof(itimer));
 
-            itimer.it_value.tv_sec = global_clock.ms_res / 1000;
-            itimer.it_value.tv_usec = (global_clock.ms_res % 1000) * 1000;
+	    itimer.it_value.tv_sec = global_clock.ms_res / 1000;
+	    itimer.it_value.tv_usec = (global_clock.ms_res % 1000) * 1000;
 
-            if(setitimer(ITIMER_REAL, &itimer, NULL)) {
-                LOG_ERR("Could not create an itimer with ms value: %u error: %s\n",
-                        global_clock.ms_res, strerror(errno));
-            }
+	    if (setitimer(ITIMER_REAL, &itimer, NULL)) {
+		LOG_ERR
+		    ("Could not create an itimer with ms value: %u error: %s\n",
+		     global_clock.ms_res, strerror(errno));
+	    }
 
-            global_clock.recurring = FALSE;
-        }
-    } else if(global_clock.avg_res_per_tick > HIGH_RES_PER_TICK_MARK) {
-        //LOG_DBG("Avg resolutions per tick: %u > %i - change to recurrent scheduling.\n", global_clock.avg_res_per_tick, HIGH_RES_PER_TICK_MARK);
+	    global_clock.recurring = FALSE;
+	}
+    } else if (global_clock.avg_res_per_tick > HIGH_RES_PER_TICK_MARK) {
+	//LOG_DBG("Avg resolutions per tick: %u > %i - change to recurrent scheduling.\n", global_clock.avg_res_per_tick, HIGH_RES_PER_TICK_MARK);
 
-        struct itimerval itimer;
-        bzero(&itimer, sizeof(itimer));
+	struct itimerval itimer;
+	bzero(&itimer, sizeof(itimer));
 
-        itimer.it_interval.tv_sec = global_clock.ms_res / 1000;
-        itimer.it_interval.tv_usec = (global_clock.ms_res % 1000) * 1000;
+	itimer.it_interval.tv_sec = global_clock.ms_res / 1000;
+	itimer.it_interval.tv_usec = (global_clock.ms_res % 1000) * 1000;
 
-        itimer.it_value = itimer.it_interval;
+	itimer.it_value = itimer.it_interval;
 
-        //LOG_DBG("recurrent interval: %i.%06i recurrent start: %i.%06i\n", itimer.it_interval.tv_sec, itimer.it_interval.tv_usec, itimer.it_value.tv_sec, itimer.it_value.tv_usec);
+	//LOG_DBG("recurrent interval: %i.%06i recurrent start: %i.%06i\n", itimer.it_interval.tv_sec, itimer.it_interval.tv_usec, itimer.it_value.tv_sec, itimer.it_value.tv_usec);
 
-        if(setitimer(ITIMER_REAL, &itimer, NULL)) {
-            LOG_ERR("Could not create an itimer with ms value: %u error: %s\n",
-                    global_clock.ms_res, strerror(errno));
-        }
+	if (setitimer(ITIMER_REAL, &itimer, NULL)) {
+	    LOG_ERR
+		("Could not create an itimer with ms value: %u error: %s\n",
+		 global_clock.ms_res, strerror(errno));
+	}
 
-        global_clock.recurring = TRUE;
+	global_clock.recurring = TRUE;
     } else {
-        struct itimerval itimer;
-        bzero(&itimer, sizeof(itimer));
+	struct itimerval itimer;
+	bzero(&itimer, sizeof(itimer));
 
-        itimer.it_value.tv_sec = global_clock.ms_res / 1000;
-        itimer.it_value.tv_usec = (global_clock.ms_res % 1000) * 1000;
+	itimer.it_value.tv_sec = global_clock.ms_res / 1000;
+	itimer.it_value.tv_usec = (global_clock.ms_res % 1000) * 1000;
 
-        if(setitimer(ITIMER_REAL, &itimer, NULL)) {
-            LOG_ERR("Could not create an itimer with ms value: %u error: %s\n",
-                    global_clock.ms_res, strerror(errno));
-        }
+	if (setitimer(ITIMER_REAL, &itimer, NULL)) {
+	    LOG_ERR
+		("Could not create an itimer with ms value: %u error: %s\n",
+		 global_clock.ms_res, strerror(errno));
+	}
     }
 
 }
 
-time_t get_current_time() {
+time_t get_current_time()
+{
     resolve_time_if_ticked();
     return global_clock.now.tv_sec;
 }
 
-long long get_current_time_ms() {
+long long get_current_time_ms()
+{
     resolve_time_if_ticked();
-    return global_clock.now.tv_sec * 1000LL + global_clock.now.tv_nsec / 1000000;
+    return global_clock.now.tv_sec * 1000LL +
+	global_clock.now.tv_nsec / 1000000;
 }
 
-long long get_current_time_us() {
+long long get_current_time_us()
+{
     resolve_time_if_ticked();
-    return global_clock.now.tv_sec * 1000000LL + global_clock.now.tv_nsec / 1000;
+    return global_clock.now.tv_sec * 1000000LL +
+	global_clock.now.tv_nsec / 1000;
 }
 
-long long resolve_current_time_ms() {
-    if(resolve) {
-        pthread_mutex_lock(&clock_mutex);
-        resolve_time();
-        pthread_mutex_unlock(&clock_mutex);
+long long resolve_current_time_ms()
+{
+    if (resolve) {
+	pthread_mutex_lock(&clock_mutex);
+	resolve_time();
+	pthread_mutex_unlock(&clock_mutex);
     }
-    return global_clock.now.tv_sec * 1000LL + global_clock.now.tv_nsec / 1000000;
+    return global_clock.now.tv_sec * 1000LL +
+	global_clock.now.tv_nsec / 1000000;
 }
 
-long long resolve_current_time_us() {
-    if(resolve) {
-        pthread_mutex_lock(&clock_mutex);
-        resolve_time();
-        pthread_mutex_unlock(&clock_mutex);
+long long resolve_current_time_us()
+{
+    if (resolve) {
+	pthread_mutex_lock(&clock_mutex);
+	resolve_time();
+	pthread_mutex_unlock(&clock_mutex);
 
     }
-    return global_clock.now.tv_sec * 1000000LL + global_clock.now.tv_nsec / 1000;
+    return global_clock.now.tv_sec * 1000000LL +
+	global_clock.now.tv_nsec / 1000;
 }
 
-static void resolve_time() {
+static void resolve_time()
+{
     //compute the interval in ms
 
     global_clock.prev = global_clock.now;
@@ -203,12 +227,14 @@ static void resolve_time() {
     //        (long long) global_clock.now.tv_nsec, resolve);
 }
 
-static void signal_handler(int sig) {
+static void signal_handler(int sig)
+{
     //LOG_DBG("Signal received, setting resolve to true.\n");
     resolve = TRUE;
 }
 
-static void initialize_signal(int flags) {
+static void initialize_signal(int flags)
+{
 
     struct sigaction sa;
     struct sigaction osa;
@@ -219,9 +245,9 @@ static void initialize_signal(int flags) {
     sa.sa_handler = signal_handler;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = flags | SA_ONSTACK;
-    if(sigaction(SIGALRM, &sa, &osa)) {
-        LOG_ERR("sigaction(SIGALRM) failed: %s\n", strerror(errno));
+    if (sigaction(SIGALRM, &sa, &osa)) {
+	LOG_ERR("sigaction(SIGALRM) failed: %s\n", strerror(errno));
     } else {
-        //LOG_DBG("initialized signal clock with alarm handler\n");k
+	//LOG_DBG("initialized signal clock with alarm handler\n");k
     }
 }

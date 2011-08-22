@@ -1,5 +1,6 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 /*
- * time_util.hh
+ * time_util.h
  *
  *  Created on: Jul 28, 2010
  *      Author: daveds
@@ -30,4 +31,4 @@ long long resolve_current_time_us();
 //void resolve_time();
 //bool should_resolve();
 
-#endif /* _TIME_UTIL_H_ */
+#endif				/* _TIME_UTIL_H_ */

@@ -2666,13 +2666,18 @@ static void serval_tcp_fin(struct sk_buff *skb,
                            struct sock *sk, struct tcphdr *th)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+
+        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
+
 	serval_tsk_schedule_ack(sk);
+
+        /* Tell service access layer this stream is closed at other
+         * end */
+        serval_sk(sk)->af_ops->recv_shutdown(sk);
 
 	/*sk->sk_shutdown |= RCV_SHUTDOWN;
           sock_set_flag(sk, SOCK_DONE);
         */
-
-        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
 
 	switch (sk->sk_state) {
 	case TCP_SYN_RECV:
@@ -2713,12 +2718,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
                         sk->sk_state);
 		break;
 	}
-
-        tp->fin_recvd = 1;
-
-        /* Tell service access layer this stream is closed at other
-         * end */
-        serval_sk(sk)->af_ops->recv_fin(sk, skb);
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.
@@ -2814,11 +2813,13 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_PKT("Incoming segment skb->len=%u skb->data_len=%u doff=%u\n", 
-                skb->len, skb->data_len, th->doff * 4);
+        LOG_PKT("Incoming segment skb->len=%u doff=%u\n", 
+                skb->len, th->doff * 4);
 
-	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq)
-		goto drop;
+	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
+		LOG_DBG("seq is end_seq, dropping\n");
+                goto drop;
+        }
 
 	skb_dst_drop(skb);
 	__skb_pull(skb, th->doff * 4);
@@ -2832,7 +2833,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	 *  Out of sequence packets to the out_of_order_queue.
 	 */
 	if (TCP_SKB_CB(skb)->seq == tp->rcv_nxt) {
-		if (serval_tcp_receive_window(tp) == 0)
+		if (serval_tcp_receive_window(tp) == 0)                        
 			goto out_of_window;
 
 		/* Ok. In sequence. In window. */
@@ -2901,7 +2902,7 @@ queue_and_out:
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, 
                                      TCP_SKB_CB(skb)->end_seq);
         out_of_window:
-                LOG_PKT("Segment out of window!\n");
+                LOG_DBG("Segment out of window!\n");
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
         drop:
@@ -2934,8 +2935,10 @@ queue_and_out:
 
 	//TCP_ECN_check_ce(tp, skb);
 
-	if (serval_tcp_try_rmem_schedule(sk, skb->truesize))
+	if (serval_tcp_try_rmem_schedule(sk, skb->truesize)) {
+                LOG_DBG("rmem schedule failed\n");
 		goto drop;
+        }
 
 	/* Disable header prediction. */
 	tp->pred_flags = 0;
@@ -3655,7 +3658,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
-                                sk->sk_shutdown |= SEND_SHUTDOWN;
+                                serval_sk(sk)->af_ops->send_shutdown(sk);
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
@@ -3692,15 +3695,12 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 				}
 			}
 			break;
-		case TCP_CLOSING:
-                        /* Time wait handled by SAL */
-                        /*
-			if (tp->snd_una == tp->write_seq) {
-				serval_tcp_time_wait(sk, TCP_TIME_WAIT, 0);
-				goto discard;
-			}
-                        */
-			break;
+                case TCP_CLOSING:
+                case TCP_CLOSE_WAIT:
+                        if (tp->snd_una == tp->write_seq) {
+                                serval_sk(sk)->af_ops->send_shutdown(sk);
+                        }
+                        break;
 		case TCP_LAST_ACK:
 			if (tp->snd_una == tp->write_seq) {
 				serval_tcp_update_metrics(sk);

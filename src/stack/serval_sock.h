@@ -37,8 +37,8 @@
 	TCP_MAX_STATES	
  */
 enum {
-        SERVAL_MIN_STATE = 0,
-        SERVAL_INIT = SERVAL_MIN_STATE,
+        __SERVAL_MIN_STATE = 0,
+        SERVAL_INIT = __SERVAL_MIN_STATE,
         SERVAL_CONNECTED,
         SERVAL_REQUEST,
         SERVAL_RESPOND,
@@ -51,10 +51,8 @@ enum {
         SERVAL_LISTEN,
         SERVAL_CLOSING,
         SERVAL_MIGRATE,
-        SERVAL_RECONNECT,
-        SERVAL_RRESPOND,
         SERVAL_RMIGRATE,
-        SERVAL_MAX_STATE
+        __SERVAL_MAX_STATE
 };
 
 enum {
@@ -70,9 +68,18 @@ enum {
         SERVALF_LISTEN    = (1 << 10),
         SERVALF_CLOSING   = (1 << 11),
         SERVALF_MIGRATE   = (1 << 12),
-        SERVALF_RECONNECT = (1 << 13),
-        SERVALF_RRESPOND  = (1 << 14),
         SERVALF_RMIGRATE  = (1 << 15)
+};
+
+/**
+   Service Access Layer (SAL) socket states used for, e.g., migration.
+ */
+enum {
+        __SAL_MIN_STATE = 0,
+        SAL_INITIAL = __SAL_MIN_STATE,
+        SAL_RSYN_SENT,
+        SAL_RSYN_RECV,
+        __SAL_MAX_STATE,
 };
 
 enum serval_sock_flags {
@@ -107,8 +114,8 @@ struct serval_sock_af_ops {
                                            struct dst_entry *dst);
 	u16	        net_header_len;
 	u16	        sockaddr_len;
-        int             (*recv_fin)(struct sock *sk, struct sk_buff *skb);
-        int             (*close_request)(struct sock *sk, struct sk_buff *skb);
+        int             (*send_shutdown)(struct sock *sk);
+        int             (*recv_shutdown)(struct sock *sk);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
         void            (*done)(struct sock *sk);
 };
@@ -120,6 +127,8 @@ struct serval_sock {
 #if defined(OS_USER)
         struct client           *client;
 #endif
+        /* SAL state, used for, e.g., migration */
+        unsigned char           sal_state;
         struct net_device       *dev; /* TX device for connected flows */
         u8      close_received : 1,
                 flags : 7;
@@ -267,6 +276,10 @@ void serval_sock_set_dev(struct sock *sk, struct net_device *dev);
 const char *serval_sock_state_str(struct sock *sk);
 const char *serval_state_str(unsigned int state);
 int serval_sock_set_state(struct sock *sk, unsigned int state);
+
+const char *serval_sock_sal_state_str(struct sock *sk);
+const char *serval_sal_state_str(unsigned int state);
+int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state);
 void serval_sock_rexmit_timeout(unsigned long data);
 
 int __init serval_sock_tables_init(void);

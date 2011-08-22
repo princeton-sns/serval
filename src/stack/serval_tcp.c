@@ -144,12 +144,6 @@ static int serval_tcp_connection_request(struct sock *sk,
                 return -1;
         }
 
-        LOG_DBG("TCP SYN received seq=%u src=%u dst=%u skb->len=%u\n", 
-                ntohl(tcp_hdr(skb)->seq),
-                ntohs(tcp_hdr(skb)->source),
-                ntohs(tcp_hdr(skb)->dest),
-                skb->len);
-
         memset(&tmp_opt, 0, sizeof(tmp_opt));
 	serval_tcp_clear_options(&tmp_opt);
 	tmp_opt.mss_clamp = SERVAL_TCP_MSS_DEFAULT;
@@ -231,7 +225,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 {
         struct tcphdr *th;
         struct iphdr *iph;
-        
+
 #if defined(OS_LINUX_KERNEL)
 	if (is_syn) {
                 /* SYN packets can be broadcast and we should accept
@@ -301,8 +295,10 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;        
         
-        LOG_PKT("Received TCP %s end_seq=%u datalen=%u\n",
+        LOG_PKT("Received TCP %s rcv_nxt=%u snd_wnd=%u end_seq=%u datalen=%u\n",
                 tcphdr_to_str(th),
+                serval_tcp_sk(sk)->rcv_nxt,
+                serval_tcp_sk(sk)->snd_wnd,
                 TCP_SKB_CB(skb)->end_seq,
                 skb->len - (th->doff << 2));
 
@@ -371,14 +367,6 @@ void serval_tcp_done(struct sock *sk)
 {
         LOG_DBG("calling serval_sal_done\n");
 	serval_sal_done(sk);
-}
-
-static int serval_tcp_connection_close_request(struct sock *sk,
-                                               struct sk_buff *skb)
-{
-        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        
-        return tp->fin_recvd;
 }
 
 static int serval_tcp_connection_close(struct sock *sk)
@@ -1538,6 +1526,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			if (signal_pending(current)) {
 				copied = timeo ? sock_intr_errno(timeo) : 
                                         -EAGAIN;
+                                LOG_DBG("Signal is pending, copied=%d\n",
+                                        copied);
 				break;
 			}
 		}
@@ -1584,6 +1574,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 				break;
 
 			if (sk->sk_err) {
+                                LOG_DBG("socket has error %d\n", 
+                                        sock_error(sk));
 				copied = sock_error(sk);
 				break;
 			}
@@ -1609,6 +1601,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 			if (signal_pending(current)) {
 				copied = sock_intr_errno(timeo);
+                                LOG_DBG("sock_intr_errno=%d\n",
+                                        copied);
 				break;
 			}
 		}
@@ -1858,11 +1852,13 @@ skip_copy:
 
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
+        LOG_DBG("copied=%d\n", copied);
 	return copied;
 
 out:
 	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
+        LOG_DBG("err=%d\n", err);
 	return err;
 
 recv_urg:
@@ -1916,11 +1912,11 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .net_header_len = SERVAL_NET_HEADER_LEN,
-        .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .recv_fin = serval_sal_rcv_transport_fin,
+        .send_shutdown = serval_sal_send_shutdown,
+        .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };
 
@@ -1936,11 +1932,11 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
         .net_header_len = SERVAL_NET_HEADER_LEN + 8 /* sizeof(struct udphdr) */,
-        .close_request = serval_tcp_connection_close_request,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .recv_fin = serval_sal_rcv_transport_fin,
+        .send_shutdown = serval_sal_send_shutdown,
+        .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
 };
 

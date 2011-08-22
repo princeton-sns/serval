@@ -43,16 +43,27 @@ struct dev_entry {
         char name[IFNAMSIZ];
 };
 
-void dev_list_add(const char *name)
+/*
+  This adds an interface to a white list. Unless the white list is
+  empty, only the interfaces in the list will be used.
+*/
+void dev_list_add(char *name)
 {
-        struct dev_entry *de = malloc(sizeof(struct dev_entry));
-
-        if (!de)
-                return;
+        const char *sep = ",;";
+        char *save_ptr, *str;
         
-        INIT_LIST_HEAD(&de->lh);
-        strcpy(de->name, name);
-        list_add_tail(&de->lh, &dev_list);
+        for (str = strtok_r(name, sep, &save_ptr); str; 
+             str = strtok_r(NULL, sep, &save_ptr)) {
+                struct dev_entry *de;
+
+                de = malloc(sizeof(struct dev_entry));
+
+                if (de) {
+                        INIT_LIST_HEAD(&de->lh);
+                        strcpy(de->name, str);
+                        list_add_tail(&de->lh, &dev_list);
+                }
+        }
 }
 
 void dev_list_destroy(void)
@@ -339,8 +350,8 @@ void unregister_netdev(struct net_device *dev)
 static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 {
 	struct ifreq ifr;
-        int sock;
-        
+        int sock, err;
+                
         sock = socket(AF_INET, SOCK_DGRAM, 0);
         
         if (sock == -1) {
@@ -350,7 +361,9 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
         memset(&ifr, 0, sizeof(ifr));
         strncpy(ifr.ifr_name, ifname, IFNAMSIZ - 1);
 
-        if (ioctl(sock, SIOCGIFHWADDR, &ifr) == -1) {
+        err = ioctl(sock, SIOCGIFHWADDR, &ifr);
+
+        if (err == -1) {
                 LOG_ERR("could not get hw address of interface '%s'\n",
                         ifname);
         } else {
@@ -359,7 +372,7 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 
         close(sock);
 
-        return 0;
+        return err;
 }
 #endif /* OS_LINUX */
 

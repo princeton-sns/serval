@@ -14,7 +14,9 @@
 
 extern int serval_ipv4_rcv(struct sk_buff *skb);
 
-#define RCVLEN 1500 /* Should be more than enough for normal MTUs */
+#define RCVLEN (1500 + SKB_HEADROOM_RESERVE) /* Should be more than
+					      * enough for normal
+					      * MTUs */
 #define get_priv(dev) ((struct packet_raw_priv *)dev_get_priv(dev))
 
 static int packet_raw_init(struct net_device *dev)
@@ -86,9 +88,9 @@ static int packet_raw_recv(struct net_device *dev)
 		LOG_ERR("could not allocate skb\n");
 		return -1;
 	}
-        
-	LOG_DBG("Receiving RAW IP message\n");
 
+	//skb_reserve(skb, SKB_HEADROOM_RESERVE);
+        
 	ret = recvfrom(dev->fd, skb->data, RCVLEN, 0, 
                        (struct sockaddr *)&addr, &addrlen);
 	
@@ -114,6 +116,9 @@ static int packet_raw_recv(struct net_device *dev)
         /* Set network header offset */
 	skb_reset_network_header(skb);
 
+	/* Try to figure out what packet type this is by comparing the
+	 * incoming IP destination against the device's IP
+	 * configuration */
         if (memcmp(&ip_hdr(skb)->daddr, 
                    &dev->ipv4.addr, 
                    sizeof(dev->ipv4.addr)) == 0) {
