@@ -3094,9 +3094,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         case SERVAL_PKT_SYN:
                 hdr_len += serval_sal_add_conn_ext(sk, skb, 0);           
                 break;
-        case SERVAL_PKT_RSYN:
-                /* Add migration extensions */
-                break;
         case SERVAL_PKT_CLOSE:
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
