@@ -257,7 +257,6 @@ struct serval_migrate_ext {
         uint32_t seqno;
         uint32_t ackno;
         uint8_t nonce[8];
-        struct net_addr new_addr;
 } __attribute__((packed));
 
 #define __SERVAL_SOURCE_EXT_LEN(sz)             \

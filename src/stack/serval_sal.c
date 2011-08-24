@@ -1663,6 +1663,18 @@ static int serval_sal_ack_process(struct sock *sk,
                 LOG_PKT("received valid ACK ackno=%u\n", 
                         ctx->ackno);
                 err = 0;
+                switch (serval_sk(sk)->sal_state) {
+                case SAL_RSYN_SENT:
+                        LOG_DBG("RECV RSYNACK\n");
+                        serval_sock_set_sal_state(sk, SAL_INITIAL);
+                        dev_get_ipv4_addr(serval_sk(sk)->mig_dev,
+                                          &inet_sk(sk)->inet_saddr);
+                        serval_sock_set_dev(sk, serval_sk(sk)->mig_dev);
+                        serval_sock_set_mig_dev(sk, NULL);
+                        break;
+                default:
+                        break;
+                }
         } else {
                 LOG_DBG("ackno %u out of sequence, expected %u\n",
                         ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
@@ -1675,7 +1687,6 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
                                   struct sk_buff *skb,
                                   struct serval_context *ctx)
 {
-        struct inet_sock *isk = inet_sk(sk);
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb = NULL;
         int err = 0;
@@ -1693,16 +1704,17 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
         	    case SAL_INITIAL:
         	    	    LOG_DBG("RSYN RECV in INIT\n");
         	            serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
-                            memcpy(&ssk->mig_daddr, &ip_hdr(skb)->daddr, 4);
-                            rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+                        memcpy(&ssk->mig_daddr, &ip_hdr(skb)->daddr, 4);
+                        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                                     GFP_ATOMIC);
-                            if (!rskb)
-                                    return -ENOMEM;
+                        if (!rskb)
+                                return -ENOMEM;
 
-                            SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
-                            SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
-                            SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
-                            err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);                            break;
+                        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
+                        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
+                        err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);
+                        break;
         	    default:
         	            break;
         	    }
@@ -2911,19 +2923,22 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
 {
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
+        uint32_t temp_daddr;
         int err = 0;
 
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
         	    if (ssk->mig_dev) {
                             LOG_DBG("Sending on mig_dev\n");
-                            dev_get_ipv4_addr(ssk->dev, 
+                            dev_get_ipv4_addr(ssk->mig_dev,
                                               &inet_sk(sk)->inet_saddr);
                             if (!skb->dev)
                                     skb_set_dev(skb, ssk->mig_dev);
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
-        	    	// do some address stuff.
+        	            LOG_DBG("Using MIG addr\n");
+        	            memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
+        	            memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
         	    }
         }
 
@@ -2952,6 +2967,14 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
+                if (ssk->mig_dev) {
+        	            dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
+                }
+
+                if (ssk->sal_state == SAL_RSYN_RECV) {
+	                    memcpy(&ssk->mig_daddr, &inet_sk(sk)->inet_daddr, 4);
+	                    memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
+                }
         }
 
         if (err < 0) {
@@ -3029,7 +3052,6 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct serval_migrate_ext *mig_ext;
-        char addr[18];        
 
         LOG_DBG("Adding migrate ext\n");
         mig_ext = (struct serval_migrate_ext *)
@@ -3040,11 +3062,6 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
         mig_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
-        if (!dev_get_ipv4_addr(ssk->dev, &mig_ext->new_addr)) {
-                LOG_ERR("Could not copy addr\n");
-        }
-        LOG_DBG("New addr: %s\n", inet_ntop(AF_INET, &mig_ext->new_addr, 
-                addr, 18));     
 
         return sizeof(*mig_ext);
 }
@@ -3104,10 +3121,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 break;
         case SERVAL_PKT_RSYN:
                 LOG_DBG("Sending RSYN...\n");
-                if (SERVAL_SKB_CB(skb)->flags & SVH_ACK)
-                        hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
-                else
-                        hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
+                hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_DATA:
                 /* Unconnected datagram, add service extension */
