@@ -1653,6 +1653,8 @@ static int serval_sal_ack_process(struct sock *sk,
                                   struct serval_context *ctx)
 {
         int err = -1;
+        struct serval_sock *ssk = serval_sk(sk);
+        struct sk_buff *rskb;
 
         if (!ctx->hdr->ack)
                 return -1;
@@ -1663,7 +1665,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 LOG_PKT("received valid ACK ackno=%u\n", 
                         ctx->ackno);
                 err = 0;
-                switch (serval_sk(sk)->sal_state) {
+                switch (ssk->sal_state) {
                 case SAL_RSYN_SENT:
                         LOG_DBG("RECV RSYNACK\n");
                         serval_sock_set_sal_state(sk, SAL_INITIAL);
@@ -1671,6 +1673,16 @@ static int serval_sal_ack_process(struct sock *sk,
                                           &inet_sk(sk)->inet_saddr);
                         serval_sock_set_dev(sk, serval_sk(sk)->mig_dev);
                         serval_sock_set_mig_dev(sk, NULL);
+                        ssk->rcv_seq.nxt = ctx->seqno + 1;
+                        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+                                                GFP_ATOMIC);
+                        if (!rskb)
+                                return -ENOMEM;
+                        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
+                        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
+                        err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
+                        
                         break;
                 default:
                         break;
