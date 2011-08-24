@@ -14,8 +14,11 @@
 int main(int argc, char **argv)
 {
 	int ret = 0;
-	char from_if[IFNAMSIZ] = "eth0";
-	char to_if[IFNAMSIZ] = "eth1";
+	char from_if[IFNAMSIZ];
+	char to_if[IFNAMSIZ];
+
+        strncpy(&from_if, argv[1], IFNAMSIZ);
+        strncpy(&to_if, argv[2], IFNAMSIZ);
 
 	ret = libstack_init();
 
