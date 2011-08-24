@@ -1668,10 +1668,10 @@ static int serval_sal_ack_process(struct sock *sk,
                 switch (ssk->sal_state) {
                 case SAL_RSYN_SENT:
                         LOG_DBG("RECV RSYNACK\n");
-                        serval_sock_set_sal_state(sk, SAL_INITIAL);
-                        dev_get_ipv4_addr(serval_sk(sk)->mig_dev,
+                        serval_sock_set_sal_state(sk, SAL_NORM);
+                        dev_get_ipv4_addr(ssk->mig_dev,
                                           &inet_sk(sk)->inet_saddr);
-                        serval_sock_set_dev(sk, serval_sk(sk)->mig_dev);
+                        serval_sock_set_dev(sk, ssk->mig_dev);
                         serval_sock_set_mig_dev(sk, NULL);
                         ssk->rcv_seq.nxt = ctx->seqno + 1;
                         rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
@@ -1683,6 +1683,12 @@ static int serval_sal_ack_process(struct sock *sk,
                         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
                         err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
                         
+                        break;
+                case SAL_RSYN_RECV:
+                        LOG_DBG("Handshake complete\n");
+                        serval_sock_set_sal_state(sk, SAL_NORM);
+                        memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
+                        memset(&ssk->mig_daddr, '0', 4);
                         break;
                 default:
                         break;
@@ -1714,7 +1720,8 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
 
         	    switch(ssk->sal_state) {
         	    case SAL_INITIAL:
-        	            LOG_DBG("RSYN RECV in INIT\n");
+        	    case SAL_NORM:
+        	            LOG_DBG("RSYN RECV in NORM\n");
                             serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
                             memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
                             rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,

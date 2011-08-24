@@ -77,6 +77,7 @@ enum {
 enum {
         __SAL_MIN_STATE = 0,
         SAL_INITIAL = __SAL_MIN_STATE,
+        SAL_NORM,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
         __SAL_MAX_STATE,
