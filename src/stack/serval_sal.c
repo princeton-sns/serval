@@ -2239,63 +2239,6 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         return err;
 }
 
-static int serval_sal_migrate_state_process(struct sock *sk,
-                                            struct sk_buff *skb,
-                                            struct serval_context *ctx)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-        struct sk_buff *rskb;
-        int ack_ok = 0, err = 0;
-
-        ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
-
-        if (packet_has_transport_hdr(skb, ctx->hdr)) {
-                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
-
-                err = ssk->af_ops->receive(sk, skb);
-        }
-
-        if (ack_ok) {
-        	    LOG_INF("Migrated, back to connected.\n");
-                serval_sock_set_state(sk, SERVAL_CONNECTED);
-                ssk->rcv_seq.nxt = ctx->seqno + 1;
-                rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
-                                        GFP_ATOMIC);
-                if (!rskb)
-                         return -ENOMEM;
-
-                SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
-                SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
-                SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
-                err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
-        }
-
-        return err;
-}
-
-static int serval_sal_rmigrate_state_process(struct sock *sk,
-                                             struct sk_buff *skb,
-                                             struct serval_context *ctx)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-        int ack_ok = 0, err = 0;
-        LOG_INF("Processing RMIGRATE state...\n");
-
-        ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
-
-        if (packet_has_transport_hdr(skb, ctx->hdr)) {
-                SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
-                err = ssk->af_ops->receive(sk,skb);
-        }
-
-        if (ack_ok) {
-        	    LOG_INF("Successful migration\n");
-        	    serval_sock_set_state(sk, SERVAL_CONNECTED);
-        }
-
-        return err;
-}
-
 /*
   Receive for datagram sockets that are not connected.
 */
@@ -2380,12 +2323,6 @@ int serval_sal_state_process(struct sock *sk,
                 break;
         case SERVAL_CLOSED:
                 goto drop;
-        case SERVAL_MIGRATE:
-                err = serval_sal_migrate_state_process(sk, skb, ctx);
-                break;
-        case SERVAL_RMIGRATE:
-                err = serval_sal_rmigrate_state_process(sk, skb, ctx);
-                break; 
         default:
                 LOG_ERR("bad socket state %s %u\n", 
                         serval_sock_state_str(sk), sk->sk_state);

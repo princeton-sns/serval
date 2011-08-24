@@ -42,15 +42,14 @@ static const char *sock_state_str[] = {
         [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
         [ SERVAL_LASTACK ]   = "LASTACK",
         [ SERVAL_LISTEN ]    = "LISTEN",
-        [ SERVAL_CLOSING ]   = "CLOSING",
-        [ SERVAL_MIGRATE ]   = "MIGRATE",
-        [ SERVAL_RMIGRATE ]  = "RMIGRATE"
+        [ SERVAL_CLOSING ]   = "CLOSING"
 };
 
 static const char *sock_sal_state_str[] = {
         [ SAL_INITIAL ]      = "SAL_INITIAL",
-        [ SAL_RSYN_SENT ]   = "SAL_RSYN_SENT",
-        [ SAL_RSYN_RECV ]   = "SAL_RSYN_RECV",
+        [ SAL_NORM ]         = "SAL_NORM",
+        [ SAL_RSYN_SENT ]    = "SAL_RSYN_SENT",
+        [ SAL_RSYN_RECV ]    = "SAL_RSYN_RECV",
 };
 
 static void serval_sock_destruct(struct sock *sk);

@@ -50,8 +50,6 @@ enum {
         SERVAL_LASTACK,
         SERVAL_LISTEN,
         SERVAL_CLOSING,
-        SERVAL_MIGRATE,
-        SERVAL_RMIGRATE,
         __SERVAL_MAX_STATE
 };
 
@@ -66,9 +64,7 @@ enum {
         SERVALF_CLOSEWAIT = (1 << 8),
         SERVALF_LASTACK   = (1 << 9),
         SERVALF_LISTEN    = (1 << 10),
-        SERVALF_CLOSING   = (1 << 11),
-        SERVALF_MIGRATE   = (1 << 12),
-        SERVALF_RMIGRATE  = (1 << 15)
+        SERVALF_CLOSING   = (1 << 11)
 };
 
 /**
