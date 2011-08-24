@@ -1714,19 +1714,19 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
 
         	    switch(ssk->sal_state) {
         	    case SAL_INITIAL:
-        	    	    LOG_DBG("RSYN RECV in INIT\n");
-        	            serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
-                        memcpy(&ssk->mig_daddr, &ip_hdr(skb)->daddr, 4);
-                        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+        	            LOG_DBG("RSYN RECV in INIT\n");
+                            serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+                            memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
+                            rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                                     GFP_ATOMIC);
-                        if (!rskb)
-                                return -ENOMEM;
+                            if (!rskb)
+                                    return -ENOMEM;
 
-                        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
-                        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
-                        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
-                        err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);
-                        break;
+                            SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
+                            SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                            SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
+                            err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);
+                            break;
         	    default:
         	            break;
         	    }
