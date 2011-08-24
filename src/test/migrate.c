@@ -14,8 +14,8 @@
 int main(int argc, char **argv)
 {
 	int ret = 0;
-	char from_if[IFNAMSIZ] = "eth1";
-	char to_if[IFNAMSIZ] = "eth0";
+	char from_if[IFNAMSIZ] = "eth0";
+	char to_if[IFNAMSIZ] = "eth1";
 
 	ret = libstack_init();
 

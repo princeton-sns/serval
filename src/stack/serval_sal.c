@@ -2927,9 +2927,11 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
 
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
         	    if (ssk->mig_dev) {
-                       dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
-        	           if (!skb->dev)
-                	           skb_set_dev(skb, ssk->mig_dev);
+                            LOG_DBG("Sending on mig_dev\n");
+                            dev_get_ipv4_addr(ssk->dev, 
+                                              &inet_sk(sk)->inet_saddr);
+                            if (!skb->dev)
+                                    skb_set_dev(skb, ssk->mig_dev);
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
