@@ -952,26 +952,23 @@ void serval_sal_migrate(struct sock *sk)
         struct sk_buff *skb = NULL;
         int err = 0;
 
-        if (sk->sk_state == SERVAL_CONNECTED) {
-                serval_sock_set_state(sk, SERVAL_MIGRATE);
-
-                for(;;) {
-                        skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, 
+        serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
+        for(;;) {
+                skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                                GFP_ATOMIC);
-                        if (skb)
-                                break;
-                        yield();
-                }
+                if (skb)
+                        break;
+                yield();
+        }
 
-                LOG_DBG("Sending Migrate Request\n");
-                SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_RSYN;
-                SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
+        LOG_DBG("Sending Migrate Request\n");
+        SERVAL_SKB_CB(skb)->pkttype = SERVAL_PKT_RSYN;
+        SERVAL_SKB_CB(skb)->seqno = serval_sk(sk)->snd_seq.nxt++;
 
-                err = serval_sal_queue_and_push(sk,skb);
+        err = serval_sal_queue_and_push(sk,skb);
  
-                if (err < 0) {
-                        LOG_ERR("queuing failed\n");
-                }
+        if (err < 0) {
+                LOG_ERR("queuing failed\n");
         }    
 }
 
@@ -1692,8 +1689,16 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
         if (has_valid_seqno(ctx->seqno, ssk)) {
         	    ssk->rcv_seq.nxt = ctx->seqno + 1;
 
-        	    LOG_DBG("Attempting to migrate...\n");
-        	    switch (sk->sk_state) {
+        	    switch(ssk->sal_state) {
+        	    case SAL_INITIAL:
+        	    	    LOG_DBG("RSYN RECV in INIT\n");
+        	            serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+        	    default:
+        	            break;
+        	    }
+
+
+        	    /* switch (sk->sk_state) {
         	    case SERVAL_CONNECTED:
         	    	serval_sock_set_state(sk, SERVAL_RMIGRATE);
                         memcpy(&isk->inet_daddr, &ctx->mig_ext->new_addr, 4);
@@ -1711,9 +1716,8 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
                         LOG_DBG("Sending RSYNACK: %d\n", err);
                         break;
         	    default:
-        	    	/* FIXME: What to do in other states? */
         	    	break;
-        	    }
+        	    }*/
         }
 
         return err;
@@ -1808,10 +1812,6 @@ static int serval_sal_connected_state_process(struct sock *sk,
         int err = 0;
         
         serval_sal_ack_process(sk, skb, ctx);
-
-        if (ctx->hdr->type == SERVAL_PKT_RSYN)
-                err = serval_sal_rcv_mig_req(sk, skb, ctx);
-
 
         if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
                 err = serval_sal_rcv_close_req(sk, skb, ctx);
@@ -2314,6 +2314,12 @@ int serval_sal_state_process(struct sock *sk,
         int err = 0;
 
         LOG_PKT("receive in state %s\n", serval_sock_state_str(sk));
+
+        /* Check for migration */
+        if (ctx->hdr->type == SERVAL_PKT_RSYN) {
+                LOG_INF("Packet contains RSYN header\n");
+                err = serval_sal_rcv_mig_req(sk, skb, ctx);
+        }
 
         switch (sk->sk_state) {
         case SERVAL_INIT:
@@ -2919,6 +2925,18 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
+        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
+        	    if (ssk->mig_dev) {
+                       dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
+        	           if (!skb->dev)
+                	           skb_set_dev(skb, ssk->mig_dev);
+        	    }
+
+        	    if (ssk->sal_state == SAL_RSYN_RECV) {
+        	    	// do some address stuff.
+        	    }
+        }
+
         /*
           FIXME: we kind of hard code the outgoing device here based
           on what has been bound to the socket in the connection
@@ -2935,13 +2953,10 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
           queue_xmit for userlevel unless the socket has had its
           interface set by a previous send event.
         */
+
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
-        
-        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
-                /* Modify inet_sk(sk)->daddr to use migration
-                   address */
-        }
+
         
         err = ssk->af_ops->queue_xmit(skb);
         

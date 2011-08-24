@@ -125,8 +125,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                         LOG_DBG("Socket to migrate: %s\n", ssk->dev->name);
                         if (memcmp(&ssk->dev->name,&old_if->name,IFNAMSIZ) == 0) {
                             LOG_DBG("Socket matches old if\n");
-                            serval_sock_set_dev(sk, new_if);
-                            dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
+                            serval_sock_set_mig_dev(sk, new_if);
                             serval_sal_migrate(sk);
                         }
                     }
@@ -621,6 +620,19 @@ void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
 
         if (dev) {
                 ssk->dev = dev;
+                dev_hold(dev);
+        }
+}
+
+void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+        if (ssk->mig_dev)
+                dev_put(ssk->mig_dev);
+
+        if (dev) {
+                ssk->mig_dev = dev;
                 dev_hold(dev);
         }
 }

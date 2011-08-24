@@ -145,6 +145,8 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
+        uint32_t                mig_daddr;
+        struct net_device       *mig_dev;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
