@@ -24,21 +24,20 @@ static inline void serval_flow_init_output(struct flowi *fl, int oif,
         flowi4_init_output((struct flowi4 *)fl, oif, mark, tos, scope,
                            proto, flags, daddr, saddr, dport, sport);
 #else
-        fl->oif = sk->sk_bound_dev_if;
+        memset(&fl, 0, sizeof(*fl));
+        fl->oif = oif;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        fl->mark = sk->sk_mark;
+        fl->mark = mark;
 #endif
-        fl->nl_u = { .ip4_u =
-                     { .daddr = daddr,
-                       .saddr = saddr,
-                       .tos = tos } },
-                .proto = proto,
+        fl->fl4_dst = daddr;
+        fl->fl4_src = saddr;
+        fl->fl4_tos = tos;
+        fl->proto = proto;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                         .flags = flags,
+        fl->flags = flags;
 #endif
-                         .uli_u = { .ports =
-                                    { .sport = sport,
-                                      .dport = dport } } };
+        fl->fl_ip_sport = dport;
+        fl->fl_ip_dport = sport;
 #endif /* LINUX_VERSION(2,6,39) */
 }
 
@@ -65,9 +64,9 @@ struct rtable *serval_ip_route_output_flow(struct net *net,
 }
 
 static inline struct rtable *serval_ip_route_output_key(struct net *net, 
-                                                        struct flowi *flp)
+                                                        struct flowi *fl)
 {
-	return serval_ip_route_output_flow(net, flp, NULL, 0);
+	return serval_ip_route_output_flow(net, fl, NULL, 0);
 }
 
 static inline struct rtable *serval_ip_route_output(struct net *net, 
@@ -91,9 +90,9 @@ static inline void serval_security_sk_classify_flow(struct sock *sk,
                                                     struct flowi *fl)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        security_sk_classify_flow(sk, flowi4_to_flowi((struct flowi4 *)&fl));
+        security_sk_classify_flow(sk, flowi4_to_flowi((struct flowi4 *)fl));
 #else
-        security_sk_classify_flow(sk, &fl);
+        security_sk_classify_flow(sk, fl);
 #endif
 }
 
@@ -101,9 +100,9 @@ static inline void serval_security_req_classify_flow(struct request_sock *req,
                                                     struct flowi *fl)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        security_req_classify_flow(req, flowi4_to_flowi((struct flowi4 *)&fl));
+        security_req_classify_flow(req, flowi4_to_flowi((struct flowi4 *)fl));
 #else
-        security_req_classify_flow(req, &fl);
+        security_req_classify_flow(req, fl);
 #endif
 }
 
