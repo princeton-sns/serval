@@ -221,11 +221,13 @@ typedef unsigned char gfp_t;
 #define GFP_KERNEL 0
 #define GFP_ATOMIC 1
 #define MALLOC(sz, prio) malloc(sz)
+#define kmalloc(sz, prio) malloc(sz)
 #define ZALLOC(sz, prio) ({                     \
                         void *ptr = malloc(sz); \
                         memset(ptr, 0, sz);     \
                         ptr; })
 #define FREE(m) free(m)
+#define kfree(m) free(m)
 
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)

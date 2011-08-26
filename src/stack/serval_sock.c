@@ -66,8 +66,8 @@ int __init serval_table_init(struct serval_table *table,
 {
 	unsigned int i;
 
-	table->hash = MALLOC(SERVAL_HTABLE_SIZE_MIN * 
-                             sizeof(struct serval_hslot), GFP_KERNEL);
+	table->hash = kmalloc(SERVAL_HTABLE_SIZE_MIN * 
+                              sizeof(struct serval_hslot), GFP_KERNEL);
 	if (!table->hash) {
 		/* panic(name); */
 		return -1;
@@ -109,13 +109,32 @@ void __exit serval_table_fini(struct serval_table *table)
         FREE(table->hash);
 }
 
+/*
+  The interface migration is somewhat ugly, but the ugliness is
+  necessary because we cannot lock a socket (an operation that can
+  sleep) while we hold the hash table lock.
+
+  We therefore create a temporary private list of all sockets where we
+  protect them from release by using the reference counter. We can
+  then safely iterate through the private list without holding a list
+  lock, and are thereby free lock each socket.
+ */
 void serval_sock_migrate_iface(struct net_device *old_if,
                                struct net_device *new_if)
 {
         struct hlist_node *walk;
-
         struct sock *sk = NULL;
+        struct list_head mlist;
+        /* A structure we can put on our private list, containing a
+           pointer to each socket. */
+        struct migrate_sock {
+                struct list_head lh;
+                struct sock *sk;
+        } *msk;
         int i;
+        
+        /* Initialize our private list. */
+        INIT_LIST_HEAD(&mlist);
 
         for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
                 struct serval_hslot *slot;
@@ -125,19 +144,40 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                 spin_lock_bh(&slot->lock);
                                 
                 hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
-                        struct serval_sock *ssk = serval_sk(sk);
-                        LOG_DBG("Socket to migrate: %s\n", ssk->dev->name);
+                        msk = kmalloc(sizeof(struct migrate_sock), 
+                                      GFP_ATOMIC);
                         
-                        if (memcmp(&ssk->dev->name, &old_if->name, 
-                                   IFNAMSIZ) == 0) {
-                                lock_sock(sk);
-                                LOG_DBG("Socket matches old if\n");
-                                serval_sock_set_mig_dev(sk, new_if);
-                                serval_sal_migrate(sk);
-                                release_sock(sk);
+                        if (msk) {
+                                sock_hold(sk);
+                                INIT_LIST_HEAD(&msk->lh);
+                                msk->sk = sk;
+                                list_add(&msk->lh, &mlist);
                         }
                 }
                 spin_unlock_bh(&slot->lock);
+        }
+
+        /* Ok, we have our private list. Now iterate through it,
+           locking each socket in the process so that we can safely
+           access the device pointer and perform migration for
+           matching interfaces. */
+        while (!list_empty(&mlist)) {
+        
+                msk = list_first_entry(&mlist, struct migrate_sock, lh);
+                sk = msk->sk;
+
+                lock_sock(sk);
+                
+                if (serval_sk(sk)->dev && 
+                    serval_sk(sk)->dev->ifindex == old_if->ifindex) {
+                        LOG_DBG("Socket matches old if\n");
+                        serval_sock_set_mig_dev(sk, new_if);
+                        serval_sal_migrate(sk);
+                }
+                release_sock(sk);
+                list_del(&msk->lh);
+                sock_put(sk);
+                kfree(msk);
         }
 }
 

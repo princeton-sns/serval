@@ -375,12 +375,13 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
         struct net_device *old_dev, *new_dev;
 
         old_dev = dev_get_by_name(&init_net, cmm->from_if);
-        new_dev = dev_get_by_name(&init_net, cmm->to_if);
 
         if (!old_dev) {
                 LOG_ERR("No old interface %s\n", cmm->from_if);
                 return -1;
         }
+
+        new_dev = dev_get_by_name(&init_net, cmm->to_if);
 
         if (!new_dev) {
         	    LOG_ERR("No new interface %s\n", cmm->to_if);

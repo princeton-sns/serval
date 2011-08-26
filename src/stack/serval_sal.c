@@ -603,31 +603,31 @@ static inline int has_valid_control_extension(struct sock *sk,
 }
 
 static inline int has_valid_migrate_extension(struct sock *sk,
-		                                      struct serval_context *ctx)
+                                              struct serval_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
-
+        
         if (!ctx->mig_ext)
-        	   return 0;
-
+                return 0;
+        
         if (ctx->length < sizeof(*ctx->hdr) + sizeof(*ctx->mig_ext)) {
-        	   LOG_PKT("No migrate extension, hdr_len=%u\n",
-        			   ctx->length);
-        	   return 0;
+                LOG_PKT("No migrate extension, hdr_len=%u\n",
+                        ctx->length);
+                return 0;
         }
-
+        
         if (ctx->mig_ext->exthdr.type != SERVAL_MIGRATE_EXT ||
-        	ctx->mig_ext->exthdr.length != sizeof(*ctx->mig_ext)) {
-        	   LOG_PKT("No migrate extension, bad type\n");
-        	   return 0;
+            ctx->mig_ext->exthdr.length != sizeof(*ctx->mig_ext)) {
+                LOG_PKT("No migrate extension, bad type\n");
+                return 0;
         }
-
+        
         if (memcmp(ctx->mig_ext->nonce, ssk->peer_nonce,
-        	 	   SERVAL_NONCE_SIZE) != 0) {
-        	   LOG_PKT("Migrate extension has bad nonce\n");
-        	   return 0;
+                   SERVAL_NONCE_SIZE) != 0) {
+                LOG_PKT("Migrate extension has bad nonce\n");
+                return 0;
         }
-
+        
         return 1;
 }
 
@@ -2882,6 +2882,7 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
         uint32_t temp_daddr = 0;
+        struct net_device *old_dev = NULL;
         int err = 0;
 
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
@@ -2889,15 +2890,18 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
                             LOG_DBG("Sending on mig_dev\n");
                             dev_get_ipv4_addr(ssk->mig_dev,
                                               &inet_sk(sk)->inet_saddr);
-                            if (!skb->dev)
-                                    skb_set_dev(skb, ssk->mig_dev);
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
         	            LOG_DBG("Using MIG addr\n");
         	            memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
-        	            memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
+        	            memcpy(&inet_sk(sk)->inet_daddr, 
+                                   &ssk->mig_daddr, 4);
         	    }
+                    skb_set_dev(skb, ssk->mig_dev);
+                    
+                    /* Must remove any cached route */
+                    __sk_dst_reset(sk);
         }
 
         /*
@@ -2919,20 +2923,23 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
 
         if (!skb->dev && ssk->dev)
                 skb_set_dev(skb, ssk->dev);
-
         
         err = ssk->af_ops->queue_xmit(skb);
         
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
                 if (ssk->mig_dev) {
-        	            dev_get_ipv4_addr(ssk->dev, &inet_sk(sk)->inet_saddr);
+        	            dev_get_ipv4_addr(ssk->dev, 
+                                              &inet_sk(sk)->inet_saddr);
                 }
 
                 if (ssk->sal_state == SAL_RSYN_RECV) {
-	                    memcpy(&ssk->mig_daddr, &inet_sk(sk)->inet_daddr, 4);
+	                    memcpy(&ssk->mig_daddr, 
+                                   &inet_sk(sk)->inet_daddr, 4);
 	                    memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
                 }
+                /* Reset cached route again */
+                __sk_dst_reset(sk);
         }
 
         if (err < 0) {
