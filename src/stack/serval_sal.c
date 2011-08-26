@@ -1665,7 +1665,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 serval_sk(sk)->snd_seq.una++;
                 LOG_PKT("received valid ACK ackno=%u\n", 
                         ctx->ackno);
-                err = 0;
+
                 switch (ssk->sal_state) {
                 case SAL_RSYN_SENT:
                         LOG_DBG("RECV RSYNACK\n");
@@ -1674,6 +1674,7 @@ static int serval_sal_ack_process(struct sock *sk,
                                           &inet_sk(sk)->inet_saddr);
                         serval_sock_set_dev(sk, ssk->mig_dev);
                         serval_sock_set_mig_dev(sk, NULL);
+                        sk_dst_reset(sk);
                         ssk->rcv_seq.nxt = ctx->seqno + 1;
                         rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                                 GFP_ATOMIC);
@@ -1682,18 +1683,19 @@ static int serval_sal_ack_process(struct sock *sk,
                         SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
                         SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
                         SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
-                        err = serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
-                        
+                        serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
                         break;
                 case SAL_RSYN_RECV:
                         LOG_DBG("Handshake complete\n");
                         serval_sock_set_sal_state(sk, SAL_NORM);
                         memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
-                        memset(&ssk->mig_daddr, '0', 4);
+                        memset(&ssk->mig_daddr, 0, 4);
+                        sk_dst_reset(sk);
                         break;
                 default:
                         break;
                 }
+                err = 0;
         } else {
                 LOG_DBG("ackno %u out of sequence, expected %u\n",
                         ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
@@ -1832,7 +1834,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
 {
         int err = 0;
         
-        serval_sal_ack_process(sk, skb, ctx);
+        err = serval_sal_ack_process(sk, skb, ctx);
 
         if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
                 err = serval_sal_rcv_close_req(sk, skb, ctx);
@@ -2882,14 +2884,22 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
         uint32_t temp_daddr = 0;
-        struct net_device *old_dev = NULL;
         int err = 0;
 
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
         	    if (ssk->mig_dev) {
-                            LOG_DBG("Sending on mig_dev\n");
                             dev_get_ipv4_addr(ssk->mig_dev,
                                               &inet_sk(sk)->inet_saddr);
+#if defined(ENABLE_DEBUG)
+                            {
+                                    char src[18];
+                                    LOG_DBG("Sending on mig_dev %s src=%s\n",
+                                            ssk->mig_dev->name, 
+                                            inet_ntop(AF_INET, 
+                                                      &inet_sk(sk)->inet_saddr, 
+                                                      src, 18));
+                            }
+#endif
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
