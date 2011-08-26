@@ -17,13 +17,13 @@ extern void netlink_fini(void);
 #endif
 
 int libstack_migrate_interface(const char *from_if,
-		                       const char *to_if)
+                               const char *to_if)
 {
 	    struct ctrlmsg_migrate cm;
 
 	    if (!from_if || !to_if) {
-                LOG_ERR("Undefined interface\n");
-	    	return -1;
+                    LOG_ERR("Undefined interface\n");
+                    return -1;
             }
 
 	    memset(&cm, 0, sizeof(cm));

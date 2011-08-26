@@ -14,11 +14,11 @@
 int main(int argc, char **argv)
 {
 	int ret = 0;
-	char from_if[IFNAMSIZ];
-	char to_if[IFNAMSIZ];
+	char *from_if = argv[1];
+	char *to_if = argv[2];
 
-        strncpy(&from_if, argv[1], IFNAMSIZ);
-        strncpy(&to_if, argv[2], IFNAMSIZ);
+        if (!from_if || !to_if)
+                return -1;
 
 	ret = libstack_init();
 
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 	}
 
 	
-	ret = libstack_migrate_interface(&from_if, &to_if);
+	ret = libstack_migrate_interface(from_if, to_if);
 
 	if (ret < 0) {
 		fprintf(stderr, "could not migrate\n");
