@@ -11,6 +11,7 @@
 #include "ctrl.h"
 #include "serval_sock.h"
 #include "serval_sal.h"
+#include "serval_ipv4.h"
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
@@ -60,12 +61,12 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 #if defined(OS_LINUX_KERNEL)
                 {
                         struct rtable *rt;
-                        struct flowi fl = { 
-                                .oif = entry->if_index,
-                                .fl4_dst = entry->address.net_ip.s_addr,
-                        };                                   
 
-                        if (ip_route_output_key(&init_net, &rt, &fl)) {
+                        rt = serval_ip_route_output(&init_net, 
+                                                    entry->address.net_ip.s_addr,
+                                                    0, 0, entry->if_index);
+
+                        if (!rt) {
                                 LOG_DBG("Address is not routable, ignoring.\n");
                                 continue;
                         }
@@ -383,11 +384,16 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
 
         if (!new_dev) {
         	    LOG_ERR("No new interface %s\n", cmm->to_if);
+                    dev_put(old_dev);
         	    return -1;
         }
 
         LOG_DBG("migrate iface %s to iface %s\n", cmm->from_if, cmm->to_if);
+
         serval_sock_migrate_iface(old_dev, new_dev);
+
+        dev_put(old_dev);
+        dev_put(new_dev);
 
         return 0;
 }

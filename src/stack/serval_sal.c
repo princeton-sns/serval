@@ -953,6 +953,7 @@ void serval_sal_migrate(struct sock *sk)
         int err = 0;
 
         serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
+
         for(;;) {
                 skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                                GFP_ATOMIC);
@@ -1708,6 +1709,7 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb = NULL;
         int err = 0;
+
         LOG_INF("received Migrate REQUEST\n");
         
         if (!has_valid_migrate_extension(sk, ctx)) {
@@ -2879,7 +2881,7 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
 {
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
-        uint32_t temp_daddr;
+        uint32_t temp_daddr = 0;
         int err = 0;
 
         if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_RSYN) {
@@ -3076,7 +3078,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_RSYN:
-                LOG_DBG("Sending RSYN...\n");
                 hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
                 break;
         case SERVAL_PKT_DATA:

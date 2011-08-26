@@ -256,8 +256,6 @@ static void serval_tcp_delack_timer(unsigned long data)
 		serval_tcp_send_ack(sk);
 		//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_DELAYEDACKS);
 	}
-	TCP_CHECK_TIMER(sk);
-
 out:
 	if (tcp_memory_pressure)
 		sk_mem_reclaim(sk);
@@ -469,8 +467,6 @@ static void serval_tcp_write_timer(unsigned long data)
 		serval_tcp_probe_timer(sk);
 		break;
 	}
-	TCP_CHECK_TIMER(sk);
-
 out:
 	sk_mem_reclaim(sk);
 out_unlock:

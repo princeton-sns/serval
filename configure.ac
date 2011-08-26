@@ -106,7 +106,7 @@ then
      EXTRA_DEFINES="${EXTRA_DEFINES} -DENABLE_DEBUG"
      CFLAGS="$CFLAGS -g -O0 -fno-inline"  
      CXXFLAGS="$CXXFLAGS -g -O0 -fno-inline"
-     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -g3 -ggdb3 -O0 -fno-inline"
+     KERNEL_EXTRA_CFLAGS="$KERNEL_EXTRA_CFLAGS -g3 -ggdb3 -fno-inline"
 else
      CFLAGS="$CFLAGS -O2"  
      CXXFLAGS="$CXXFLAGS -O2"

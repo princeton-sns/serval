@@ -307,7 +307,7 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 }
 
 struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        const struct request_sock *req);
+                                        struct request_sock *req);
 
 int serval_sock_rebuild_header(struct sock *sk);
 

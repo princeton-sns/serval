@@ -62,11 +62,6 @@ const char *mac_ntop(const void *src, char *dst, size_t size)
 	return dst;
 }
 
-int mac_pton(const char *src, void *dst)
-{
-        return -1;
-}
-
 const char *get_strtime(void)
 {
     static char buf[30];

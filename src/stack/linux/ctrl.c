@@ -1,10 +1,11 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#include <net/sock.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/netlink.h>
 #include <linux/skbuff.h>
 #include <libstack/ctrlmsg.h>
+#include <net/sock.h>
 #include <serval/debug.h>
 #include <ctrl.h>
 

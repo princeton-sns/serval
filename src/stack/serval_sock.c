@@ -19,6 +19,7 @@
 #include <endian.h>
 #endif
 #endif
+#include "serval_ipv4.h"
 
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
 static atomic_t serval_flow_id = ATOMIC_INIT(1);
@@ -65,8 +66,8 @@ int __init serval_table_init(struct serval_table *table,
 {
 	unsigned int i;
 
-	table->hash = MALLOC(SERVAL_HTABLE_SIZE_MIN *
-                             2 * sizeof(struct serval_hslot), GFP_KERNEL);
+	table->hash = MALLOC(SERVAL_HTABLE_SIZE_MIN * 
+                             sizeof(struct serval_hslot), GFP_KERNEL);
 	if (!table->hash) {
 		/* panic(name); */
 		return -1;
@@ -112,27 +113,32 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                                struct net_device *new_if)
 {
         struct hlist_node *walk;
-        struct serval_hslot slot;
+
         struct sock *sk = NULL;
         int i;
 
-        for (i=0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
-                slot = established_table.hash[i];
-                if (slot.count > 0) {
-                    hlist_for_each_entry(sk, walk, &slot.head, sk_node) {
+        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+                struct serval_hslot *slot;
+                
+                slot = &established_table.hash[i];
+                
+                spin_lock_bh(&slot->lock);
+                                
+                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
                         struct serval_sock *ssk = serval_sk(sk);
                         LOG_DBG("Socket to migrate: %s\n", ssk->dev->name);
-                        if (memcmp(&ssk->dev->name,&old_if->name,IFNAMSIZ) == 0) {
-                            LOG_DBG("Socket matches old if\n");
-                            serval_sock_set_mig_dev(sk, new_if);
-                            serval_sal_migrate(sk);
+                        
+                        if (memcmp(&ssk->dev->name, &old_if->name, 
+                                   IFNAMSIZ) == 0) {
+                                lock_sock(sk);
+                                LOG_DBG("Socket matches old if\n");
+                                serval_sock_set_mig_dev(sk, new_if);
+                                serval_sal_migrate(sk);
+                                release_sock(sk);
                         }
-                    }
                 }
+                spin_unlock_bh(&slot->lock);
         }
-
-        LOG_DBG("Hash table done\n");
-
 }
 
 static struct sock *serval_sock_lookup(struct serval_table *table,
@@ -721,28 +727,23 @@ int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
 }
 
 struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        const struct request_sock *req)
+                                        struct request_sock *req)
 {
 #if defined(OS_LINUX_KERNEL)
 	struct rtable *rt;
 	struct inet_request_sock *ireq = inet_rsk(req);
-	//struct ip_options *opt = inet_rsk(req)->opt;
-	struct flowi fl = { .oif = sk->sk_bound_dev_if,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-			    .mark = sk->sk_mark,
-#endif
-			    .nl_u = { .ip4_u =
-				      { .daddr = ireq->rmt_addr,
-					.saddr = ireq->loc_addr,
-					.tos = 0 /*RT_CONN_FLAGS(sk)*/ } },
-			    .proto = sk->sk_protocol,
+	/* struct ip_options *opt = inet_rsk(req)->opt; */
+        struct flowi fl;
+
+        serval_flow_init_output(&fl, sk->sk_bound_dev_if, sk->sk_mark, 
+                                0, 0, sk->sk_protocol, 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-			    .flags = inet_sk_flowi_flags(sk),
+                                inet_sk_flowi_flags(sk),
+#else
+                                0,
 #endif
-			    .uli_u = { .ports =
-				       { .sport = 0,
-					 .dport = 0 } } };
-        
+                                ireq->rmt_addr, ireq->loc_addr, 0, 0);
+
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
@@ -752,16 +753,12 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
                         sk->sk_protocol);
         }
 #endif
+	serval_security_req_classify_flow(req, &fl);
 
-	security_req_classify_flow(req, &fl);
+        rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-        if (ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0))
+        if (!rt)
                 goto no_route;
-#else
-        if (ip_route_output_flow(&rt, &fl, sk, 0))
-                goto no_route;
-#endif
 
         /*
 	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
@@ -818,54 +815,37 @@ int serval_sock_rebuild_header(struct sock *sk)
 #if defined(OS_LINUX_KERNEL)
 	struct inet_sock *inet = inet_sk(sk);
 	struct rtable *rt = (struct rtable *)__sk_dst_check(sk, 0);
-	__be32 daddr;
+        struct flowi fl;
 
 	/* Route is OK, nothing to do. */
 	if (rt)
 		return 0;
 
-	/* Reroute. */
-	daddr = inet->inet_daddr;
-        /*
-	if (inet->opt && inet->opt->srr)
-		daddr = inet->opt->faddr;
-        */
-
-        {
-                struct flowi fl = {
-                        .oif = sk->sk_bound_dev_if,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-                        .mark = sk->sk_mark,
-#endif
-                        .fl4_dst = daddr,
-                        .fl4_src = inet->inet_saddr,
-                        .fl4_tos = RT_CONN_FLAGS(sk),
-                        .proto = sk->sk_protocol,
+        serval_flow_init_output(&fl, sk->sk_bound_dev_if, 
+                                sk->sk_mark, RT_CONN_FLAGS(sk), 0,
+                                sk->sk_protocol,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                        .flags = inet_sk_flowi_flags(sk),
+                                inet_sk_flowi_flags(sk),
+#else
+                                0,
 #endif
-                        .fl_ip_sport = 0,
-                        .fl_ip_dport = 0,
-                };
-                
+                                inet->inet_daddr,
+                                inet->inet_saddr,
+                                0, 0);
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
                 LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
-                        inet_ntop(AF_INET, &daddr, rmtstr, 18),
+                        inet_ntop(AF_INET, &inet->inet_daddr, rmtstr, 18),
                         inet_ntop(AF_INET, &inet->inet_saddr, locstr, 18),
                         sk->sk_protocol);
         }
 #endif
-                security_sk_classify_flow(sk, &fl);
+	serval_security_sk_classify_flow(sk, &fl);
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-                err = ip_route_output_flow(sock_net(sk), &rt, &fl, sk, 0);
-#else
-                err = ip_route_output_flow(&rt, &fl, sk, 0);
-#endif
-        }
-	if (!err) {
+        rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
+
+	if (rt) {
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
 		sk_setup_caps(sk, &rt->dst);
 #else
@@ -873,6 +853,7 @@ int serval_sock_rebuild_header(struct sock *sk)
 #endif
         } else {
 		/* Routing failed... */
+                err = -EHOSTUNREACH;
 		sk->sk_route_caps = 0;
                 LOG_ERR("Routing failed for socket %p\n", sk);
 	}

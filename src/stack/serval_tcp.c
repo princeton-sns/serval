@@ -167,15 +167,12 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
         if (sk->sk_state == TCP_ESTABLISHED) { /* Fast path */
 		//sock_rps_save_rxhash(sk, skb->rxhash);
-		TCP_CHECK_TIMER(sk);
-
                 LOG_DBG("Established state receive\n");
               
 		if (serval_tcp_rcv_established(sk, skb, 
                                                tcp_hdr(skb), skb->len)) {
 			goto reset;
 		}
-		TCP_CHECK_TIMER(sk);
 		return 0;
 	} 
 
@@ -183,12 +180,9 @@ int serval_tcp_do_rcv(struct sock *sk, struct sk_buff *skb)
             serval_tcp_checksum_complete(skb))
 		goto csum_err;
 
-	TCP_CHECK_TIMER(sk);
-
 	if (serval_tcp_rcv_state_process(sk, skb, tcp_hdr(skb), skb->len)) {
 		goto reset;
 	}
-	TCP_CHECK_TIMER(sk);
 
         return 0;
  reset:
@@ -1057,9 +1051,7 @@ int serval_tcp_sendpage(struct sock *sk, struct page *page, int offset,
         }
 
 	lock_sock(sk);
-	TCP_CHECK_TIMER(sk);
 	res = serval_do_tcp_sendpages(sk, &page, offset, size, flags);
-	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
 	return res;
 }
@@ -1081,7 +1073,6 @@ static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk,
         LOG_DBG("Sending tcp message, len=%zu\n", len);
 
 	lock_sock(sk);
-	TCP_CHECK_TIMER(sk);
 
 	flags = msg->msg_flags;
 	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
@@ -1280,9 +1271,8 @@ wait_for_memory:
 out:
 	if (copied)
 		serval_tcp_push(sk, flags, mss_now, tp->nonagle);
-	TCP_CHECK_TIMER(sk);
-	release_sock(sk);
 
+	release_sock(sk);
 
 	return copied;
 
@@ -1304,7 +1294,6 @@ out_err:
 
         LOG_ERR("error=%d\n", err);
 
-	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
 	return err;
 }
@@ -1472,8 +1461,6 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	u32 urg_hole = 0;
 
 	lock_sock(sk);
-
-	TCP_CHECK_TIMER(sk);
 
 	err = -ENOTCONN;
 	if (sk->sk_state == TCP_LISTEN)
@@ -1850,13 +1837,11 @@ skip_copy:
 	/* Clean up data we have read: This will do ACK frames. */
 	serval_tcp_cleanup_rbuf(sk, copied);
 
-	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
         LOG_DBG("copied=%d\n", copied);
 	return copied;
 
 out:
-	TCP_CHECK_TIMER(sk);
 	release_sock(sk);
         LOG_DBG("err=%d\n", err);
 	return err;
