@@ -29,6 +29,9 @@ struct client {
         int should_exit;
 };
 
+#define TRANSLATOR_PORT 8080
+static const char *server_ip = "192.168.56.101";
+
 static ssize_t forward_data(int from, int to, int pipefd[2])
 {
         ssize_t rlen, wlen = 0;
@@ -123,8 +126,6 @@ void client_free(struct client *c)
         free(c);
 }
 
-static const char *server_ip = "192.168.56.101";
-
 void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
@@ -141,8 +142,7 @@ void *client_thread(void *arg)
         
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
-                /* addr.sv.sv_srvid.s_sid32[0] = htonl(16385); */
-                addr.sv.sv_srvid.s_sid32[0] = htonl(8080);
+                addr.sv.sv_srvid.s_sid32[0] = htonl(TRANSLATOR_PORT);
                 addrlen = sizeof(addr.sv);
         } else {
                 addr.in.sin_family = c->family;
@@ -222,8 +222,6 @@ static void signal_handler(int sig)
 {
         printf("signal %u caught!\n", sig);
 }
-
-#define TRANSLATOR_PORT 8080
 
 int main(int argc, char **argv)
 {       

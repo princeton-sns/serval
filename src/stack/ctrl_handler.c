@@ -54,7 +54,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
         for (i = 0; i < num_res; i++) {
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
-   
+                
                 if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
                         entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
@@ -67,7 +67,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                                                     0, 0, entry->if_index);
 
                         if (!rt) {
-                                LOG_DBG("Address is not routable, ignoring.\n");
+                                LOG_DBG("Service address is not routable, ignoring.\n");
                                 continue;
                         }
 
@@ -80,7 +80,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                         ip_rt_put(rt);
                 }
 #else
-                 dev = dev_get_by_index(&init_net, entry->if_index);
+                dev = dev_get_by_index(&init_net, entry->if_index);
 
                 if (!dev) {                        
                         LOG_ERR("No device with id=%d\n",

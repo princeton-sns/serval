@@ -3,7 +3,6 @@
 #define _SERVAL_IPV4_H_
 
 #include <serval/skbuff.h>
-
 #if defined(OS_LINUX_KERNEL)
 #include <linux/kernel.h>
 #include <linux/version.h>
@@ -24,7 +23,7 @@ static inline void serval_flow_init_output(struct flowi *fl, int oif,
         flowi4_init_output((struct flowi4 *)fl, oif, mark, tos, scope,
                            proto, flags, daddr, saddr, dport, sport);
 #else
-        memset(&fl, 0, sizeof(*fl));
+        memset(fl, 0, sizeof(*fl));
         fl->oif = oif;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
         fl->mark = mark;
@@ -51,14 +50,12 @@ struct rtable *serval_ip_route_output_flow(struct net *net,
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
         rt = ip_route_output_flow(net, (struct flowi4 *)fl, sk);
-#else
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
         if (ip_route_output_flow(net, &rt, fl, sk, flags))
                 return NULL;
 #else
         if (ip_route_output_flow(&rt, fl, sk, flags))
                 return NULL;
-#endif
 #endif
         return rt;
 }
