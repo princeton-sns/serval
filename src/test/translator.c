@@ -22,6 +22,7 @@ static unsigned int client_num = 0;
 struct client {
         int family;
         unsigned int id;
+        struct sockaddr_in saddr;
         pthread_t thr;
         int inet_sock;
         int serval_sock;
@@ -77,7 +78,8 @@ static ssize_t serval_to_legacy(struct client *c)
         return forward_data(c->serval_sock, c->inet_sock, c->pipefd);
 }
 
-struct client *client_create(int inet_sock, int family)
+struct client *client_create(int inet_sock, int family, 
+                             struct sockaddr *sa, socklen_t salen)
 {
         struct client *c;
         int ret;
@@ -106,6 +108,7 @@ struct client *client_create(int inet_sock, int family)
 			strerror(errno));
                 goto fail_sock;
 	}
+        memcpy(&c->saddr, sa, salen);
 out:        
         return c;
 fail_sock:        
@@ -136,6 +139,7 @@ void *client_thread(void *arg)
         } addr;
         socklen_t addrlen;
         int inet_port = 49254;
+        char srcstr[18];
         int ret;
 
         memset(&addr, 0, sizeof(addr));
@@ -150,13 +154,16 @@ void *client_thread(void *arg)
                 addr.in.sin_port = htons(inet_port);
                 addrlen = sizeof(addr.in);
         }
-
+        
+        inet_ntop(AF_INET, &c->saddr.sin_addr, 
+                  srcstr, sizeof(srcstr));
+        
         if (c->family == AF_SERVAL) {
-                printf("client %u connecting to service %s... ",
-                       c->id, service_id_to_str(&addr.sv.sv_srvid));
+                printf("client %u from %s connecting to service %s...\n",
+                       c->id, srcstr, service_id_to_str(&addr.sv.sv_srvid));
         } else {
-                printf("client %u connecting to %s:%u... ",
-                       c->id, server_ip, inet_port);
+                printf("client %u from %s connecting to %s:%u...\n",
+                       c->id, srcstr, server_ip, inet_port);
         }
 
         ret = connect(c->serval_sock, &addr.sa, addrlen);
@@ -168,7 +175,7 @@ void *client_thread(void *arg)
                 return NULL;
         }
 
-        printf("success!\n");
+        printf("client %u connected successfully!\n", c->id);
 
         while (!c->should_exit) {
                 fd_set fds;
@@ -285,7 +292,7 @@ int main(int argc, char **argv)
                 socklen_t addrlen = sizeof(saddr);
                 struct client *c;
                 
-                printf("Waiting for client...\n");
+                printf("Waiting for new clients...\n");
 
                 client_sock = accept(sock, (struct sockaddr *)&saddr,
                                      &addrlen);
@@ -302,11 +309,16 @@ int main(int argc, char **argv)
                                         strerror(errno));
                         }
                         break;
+                } else {
+                        char buf[18];
+                        
+                        printf("client connected from %s\n",
+                               inet_ntop(AF_INET, &saddr.sin_addr, 
+                                         buf, sizeof(buf)));
                 }
-
-                printf("client connected\n");
-
-                c = client_create(client_sock, family);
+                
+                c = client_create(client_sock, family, 
+                                  (struct sockaddr *)&saddr, addrlen);
 
                 if (!c) {
                         fprintf(stderr, "Could not create client\n");
