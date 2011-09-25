@@ -103,6 +103,8 @@ struct sockaddr_sv {
         struct service_id sv_srvid;
 };
 
+#define SERVAL_ADDRSTRLEN 80
+
 struct flow_id {
         union {
                 uint8_t  un_id8[4];
