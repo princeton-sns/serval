@@ -30,7 +30,7 @@ struct client {
         int should_exit;
 };
 
-#define TRANSLATOR_PORT 8080
+static unsigned short translator_port = 8080;
 static const char *server_ip = "192.168.56.101";
 
 static ssize_t forward_data(int from, int to, int pipefd[2])
@@ -146,7 +146,7 @@ void *client_thread(void *arg)
         
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(TRANSLATOR_PORT);
+                addr.sv.sv_srvid.s_sid32[0] = htonl(translator_port);
                 addrlen = sizeof(addr.sv);
         } else {
                 addr.in.sin_family = c->family;
@@ -237,6 +237,20 @@ int main(int argc, char **argv)
 	struct sockaddr_in saddr;
 	int family = AF_SERVAL;
 
+        argc--;
+	argv++;
+        
+	while (argc) {
+                if (strcmp(argv[0], "-p") == 0 ||
+		    strcmp(argv[0], "--port") == 0) {
+                        translator_port = atoi(argv[1]);
+			argv++;
+			argc--;
+                }
+		argc--;
+		argv++;
+	}	
+        
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         
@@ -257,10 +271,10 @@ int main(int argc, char **argv)
         memset(&saddr, 0, sizeof(saddr));
         saddr.sin_family = AF_INET;
         saddr.sin_addr.s_addr = INADDR_ANY;
-        saddr.sin_port = htons(TRANSLATOR_PORT);
+        saddr.sin_port = htons(translator_port);
 
         printf("Serval translator running on port %u\n", 
-               TRANSLATOR_PORT);
+               translator_port);
 
         ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
