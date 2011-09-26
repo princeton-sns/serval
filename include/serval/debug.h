@@ -60,8 +60,8 @@ static inline const char *hexdump(const void *data, int datalen,
 #else
 
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
-#define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
-#define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
+#define LOG_ERR(fmt, ...) 
+#define LOG_WARN(fmt, ...)
 #define LOG_INF(fmt, ...)
 #define LOG_DBG(fmt, ...)
 #define LOG_PKT(fmt, ...)
