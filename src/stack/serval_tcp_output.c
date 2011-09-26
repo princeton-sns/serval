@@ -140,7 +140,7 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 			       (TCPOLEN_MSS << 16) |
 			       opts->mss);
 	}
-        /*
+
 	if (likely(OPTION_TS & options)) {
 		if (unlikely(OPTION_SACK_ADVERTISE & options)) {
 			*ptr++ = htonl((TCPOPT_SACK_PERM << 24) |
@@ -157,7 +157,6 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 		*ptr++ = htonl(opts->tsval);
 		*ptr++ = htonl(opts->tsecr);
 	}
-        */
 
 	if (unlikely(OPTION_WSCALE & options)) {
                 LOG_DBG("Writing window scale option\n");
@@ -191,14 +190,14 @@ static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 	 * going out.  */
 	opts->mss = serval_tcp_advertise_mss(sk);
 	remaining -= TCPOLEN_MSS_ALIGNED;
-        /*
-	if (likely(sysctl_tcp_timestamps && *md5 == NULL)) {
+
+	if (likely(sysctl_serval_tcp_timestamps && *md5 == NULL)) {
 		opts->options |= OPTION_TS;
 		opts->tsval = TCP_SKB_CB(skb)->when;
 		opts->tsecr = tp->rx_opt.ts_recent;
 		remaining -= TCPOLEN_TSTAMP_ALIGNED;
 	}
-        */
+
 	if (likely(sysctl_serval_tcp_window_scaling)) {
 		opts->ws = tp->rx_opt.rcv_wscale;
 		opts->options |= OPTION_WSCALE;

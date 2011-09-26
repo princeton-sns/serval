@@ -31,8 +31,6 @@ void serval_tcp_cleanup_congestion_control(struct sock *sk)
 	//module_put(tp->ca_ops->owner);
 }
 
-
-
 /* RFC2861 Check whether we are limited by application or congestion window
  * This is the inverse of cwnd check in tcp_tso_should_defer
  */
