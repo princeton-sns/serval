@@ -1579,7 +1579,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         struct request_sock *rsk = &srsk->rsk.req;
                         struct inet_request_sock *irsk = &srsk->rsk;
                         struct inet_sock *newinet;
-
+                        
                         if (memcmp(srsk->peer_nonce, ctx->conn_ext->nonce, 
                                    SERVAL_NONCE_SIZE) != 0) {
                                 LOG_ERR("Bad nonce\n");
@@ -1608,7 +1608,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         /* Move request sock to accept queue */
                         list_del(&srsk->lh);
                         list_add_tail(&srsk->lh, &ssk->accept_queue);
-
+                        
                         newinet = inet_sk(nsk);
                         nssk = serval_sk(nsk);
 

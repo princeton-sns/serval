@@ -362,7 +362,8 @@ struct sock *serval_accept_dequeue(struct sock *parent,
                 }
 
                 list_del(&srsk->lh);
-                reqsk_free(&srsk->rsk.req);                
+                reqsk_free(&srsk->rsk.req);
+                sk->sk_ack_backlog--;
                 return sk;
         }
 
