@@ -1365,6 +1365,7 @@ static int serval_sal_syn_rcv(struct sock *sk,
 
         /* Add the new request socket to the SYN queue. */
         list_add(&srsk->lh, &ssk->syn_queue);
+        sk->sk_ack_backlog++;
         
         /* Call upper transport protocol handler */
         if (ssk->af_ops->conn_request) {
@@ -1608,7 +1609,8 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         /* Move request sock to accept queue */
                         list_del(&srsk->lh);
                         list_add_tail(&srsk->lh, &ssk->accept_queue);
-                        
+                        nsk->sk_ack_backlog = 0;
+
                         newinet = inet_sk(nsk);
                         nssk = serval_sk(nsk);
 
