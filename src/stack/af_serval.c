@@ -165,7 +165,6 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct sock *sk = sock->sk;
         struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
-        struct ctrlmsg_register cm;
 
         if ((unsigned int)addr_len < sizeof(*svaddr))
                 return -EINVAL;
@@ -207,26 +206,29 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
-                
-        /* Notify the service daemon */
-        memset(&cm, 0, sizeof(cm));
-        cm.cmh.type = CTRLMSG_TYPE_REGISTER;
-        cm.cmh.len = sizeof(cm);
-        cm.srvid_flags = svaddr->sv_flags;
-        cm.srvid_prefix_bits = svaddr->sv_prefix_bits;
-        memcpy(&cm.srvid, &svaddr->sv_srvid, sizeof(svaddr->sv_srvid));
-
-        if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
-                LOG_INF("servd not running?\n");
-        }
 
         return 0;
 }
 
 static int serval_listen_start(struct sock *sk, int backlog)
 {
+        struct ctrlmsg_register cm;
+        struct serval_sock *ssk = serval_sk(sk);
+
         serval_sock_set_state(sk, SERVAL_LISTEN);
         sk->sk_ack_backlog = 0;
+                
+        /* Notify the service daemon */
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_REGISTER;
+        cm.cmh.len = sizeof(cm);
+        cm.srvid_flags = ssk->srvid_flags;
+        cm.srvid_prefix_bits = ssk->srvid_prefix_bits;
+        memcpy(&cm.srvid, &ssk->local_srvid, sizeof(ssk->local_srvid));
+
+        if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
+                LOG_INF("No service daemon running?\n");
+        }
 
         return 0;
 }
@@ -234,6 +236,19 @@ static int serval_listen_start(struct sock *sk, int backlog)
 static int serval_listen_stop(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct ctrlmsg_register cm;
+                
+        /* Notify user space */
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
+        cm.cmh.len = sizeof(cm);
+        cm.srvid_flags = serval_sk(sk)->srvid_flags;
+        cm.srvid_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
+        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, sizeof(cm.srvid));
+
+        if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
+                LOG_INF("No service daemon running?\n");
+        }
 
         /* Destroy queue of sockets that haven't completed three-way
          * handshake */
@@ -597,7 +612,6 @@ static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
 static int serval_shutdown(struct socket *sock, int how)
 {
 	struct sock *sk = sock->sk;
-        struct ctrlmsg_register cm;
 	int err = 0;
 
 	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
@@ -607,18 +621,6 @@ static int serval_shutdown(struct socket *sock, int how)
 		return -EINVAL;
 
 	lock_sock(sk);
-
-        /* Notify user space */
-        cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
-        cm.cmh.len = sizeof(cm);
-        cm.srvid_flags = serval_sk(sk)->srvid_flags;
-        cm.srvid_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
-        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, sizeof(cm.srvid));
-        err = ctrl_sendmsg(&cm.cmh, GFP_KERNEL);
-
-        if (err < 0) {
-                LOG_INF("servd not running?\n");
-        }
 
 	if (sock->state == SS_CONNECTING) {
                 /*
