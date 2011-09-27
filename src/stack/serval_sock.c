@@ -248,10 +248,10 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
 static inline unsigned int serval_sock_lhash(struct serval_table *table, 
                                              struct sock *sk)
 {
-        return serval_hashfn_listen(sock_net(sk), 
-                                    &serval_sk(sk)->local_srvid, 
-                                    serval_sk(sk)->hash_key_len * 8,
-                                    table->mask);
+        return serval_hashfn(sock_net(sk), 
+                             serval_sk(sk)->hash_key, 
+                             serval_sk(sk)->hash_key_len,
+                             table->mask);
 }
 
 static void __serval_table_hash(struct serval_table *table, struct sock *sk)
@@ -288,13 +288,9 @@ static void __serval_sock_hash(struct sock *sk)
             sk->sk_state == SERVAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
-#ifdef __LITTLE_ENDIAN
-                ssk->hash_key = &ssk->local_flowid.s_id8[3];
-                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[3]);
-#else
-                ssk->hash_key = &ssk->local_flowid.s_id8[0];
-                ssk->hash_key_len = sizeof(ssk->local_flowid.s_id8[0]);
-#endif
+                ssk->hash_key = &ssk->local_flowid;
+                ssk->hash_key_len = sizeof(ssk->local_flowid);
+
                 __serval_table_hash(&established_table, sk);
         } else { 
                 /* We use the service table for listening sockets. See

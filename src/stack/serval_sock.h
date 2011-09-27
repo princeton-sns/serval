@@ -205,14 +205,6 @@ static inline unsigned int serval_hashfn(struct net *net,
                                          size_t keylen,
                                          unsigned int mask)
 {
-	return *((unsigned int *)key) & mask;
-}
-
-static inline unsigned int serval_hashfn_listen(struct net *net, 
-                                                void *key,
-                                                size_t keylen,
-                                                unsigned int mask)
-{
         return full_bitstring_hash(key, keylen) & mask;
 }
 
@@ -233,7 +225,7 @@ struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
                                             void *key,
                                             size_t keylen)
 {
-	return &table->hash[serval_hashfn_listen(net, key, keylen*8, table->mask)];
+	return &table->hash[serval_hashfn(net, key, keylen*8, table->mask)];
 }
 
 void serval_sock_migrate_iface(struct net_device *old_if, 
