@@ -11,6 +11,7 @@
 #include <serval_sock.h>
 #include "log.h"
 
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
 #define proc_net init_net.proc_net
 #endif
