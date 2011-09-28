@@ -17,7 +17,8 @@ bin_PROGRAMS = \
 	tcp_servern \
 	tcp_inet_client \
 	addservice \
-        migrate
+        migrate \
+	manysockets
 
 if OS_LINUX
 bin_PROGRAMS += \
@@ -39,6 +40,10 @@ migrate_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
 addservice_SOURCES = addservice.c
 addservice_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack
 addservice_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
+
+manysockets_SOURCES = manysockets.c
+manysockets_CPPFLAGS =-I$(top_srcdir)/include 
+manysockets_LDFLAGS =
 
 tcp_inet_client_SOURCES = tcp_inet_client.c
 

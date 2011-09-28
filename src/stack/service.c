@@ -803,41 +803,70 @@ int service_entry_print(struct service_entry *se, char *buf, int buflen)
         return __service_entry_print(se->node, buf, buflen);
 }
 
-static int service_table_print(struct service_table *tbl, 
-                               char *buf, int buflen) 
+void service_table_read_lock(void)
 {
-        int ret = 0;
+        read_lock_bh(&srvtable.lock);
+}
 
-        /* print header */
-        //        ret = snprintf(buf, buflen, "%-64s %-6s %-4s [iface dst]\n",
-        //                       "prefix", "bits", "sock");
-        read_lock_bh(&tbl->lock);
-#if defined(OS_USER)
+void service_table_read_unlock(void)
+{
+        read_unlock_bh(&srvtable.lock);
+}
+
+int __service_table_print(char *buf, int buflen)
+{
+        int len = 0, tot_len = 0, find_size = 0;
+        char tmp_buf[200];
+
+        if (buflen < 0) {
+                find_size = 1;
+                buf = tmp_buf;
+                buflen = 200;
+        }
+
+ #if defined(OS_USER)
         /* Adding this stuff prints garbage in the kernel */
-        ret = snprintf(buf, buflen, "instances: %i bytes resolved: "
+        len = snprintf(buf, buflen, "instances: %i bytes resolved: "
                        "%i packets resolved: %i bytes dropped: "
                        "%i packets dropped %i\n",
-                       tbl->instances, atomic_read(&tbl->bytes_resolved),
-                       atomic_read(&tbl->packets_resolved),
-                       atomic_read(&tbl->bytes_dropped),
-                       atomic_read(&tbl->packets_dropped));
+                       srvtable.instances, 
+                       atomic_read(&srvtable.bytes_resolved),
+                       atomic_read(&srvtable.packets_resolved),
+                       atomic_read(&srvtable.bytes_dropped),
+                       atomic_read(&srvtable.packets_dropped));
+        
+        tot_len += len;
+        
+        /* If we are finding out the buffer size, only
+           increment tot_len, not len. */
+        if (!find_size)
+                len = tot_len;
 #endif
-        ret += snprintf(buf, buflen + ret, "%-64s %-6s %-6s %-6s %-6s %s\n", 
-                        "prefix", "bits", "flags",
-                        "prio", "weight", "dest out");
+        len = snprintf(buf + len, buflen + len, 
+                       "%-64s %-6s %-6s %-6s %-6s %s\n", 
+                       "prefix", "bits", "flags",
+                       "prio", "weight", "dest out");
+        
+        tot_len += len;
+        
+        if (!find_size)
+                len = tot_len;
+        
+        len = bst_print(&srvtable.tree, buf + len, buflen - len);
 
-        ret += bst_print(&tbl->tree, buf + ret, buflen - ret);
+        tot_len += len;
 
-        read_unlock_bh(&tbl->lock);
+        return tot_len;
+}
 
+int service_table_print(char *buf, int buflen)
+{
+        int ret;
+        read_lock_bh(&srvtable.lock);
+        ret = service_table_print(buf, buflen);
+        read_unlock_bh(&srvtable.lock);
         return ret;
 }
-
-int services_print(char *buf, int buflen) 
-{
-        return service_table_print(&srvtable, buf, buflen);
-}
-
 
 static int service_entry_local_match(struct bst_node *n)
 {

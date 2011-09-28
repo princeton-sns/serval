@@ -22,52 +22,120 @@
 
 static struct proc_dir_entry *serval_dir = NULL;
 
+static int proc_generic_read(char **static_buf, int *static_buflen,
+                             char *page, char **start, 
+                             off_t off, int count, 
+                             int *eof, void *data,
+                             int (*print_func)(char *buf, int buflen),
+                             void (*lock_func)(void),
+                             void (*unlock_func)(void))
+{
+        if (!*static_buf) {
+                int len;
+
+                if (off > 0) {
+                        /* Since no static_buf was allocated in the
+                           previous call, and off > 0, we know that
+                           everything printed fitted in the first
+                           page. Therefore, just return 0 and indicate
+                           that we are done. */
+                        *start = NULL;
+                        *eof = 1;
+                        return 0;
+                }
+                
+                lock_func();
+
+                /* Find the size needed for printing */
+                len = print_func(page, -1);
+                
+                /* Check if everything will fit in a single page */
+                if (len < count) {
+                        len = print_func(page, count);
+                        *eof = 1;
+                        /* Set the start pointer so that off will be
+                           non-zero in the next call. */
+                        *start = page;
+                        unlock_func();
+                        return len;
+                }
+                /* Ok, it didn't fit. Allocate a buffer large enough
+                   to hold everything we print */
+                *static_buflen = len + 1;
+                *static_buf = kmalloc(*static_buflen, GFP_ATOMIC);
+                
+                if (!*static_buf) {
+                        *eof = 1;
+                        *static_buflen = 0;
+                        unlock_func();
+                        return 0;
+                }
+                len = print_func(*static_buf, *static_buflen);
+                unlock_func();
+        }
+        /* If we get here, we have allocated memory and printed the
+           information into it. Now output the info into each page
+           through recursive calls to this function. */
+
+
+        /* Check if we are done, i.e., static_buflen has reached
+           zero */
+        if (*static_buflen == 0) {
+                if (*static_buf)
+                        kfree(*static_buf);
+                *static_buf = NULL;
+                *start = NULL;
+                *eof = 1;
+                return 0;
+        }
+
+        /* Check if this is the last page to output stuff into. */
+        if (count >= *static_buflen) {
+                /* We should not write a complete page. */
+                count = *static_buflen;
+                *static_buflen = 0;
+                *eof = 1;
+        } else {
+                /* Not the last page, just decrement the buflen */
+                *static_buflen -= count;
+        }
+
+        /* Copy the information from our memory area into the page */
+        strncpy(page, *static_buf + off, count);
+
+        /* Make sure the offset (off) is updated in the next call by
+           pointing start to our page. */
+        *start = page;
+
+        return count;
+}
+
 static int serval_proc_service_table_read(char *page, char **start, 
                                           off_t off, int count, 
                                           int *eof, void *data)
 {
-	int len;
-        len = 0;
+        static char *buf = NULL;
+        static int buflen = 0;
 
-        len = services_print(page, count);
-
-        if (len <= off + count) 
-                *eof = 1;
-        
-        *start = page + off;
-        len -= off;
-        
-        if (len > count) 
-                len = count;
-
-        if (len < 0) 
-                len = 0;
-
-        return len;
+        return proc_generic_read(&buf, &buflen, page, start, off, 
+                                 count, eof, data,
+                                 __service_table_print,
+                                 service_table_read_lock,
+                                 service_table_read_unlock);
 }
 
 static int serval_proc_flow_table_read(char *page, char **start, 
                                        off_t off, int count, 
                                        int *eof, void *data)
 {
-	int len;
-        len = 0;
+        static char *buf = NULL;
+        static int buflen = 0;
 
-        len = flows_print(page, count);
-
-        if (len <= off + count) 
-                *eof = 1;
-        
-        *start = page + off;
-        len -= off;
-        
-        if (len > count) 
-                len = count;
-
-        if (len < 0) 
-                len = 0;
-
-        return len;
+        return proc_generic_read(&buf, &buflen, page, start, off, 
+                                 count, eof, data,
+                                 __flow_table_print,
+                                 flow_table_read_lock,
+                                 flow_table_read_unlock);
 }
 
 /*

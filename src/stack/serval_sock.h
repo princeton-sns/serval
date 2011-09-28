@@ -303,6 +303,9 @@ struct dst_entry *serval_sock_route_req(struct sock *sk,
 
 int serval_sock_rebuild_header(struct sock *sk);
 
-int flows_print(char *buf, int buflen);
+void flow_table_read_lock(void);
+void flow_table_read_unlock(void);
+int __flow_table_print(char *buf, int buflen);
+int flow_table_print(char *buf, int buflen);
 
 #endif /* _SERVAL_SOCK_H */

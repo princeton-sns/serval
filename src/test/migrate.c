@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 	if (ret < 0) {
 		fprintf(stderr, "could not migrate\n");
 	}
-    libstack_fini();
+        libstack_fini();
 
 fail_libstack:
 	

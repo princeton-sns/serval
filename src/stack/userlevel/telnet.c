@@ -35,7 +35,7 @@ static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
 
 	ret = sprintf(buf, "# Service table:\n");
 
-	ret += services_print(buf + ret, buflen - ret);
+	ret += service_table_print(buf + ret, buflen - ret);
 		
 	if (ret < 0)
 		return;
