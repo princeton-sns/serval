@@ -111,9 +111,9 @@ static int proc_generic_read(char **static_buf, int *static_buflen,
         return count;
 }
 
-static int serval_proc_service_table_read(char *page, char **start, 
-                                          off_t off, int count, 
-                                          int *eof, void *data)
+static int proc_service_table_read(char *page, char **start, 
+                                   off_t off, int count, 
+                                   int *eof, void *data)
 {
         static char *buf = NULL;
         static int buflen = 0;
@@ -125,9 +125,9 @@ static int serval_proc_service_table_read(char *page, char **start,
                                  service_table_read_unlock);
 }
 
-static int serval_proc_flow_table_read(char *page, char **start, 
-                                       off_t off, int count, 
-                                       int *eof, void *data)
+static int proc_flow_table_read(char *page, char **start, 
+                                off_t off, int count, 
+                                int *eof, void *data)
 {
         static char *buf = NULL;
         static int buflen = 0;
@@ -223,7 +223,7 @@ int __init proc_init(void)
 
         proc = create_proc_read_entry(SERVAL_PROC_FILE_SERVICE_TBL, 0, 
                                       serval_dir, 
-                                      serval_proc_service_table_read, 
+                                      proc_service_table_read, 
                                       NULL);
 
         if (!proc)
@@ -231,7 +231,7 @@ int __init proc_init(void)
 
         proc = create_proc_read_entry(SERVAL_PROC_FILE_FLOW_TBL, 0, 
                                       serval_dir, 
-                                      serval_proc_flow_table_read, 
+                                      proc_flow_table_read, 
                                       NULL);
 
         if (!proc)

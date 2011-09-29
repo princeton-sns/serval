@@ -81,14 +81,11 @@ int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)
         unsigned int i;
         int len = 0;
         
-        if (n == NULL)
-                return 0;
-
-        if (buflen <= 0)
+        if (n == NULL || buflen <= 0)
                 return 0;
 
         if (n->prefix_bits == 0) {
-                len += snprintf(buf, buflen - len, "0");
+                len = snprintf(buf, buflen, "0");
         } else {
                 for (i = 0; i < PREFIX_SIZE(n->prefix_bits); i++) {
                         len += snprintf(&buf[i*2], buflen - len, "%02x", 
@@ -163,30 +160,47 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
  */
 int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
 {
-        int len = 0;
-
-        if (buflen <= 0)
-                return len;
+        int len = 0, tot_len = 0, find_size = 0;
+        char tmpbuf[100];
+        
+        if (buflen < 0) {
+                buf = tmpbuf;
+                buflen = 100;
+                find_size = 1;
+        }
 
 	if (n) {
 		if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                         if (n->ops && n->ops->print) {
-                                len += n->ops->print(n, buf + len, 
-                                                     buflen - len);
+                                len = n->ops->print(n, buf + len, 
+                                                    buflen - len);
+
+                                tot_len += len;
+
+                                if (!find_size)
+                                        len = tot_len;
                         }
-                        /*
-                          if (buflen - len > 0) {
-                                buf[len++] = '\n';
-                        }
-                        */
+                        
                 }
-		len += bst_node_print_recursive(n->left, buf + len, 
-                                                buflen - len);
-		len += bst_node_print_recursive(n->right, buf + len, 
-                                                buflen - len);
+
+		len = bst_node_print_recursive(n->left, buf + len, 
+                                               buflen - len);
+                
+                tot_len += len;
+                
+                if (!find_size)
+                        len = tot_len;
+
+		len = bst_node_print_recursive(n->right, buf + len, 
+                                               buflen - len);
+                
+                tot_len += len;
+                
+                if (!find_size)
+                        len = tot_len;
 	}
 
-        return len;
+        return tot_len;
 }
 
 static

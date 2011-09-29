@@ -817,7 +817,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                 list_for_each_entry(de, &dset->dest_list, lh) {
                         len = snprintf(buf + len, buflen - len, 
                                        "%-64s %-6u %-6u %-6u %-6u ", 
-                                       prefix, 
+                                       prefix,
                                        bits,
                                        dset->flags, 
                                        dset->priority, 
@@ -829,25 +829,25 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                 len = tot_len;
 
                         if (is_sock_dest(de) && de->dest_out.sk) {
-                                len += snprintf(buf + len, buflen - len, 
-                                                "%-5s %s\n", 
-                                                de->dest_out.sk ? 
-                                                "sock" : "NULL",
-                                                protocol_to_str(de->dest_out.sk->sk_protocol));
-
+                                len = snprintf(buf + len, buflen - len, 
+                                               "%-5s %s\n", 
+                                               de->dest_out.sk ? 
+                                               "sock" : "NULL",
+                                               protocol_to_str(de->dest_out.sk->sk_protocol));
+                                
                                 tot_len += len;
                                 
                                 if (!find_size)
                                         len = tot_len;
                                 
                         } else if (!is_sock_dest(de) && de->dest_out.dev) {
-                                len += snprintf(buf + len, buflen - len, 
-                                                "%-5s %s\n",
-                                                de->dest_out.dev ? 
-                                                de->dest_out.dev->name : "any",
-                                                inet_ntop(AF_INET,
-                                                          de->dst, 
-                                                          dststr, 18));
+                                len = snprintf(buf + len, buflen - len, 
+                                               "%-5s %s\n",
+                                               de->dest_out.dev ? 
+                                               de->dest_out.dev->name : "any",
+                                               inet_ntop(AF_INET,
+                                                         de->dst, 
+                                                         dststr, 18));
                                 
                                 tot_len += len;
                                 
@@ -856,9 +856,9 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                         }
                 }
         }
-
+        
         read_unlock_bh(&se->destlock);
-
+        
         return tot_len;
 }
 
@@ -1266,8 +1266,6 @@ static void service_table_del_dest(struct service_table *tbl,
                                    struct dest_stats* stats) {
         struct bst_node *n;
         int ret = 0;
-        //if (!dst || dstlen == 0)
-        //return service_table_del(tbl, srvid, prefix_bits);
 
         local_bh_disable();
         write_lock(&tbl->lock);
