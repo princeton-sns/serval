@@ -119,11 +119,15 @@ static struct bst_node *stack_pop(struct list_head *stack)
 int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
 {
         struct list_head stack;
-        int len = 0;
-        
-        if (buflen <= 0)
-                return len;
-        
+        char tmpbuf[100];
+        int len = 0, tot_len = 0, find_size = 0;
+
+        if (buflen < 0) {
+                buf = tmpbuf;
+                buflen = 100;
+                find_size = 1;
+        }
+
         INIT_LIST_HEAD(&stack);
         
         stack_push(&stack, n);
@@ -133,8 +137,13 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
                 if (n) {
                         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                                 if (n->ops && n->ops->print) {
-                                        len += n->ops->print(n, buf + len, 
-                                                             buflen - len);
+                                        len = n->ops->print(n, buf + len, 
+                                                            buflen - len);
+
+                                        tot_len += len;
+
+                                        if (!find_size)
+                                                len = tot_len;
                                 }
                         }
                         if (n->right)
@@ -144,7 +153,7 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
                                 stack_push(&stack, n->left);
                 }
         }
-        return len;
+        return tot_len;
 }
 
 /*

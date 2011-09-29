@@ -230,8 +230,8 @@ struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
 
 void serval_sock_migrate_iface(struct net_device *old_if, 
                                struct net_device *new_if);
-struct sock *serval_sock_lookup_serviceid(struct service_id *);
-struct sock *serval_sock_lookup_flowid(struct flow_id *);
+struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
+struct sock *serval_sock_lookup_flow(struct flow_id *);
 
 void serval_sock_hash(struct sock *sk);
 void serval_sock_unhash(struct sock *sk);

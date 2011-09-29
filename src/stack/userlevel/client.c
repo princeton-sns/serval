@@ -509,7 +509,8 @@ int client_handle_accept2_req_msg(struct client *c, struct client_msg *msg)
         client_msg_hdr_init(&rsp.msghdr, MSG_ACCEPT2_RSP);
 
         /* Find parent sock */
-        psk = serval_sock_lookup_serviceid(&req->srvid);
+        psk = serval_sock_lookup_service(&req->srvid, 
+                                         c->sock->sk->sk_protocol);
 
         if (!psk) {
                 LOG_ERR("no parent sock\n");

@@ -131,11 +131,17 @@ static struct dest *__service_entry_get_dev(struct service_entry *se,
         return NULL;
 }
 
+enum {
+        MATCH_NO_PROTOCOL = -1,
+        MATCH_ANY_PROTOCOL = 0,
+};
+
 static struct dest * __service_entry_get_dest(struct service_entry *se, 
                                               const void *dst,
                                               int dstlen,
                                               const void *dest_out,
-                                              struct dest_set **dset_p) 
+                                              struct dest_set **dset_p,
+                                              int protocol) 
 {
         struct dest *de = NULL;
         struct dest_set* dset = NULL;
@@ -143,10 +149,17 @@ static struct dest * __service_entry_get_dest(struct service_entry *se,
 
         list_for_each_entry(dset, &se->dest_set, ds) {
                 list_for_each_entry(de, &dset->dest_list, lh) {
-                        if ((is_sock_dest(de) && dstlen == 0) || 
-                            (!is_sock_dest(de) && 
-                             memcmp(de->dst, dst, dstlen) == 0 && 
-                             (!dev || dev->ifindex == de->dest_out.dev->ifindex))) {
+                        if (is_sock_dest(de) && dstlen == 0) {
+                                struct sock *sk = de->dest_out.sk;
+                                if (sk->sk_protocol == protocol || 
+                                    protocol == MATCH_ANY_PROTOCOL) {
+                                        if (dset_p)
+                                                *dset_p = dset;
+                                        return de;
+                                }
+                        } else if (!is_sock_dest(de) && 
+                                   memcmp(de->dst, dst, dstlen) == 0 && 
+                                   (!dev || dev->ifindex == de->dest_out.dev->ifindex)) {
                                 if (dset_p)
                                         *dset_p = dset;
                                 return de;
@@ -219,16 +232,20 @@ static int __service_entry_add_dest(struct service_entry *se,
                                     int dstlen, const void *dest_out, 
                                     gfp_t alloc) 
 {
-        struct dest_set* dset = NULL;
+        struct dest_set *dset = NULL;
         struct dest *de;
-
-        de = __service_entry_get_dest(se, dst, dstlen, 
+        
+        de = __service_entry_get_dest(se, dst, dstlen,
                                       (const struct net_device *)dest_out, 
-                                      &dset);
+                                      &dset,
+                                      dstlen == 0 ? 
+                                      ((struct sock *)dest_out)->sk_protocol :
+                                      MATCH_NO_PROTOCOL);
 
         if (de) {
-                if (is_sock_dest(de))
+                if (is_sock_dest(de)) {
                         return -EADDRINUSE;
+                }
                 LOG_INF("Identical service entry already exists\n");
                 return 0;
         }
@@ -294,7 +311,10 @@ static int __service_entry_modify_dest(struct service_entry *se,
 {
         struct dest_set* dset = NULL;
         struct dest *de = __service_entry_get_dest(se, dst, dstlen, 
-                                                   dest_out, &dset);
+                                                   dest_out, &dset,
+                                                   dstlen == 0 ? 
+                                                   ((struct sock *)dest_out)->sk_protocol :
+                                                   MATCH_NO_PROTOCOL);
         
         if (!de)
                 return 0;
@@ -351,11 +371,13 @@ int service_entry_modify_dest(struct service_entry *se,
 
 
 static void __service_entry_inc_dest_stats(struct service_entry *se, 
-                                           const void* dst, int dstlen, 
+                                           const void *dst, int dstlen, 
                                            int packets, int bytes) 
 {
         struct dest_set* dset = NULL;
-        struct dest *de = __service_entry_get_dest(se, dst, dstlen, NULL, &dset);
+        struct dest *de = __service_entry_get_dest(se, dst, dstlen, 
+                                                   NULL, &dset, 
+                                                   MATCH_NO_PROTOCOL);
 
         if (!de)
                 return;
@@ -748,6 +770,25 @@ static const char *rule_type_names[] = {
 };
 */
 
+static const char *protocol_to_str(int protocol)
+{
+        static char buf[20];
+        
+        switch (protocol) {
+        case IPPROTO_TCP:
+                sprintf(buf, "TCP");
+                break;
+        case IPPROTO_UDP:
+                sprintf(buf, "UDP");
+                break;
+        default:
+                sprintf(buf, "%d", protocol);
+                break;
+        }
+        
+        return buf;
+}
+
 static int __service_entry_print(struct bst_node *n, char *buf, int buflen) 
 {
 #define PREFIX_BUFLEN (sizeof(struct service_id)*2+4)
@@ -756,8 +797,15 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         struct dest_set *dset;
         struct dest *de;
         char dststr[18]; /* Currently sufficient for IPv4 */
-        int len = 0;
+        int len = 0, tot_len = 0, find_size = 0;
         unsigned int bits = 0;
+        char tmpbuf[100];
+
+        if (buflen < 0) {
+                buf = tmpbuf;
+                buflen = 100;
+                find_size = 1;
+        }
 
         read_lock_bh(&se->destlock);
 
@@ -767,20 +815,31 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
 
         list_for_each_entry(dset, &se->dest_set, ds) {
                 list_for_each_entry(de, &dset->dest_list, lh) {
-                        len += snprintf(buf + len, buflen - len, 
-                                        "%-64s %-6u %-6u %-6u %-6u", 
-                                        prefix, 
-                                        bits,
-                                        dset->flags, 
-                                        dset->priority, 
-                                        de->weight);
+                        len = snprintf(buf + len, buflen - len, 
+                                       "%-64s %-6u %-6u %-6u %-6u ", 
+                                       prefix, 
+                                       bits,
+                                       dset->flags, 
+                                       dset->priority, 
+                                       de->weight);
+
+                        tot_len += len;
+                        
+                        if (!find_size)
+                                len = tot_len;
 
                         if (is_sock_dest(de) && de->dest_out.sk) {
                                 len += snprintf(buf + len, buflen - len, 
-                                                " %s\n", 
+                                                "%-5s %s\n", 
                                                 de->dest_out.sk ? 
-                                                "sock" : "NULL");
+                                                "sock" : "NULL",
+                                                protocol_to_str(de->dest_out.sk->sk_protocol));
 
+                                tot_len += len;
+                                
+                                if (!find_size)
+                                        len = tot_len;
+                                
                         } else if (!is_sock_dest(de) && de->dest_out.dev) {
                                 len += snprintf(buf + len, buflen - len, 
                                                 "%-5s %s\n",
@@ -789,13 +848,18 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                                 inet_ntop(AF_INET,
                                                           de->dst, 
                                                           dststr, 18));
+                                
+                                tot_len += len;
+                                
+                                if (!find_size)
+                                        len = tot_len;
                         }
                 }
         }
 
         read_unlock_bh(&se->destlock);
 
-        return len;
+        return tot_len;
 }
 
 int service_entry_print(struct service_entry *se, char *buf, int buflen) 
@@ -845,7 +909,7 @@ int __service_table_print(char *buf, int buflen)
         len = snprintf(buf + len, buflen + len, 
                        "%-64s %-6s %-6s %-6s %-6s %s\n", 
                        "prefix", "bits", "flags",
-                       "prio", "weight", "dest out");
+                       "prio", "weight", "target(s)");
         
         tot_len += len;
         
@@ -863,7 +927,7 @@ int service_table_print(char *buf, int buflen)
 {
         int ret;
         read_lock_bh(&srvtable.lock);
-        ret = service_table_print(buf, buflen);
+        ret = __service_table_print(buf, buflen);
         read_unlock_bh(&srvtable.lock);
         return ret;
 }
@@ -873,7 +937,9 @@ static int service_entry_local_match(struct bst_node *n)
         struct service_entry *se = get_service(n);
         struct dest *dst;
 
-        dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
+        dst = __service_entry_get_dest(se, NULL, 0, 
+                                       NULL, NULL, 
+                                       MATCH_ANY_PROTOCOL);
         
         if (dst && is_sock_dest(dst) && dst->dest_out.sk) 
                 return 1;
@@ -886,7 +952,9 @@ static int service_entry_global_match(struct bst_node *n)
         struct service_entry *se = get_service(n);        
         struct dest *dst;
 
-        dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
+        dst = __service_entry_get_dest(se, NULL, 0, 
+                                       NULL, NULL, 
+                                       MATCH_NO_PROTOCOL);
         
         if (dst && !is_sock_dest(dst)) 
                 return 1;
@@ -956,11 +1024,11 @@ static struct service_entry *service_table_find(struct service_table *tbl,
 
 static struct sock* service_table_find_sock(struct service_table *tbl, 
                                             struct service_id *srvid,
-                                            int prefix) 
+                                            int prefix, int protocol) 
 {
         struct service_entry *se = NULL;
-        struct sock* sk = NULL;
-        struct dest* dst = NULL;
+        struct sock *sk = NULL;
+        struct dest *dst = NULL;
         
         if (!srvid)
                 return NULL;
@@ -970,11 +1038,12 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         se = __service_table_find(tbl, srvid, prefix, SERVICE_ENTRY_LOCAL);
         
         if (se) {
-                dst = __service_entry_get_dest(se, NULL, 0, NULL, NULL);
+                dst = __service_entry_get_dest(se, NULL, 0, 
+                                               NULL, NULL, protocol);
                 
                 if (dst && is_sock_dest(dst)) {
-                        sock_hold(dst->dest_out.sk);
                         sk = dst->dest_out.sk;
+                        sock_hold(sk);
                 }
         }
         
@@ -1012,9 +1081,9 @@ struct service_entry *service_find_type(struct service_id *srvid, int prefix,
         return service_table_find(&srvtable, srvid, prefix, type);
 }
 
-struct sock *service_find_sock(struct service_id *srvid, int prefix) 
+struct sock *service_find_sock(struct service_id *srvid, int prefix, int protocol) 
 {
-        return service_table_find_sock(&srvtable, srvid, prefix);
+        return service_table_find_sock(&srvtable, srvid, prefix, protocol);
 }
 
 static int service_table_modify(struct service_table *tbl, 

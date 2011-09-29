@@ -87,7 +87,7 @@ struct dest_set {
         uint16_t count;
 };
 
-#define is_sock_dest(dest) (dest->dstlen == 0)
+#define is_sock_dest(dest) ((dest)->dstlen == 0)
 
 /**
    A destination, either a local socket or remote host.
@@ -121,11 +121,9 @@ struct net_device *service_entry_get_dev(struct service_entry *se,
                                          const char *ifname);
 int service_entry_remove_dest_by_dev(struct service_entry *se,
                                      const char *ifname);
-//int service_entry_remove_dest_by_sock(struct service_entry *se,
-//                                     struct sock *sk);
 
 int service_entry_remove_dest(struct service_entry *se,
-                              const void *dst, int dstlen, struct dest_stats* dstats);
+                              const void *dst, int dstlen, struct dest_stats *dstats);
 
 int service_entry_add_dest(struct service_entry *se,
                            uint16_t flags,
@@ -142,31 +140,29 @@ int service_entry_modify_dest(struct service_entry *se,
                            const void *dst,
                            int dstlen,
                            const void *dest_out);
-void service_entry_inc_dest_stats(struct service_entry *se, const void* dst, int dstlen, int packets, int bytes);
-//void service_entry_dest_iterate_begin(struct service_entry *se);
-//void service_entry_dest_iterate_end(struct service_entry *se);
-//struct dest *service_entry_dest_next(struct service_entry *se);
+void service_entry_inc_dest_stats(struct service_entry *se, const void *dst, 
+                                  int dstlen, int packets, int bytes);
 
 typedef enum {
         SERVICE_ITER_ALL, /* Return all entries */
         SERVICE_ITER_ANYCAST, /* Only top priority entries */
 } iter_mode_t;
 
-void service_resolution_iter_init(struct service_resolution_iter* iter, 
+void service_resolution_iter_init(struct service_resolution_iter *iter, 
                                   struct service_entry *se, iter_mode_t mode);
-void service_resolution_iter_destroy(struct service_resolution_iter* iter);
-struct dest *service_resolution_iter_next(struct service_resolution_iter* iter);
-void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, 
+void service_resolution_iter_destroy(struct service_resolution_iter *iter);
+struct dest *service_resolution_iter_next(struct service_resolution_iter *iter);
+void service_resolution_iter_inc_stats(struct service_resolution_iter *iter, 
                                        int packets, int bytes);
-int service_resolution_iter_get_priority(struct service_resolution_iter* iter);
-int service_resolution_iter_get_flags(struct service_resolution_iter* iter);
+int service_resolution_iter_get_priority(struct service_resolution_iter *iter);
+int service_resolution_iter_get_flags(struct service_resolution_iter *iter);
 
 int service_entry_dest_fill(struct service_entry *se, void *dst,
                             int dstlen);
 
 int service_add(struct service_id *srvid, uint16_t prefix_bits, 
                 uint16_t flags, uint32_t priority, uint32_t weight,
-		const void *dst, int dstlen, const void* dest_out, gfp_t alloc);
+		const void *dst, int dstlen, const void *dest_out, gfp_t alloc);
 
 int service_modify(struct service_id *srvid, uint16_t prefix_bits, 
                    uint16_t flags, uint32_t priority, uint32_t weight,
@@ -174,12 +170,12 @@ int service_modify(struct service_id *srvid, uint16_t prefix_bits,
 
 void service_del(struct service_id *srvid, uint16_t prefix_bits);
 void service_del_dest(struct service_id *srvid, uint16_t prefix_bits,
-                      const void *dst, int dstlen, struct dest_stats* stats);
+                      const void *dst, int dstlen, struct dest_stats *stats);
 
 int service_del_dest_all(const void *dst, int dstlen);
 int service_del_dev_all(const char *devname);
 
-struct service_entry *service_find_type(struct service_id *srvid, 
+struct service_entry *service_find_type(struct service_id *srvid,
                                         int prefix,
                                         service_entry_type_t type);
 
@@ -197,7 +193,7 @@ inline struct service_entry *service_find_exact(struct service_id *srvid,
         return service_find_type(srvid, prefix, SERVICE_ENTRY_EXACT);
 }
 
-struct sock *service_find_sock(struct service_id *srvid, int prefix);
+struct sock *service_find_sock(struct service_id *srvid, int prefix, int protocol);
 
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);

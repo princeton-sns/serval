@@ -39,10 +39,9 @@ void server(void)
                 exit(EXIT_FAILURE);
         }
   
-        bzero((void *)&servaddr, sizeof(servaddr));
+        memset(&servaddr, 0, sizeof(servaddr));
         servaddr.sv_family = AF_SERVAL;
         servaddr.sv_srvid.s_sid32[0] = htonl(ECHO_OBJECT_ID);
-        servaddr.sv_prefix_bits = 8;
   
         set_reuse_ok(sock);
   

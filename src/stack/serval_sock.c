@@ -213,7 +213,7 @@ out:
         return sk;
 }
 
-struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
+struct sock *serval_sock_lookup_flow(struct flow_id *flowid)
 {
 #ifdef __LITTLE_ENDIAN
         return serval_sock_lookup(&established_table, &init_net, 
@@ -224,16 +224,9 @@ struct sock *serval_sock_lookup_flowid(struct flow_id *flowid)
 #endif
 }
 
-struct sock *serval_sock_lookup_serviceid(struct service_id *srvid)
+struct sock *serval_sock_lookup_service(struct service_id *srvid, int protocol)
 {
-        /* 
-           return serval_sock_lookup(&listen_table, &init_net, 
-                                  srvid, SERVICE_KEY_LEN);
-        */
-//        struct service_entry *se = service_find_type(srvid,
-//                                                     SERVICE_ENTRY_LOCAL);
-
-        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS);
+        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS, protocol);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,

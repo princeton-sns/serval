@@ -2620,14 +2620,15 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 }
 
 static struct sock *serval_sal_demux_service(struct sk_buff *skb, 
-                                             struct service_id *srvid)
+                                             struct service_id *srvid,
+                                             int protocol)
 {
         struct sock *sk;
 
         LOG_DBG("Demux on serviceID %s\n", service_id_to_str(srvid));
 
         /* only allow listening socket demux */
-        sk = serval_sock_lookup_serviceid(srvid);
+        sk = serval_sock_lookup_service(srvid, protocol);
         
         if (!sk) {
                 LOG_INF("No matching sock for serviceID %s\n",
@@ -2648,7 +2649,7 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
          * demux on service id instead of socket id */
         if (!(ctx->hdr->type == SERVAL_PKT_SYN && !ctx->hdr->ack)) {
                 /* Ok, check if we can demux on socket id */
-                sk = serval_sock_lookup_flowid(&ctx->hdr->dst_flowid);
+                sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
                 
                 if (!sk) {
                         LOG_INF("No matching sock for flowid %s\n",
@@ -2681,7 +2682,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         if (net_serval.sysctl_sal_forward) {
                 ret = serval_sal_resolve_service(skb, ctx, srvid, sk);
         } else {
-                *sk = serval_sal_demux_service(skb, srvid);
+                *sk = serval_sal_demux_service(skb, srvid, ctx->hdr->protocol);
                 
                 if (!(*sk))
                         ret = SAL_RESOLVE_NO_MATCH;
