@@ -926,7 +926,8 @@ int __service_table_print(char *buf, int buflen)
         else
                 len = tot_len;
         
-        len = bst_print(&srvtable.tree, buf + len, buflen - len);
+        len = bst_print(&srvtable.tree, buf + len, 
+                        find_size ? -1 : buflen - len);
 
         tot_len += len;
 

@@ -135,6 +135,7 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
                         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                                 if (n->ops && n->ops->print) {
                                         len = n->ops->print(n, buf + len, 
+                                                            find_size ? -1 : 
                                                             buflen - len);
 
                                         tot_len += len;
@@ -175,6 +176,7 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
 		if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                         if (n->ops && n->ops->print) {
                                 len = n->ops->print(n, buf + len, 
+                                                    find_size ? -1 : 
                                                     buflen - len);
 
                                 tot_len += len;
@@ -187,6 +189,7 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
                 }
 
 		len = bst_node_print_recursive(n->left, buf + len, 
+                                               find_size ? -1 : 
                                                buflen - len);
                 
                 tot_len += len;
@@ -197,6 +200,7 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
                         len = tot_len;
 
 		len = bst_node_print_recursive(n->right, buf + len, 
+                                               find_size ? -1 : 
                                                buflen - len);
                 
                 tot_len += len;
