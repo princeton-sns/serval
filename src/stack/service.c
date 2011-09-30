@@ -489,7 +489,6 @@ int __service_entry_remove_dest(struct service_entry *se,
                                         dstats->bytes_resolved = atomic_read(&de->bytes_resolved);
                                         dstats->packets_dropped = atomic_read(&de->packets_dropped);
                                         dstats->bytes_dropped = atomic_read(&de->bytes_dropped);
-                                        
                                 }
                                 
                                 dest_free(de);
@@ -816,12 +815,14 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         list_for_each_entry(dset, &se->dest_set, ds) {
                 list_for_each_entry(de, &dset->dest_list, lh) {
                         len = snprintf(buf + len, buflen - len, 
-                                       "%-64s %-6u %-6u %-6u %-6u ", 
+                                       "%-64s %-6u %-6u %-6u %-6u %-10u %-10u ", 
                                        prefix,
                                        bits,
                                        dset->flags, 
                                        dset->priority, 
-                                       de->weight);
+                                       de->weight,
+                                       atomic_read(&de->packets_resolved),
+                                       atomic_read(&de->packets_dropped));
 
                         tot_len += len;
                         
@@ -915,9 +916,9 @@ int __service_table_print(char *buf, int buflen)
                 len = tot_len;
 #endif
         len = snprintf(buf + len, buflen + len, 
-                       "%-64s %-6s %-6s %-6s %-6s %s\n", 
-                       "prefix", "bits", "flags",
-                       "prio", "weight", "target(s)");
+                       "%-64s %-6s %-6s %-6s %-6s %-10s %-10s %s\n", 
+                       "prefix", "bits", "flags", "prio", "weight", 
+                       "resolved", "dropped", "target(s)");
         
         tot_len += len;
         
