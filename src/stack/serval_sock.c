@@ -942,7 +942,9 @@ int __flow_table_print(char *buf, int buflen)
 
                 /* If we are finding out the buffer size, only
                    increment tot_len, not len. */
-                if (!find_size)
+                if (find_size)
+                        len = 0;
+                else
                         len = tot_len;
         }
 

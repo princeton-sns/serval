@@ -799,11 +799,11 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         char dststr[18]; /* Currently sufficient for IPv4 */
         int len = 0, tot_len = 0, find_size = 0;
         unsigned int bits = 0;
-        char tmpbuf[100];
+        char tmpbuf[200];
 
         if (buflen < 0) {
                 buf = tmpbuf;
-                buflen = 100;
+                buflen = sizeof(tmpbuf);
                 find_size = 1;
         }
 
@@ -825,7 +825,9 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
 
                         tot_len += len;
                         
-                        if (!find_size)
+                        if (find_size)
+                                len = 0;
+                        else
                                 len = tot_len;
 
                         if (is_sock_dest(de) && de->dest_out.sk) {
@@ -836,10 +838,11 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                                protocol_to_str(de->dest_out.sk->sk_protocol));
                                 
                                 tot_len += len;
-                                
-                                if (!find_size)
+
+                                if (find_size)
+                                        len = 0;
+                                else
                                         len = tot_len;
-                                
                         } else if (!is_sock_dest(de) && de->dest_out.dev) {
                                 len = snprintf(buf + len, buflen - len, 
                                                "%-5s %s\n",
@@ -850,8 +853,10 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                                          dststr, 18));
                                 
                                 tot_len += len;
-                                
-                                if (!find_size)
+
+                                if (find_size)
+                                        len = 0;
+                                else
                                         len = tot_len;
                         }
                 }
@@ -903,7 +908,10 @@ int __service_table_print(char *buf, int buflen)
         
         /* If we are finding out the buffer size, only
            increment tot_len, not len. */
-        if (!find_size)
+
+        if (find_size)
+                len = 0;
+        else
                 len = tot_len;
 #endif
         len = snprintf(buf + len, buflen + len, 
@@ -913,7 +921,9 @@ int __service_table_print(char *buf, int buflen)
         
         tot_len += len;
         
-        if (!find_size)
+        if (find_size)
+                len = 0;
+        else
                 len = tot_len;
         
         len = bst_print(&srvtable.tree, buf + len, buflen - len);

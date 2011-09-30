@@ -139,7 +139,9 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
 
                                         tot_len += len;
 
-                                        if (!find_size)
+                                        if (find_size)
+                                                len = 0;
+                                        else
                                                 len = tot_len;
                                 }
                         }
@@ -177,10 +179,11 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
 
                                 tot_len += len;
 
-                                if (!find_size)
+                                if (find_size)
+                                        len = 0;
+                                else
                                         len = tot_len;
                         }
-                        
                 }
 
 		len = bst_node_print_recursive(n->left, buf + len, 
@@ -188,7 +191,9 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
                 
                 tot_len += len;
                 
-                if (!find_size)
+                if (find_size)
+                        len = 0;
+                else
                         len = tot_len;
 
 		len = bst_node_print_recursive(n->right, buf + len, 
@@ -196,7 +201,9 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
                 
                 tot_len += len;
                 
-                if (!find_size)
+                if (find_size)
+                        len = 0;
+                else
                         len = tot_len;
 	}
 
