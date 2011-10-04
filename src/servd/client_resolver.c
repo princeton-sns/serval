@@ -542,31 +542,32 @@ static void client_start(service_resolver * resolver)
 
 static void client_stop(service_resolver * resolver)
 {
+    struct sv_client_resolver *clientres =
+	(struct sv_client_resolver *) resolver;
+
     assert(resolver);
+
     if (resolver->resolver.state < ACTIVE) {
 	return;
     }
-
-    struct sv_client_resolver *clientres =
-	(struct sv_client_resolver *) resolver;
     clientres->messaging->interface->stop(clientres->messaging);
     resolver->resolver.state = DISCOVERED;
 }
 
 static int client_finalize(service_resolver * resolver)
 {
-    assert(resolver);
-
     struct sv_client_resolver *clientres =
 	(struct sv_client_resolver *) resolver;
+    int retval;
 
-    int retval = base_resolver_finalize(resolver);
+    assert(resolver);
+
+    retval = base_resolver_finalize(resolver);
     task_mutex_destroy(&clientres->message_mutex);
     task_cond_destroy(&clientres->message_cond);
 
     if (clientres->messaging) {
-	retval =
-	    clientres->messaging->interface->finalize(clientres->messaging);
+	retval = clientres->messaging->interface->finalize(clientres->messaging);
 	free(clientres->messaging);
 	clientres->messaging = NULL;
     }
