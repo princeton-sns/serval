@@ -649,10 +649,9 @@ void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        if (ssk->dev)
-                dev_put(ssk->dev);
-
         if (dev) {
+                if (ssk->dev)
+                        dev_put(ssk->dev);
                 ssk->dev = dev;
                 dev_hold(dev);
         }
@@ -662,10 +661,9 @@ void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        if (ssk->mig_dev)
-                dev_put(ssk->mig_dev);
-
         if (dev) {
+                if (ssk->mig_dev)
+                        dev_put(ssk->mig_dev);
                 ssk->mig_dev = dev;
                 dev_hold(dev);
         }

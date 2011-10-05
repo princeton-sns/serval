@@ -50,6 +50,9 @@ struct rtable *serval_ip_route_output_flow(struct net *net,
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
         rt = ip_route_output_flow(net, (struct flowi4 *)fl, sk);
+
+        if (IS_ERR(rt))
+                return NULL;
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
         if (ip_route_output_flow(net, &rt, fl, sk, flags))
                 return NULL;
@@ -72,7 +75,9 @@ static inline struct rtable *serval_ip_route_output(struct net *net,
                                                     u8 tos, int oif)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-	return ip_route_output(net, daddr, saddr, tos, oif);
+        struct rtable *rt = ip_route_output(net, daddr, saddr, tos, oif);
+
+        return IS_ERR(rt) ? NULL : rt; 
 #else
         struct flowi fl;
 
