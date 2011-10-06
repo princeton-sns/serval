@@ -607,8 +607,6 @@ static int serval_shutdown(struct socket *sock, int how)
 	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
 		return -EINVAL;
 
-	lock_sock(sk);
-
         /*
           Unregister notification only if we previously registered and
           this is not a child socket.
@@ -631,6 +629,8 @@ static int serval_shutdown(struct socket *sock, int how)
                                 LOG_INF("No service daemon running?\n");
                 }
         }
+
+	lock_sock(sk);
 
 	if (sock->state == SS_CONNECTING) {
                 /*
