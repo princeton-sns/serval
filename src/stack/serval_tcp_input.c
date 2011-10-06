@@ -3695,8 +3695,9 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 				}
 			}
 			break;
-                case TCP_CLOSING:
                 case TCP_CLOSE_WAIT:
+                        break;
+                case TCP_CLOSING:
                         if (tp->snd_una == tp->write_seq) {
                                 serval_sk(sk)->af_ops->send_shutdown(sk);
                         }
@@ -3704,7 +3705,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		case TCP_LAST_ACK:
 			if (tp->snd_una == tp->write_seq) {
 				serval_tcp_update_metrics(sk);
-				serval_tcp_done(sk);
+                                serval_sk(sk)->af_ops->send_shutdown(sk);
 				goto discard;
 			}
 			break;
