@@ -3722,11 +3722,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	case TCP_CLOSE_WAIT:
 	case TCP_CLOSING:
 	case TCP_LAST_ACK:
-		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
-                        LOG_DBG("Unexpected sequence number %u, rcv_nxt=%u\n",
-                                TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
+		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt))
 			break;
-                }
 	case TCP_FIN_WAIT1:
 	case TCP_FIN_WAIT2:
 		/* RFC 793 says to queue data in these states,

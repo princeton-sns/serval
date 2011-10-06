@@ -1019,6 +1019,8 @@ void serval_sal_close(struct sock *sk, long timeout)
 
         LOG_INF("Closing socket %p in state %s\n",
                 sk, serval_sock_state_str(sk));
+
+        sk->sk_shutdown |= SEND_SHUTDOWN;
         
         switch (sk->sk_state) {
         case SERVAL_CONNECTED:
@@ -1815,6 +1817,8 @@ int serval_sal_send_shutdown(struct sock *sk)
 {
         LOG_DBG("SEND_SHUTDOWN\n");
 
+        /* Not sure we need to set SEND_SHUTDOWN here, since it is
+           alread set in serval_sal_close() */
         sk->sk_shutdown |= SEND_SHUTDOWN;
         
         /* SOCK_DEAD would mean there is no user app attached
