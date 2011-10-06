@@ -1578,10 +1578,14 @@ serval_sal_create_respond_sock(struct sock *sk,
 
         if (nsk) {
                 int ret;
-
+                
                 atomic_inc(&serval_nr_socks);
                 serval_sock_init(nsk);
-
+                /* Indicate that this is a child socket. Necessary to
+                 * know that this socket should not unregister its
+                 * serviceID. */
+                serval_sock_set_flag(serval_sk(nsk), SSK_FLAG_CHILD);
+                
                 /* Transport protocol specific init. */                
                 ret = serval_sk(sk)->af_ops->conn_child_sock(sk, skb, 
                                                              req, nsk, dst);

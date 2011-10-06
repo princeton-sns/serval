@@ -610,10 +610,12 @@ static int serval_shutdown(struct socket *sock, int how)
 	lock_sock(sk);
 
         /*
-          Unregister notification only if we previously registered. 
+          Unregister notification only if we previously registered and
+          this is not a child socket.
         */
         if (serval_sock_flag(ssk, SSK_FLAG_BOUND) &&
-            !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND)) {
+            !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND) && 
+            !serval_sock_flag(ssk, SSK_FLAG_CHILD)) {
                 struct ctrlmsg_register cm;
                 
                 /* Notify user space */
@@ -626,7 +628,7 @@ static int serval_shutdown(struct socket *sock, int how)
                        sizeof(cm.srvid));
                 
                 if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
-                        LOG_INF("No service daemon running?\n");
+                                LOG_INF("No service daemon running?\n");
                 }
         }
 

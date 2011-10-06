@@ -82,6 +82,7 @@ enum {
 enum serval_sock_flags {
         SSK_FLAG_BOUND = 0,
         SSK_FLAG_AUTOBOUND,
+        SSK_FLAG_CHILD,
 };
 
 struct serval_sock_af_ops {
@@ -126,9 +127,8 @@ struct serval_sock {
 #endif
         /* SAL state, used for, e.g., migration */
         unsigned char           sal_state;
-        struct net_device       *dev; /* TX device for connected flows */
-        u8      close_received : 1,
-                flags : 7;
+        struct net_device       *dev; /* TX device for connected flows */ 
+        u8                      flags;
         void                    *hash_key;
         unsigned int            hash_key_len;  /* Keylen in bytes */
         unsigned short          srvid_prefix_bits;
