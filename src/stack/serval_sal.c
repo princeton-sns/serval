@@ -937,6 +937,12 @@ static void serval_sal_timewait(struct sock *sk, int state)
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer, timeout); 
 }
 
+/* Called by transport when it is done sending/receiving data */
+void serval_transport_done(struct sock *sk)
+{
+        
+}
+
 void serval_sal_done(struct sock *sk)
 {
         LOG_DBG("socket DONE!\n");
@@ -1885,8 +1891,6 @@ static int serval_sal_closewait_state_process(struct sock *sk,
 
         serval_sal_ack_process(sk, skb, ctx);
 
-        /* Should also pass FIN to user, as it needs to pick it off
-         * its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
                 struct serval_sock *ssk = serval_sk(sk);
                 /* Set the received service id.
@@ -2151,8 +2155,12 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                 ack_ok = 1;
 
         if (ctx->hdr->type == SERVAL_PKT_CLOSE) {
-                if (serval_sal_rcv_close_req(sk, skb, ctx) == 0)
-                        serval_sal_timewait(sk, SERVAL_CLOSING);
+                if (serval_sal_rcv_close_req(sk, skb, ctx) == 0) {
+                        if (ack_ok)
+                                serval_sal_timewait(sk, SERVAL_TIMEWAIT);
+                        else
+                                serval_sal_timewait(sk, SERVAL_CLOSING);
+                }
         } else if (ack_ok) {
                 serval_sal_timewait(sk, SERVAL_FINWAIT2);
         }

@@ -360,7 +360,7 @@ static void __serval_tcp_done(struct sock *sk)
 void serval_tcp_done(struct sock *sk)
 {
         LOG_DBG("calling serval_sal_done\n");
-	serval_sal_done(sk);
+	//serval_sal_done(sk);
 }
 
 static int serval_tcp_connection_close(struct sock *sk)
