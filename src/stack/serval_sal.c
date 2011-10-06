@@ -308,7 +308,11 @@ static int parse_connection_ext(struct serval_ext *ext, struct sk_buff *skb,
         ctx->seqno = ntohl(ctx->conn_ext->seqno);
         ctx->ackno = ntohl(ctx->conn_ext->ackno);
         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
-                        
+        
+        LOG_DBG("%s seqno=%u ackno=%u",
+                serval_ext_name[ext->type], 
+                ctx->seqno, ctx->ackno);
+        
         return ext->length;
 }
 
@@ -322,6 +326,10 @@ static int parse_control_ext(struct serval_ext *ext, struct sk_buff *skb,
         ctx->seqno = ntohl(ctx->ctrl_ext->seqno);
         ctx->ackno = ntohl(ctx->ctrl_ext->ackno);
         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
+                    
+        LOG_DBG("%s seqno=%u ackno=%u",
+                serval_ext_name[ext->type], 
+                ctx->seqno, ctx->ackno);
         
         return ext->length;
 }
@@ -2374,8 +2382,10 @@ int serval_sal_state_process(struct sock *sk,
                 err = serval_sal_lastack_state_process(sk, skb, ctx);
                 break;
         case SERVAL_TIMEWAIT:
-                /* Send ACK again */
-                serval_sal_send_ack(sk);
+                /* Resend ACK for anything which isn't a "pure" ACK
+                   itself */
+                if (ctx->hdr->type != SERVAL_PKT_DATA)
+                        serval_sal_send_ack(sk);
                 goto drop;
         case SERVAL_CLOSEWAIT:
                 err = serval_sal_closewait_state_process(sk, skb, ctx);
