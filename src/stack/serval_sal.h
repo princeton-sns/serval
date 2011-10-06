@@ -189,10 +189,6 @@ static inline void serval_sal_add_ctrl_queue_tail(struct sock *sk,
 	/* Queue it, remembering where we must start sending. */
 	if (serval_sk(sk)->ctrl_send_head == NULL) {
 		serval_sk(sk)->ctrl_send_head = skb;
-		/*
-		if (serval_sal_sk(sk)->highest_sack == NULL)
-			serval_sal_sk(sk)->highest_sack = skb;
-		*/
 	}
 }
 

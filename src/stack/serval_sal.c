@@ -39,6 +39,25 @@ static struct net_addr zero_addr = {
 
 #define MAX_NUM_SERVAL_EXTENSIONS 5 /* TODO: Set reasonable number */
 
+/*
+ * The next routines deal with comparing 32 bit unsigned ints
+ * and worry about wraparound (automatic with unsigned arithmetic).
+ * Taken from linux/net/tcp.h.
+ */
+
+static inline int before(__u32 seq1, __u32 seq2)
+{
+        return (__s32)(seq1-seq2) < 0;
+}
+
+#define after(seq2, seq1) 	before(seq1, seq2)
+
+/* is s2<=s1<=s3 ? */
+static inline int between(__u32 seq1, __u32 seq2, __u32 seq3)
+{
+	return seq3 - seq2 >= seq1 - seq2;
+}
+
 /* 
    Context for parsed Serval headers 
 */   
@@ -521,8 +540,6 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
 {        
         int ret = 0;
 
-        /* Basically modelled after TCP, should check whether it makes
-         * sense... */
         if (seg_seq == 0) {
                 if (seg_seq == ssk->rcv_seq.nxt)
                         ret = 1;
@@ -775,7 +792,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno)
        
         while ((skb = serval_sal_ctrl_queue_head(sk)) && 
                skb != serval_sal_send_head(sk)) {
-                if (ackno == SERVAL_SKB_CB(skb)->seqno + 1) {
+                if (ackno > SERVAL_SKB_CB(skb)->seqno) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
                         LOG_PKT("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);
@@ -789,7 +806,8 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno)
                 }
         }
 
-        LOG_PKT("cleaned up %u packets from rtx queue\n", num);
+        LOG_PKT("cleaned up %u packets from rtx queue, queue len=%u\n", 
+                num, serval_sal_ctrl_queue_len(sk));
         
         /* Did we remove the first packet in the queue? */
         if (serval_sal_ctrl_queue_head(sk) != fskb) {
@@ -798,7 +816,8 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno)
         }
 
         if (serval_sal_ctrl_queue_head(sk)) {
-                LOG_PKT("Setting retrans timer\n");
+                LOG_PKT("Setting retrans timer, queue len=%u\n",
+                        serval_sal_ctrl_queue_len(sk));
                 sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
                                jiffies + msecs_to_jiffies(ssk->rto));
         }
@@ -929,10 +948,10 @@ static void serval_sal_timewait(struct sock *sk, int state)
 
         serval_sock_set_state(sk, state);
         /* FIXME: Dynamically set timeout */
-        if (state == SERVAL_FINWAIT2) {
+        if (state == SERVAL_TIMEWAIT) {
                 timeout += msecs_to_jiffies(60000);
         } else {
-                timeout += msecs_to_jiffies(8000);
+                timeout += msecs_to_jiffies(10000);
         }
         sk_reset_timer(sk, &serval_sk(sk)->tw_timer, timeout); 
 }
@@ -1671,55 +1690,69 @@ static int serval_sal_ack_process(struct sock *sk,
                                   struct sk_buff *skb,
                                   struct serval_context *ctx)
 {
-        int err = -1;
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb;
-
+       
         if (!ctx->hdr->ack)
                 return -1;
-        
-        if (ctx->ackno == serval_sk(sk)->snd_seq.una + 1) {
-                serval_sal_clean_rtx_queue(sk, ctx->ackno);
-                serval_sk(sk)->snd_seq.una++;
-                LOG_PKT("received valid ACK ackno=%u\n", 
-                        ctx->ackno);
 
-                switch (ssk->sal_state) {
-                case SAL_RSYN_SENT:
-                        LOG_DBG("RECV RSYNACK\n");
-                        serval_sock_set_sal_state(sk, SAL_NORM);
-                        dev_get_ipv4_addr(ssk->mig_dev,
-                                          &inet_sk(sk)->inet_saddr);
-                        serval_sock_set_dev(sk, ssk->mig_dev);
-                        serval_sock_set_mig_dev(sk, NULL);
-                        sk_dst_reset(sk);
-                        ssk->rcv_seq.nxt = ctx->seqno + 1;
-                        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
-                                                GFP_ATOMIC);
-                        if (!rskb)
-                                return -ENOMEM;
-                        SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
-                        SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
-                        SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
-                        serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
-                        break;
-                case SAL_RSYN_RECV:
-                        LOG_DBG("Handshake complete\n");
-                        serval_sock_set_sal_state(sk, SAL_NORM);
-                        memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
-                        memset(&ssk->mig_daddr, 0, 4);
-                        sk_dst_reset(sk);
-                        break;
-                default:
-                        break;
-                }
-                err = 0;
-        } else {
-                LOG_DBG("ackno %u out of sequence, expected %u\n",
-                        ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
+	/* If the ack is older than previous acks
+	 * then we can probably ignore it.
+	 */
+	if (before(ctx->ackno, serval_sk(sk)->snd_seq.una))
+		goto old_ack;
+
+	/* If the ack corresponds to something we haven't sent yet,
+           ignore.
+	 */
+	if (after(ctx->ackno, serval_sk(sk)->snd_seq.nxt))
+		goto invalid_ack;
+
+        serval_sal_clean_rtx_queue(sk, ctx->ackno);
+        serval_sk(sk)->snd_seq.una = ctx->ackno;
+
+        LOG_PKT("received valid ACK ackno=%u\n", 
+                ctx->ackno);
+        
+        switch (ssk->sal_state) {
+        case SAL_RSYN_SENT:
+                LOG_DBG("RECV RSYNACK\n");
+                serval_sock_set_sal_state(sk, SAL_NORM);
+                dev_get_ipv4_addr(ssk->mig_dev,
+                                  &inet_sk(sk)->inet_saddr);
+                serval_sock_set_dev(sk, ssk->mig_dev);
+                serval_sock_set_mig_dev(sk, NULL);
+                sk_dst_reset(sk);
+                ssk->rcv_seq.nxt = ctx->seqno + 1;
+                rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
+                                        GFP_ATOMIC);
+                if (!rskb)
+                        return -ENOMEM;
+                SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_DATA;
+                SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
+                SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt;
+                serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
+                break;
+        case SAL_RSYN_RECV:
+                LOG_DBG("Handshake complete\n");
+                serval_sock_set_sal_state(sk, SAL_NORM);
+                memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
+                memset(&ssk->mig_daddr, 0, 4);
+                sk_dst_reset(sk);
+                break;
+        default:
+                break;
         }
 
-        return err;
+        return 0;
+ invalid_ack:
+        LOG_DBG("invalid ackno %u out of sequence, expected %u\n",
+                ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
+        return -1;
+ old_ack:
+        LOG_DBG("old ackno %u, expected %u\n",
+                ctx->ackno, serval_sk(sk)->snd_seq.una + 1);
+        return -1;
 }
 
 static int serval_sal_rcv_mig_req(struct sock *sk,
@@ -2875,7 +2908,8 @@ void serval_sal_rexmit_timeout(unsigned long data)
                 sk->sk_err = ETIMEDOUT;
                 serval_sal_done(sk);
         } else {
-                LOG_DBG("Retransmitting and rescheduling timer\n");
+                LOG_DBG("RemXmit and rescheduling timer, queue len=%u\n",
+                        serval_sal_ctrl_queue_len(sk));
 
                 serval_sal_rexmit(sk);
 
