@@ -2680,14 +2680,6 @@ static inline struct prefix_trie_iter_node *get_iter_node_at_level(uint16_t
 
 int prefix_trie_iter_remove(struct prefix_trie_iter *iter)
 {
-    assert(iter);
-
-    /*nothing to remove */
-    if (iter->last_iter_node.branch < 0 && iter->last_iter_node.prefix == NULL) {
-        return FALSE;
-    }
-    //printf("ITER REMOVE\n");
-
     struct prefix_trie_data *next = NULL;
     struct prefix_trie_data *leaf = NULL;
 
@@ -2699,6 +2691,14 @@ int prefix_trie_iter_remove(struct prefix_trie_iter *iter)
     struct prefix_trie_iter_node *tempnode = NULL;
 
     uint16_t branch = 0;
+
+    assert(iter);
+
+    /*nothing to remove */
+    if (iter->last_iter_node.branch < 0 && iter->last_iter_node.prefix == NULL) {
+        return FALSE;
+    }
+    //printf("ITER REMOVE\n");
 
     if (inode->prefix) {
 

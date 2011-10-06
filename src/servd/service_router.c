@@ -614,14 +614,14 @@ int main(int argc, char **argv)
 
     LOG_DBG("Stopping...\n");
 
-    resolver->interface->stop(resolver);
     server_rpc_handler_stop(rpc_handler);
+    resolver->interface->stop(resolver);
     def_resolver->interface->stop(def_resolver);
     rpath->interface->stop(rpath);
 
     LOG_DBG("Finalizing...\n");
-    resolver->interface->finalize(resolver);
     server_rpc_handler_finalize(rpc_handler);
+    resolver->interface->finalize(resolver);
     def_resolver->interface->finalize(def_resolver);
     rpath->interface->finalize(rpath);
 

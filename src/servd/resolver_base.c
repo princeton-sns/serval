@@ -77,10 +77,10 @@ int base_resolver_initialize(service_resolver * resolver)
 
 int base_resolver_finalize(service_resolver * resolver)
 {
-    assert(resolver);
-
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     if (base->addresses) {
         g_array_free(base->addresses, TRUE);
@@ -150,14 +150,18 @@ static int resolver_find_address_index(struct sv_base_service_resolver
 
 int resolver_remove_address(service_resolver *resolver, struct net_addr *addr)
 {
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
+    int index;
+    
     assert(resolver);
+    
     if (addr == NULL) {
         return -1;
     }
-    struct sv_base_service_resolver *base =
-        (struct sv_base_service_resolver *) resolver;
+    
+    index = resolver_find_address_index(base, addr);
 
-    int index = resolver_find_address_index(base, addr);
     if (index >= 0) {
         g_array_remove_index(base->addresses, index);
     }
@@ -166,18 +170,20 @@ int resolver_remove_address(service_resolver *resolver, struct net_addr *addr)
 
 int resolver_get_address_count(service_resolver *resolver)
 {
-    assert(resolver);
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     return base->addresses->len;
 }
 
 void resolver_clear_addresses(service_resolver *resolver)
 {
-    assert(resolver);
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     g_array_remove_range(base->addresses, 0, base->addresses->len);
 }
@@ -185,12 +191,14 @@ void resolver_clear_addresses(service_resolver *resolver)
 void resolver_register_peer_status_callback(service_resolver *resolver,
                                             peer_status_callback *cb)
 {
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
+
     assert(resolver);
+
     if (cb == NULL) {
         return;
     }
-    struct sv_base_service_resolver *base =
-        (struct sv_base_service_resolver *) resolver;
 
     g_array_append_val(base->peer_status_callbacks, *cb);
 }
@@ -198,6 +206,7 @@ void resolver_register_peer_status_callback(service_resolver *resolver,
 static int resolver_find_peer_status_callback_index(struct sv_base_service_resolver *resolver, peer_status_callback *cb)
 {
     int i = 0;
+    
     for (; i < resolver->addresses->len; i++) {
         if (!memcmp(&g_array_index(resolver->peer_status_callbacks, 
                                    peer_status_callback, i),
@@ -246,9 +255,10 @@ void notify_peer_status_callbacks(service_resolver *resolver,
 struct service_desc *resolver_get_service_desc(service_resolver *resolver,
                                                int index)
 {
-    assert(resolver);
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     if (index < 0 || index >= base->service_descs->len) {
         return NULL;
@@ -260,13 +270,14 @@ struct service_desc *resolver_get_service_desc(service_resolver *resolver,
 void resolver_add_service_desc(service_resolver *resolver,
                                struct service_desc *sdesc)
 {
+    struct sv_base_service_resolver *base =
+        (struct sv_base_service_resolver *) resolver;
+
     assert(resolver);
 
     if (sdesc == NULL) {
         return;
     }
-    struct sv_base_service_resolver *base =
-        (struct sv_base_service_resolver *) resolver;
 
     /*TODO - check for dups? */
     g_ptr_array_add(base->service_descs, sdesc);
@@ -307,18 +318,20 @@ int resolver_remove_service_desc(service_resolver *resolver,
 
 int resolver_get_service_desc_count(service_resolver *resolver)
 {
-    assert(resolver);
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     return base->service_descs->len;
 }
 
 void resolver_clear_service_descs(service_resolver *resolver)
 {
-    assert(resolver);
     struct sv_base_service_resolver *base =
         (struct sv_base_service_resolver *) resolver;
+
+    assert(resolver);
 
     g_ptr_array_remove_range(base->service_descs, 0, base->service_descs->len);
 }
