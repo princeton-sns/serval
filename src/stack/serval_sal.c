@@ -309,7 +309,7 @@ static int parse_connection_ext(struct serval_ext *ext, struct sk_buff *skb,
         ctx->ackno = ntohl(ctx->conn_ext->ackno);
         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
         
-        LOG_DBG("%s seqno=%u ackno=%u",
+        LOG_DBG("%s seqno=%u ackno=%u\n",
                 serval_ext_name[ext->type], 
                 ctx->seqno, ctx->ackno);
         
@@ -327,7 +327,7 @@ static int parse_control_ext(struct serval_ext *ext, struct sk_buff *skb,
         ctx->ackno = ntohl(ctx->ctrl_ext->ackno);
         ctx->flags |= SERVAL_CTX_FLAG_SEQNO;
                     
-        LOG_DBG("%s seqno=%u ackno=%u",
+        LOG_DBG("%s seqno=%u ackno=%u\n",
                 serval_ext_name[ext->type], 
                 ctx->seqno, ctx->ackno);
         
