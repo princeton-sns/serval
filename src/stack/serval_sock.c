@@ -215,13 +215,8 @@ out:
 
 struct sock *serval_sock_lookup_flow(struct flow_id *flowid)
 {
-#ifdef __LITTLE_ENDIAN
         return serval_sock_lookup(&established_table, &init_net, 
-                                  &flowid->s_id8[3], sizeof(flowid->s_id8[3]));
-#else
-        return serval_sock_lookup(&established_table, &init_net, 
-                                  &flowid->s_id8[0], sizeof(flowid->s_id8[0]));
-#endif
+                                  flowid, sizeof(*flowid));
 }
 
 struct sock *serval_sock_lookup_service(struct service_id *srvid, int protocol)

@@ -1008,18 +1008,16 @@ static int serval_sal_send_close(struct sock *sk)
 /* Called as a result of user app close() */
 void serval_sal_close(struct sock *sk, long timeout)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        LOG_INF("Closing socket\n");
+        LOG_INF("Closing socket %p in state %s\n",
+                sk, serval_sock_state_str(sk));
         
-        if (sk->sk_state == SERVAL_CONNECTED ||
-            sk->sk_state == SERVAL_RESPOND ||
-            sk->sk_state == SERVAL_CLOSEWAIT) {
-                struct serval_sock *ssk = serval_sk(sk);
-                /*                
-                if (sk->sk_state != SERVAL_CLOSEWAIT)
-                        serval_sock_set_sal_state(sk, SAL_CLOSING);
-                */
+        switch (sk->sk_state) {
+        case SERVAL_CONNECTED:
+        case SERVAL_RESPOND:
+        case SERVAL_CLOSEWAIT:
                 if (sk->sk_state == SERVAL_CLOSEWAIT) {
                         serval_sal_timewait(sk, SERVAL_LASTACK);
                 } else {
@@ -1038,9 +1036,19 @@ void serval_sal_close(struct sock *sk, long timeout)
                 } else {
                         err = serval_sal_send_shutdown(sk);
                 }
-        } else {
-                LOG_DBG("Closing socket\n");
+                break;
+        case SERVAL_FINWAIT1:
+        case SERVAL_FINWAIT2:
+        case SERVAL_CLOSING:
+        case SERVAL_TIMEWAIT:
+                LOG_ERR("Close called in post close() state %s\n",
+                        serval_sock_state_str(sk));
+                break;
+        default:
+                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
+                        serval_sock_state_str(sk));
                 serval_sal_done(sk);
+                break;
         }
 }
 
@@ -1842,7 +1850,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 err = serval_sal_rcv_close_req(sk, skb, ctx);
                 
                 if (err == 0) {
-                        serval_sal_timewait(sk, SERVAL_FINWAIT1);
+                        serval_sal_timewait(sk, SERVAL_CLOSEWAIT);
                 }
         }
         
