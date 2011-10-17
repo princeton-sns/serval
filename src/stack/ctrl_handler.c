@@ -373,30 +373,44 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_migrate *cmm = (struct ctrlmsg_migrate*)cm;
         struct net_device *old_dev, *new_dev;
+        int ret = 0;
+        
+        new_dev = dev_get_by_name(&init_net, cmm->to_i);
 
-        old_dev = dev_get_by_name(&init_net, cmm->from_if);
-
-        if (!old_dev) {
-                LOG_ERR("No old interface %s\n", cmm->from_if);
+        // Check that migration destination is valid.
+        if (!new_dev) {
+                LOG_ERR("No new interface %s\n", cmm->to_i);
                 return -1;
         }
 
-        new_dev = dev_get_by_name(&init_net, cmm->to_if);
+        switch (cmm->migrate_type) {
+        case CTRL_MIG_IFACE:
+                LOG_DBG("migrate iface %s to iface %s\n", 
+                        cmm->from_i, cmm->to_i);
+                old_dev = dev_get_by_name(&init_net, cmm->from_i);
 
-        if (!new_dev) {
-        	    LOG_ERR("No new interface %s\n", cmm->to_if);
-                    dev_put(old_dev);
-        	    return -1;
+                if (!old_dev) {
+                        LOG_ERR("No old interface %s\n", cmm->from_i);
+                        ret = -1;
+                        break;  
+                }
+                serval_sock_migrate_iface(old_dev, new_dev);
+                dev_put(old_dev);
+                break;
+        case CTRL_MIG_FLOW:
+                LOG_DBG("migrate flow %s to iface %s\n", 
+                        flow_id_to_str(&cmm->from_f), cmm->to_i);
+                serval_sock_migrate_flow(&cmm->from_f, new_dev);
+                break;
+        case CTRL_MIG_SERVICE:
+                LOG_DBG("migrate service to iface %s\n", cmm->to_i);
+                serval_sock_migrate_service(&cmm->from_s, new_dev);
+                break;
         }
-
-        LOG_DBG("migrate iface %s to iface %s\n", cmm->from_if, cmm->to_if);
-
-        serval_sock_migrate_iface(old_dev, new_dev);
-
-        dev_put(old_dev);
+        LOG_DBG("Done proc.\n");
         dev_put(new_dev);
 
-        return 0;
+        return ret;
 }
 
 ctrlmsg_handler_t handlers[] = {
