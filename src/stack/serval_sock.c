@@ -181,6 +181,40 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         }
 }
 
+
+void serval_sock_migrate_flow(struct flow_id *old_f,
+                              struct net_device *new_if)
+{
+        struct sock *sk = serval_sock_lookup_flow(old_f);
+
+        if (sk) {
+                LOG_DBG("Found sock, migrating...\n");
+                lock_sock(sk);
+                serval_sock_set_mig_dev(sk, new_if);
+                serval_sal_migrate(sk);
+                release_sock(sk);
+                sock_put(sk);
+        }
+}
+
+/* For now this looks pretty much like migrating a flow, but I suspect it'll
+ * be a little more involved once we support multiple flows per service.
+ */
+void serval_sock_migrate_service(struct service_id *old_s,
+                                 struct net_device *new_if)
+{
+        /* FIXME: Set protocol type of socket */
+        struct sock *sk = serval_sock_lookup_service(old_s, IPPROTO_TCP);
+
+        if (sk) {
+                lock_sock(sk);
+                serval_sock_set_mig_dev(sk, new_if);
+                serval_sal_migrate(sk);
+                release_sock(sk);
+                sock_put(sk);
+        }
+}
+
 static struct sock *serval_sock_lookup(struct serval_table *table,
                                        struct net *net, void *key, 
                                        size_t keylen)

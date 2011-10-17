@@ -3011,8 +3011,6 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
                 }
 
                 if (ssk->sal_state == SAL_RSYN_RECV) {
-	                    memcpy(&ssk->mig_daddr, 
-                                   &inet_sk(sk)->inet_daddr, 4);
 	                    memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
                 }
                 /* Reset cached route again */
