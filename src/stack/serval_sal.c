@@ -556,6 +556,7 @@ static inline int has_valid_seqno(uint32_t seg_seq, struct serval_sock *ssk)
                               ssk->rcv_seq.wnd)) {
                 ret = 1;
         }
+
         if (ret == 0) {
                 LOG_DBG("Seqno not in sequence received=%u next=%u."
                         " Could be ACK though...\n",
@@ -1769,20 +1770,25 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb = NULL;
+        u32 mig_seqno = 0;
         int err = 0;
-
+        
         LOG_INF("received Migrate REQUEST\n");
         
         if (!has_valid_migrate_extension(sk, ctx)) {
-        	    LOG_ERR("Bad migration extension\n");
-        	    return -1;
+                LOG_ERR("Bad migration extension\n");
+                return -1;
         }
 
-        if (has_valid_seqno(ctx->seqno, ssk)) {
-        	    ssk->rcv_seq.nxt = ctx->seqno + 1;
+        mig_seqno = ntohl(ctx->mig_ext->mig_seqno);
 
-        	    switch(ssk->sal_state) {
-        	    case SAL_INITIAL:
+        if (ctx->seqno == (ssk->rcv_seq.nxt - 1) &&
+            mig_seqno > ssk->rcv_seq.mig) {
+                //ssk->rcv_seq.nxt = ctx->seqno + 1;
+                ssk->rcv_seq.mig = mig_seqno + 1;
+                
+                switch(ssk->sal_state) {
+                case SAL_INITIAL:
         	    case SAL_NORM:
         	            LOG_DBG("RSYN RECV in NORM\n");
                             serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
@@ -1795,11 +1801,14 @@ static int serval_sal_rcv_mig_req(struct sock *sk,
                             SERVAL_SKB_CB(rskb)->pkttype = SERVAL_PKT_RSYN;
                             SERVAL_SKB_CB(rskb)->flags = SVH_ACK;
                             SERVAL_SKB_CB(rskb)->seqno = ssk->snd_seq.nxt++;
-                            err = serval_sal_transmit_skb(sk,rskb,0,GFP_ATOMIC);
+                            err = serval_sal_transmit_skb(sk, rskb, 0, 
+                                                          GFP_ATOMIC);
                             break;
         	    default:
         	            break;
         	    }
+        } else {
+                LOG_DBG("Invalid migration request\n");
         }
 
         return err;
@@ -3099,8 +3108,11 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         mig_ext->exthdr.type = SERVAL_MIGRATE_EXT;
         mig_ext->exthdr.length = sizeof(*mig_ext);
         mig_ext->exthdr.flags = flags;
-        mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno);
+        /* Migration sequence number should be the same as the
+           previous one. */
+        mig_ext->seqno = htonl(SERVAL_SKB_CB(skb)->seqno - 1);
         mig_ext->ackno = htonl(ssk->rcv_seq.nxt);
+        mig_ext->mig_seqno = htonl(++ssk->snd_seq.mig);
         memcpy(mig_ext->nonce, ssk->local_nonce, SERVAL_NONCE_SIZE);
 
         return sizeof(*mig_ext);
