@@ -258,7 +258,6 @@ struct serval_migrate_ext {
         struct serval_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
-        uint32_t mig_seqno;
         uint8_t nonce[8];
 } __attribute__((packed));
 

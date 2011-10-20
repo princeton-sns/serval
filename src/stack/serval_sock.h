@@ -157,13 +157,11 @@ struct serval_sock {
                 u32        nxt;
                 u32        wnd;
                 u32        iss;
-                u32        mig;
         } snd_seq;
         struct {
                 u32        nxt;
                 u32        wnd;
                 u32        iss;
-                u32        mig;
         } rcv_seq;
         unsigned short          retransmits;
         unsigned long           rto;
