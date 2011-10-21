@@ -47,10 +47,10 @@ static const char *sock_state_str[] = {
 };
 
 static const char *sock_sal_state_str[] = {
-        [ SAL_INITIAL ]      = "SAL_INITIAL",
-        [ SAL_NORM ]         = "SAL_NORM",
-        [ SAL_RSYN_SENT ]    = "SAL_RSYN_SENT",
-        [ SAL_RSYN_RECV ]    = "SAL_RSYN_RECV",
+        [ SAL_INITIAL ]        = "SAL_INITIAL",
+        [ SAL_RSYN_SENT ]      = "SAL_RSYN_SENT",
+        [ SAL_RSYN_RECV ]      = "SAL_RSYN_RECV",
+        [ SAL_RSYN_SENT_RECV ] = "SAL_RSYN_SENT_RECV",
 };
 
 static void serval_sock_destruct(struct sock *sk);
@@ -765,8 +765,7 @@ const char *serval_sal_state_str(unsigned int state)
 
 int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state == __SAL_MIN_STATE ||
-            new_state >= __SAL_MAX_STATE) {
+        if (new_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", new_state);
                 return -1;
         }

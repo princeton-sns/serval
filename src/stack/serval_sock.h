@@ -71,11 +71,10 @@ enum {
    Service Access Layer (SAL) socket states used for, e.g., migration.
  */
 enum {
-        __SAL_MIN_STATE = 0,
-        SAL_INITIAL = __SAL_MIN_STATE,
-        SAL_NORM,
+        SAL_INITIAL = 0,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
+        SAL_RSYN_SENT_RECV, /* Receive RSYN after having sent RSYN */
         __SAL_MAX_STATE,
 };
 

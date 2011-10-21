@@ -240,7 +240,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	 *  Validate the packet.
 	 */
 
-        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+        if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
                 serval_sk(sk)->af_ops->recv_shutdown(sk);
         } else {
                 unsigned short datalen = ntohs(uh->len) - sizeof(*uh);
@@ -444,7 +444,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
-                if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+                if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
                         retval = 0;
                         goto found_fin_ok;
                 }
@@ -559,7 +559,7 @@ int serval_udp_read_sock(struct sock *sk, read_descriptor_t *desc,
         if (!skb)
                 return 0;
         
-        if (SERVAL_SKB_CB(skb)->pkttype == SERVAL_PKT_CLOSE) {
+        if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
                 retval = 0;
         } else {
                 retval = recv_actor(desc, skb, 0, skb->len);
