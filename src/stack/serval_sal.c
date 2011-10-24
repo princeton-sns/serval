@@ -1006,6 +1006,9 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 seqno)
         }
 
         switch (ssk->sal_state) {
+        case SAL_INITIAL:
+                serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
+                break;
         case SAL_RSYN_RECV:
                 serval_sock_set_sal_state(sk, SAL_RSYN_SENT_RECV);
                 break;
@@ -1049,8 +1052,6 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 seqno)
 
 int serval_sal_migrate(struct sock *sk)
 {
-        serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
-        
         return serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 }
 
