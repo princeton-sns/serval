@@ -2,7 +2,7 @@
 #include <serval/debug.h>
 #include <serval/platform.h>
 #include <serval/netdevice.h>
-#include <libstack/ctrlmsg.h>
+#include <serval/ctrlmsg.h>
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
 #include <net/route.h>
@@ -19,27 +19,6 @@ static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
         return 0;
 }
 
-static int ctrl_handle_iface_conf_msg(struct ctrlmsg *cm)
-{
-        struct ctrlmsg_iface_conf *ifcm = (struct ctrlmsg_iface_conf *)cm;
-        struct net_device *dev;
-        int ret = 0;
-
-        dev = dev_get_by_name(&init_net, ifcm->ifname);
-
-        if (!dev) {
-                LOG_ERR("No interface %s\n", ifcm->ifname);
-                return -1;
-        }
-
-        LOG_DBG("iface %s\n", ifcm->ifname);
-
-        /* Nothing really done here a.t.m. */
-        dev_put(dev);
-
-        return ret;
-}
-
 static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
@@ -49,25 +28,23 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
         int err = 0;
 
         LOG_DBG("adding %u services, msg size %u\n", 
-                num_res, sizeof(*cmr));
-
+                num_res, CTRLMSG_SERVICE_LEN(cmr));
+        
         for (i = 0; i < num_res; i++) {
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
-                
-                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
-                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
 #if defined(OS_LINUX_KERNEL)
                 {
                         struct rtable *rt;
 
                         rt = serval_ip_route_output(&init_net, 
-                                                    entry->address.net_ip.s_addr,
+                                                    entry->address.s_addr,
                                                     0, 0, entry->if_index);
 
                         if (!rt) {
-                                LOG_DBG("Service address is not routable, ignoring.\n");
+                                LOG_DBG("Service address is not routable.\n");
                                 continue;
                         }
 
@@ -88,21 +65,23 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                         continue;
                 }
 #endif
-               
+                if (entry->srvid_prefix_bits > 0)
+                        prefix_bits = entry->srvid_prefix_bits;
+         
 #if defined(ENABLE_DEBUG)
                 {
                         char ipstr[18];
                         LOG_DBG("Adding service id: %s(%u) "
                                 "@ address %s, priority %u, weight %u\n", 
                                 service_id_to_str(&entry->srvid), 
-                                entry->srvid_prefix_bits, 
+                                prefix_bits, 
                                 inet_ntop(AF_INET, &entry->address,
                                           ipstr, sizeof(ipstr)),
                                 entry->priority, entry->weight);
                 }
 #endif
                 err = service_add(&entry->srvid, 
-                                  entry->srvid_prefix_bits, 
+                                  prefix_bits, 
                                   entry->srvid_flags, 
                                   entry->priority, 
                                   entry->weight,
@@ -124,7 +103,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 }
         }
 
-        cm->len = CTRLMSG_SERVICE_LEN(index);
+        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -134,10 +113,10 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
         unsigned int num_res = CTRLMSG_SERVICE_NUM(cmr);
-        unsigned char buffer[sizeof(struct ctrlmsg_service_stat) + 
-                             sizeof(struct service_info_stat) * (num_res - 1)];
-        struct ctrlmsg_service_stat *cms = 
-                (struct ctrlmsg_service_stat *)buffer;
+        unsigned char buffer[sizeof(struct ctrlmsg_service_info_stat) + 
+                             sizeof(struct service_info_stat) * num_res];
+        struct ctrlmsg_service_info_stat *cms = 
+                (struct ctrlmsg_service_info_stat *)buffer;
         struct in_addr null_ip = { 0 };
         struct in_addr *ip = &null_ip;
         unsigned int i = 0;
@@ -154,24 +133,26 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 struct service_info_stat *stat = &cms->service[index];
                 struct dest_stats dstat;
                 struct service_entry *se;
-
-                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
-                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(null_ip)) != 0) {
-                        ip = &entry->address.net_un.un_ip;
+                        ip = &entry->address;
                 }
 
+                if (entry->srvid_prefix_bits > 0)
+                        prefix_bits = entry->srvid_prefix_bits;
+
                 se = service_find_exact(&entry->srvid, 
-                                        entry->srvid_prefix_bits);
+                                        prefix_bits);
 
                 if (!se) {
                         LOG_DBG("No match for serviceID %s:(%u)\n",
                                 service_id_to_str(&entry->srvid),
-                                entry->srvid_prefix_bits);
+                                prefix_bits);
                         continue;
                 }
+
                 memset(&dstat, 0, sizeof(dstat));
 
                 err = service_entry_remove_dest(se, ip, ip ? 
@@ -181,7 +162,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 if (err > 0) {
                         stat->duration_sec = dstat.duration_sec;
                         stat->duration_nsec = dstat.duration_nsec;
-                        //tokens too?
                         stat->packets_resolved = dstat.packets_resolved;
                         stat->bytes_resolved = dstat.bytes_resolved;
                         stat->packets_dropped = dstat.packets_dropped;
@@ -201,8 +181,8 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 service_entry_put(se);
         }
 
-        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STATS;
-        cms->cmh.len = CTRLMSG_SERVICE_STAT_LEN(index);
+        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STAT;
+        cms->cmh.len = CTRLMSG_SERVICE_STAT_NUM_LEN(index);
         ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
 
         return 0;
@@ -231,22 +211,22 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 
         for (i = 0; i < num_res; i++) {
                 struct service_info *entry = &cmr->service[i];
-
-                if (entry->srvid_prefix_bits > SERVICE_ID_MAX_PREFIX_BITS)
-                        entry->srvid_prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(entry->address)) != 0) {
-                        ip = &entry->address.net_un.un_ip;
+                        ip = &entry->address;
                 }
+                if (entry->srvid_prefix_bits > 0)
+                        prefix_bits = entry->srvid_prefix_bits;
 
                 LOG_DBG("Modifying: %s flags(%i) bits(%i)\n", 
                         service_id_to_str(&entry->srvid), 
                         entry->srvid_flags, 
-                        entry->srvid_prefix_bits);
+                        prefix_bits);
                 
                 err = service_modify(&entry->srvid, 
-                                     entry->srvid_prefix_bits, 
+                                     prefix_bits, 
                                      entry->srvid_flags, 
                                      entry->priority, 
                                      entry->weight, 
@@ -266,7 +246,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                 }
         }
 
-        cm->len = CTRLMSG_SERVICE_LEN(index);
+        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -277,6 +257,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         struct ctrlmsg_service *cmg = (struct ctrlmsg_service *)cm;
         struct service_entry *se;
         struct service_resolution_iter iter;
+        unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         struct dest *dst;
         int i = 0;
 
@@ -285,14 +266,16 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
 #endif
+        if (cmg->service[0].srvid_prefix_bits > 0)
+                prefix_bits = cmg->service[0].srvid_prefix_bits;
+
         se = service_find(&cmg->service[0].srvid, 
-                          cmg->service[0].srvid_prefix_bits);
+                          prefix_bits);
 
         if (se) {
-                int size = sizeof(struct ctrlmsg_service) + 
-                        se->count * sizeof(struct service_entry);
-                struct ctrlmsg_service *cres = 
-                        (struct ctrlmsg_service *)MALLOC(size, GFP_KERNEL);
+                struct ctrlmsg_service *cres;
+                size_t size = CTRLMSG_SERVICE_NUM_LEN(se->count);
+                cres = kmalloc(size, GFP_KERNEL);
 
                 if (!cres) {
                         service_entry_put(se);
@@ -339,7 +322,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 
 static int ctrl_handle_service_stats_msg(struct ctrlmsg *cm)
 {
-        struct ctrlmsg_service_stats *cms = (struct ctrlmsg_service_stats *)cm;
+        struct ctrlmsg_service_stat *cms = (struct ctrlmsg_service_stat *)cm;
         struct table_stats tstats;
 
         memset(&cms->stats, 0, sizeof(cms->stats));
@@ -417,7 +400,6 @@ ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
-        ctrl_handle_iface_conf_msg,
         ctrl_handle_add_service_msg,
         ctrl_handle_del_service_msg,
         ctrl_handle_mod_service_msg,

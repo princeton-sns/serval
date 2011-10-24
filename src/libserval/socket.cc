@@ -24,11 +24,9 @@
 #include "lock.hh"
 
 #if defined(OS_ANDROID)
-const char *SVSockLib::DEFAULT_SF_CFG = "/data/local/tmp/serval.conf";
 const char *SVSockLib::SERVAL_TCP_PATH = "/data/local/tmp/serval-tcp.sock";
 const char *SVSockLib::SERVAL_UDP_PATH = "/data/local/tmp/serval-udp.sock";
 #else
-const char *SVSockLib::DEFAULT_SF_CFG = "/etc/serval.conf";
 const char *SVSockLib::SERVAL_TCP_PATH = "/tmp/serval-tcp.sock";
 const char *SVSockLib::SERVAL_UDP_PATH = "/tmp/serval-udp.sock";
 #endif

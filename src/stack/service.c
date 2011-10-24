@@ -693,7 +693,7 @@ struct dest *service_resolution_iter_next(struct service_resolution_iter* iter)
         return dst;
 }
 
-void service_resolution_iter_inc_stats(struct service_resolution_iter* iter, 
+void service_resolution_iter_inc_stats(struct service_resolution_iter *iter, 
                                        int packets, int bytes) 
 {
         struct dest *dst = NULL;
@@ -825,7 +825,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                        atomic_read(&de->packets_dropped));
 
                         tot_len += len;
-                        
+
                         if (find_size)
                                 len = 0;
                         else
@@ -852,7 +852,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                                inet_ntop(AF_INET,
                                                          de->dst, 
                                                          dststr, 18));
-                                
+
                                 tot_len += len;
 
                                 if (find_size)

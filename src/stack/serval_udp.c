@@ -42,9 +42,13 @@ static int serval_udp_connection_respond_sock(struct sock *sk,
                                               struct dst_entry *dst);
 
 static int serval_udp_rcv(struct sock *sk, struct sk_buff *skb);
+static void serval_udp_v4_send_check(struct sock *sk, struct sk_buff *skb);
+static void serval_udp_v4_encap_send_check(struct sock *sk, 
+                                           struct sk_buff *skb);
 
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+        .send_check = serval_udp_v4_send_check,
         .queue_xmit = serval_ipv4_xmit,
         .receive = serval_udp_rcv,
         .net_header_len = SERVAL_NET_HEADER_LEN,
@@ -55,6 +59,7 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
 
 static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+        .send_check = serval_udp_v4_encap_send_check,
         .encap_queue_xmit = serval_ipv4_xmit,
         .queue_xmit = serval_udp_encap_xmit,
         .receive = serval_udp_rcv,
@@ -97,6 +102,31 @@ static inline int udp_csum_init(struct sk_buff *skb,
 	return 0;
 }
 
+static void __serval_udp_v4_send_check(struct sk_buff *skb,
+                                __be32 saddr, __be32 daddr)
+{
+	struct udphdr *uh = udp_hdr(skb);
+        unsigned long len = skb_tail_pointer(skb) - skb_transport_header(skb);
+
+        skb->ip_summed = CHECKSUM_NONE;
+        uh->check = 0;
+        uh->check = csum_tcpudp_magic(saddr, daddr, len, IPPROTO_UDP,
+                                      csum_partial(uh, len, 0));
+}
+
+void serval_udp_v4_send_check(struct sock *sk, struct sk_buff *skb)
+{
+	struct inet_sock *inet = inet_sk(sk);
+        __serval_udp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
+}
+
+void serval_udp_v4_encap_send_check(struct sock *sk, struct sk_buff *skb)
+{
+	struct inet_sock *inet = inet_sk(sk);
+        LOG_WARN("Encapsulation send checksumming not implemented!\n");
+        __serval_udp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
+}
+
 static int serval_udp_transmit_skb(struct sock *sk, 
                                    struct sk_buff *skb)
 {
@@ -111,16 +141,18 @@ static int serval_udp_transmit_skb(struct sock *sk,
         uh->source = 0;
         uh->dest = 0;
         uh->len = htons(skb->len);
-        skb->ip_summed = CHECKSUM_NONE;
         uh->check = 0;
-        uh->check = csum_tcpudp_magic(inet_sk(sk)->inet_saddr,
-                                      inet_sk(sk)->inet_daddr, 
-                                      skb->len,
-                                      IPPROTO_UDP,
-                                      csum_partial(uh, skb->len, 0));
-
+        skb->ip_summed = CHECKSUM_NONE;
         skb->protocol = IPPROTO_UDP;
-        
+        /*
+          Note, for packets resolved through the service table, this
+          checksum calculated here will be recalculated once the
+          resolution is performed and the src/dst IP addresses are
+          known. This could be inefficient, since we are calculating
+          the checksum twice for such packets.
+         */
+        serval_udp_v4_send_check(sk, skb);
+
         LOG_PKT("UDP pkt [s=%u d=%u len=%u]\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
@@ -370,7 +402,8 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
         
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
-        }
+        } else 
+                err = len;
  out:
         release_sock(sk);
 
@@ -461,6 +494,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 if (svaddr) {
                         size_t addrlen = msg->msg_namelen;
 
+                        memset(svaddr, 0, addrlen);
                         svaddr->sv_family = AF_SERVAL;
                         *addr_len = sizeof(*svaddr);
                         
@@ -499,7 +533,6 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
 	} while (1);
  out:
         release_sock(sk);
-        LOG_DBG("final retval: %i\n", retval);
         return retval;
 }
 

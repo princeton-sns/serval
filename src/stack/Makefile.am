@@ -54,7 +54,7 @@ SERVAL_HDR = \
 	serval_sal.h \
 	serval_tcp.h \
 	userlevel/serval_tcp_user.h \
-	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
+	$(SERVAL_INCLUDE_DIR)/serval/ctrlmsg.h \
 	$(SERVAL_INCLUDE_DIR)/netinet/serval.h \
 	$(SERVAL_INCLUDE_DIR)/serval/platform_tcpip.h \
 	$(SERVAL_INCLUDE_DIR)/serval/platform.h \
@@ -113,7 +113,7 @@ SERVAL_KERNEL_SRC = \
 	linux/sysctl_net_serval.c
 
 SERVAL_KERNEL_DEP = \
-	$(SERVAL_INCLUDE_DIR)/libstack/ctrlmsg.h \
+	$(SERVAL_INCLUDE_DIR)/serval/ctrlmsg.h \
 	$(SERVAL_HDR) \
 	$(SERVAL_KERNEL_HDR) \
 	$(SERVAL_KERNEL_SRC)

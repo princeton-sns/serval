@@ -2,7 +2,7 @@
 #ifndef _CTRL_H_
 #define _CTRL_H_
 
-#include <libstack/ctrlmsg.h>
+#include <serval/ctrlmsg.h>
 
 typedef int (*ctrlmsg_handler_t)(struct ctrlmsg *);
 

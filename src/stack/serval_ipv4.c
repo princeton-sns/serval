@@ -92,7 +92,7 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                         skb->len, iph->ihl << 2, iph->tos);
         }
 #endif
-	//skb->protocol = htons(ETH_P_IP);
+	skb->protocol = htons(ETH_P_IP);
 
 #if defined(OS_LINUX_KERNEL)
 

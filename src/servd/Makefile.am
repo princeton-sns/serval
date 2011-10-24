@@ -1,195 +1,7 @@
 bin_PROGRAMS = \
 	servd
 
-if ENABLE_SERVICE_ROUTER
-
-bin_PROGRAMS +=	servr \
-		utiltest \
-		trietest \
-		tasktest \
-		stabletest \
-		messagetest
-
-noinst_LIBRARIES = libservr.a
-
-libservr_a_SOURCES = \
-	cmwc.c \
-	task.c \
-	time_util.c \
-	poll_reactor.c \
-	prefixtrie.c \
-	service_util.c \
-	service_types.c \
-	service_table.c \
-	message_channel_base.c \
-	unix_message_channel.c \
-	netlink_message_channel.c \
-	udp_message_channel.c \
-	resolver_messaging.c \
-	resolution_path.c \
-	resolver_base.c
-
-
-libservr_headers = \
-	cmwc.h \
-	message_channel_base.h \
-	message_channel.h \
-	poll_reactor.h \
-	prefixtrie.h \
-	resolution_path.h \
-	resolver_base.h \
-	resolver.h \
-	resolver_messaging.h \
-	service_table.h \
-	service_types.h \
-	service_util.h \
-	task.h \
-	time_util.h
-
-libservr_a_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-utiltest_SOURCES = \
-	util_test.c
-
-utiltest_LDADD = \
-	libservr.a
-
-utiltest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd/ \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-utiltest_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt \
-	-lpcl
-
-messagetest_SOURCES = \
-	messaging_test.c
-
-messagetest_LDADD = \
-	libservr.a
-
-messagetest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-messagetest_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	-lserval \
-	-lrt \
-	-lpcl \
-	$(GLIB_LIBS) \
-	-lpthread 
-
-trietest_SOURCES = \
-	prefixtrie_test.c
-
-trietest_LDADD = \
-	libservr.a
-
-trietest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-trietest_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt \
-	-lpcl
-
-stabletest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-stabletest_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt \
-	-lpcl
-
-stabletest_SOURCES = \
-	service_table_test.c
-
-stabletest_LDADD = \
-	libservr.a
-
-tasktest_SOURCES = \
-	task_test.c
-
-tasktest_LDADD = \
-	libservr.a
-
-tasktest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-tasktest_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt \
-	-lpcl
-
-servr_SOURCES = \
-	server_resolver.c \
-	client_resolver.c \
-	local_resolver.c \
-	service_router.c
-
-servr_headers = \
-	server_resolver.h
-
-servr_LDADD = \
-	libservr.a
-
-servr_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/libstack \
-	$(GLIB_CFLAGS)
-
-servr_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
-	-L$(top_srcdir)/src/libserval \
-	-L/usr/local/lib \
-	-lstack \
-	-lserval \
-	-lpcl \
-	-lrt \
-	-lpthread \
-	$(GLIB_LIBS)
-
-endif # ENABLE_SERVICE_ROUTER
-
 servd_SOURCES = \
-	timer.c \
 	servd.c
 
 if OS_LINUX
@@ -203,32 +15,24 @@ servd_SOURCES += \
 endif
 
 servd_headers = \
-	debug.h \
-	timer.h \
 	ifa.h \
 	rtnl.h
 
 servd_CPPFLAGS = \
 	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/libstack
+	-I$(top_srcdir)/src/libservalctrl
 
 servd_LDFLAGS = \
-	-L$(top_srcdir)/src/libstack \
+	-L$(top_srcdir)/src/common \
+	-L$(top_srcdir)/src/libservalctrl \
 	-L$(top_srcdir)/src/libserval \
-	-lstack \
+	-lcommon \
+	-lservalctrl \
 	-lserval \
 	-lpthread
 
 noinst_HEADERS = \
-	$(servd_headers) \
-	$(servr_headers)
+	$(servd_headers)
 
 clean-local:
 	rm -f *~
-
-indent:
-	indent -kr -i4 -lc80 \
-	$(libservr_a_SOURCES) \
-	$(servr_SOURCES) \
-	$(libservr_headers) \
-	$(servr_headers)

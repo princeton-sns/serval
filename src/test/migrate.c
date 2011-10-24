@@ -6,14 +6,16 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#include <libstack/stack.h>
 #include <libserval/serval.h>
+#include <libservalctrl/init.h>
+#include <libservalctrl/hostctrl.h>
 #include <netinet/serval.h>
 #include <netinet/in.h>
 
 enum cmd_type {
         CMD_MIGRATE_FLOW,
         CMD_MIGRATE_INTERFACE,
+        CMD_MIGRATE_SERVICE,
         __MAX_CMD_TYPE,
 };
 
@@ -33,6 +35,11 @@ static struct {
                 .name = "interface",
                 .desc = "Migrate all flows on interface IFACE1 to IFACE2",
                 .args = { "IFACE1", "IFACE2", NULL },
+        },
+        [CMD_MIGRATE_SERVICE] = {
+                .name = "service",
+                .desc = "Migrate all flows associated with service SERVICE to IFACE",
+                .args = { "SERVICE", "IFACE2", NULL },
         }
 };
 
@@ -55,9 +62,12 @@ int main(int argc, char **argv)
 	char *from_if = NULL;
 	char *to_if = NULL;
         struct flow_id flow;
-        enum cmd_type cmd = 0;
+        struct service_id service;
+        enum cmd_type cmd = __MAX_CMD_TYPE;
+        struct hostctrl *hc;
 
         memset(&flow, 0, sizeof(flow));
+        memset(&service, 0, sizeof(service));
 
         argc--;
         argv++;
@@ -86,37 +96,65 @@ int main(int argc, char **argv)
                 
                 printf("Migrating flows on interface %s to interface %s\n",
                        from_if, to_if);
+        } else if (strcmp(argv[0], 
+                          commands[CMD_MIGRATE_SERVICE].name) == 0) {
+                if (argc < 2) {
+                        printf("Too few arguments\n");
+                        goto fail_usage;
+                }
+                cmd = CMD_MIGRATE_SERVICE;
+                service.s_sid32[0] = htonl(atoi(argv[1]));
+                to_if = argv[2];
+                
+                printf("Migrating flows of service %s to interface %s\n",
+                       service_id_to_str(&service), to_if);
+        }
+        
+        if (cmd == __MAX_CMD_TYPE) {
+                print_usage();
+                return 0;
         }
 
-	ret = libstack_init();
+	ret = libservalctrl_init();
 
 	if (ret == -1) {
-		fprintf(stderr, "Could not init libstack\n");
+		fprintf(stderr, "Could not init libservalctrl\n");
 		ret = -1;
-		goto fail_libstack;
+		goto fail_ctrl;
 	}
+        
+        hc = hostctrl_local_create(NULL, NULL, HCF_START);
+	
+        if (!hc) {
+                ret = -1;
+                goto out;
+        }
+
 
 	switch (cmd) {
         case CMD_MIGRATE_FLOW:
-                ret = libstack_migrate_flow(&flow, to_if);
+                ret = hostctrl_flow_migrate(hc, &flow, to_if);
                 break;
         case CMD_MIGRATE_INTERFACE:
-                ret = libstack_migrate_interface(from_if, to_if);
+                ret = hostctrl_interface_migrate(hc, from_if, to_if);
                 break;
+        case CMD_MIGRATE_SERVICE:
+                ret = hostctrl_service_migrate(hc, &service, to_if);
         default:
                 break;
         }
-
+        
 	if (ret < 0) {
 		fprintf(stderr, "could not migrate\n");
 	}
 
-        libstack_fini();
-
-fail_libstack:	
+        hostctrl_free(hc);
+out:
+        libservalctrl_fini();
+fail_ctrl:
 	return ret;
 
- fail_usage:
+fail_usage:
         print_usage();
         return 0;
 }

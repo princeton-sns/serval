@@ -6,9 +6,6 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#include <serval/list.h>
-#include <libstack/stack.h>
-#include <libserval/serval.h>
 #include <netinet/serval.h>
 #include <netinet/in.h>
 

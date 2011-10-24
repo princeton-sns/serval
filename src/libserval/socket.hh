@@ -32,7 +32,6 @@ public:
   SVSockLib(int serval_id = 0);
   ~SVSockLib();
 
-  static const char *DEFAULT_SF_CFG;
   static const char *SERVAL_TCP_PATH;
   static const char *SERVAL_UDP_PATH;
   static const sv_srvid_t CONTROLLER_OBJ_ID;

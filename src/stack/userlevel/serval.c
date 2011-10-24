@@ -32,7 +32,6 @@ extern int telnet_init(void);
 extern void telnet_fini(void);
 extern unsigned int debug;
 unsigned int checksum_mode = 1;
-extern int stackid;
 
 #define MAX(x, y) (x >= y ? x : y)
 
@@ -142,11 +141,11 @@ void garbage_collect_clients(unsigned long data)
 #define NUM_SERVER_SOCKS 2
 
 #if defined(OS_ANDROID)
-#define UDP_SERVER_PATH "/data/local/tmp/serval-udp.sock"
-#define TCP_SERVER_PATH "/data/local/tmp/serval-tcp.sock"
+#define UDP_SERVER_PATH "/data/local/tmp/serval-udp-0.sock"
+#define TCP_SERVER_PATH "/data/local/tmp/serval-tcp-0.sock"
 #else
-#define UDP_SERVER_PATH "/tmp/serval-udp.sock"
-#define TCP_SERVER_PATH "/tmp/serval-tcp.sock"
+#define UDP_SERVER_PATH "/tmp/serval-udp-0.sock"
+#define TCP_SERVER_PATH "/tmp/serval-tcp-0.sock"
 #endif 
 
 static char *server_sock_path[] = {
@@ -160,8 +159,6 @@ static int server_run(void)
 	int server_sock[NUM_SERVER_SOCKS], i, ret = 0;
 	struct sockaddr_un sa;
         int timer_list_signal[2];
-        char tcp_buffer[128];
-        char udp_buffer[128];
         
         /* pipe/signal to tell us when a new timer timeout must be
          * scheduled */
@@ -186,13 +183,6 @@ static int server_run(void)
                 goto out_close_pipe;
         }
         
-	if(stackid > 0) {
-                sprintf(udp_buffer,"/tmp/serval-udp-%i.sock", stackid);
-                sprintf(tcp_buffer,"/tmp/serval-tcp-%i.sock", stackid);
-                server_sock_path[0] = udp_buffer;
-                server_sock_path[1] = tcp_buffer;
-	}
-
 	for (i = 0; i < NUM_SERVER_SOCKS; i++) {
 		server_sock[i] = socket(AF_UNIX, SOCK_STREAM, 0);
 
@@ -517,7 +507,7 @@ int main(int argc, char **argv)
 
                 /* Cleanup old stuff from crashed instance */
                 unlink(SERVAL_STACK_CTRL_PATH);
-                unlink(SERVAL_SERVD_CTRL_PATH);
+                unlink(SERVAL_CLIENT_CTRL_PATH);
                 unlink(TCP_SERVER_PATH);
                 unlink(UDP_SERVER_PATH);
         }
@@ -590,15 +580,7 @@ int main(int argc, char **argv)
                                 fprintf(stderr, "Invalid debug setting %s\n",
                                         argv[1]);
                         }
-                } else if (strcmp(argv[0], "-s") == 0 || 
-                           strcmp(argv[0], "-stackid")) {
-                        stackid = atoi(argv[1]);
-                        if (stackid < 0) {
-                                stackid = 0;
-                        }
-                        argv++;
-                        argc--;
-		}
+                }
 		argc--;
 		argv++;
 	}	

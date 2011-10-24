@@ -6,7 +6,7 @@
 #include <serval/debug.h>
 #include <serval/netdevice.h>
 #include <linux/inetdevice.h>
-#include <libstack/ctrlmsg.h>
+#include <serval/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
 

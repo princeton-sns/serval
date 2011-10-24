@@ -8,7 +8,7 @@ clean-local:
 	rm -f *~
 	rm -f include/netinet/*~
 	rm -f include/serval/*~
-	rm -f include/libstack/*~
+	rm -f include/libservalctrl/*~
 	rm -f include/libserval/*~
 
 EXTRA_DIST=Android.mk

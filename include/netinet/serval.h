@@ -41,6 +41,12 @@
 #endif
 #endif
 
+#define SERVAL_ASSERT(predicate) __ASSERT(predicate, __LINE__)
+
+#define __PASTE(a,b) a##b
+#define __ASSERT(predicate,line)                                 \
+        typedef char __PASTE(assertion_failed_,line)[2*!!(predicate)-1];
+
 #define AF_SERVAL 27
 #define PF_SERVAL AF_SERVAL   /* include/linux/socket.h */
 
@@ -74,6 +80,8 @@ struct service_id {
 #define s_sid32 srv_un.un_id32
 };
 
+SERVAL_ASSERT(sizeof(struct service_id) == 32)
+
 #define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
 
 enum sv_service_flags {
@@ -83,12 +91,12 @@ enum sv_service_flags {
         SVSF_LOCAL_SCOPE = 1,
         SVSF_DOMAIN_SCOPE = 2,
         SVSF_GLOBAL_SCOPE = 3,
-        SVSF_STRICT_SCOPE = 1 << 4, /* interpret scope strictly, by
+        SVSF_STRICT_SCOPE = 1 << 3, /* interpret scope strictly, by
                                      * default, scopes are
                                      * inclusive */
-        SVSF_ANYCAST = 1 << 5, /* service instance can be anycasted, 0
+        SVSF_ANYCAST = 1 << 4, /* service instance can be anycasted, 0
                                 * = backup or strict match */
-        SVSF_MULTICAST = 1 << 6, /* service instance can be
+        SVSF_MULTICAST = 1 << 5, /* service instance can be
                                   * multicasted */
         SVSF_INVALID = 0xFF
 };
@@ -103,6 +111,8 @@ struct sockaddr_sv {
         struct service_id sv_srvid;
 };
 
+SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 36)
+
 #define SERVAL_ADDRSTRLEN 80
 
 struct flow_id {
@@ -115,6 +125,8 @@ struct flow_id {
 #define s_id16 fl_un.un_id16
 #define s_id32 fl_un.un_id32
 };
+
+SERVAL_ASSERT(sizeof(struct flow_id) == 4)
 
 struct net_addr {
         union {
@@ -191,6 +203,8 @@ struct serval_hdr {
         struct flow_id dst_flowid;
 } __attribute__((packed));
 
+SERVAL_ASSERT(sizeof(struct serval_hdr) == 16)
+
 /* Generic extension header */
 struct serval_ext {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
@@ -204,6 +218,9 @@ struct serval_ext {
 #endif
         uint8_t length;
 } __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct serval_ext) == 2)
+
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
@@ -225,7 +242,7 @@ enum serval_ext_type {
         SERVAL_SOURCE_EXT,
         SERVAL_MIGRATE_EXT,
         __SERVAL_EXT_TYPE_MAX,
-} __attribute__((packed));
+};
 
 struct serval_connection_ext {
         struct serval_ext exthdr;
@@ -234,6 +251,8 @@ struct serval_connection_ext {
         uint8_t  nonce[8];
         struct service_id srvid;
 } __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct serval_connection_ext) == 50)
 
 #define SERVAL_NONCE_SIZE 8
 
@@ -244,21 +263,29 @@ struct serval_control_ext {
         uint8_t  nonce[8];
 } __attribute__((packed));
 
+SERVAL_ASSERT(sizeof(struct serval_control_ext) == 18)
+
 struct serval_service_ext {
         struct serval_ext exthdr;
         struct service_id src_srvid;
         struct service_id dst_srvid;
 } __attribute__((packed));
 
+SERVAL_ASSERT(sizeof(struct serval_service_ext) == 66)
+
 struct serval_description_ext {
         struct serval_ext exthdr;
         struct net_addr addrs[0];
 } __attribute__((packed));
 
+SERVAL_ASSERT(sizeof(struct serval_description_ext) == 2)
+
 struct serval_source_ext {
         struct serval_ext exthdr;
         uint8_t source[0];
 } __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct serval_source_ext) == 2)
 
 struct serval_migrate_ext {
         struct serval_ext exthdr;
@@ -266,6 +293,8 @@ struct serval_migrate_ext {
         uint32_t ackno;
         uint8_t nonce[8];
 } __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct serval_migrate_ext) == 18)
 
 #define __SERVAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct serval_source_ext))

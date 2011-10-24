@@ -3,10 +3,9 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <serval/debug.h>
-#include <libstack/ctrlmsg.h>
+#include <serval/ctrlmsg.h>
 #include <ctrl.h>
 
-int stackid = 0;
 static int ctrl_sock = -1;
 struct sockaddr_un unaddr;
 
@@ -107,12 +106,7 @@ int ctrl_init(void)
 	memset(&unaddr, 0, sizeof(unaddr));
 	unaddr.sun_family = AF_UNIX;
 
-	if (stackid <= 0) {
-                strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
-	} else {
-                sprintf(unaddr.sun_path, 
-                        "/tmp/serval-stack-ctrl-%i.sock", stackid);
-	}
+        strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
 
 	ret = bind(ctrl_sock,
 		   (struct sockaddr *)&unaddr, sizeof(unaddr));
@@ -129,13 +123,9 @@ int ctrl_init(void)
 			unaddr.sun_path, strerror(errno));
 		goto out_unbind;
 	}
-	/* Now set the address to point to scafd */
-	if (stackid <= 0) {
-                strcpy(unaddr.sun_path, SERVAL_SERVD_CTRL_PATH);
-        } else {
-                sprintf(unaddr.sun_path, 
-                        "/tmp/serval-libstack-ctrl-%i.sock", stackid);
-        }
+	/* Now set the address to point to servd */
+        strcpy(unaddr.sun_path, SERVAL_CLIENT_CTRL_PATH);
+
 out:
 	return ret;
 out_unbind:
@@ -150,11 +140,5 @@ void ctrl_fini(void)
 	if (ctrl_sock != -1)
 		close(ctrl_sock);
 
-        if (stackid <= 0) {
-                unlink(SERVAL_STACK_CTRL_PATH);
-        } else {
-                char buffer[128];
-                sprintf(buffer, "/tmp/serval-stack-ctrl-%i.sock", stackid);
-                unlink(buffer);
-        }
+        unlink(SERVAL_STACK_CTRL_PATH);
 }

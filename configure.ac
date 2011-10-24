@@ -231,26 +231,18 @@ AS_HELP_STRING([--disable-service-router],[Turn off service router support]),
   *) AC_MSG_ERROR([bad value ${enableval} for --disable-service-router]) ;;
 esac],[service_router=yes])
 
-dnl Check for PCL library
-have_pcl=no
-
-AC_CHECK_LIB(pcl,co_thread_init, [AC_CHECK_HEADERS([pcl.h],have_pcl=yes,AC_MSG_WARN(You have libpcl but not the development headers))],AC_MSG_WARN(PCL library missing or wrong version. Check http://www.xmailserver.org/libpcl.html for latest version.),)
-		
-AC_MSG_CHECKING([for Portable Coroutine Library (PCL)])
-AC_MSG_RESULT([$have_pcl])
-AM_CONDITIONAL([HAVE_PCL_LIB], [test x$have_pcl = xyes])
-
 dnl Check for glib
 have_glib2=no
 PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
 
 AM_CONDITIONAL([HAVE_GLIB2], [test x$have_glib2 = xyes])
 
-if test "$service_router" = yes && [ test "$have_glib2" = no || test "$have_pcl" = no ]; then
+if test "$service_router" = yes && [ test "$have_glib2" = no ]; then
 	service_router=no
 fi
 
 AM_CONDITIONAL([ENABLE_SERVICE_ROUTER], [test x$service_router = xyes])
+AM_CONDITIONAL([ENABLE_LIBRESOLVE], [test x$service_router = xyes])
 
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
@@ -279,10 +271,12 @@ dnl
 
 AC_CONFIG_FILES([Makefile
 	src/Makefile
+	src/common/Makefile
 	src/stack/Makefile
-	src/stack/Kbuild
+	src/stack/Kbuild	
+	src/libservalctrl/Makefile
 	src/libserval/Makefile
-	src/libstack/Makefile
+	src/servicerouter/Makefile
 	src/servd/Makefile
 	src/test/Makefile
 	src/javasock/Makefile

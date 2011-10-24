@@ -11,33 +11,33 @@
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
-#include <libstack/stack.h>
 #include <libserval/serval.h>
+#include <libservalctrl/hostctrl.h>
+#include <libservalctrl/init.h>
 #include <netinet/serval.h>
 #include <serval/platform.h>
-#include "debug.h"
+#include <common/timer.h>
+#include <common/debug.h>
 #if defined(OS_LINUX)
 #include "rtnl.h"
 #endif
 #if defined(OS_BSD)
 #include "ifa.h"
 #endif
-#include "timer.h"
 
-static int ctrlsock = -1; /* socket to communicate with controller */
-static int native = 0; /* Whether the socket is native or libserval */
+static int router = 0; /* Whether this service daemon is a stub
+                          end-host or a router */
 
 static int should_exit = 0;
 static int p[2] = { -1, -1 };
-struct sockaddr_sv ctrlid;
-
-static int join_timeout(struct timer *t);
+static struct timer_queue tq;
 
 static void signal_handler(int sig)
 {
         ssize_t ret;
         char q = 'q';
 	should_exit = 1;
+
         ret = write(p[1], &q, 1);
 
         if (ret < 0) {
@@ -45,135 +45,102 @@ static void signal_handler(int sig)
         }
 }
 
-static ssize_t servd_sendto(int sock, void *data, size_t len, int flags, 
-                            struct sockaddr *addr, socklen_t addrlen)
+int servd_interface_register(const char *ifname)
 {
-	ssize_t ret;
-
-	if (native)
-		ret = sendto(sock, data, len, flags, 
-			     addr, addrlen);
-	else 
-		ret = sendto_sv(sock, data, len, flags, 
-				addr, addrlen);
-	
-	if (ret == -1) {
-		LOG_ERR("sendto failed: %s\n",
-			strerror_sv(errno));
-	}
-
-	return ret;
-}
-
-static ssize_t servd_recvfrom(int sock, void *buf, size_t len, int flags, 
-                              struct sockaddr *addr, socklen_t *addrlen)
-{
-	ssize_t ret;
-
-	if (native)
-		ret = recvfrom(sock, buf, len, flags, 
-                               addr, addrlen);
-	else 
-		ret = recvfrom_sv(sock, buf, len, flags, 
-                                  addr, addrlen);
-	
-	if (ret == -1) {
-		LOG_ERR("recvfrom failed: %s\n",
-			strerror_sv(errno));
-	}
-
-	return ret;
-}
-
-int join_timeout(struct timer *t)
-{
-         LOG_DBG("Join timeout for %s.\n",
-                (char *)t->data);
-
-        timer_destroy(t);
-
+	LOG_DBG("New interface %s\n", ifname);
+        
         return 0;
 }
 
-void join_timer_destroy(struct timer *t)
-{        
-        free(t->data);
-        timer_free(t);
-}
-
-int servd_send_join(const char *ifname)
+static int register_service_remotely(void *context,
+                                     const struct service_id *srvid,
+                                     unsigned short flags,
+                                     unsigned short prefix,
+                                     const struct in_addr *local_ip)
 {
-        struct timer *t;
-        
-	LOG_DBG("Join for interface %s\n", ifname);
-
-        t = timer_new_callback(join_timeout, NULL);
-        
-        if (!t)
-                return -1;
-
-        t->data = malloc(strlen(ifname) + 1);
-        
-        if (!t->data) {
-                timer_free(t);
-                return -1;
-        }
-        strcpy(t->data, ifname);
-        t->destruct = join_timer_destroy;
-
-        timer_schedule_secs(t, 5);
-
-	return servd_sendto(ctrlsock, (void *)ifname, strlen(ifname) + 1, 0, 
-                            (struct sockaddr *)&ctrlid, sizeof(ctrlid));
-}
-
-static void servd_register_service(struct service_id *srvid)
-{
+        struct {
+                struct hostctrl *lhc, *rhc;
+        } *ctx = context;
 	int ret;
-	unsigned long data = 232366;
-        
-        if (!srvid)
-                return;
 
 	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
 
-        ret = servd_sendto(ctrlsock, &data, sizeof(data), 0, 
-			   (struct sockaddr *)&ctrlid, sizeof(ctrlid));
-
-        if (ret < 0) {
-                LOG_ERR("sendto failed.\n");
-        }
-}
-
-static struct libstack_callbacks callbacks = {
-	.srvregister = servd_register_service,
-};
-
-int ctrlsock_read(int sock)
-{
-        unsigned char buf[2000];
-        struct sockaddr_sv addr;
-        socklen_t addrlen = 0;
-        int ret;
-
-        ret = servd_recvfrom(sock, buf, 2000, 0, 
-                             (struct sockaddr *)&addr, &addrlen);
-
-        if (ret > 0) {
-                printf("received message from serviceID %s\n",
-                       service_id_to_str(&addr.sv_srvid));
-        }
-
+        ret = hostctrl_service_register(ctx->rhc, srvid, prefix);
+    
         return ret;
 }
 
-int close_ctrlsock(int sock)
+static int unregister_service_remotely(void *context,
+                                       const struct service_id *srvid,
+                                       unsigned short flags,
+                                       unsigned short prefix,
+                                       const struct in_addr *local_ip)
 {
-	if (native)
-		return close(ctrlsock);
-	
-	return close_sv(ctrlsock);
+        struct {
+                struct hostctrl *lhc, *rhc;
+        } *ctx = context;
+        int ret;
+
+	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
+
+        ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
+    
+        return ret;
 }
+
+static int handle_incoming_registration(void *context,
+                                        const struct service_id *srvid,
+                                        unsigned short flags,
+                                        unsigned short prefix,
+                                        const struct in_addr *remote_ip)
+{
+        struct {
+                struct hostctrl *lhc, *rhc;
+        } *ctx = context;
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[18];
+                LOG_DBG("Remote service %s @ %s registered\n", 
+                        service_id_to_str(srvid), 
+                        inet_ntop(AF_INET, remote_ip, buf, 18));
+        }
+#endif
+        /* Addd this service the local service table. */
+        return hostctrl_service_add(ctx->lhc, srvid, prefix, 
+                                    remote_ip);
+}
+
+static int handle_incoming_unregistration(void *context,
+                                          const struct service_id *srvid,
+                                          unsigned short flags,
+                                          unsigned short prefix,
+                                          const struct in_addr *remote_ip)
+{
+        struct {
+                struct hostctrl *lhc, *rhc;
+        } *ctx = context;
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[18];
+                LOG_DBG("Remote service %s @ %s unregistered\n", 
+                        service_id_to_str(srvid), 
+                        inet_ntop(AF_INET, remote_ip, buf, 18));
+        }
+#endif
+        /* Register this service the local service table. */
+        return hostctrl_service_remove(ctx->lhc, srvid, prefix, 
+                                       remote_ip);
+}
+                                     
+static struct hostctrl_callback lcb = {
+        .service_registration = register_service_remotely,
+        .service_unregistration = unregister_service_remotely,
+};
+
+static struct hostctrl_callback rcb = {
+        .service_registration = handle_incoming_registration,
+        .service_unregistration = handle_incoming_unregistration,
+};
 
 static int daemonize(void)
 {
@@ -241,10 +208,14 @@ int main(int argc, char **argv)
 #if defined(OS_LINUX)
         struct netlink_handle nlh;
 #endif
+        struct {
+                struct hostctrl *lhc, *rhc;
+        } ctx;
         fd_set readfds;
         int daemon = 0;
 	int ret = EXIT_SUCCESS;
-
+        unsigned int router_id = 88888, client_id = 55555;
+        struct sockaddr_sv raddr, caddr;
 	memset(&sigact, 0, sizeof(struct sigaction));
 
 	sigact.sa_handler = &signal_handler;
@@ -260,7 +231,32 @@ int main(int argc, char **argv)
                 if (strcmp(argv[0], "-d") == 0 ||
                     strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
-		}
+                } else if (strcmp(argv[0], "-r") == 0 ||
+                           strcmp(argv[0], "--router") == 0) {
+                        router = 1;
+                } else if (strcmp(argv[0], "-rid") == 0 ||
+                           strcmp(argv[0], "--router-id") == 0) {
+                        char *ptr;
+                        router_id = strtoul(argv[1], &ptr, 10);
+                        
+                        if (!(*ptr == '\0' && argv[1] != '\0')) {
+                                fprintf(stderr, "bad router id format '%s',"
+                                        " should beinteger string\n",
+                                        argv[1]);
+                                return -1;
+                        }
+                } else if (strcmp(argv[0], "-cid") == 0 ||
+                           strcmp(argv[0], "--client-id") == 0) {
+                        char *ptr;
+                        client_id = strtoul(argv[1], &ptr, 10);
+                        
+                        if (!(*ptr == '\0' && argv[1] != '\0')) {
+                                fprintf(stderr, "bad client id format '%s',"
+                                        " should be short integer string\n",
+                                        argv[1]);
+                                return -1;
+                        }
+                } 
 		argc--;
 		argv++;
 	}	
@@ -275,43 +271,13 @@ int main(int argc, char **argv)
                 } 
         }
 
-        ret = timer_list_init();
+        ret = timer_queue_init(&tq);
 
         if (ret == -1) {
-                LOG_ERR("timer_list_init failure\n");
+                LOG_ERR("timer_queue_init failure\n");
                 return -1;
         }
 
-	/* Set controller service id */
-	memset(&ctrlid, 0, sizeof(ctrlid));
-	ctrlid.sv_family = AF_SERVAL;
-	ctrlid.sv_srvid.s_sid16[0] = htons(666);
-
-	/* Try first a native socket */
-	ctrlsock = socket(AF_SERVAL, SOCK_DGRAM, 0);
-
-	if (ctrlsock == -1) {
-                switch (errno) {
-		case EAFNOSUPPORT:
-                case EPROTONOSUPPORT:
-			/* Try libserval */
-			ctrlsock = socket_sv(AF_SERVAL, SOCK_DGRAM, 0);
-			
-			if (ctrlsock == -1) {
-				LOG_ERR("controller socket: %s\n",
-					strerror_sv(errno));
-				goto fail_ctrlsock;
-			}
-                        break;
-                default:
-			LOG_ERR("controller socket (native): %s\n",
-				strerror(errno));
-                        goto fail_ctrlsock;
-                }
-	} else {
-		native = 1;
-	}
-	
 	ret = pipe(p);
 
         if (ret == -1) {
@@ -319,14 +285,52 @@ int main(int argc, char **argv)
 		goto fail_pipe;
         }
 
-	ret = libstack_init();
+	ret = libservalctrl_init();
 
 	if (ret == -1) {
-		LOG_ERR("Could not init libstack\n");
-		goto fail_libstack;
+		LOG_ERR("Could not init libservalctrl\n");
+		goto fail_libservalctrl;
 	}
+
+        ctx.lhc = hostctrl_local_create(&lcb, &ctx, 0);
+        
+        if (!ctx.lhc) {
+                LOG_ERR("Could not create local host control\n");
+                goto fail_hostctrl_local;
+        }
+
+
+        memset(&raddr, 0, sizeof(raddr));
+        memset(&caddr, 0, sizeof(caddr));
+        
+        raddr.sv_family = AF_SERVAL;
+        raddr.sv_srvid.srv_un.un_id32[0] = htonl(router_id);
+
+        caddr.sv_family = AF_SERVAL;
+        caddr.sv_srvid.srv_un.un_id32[0] = htonl(client_id);
 	
-	libstack_register_callbacks(&callbacks);
+                
+        if (router) {
+                ctx.rhc = hostctrl_remote_create_specific(&rcb, &ctx,
+                                                          (struct sockaddr *)&raddr, 
+                                                          sizeof(raddr),
+                                                          (struct sockaddr *)&caddr, 
+                                                          sizeof(caddr), HCF_ROUTER);                
+        } else {
+                ctx.rhc = hostctrl_remote_create_specific(&rcb, &ctx,
+                                                          (struct sockaddr *)&caddr, 
+                                                          sizeof(caddr),
+                                                          (struct sockaddr *)&raddr, 
+                                                          sizeof(raddr), 0);
+        }
+        
+        if (!ctx.rhc) {
+                LOG_ERR("Could not create remote host control\n");
+                goto fail_hostctrl_remote;
+        }
+
+        hostctrl_start(ctx.rhc);	
+        hostctrl_start(ctx.lhc);
 
 #if defined(OS_LINUX)
 	ret = rtnl_init(&nlh);
@@ -362,8 +366,8 @@ int main(int argc, char **argv)
 
                 FD_ZERO(&readfds);
 
-                FD_SET(timer_list_get_signal(), &readfds);
-                maxfd = MAX(timer_list_get_signal(), maxfd);
+                FD_SET(timer_queue_get_signal(&tq), &readfds);
+                maxfd = MAX(timer_queue_get_signal(&tq), maxfd);
 
 #if defined(OS_LINUX)
                 FD_SET(nlh.fd, &readfds);
@@ -371,17 +375,14 @@ int main(int argc, char **argv)
 #endif
                 FD_SET(p[0], &readfds);               
                 maxfd = MAX(p[0], maxfd);
-                /*
-                FD_SET(ctrlsock, &readfds);               
-                nfds = MAX(ctrlsock, nfds);
-                */
-                if (timer_next_timeout_timeval(&timeout))
+
+                if (timer_next_timeout_timeval(&tq, &timeout))
                         t = &timeout;
 
                 ret = select(maxfd + 1, &readfds, NULL, NULL, t);
 
                 if (ret == 0) {
-                        ret = timer_handle_timeout();
+                        ret = timer_handle_timeout(&tq);
                 } else if (ret == -1) {
 			if (errno == EINTR) {
 				should_exit = 1;
@@ -391,7 +392,7 @@ int main(int argc, char **argv)
                                 should_exit = 1;
 			}
                 } else {
-                        if (FD_ISSET(timer_list_get_signal(), &readfds)) {
+                        if (FD_ISSET(timer_queue_get_signal(&tq), &readfds)) {
                                 /* Just reschedule timeout */
                         }
 #if defined(OS_LINUX)
@@ -401,17 +402,7 @@ int main(int argc, char **argv)
                         }
 #endif
                         if (FD_ISSET(p[0], &readfds)) {
-                                LOG_DBG("pipe readable\n");
                                 should_exit = 1;
-                        }
-                        if (FD_ISSET(ctrlsock, &readfds)) {
-                                LOG_DBG("ctrl sock readable\n");
-                                ret = ctrlsock_read(ctrlsock);
-
-                                if (ret == 0) {
-                                        LOG_DBG("ctrl sock closed by peer\n");
-                                        should_exit = 1;
-                                }
                         }
                 }        
         }
@@ -426,16 +417,17 @@ fail_ifaddrs:
 	rtnl_close(&nlh);
 fail_netlink:
 #endif
-	libstack_unregister_callbacks(&callbacks);
-        libstack_fini();
-fail_libstack:
+        hostctrl_free(ctx.rhc);
+fail_hostctrl_remote:
+        hostctrl_free(ctx.lhc);
+fail_hostctrl_local:
+        libservalctrl_fini();
+fail_libservalctrl:
 	close(p[0]);
 	close(p[1]);
 fail_pipe:
-	close_ctrlsock(ctrlsock);
-fail_ctrlsock:
-        timer_list_fini();
-
+        timer_queue_fini(&tq);
+        
 	LOG_DBG("done\n");
 
         return ret;

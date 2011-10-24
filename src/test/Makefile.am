@@ -16,9 +16,10 @@ bin_PROGRAMS = \
 	tcp_server \
 	tcp_servern \
 	tcp_inet_client \
-	addservice \
-        migrate \
+	servicetool \
+	migrate \
 	manysockets
+
 
 if OS_LINUX
 bin_PROGRAMS += \
@@ -34,12 +35,12 @@ translator_LDFLAGS =-lpthread
 endif
 
 migrate_SOURCES = migrate.c
-migrate_CPPFLAGS = -I$(top_srcdir)/include -I$(top_srcdir)/src/libstack
-migrate_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
+migrate_CPPFLAGS = -I$(top_srcdir)/include 
+migrate_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 
-addservice_SOURCES = addservice.c
-addservice_CPPFLAGS =-I$(top_srcdir)/include -I$(top_srcdir)/src/libstack
-addservice_LDFLAGS =-L$(top_srcdir)/src/libstack -lstack
+servicetool_SOURCES = servicetool.c
+servicetool_CPPFLAGS =-I$(top_srcdir)/include
+servicetool_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 
 manysockets_SOURCES = manysockets.c
 manysockets_CPPFLAGS =-I$(top_srcdir)/include 

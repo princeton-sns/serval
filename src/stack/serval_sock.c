@@ -68,6 +68,7 @@ int __init serval_table_init(struct serval_table *table,
 
 	table->hash = kmalloc(SERVAL_HTABLE_SIZE_MIN * 
                               sizeof(struct serval_hslot), GFP_KERNEL);
+
 	if (!table->hash) {
 		/* panic(name); */
 		return -1;
@@ -302,7 +303,7 @@ static void __serval_sock_hash(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
  
-       if (!hlist_unhashed(&sk->sk_node)) {
+        if (!hlist_unhashed(&sk->sk_node)) {
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         

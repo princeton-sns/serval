@@ -7,9 +7,10 @@
 #include <errno.h>
 #include <string.h>
 #include <serval/list.h>
-#include "timer.h"
-#include "debug.h"
+#include <common/timer.h>
+#include <common/debug.h>
 #include "ifa.h"
+
 /*
   Interface discovery on platforms that have ifaddrs support, but
   no event-based mechanism for interface events (e.g., up/down).

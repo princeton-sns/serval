@@ -174,6 +174,7 @@ struct serval_sock {
 
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 
+/* Should be power of two */
 #define SERVAL_HTABLE_SIZE_MIN 256
 
 struct serval_hslot {

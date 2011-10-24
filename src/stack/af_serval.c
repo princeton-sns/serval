@@ -48,7 +48,7 @@ extern struct proto serval_tcp_proto;
 struct netns_serval net_serval;
 
 static struct sock *serval_accept_dequeue(struct sock *parent,
-                                            struct socket *newsock);
+                                          struct socket *newsock);
 
 
 #if 0
@@ -344,7 +344,7 @@ static int serval_listen(struct socket *sock, int backlog)
 }
 
 struct sock *serval_accept_dequeue(struct sock *parent,
-                                     struct socket *newsock)
+                                   struct socket *newsock)
 {
 	struct sock *sk = NULL;
         struct serval_sock *pssk = serval_sk(parent);

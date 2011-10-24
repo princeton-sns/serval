@@ -4,7 +4,7 @@
 #include <linux/netdevice.h>
 #include <linux/netlink.h>
 #include <linux/skbuff.h>
-#include <libstack/ctrlmsg.h>
+#include <serval/ctrlmsg.h>
 #include <net/sock.h>
 #include <serval/debug.h>
 #include <ctrl.h>
