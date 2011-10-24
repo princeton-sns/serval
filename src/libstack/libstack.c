@@ -2,6 +2,7 @@
 #include <libstack/ctrlmsg.h>
 #include <libstack/callback.h>
 #include <serval/platform.h>
+#include <netinet/serval.h>
 #include <event.h>
 #include <string.h>
 #include "debug.h"
@@ -19,20 +20,71 @@ extern void netlink_fini(void);
 int libstack_migrate_interface(const char *from_if,
                                const char *to_if)
 {
-	    struct ctrlmsg_migrate cm;
+        struct ctrlmsg_migrate cm;
 
 	    if (!from_if || !to_if) {
-                    LOG_ERR("Undefined interface\n");
-                    return -1;
-            }
+	            LOG_ERR("Undefined interface\n");
+	            return -1;
+	    }
 
 	    memset(&cm, 0, sizeof(cm));
 	    cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
 	    cm.cmh.len = sizeof(cm);
-	    strncpy(cm.from_if, from_if, IFNAMSIZ - 1);
-	    strncpy(cm.to_if, to_if, IFNAMSIZ - 1);
+	    cm.migrate_type = CTRL_MIG_IFACE;
+	    strncpy(cm.from_i, from_if, IFNAMSIZ - 1);
+	    strncpy(cm.to_i, to_if, IFNAMSIZ - 1);
 
 	    return event_sendmsg(&cm, cm.cmh.len);
+}
+
+int libstack_migrate_flow(struct flow_id *from_flow,
+                          const char *to_if)
+{
+        struct ctrlmsg_migrate cm;
+
+        if (!from_flow) {
+                LOG_ERR("Undefined flow\n");
+                return -1;
+        }
+
+        if (!to_if) {
+                LOG_ERR("Undefined interface\n");
+                return -1;
+        }
+
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
+        cm.cmh.len = sizeof(cm);
+        cm.migrate_type = CTRL_MIG_FLOW;
+        memcpy(&cm.from_f, from_flow, sizeof(struct flow_id));
+        strncpy(cm.to_i, to_if, IFNAMSIZ - 1);
+
+        return event_sendmsg(&cm, cm.cmh.len);
+}
+
+int libstack_migrate_service(struct service_id *from_service,
+                             const char *to_if)
+{
+        struct ctrlmsg_migrate cm;
+
+        if (!from_service) {
+                LOG_ERR("Undefined service\n");
+                return -1;
+        }
+
+        if (!to_if) {
+                LOG_ERR("Undefined interface\n");
+                return -1;
+        }
+
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
+        cm.cmh.len = sizeof(cm);
+        cm.migrate_type = CTRL_MIG_SERVICE;
+        memcpy(&cm.from_s, from_service, sizeof(struct service_id));
+        strncpy(cm.to_i, to_if, IFNAMSIZ - 1);
+
+        return event_sendmsg(&cm, cm.cmh.len);
 }
 
 int libstack_add_service(const struct service_id *srvid,

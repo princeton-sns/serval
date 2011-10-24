@@ -168,11 +168,17 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
 struct serval_hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	uint8_t	res1:3,
+                rsyn:1,
+                fin:1,
+                rst:1,
                 ack:1,
-		type:4;
+		syn:1;
 #elif defined (__BIG_ENDIAN_BITFIELD)
-	uint8_t	type:4,
+	uint8_t	syn:1,
   		ack:1,
+                rst:1,
+                fin:1,
+                rsyn:1,
                 res1:3;
 #else
 #error	"Please fix <asm/byteorder.h>"

@@ -188,10 +188,24 @@ enum {
         CTRL_MODE_NET = 0, CTRL_MODE_HOST = 1
 };
 
+enum {
+        CTRL_MIG_IFACE = 0,
+        CTRL_MIG_FLOW,
+        CTRL_MIG_SERVICE
+};
+
 struct ctrlmsg_migrate {
 	struct ctrlmsg cmh;
-	char from_if[IFNAMSIZ];
-	char to_if[IFNAMSIZ];
+	unsigned char migrate_type;
+	union  {
+	        char from_if[IFNAMSIZ];
+	        struct flow_id from_flow;
+	        struct service_id from_service;
+	} from;
+#define from_i from.from_if
+#define from_f from.from_flow
+#define from_s from.from_service
+	char to_i[IFNAMSIZ];
 };
 
 #define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_service))

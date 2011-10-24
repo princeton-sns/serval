@@ -11,16 +11,6 @@ int serval_sal_xmit_skb(struct sk_buff *skb);
 
 struct service_entry;
 
-
-enum serval_packet_type {
-        SERVAL_PKT_DATA = 0,
-        SERVAL_PKT_SYN,
-        SERVAL_PKT_RESET,
-        SERVAL_PKT_CLOSE,
-        SERVAL_PKT_RSYN,
-        __SERVAL_PKT_MAX = SERVAL_PKT_RSYN, 
-};
-
 /* 
    NOTE:
    
@@ -44,14 +34,21 @@ enum serval_packet_type {
    transmit.
  */
  struct serval_skb_cb {
-         u8 pkttype;
          u8 flags;
-#define SVH_ACK 0x01
-#define SVH_CONN_ACK 0x02
          u32 seqno;
-         //struct serval_hdr *sh;
          struct service_id *srvid;
  };
+
+enum serval_ctrl_flags {
+        SVH_SYN       = 1 << 0,
+        SVH_ACK       = 1 << 1,
+        SVH_RST       = 1 << 2,
+        SVH_FIN       = 1 << 3,
+        SVH_RSYN      = 1 << 4,
+        SVH_CONN_ACK  = 1 << 5, /* Only used internally to signal that
+                                   the ACK should carry a connection
+                                   extension (for SYN-ACKs). */
+};
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 {
@@ -238,7 +235,7 @@ static inline unsigned int serval_sal_ctrl_queue_len(struct sock *sk)
 
 int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr, int addr_len);
 void serval_sal_close(struct sock *sk, long timeout);
-void serval_sal_migrate(struct sock *sk);
+int serval_sal_migrate(struct sock *sk);
 int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb);
 void serval_sal_rexmit_timeout(unsigned long data);
 void serval_sal_timewait_timeout(unsigned long data);

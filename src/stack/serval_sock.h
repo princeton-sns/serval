@@ -71,11 +71,10 @@ enum {
    Service Access Layer (SAL) socket states used for, e.g., migration.
  */
 enum {
-        __SAL_MIN_STATE = 0,
-        SAL_INITIAL = __SAL_MIN_STATE,
-        SAL_NORM,
+        SAL_INITIAL = 0,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
+        SAL_RSYN_SENT_RECV, /* Receive RSYN after having sent RSYN */
         __SAL_MAX_STATE,
 };
 
@@ -230,6 +229,10 @@ struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
 
 void serval_sock_migrate_iface(struct net_device *old_if, 
                                struct net_device *new_if);
+void serval_sock_migrate_flow(struct flow_id *old_f,
+                              struct net_device *new_if);
+void serval_sock_migrate_service(struct service_id *old_s,
+                                 struct net_device *new_if);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
 
