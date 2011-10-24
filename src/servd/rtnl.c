@@ -14,7 +14,7 @@
 #include <common/debug.h>
 #include "rtnl.h"
 
-extern int servd_interface_register(const char *ifname);
+extern int servd_interface_changed(const char *ifname);
 
 struct if_info {
 	int msg_type;
@@ -335,7 +335,7 @@ int rtnl_read(struct netlink_handle *nlh)
                                         ifinfo.ifname, 
                                         inet_ntoa(ifinfo.ipaddr.sin_addr));
                                 
-                                servd_interface_register(ifinfo.ifname);
+                                servd_interface_changed(ifinfo.ifname);
                         }
 			break;
 		case NLMSG_DONE:

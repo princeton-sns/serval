@@ -31,6 +31,9 @@ static int router = 0; /* Whether this service daemon is a stub
 static int should_exit = 0;
 static int p[2] = { -1, -1 };
 static struct timer_queue tq;
+static struct {
+        struct hostctrl *lhc, *rhc;
+} ctx;
 
 static void signal_handler(int sig)
 {
@@ -45,11 +48,11 @@ static void signal_handler(int sig)
         }
 }
 
-int servd_interface_register(const char *ifname)
+int servd_interface_changed(const char *ifname)
 {
-	LOG_DBG("New interface %s\n", ifname);
+	LOG_DBG("Interface %s changed address. Migrating flows\n", ifname);
         
-        return 0;
+        return hostctrl_interface_migrate(ctx.lhc, ifname, ifname);
 }
 
 static int register_service_remotely(void *context,
@@ -208,9 +211,6 @@ int main(int argc, char **argv)
 #if defined(OS_LINUX)
         struct netlink_handle nlh;
 #endif
-        struct {
-                struct hostctrl *lhc, *rhc;
-        } ctx;
         fd_set readfds;
         int daemon = 0;
 	int ret = EXIT_SUCCESS;
