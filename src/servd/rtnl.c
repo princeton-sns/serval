@@ -193,6 +193,7 @@ static int rtnl_parse_addr_info(struct nlmsghdr *nlm, struct if_info *ifinfo)
 			}
 		} else if (rta->rta_type == IFA_LABEL) {
 			strcpy(ifinfo->ifname, (char *) RTA_DATA(rta));
+                        n++;
 		}
 	}
 
@@ -320,6 +321,7 @@ int rtnl_read(struct netlink_handle *nlh)
                         }
                         break;
 		case RTM_DELADDR:
+                        LOG_DBG("deladdr\n");
 			ret = rtnl_parse_addr_info(nlm, &ifinfo);
                         if (ret > 0) {
                                 LOG_DBG("Interface deladdr %s %s\n", 
@@ -328,6 +330,7 @@ int rtnl_read(struct netlink_handle *nlh)
                         }
 			break;
 		case RTM_NEWADDR:
+                        LOG_DBG("New addr\n");
 			ret = rtnl_parse_addr_info(nlm, &ifinfo);
                         
                         if (ret > 0 && !is_blacklist_iface(ifinfo.ifname)) {

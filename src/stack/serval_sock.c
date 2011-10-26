@@ -132,7 +132,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                 struct list_head lh;
                 struct sock *sk;
         } *msk;
-        int i;
+        int i, n = 0;
         
         /* Initialize our private list. */
         INIT_LIST_HEAD(&mlist);
@@ -174,12 +174,15 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                         LOG_DBG("Socket matches old if\n");
                         serval_sock_set_mig_dev(sk, new_if);
                         serval_sal_migrate(sk);
+                        n++;
                 }
                 release_sock(sk);
                 list_del(&msk->lh);
                 sock_put(sk);
                 kfree(msk);
         }
+
+        LOG_DBG("Migrated %d flows\n", n);
 }
 
 

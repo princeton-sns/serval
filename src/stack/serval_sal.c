@@ -1052,6 +1052,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 seqno)
 
 int serval_sal_migrate(struct sock *sk)
 {
+        LOG_DBG("Sending RSYN\n");
         return serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 }
 

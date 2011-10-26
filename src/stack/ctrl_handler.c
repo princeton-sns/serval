@@ -390,7 +390,7 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
                 serval_sock_migrate_service(&cmm->from_s, new_dev);
                 break;
         }
-        LOG_DBG("Done proc.\n");
+
         dev_put(new_dev);
 
         return ret;
