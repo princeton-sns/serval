@@ -34,7 +34,7 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
         while (ai) {
                 if (ai->ai_family == AF_INET) {
                         struct sockaddr_in *in = (struct sockaddr_in *)ai->ai_addr;
-                        memcpy(ip, &in->sin_addr, sizeof(*in));
+                        memcpy(ip, &in->sin_addr, sizeof(*ip));
                         ret = 1;
                         break;
                 }
@@ -126,10 +126,11 @@ int main(int argc, char **argv)
                 }
                 if (*ptr == ':')
                         prefix = ++ptr;
-                
+
                 srvid.s_sid32[0] = ntohl(id);
         }
 
+        
         if (prefix) {
                 prefix_bits = strtoul(prefix, &ptr, 10);
                 
@@ -138,10 +139,11 @@ int main(int argc, char **argv)
                                 prefix);
                         return -1;
                 }
-                if (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS || prefix_bits == 0)
+                if (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS || 
+                    prefix_bits == 0)
                         prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         }
-        
+
         if (argc == 3) {
                 //ret = inet_pton(AF_INET, argv[2], &ipaddr);
                 ret = name_to_inet_addr(argv[2], &ipaddr);
