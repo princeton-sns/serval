@@ -2597,7 +2597,7 @@ int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb)
 
 void serval_sal_error_rcv(struct sk_buff *skb, u32 info)
 {
-        LOG_PKT("received ICMP error!\n");
+        LOG_WARN("ICMP error handling not implemented!\n");
         
         /* TODO: deal with ICMP errors, e.g., wake user and report. */
 }
@@ -3121,11 +3121,11 @@ void serval_sal_timewait_timeout(unsigned long data)
         sock_put(sk);
 }
 
-static inline int serval_sal_do_xmit(struct sk_buff *skb)
+static int serval_sal_do_xmit(struct sk_buff *skb)
 {
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
-        uint32_t temp_daddr = 0;
+      	uint32_t temp_daddr = 0;
         int err = 0;
 
         if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
@@ -3153,7 +3153,7 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
                     skb_set_dev(skb, ssk->mig_dev);
                     
                     /* Must remove any cached route */
-                    __sk_dst_reset(sk);
+                    sk_dst_reset(sk);
         }
 
         /*
@@ -3189,7 +3189,7 @@ static inline int serval_sal_do_xmit(struct sk_buff *skb)
                         memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
                 }
                 /* Reset cached route again */
-                __sk_dst_reset(sk);
+                sk_dst_reset(sk);
         }
 
         if (err < 0) {
@@ -3515,7 +3515,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    not what we want here. */
                 
                 if (__sk_dst_get(sk))
-                        __sk_dst_reset(sk);
+                        sk_dst_reset(sk);
                 
                 /*
                   We have to calculate the checksum for resolution
@@ -3547,7 +3547,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /* Reset dst cache since we don't want to potantially cache a
            broadcast destination */
         if (__sk_dst_get(sk))
-                __sk_dst_reset(sk);
+                sk_dst_reset(sk);
 
         /* Zero the address again so that we do not confuse the
            resolution in case of retransmission. */

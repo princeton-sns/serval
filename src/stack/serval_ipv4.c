@@ -296,6 +296,14 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
 {
         int err = 0;
 
+#if defined(OS_LINUX_KERNEL)
+	/* 
+	We need to initialize the IP control block since SAL 
+	might have dirtied it.
+	*/
+        memset(IPCB(skb), 0, sizeof(struct inet_skb_parm));
+#endif
+
         if (saddr == 0) {
                 if (!skb->dev) {
                         LOG_ERR("no device set\n");
@@ -343,7 +351,8 @@ int serval_ipv4_xmit(struct sk_buff *skb)
         struct sock *sk = skb->sk;
         int err = 0;
 #if defined(OS_LINUX_KERNEL)
-        /*
+
+	/*
           This is pretty much a copy paste from ip_queue_xmit
           (ip_output.c), but which modifications that take into
           account Serval specific stuff.
@@ -357,7 +366,16 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 	struct ip_options *opt = NULL; /*inet->inet_opt; */
         int ifindex;
 
-        /* 
+	/*
+	   The SAL has dirtied the control block that IP expects to be
+	zeroed out. 
+	We need to make sure it is initialized again. Otherwise, there
+	might be stack corruptions when IP functions try to read the
+	IPCB. (This happens in, e.g., icmp_send when reading ip options.)  
+	*/
+        memset(IPCB(skb), 0, sizeof(struct inet_skb_parm));
+        
+	/* 
          * Skip all of this if the packet is already routed,
          */
         rcu_read_lock();
