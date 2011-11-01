@@ -10,11 +10,12 @@
 struct netlink_handle {
         int fd;
         int seq;
+        void *data;
         struct sockaddr_nl local;
         struct sockaddr_nl peer;
 };
 
-int rtnl_init(struct netlink_handle *nlh);
+int rtnl_init(struct netlink_handle *nlh, void *arg);
 int rtnl_close(struct netlink_handle *nlh);
 int rtnl_get_fd(struct netlink_handle *nlh);
 

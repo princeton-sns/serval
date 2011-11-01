@@ -14,7 +14,7 @@
 #include <common/debug.h>
 #include "rtnl.h"
 
-extern int servd_interface_changed(const char *ifname);
+extern int servd_interface_up(const char *ifname, void *arg);
 
 struct if_info {
 	int msg_type;
@@ -61,7 +61,7 @@ int rtnl_get_fd(struct netlink_handle *nlh)
 	return nlh->fd;
 }
 
-int rtnl_init(struct netlink_handle *nlh)
+int rtnl_init(struct netlink_handle *nlh, void *arg)
 {
 	int ret;
 	socklen_t addrlen;
@@ -75,13 +75,14 @@ int rtnl_init(struct netlink_handle *nlh)
 	nlh->local.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR;
 	nlh->local.nl_pid = getpid();
 	nlh->peer.nl_family = PF_NETLINK;
-
+        nlh->data = arg;
 	nlh->fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
 
 	if (!nlh->fd) {
 		LOG_DBG("Could not create netlink socket");
 		return -2;
 	}
+
 	addrlen = sizeof(nlh->local);
 
 	ret = bind(nlh->fd, (struct sockaddr *) &nlh->local, addrlen);
@@ -338,7 +339,7 @@ int rtnl_read(struct netlink_handle *nlh)
                                         ifinfo.ifname, 
                                         inet_ntoa(ifinfo.ipaddr.sin_addr));
                                 
-                                servd_interface_changed(ifinfo.ifname);
+                                servd_interface_up(ifinfo.ifname, nlh->data);
                         }
 			break;
 		case NLMSG_DONE:
