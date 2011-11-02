@@ -22,11 +22,24 @@ struct hostctrl_ops {
         int (*service_add)(struct hostctrl *hc, 
 			   const struct service_id *srvid, 
                            unsigned short prefix_bits,
+                           unsigned int priority,
+                           unsigned int weight,
 			   const struct in_addr *ipaddr);
-	int (*service_remove)(struct hostctrl *hc,
+        int (*service_remove)(struct hostctrl *hc, 
                               const struct service_id *srvid, 
                               unsigned short prefix_bits,
                               const struct in_addr *ipaddr);
+        int (*service_modify)(struct hostctrl *hc,
+                              const struct service_id *srvid, 
+                              unsigned short prefix_bits,
+                              unsigned int priority,
+                              unsigned int weight,
+                              const struct in_addr *old_ip,
+                              const struct in_addr *new_ip);
+        int (*service_get)(struct hostctrl *hc, 
+			   const struct service_id *srvid, 
+                           unsigned short prefix_bits,
+			   const struct in_addr *ipaddr);
         int (*services_add)(struct hostctrl *hc,
                             const struct service_info *si,
                             unsigned int num_si);
@@ -43,7 +56,7 @@ struct hostctrl_ops {
 int handle_service_change(struct hostctrl *hc, 
                           struct ctrlmsg_register *cmr,
                           const struct in_addr *ip,
-                          int (*const callback)(void *context,
+                          int (*const callback)(struct hostctrl *hc,
                                                 const struct service_id *srvid,
                                                 unsigned short flags,
                                                 unsigned short prefix,

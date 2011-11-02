@@ -133,13 +133,18 @@ int service_entry_add_dest(struct service_entry *se,
                            int dstlen,
                            const void *dest_out,
                            gfp_t alloc);
+
 int service_entry_modify_dest(struct service_entry *se,
-                           uint16_t flags,
-                           uint32_t priority,
-                           uint32_t weight,
-                           const void *dst,
-                           int dstlen,
-                           const void *dest_out);
+                              uint16_t flags,
+                              uint32_t priority,
+                              uint32_t weight,
+                              const void *dst,
+                              int dstlen,
+                              const void *new_dst,
+                              int new_dstlen,
+                              const void *dest_out,
+                              gfp_t alloc);
+
 void service_entry_inc_dest_stats(struct service_entry *se, const void *dst, 
                                   int dstlen, int packets, int bytes);
 
@@ -166,7 +171,9 @@ int service_add(struct service_id *srvid, uint16_t prefix_bits,
 
 int service_modify(struct service_id *srvid, uint16_t prefix_bits, 
                    uint16_t flags, uint32_t priority, uint32_t weight,
-                   const void *dst, int dstlen, const void* dest_out);
+                   const void *dst, int dstlen, 
+                   const void *new_dst, int new_dstlen,
+                   const void *dest_out);
 
 void service_del(struct service_id *srvid, uint16_t prefix_bits);
 void service_del_dest(struct service_id *srvid, uint16_t prefix_bits,

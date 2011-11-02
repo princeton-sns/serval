@@ -19,6 +19,40 @@ static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
         return 0;
 }
 
+static struct net_device *resolve_dev(struct service_info *entry)
+{
+        struct net_device *dev;
+#if defined(OS_LINUX_KERNEL)
+        struct rtable *rt;
+                
+        rt = serval_ip_route_output(&init_net, 
+                                    entry->address.s_addr,
+                                    0, 0, entry->if_index);
+        
+        if (!rt) {
+                LOG_DBG("Service address is not routable.\n");
+                return NULL;
+        }
+        
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
+        dev = rt->dst.dev;
+#else
+        dev = rt->u.dst.dev;
+#endif
+        dev_hold(dev);
+        ip_rt_put(rt);
+        
+#else
+        dev = dev_get_by_index(&init_net, entry->if_index);
+        
+        if (!dev) {                        
+                LOG_DBG("No device with id=%d\n",
+                        entry->if_index);
+        }
+#endif
+        return dev;
+}
+
 static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
@@ -35,36 +69,11 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 struct service_info *entry = &cmr->service[i];
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
-#if defined(OS_LINUX_KERNEL)
-                {
-                        struct rtable *rt;
-
-                        rt = serval_ip_route_output(&init_net, 
-                                                    entry->address.s_addr,
-                                                    0, 0, entry->if_index);
-
-                        if (!rt) {
-                                LOG_DBG("Service address is not routable.\n");
-                                continue;
-                        }
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
-                        dev = rt->dst.dev;
-#else
-                        dev = rt->u.dst.dev;
-#endif
-                        dev_hold(dev);
-                        ip_rt_put(rt);
-                }
-#else
-                dev = dev_get_by_index(&init_net, entry->if_index);
-
-                if (!dev) {                        
-                        LOG_ERR("No device with id=%d\n",
-                                entry->if_index);
+                dev = resolve_dev(entry);
+                
+                if (!dev)
                         continue;
-                }
-#endif
+
                 if (entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
          
@@ -99,7 +108,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                         }
                         index++;
                 } else {
-                        LOG_ERR("Error adding service: %i\n", err);
+                        LOG_ERR("Error adding service %s: err=%d\n", 
+                                service_id_to_str(&entry->srvid), err);
                 }
         }
 
@@ -118,7 +128,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         struct ctrlmsg_service_info_stat *cms = 
                 (struct ctrlmsg_service_info_stat *)buffer;
         struct in_addr null_ip = { 0 };
-        struct in_addr *ip = &null_ip;
         unsigned int i = 0;
         int index = 0;
         int err = 0;
@@ -134,6 +143,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 struct dest_stats dstat;
                 struct service_entry *se;
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                struct in_addr *ip = NULL;
 
                 if (memcmp(&entry->address, &null_ip, 
                            sizeof(null_ip)) != 0) {
@@ -198,50 +208,62 @@ static int ctrl_handle_capabilities_msg(struct ctrlmsg *cm)
 static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
-        struct in_addr *ip = NULL;
-        uint32_t null_ip = 0;
         unsigned int num_res = CTRLMSG_SERVICE_NUM(cmr);
         unsigned int i, index = 0;
         int err = 0;
 
-#if defined(ENABLE_DEBUG)
-        //char ipstr[20];
-        LOG_DBG("modifying %u services\n", num_res);
-#endif
+        if (num_res < 2 || num_res % 2 != 0) {
+                LOG_DBG("Not an even number of service infos\n");
+                return 0;
+        }
 
-        for (i = 0; i < num_res; i++) {
-                struct service_info *entry = &cmr->service[i];
+        LOG_DBG("modifying %u services\n", num_res / 2);
+
+        for (i = 0; i < num_res; i += 2) {
+                struct net_device *dev;
+                struct service_info *entry_old = &cmr->service[i];
+                struct service_info *entry_new = &cmr->service[i+1];
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-
-                if (memcmp(&entry->address, &null_ip, 
-                           sizeof(entry->address)) != 0) {
-                        ip = &entry->address;
-                }
-                if (entry->srvid_prefix_bits > 0)
-                        prefix_bits = entry->srvid_prefix_bits;
-
-                LOG_DBG("Modifying: %s flags(%i) bits(%i)\n", 
-                        service_id_to_str(&entry->srvid), 
-                        entry->srvid_flags, 
-                        prefix_bits);
                 
-                err = service_modify(&entry->srvid, 
-                                     prefix_bits, 
-                                     entry->srvid_flags, 
-                                     entry->priority, 
-                                     entry->weight, 
-                                     ip, 
-                                     ip ? sizeof(entry->address) : 0, NULL);
+                if (entry_old->srvid_prefix_bits > 0)
+                        prefix_bits = entry_old->srvid_prefix_bits;
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char buf[18];
+                        LOG_DBG("Modifying: %s flags(%i) bits(%i) %s\n", 
+                                service_id_to_str(&entry_old->srvid), 
+                                entry_old->srvid_flags, 
+                                prefix_bits,
+                                inet_ntop(AF_INET, &entry_old->address, 
+                                          buf, 18));
+                }
+#endif
+                dev = resolve_dev(entry_new);
+                
+                if (!dev)
+                        continue;
+
+                err = service_modify(&entry_old->srvid,
+                                     prefix_bits,
+                                     entry_old->srvid_flags, 
+                                     entry_new->priority, 
+                                     entry_new->weight, 
+                                     &entry_old->address,
+                                     sizeof(entry_old->address),
+                                     &entry_new->address,
+                                     sizeof(entry_new->address), 
+                                     dev);
                 if (err > 0) {
                         if (index < i) {
                                 /*copy it over */
                                 memcpy(&cmr->service[index], 
-                                       entry, sizeof(*entry));
+                                       entry_new, sizeof(*entry_new));
                         }
                         index++;
                 } else {
                         LOG_ERR("Could not modify service %s: %i\n", 
-                                service_id_to_str(&entry->srvid), 
+                                service_id_to_str(&entry_old->srvid), 
                                 err);
                 }
         }

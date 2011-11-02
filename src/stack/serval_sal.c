@@ -3539,7 +3539,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		err = ssk->af_ops->queue_xmit(cskb);
 
 		if (err < 0) {
-			LOG_ERR("xmit failed err=%d\n", err);
+			LOG_ERR("xmit failed on queue_xmit err=%d\n", err);
 		}
 		dest = next_dest;
 	}

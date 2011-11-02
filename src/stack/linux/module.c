@@ -47,11 +47,11 @@ extern void udp_encap_fini(void);
 static int dev_configuration(struct net_device *dev)
 {
         struct net_addr dst;
-        /* u32 mask = 0;
-        unsigned int prefix_len = 0;
-        */
+        struct service_id default_service;
         int ret;
-        
+
+        memset(&default_service, 0, sizeof(default_service));
+
         if (ifname && strcmp(dev->name, ifname) != 0)
                 return 0;
 
@@ -66,7 +66,7 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(NULL, 0, 0, 
+                service_add(&default_service, 0, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
                             &dst, sizeof(dst), dev, GFP_ATOMIC);

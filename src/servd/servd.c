@@ -32,9 +32,11 @@
 static int should_exit = 0;
 static int p[2] = { -1, -1 };
 static struct timer_queue tq;
+static struct service_id default_service;
+
 struct servd_context {
         int router; /* Whether this service daemon is a stub
-                          end-host or a router */
+                       end-host or a router */
         struct in_addr router_ip;
         int router_ip_set;
         struct sockaddr_sv raddr, caddr;
@@ -184,30 +186,37 @@ int servd_interface_up(const char *ifname, void *context)
 {
         struct servd_context *ctx = context;
 
-        /* Make sure our service router entry is present. It might
-           have been purged when the interface went down
-           previously. */
-        if (ctx->router_ip_set && !ctx->router) {
-                hostctrl_service_add(ctx->lhc, &ctx->raddr.sv_srvid, 
-                                     0, &ctx->router_ip);
-        }
+        /* Delay operations for a short time. The reason is that the
+           stack doesn't seem to be immediately ready for using the
+           newly assigned address. */
+        sleep(1);
 
 	LOG_DBG("Interface %s changed address. Migrating flows\n", ifname);
         
         hostctrl_interface_migrate(ctx->lhc, ifname, ifname);
+        
+        /* Make sure our service router entry is present. It might
+           have been purged when the interface went down
+           previously. Get any new information default route (default
+           broadcast) and update it in the callback. */
+        if (ctx->router_ip_set && !ctx->router) {
+                sleep(1);
+                hostctrl_service_get(ctx->lhc, &default_service, 
+                                     0, NULL);
+        }
 
         LOG_DBG("Resending registrations\n");
 
         return registration_redo(ctx);
 }
 
-static int register_service_remotely(void *context,
+static int register_service_remotely(struct hostctrl *hc,
                                      const struct service_id *srvid,
                                      unsigned short flags,
                                      unsigned short prefix,
                                      const struct in_addr *local_ip)
 {
-        struct servd_context *ctx = context;
+        struct servd_context *ctx = hc->context;
 	int ret;
 
 	LOG_DBG("service=%s\n", service_id_to_str(srvid));
@@ -219,13 +228,13 @@ static int register_service_remotely(void *context,
         return ret;
 }
 
-static int unregister_service_remotely(void *context,
+static int unregister_service_remotely(struct hostctrl *hc,
                                        const struct service_id *srvid,
                                        unsigned short flags,
                                        unsigned short prefix,
                                        const struct in_addr *local_ip)
 {
-        struct servd_context *ctx = context;
+        struct servd_context *ctx = hc->context;
         int ret;
 
 	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
@@ -237,13 +246,13 @@ static int unregister_service_remotely(void *context,
         return ret;
 }
 
-static int handle_incoming_registration(void *context,
+static int handle_incoming_registration(struct hostctrl *hc,
                                         const struct service_id *srvid,
                                         unsigned short flags,
                                         unsigned short prefix,
                                         const struct in_addr *remote_ip)
 {
-        struct servd_context *ctx = context;
+        struct servd_context *ctx = hc->context;
 
 #if defined(ENABLE_DEBUG)
         {
@@ -255,16 +264,16 @@ static int handle_incoming_registration(void *context,
 #endif
         /* Addd this service the local service table. */
         return hostctrl_service_add(ctx->lhc, srvid, prefix, 
-                                    remote_ip);
+                                    0, 0, remote_ip);
 }
 
-static int handle_incoming_unregistration(void *context,
+static int handle_incoming_unregistration(struct hostctrl *hc,
                                           const struct service_id *srvid,
                                           unsigned short flags,
                                           unsigned short prefix,
                                           const struct in_addr *remote_ip)
 {
-        struct servd_context *ctx = context;
+        struct servd_context *ctx = hc->context;
 
 #if defined(ENABLE_DEBUG)
         {
@@ -278,10 +287,63 @@ static int handle_incoming_unregistration(void *context,
         return hostctrl_service_remove(ctx->lhc, srvid, prefix, 
                                        remote_ip);
 }
-                                     
+
+/*
+  Callback that returns the result of a previous service 'get'.
+
+  We use it to set the default service resolve rule to a fixed service
+  router IP.
+ */
+static int local_service_get_result(struct hostctrl *hc,
+                                    const struct service_id *srvid,
+                                    unsigned short flags,
+                                    unsigned short prefix,
+                                    unsigned int priority,
+                                    unsigned int weight,
+                                    struct in_addr *ip)
+{
+        struct servd_context *ctx = hc->context;
+        int ret = 0;
+
+#if defined(ENABLE_DEBUG)
+        char buf[18], buf2[18];
+        LOG_DBG("GET: %s valid=%s is_router=%s router_ip_set=%s"
+                " prio=%u weight=%u"
+                " requested_ip=%s new_ip=%s\n",
+                service_id_to_str(srvid),
+                flags & SVSF_INVALID ? "false" : "true",
+                ctx->router ? "true" : "false",
+                ctx->router_ip_set ? "true" : "false",
+                priority, weight,
+                inet_ntop(AF_INET, ip, buf, 18),
+                inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+#endif
+     
+        if (flags & SVSF_INVALID) {
+                LOG_DBG("No default service route set\n");
+                /* There was no existing route, the 'get' returned
+                   nothing. Just add our default route */
+                ret = hostctrl_service_add(ctx->lhc, &default_service,
+                                           0, 1, 0, &ctx->router_ip);
+        } else if (!ctx->router && ctx->router_ip_set && 
+                   memcmp(&default_service, srvid, 
+                          sizeof(default_service)) == 0 && 
+                   memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
+                LOG_DBG("Replacing default route\n");
+                /* The 'get' for the default service returned
+                   something. Update the existing entry */
+                ret = hostctrl_service_modify(ctx->lhc, srvid, 
+                                              prefix, priority,
+                                              weight, ip, &ctx->router_ip);
+        }
+        
+        return ret;
+}
+                                   
 static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
+        .service_get = local_service_get_result,
 };
 
 static struct hostctrl_callback rcb = {
@@ -358,9 +420,10 @@ int main(int argc, char **argv)
         fd_set readfds;
         int daemon = 0;
 	int ret = EXIT_SUCCESS;
-        unsigned int router_id = 88888, client_id = 55555;        
+        unsigned int router_id = 88888, client_id = 55555;
         struct servd_context ctx;
 
+        memset(&default_service, 0, sizeof(default_service));
 	memset(&sigact, 0, sizeof(struct sigaction));
         memset(&ctx, 0, sizeof(ctx));
         INIT_LIST_HEAD(&ctx.reglist);
@@ -381,6 +444,7 @@ int main(int argc, char **argv)
                         daemon = 1;
                 } else if (strcmp(argv[0], "-r") == 0 ||
                            strcmp(argv[0], "--router") == 0) {
+                        LOG_DBG("Host is service router\n");
                         ctx.router = 1;
                 } else if (strcmp(argv[0], "-rid") == 0 ||
                            strcmp(argv[0], "--router-id") == 0) {
@@ -533,10 +597,11 @@ int main(int argc, char **argv)
         }
 #endif
         /* If we are a client and have a fixed IP for the service
-           router, then add this entry to the service table */
+           router, then replace an existing "default" service rule by
+           querying for the current one and modifying it in the
+           resulting callback. */
         if (ctx.router_ip_set && !ctx.router) {
-                hostctrl_service_add(ctx.lhc, &ctx.raddr.sv_srvid, 0, 
-                                     &ctx.router_ip);
+                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
         }
 
 #define MAX(x,y) (x > y ? x : y)

@@ -61,7 +61,17 @@ static int remote_service_unregister(struct hostctrl *hc,
 static int remote_service_add_dummy(struct hostctrl *hc,
                                     const struct service_id *srvid, 
                                     unsigned short prefix_bits,
+                                    unsigned int priority,
+                                    unsigned int weight,
                                     const struct in_addr *ipaddr)
+{
+        return 0;
+}
+
+static int remote_service_remove_dummy(struct hostctrl *hc,
+                                       const struct service_id *srvid, 
+                                       unsigned short prefix_bits,
+                                       const struct in_addr *ipaddr)
 {
         return 0;
 }
@@ -100,7 +110,7 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
 
 struct hostctrl_ops remote_ops = {
         .service_add = remote_service_add_dummy,
-        .service_remove = remote_service_add_dummy,
+        .service_remove = remote_service_remove_dummy,
 	.service_register = remote_service_register,
 	.service_unregister = remote_service_unregister,
         .ctrlmsg_recv = remote_ctrlmsg_recv,

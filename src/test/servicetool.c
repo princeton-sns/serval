@@ -46,38 +46,63 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
+enum {
+        SERVICE_OP_ADD,
+        SERVICE_OP_DEL,
+        SERVICE_OP_MOD,
+        __SERVICE_OP_MAX,
+};
+
+struct opname {
+        const char *name;
+        const char *long_name;
+};
+
+static const struct opname opnames[] = {
+        { "add", "add" },
+        { "del", "delete" },
+        { "mod", "modify" }
+};
+        
 int main(int argc, char **argv)
 {
-	int ret = 0, delete = 0;
+	int ret = 0, op = SERVICE_OP_ADD;
 	struct service_id srvid;
 	char *ptr, *prefix = NULL;
         hostctrl_t *hctl;
-	struct in_addr ipaddr, *ip = NULL;
+	struct in_addr ipaddr1, ipaddr2, *ip1 = NULL, *ip2 = NULL;
         unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+        int i;
 
 	if (argc < 3) {
         usage:
-		fprintf(stderr, "Usage: %s add|del SERVICEID[:PREFIX_BITS] IPADDR\n",
-			basename(argv[0]));
-                fprintf(stderr, "SERVICEID can be decimal or hexadecimal (use 0x prefix).\n");
+		fprintf(stderr, "Usage: %s add|del|mod SERVICEID[:PREFIX_BITS]"
+                        " IPADDR [IPADDR]\n", basename(argv[0]));
+                fprintf(stderr, "SERVICEID can be decimal or hexadecimal"
+                        " (use 0x prefix).\n");
 		return 0;
 	}
 
-        if (strcmp(argv[1], "add") == 0) {
-                delete = 0;
-        } else if (strcmp(argv[1], "del") == 0) {
-                delete = 1;
-        } else {
-                goto usage;
+        for (i = 0; i < __SERVICE_OP_MAX; i++) {
+                if (strcmp(argv[1], opnames[i].name) == 0 ||
+                    strcmp(argv[1], opnames[i].long_name) == 0) {
+                        op = i;
+                        break;
+                }
         }
+
+        if (i == __SERVICE_OP_MAX)
+                goto usage;
 
         argc--;
         argv++;
         
 	memset(&srvid, 0, sizeof(srvid));
-
+        
         /* Check for hexadecimal serviceID. */
-        if (argv[1][0] == '0' && argv[1][1] == 'x') {
+        if (strcmp(argv[0], "default") == 0) {
+                /* Do nothing, serviceID already set to zero */
+        } else if (argv[1][0] == '0' && argv[1][1] == 'x') {
                 int len, i = 0;
 
                 argv[1] += 2;
@@ -129,7 +154,6 @@ int main(int argc, char **argv)
 
                 srvid.s_sid32[0] = ntohl(id);
         }
-
         
         if (prefix) {
                 prefix_bits = strtoul(prefix, &ptr, 10);
@@ -144,25 +168,34 @@ int main(int argc, char **argv)
                         prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         }
 
-        if (argc == 3) {
-                //ret = inet_pton(AF_INET, argv[2], &ipaddr);
-                ret = name_to_inet_addr(argv[2], &ipaddr);
+        if (argc >= 3) {
+                ret = name_to_inet_addr(argv[2], &ipaddr1);
 
                 if (ret != 1) {
                         fprintf(stderr, "bad IP address: '%s'\n",
                                 argv[2]);
                         return -1;
                 }
-                ip = &ipaddr;
+                ip1 = &ipaddr1;
         }
 
+        if (argc == 4) {
+                ret = name_to_inet_addr(argv[3], &ipaddr2);
+
+                if (ret != 1) {
+                        fprintf(stderr, "bad IP address: '%s'\n",
+                                argv[2]);
+                        return -1;
+                }
+                ip2 = &ipaddr2;
+        }
         {
                 char buf[18];
                 printf("%s %s:%u %s\n",
-                       delete ? "delete" : "add",                      
+                       opnames[op].long_name,
                        service_id_to_str(&srvid), 
                        prefix_bits, 
-                       inet_ntop(AF_INET, &ipaddr, buf, 18));
+                       inet_ntop(AF_INET, &ipaddr1, buf, 18));
         }
 
         libservalctrl_init();
@@ -175,14 +208,25 @@ int main(int argc, char **argv)
 		goto fail_hostctrl;
 	}
 	
-        if (delete) {
-                hostctrl_service_remove(hctl, &srvid, prefix_bits, ip);
-        } else {
-                hostctrl_service_add(hctl, &srvid, prefix_bits, ip);
+        switch (op) {
+        case SERVICE_OP_ADD:
+                ret = hostctrl_service_add(hctl, &srvid, prefix_bits, 
+                                           0, 0, ip1);
+                break;
+        case SERVICE_OP_DEL:
+                ret = hostctrl_service_remove(hctl, &srvid, prefix_bits, ip1);
+                break;
+        case SERVICE_OP_MOD:
+                ret = hostctrl_service_modify(hctl, &srvid, prefix_bits, 
+                                              0, 0, ip1, ip2);
+                break;
+        default:
+                break;
         }
 
 	if (ret < 0) {
-		fprintf(stderr, "could not add/delete service\n");
+		fprintf(stderr, "could not %s service\n", 
+                        opnames[op].long_name);
 	}
 
         hostctrl_free(hctl);
