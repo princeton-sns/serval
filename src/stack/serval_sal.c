@@ -488,6 +488,12 @@ static inline int is_pure_data(struct serval_context *ctx)
         return ctx->flags == 0;
 }
 
+static inline int is_pure_ack(struct serval_context *ctx)
+{
+        return ctx->hdr->ack && !ctx->hdr->fin && 
+                !ctx->hdr->syn && !ctx->hdr->rsyn && !ctx->hdr->rst;
+}
+
 static inline int has_connection_extension(struct serval_context *ctx)
 {
         /* Check for connection extension. We require that this
@@ -2549,12 +2555,9 @@ int serval_sal_state_process(struct sock *sk,
                 err = serval_sal_lastack_state_process(sk, skb, ctx);
                 break;
         case SERVAL_TIMEWAIT:
-                /* Resend ACK for anything which isn't a "pure" ACK
-                   itself */
-                /* 
-                   if (has_seqno(ctx))
+                /* Resend ACK of FIN in case our previous one got lost */
+                if (ctx->hdr->fin)
                         serval_sal_send_ack(sk);
-                */
                 goto drop;
         case SERVAL_CLOSEWAIT:
                 err = serval_sal_closewait_state_process(sk, skb, ctx);
