@@ -1155,8 +1155,6 @@ static int serval_sal_send_ack(struct sock *sk)
         struct sk_buff *skb;
         int err = 0;
 
-        LOG_DBG("Sending ACK\n");
-
         skb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
                         
         if (!skb)
@@ -1165,6 +1163,8 @@ static int serval_sal_send_ack(struct sock *sk)
         SERVAL_SKB_CB(skb)->flags = SVH_ACK;
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
+
+        LOG_DBG("Sending ACK seqno=%u\n", ssk->snd_seq.nxt);
 
         if (err == 0) {
                 /* Do not queue pure ACKs */
@@ -2551,8 +2551,10 @@ int serval_sal_state_process(struct sock *sk,
         case SERVAL_TIMEWAIT:
                 /* Resend ACK for anything which isn't a "pure" ACK
                    itself */
-                if (has_seqno(ctx))
+                /* 
+                   if (has_seqno(ctx))
                         serval_sal_send_ack(sk);
+                */
                 goto drop;
         case SERVAL_CLOSEWAIT:
                 err = serval_sal_closewait_state_process(sk, skb, ctx);
