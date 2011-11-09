@@ -799,7 +799,6 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
         return err;
 }
 
-
 /* 
    Queue SAL control packets for the purpose of doing retransmissions
    and socket buffer accounting. The TCP SYN is piggy-backed on the
@@ -1064,10 +1063,11 @@ int serval_sal_migrate(struct sock *sk)
 
 static int serval_sal_send_fin(struct sock *sk, u32 seqno)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         int err;
 
-        //if (serval_sk(sk)->sal_state != SAL_CLOSING)
+        //if (ssk->sal_state != SAL_CLOSING)
         //      return 0;
         
         /* We are under lock, so allocation must be atomic */
@@ -1090,12 +1090,14 @@ static int serval_sal_send_fin(struct sock *sk, u32 seqno)
            RSYN was lost, this FIN packet will "override" the RSYN and
            the migration will never happen. TODO: verify that this is
            really the way to handle this situation. */
-        if (serval_sk(sk)->sal_state == SAL_RSYN_SENT) {
+        if (ssk->sal_state == SAL_RSYN_SENT) {
                 LOG_DBG("RSYN was in progress, adding RSYN flag\n");
                 SERVAL_SKB_CB(skb)->flags |= SVH_RSYN;
         } else if (serval_sk(sk)->sal_state == SAL_RSYN_RECV) {
                 SERVAL_SKB_CB(skb)->flags |= SVH_RSYN | SVH_ACK;
         }
+        
+        ssk->flags |= SSK_FLAG_FIN_SENT;
 
         err = serval_sal_queue_and_push(sk, skb);
         
@@ -1170,7 +1172,7 @@ static int serval_sal_send_ack(struct sock *sk)
         /* Do not increment sequence numbers for pure ACKs */
         SERVAL_SKB_CB(skb)->seqno = ssk->snd_seq.nxt;
 
-        LOG_DBG("Sending ACK seqno=%u\n", ssk->snd_seq.nxt);
+        LOG_DBG("Sending ACK seqno=%u\n", ssk->rcv_seq.nxt);
 
         if (err == 0) {
                 /* Do not queue pure ACKs */
@@ -1996,7 +1998,17 @@ static int serval_sal_rcv_fin(struct sock *sk,
 
 int serval_sal_send_shutdown(struct sock *sk)
 {
+        struct serval_sock *ssk = serval_sk(sk);
+
         LOG_DBG("SEND_SHUTDOWN\n");
+        
+        /* We use this extra flag to not send a FIN
+         * twice. Unfortunately, we cannot rely on the socket state as
+         * we must wait for transport to send its FIN
+         * first. Therefore, we are not necessarily in the state
+         * normally expected after having sent a FIN. */
+        if (ssk->flags & SSK_FLAG_FIN_SENT)
+                return 0;
 
         /* Not sure we need to set SEND_SHUTDOWN here, since it is
            alread set in serval_sal_close() */
@@ -2007,7 +2019,7 @@ int serval_sal_send_shutdown(struct sock *sk)
         if (!sock_flag(sk, SOCK_DEAD))
                 /* Wake up lingering close() */
                 sk->sk_state_change(sk);
-        
+
         return serval_sal_send_fin(sk, serval_sk(sk)->snd_seq.nxt++);
 }
 
