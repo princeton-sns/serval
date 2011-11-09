@@ -1097,7 +1097,7 @@ static int serval_sal_send_fin(struct sock *sk, u32 seqno)
                 SERVAL_SKB_CB(skb)->flags |= SVH_RSYN | SVH_ACK;
         }
         
-        ssk->flags |= SSK_FLAG_FIN_SENT;
+        serval_sock_set_flag(ssk, SSK_FLAG_FIN_SENT);
 
         err = serval_sal_queue_and_push(sk, skb);
         
@@ -1655,11 +1655,13 @@ serval_sal_create_respond_sock(struct sock *sk,
                                struct request_sock *req,
                                struct dst_entry *dst)
 {
+        struct serval_sock *ssk = serval_sk(sk);
         struct sock *nsk;
 
         nsk = sk_clone(sk, GFP_ATOMIC);
 
         if (nsk) {
+                struct serval_sock *nssk = serval_sk(nsk);
                 int ret;
                 
                 atomic_inc(&serval_nr_socks);
@@ -1667,11 +1669,11 @@ serval_sal_create_respond_sock(struct sock *sk,
                 /* Indicate that this is a child socket. Necessary to
                  * know that this socket should not unregister its
                  * serviceID. */
-                serval_sock_set_flag(serval_sk(nsk), SSK_FLAG_CHILD);
+                serval_sock_set_flag(nssk, SSK_FLAG_CHILD);
                 
                 /* Transport protocol specific init. */                
-                ret = serval_sk(sk)->af_ops->conn_child_sock(sk, skb, 
-                                                             req, nsk, dst);
+                ret = ssk->af_ops->conn_child_sock(sk, skb, 
+                                                   req, nsk, dst);
 
                 if (ret < 0) {
                         LOG_ERR("Transport child sock init failed\n");
@@ -2007,7 +2009,7 @@ int serval_sal_send_shutdown(struct sock *sk)
          * we must wait for transport to send its FIN
          * first. Therefore, we are not necessarily in the state
          * normally expected after having sent a FIN. */
-        if (ssk->flags & SSK_FLAG_FIN_SENT)
+        if (serval_sock_flag(ssk, SSK_FLAG_FIN_SENT))
                 return 0;
 
         /* Not sure we need to set SEND_SHUTDOWN here, since it is
