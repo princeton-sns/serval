@@ -1886,6 +1886,485 @@ void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
 }
 
+#if defined(OS_LINUX_KERNEL)
+
+/*
+ *	Socket option code for TCP.
+ */
+static int serval_do_tcp_setsockopt(struct sock *sk, int level,
+                                    int optname, char __user *optval, 
+                                    unsigned int optlen)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        //struct serval_sock *ssk = serval_sk(sk);
+	int val;
+	int err = 0;
+
+        LOG_DBG("level=SOL_TCP optname=%d\n", optname);
+
+	/* These are data/string values, all the others are ints */
+	switch (optname) {
+                /*
+	case TCP_CONGESTION: {
+		char name[TCP_CA_NAME_MAX];
+
+		if (optlen < 1)
+			return -EINVAL;
+
+		val = strncpy_from_user(name, optval,
+					min_t(long, TCP_CA_NAME_MAX-1, optlen));
+		if (val < 0)
+			return -EFAULT;
+		name[val] = 0;
+
+		lock_sock(sk);
+		err = serval_tcp_set_congestion_control(sk, name);
+		release_sock(sk);
+		return err;
+	}
+                */
+#if 0
+	case TCP_COOKIE_TRANSACTIONS: {
+		struct tcp_cookie_transactions ctd;
+		struct tcp_cookie_values *cvp = NULL;
+
+		if (sizeof(ctd) > optlen)
+			return -EINVAL;
+		if (copy_from_user(&ctd, optval, sizeof(ctd)))
+			return -EFAULT;
+
+		if (ctd.tcpct_used > sizeof(ctd.tcpct_value) ||
+		    ctd.tcpct_s_data_desired > TCP_MSS_DESIRED)
+			return -EINVAL;
+
+		if (ctd.tcpct_cookie_desired == 0) {
+			/* default to global value */
+		} else if ((0x1 & ctd.tcpct_cookie_desired) ||
+			   ctd.tcpct_cookie_desired > TCP_COOKIE_MAX ||
+			   ctd.tcpct_cookie_desired < TCP_COOKIE_MIN) {
+			return -EINVAL;
+		}
+
+		if (TCP_COOKIE_OUT_NEVER & ctd.tcpct_flags) {
+			/* Supercedes all other values */
+			lock_sock(sk);
+			if (tp->cookie_values != NULL) {
+				kref_put(&tp->cookie_values->kref,
+					 tcp_cookie_values_release);
+				tp->cookie_values = NULL;
+			}
+			tp->rx_opt.cookie_in_always = 0; /* false */
+			tp->rx_opt.cookie_out_never = 1; /* true */
+			release_sock(sk);
+			return err;
+		}
+
+		/* Allocate ancillary memory before locking.
+		 */
+		if (ctd.tcpct_used > 0 ||
+		    (tp->cookie_values == NULL &&
+		     (sysctl_tcp_cookie_size > 0 ||
+		      ctd.tcpct_cookie_desired > 0 ||
+		      ctd.tcpct_s_data_desired > 0))) {
+			cvp = kzalloc(sizeof(*cvp) + ctd.tcpct_used,
+				      GFP_KERNEL);
+			if (cvp == NULL)
+				return -ENOMEM;
+
+			kref_init(&cvp->kref);
+		}
+		lock_sock(sk);
+		tp->rx_opt.cookie_in_always =
+			(TCP_COOKIE_IN_ALWAYS & ctd.tcpct_flags);
+		tp->rx_opt.cookie_out_never = 0; /* false */
+
+		if (tp->cookie_values != NULL) {
+			if (cvp != NULL) {
+				/* Changed values are recorded by a changed
+				 * pointer, ensuring the cookie will differ,
+				 * without separately hashing each value later.
+				 */
+				kref_put(&tp->cookie_values->kref,
+					 tcp_cookie_values_release);
+			} else {
+				cvp = tp->cookie_values;
+			}
+		}
+
+		if (cvp != NULL) {
+			cvp->cookie_desired = ctd.tcpct_cookie_desired;
+
+			if (ctd.tcpct_used > 0) {
+				memcpy(cvp->s_data_payload, ctd.tcpct_value,
+				       ctd.tcpct_used);
+				cvp->s_data_desired = ctd.tcpct_used;
+				cvp->s_data_constant = 1; /* true */
+			} else {
+				/* No constant payload data. */
+				cvp->s_data_desired = ctd.tcpct_s_data_desired;
+				cvp->s_data_constant = 0; /* false */
+			}
+
+			tp->cookie_values = cvp;
+		}
+		release_sock(sk);
+		return err;
+	}
+#endif /* 0 */
+	default:
+		/* fallthru */
+		break;
+	}
+
+	if (optlen < sizeof(int))
+		return -EINVAL;
+
+	if (get_user(val, (int __user *)optval))
+		return -EFAULT;
+
+	lock_sock(sk);
+
+	switch (optname) {
+	case TCP_MAXSEG:
+		/* Values greater than interface MTU won't take effect. However
+		 * at the point when this call is done we typically don't yet
+		 * know which interface is going to be used */
+		if (val < SERVAL_TCP_MIN_MSS || val > MAX_TCP_WINDOW) {
+			err = -EINVAL;
+			break;
+		}
+		tp->rx_opt.user_mss = val;
+		break;
+
+	case TCP_NODELAY:
+                LOG_DBG("Setting TCP_NODELAY\n");
+		if (val) {
+			/* TCP_NODELAY is weaker than TCP_CORK, so that
+			 * this option on corked socket is remembered, but
+			 * it is not activated until cork is cleared.
+			 *
+			 * However, when TCP_NODELAY is set we make
+			 * an explicit push, which overrides even TCP_CORK
+			 * for currently queued segments.
+			 */
+			tp->nonagle |= TCP_NAGLE_OFF|TCP_NAGLE_PUSH;
+			serval_tcp_push_pending_frames(sk);
+		} else {
+			tp->nonagle &= ~TCP_NAGLE_OFF;
+		}
+		break;
+
+	case TCP_THIN_LINEAR_TIMEOUTS:
+		if (val < 0 || val > 1)
+			err = -EINVAL;
+		else
+			tp->thin_lto = val;
+		break;
+
+	case TCP_THIN_DUPACK:
+		if (val < 0 || val > 1)
+			err = -EINVAL;
+		else
+			tp->thin_dupack = val;
+		break;
+
+	case TCP_CORK:
+		/* When set indicates to always queue non-full frames.
+		 * Later the user clears this option and we transmit
+		 * any pending partial frames in the queue.  This is
+		 * meant to be used alongside sendfile() to get properly
+		 * filled frames when the user (for example) must write
+		 * out headers with a write() call first and then use
+		 * sendfile to send out the data parts.
+		 *
+		 * TCP_CORK can be set together with TCP_NODELAY and it is
+		 * stronger than TCP_NODELAY.
+		 */
+		if (val) {
+			tp->nonagle |= TCP_NAGLE_CORK;
+		} else {
+			tp->nonagle &= ~TCP_NAGLE_CORK;
+			if (tp->nonagle&TCP_NAGLE_OFF)
+				tp->nonagle |= TCP_NAGLE_PUSH;
+			serval_tcp_push_pending_frames(sk);
+		}
+		break;
+
+	case TCP_KEEPIDLE:
+		if (val < 1 || val > MAX_TCP_KEEPIDLE)
+			err = -EINVAL;
+		else {
+			tp->keepalive_time = val * HZ;
+			if (sock_flag(sk, SOCK_KEEPOPEN) &&
+			    !((1 << sk->sk_state) &
+			      (TCPF_CLOSE | TCPF_LISTEN))) {
+				u32 elapsed = serval_keepalive_time_elapsed(tp);
+				if (tp->keepalive_time > elapsed)
+					elapsed = tp->keepalive_time - elapsed;
+				else
+					elapsed = 0;
+				serval_tsk_reset_keepalive_timer(sk, elapsed);
+			}
+		}
+		break;
+	case TCP_KEEPINTVL:
+		if (val < 1 || val > MAX_TCP_KEEPINTVL)
+			err = -EINVAL;
+		else
+			tp->keepalive_intvl = val * HZ;
+		break;
+	case TCP_KEEPCNT:
+		if (val < 1 || val > MAX_TCP_KEEPCNT)
+			err = -EINVAL;
+		else
+			tp->keepalive_probes = val;
+		break;
+	case TCP_SYNCNT:
+		if (val < 1 || val > MAX_TCP_SYNCNT)
+			err = -EINVAL;
+		else
+			tp->syn_retries = val;
+		break;
+
+	case TCP_LINGER2:
+		if (val < 0)
+			tp->linger2 = -1;
+		else if (val > sysctl_serval_tcp_fin_timeout / HZ)
+			tp->linger2 = 0;
+		else
+			tp->linger2 = val * HZ;
+		break;
+#if 0
+	case TCP_DEFER_ACCEPT:
+		/* Translate value in seconds to number of retransmits */
+		icsk->icsk_accept_queue.rskq_defer_accept =
+			secs_to_retrans(val, TCP_TIMEOUT_INIT / HZ,
+					TCP_RTO_MAX / HZ);
+		break;
+#endif
+	case TCP_WINDOW_CLAMP:
+		if (!val) {
+			if (sk->sk_state != TCP_CLOSE) {
+				err = -EINVAL;
+				break;
+			}
+			tp->window_clamp = 0;
+		} else
+			tp->window_clamp = val < SOCK_MIN_RCVBUF / 2 ?
+						SOCK_MIN_RCVBUF / 2 : val;
+		break;
+
+	case TCP_QUICKACK:
+		if (!val) {
+			tp->tp_ack.pingpong = 1;
+		} else {
+			tp->tp_ack.pingpong = 0;
+			if ((1 << sk->sk_state) &
+			    (TCPF_ESTABLISHED | TCPF_CLOSE_WAIT) &&
+			    serval_tsk_ack_scheduled(sk)) {
+				tp->tp_ack.pending |= STSK_ACK_PUSHED;
+				serval_tcp_cleanup_rbuf(sk, 1);
+				if (!(val & 1))
+					tp->tp_ack.pingpong = 1;
+			}
+		}
+		break;
+
+#if 0
+#ifdef CONFIG_TCP_MD5SIG
+	case TCP_MD5SIG:
+		/* Read the IP->Key mappings from userspace */
+		err = tp->af_specific->md5_parse(sk, optval, optlen);
+		break;
+#endif
+#endif
+	case TCP_USER_TIMEOUT:
+		/* Cap the max timeout in ms TCP will retry/retrans
+		 * before giving up and aborting (ETIMEDOUT) a connection.
+		 */
+		//icsk->icsk_user_timeout = msecs_to_jiffies(val);
+		break;
+	default:
+		err = -ENOPROTOOPT;
+		break;
+	}
+
+	release_sock(sk);
+	return err;
+}
+
+static int serval_do_tcp_getsockopt(struct sock *sk, int level,
+                                    int optname, char __user *optval, 
+                                    int __user *optlen)
+{
+	//struct serval_sock *ssk = serval_sk(sk);
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	int val, len;
+
+	if (get_user(len, optlen))
+		return -EFAULT;
+
+	len = min_t(unsigned int, len, sizeof(int));
+
+	if (len < 0)
+		return -EINVAL;
+
+	switch (optname) {
+	case TCP_MAXSEG:
+		val = tp->mss_cache;
+		if (!val && ((1 << sk->sk_state) & (TCPF_CLOSE | TCPF_LISTEN)))
+			val = tp->rx_opt.user_mss;
+		break;
+	case TCP_NODELAY:
+		val = !!(tp->nonagle&TCP_NAGLE_OFF);
+		break;
+	case TCP_CORK:
+		val = !!(tp->nonagle&TCP_NAGLE_CORK);
+		break;
+	case TCP_KEEPIDLE:
+		val = serval_keepalive_time_when(tp) / HZ;
+		break;
+	case TCP_KEEPINTVL:
+		val = serval_keepalive_intvl_when(tp) / HZ;
+		break;
+	case TCP_KEEPCNT:
+		val = serval_keepalive_probes(tp);
+		break;
+	case TCP_SYNCNT:
+		val = tp->syn_retries ? : sysctl_serval_tcp_syn_retries;
+		break;
+	case TCP_LINGER2:
+		val = tp->linger2;
+		if (val >= 0)
+			val = (val ? : sysctl_serval_tcp_fin_timeout) / HZ;
+		break;
+                /*
+	case TCP_DEFER_ACCEPT:
+		val = retrans_to_secs(icsk->icsk_accept_queue.rskq_defer_accept,
+				      TCP_TIMEOUT_INIT / HZ, TCP_RTO_MAX / HZ);
+		break;
+                */
+	case TCP_WINDOW_CLAMP:
+		val = tp->window_clamp;
+		break;
+	case TCP_INFO: {
+		struct tcp_info info;
+
+		if (get_user(len, optlen))
+			return -EFAULT;
+
+		tcp_get_info(sk, &info);
+
+		len = min_t(unsigned int, len, sizeof(info));
+		if (put_user(len, optlen))
+			return -EFAULT;
+		if (copy_to_user(optval, &info, len))
+			return -EFAULT;
+		return 0;
+	}
+	case TCP_QUICKACK:
+		val = !tp->tp_ack.pingpong;
+		break;
+                /*
+	case TCP_CONGESTION:
+		if (get_user(len, optlen))
+			return -EFAULT;
+		len = min_t(unsigned int, len, TCP_CA_NAME_MAX);
+		if (put_user(len, optlen))
+			return -EFAULT;
+		if (copy_to_user(optval, icsk->icsk_ca_ops->name, len))
+			return -EFAULT;
+		return 0;
+                */
+                /*
+	case TCP_COOKIE_TRANSACTIONS: {
+		struct tcp_cookie_transactions ctd;
+		struct tcp_cookie_values *cvp = tp->cookie_values;
+
+		if (get_user(len, optlen))
+			return -EFAULT;
+		if (len < sizeof(ctd))
+			return -EINVAL;
+
+		memset(&ctd, 0, sizeof(ctd));
+		ctd.tcpct_flags = (tp->rx_opt.cookie_in_always ?
+				   TCP_COOKIE_IN_ALWAYS : 0)
+				| (tp->rx_opt.cookie_out_never ?
+				   TCP_COOKIE_OUT_NEVER : 0);
+
+		if (cvp != NULL) {
+			ctd.tcpct_flags |= (cvp->s_data_in ?
+					    TCP_S_DATA_IN : 0)
+					 | (cvp->s_data_out ?
+					    TCP_S_DATA_OUT : 0);
+
+			ctd.tcpct_cookie_desired = cvp->cookie_desired;
+			ctd.tcpct_s_data_desired = cvp->s_data_desired;
+
+			memcpy(&ctd.tcpct_value[0], &cvp->cookie_pair[0],
+			       cvp->cookie_pair_size);
+			ctd.tcpct_used = cvp->cookie_pair_size;
+		}
+
+		if (put_user(sizeof(ctd), optlen))
+			return -EFAULT;
+		if (copy_to_user(optval, &ctd, sizeof(ctd)))
+			return -EFAULT;
+		return 0;
+	}
+                */
+                /*
+	case TCP_THIN_LINEAR_TIMEOUTS:
+		val = tp->thin_lto;
+		break;
+	case TCP_THIN_DUPACK:
+		val = tp->thin_dupack;
+		break;
+
+	case TCP_USER_TIMEOUT:
+		val = jiffies_to_msecs(icsk->icsk_user_timeout);
+		break;
+                */
+	default:
+		return -ENOPROTOOPT;
+	}
+
+	if (put_user(len, optlen))
+		return -EFAULT;
+	if (copy_to_user(optval, &val, len))
+		return -EFAULT;
+	return 0;
+}
+
+#endif /* OS_LINUX_KERNEL */
+
+int serval_tcp_setsockopt(struct sock *sk, int level, int optname, 
+                          char __user *optval, unsigned int optlen)
+{
+	if (level != SOL_TCP)
+		return -EOPNOTSUPP;
+
+#if defined(OS_LINUX_KERNEL)
+	return serval_do_tcp_setsockopt(sk, level, optname, optval, optlen);
+#else
+        return -EOPNOTSUPP;
+#endif
+}
+
+int serval_tcp_getsockopt(struct sock *sk, int level, 
+                          int optname, char __user *optval,
+                          int __user *optlen)
+{
+	if (level != SOL_TCP)
+		return -EOPNOTSUPP;
+
+#if defined(OS_LINUX_KERNEL)
+	return serval_do_tcp_getsockopt(sk, level, optname, optval, optlen);
+#else
+        return -EOPNOTSUPP;
+#endif
+}
+
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit,
         .receive = serval_tcp_rcv,
@@ -2231,6 +2710,7 @@ struct proto serval_tcp_proto = {
 	.shutdown		= serval_tcp_shutdown,
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
+        .setsockopt             = serval_tcp_setsockopt,
 #if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
         .sendpage               = serval_tcp_sendpage,
 #endif

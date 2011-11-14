@@ -329,23 +329,21 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
 int serval_getsockopt(struct socket *sock, int level, int optname,
                       char __user *optval, int __user *optlen)
 {
-	//struct sock *sk = sock->sk;
+	struct sock *sk = sock->sk;
 
         LOG_DBG("level=%d optname=%d\n", level, optname);
 
-        return -EOPNOTSUPP;
-
-	//return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
+	return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
 }
 
 int serval_setsockopt(struct socket *sock, int level, int optname,
                       char __user *optval, unsigned int optlen)
 {
-	//struct sock *sk = sock->sk;
+	struct sock *sk = sock->sk;
 
         LOG_DBG("level=%d optname=%d\n", level, optname);
-        return -EOPNOTSUPP;
-	//return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
+	
+        return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
 }
 
 static int serval_listen_start(struct sock *sk, int backlog)

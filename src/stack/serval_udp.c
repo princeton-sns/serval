@@ -822,6 +822,19 @@ static void serval_udp_request_sock_destructor(struct request_sock *rsk)
 {
 }
 
+static int serval_udp_setsockopt(struct sock *sk, int level, int optname, 
+                                 char __user *optval, unsigned int optlen)
+{
+        return -EOPNOTSUPP;
+}
+
+static int serval_udp_getsockopt(struct sock *sk, int level, 
+                                 int optname, char __user *optval,
+                                 int __user *optlen)
+{
+        return -EOPNOTSUPP;
+}
+
 struct request_sock_ops udp_request_sock_ops __read_mostly = {
 	.family		=	PF_INET,
 	.obj_size	=	sizeof(struct serval_request_sock),
@@ -842,6 +855,8 @@ struct proto serval_udp_proto = {
 #endif
         .sendmsg                = serval_udp_sendmsg,
         .recvmsg                = serval_udp_recvmsg,
+        .getsockopt             = serval_udp_getsockopt,
+        .setsockopt             = serval_udp_setsockopt,
 	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
