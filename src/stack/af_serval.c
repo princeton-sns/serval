@@ -224,6 +224,108 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         return 0;
 }
 
+/*
+ *	This does both peername and sockname.
+ */
+int serval_getname(struct socket *sock, struct sockaddr *uaddr,
+                   int *uaddr_len, int peer)
+{
+	struct sock *sk		= sock->sk;
+	struct inet_sock *inet	= inet_sk(sk);
+        struct serval_sock *ssk = serval_sk(sk);
+        
+        /* 
+           The uaddr_len variable will always be -1, because the
+           system call passes a sockaddr_storage here instead of the
+           user-level passed memory area. Thus, there is no way to
+           signal what address to return in the system call. We should
+           probably default to returning both serviceID and IP
+           address, but for compatibility with user apps we force
+           return of only IP.
+         */
+        *uaddr_len = sizeof(struct sockaddr_in);
+	
+        if (peer) {
+		if ((((1 << sk->sk_state) & (SERVALF_CLOSED | 
+                                             SERVALF_REQUEST)) &&
+		     peer == 1))
+			return -ENOTCONN;
+                
+                if (*uaddr_len >= sizeof(struct sockaddr_in) + 
+                    sizeof(struct sockaddr_sv)) {
+                        struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
+                        struct sockaddr_in *sin = 
+                                (struct sockaddr_in *)(sv + 1);
+                        sv->sv_family = AF_SERVAL;
+                        memcpy(&sv->sv_srvid, &ssk->peer_srvid, 
+                               sizeof(ssk->peer_srvid));
+                        sv->sv_prefix_bits = 0;
+                        sv->sv_flags = 0;
+
+                        sin->sin_family = AF_INET;
+                        sin->sin_port = 0; /* inet->inet_dport; */
+                        sin->sin_addr.s_addr = inet->inet_daddr;
+                        memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
+                        *uaddr_len = sizeof(*sv) + sizeof(*sin);
+                } else if (*uaddr_len >= sizeof(struct sockaddr_sv)) {
+                        struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
+                        sv->sv_family = AF_SERVAL;
+                        memcpy(&sv->sv_srvid, &ssk->peer_srvid, 
+                               sizeof(ssk->peer_srvid));
+                        sv->sv_prefix_bits = 0;
+                        sv->sv_flags = 0;
+                        *uaddr_len = sizeof(*sv);
+                } else {
+                        struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
+                        sin->sin_family = AF_INET;
+                        sin->sin_port = 0; /* inet->inet_dport; */
+                        sin->sin_addr.s_addr = inet->inet_daddr;
+                        memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
+                        *uaddr_len = sizeof(*sin);
+                }
+	} else {
+                if (*uaddr_len >= sizeof(struct sockaddr_in) + 
+                    sizeof(struct sockaddr_sv)) {
+                        struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
+                        struct sockaddr_in *sin = 
+                                (struct sockaddr_in *)(sv + 1);
+                        __be32 addr = inet->inet_rcv_saddr;
+
+                        sv->sv_family = AF_SERVAL;
+                        memcpy(&sv->sv_srvid, &ssk->local_srvid, 
+                               sizeof(ssk->local_srvid));
+                        sv->sv_prefix_bits = ssk->srvid_prefix_bits;
+                        sv->sv_flags = ssk->srvid_flags;
+
+                        sin->sin_family = AF_INET;
+                        if (!addr)
+                                addr = inet->inet_saddr;
+                        sin->sin_port = 0; /* inet->inet_sport; */
+                        sin->sin_addr.s_addr = addr;
+                        memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
+                        *uaddr_len = sizeof(*sv) + sizeof(*sin);
+                } else if (*uaddr_len >= sizeof(struct sockaddr_sv)) {
+                        struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
+                        sv->sv_family = AF_SERVAL;
+                        memcpy(&sv->sv_srvid, &ssk->local_srvid, 
+                               sizeof(ssk->local_srvid));
+                        sv->sv_prefix_bits = ssk->srvid_prefix_bits;
+                        sv->sv_flags = ssk->srvid_flags;
+                        *uaddr_len = sizeof(*sv);
+                } else {
+                        struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
+                        __be32 addr = inet->inet_rcv_saddr;
+                        if (!addr)
+                                addr = inet->inet_saddr;
+                        sin->sin_port = 0; /* inet->inet_sport; */
+                        sin->sin_addr.s_addr = addr;
+                        memset(sin->sin_zero, 0, sizeof(sin->sin_zero));
+                        *uaddr_len = sizeof(*sin);
+                }
+	}
+	return 0;
+}
+
 static int serval_listen_start(struct sock *sk, int backlog)
 {
         serval_sock_set_state(sk, SERVAL_LISTEN);
@@ -437,26 +539,6 @@ static int serval_accept(struct socket *sock, struct socket *newsock,
 out:
 	release_sock(sk);
         return err;
-}
-
-int serval_getname(struct socket *sock, struct sockaddr *addr,
-		 int *addr_len, int peer)
-{
-        struct sockaddr_sv *sa = (struct sockaddr_sv *)addr;
-        struct sock *sk = sock->sk;
-
-	sa->sv_family  = AF_SERVAL;
-
-	if (peer)
-		memcpy(&sa->sv_srvid, &serval_sk(sk)->peer_srvid,
-                       sizeof(struct sockaddr_sv));
-	else
-		memcpy(&sa->sv_srvid, &serval_sk(sk)->local_srvid,
-                       sizeof(struct sockaddr_sv));
-
-	*addr_len = sizeof(struct sockaddr_sv);
-
-        return 0;
 }
 
 static int serval_connect(struct socket *sock, struct sockaddr *addr,

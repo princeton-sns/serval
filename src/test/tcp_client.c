@@ -263,7 +263,29 @@ static int client(const char *filepath, int handle_migration,
                         strerror_sv(errno));
                 goto out;
         }
-        
+#if defined(SERVAL_NATIVE)
+        {
+                struct {
+                        struct sockaddr_sv sv;
+                        struct sockaddr_in in;
+                } saddr;
+                socklen_t addrlen = sizeof(saddr.in);
+                char peer[18];
+
+                memset(&saddr, 0, sizeof(saddr));
+                
+                ret = getpeername(sock, (struct sockaddr *)&saddr.in, &addrlen);
+
+                if (ret == -1) {
+                        fprintf(stderr, "Could not get peer name : %s\n",
+                                strerror(errno));
+                } else {
+                        printf("peer is %s\n",
+                               inet_ntop(AF_INET, &saddr.in.sin_addr, 
+                                         peer, 18));
+                }
+        } 
+#endif
         printf("Connected successfully!\n");
         
         ret = recv_file(sock, filepath, handle_migration, digest);
