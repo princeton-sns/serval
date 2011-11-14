@@ -2177,13 +2177,13 @@ static int serval_do_tcp_setsockopt(struct sock *sk, int level,
 		err = tp->af_specific->md5_parse(sk, optval, optlen);
 		break;
 #endif
-#endif
 	case TCP_USER_TIMEOUT:
 		/* Cap the max timeout in ms TCP will retry/retrans
 		 * before giving up and aborting (ETIMEDOUT) a connection.
 		 */
 		//icsk->icsk_user_timeout = msecs_to_jiffies(val);
 		break;
+#endif
 	default:
 		err = -ENOPROTOOPT;
 		break;
