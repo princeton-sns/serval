@@ -326,6 +326,28 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
 	return 0;
 }
 
+int serval_getsockopt(struct socket *sock, int level, int optname,
+                      char __user *optval, int __user *optlen)
+{
+	//struct sock *sk = sock->sk;
+
+        LOG_DBG("level=%d optname=%d\n", level, optname);
+
+        return -EOPNOTSUPP;
+
+	//return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
+}
+
+int serval_setsockopt(struct socket *sock, int level, int optname,
+                      char __user *optval, unsigned int optlen)
+{
+	//struct sock *sk = sock->sk;
+
+        LOG_DBG("level=%d optname=%d\n", level, optname);
+        return -EOPNOTSUPP;
+	//return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
+}
+
 static int serval_listen_start(struct sock *sk, int backlog)
 {
         serval_sock_set_state(sk, SERVAL_LISTEN);
@@ -956,9 +978,9 @@ static const struct proto_ops serval_stream_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
+	.setsockopt =	serval_setsockopt,
+	.getsockopt =	serval_getsockopt,
 #if defined(OS_LINUX_KERNEL)
-	.setsockopt =	sock_no_setsockopt,
-	.getsockopt =	sock_no_getsockopt,
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_tcp_poll,
 	.ioctl =	serval_ioctl,
@@ -982,9 +1004,9 @@ static const struct proto_ops serval_dgram_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
+	.setsockopt =	serval_setsockopt,
+	.getsockopt =	serval_getsockopt,
 #if defined(OS_LINUX_KERNEL)
-	.setsockopt =	sock_no_setsockopt,
-	.getsockopt =	sock_no_getsockopt,
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_poll,
 	.ioctl =	serval_ioctl,
