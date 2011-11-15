@@ -317,6 +317,7 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         __be32 addr = inet->inet_rcv_saddr;
                         if (!addr)
                                 addr = inet->inet_saddr;
+                        sin->sin_family = AF_INET;
                         sin->sin_port = 0; /* inet->inet_sport; */
                         sin->sin_addr.s_addr = addr;
                         memset(sin->sin_zero, 0, sizeof(sin->sin_zero));

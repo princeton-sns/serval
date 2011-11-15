@@ -270,7 +270,20 @@ static int client(const char *filepath, int handle_migration,
                         struct sockaddr_in in;
                 } saddr;
                 socklen_t addrlen = sizeof(saddr.in);
-                char peer[18];
+                char ipaddr[18];
+
+                memset(&saddr, 0, sizeof(saddr));
+                
+                ret = getsockname(sock, (struct sockaddr *)&saddr.in, &addrlen);
+
+                if (ret == -1) {
+                        fprintf(stderr, "Could not get sock name : %s\n",
+                                strerror(errno));
+                } else {
+                        printf("sock name is %s family=%d\n",
+                               inet_ntop(AF_INET, &saddr.in.sin_addr, 
+                                         ipaddr, 18), saddr.in.sin_family);
+                }
 
                 memset(&saddr, 0, sizeof(saddr));
                 
@@ -280,9 +293,9 @@ static int client(const char *filepath, int handle_migration,
                         fprintf(stderr, "Could not get peer name : %s\n",
                                 strerror(errno));
                 } else {
-                        printf("peer is %s\n",
+                        printf("peer name is %s family=%d\n",
                                inet_ntop(AF_INET, &saddr.in.sin_addr, 
-                                         peer, 18));
+                                         ipaddr, 18), saddr.in.sin_family);
                 }
         } 
 #endif
