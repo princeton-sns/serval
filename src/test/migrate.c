@@ -69,6 +69,11 @@ int main(int argc, char **argv)
         memset(&flow, 0, sizeof(flow));
         memset(&service, 0, sizeof(service));
 
+        if (argc < 2) {
+                print_usage();
+                return 0;
+        }
+
         argc--;
         argv++;
         
