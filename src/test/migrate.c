@@ -135,7 +135,6 @@ int main(int argc, char **argv)
                 goto out;
         }
 
-
 	switch (cmd) {
         case CMD_MIGRATE_FLOW:
                 ret = hostctrl_flow_migrate(hc, &flow, to_if);

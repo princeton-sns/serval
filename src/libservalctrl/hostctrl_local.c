@@ -196,7 +196,10 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                        struct in_addr *from)
 {
         int ret = 0;
-        
+
+        if (!hc->cbs)
+                return 0;
+
         switch (cm->type) {
         case CTRLMSG_TYPE_REGISTER:
                 ret = handle_service_change(hc, (struct ctrlmsg_register *)cm,
@@ -210,26 +213,25 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                 break;
         case CTRLMSG_TYPE_RESOLVE:                
                 break;
-        case CTRLMSG_TYPE_GET_SERVICE:
-                {
-                        struct ctrlmsg_service *cs = 
-                                (struct ctrlmsg_service *)cm;
-                        unsigned int num = CTRLMSG_SERVICE_NUM(cs);
-                        unsigned int i;
-
-                        if (!hc->cbs->service_get)
-                                break;
-                        
-                        for (i = 0; i < num; i++) {
-                                ret = hc->cbs->service_get(hc, &cs->service[i].srvid,
-                                                           cs->service[i].srvid_flags,
-                                                           cs->service[i].srvid_prefix_bits,
-                                                           cs->service[i].priority,
-                                                           cs->service[i]. weight,
-                                                           &cs->service[i].address);
-                        }
+        case CTRLMSG_TYPE_GET_SERVICE: {
+                struct ctrlmsg_service *cs = 
+                        (struct ctrlmsg_service *)cm;
+                unsigned int num = CTRLMSG_SERVICE_NUM(cs);
+                unsigned int i;
+                
+                if (!hc->cbs->service_get)
+                        break;
+                
+                for (i = 0; i < num; i++) {
+                        ret = hc->cbs->service_get(hc, &cs->service[i].srvid,
+                                                   cs->service[i].srvid_flags,
+                                                   cs->service[i].srvid_prefix_bits,
+                                                   cs->service[i].priority,
+                                                   cs->service[i]. weight,
+                                                   &cs->service[i].address);
                 }
                 break;
+        }
         case CTRLMSG_TYPE_SERVICE_STAT:
                 break;
         case CTRLMSG_TYPE_ADD_SERVICE:

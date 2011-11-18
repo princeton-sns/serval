@@ -49,6 +49,7 @@ hashelm_t *hashtable_lookup(struct hashtable *table, const void *key,
                             hashfn_t hashfn);
 unsigned int hashtable_count(struct hashtable *table);
 int hashtable_for_each(struct hashtable *table, void (*action)(struct hashelm *));
+int hashelm_hashed(struct hashelm *he);
 int hashelm_hash(struct hashtable *table, struct hashelm *he, const void *key);
 void hashelm_unhash(struct hashtable *table, struct hashelm *he);
 void hashelm_hold(struct hashelm *he);

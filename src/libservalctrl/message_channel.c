@@ -59,11 +59,13 @@ int message_channel_libinit(void)
     return hashtable_init(&channel_table, HTABLE_MIN_SIZE);
 }
 
+/*
 static void channel_stop(struct hashelm *elm)
 {
     struct message_channel *c = container_of(elm, struct message_channel, he);
     c->ops->stop(c);
 }
+*/
 
 void message_channel_libfini(void)
 {
@@ -98,6 +100,11 @@ int message_channel_init(message_channel_t *channel,
 
     return hashelm_init(&channel->he, ops->hashfn, equal_wrapper, 
                         free_wrapper);
+}
+
+static int message_channel_hashed(message_channel_t *channel)
+{
+    return hashelm_hashed(&channel->he);
 }
 
 int message_channel_hash(message_channel_t *channel)
@@ -203,8 +210,6 @@ message_channel_type_t message_channel_get_type(struct message_channel *ch)
 int message_channel_register_callback(message_channel_t *channel,
                                       message_channel_callback_t *cb)
 {
-    LOG_DBG("%s registering callback\n", channel->name);
-    
     if (channel->state != CHANNEL_RUNNING)
         return channel->ops->register_callback(channel, cb);
 
@@ -216,8 +221,6 @@ int message_channel_register_callback(message_channel_t *channel,
 int message_channel_unregister_callback(message_channel_t *channel,
                                         message_channel_callback_t *cb)
 {
-    LOG_DBG("%s unregistering callback\n", channel->name);
-
     if (channel->state != CHANNEL_RUNNING)
         return channel->ops->unregister_callback(channel, cb);
 
@@ -274,10 +277,9 @@ int message_channel_send(message_channel_t *channel,
 
 int message_channel_start(message_channel_t *channel)
 {
-
     int ret = channel->ops->start(channel);
-    
-    if (ret == 0)
+ 
+    if (ret == 0 && !message_channel_hashed(channel))
         message_channel_hash(channel);
 
     return ret;

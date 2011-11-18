@@ -44,6 +44,7 @@ src/test/tcp_client
 src/test/tcp_clientn
 src/test/tcp_server
 src/test/tcp_servern
+src/test/automigrated
 src/javasock/classes.list
 src/javasock/sources.list
 src/javasock/bin/

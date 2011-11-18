@@ -98,6 +98,11 @@ static struct hashslot *get_slot(struct hashtable *tbl,
     return &tbl->hash[hash & tbl->mask];
 }
 
+int hashelm_hashed(struct hashelm *he)
+{
+    return !hlist_unhashed(&he->node);
+}
+
 int hashelm_hash(struct hashtable *table, struct hashelm *he, 
                  const void *key)
 {

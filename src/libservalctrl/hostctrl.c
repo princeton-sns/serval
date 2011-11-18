@@ -100,7 +100,7 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 					 (struct sockaddr *)&local, 
                                          sizeof(local), 
 					 (struct sockaddr *)&peer, 
-                                         sizeof(peer), flags & HCF_START);
+                                         sizeof(peer), 0);
         
 #endif
 
@@ -111,7 +111,9 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 	
 	hc = hostctrl_create(mc, cbs, context);
 
-        if (!hc)
+        if (hc && (flags & HCF_START))
+                hostctrl_start(hc);
+        else
                 message_channel_put(mc);
 
         return hc;
@@ -124,19 +126,26 @@ hostctrl_remote_create_specific(const struct hostctrl_callback *cbs,
                                 struct sockaddr *peer, socklen_t peer_len, 
                                 unsigned short flags)
 {
-
 	struct message_channel *mc = NULL;
-        
+        struct hostctrl *hc;
+
  	mc = message_channel_get_generic(MSG_CHANNEL_UDP, SOCK_DGRAM, 0, 
                                          local, local_len,
-					 peer, peer_len, flags & HCF_START);
+					 peer, peer_len, 0);
         
 	if (!mc) {
 		LOG_DBG("Could not create local host control interface\n");
 		return NULL;
 	}
-	
-	return hostctrl_create(mc, cbs, context);
+        
+        hc = hostctrl_create(mc, cbs, context);
+
+        if (hc && (flags & HCF_START))
+                hostctrl_start(hc);
+        else
+                message_channel_put(mc);
+                
+        return hc;
 }
 
 struct hostctrl *hostctrl_remote_create(const struct hostctrl_callback *cbs,
@@ -161,7 +170,7 @@ struct hostctrl *hostctrl_remote_create(const struct hostctrl_callback *cbs,
                                                sizeof(laddr),
                                                (struct sockaddr *)&raddr, 
                                                sizeof(raddr),
-                                               flags & HCF_START);
+                                               flags);
 }
 
 int hostctrl_start(struct hostctrl *hc)
