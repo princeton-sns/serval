@@ -128,6 +128,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         struct ctrlmsg_service_info_stat *cms = 
                 (struct ctrlmsg_service_info_stat *)buffer;
         struct in_addr null_ip = { 0 };
+        struct service_id null_service = { .s_sid = { 0 } };
         unsigned int i = 0;
         int index = 0;
         int err = 0;
@@ -150,9 +151,15 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                         ip = &entry->address;
                 }
 
-                if (entry->srvid_prefix_bits > 0)
+                /*
+                  We might be trying to delete the "default" entry. In
+                  that case
+                */
+                if (memcmp(&entry->srvid, &null_service, 
+                           sizeof(null_service)) == 0 ||
+                    entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
-
+                
                 se = service_find_exact(&entry->srvid, 
                                         prefix_bits);
 

@@ -339,6 +339,7 @@ void serval_sock_hash(struct sock *sk)
             sk->sk_state == SERVAL_RESPOND) {
 		local_bh_disable();
 		__serval_sock_hash(sk);
+                serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
 		local_bh_enable();
         } else {
                 int err = 0;
@@ -363,6 +364,7 @@ void serval_sock_hash(struct sock *sk)
                         LOG_ERR("could not add service for listening demux: %s\n", strerror(-err));
 #endif
                 } else {
+                        
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                         sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
@@ -370,6 +372,7 @@ void serval_sock_hash(struct sock *sk)
                         sock_prot_inc_use(sk->sk_prot);
 #endif
 #endif
+                        serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
                 }
 	}
 }
@@ -382,8 +385,6 @@ void serval_sock_unhash(struct sock *sk)
 
         if (ssk->hash_key_len == 0)
                 return;
-
-        ssk->hash_key_len = 0;
                 
         if (sk->sk_state == SERVAL_LISTEN ||
             sk->sk_state == SERVAL_INIT) {
@@ -406,13 +407,16 @@ void serval_sock_unhash(struct sock *sk)
                 sock_prot_dec_use(sk->sk_prot);
 #endif
 #endif
+                serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
+                ssk->hash_key_len = 0;
                 return;
-        } else {
-                LOG_DBG("unhashing socket %p\n", sk);
-                lock = &established_table.hashslot(&established_table,
-                                                   net, &ssk->local_flowid, 
-                                                   ssk->hash_key_len)->lock;
-        }
+        } 
+
+        LOG_DBG("unhashing socket %p\n", sk);
+
+        lock = &established_table.hashslot(&established_table,
+                                           net, &ssk->local_flowid, 
+                                           ssk->hash_key_len)->lock;
         
 	spin_lock_bh(lock);
 
@@ -425,6 +429,8 @@ void serval_sock_unhash(struct sock *sk)
                 sock_prot_dec_use(sk->sk_prot);
 #endif
 #endif
+                serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
+                ssk->hash_key_len = 0;        
         }
 	spin_unlock_bh(lock);
 }

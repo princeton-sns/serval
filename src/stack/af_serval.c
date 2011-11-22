@@ -167,6 +167,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         struct ctrlmsg_register cm;
+        struct service_id null_service = { .s_sid = { 0 } };
 
         if ((unsigned int)addr_len < sizeof(*svaddr))
                 return -EINVAL;
@@ -180,7 +181,13 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 svaddr->sv_flags, 
                 svaddr->sv_prefix_bits, 
                 service_id_to_str(&svaddr->sv_srvid));
-
+        
+        if (memcmp(&svaddr->sv_srvid, &null_service, 
+                   sizeof(null_service)) == 0) {
+                LOG_ERR("Cannot bind on null serviceID\n");
+                return -EINVAL;
+        }
+        
         /* Call the protocol's own bind, if it exists */
 	if (sk->sk_prot->bind) {
                 int err = sk->sk_prot->bind(sk, addr, addr_len);
@@ -206,9 +213,14 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 release_sock(sk);
         }
 
-        /* Add to protocol hash chains. */
+        /* Add protocol. */
         sk->sk_prot->hash(sk);
                
+        if (!serval_sock_flag(ssk, SSK_FLAG_HASHED)) {
+                LOG_DBG("Could not bind socket, hashing failed\n");
+                return -EINVAL;
+        }
+
         /* Notify the service daemon */
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_REGISTER;

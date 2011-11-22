@@ -81,6 +81,7 @@ enum {
 enum serval_sock_flags {
         SSK_FLAG_BOUND = 0,
         SSK_FLAG_AUTOBOUND,
+        SSK_FLAG_HASHED,
         SSK_FLAG_CHILD,
         SSK_FLAG_FIN_SENT,
 };
