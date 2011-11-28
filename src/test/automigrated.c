@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -318,6 +319,9 @@ static int read_netlink(struct netlink_handle *nlh, struct hostctrl *hc)
 
 				ret = nl_parse_link_info(nlm, ifo);
 
+				if (ret < 0)
+				        break;
+
 				/* TODO: Should find a good way to sort out unwanted interfaces. */
 				if (ifo->isUp) {
 					
@@ -421,6 +425,11 @@ static void signal_handler(int sig)
         printf("Writing to pipe\n");
 
         ret = write(p[1], &q, 1);
+
+	if (ret < 0) {
+                fprintf(stderr, "Could not write to pipe: %s\n", 
+                        strerror(errno));
+	}
 }
 
 int main(int argc, char **argv)
@@ -480,7 +489,7 @@ int main(int argc, char **argv)
                 
                 ndfs = nlh.fd > p[0] ? nlh.fd : p[0];
                 
-                ret = select(nlh.fd + 1, &readfds, NULL, NULL, NULL);
+                ret = select(ndfs + 1, &readfds, NULL, NULL, NULL);
 
                 if (ret == 0) {
                         SF_DBG("Timeout...\n");
