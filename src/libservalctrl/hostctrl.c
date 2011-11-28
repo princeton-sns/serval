@@ -111,10 +111,11 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 	
 	hc = hostctrl_create(mc, cbs, context);
 
-        if (hc && (flags & HCF_START))
-                hostctrl_start(hc);
-        else
+        if (!hc)
                 message_channel_put(mc);
+        else if (flags & HCF_START)
+                hostctrl_start(hc);
+               
 
         return hc;
 }
@@ -140,10 +141,10 @@ hostctrl_remote_create_specific(const struct hostctrl_callback *cbs,
         
         hc = hostctrl_create(mc, cbs, context);
 
-        if (hc && (flags & HCF_START))
-                hostctrl_start(hc);
-        else
+        if (!hc)
                 message_channel_put(mc);
+        else if (flags & HCF_START)
+                hostctrl_start(hc);
                 
         return hc;
 }

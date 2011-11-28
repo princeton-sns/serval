@@ -147,8 +147,9 @@ void hashelm_hold(struct hashelm *he)
 void hashelm_put(struct hashelm *he)
 {
     if (atomic_dec_and_test(&he->refcount)) 
-        if (he->freefn)
+        if (he->freefn) {
             he->freefn(he);
+        }
 }
 
 int hashelm_init(struct hashelm *he,

@@ -187,9 +187,11 @@ int servd_interface_up(const char *ifname, void *context)
         struct servd_context *ctx = context;
 
         /* Delay operations for a short time. The reason is that the
-           stack doesn't seem to be immediately ready for using the
-           newly assigned address. */
+           stack doesn't seem to be immediately ready to use the newly
+           assigned address. */
         sleep(1);
+
+        LOG_DBG("lhc=%p rhc=%p\n", ctx->lhc, ctx->rhc);
 
 	LOG_DBG("Interface %s changed address. Migrating flows\n", ifname);
         
@@ -532,7 +534,6 @@ int main(int argc, char **argv)
 		LOG_ERR("Could not init libservalctrl\n");
 		goto fail_libservalctrl;
 	}
-
        
         ctx.lhc = hostctrl_local_create(&lcb, &ctx, 0);
         
@@ -547,7 +548,6 @@ int main(int argc, char **argv)
         ctx.caddr.sv_family = AF_SERVAL;
         ctx.caddr.sv_srvid.srv_un.un_id32[0] = htonl(client_id);
 	
-                
         if (ctx.router) {
                 ctx.rhc = hostctrl_remote_create_specific(&rcb, &ctx,
                                                           (struct sockaddr *)&ctx.raddr, 
@@ -561,13 +561,13 @@ int main(int argc, char **argv)
                                                           (struct sockaddr *)&ctx.raddr, 
                                                           sizeof(ctx.raddr), 0);
         }
-        
+
         if (!ctx.rhc) {
                 LOG_ERR("Could not create remote host control\n");
                 goto fail_hostctrl_remote;
         }
 
-        hostctrl_start(ctx.rhc);	
+        hostctrl_start(ctx.rhc);
         hostctrl_start(ctx.lhc);
 
 #if defined(OS_LINUX)
