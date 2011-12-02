@@ -114,7 +114,7 @@
 #define SERVAL_TCP_RTO_MIN	((unsigned)(HZ/5))
 #define SERVAL_TCP_TIMEOUT_INIT ((unsigned)(3*HZ))	/* RFC 1122 initial RTO value	*/
 
-#define TCP_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
+#define SERVAL_TCP_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
 					                 * for local resources.
 					                 */
 
@@ -1037,6 +1037,9 @@ int serval_tcp_rcv_established(struct sock *sk,
                                struct sk_buff *skb,
                                struct tcphdr *th, 
                                unsigned len);
+
+void serval_tcp_send_probe0(struct sock *sk);
+
 /*
  *	The union cast uses a gcc extension to avoid aliasing problems
  *  (union is compatible to any of its members)

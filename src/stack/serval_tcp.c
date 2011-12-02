@@ -2560,7 +2560,7 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 	serval_tcp_mtup_init(newsk);
 #if defined(OS_LINUX_KERNEL)
         serval_tcp_sync_mss(newsk, dst_mtu(dst));
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
 #else
         newtp->advmss = dst_metric_advmss(dst);

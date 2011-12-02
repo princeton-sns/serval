@@ -305,7 +305,7 @@ static void serval_tcp_probe_timer(struct sock *sk)
 		serval_tcp_write_err(sk);
 	} else {
 		/* Only send another probe if we didn't close things up. */
-		//serval_tcp_send_probe0(sk);
+		serval_tcp_send_probe0(sk);
 	}
 }
 
@@ -382,7 +382,7 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 		if (!tp->retransmits)
 			tp->retransmits = 1;
 		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
-					    min(tp->rto, TCP_RESOURCE_PROBE_INTERVAL),
+					    min(tp->rto, SERVAL_TCP_RESOURCE_PROBE_INTERVAL),
 					    SERVAL_TCP_RTO_MAX);
 		goto out;
 	}
