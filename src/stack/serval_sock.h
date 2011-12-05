@@ -113,6 +113,7 @@ struct serval_sock_af_ops {
                                            struct dst_entry *dst);
 	u16	        net_header_len;
 	u16	        sockaddr_len;
+        void            (*migration_completed)(struct sock *sk);
         int             (*send_shutdown)(struct sock *sk);
         int             (*recv_shutdown)(struct sock *sk);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
