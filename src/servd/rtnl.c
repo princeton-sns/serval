@@ -445,10 +445,7 @@ int rtnl_read(struct netlink_handle *nlh)
         case RTM_NEWADDR:
                 ifi2 = iflist_find(&nlh->iflist, ifi->ifindex);
                 
-                printf("Finding interface %d\n", ifi->ifindex);
-                
                 if (ifi2 && !is_blacklist_iface(ifi->ifname)) {
-                        printf("Found interface %d\n", ifi->ifindex);
                         servd_interface_up(ifi->ifname,
                                            &ifi->ipaddr.sin_addr,
                                            &ifi2->ipaddr.sin_addr,
@@ -462,7 +459,6 @@ int rtnl_read(struct netlink_handle *nlh)
                                            &ifi->ipaddr.sin_addr,
                                            NULL,
                                            nlh->data);
-                        printf("Adding new interface %d\n", ifi->ifindex);
                         iflist_add(&nlh->iflist, ifi);
                 }
                 break;
