@@ -112,11 +112,10 @@ static int registration_del(struct servd_context *ctx,
         return ret;
 }
 
-static int registration_update(struct servd_context *ctx, 
-                               enum service_type type,
-                               const struct service_id *srvid,
-                               const struct in_addr *new_ip,
-                               const struct in_addr *old_ip)
+static int registration_update_local(struct servd_context *ctx, 
+                                     const struct service_id *srvid,
+                                     const struct in_addr *new_ip,
+                                     struct in_addr *old_ip)
 {
         struct registration *r;
         int ret = 0;
@@ -124,20 +123,51 @@ static int registration_update(struct servd_context *ctx,
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
-                if (r->type == type && 
+                if (r->type == SERVICE_LOCAL && 
                     memcmp(&r->srvid, srvid, 
-                           sizeof(struct service_id)) == 0 &&
-                    memcmp(&r->ipaddr, old_ip, sizeof(*old_ip)) == 0) {
+                           sizeof(struct service_id)) == 0) {
+                        if (old_ip)
+                                memcpy(old_ip, &r->ipaddr, 
+                                       sizeof(*old_ip));
                         memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
                         ret = 1;
                         break;
                 }
         }
-
+        
         pthread_mutex_unlock(&ctx->lock);
 
         return ret;
         
+}
+
+static int registration_update_remote(struct servd_context *ctx, 
+                                      const struct service_id *srvid,
+                                      const struct in_addr *new_ip,
+                                      const struct in_addr *old_ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (r->type == SERVICE_REMOTE && 
+                    memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0 && 
+                    memcmp(&r->ipaddr, old_ip, 
+                           sizeof(*old_ip)) == 0) {
+                        /* The old IP matched the IP stored,
+                           so this is the old record. */
+                        memcpy(&r->ipaddr, new_ip, 
+                               sizeof(*new_ip));
+                        ret = 1;
+                }
+        }
+        
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
 }
 
 static int registration_redo(struct servd_context *ctx)
@@ -287,7 +317,8 @@ static int register_service_remotely(struct hostctrl *hc,
                                      const struct service_id *srvid,
                                      unsigned short flags,
                                      unsigned short prefix,
-                                     const struct in_addr *local_ip)
+                                     const struct in_addr *local_ip,
+                                     const struct in_addr *prev_ip)
 {
         struct servd_context *ctx = hc->context;
         struct in_addr old_ip;
@@ -295,8 +326,8 @@ static int register_service_remotely(struct hostctrl *hc,
 
 	printf("Local service %s registered\n", service_id_to_str(srvid));
  
-        if (registration_update(ctx, SERVICE_LOCAL, srvid, 
-                                local_ip, &old_ip)) {
+        if (registration_update_local(ctx, srvid, 
+                                      local_ip, &old_ip)) {
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, &old_ip);
         } else {
@@ -337,8 +368,15 @@ static int handle_incoming_registration(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
         int ret = 0;
 
-        if (registration_update(ctx, SERVICE_REMOTE, srvid, 
-                                remote_ip, old_ip)) {
+        char ip1[18], ip2[18];
+        
+        printf("Registration service %s @ %s %s\n", 
+               service_id_to_str(srvid), 
+               old_ip ? inet_ntop(AF_INET, old_ip, ip1, 18) : "none",
+               inet_ntop(AF_INET, remote_ip, ip2, 18));
+
+        if (registration_update_remote(ctx, srvid, 
+                                       remote_ip, old_ip)) {
                 char buf[18];
                         
                 printf("Remote service %s @ %s reregistered\n", 
