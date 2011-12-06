@@ -16,7 +16,8 @@ struct hostctrl_callback {
                                     const struct service_id *srvid,
                                     unsigned short flags,
                                     unsigned short prefix,
-                                    const struct in_addr *ip);
+                                    const struct in_addr *ip,
+                                    const struct in_addr *old_ip);
         int (*service_unregistration)(struct hostctrl *hc,
                                       const struct service_id *srvid,
                                       unsigned short flags,
@@ -74,7 +75,8 @@ int hostctrl_service_migrate(struct hostctrl *hc,
                              const char *to_iface);
 int hostctrl_service_register(struct hostctrl *hc, 
                               const struct service_id *srvid, 
-                              unsigned short prefix_bits);
+                              unsigned short prefix_bits,
+                              const struct in_addr *old_ip);
 int hostctrl_service_unregister(struct hostctrl *hc, 
                                 const struct service_id *srvid, 
                                 unsigned short prefix_bits);

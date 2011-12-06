@@ -18,6 +18,7 @@
 #include <netinet/serval.h>
 #include <serval/platform.h>
 #include <serval/list.h>
+#include <serval/atomic.h>
 #include <common/timer.h>
 #include <common/debug.h>
 #include <pthread.h>
@@ -46,14 +47,21 @@ struct servd_context {
         pthread_mutex_t lock; /* Protects the registration list */
 };
 
+enum service_type {
+        SERVICE_LOCAL,
+        SERVICE_REMOTE,
+};
+
 struct registration {
         struct list_head lh;
+        enum service_type type;
         struct service_id srvid;
         struct in_addr ipaddr;
         int ip_set;
 };
 
 static struct registration *registration_add(struct servd_context *ctx,
+                                             enum service_type type,
                                              const struct service_id *srvid, 
                                              const struct in_addr *ipaddr)
 {
@@ -72,6 +80,7 @@ static struct registration *registration_add(struct servd_context *ctx,
                 r->ip_set = 1;
         }
 
+        r->type = type;
         pthread_mutex_lock(&ctx->lock);
         list_add_tail(&r->lh, &ctx->reglist);
         ctx->num_regs++;
@@ -103,6 +112,34 @@ static int registration_del(struct servd_context *ctx,
         return ret;
 }
 
+static int registration_update(struct servd_context *ctx, 
+                               enum service_type type,
+                               const struct service_id *srvid,
+                               const struct in_addr *new_ip,
+                               const struct in_addr *old_ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (r->type == type && 
+                    memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0 &&
+                    memcmp(&r->ipaddr, old_ip, sizeof(*old_ip)) == 0) {
+                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+                        ret = 1;
+                        break;
+                }
+        }
+
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
+        
+}
+
 static int registration_redo(struct servd_context *ctx)
 {
         struct registration *r;
@@ -114,11 +151,36 @@ static int registration_redo(struct servd_context *ctx)
                 printf("Reregistering service %s\n",
                         service_id_to_str(&r->srvid));
 
-                ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0);
+                ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0, 
+                                                &r->ipaddr);
                 
                 if (ret <= 0) {
                         fprintf(stderr, "Could not reregister service %s\n",
                                 service_id_to_str(&r->srvid));
+                }
+        }
+
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
+}
+
+static int registration_exists(struct servd_context *ctx, 
+                               enum service_type type,
+                               const struct service_id *srvid,
+                               const struct in_addr *ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0 &&
+                    r->type == type) {
+                        ret = 1;
+                        break;
                 }
         }
 
@@ -136,34 +198,6 @@ static void registration_clear(struct servd_context *ctx)
                 list_del(&reg->lh);
                 free(reg);
         }
-}
-
-static int registration_update(struct servd_context *ctx, 
-                               const struct service_id *srvid,
-                               const struct in_addr *new_ip,
-                               struct in_addr *old_ip)
-{
-        struct registration *r;
-        int ret = 0;
-
-        pthread_mutex_lock(&ctx->lock);
-        
-        list_for_each_entry(r, &ctx->reglist, lh) {
-                if (memcmp(&r->srvid, srvid, 
-                           sizeof(struct service_id)) == 0) {
-                        if (old_ip)
-                                memcpy(old_ip, &r->ipaddr, sizeof(*old_ip));
-                        
-                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
-                        ret = 1;
-                        break;
-                }
-        }
-
-        pthread_mutex_unlock(&ctx->lock);
-
-        return ret;
-        
 }
 
 static int name_to_inet_addr(const char *name, struct in_addr *ip)
@@ -256,13 +290,20 @@ static int register_service_remotely(struct hostctrl *hc,
                                      const struct in_addr *local_ip)
 {
         struct servd_context *ctx = hc->context;
-	int ret;
+        struct in_addr old_ip;
+        int ret = 0;
 
 	printf("Local service %s registered\n", service_id_to_str(srvid));
-
-        ret = hostctrl_service_register(ctx->rhc, srvid, prefix);
-    
-        registration_add(ctx, srvid, local_ip);
+ 
+        if (registration_update(ctx, SERVICE_LOCAL, srvid, 
+                                local_ip, &old_ip)) {
+                ret = hostctrl_service_register(ctx->rhc, srvid, 
+                                                prefix, &old_ip);
+        } else {
+                registration_add(ctx, SERVICE_LOCAL, srvid, local_ip);
+                ret = hostctrl_service_register(ctx->rhc, srvid, 
+                                                prefix, NULL);
+        }
 
         return ret;
 }
@@ -290,33 +331,36 @@ static int handle_incoming_registration(struct hostctrl *hc,
                                         const struct service_id *srvid,
                                         unsigned short flags,
                                         unsigned short prefix,
-                                        const struct in_addr *remote_ip)
+                                        const struct in_addr *remote_ip, 
+                                        const struct in_addr *old_ip)
 {
         struct servd_context *ctx = hc->context;
-        struct in_addr old_ip;
         int ret = 0;
 
-        if (registration_update(ctx, srvid, remote_ip, &old_ip)) {
-                if (memcmp(remote_ip, &old_ip, sizeof(old_ip)) != 0) {
-                        char buf[18];
+        if (registration_update(ctx, SERVICE_REMOTE, srvid, 
+                                remote_ip, old_ip)) {
+                char buf[18];
                         
-                        printf("Remote service %s @ %s reregistered\n", 
-                               service_id_to_str(srvid), 
-                               inet_ntop(AF_INET, remote_ip, buf, 18));
-                        
-                        ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
-                                                      0, 0, &old_ip, remote_ip);
-                }
+                printf("Remote service %s @ %s reregistered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
+                                              0, 0, old_ip, remote_ip);
         } else {
                 /* Add this service the local service table. */
                 char buf[18];
+                
                 printf("Remote service %s @ %s registered\n", 
                        service_id_to_str(srvid), 
                        inet_ntop(AF_INET, remote_ip, buf, 18));
                 
+                registration_add(ctx, SERVICE_REMOTE, srvid, remote_ip);
+
                 ret = hostctrl_service_add(ctx->lhc, srvid, prefix, 
                                            0, 0, remote_ip);
         }
+
         return ret;
 }
 
@@ -327,17 +371,22 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
                                           const struct in_addr *remote_ip)
 {
         struct servd_context *ctx = hc->context;
-
-        {
+        int ret = 0;
+        
+        if (registration_exists(ctx, SERVICE_REMOTE, srvid, remote_ip)) {
                 char buf[18];
+                
                 printf("Remote service %s @ %s unregistered\n", 
                        service_id_to_str(srvid), 
                        inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                /* Remove this service from the local service
+                   table. */
+                ret = hostctrl_service_remove(ctx->lhc, srvid, prefix, 
+                                              remote_ip);
         }
 
-        /* Register this service the local service table. */
-        return hostctrl_service_remove(ctx->lhc, srvid, prefix, 
-                                       remote_ip);
+        return ret;
 }
 
 /*
