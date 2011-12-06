@@ -17,10 +17,9 @@
 #include <libservalctrl/init.h>
 #include <netinet/serval.h>
 #include <serval/platform.h>
-#include <serval/list.h>
-#include <serval/atomic.h>
 #include <common/timer.h>
 #include <common/debug.h>
+#include <common/list.h>
 #include <pthread.h>
 
 #if defined(OS_LINUX)
@@ -170,7 +169,10 @@ static int registration_update_remote(struct servd_context *ctx,
         return ret;
 }
 
-static int registration_redo(struct servd_context *ctx)
+static int registration_redo(struct servd_context *ctx,
+                             const char *ifname,
+                             const struct in_addr *new_ip,
+                             const struct in_addr *old_ip)
 {
         struct registration *r;
         int ret = 0;
@@ -178,16 +180,22 @@ static int registration_redo(struct servd_context *ctx)
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
-                printf("Reregistering service %s\n",
-                        service_id_to_str(&r->srvid));
+                char ip1[18], ip2[18];
 
+                printf("Reregistering service %s new_ip=%s old_ip=%s\n",
+                       service_id_to_str(&r->srvid),
+                       inet_ntop(AF_INET, new_ip, ip1, 18),
+                       old_ip ? inet_ntop(AF_INET, old_ip, ip2, 18) : "none");
+                
                 ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0, 
-                                                &r->ipaddr);
+                                                old_ip);
                 
                 if (ret <= 0) {
                         fprintf(stderr, "Could not reregister service %s\n",
                                 service_id_to_str(&r->srvid));
                 }
+
+                memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
         }
 
         pthread_mutex_unlock(&ctx->lock);
@@ -274,7 +282,36 @@ static void signal_handler(int sig)
         }
 }
 
-int servd_interface_up(const char *ifname, void *context)
+/*
+static int get_interface_ip(const char *ifname, struct in_addr *ip)
+{
+	struct ifreq ifr;
+	struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+	int sock, ret = 0;
+
+	sock = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&ifr, 0, sizeof(ifr));
+	strcpy(ifr.ifr_name, ifname);
+
+	ret = ioctl(sock, SIOCGIFADDR, &ifr);
+
+        if (ret == 0) {
+                memcpy(&ip, &sin->sin_addr, 
+                       sizeof(struct in_addr));
+                ret = 1;
+	}
+
+	close(sock);
+
+	return ret;
+}
+*/
+
+int servd_interface_up(const char *ifname, 
+                       const struct in_addr *new_ip,
+                       const struct in_addr *old_ip,
+                       void *context)
 {
         struct servd_context *ctx = context;
         static int first_up_event = 0;
@@ -310,7 +347,7 @@ int servd_interface_up(const char *ifname, void *context)
 
         LOG_DBG("Resending registrations\n");
 
-        return registration_redo(ctx);
+        return registration_redo(ctx, ifname, new_ip, old_ip);
 }
 
 static int register_service_remotely(struct hostctrl *hc,
@@ -324,10 +361,13 @@ static int register_service_remotely(struct hostctrl *hc,
         struct in_addr old_ip;
         int ret = 0;
 
-	printf("Local service %s registered\n", service_id_to_str(srvid));
+	printf("Local service %s @ %s registered\n", 
+               service_id_to_str(srvid),
+               local_ip ? inet_ntoa(*local_ip) : "none");
  
         if (registration_update_local(ctx, srvid, 
                                       local_ip, &old_ip)) {
+                printf("reregistering\n");
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, &old_ip);
         } else {
@@ -720,7 +760,7 @@ int main(int argc, char **argv)
         if (ret < 0) {
                 LOG_ERR("Could not netlink request: %s\n",
                         strerror(errno));
-                rtnl_close(&nlh);
+                rtnl_fini(&nlh);
                 goto fail_netlink;
         }
 #endif
@@ -802,7 +842,7 @@ int main(int argc, char **argv)
 fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
-	rtnl_close(&nlh);
+	rtnl_fini(&nlh);
 fail_netlink:
 #endif
         hostctrl_free(ctx.rhc);
