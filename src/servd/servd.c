@@ -138,6 +138,34 @@ static void registration_clear(struct servd_context *ctx)
         }
 }
 
+static int registration_update(struct servd_context *ctx, 
+                               const struct service_id *srvid,
+                               const struct in_addr *new_ip,
+                               struct in_addr *old_ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0) {
+                        if (old_ip)
+                                memcpy(old_ip, &r->ipaddr, sizeof(*old_ip));
+                        
+                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+                        ret = 1;
+                        break;
+                }
+        }
+
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
+        
+}
+
 static int name_to_inet_addr(const char *name, struct in_addr *ip)
 {
         struct addrinfo *ai;
@@ -185,7 +213,16 @@ static void signal_handler(int sig)
 int servd_interface_up(const char *ifname, void *context)
 {
         struct servd_context *ctx = context;
+        static int first_up_event = 0;
 
+        /* Ignore first interface up event since it is generated as a
+           result of detecting the interfaces when the app first
+           starts. */
+        if (first_up_event == 0) {
+                first_up_event = 1;
+                return 0;
+        }
+                
         /* Delay operations for a short time. The reason is that the
            stack doesn't seem to be immediately ready to use the newly
            assigned address. */
@@ -221,7 +258,7 @@ static int register_service_remotely(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
 	int ret;
 
-	LOG_DBG("service=%s\n", service_id_to_str(srvid));
+	printf("Local service %s registered\n", service_id_to_str(srvid));
 
         ret = hostctrl_service_register(ctx->rhc, srvid, prefix);
     
@@ -239,7 +276,8 @@ static int unregister_service_remotely(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
         int ret;
 
-	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
+	printf("Local service=%s unregistered\n", 
+               service_id_to_str(srvid));
 
         ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
     
@@ -255,18 +293,31 @@ static int handle_incoming_registration(struct hostctrl *hc,
                                         const struct in_addr *remote_ip)
 {
         struct servd_context *ctx = hc->context;
+        struct in_addr old_ip;
+        int ret = 0;
 
-#if defined(ENABLE_DEBUG)
-        {
+        if (registration_update(ctx, srvid, remote_ip, &old_ip)) {
+                if (memcmp(remote_ip, &old_ip, sizeof(old_ip)) != 0) {
+                        char buf[18];
+                        
+                        printf("Remote service %s @ %s reregistered\n", 
+                               service_id_to_str(srvid), 
+                               inet_ntop(AF_INET, remote_ip, buf, 18));
+                        
+                        ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
+                                                      0, 0, &old_ip, remote_ip);
+                }
+        } else {
+                /* Add this service the local service table. */
                 char buf[18];
-                LOG_DBG("Remote service %s @ %s registered\n", 
-                        service_id_to_str(srvid), 
-                        inet_ntop(AF_INET, remote_ip, buf, 18));
+                printf("Remote service %s @ %s registered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                ret = hostctrl_service_add(ctx->lhc, srvid, prefix, 
+                                           0, 0, remote_ip);
         }
-#endif
-        /* Addd this service the local service table. */
-        return hostctrl_service_add(ctx->lhc, srvid, prefix, 
-                                    0, 0, remote_ip);
+        return ret;
 }
 
 static int handle_incoming_unregistration(struct hostctrl *hc,
@@ -277,14 +328,13 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
 {
         struct servd_context *ctx = hc->context;
 
-#if defined(ENABLE_DEBUG)
         {
                 char buf[18];
-                LOG_DBG("Remote service %s @ %s unregistered\n", 
-                        service_id_to_str(srvid), 
-                        inet_ntop(AF_INET, remote_ip, buf, 18));
+                printf("Remote service %s @ %s unregistered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
         }
-#endif
+
         /* Register this service the local service table. */
         return hostctrl_service_remove(ctx->lhc, srvid, prefix, 
                                        remote_ip);
