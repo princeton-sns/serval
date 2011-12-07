@@ -439,7 +439,6 @@ int rtnl_read(struct netlink_handle *nlh)
 			break;
 		}
 	}
-        
 
         switch (msg_type) {
         case RTM_NEWADDR:
