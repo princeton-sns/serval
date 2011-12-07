@@ -614,7 +614,10 @@ static int local_service_get_result(struct hostctrl *hc,
                    memcmp(&default_service, srvid, 
                           sizeof(default_service)) == 0 && 
                    memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
-                printf("Replacing default route\n");
+                char buf[18], buf2[18];
+                printf("Replacing default route old=%s new=%s\n",
+                       inet_ntop(AF_INET, ip, buf, 18),
+                       inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
                 /* The 'get' for the default service returned
                    something. Update the existing entry */
                 ret = hostctrl_service_modify(ctx->lhc, srvid, 
