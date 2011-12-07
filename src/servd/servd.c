@@ -427,7 +427,7 @@ int servd_interface_up(const char *ifname,
 
         LOG_DBG("lhc=%p rhc=%p\n", ctx->lhc, ctx->rhc);
 
-	LOG_DBG("Interface %s changed address. Migrating flows\n", ifname);
+	printf("Interface %s changed address. Migrating flows\n", ifname);
         
         hostctrl_interface_migrate(ctx->lhc, ifname, ifname);
         
@@ -441,7 +441,8 @@ int servd_interface_up(const char *ifname,
                    registrations. We need the default service route to
                    send them out. */
                 ctx->reregister_signal_waiting = 1;
-
+                
+                printf("Requesting default service route info\n");
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
 
@@ -604,7 +605,7 @@ static int local_service_get_result(struct hostctrl *hc,
 #endif
      
         if (flags & SVSF_INVALID) {
-                LOG_DBG("No default service route set\n");
+                printf("No default service route set\n");
                 /* There was no existing route, the 'get' returned
                    nothing. Just add our default route */
                 ret = hostctrl_service_add(ctx->lhc, &default_service,
@@ -613,7 +614,7 @@ static int local_service_get_result(struct hostctrl *hc,
                    memcmp(&default_service, srvid, 
                           sizeof(default_service)) == 0 && 
                    memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
-                LOG_DBG("Replacing default route\n");
+                printf("Replacing default route\n");
                 /* The 'get' for the default service returned
                    something. Update the existing entry */
                 ret = hostctrl_service_modify(ctx->lhc, srvid, 
@@ -624,7 +625,8 @@ static int local_service_get_result(struct hostctrl *hc,
         /* Check if we need to perform the deferred reregistration of
            services now that we have a new default service router
            (which was probably a result of an interface up/down). */
-        if (ctx->router_ip_set && !ctx->router && ctx->reregister_signal_waiting) {
+        if (ctx->router_ip_set && !ctx->router && 
+            ctx->reregister_signal_waiting) {
                 signal_raise(ctx->reregister_signal);
         }
 
