@@ -495,9 +495,11 @@ static int unregister_service_remotely(struct hostctrl *hc,
 	printf("Local service=%s unregistered\n", 
                service_id_to_str(srvid));
 
-        ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
+        if (ctx->rhc) {
+                ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
     
-        registration_del(ctx, srvid);
+                registration_del(ctx, srvid);
+        }
 
         return ret;
 }
@@ -836,21 +838,6 @@ int main(int argc, char **argv)
                 goto fail_hostctrl_local;
         }
 
-        hostctrl_start(ctx.lhc);
-
-        /* If we are a client and have a fixed IP for the service
-           router, then replace an existing "default" service rule by
-           querying for the current one and modifying it in the
-           resulting callback. */
-        if (ctx.router_ip_set && !ctx.router) {
-                ctx.reregister_signal_waiting = 1;
-                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-                printf("waiting on signal\n");
-                signal_wait(ctx.reregister_signal, 3000);
-                printf("done waiting on signal\n");
-                ctx.reregister_signal_waiting = 0;
-        }
-
         ctx.raddr.sv_family = AF_SERVAL;
         ctx.raddr.sv_srvid.srv_un.un_id32[0] = htonl(router_id);
 
@@ -877,6 +864,20 @@ int main(int argc, char **argv)
         }
 
         hostctrl_start(ctx.rhc);
+        hostctrl_start(ctx.lhc);
+        /* If we are a client and have a fixed IP for the service
+           router, then replace an existing "default" service rule by
+           querying for the current one and modifying it in the
+           resulting callback. */
+        if (ctx.router_ip_set && !ctx.router) {
+                ctx.reregister_signal_waiting = 1;
+                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
+                printf("waiting on signal\n");
+                signal_wait(ctx.reregister_signal, 3000);
+                printf("done waiting on signal\n");
+                ctx.reregister_signal_waiting = 0;
+        }
+
 #if defined(OS_LINUX)
 	ret = rtnl_init(&nlh, &ctx);
 
@@ -968,6 +969,7 @@ fail_ifaddrs:
 fail_netlink:
 #endif
         hostctrl_free(ctx.rhc);
+        ctx.rhc = NULL;
 fail_hostctrl_remote:
         hostctrl_free(ctx.lhc);
 fail_hostctrl_local:

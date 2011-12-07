@@ -190,7 +190,7 @@ static int local_service_migrate(struct hostctrl *hc,
                 LOG_ERR("Undefined interface\n");
                 return -1;
         }
-
+        
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
         cm.cmh.len = sizeof(cm);
