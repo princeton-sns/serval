@@ -231,7 +231,7 @@ static void message_channel_base_task(void *channel)
     ssize_t ret;
 
     while (base->running) {
-        LOG_DBG("%s receive task running\n", base->channel.name);
+        /* LOG_DBG("%s receive task running\n", base->channel.name); */
 
         if (base->native_socket) {
             ret = recvfrom(base->sock, base->buffer,
@@ -249,11 +249,7 @@ static void message_channel_base_task(void *channel)
         
         if (ret == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                LOG_DBG("%s recv would block\n",
-                        base->channel.name);
                 if (task_block(base->sock, FD_READ) == 0) {
-                    LOG_DBG("%s unblocked (continuing)\n",
-                            base->channel.name);
                     continue;
                 }
             }
@@ -263,8 +259,8 @@ static void message_channel_base_task(void *channel)
             
             base->running = 0;
         } else {
-            LOG_DBG("%s Received a message len=%zd\n", 
-                    base->channel.name, ret);
+            /* LOG_DBG("%s Received a message len=%zd\n", 
+               base->channel.name, ret); */
             //pthread_mutex_lock(&channel->lock);
             base->channel.ops->recv(&base->channel, base->buffer, (size_t)ret, 
                                     &peer.sa, addrlen);
@@ -300,8 +296,10 @@ int message_channel_base_send(message_channel_t *channel,
     }
     */
 
+    /*
     LOG_DBG("%s Sending %zu byte message\n",
             channel->name, msglen);
+    */
 
     while (retries++ <= MAX_SEND_RETRIES && ret == -1) {
 
@@ -329,9 +327,9 @@ int message_channel_base_send(message_channel_t *channel,
                 break;
             }
         }
-
-        LOG_DBG("sendto returned %d\n", ret);
     }
+
+    LOG_DBG("Sent %d\n", ret);
 
     return ret;
 }
@@ -368,8 +366,10 @@ int message_channel_base_send_iov(message_channel_t *channel, struct iovec *iov,
     }
     */
 
+    /*
     LOG_DBG("%s Sending %zu byte message to the local stack\n", 
             channel->name, msglen);
+    */
 
     while (retries++ <= MAX_SEND_RETRIES && ret == -1) {
 
@@ -382,13 +382,11 @@ int message_channel_base_send_iov(message_channel_t *channel, struct iovec *iov,
             ret = sendmsg(base->sock, &mh, 0);
         }
 #endif
-        LOG_DBG("sendmsg returned %d\n", ret);
-
         if (ret == -1) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
                 //task_block(base->sock, FD_WRITE);
             } else {
-                LOG_DBG("%s sendmsg error: %s\n", 
+                LOG_ERR("%s sendmsg error: %s\n", 
                         channel->name, strerror(errno));
                 break;
             }

@@ -368,7 +368,7 @@ int rtnl_read(struct netlink_handle *nlh)
 		case NLMSG_ERROR:
 			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
 			if (nlmerr->error == 0) {
-				LOG_DBG("NLMSG_ACK");
+				/* LOG_DBG("NLMSG_ACK"); */
 			} else {
 				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", 
 					nlmerr->error, nlmerr->msg.nlmsg_type);
@@ -415,7 +415,7 @@ int rtnl_read(struct netlink_handle *nlh)
                         }
                         break;
 		case RTM_DELADDR:
-                        LOG_DBG("deladdr\n");
+                        /* LOG_DBG("deladdr\n"); */
 			ret = rtnl_parse_addr_info(nlm, ifi);
                         if (ret > 0) {
                                 LOG_DBG("Interface deladdr %s %s\n", 
@@ -424,7 +424,7 @@ int rtnl_read(struct netlink_handle *nlh)
                         }
 			break;
 		case RTM_NEWADDR:
-                        LOG_DBG("New addr\n");
+                        /* LOG_DBG("New addr\n"); */
 			ret = rtnl_parse_addr_info(nlm, ifi);
                         
                         if (ret > 0) {
@@ -470,7 +470,7 @@ int rtnl_read(struct netlink_handle *nlh)
                 break;
         }
 
-        LOG_DBG("read %u messages\n", num_msgs);
+        /* LOG_DBG("read %u messages\n", num_msgs); */
 
 	return num_msgs;
 }

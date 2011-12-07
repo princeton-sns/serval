@@ -43,6 +43,7 @@ struct servd_context {
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
+        int reregister_signal_waiting;
         int reregister_signal[2];
         unsigned int num_regs;
         pthread_mutex_t lock; /* Protects the registration list */
@@ -287,10 +288,12 @@ static void signal_raise(int sig[2])
         memset(&fds, 0, sizeof(fds));
 
         fds.fd = sig[0];
-        fds.events = POLL_IN;
+        fds.events = POLLIN;
 
-        if (poll(&fds, 1, -1) > 0)
+        if (poll(&fds, 1, 0) > 0) {
+                LOG_DBG("Signal already raised\n");
                 return;
+        }
 
         ret = write(sig[1], &r, 1);
 
@@ -309,7 +312,7 @@ static int signal_lower(int sig[2])
                 memset(&fds, 0, sizeof(fds));
                 
                 fds.fd = sig[0];
-                fds.events = POLL_IN;
+                fds.events = POLLIN;
                 
                 if (poll(&fds, 1, 0) <= 0)
                         break;
@@ -327,9 +330,8 @@ static int signal_wait(int sig[2], int timeout)
         int ret = 0;
         
         memset(&fds, 0, sizeof(fds));
-        
         fds.fd = sig[0];
-        fds.events = POLL_IN;
+        fds.events = POLLIN;
         
         ret = poll(&fds, 1, timeout);
 
@@ -354,7 +356,7 @@ static int signal_is_raised(int sig[2])
         memset(&fds, 0, sizeof(fds));
         
         fds.fd = sig[0];
-        fds.events = POLL_IN;
+        fds.events = POLLIN;
         
         if (poll(&fds, 1, 0) > 0)
                 return SIGNAL_SET;
@@ -434,14 +436,17 @@ int servd_interface_up(const char *ifname,
            previously. Get any new information default route (default
            broadcast) and update it in the callback. */
         if (ctx->router_ip_set && !ctx->router) {
-                hostctrl_service_get(ctx->lhc, &default_service, 
-                                     0, NULL);
 
                 /* Synchronize with callback before redoing
                    registrations. We need the default service route to
                    send them out. */
-                printf("Waiting for reregister signal\n");
+                ctx->reregister_signal_waiting = 1;
+
+                hostctrl_service_get(ctx->lhc, &default_service, 
+                                     0, NULL);
+
                 signal_wait(ctx->reregister_signal, 5000);
+                ctx->reregister_signal_waiting = 0;
         }
 
         LOG_DBG("Resending registrations\n");
@@ -617,7 +622,7 @@ static int local_service_get_result(struct hostctrl *hc,
         /* Check if we need to perform the deferred reregistration of
            services now that we have a new default service router
            (which was probably a result of an interface up/down). */
-        if (ret == 0 && ctx->router_ip_set && !ctx->router) {
+        if (ctx->router_ip_set && !ctx->router && ctx->reregister_signal_waiting) {
                 signal_raise(ctx->reregister_signal);
         }
 
@@ -831,6 +836,21 @@ int main(int argc, char **argv)
                 goto fail_hostctrl_local;
         }
 
+        hostctrl_start(ctx.lhc);
+
+        /* If we are a client and have a fixed IP for the service
+           router, then replace an existing "default" service rule by
+           querying for the current one and modifying it in the
+           resulting callback. */
+        if (ctx.router_ip_set && !ctx.router) {
+                ctx.reregister_signal_waiting = 1;
+                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
+                printf("waiting on signal\n");
+                signal_wait(ctx.reregister_signal, 3000);
+                printf("done waiting on signal\n");
+                ctx.reregister_signal_waiting = 0;
+        }
+
         ctx.raddr.sv_family = AF_SERVAL;
         ctx.raddr.sv_srvid.srv_un.un_id32[0] = htonl(router_id);
 
@@ -857,8 +877,6 @@ int main(int argc, char **argv)
         }
 
         hostctrl_start(ctx.rhc);
-        hostctrl_start(ctx.lhc);
-
 #if defined(OS_LINUX)
 	ret = rtnl_init(&nlh, &ctx);
 
@@ -885,13 +903,6 @@ int main(int argc, char **argv)
                 goto fail_ifaddrs;
         }
 #endif
-        /* If we are a client and have a fixed IP for the service
-           router, then replace an existing "default" service rule by
-           querying for the current one and modifying it in the
-           resulting callback. */
-        if (ctx.router_ip_set && !ctx.router) {
-                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-        }
 
 #define MAX(x,y) (x > y ? x : y)
 
@@ -932,7 +943,6 @@ int main(int argc, char **argv)
                         }
 #if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
-                                LOG_DBG("netlink readable\n");
                                 rtnl_read(&nlh);
                         }
 #endif

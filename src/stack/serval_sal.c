@@ -3433,11 +3433,15 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /* TODO - prefix, flags??*/
         //ssk->srvid_flags;
         //ssk->srvid_prefix;
+
+        LOG_DBG("Resolving service %s\n",
+                service_id_to_str(&ssk->peer_srvid));
+
         se = service_find(&ssk->peer_srvid, 
                           sizeof(struct service_id) * 8);
 
 	if (!se) {
-		LOG_INF("service lookup failed for [%s]\n",
+		LOG_DBG("service lookup failed for [%s]\n",
                         service_id_to_str(&ssk->peer_srvid));
                 service_inc_stats(-1, -dlen);
                 kfree_skb(skb);
