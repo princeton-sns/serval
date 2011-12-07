@@ -271,6 +271,13 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
+
+enum {
+        SIGNAL_ERROR = -1,
+        SIGNAL_TIMEOUT = 0,
+        SIGNAL_RAISED = 1,
+};
+
 static void signal_raise(int sig[2])
 {
         struct pollfd fds;
@@ -318,7 +325,6 @@ static int signal_wait(int sig[2], int timeout)
         struct pollfd fds;
         char r = 'r';
         int ret = 0;
-
         
         memset(&fds, 0, sizeof(fds));
         
@@ -327,12 +333,17 @@ static int signal_wait(int sig[2], int timeout)
         
         ret = poll(&fds, 1, timeout);
 
-        if (ret <= 0)
+        if (ret <= 0) {
+                if (ret == 0) {
+                        printf("Signal timeout\n");
+                }
                 return ret;
-        
+        }
         ret = read(sig[0], &r, 1);
 
-        return signal_lower(sig);
+        signal_lower(sig);
+
+        return SIGNAL_RAISED;
 }
 
 #ifdef ENABLE_NOT_USED
@@ -345,10 +356,10 @@ static int signal_is_raised(int sig[2])
         fds.fd = sig[0];
         fds.events = POLL_IN;
         
-        if (poll(&fds, 1, -1) > 0)
-                return 1;
+        if (poll(&fds, 1, 0) > 0)
+                return SIGNAL_SET;
 
-        return 0;
+        return SIGNAL_TIMEOUT;
 }
 #endif
 
@@ -429,6 +440,7 @@ int servd_interface_up(const char *ifname,
                 /* Synchronize with callback before redoing
                    registrations. We need the default service route to
                    send them out. */
+                printf("Waiting for reregister signal\n");
                 signal_wait(ctx->reregister_signal, 5000);
         }
 
