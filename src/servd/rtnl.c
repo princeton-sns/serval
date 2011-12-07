@@ -105,7 +105,9 @@ static void iflist_del(struct list_head *list, int ifindex)
                 if_info_free(ifi);
         }
 }
+*/
 
+#if defined(ENABLE_DEBUG)
 static char *eth_to_str(unsigned char *addr)
 {
 	static char buf[30];
@@ -117,7 +119,7 @@ static char *eth_to_str(unsigned char *addr)
 
 	return buf;
 }
-*/
+#endif
 
 static char *iface_blacklist[] = { "lo", "dummy", NULL };
 

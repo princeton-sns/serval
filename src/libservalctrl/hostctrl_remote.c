@@ -93,7 +93,9 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                 ret = hc->cbs->service_registration(hc, &cmr->srvid, 
                                                     cmr->srvid_flags, 
                                                     cmr->srvid_prefix_bits, 
-                                                    from, cmr->flags & REG_FLAG_REREGISTER ? &cmr->addr : NULL);
+                                                    from, 
+                                                    cmr->flags & REG_FLAG_REREGISTER ? 
+                                                    &cmr->addr : NULL);
                 break;
         }
         case CTRLMSG_TYPE_UNREGISTER: {

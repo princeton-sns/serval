@@ -21,6 +21,7 @@
 #include <common/debug.h>
 #include <common/list.h>
 #include <pthread.h>
+#include <poll.h>
 
 #if defined(OS_LINUX)
 #include "rtnl.h"
@@ -42,6 +43,7 @@ struct servd_context {
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
+        int reregister_signal[2];
         unsigned int num_regs;
         pthread_mutex_t lock; /* Protects the registration list */
 };
@@ -269,6 +271,87 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
+static void signal_raise(int sig[2])
+{
+        struct pollfd fds;
+        const char r = 'r';
+        int ret = 0;
+
+        memset(&fds, 0, sizeof(fds));
+
+        fds.fd = sig[0];
+        fds.events = POLL_IN;
+
+        if (poll(&fds, 1, -1) > 0)
+                return;
+
+        ret = write(sig[1], &r, 1);
+
+        if (ret < 0) {
+                LOG_ERR("Could not signal quit!\n");
+        }
+}
+
+static int signal_lower(int sig[2])
+{
+        struct pollfd fds;
+        char r = 'r';
+        int ret = 0;
+
+        while (1) {
+                memset(&fds, 0, sizeof(fds));
+                
+                fds.fd = sig[0];
+                fds.events = POLL_IN;
+                
+                if (poll(&fds, 1, 0) <= 0)
+                        break;
+                
+                ret = read(sig[0], &r, 1);
+        }
+
+        return ret;
+}
+
+static int signal_wait(int sig[2], int timeout)
+{
+        struct pollfd fds;
+        char r = 'r';
+        int ret = 0;
+
+        
+        memset(&fds, 0, sizeof(fds));
+        
+        fds.fd = sig[0];
+        fds.events = POLL_IN;
+        
+        ret = poll(&fds, 1, timeout);
+
+        if (ret <= 0)
+                return ret;
+        
+        ret = read(sig[0], &r, 1);
+
+        return signal_lower(sig);
+}
+
+#ifdef ENABLE_NOT_USED
+static int signal_is_raised(int sig[2])
+{
+        struct pollfd fds;
+        
+        memset(&fds, 0, sizeof(fds));
+        
+        fds.fd = sig[0];
+        fds.events = POLL_IN;
+        
+        if (poll(&fds, 1, -1) > 0)
+                return 1;
+
+        return 0;
+}
+#endif
+
 static void signal_handler(int sig)
 {
         ssize_t ret;
@@ -340,13 +423,17 @@ int servd_interface_up(const char *ifname,
            previously. Get any new information default route (default
            broadcast) and update it in the callback. */
         if (ctx->router_ip_set && !ctx->router) {
-                sleep(1);
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
+
+                /* Synchronize with callback before redoing
+                   registrations. We need the default service route to
+                   send them out. */
+                signal_wait(ctx->reregister_signal, 5000);
         }
 
         LOG_DBG("Resending registrations\n");
-
+        
         return registration_redo(ctx, ifname, new_ip, old_ip);
 }
 
@@ -407,15 +494,14 @@ static int handle_incoming_registration(struct hostctrl *hc,
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
-
         char ip1[18], ip2[18];
         
         printf("Registration service %s @ %s %s\n", 
                service_id_to_str(srvid), 
                old_ip ? inet_ntop(AF_INET, old_ip, ip1, 18) : "none",
                inet_ntop(AF_INET, remote_ip, ip2, 18));
-
-        if (registration_update_remote(ctx, srvid, 
+        
+        if (old_ip && registration_update_remote(ctx, srvid, 
                                        remote_ip, old_ip)) {
                 char buf[18];
                         
@@ -515,7 +601,14 @@ static int local_service_get_result(struct hostctrl *hc,
                                               prefix, priority,
                                               weight, ip, &ctx->router_ip);
         }
-        
+
+        /* Check if we need to perform the deferred reregistration of
+           services now that we have a new default service router
+           (which was probably a result of an interface up/down). */
+        if (ret == 0 && ctx->router_ip_set && !ctx->router) {
+                signal_raise(ctx->reregister_signal);
+        }
+
         return ret;
 }
                                    
@@ -702,7 +795,14 @@ int main(int argc, char **argv)
 
         if (ret == -1) {
 		LOG_ERR("Could not open pipe\n");
-		goto fail_pipe;
+		goto fail_pipe1;
+        }
+
+	ret = pipe(ctx.reregister_signal);
+
+        if (ret == -1) {
+		LOG_ERR("Could not open reregister signal pipe\n");
+		goto fail_pipe2;
         }
 
 	ret = libservalctrl_init();
@@ -851,9 +951,12 @@ fail_hostctrl_remote:
 fail_hostctrl_local:
         libservalctrl_fini();
 fail_libservalctrl:
+        close(ctx.reregister_signal[0]);
+        close(ctx.reregister_signal[1]);
+ fail_pipe2:
 	close(p[0]);
 	close(p[1]);
-fail_pipe:
+fail_pipe1:
         timer_queue_fini(&tq);
 
         registration_clear(&ctx);
