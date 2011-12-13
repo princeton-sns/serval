@@ -603,7 +603,8 @@ static int local_service_get_result(struct hostctrl *hc,
                 inet_ntop(AF_INET, ip, buf, 18),
                 inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
 #endif
-     
+        sleep(1);
+
         if (flags & SVSF_INVALID) {
                 printf("No default service route set\n");
                 /* There was no existing route, the 'get' returned
