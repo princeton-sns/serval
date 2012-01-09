@@ -117,7 +117,7 @@ hostctrl_remote_create_specific(const struct hostctrl_callback *cbs,
 					 peer, peer_len, 0);
         
 	if (!mc) {
-		LOG_DBG("Could not create local host control interface\n");
+		LOG_DBG("Could not create remote host control interface\n");
 		return NULL;
 	}
         
