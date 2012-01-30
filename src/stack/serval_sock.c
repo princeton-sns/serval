@@ -708,6 +708,24 @@ void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
         }
 }
 
+const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+        snprintf(buf, buflen, "%s snd_seq[una=%u nxt=%u wnd=%u iss=%u] "
+                 "rcv_seq[nxt=%u wnd=%u iss=%u]",
+                 serval_sock_sal_state_str(sk), 
+                 ssk->snd_seq.una, 
+                 ssk->snd_seq.nxt, 
+                 ssk->snd_seq.wnd, 
+                 ssk->snd_seq.iss,
+                 ssk->rcv_seq.nxt,
+                 ssk->rcv_seq.wnd,
+                 ssk->rcv_seq.iss);
+
+        return buf;
+}
+
 const char *serval_sock_state_str(struct sock *sk)
 {
         if (sk->sk_state >= __SERVAL_MAX_STATE) {

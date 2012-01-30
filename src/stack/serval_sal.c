@@ -2526,6 +2526,14 @@ int serval_sal_state_process(struct sock *sk,
 
         LOG_PKT("receive in state %s\n", serval_sock_state_str(sk));
 
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                LOG_DBG("SAL PROCESS START %s\n",
+                        serval_sock_print_state(sk, buf, 512));
+        }
+#endif
+
         if (has_seqno(ctx) && !has_valid_seqno(ctx->seqno, sk))
                 goto drop;
         
@@ -2583,6 +2591,14 @@ int serval_sal_state_process(struct sock *sk,
                         serval_sock_state_str(sk), sk->sk_state);
                 goto drop;
         }
+
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                LOG_DBG("SAL PROCESS END %s\n",
+                        serval_sock_print_state(sk, buf, 512));
+        }
+#endif
                 
         if (err) {
                 LOG_ERR("Error on receive: %d\n", err);
@@ -2590,6 +2606,15 @@ int serval_sal_state_process(struct sock *sk,
 
         return 0;
 drop:
+
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                LOG_DBG("SAL PROCESS END %s\n",
+                        serval_sock_print_state(sk, buf, 512));
+        }
+#endif
+
         kfree_skb(skb);
 
         return 0;
@@ -2975,8 +3000,8 @@ int serval_sal_rcv(struct sk_buff *skb)
         {
                 struct iphdr *iph = ip_hdr(skb);
                 char src[18], dst[18];
-                
-                LOG_PKT("Serval RECEIVE %s skb->len=%u : %s -> %s\n",
+
+                LOG_PKT("SAL RECEIVE %s skb->len=%u : %s -> %s\n",
                         serval_hdr_to_str(ctx.hdr), skb->len, 
                         inet_ntop(AF_INET, &iph->saddr, src, 18),
                         inet_ntop(AF_INET, &iph->daddr, dst, 18));
@@ -3164,12 +3189,18 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
-        	            LOG_DBG("Using MIG addr\n");
+#if defined(ENABLE_DEBUG)
+                            char dst[18];
+        	            LOG_DBG("Sending to MIG dest addr %s\n",
+                                    inet_ntop(AF_INET, 
+                                              &ssk->mig_daddr, 
+                                              dst, 18));
+#endif
         	            memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
         	            memcpy(&inet_sk(sk)->inet_daddr, 
                                    &ssk->mig_daddr, 4);
         	    }
-                    skb_set_dev(skb, ssk->mig_dev);
+                    /* skb_set_dev(skb, ssk->mig_dev); */
                     
                     /* Must remove any cached route */
                     sk_dst_reset(sk);
