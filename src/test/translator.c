@@ -230,6 +230,13 @@ static void signal_handler(int sig)
         printf("signal %u caught!\n", sig);
 }
 
+void print_usage(void)
+{
+        printf("Usage: translator OPTIONS\n");
+        printf("OPTIONS:\n");
+        printf("\t-p, --port PORT\t\t port to listen on\n");
+}
+
 int main(int argc, char **argv)
 {       
 	struct sigaction action;
@@ -246,6 +253,10 @@ int main(int argc, char **argv)
                         translator_port = atoi(argv[1]);
 			argv++;
 			argc--;
+                } else if (strcmp(argv[0], "-h") == 0 ||
+                           strcmp(argv[0], "--help") ==  0) {
+                        print_usage();
+                        return 0;
                 }
 		argc--;
 		argv++;
