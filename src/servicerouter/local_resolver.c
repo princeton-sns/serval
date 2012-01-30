@@ -393,7 +393,7 @@ static void purge_peer_resolution(struct sv_local_resolver *lres,
     memcpy(&addr, resolver_get_address(peer, 0), sizeof(addr));
     hostctrl_service_add(lres->lhc, &sdesc->sv_srvid, 
                          sdesc->sv_prefix_bits,
-                         &addr);
+                         1, 1, &addr);
                  
 }
 
@@ -649,12 +649,12 @@ static void destroy_peer_info(void *value)
     free(pinfo);
 }
 
-static int local_handle_service_registration(void *context,
+static int local_handle_service_registration(struct hostctrl *hc,
                                              const struct service_id *service,
                                              unsigned short flags,
                                              unsigned short prefix,
                                              const struct in_addr *ip);
-static int local_handle_service_unregistration(void *context,
+static int local_handle_service_unregistration(struct hostctrl *hc,
                                                const struct service_id *service,
                                                unsigned short flags,
                                                unsigned short prefix,
@@ -723,13 +723,13 @@ service_resolver *create_local_service_resolver(struct sockaddr_sv *local,
     return &lres->resolver.resolver;
 }
 
-static int local_handle_service_registration(void *context,
+static int local_handle_service_registration(struct hostctrl *hc,
                                              const struct service_id *service,
                                              unsigned short flags,
                                              unsigned short prefix,
                                              const struct in_addr *ip)
 {
-    service_resolver *res = (service_resolver *)context;
+    service_resolver *res = (service_resolver *)hc->context;
     struct service_desc sd;
     memset(&sd, 0, sizeof(sd));
     memcpy(&sd.service, service, sizeof(*service));
@@ -738,13 +738,13 @@ static int local_handle_service_registration(void *context,
     return res->interface->register_services(res, NULL, &sd, 1, NULL, 0);
 }
 
-static int local_handle_service_unregistration(void *context,
+static int local_handle_service_unregistration(struct hostctrl *hc,
                                                const struct service_id *service,
                                                unsigned short flags,
                                                unsigned short prefix,
                                                const struct in_addr *ip)
 {
-    service_resolver *res = (service_resolver *)context;
+    service_resolver *res = (service_resolver *)hc->context;
     struct service_desc sd;
     memset(&sd, 0, sizeof(sd));
     memcpy(&sd.service, service, sizeof(*service));
@@ -1705,6 +1705,7 @@ static void add_peer_resolution(struct sv_local_resolver *lres,
     hostctrl_service_add(lres->lhc, 
                          &ref->instance.service.sv_srvid,
                          ref->instance.service.sv_prefix_bits,
+                         1, 1,
                          &ref->instance.address.sin.sin_addr);
 }
 

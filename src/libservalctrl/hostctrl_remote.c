@@ -8,7 +8,8 @@
 
 static int remote_service_register(struct hostctrl *hc,
                                    const struct service_id *srvid, 
-                                   unsigned short prefix_bits)
+                                   unsigned short prefix_bits,
+                                   const struct in_addr *old_ip)
 {
         struct ctrlmsg_register req;
 
@@ -22,6 +23,11 @@ static int remote_service_register(struct hostctrl *hc,
                 (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
                 0 : prefix_bits;
         memcpy(&req.srvid, srvid, sizeof(*srvid));
+
+        if (old_ip) {
+                req.flags |= REG_FLAG_REREGISTER;
+                memcpy(&req.addr, old_ip, sizeof(*old_ip));
+        }
         //memcpy(&req.address, ipaddr, sizeof(*ipaddr));
         
         LOG_DBG("prefix_bits=%u sizeof(req)=%zu %s\n",
@@ -82,16 +88,24 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         int ret = 0;
         
         switch (cm->type) {
-        case CTRLMSG_TYPE_REGISTER:
-                ret = handle_service_change(hc, (struct ctrlmsg_register *)cm,
-                                            from,
-                                            hc->cbs->service_registration);
+        case CTRLMSG_TYPE_REGISTER: {
+                struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+                ret = hc->cbs->service_registration(hc, &cmr->srvid, 
+                                                    cmr->srvid_flags, 
+                                                    cmr->srvid_prefix_bits, 
+                                                    from, 
+                                                    cmr->flags & REG_FLAG_REREGISTER ? 
+                                                    &cmr->addr : NULL);
                 break;
-        case CTRLMSG_TYPE_UNREGISTER:
-                ret = handle_service_change(hc, (struct ctrlmsg_register *)cm,
-                                            from,
-                                            hc->cbs->service_unregistration);
+        }
+        case CTRLMSG_TYPE_UNREGISTER: {
+                struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+                ret = hc->cbs->service_unregistration(hc, &cmr->srvid, 
+                                                      cmr->srvid_flags, 
+                                                      cmr->srvid_prefix_bits, 
+                                                      from);
                 break;
+        }
         case CTRLMSG_TYPE_RESOLVE:
                 break;
         case CTRLMSG_TYPE_SERVICE_STAT:

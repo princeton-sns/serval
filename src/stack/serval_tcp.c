@@ -2379,6 +2379,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
+        .migration_completed = serval_tcp_send_probe0,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
@@ -2399,6 +2400,7 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
+        .migration_completed = serval_tcp_send_probe0,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
@@ -2560,7 +2562,7 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 	serval_tcp_mtup_init(newsk);
 #if defined(OS_LINUX_KERNEL)
         serval_tcp_sync_mss(newsk, dst_mtu(dst));
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);
 #else
         newtp->advmss = dst_metric_advmss(dst);

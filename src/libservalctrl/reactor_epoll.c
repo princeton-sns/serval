@@ -79,7 +79,7 @@ static int reactor_epoll_wait(struct reactor *r, const struct timespec *t)
     }
     pthread_mutex_unlock(&r->lock);
 
-    LOG_DBG("Waiting on %u blocks\n", num_ee - 1);
+    /* LOG_DBG("Waiting on %u blocks\n", num_ee - 1); */
 
     ee = malloc(sizeof(struct epoll_event) * num_ee);
 

@@ -352,7 +352,7 @@ uint16_t in_cksum(const void *data, size_t len);
 const char *mac_ntop(const void *src, char *dst, size_t size);
 const char *get_strtime(void);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 #define route_dst(rt) (&(rt)->u.dst)
 #else
 #define route_dst(rt) (&(rt)->dst)

@@ -95,17 +95,21 @@ CTRLMSG_ASSERT(sizeof(struct ctrlmsg) == 4)
 
 #define CTRLMSG_SIZE (sizeof(struct ctrlmsg))
 
-/* this should probably include address as well - whatever was passed
- * in to bind()*/
 struct ctrlmsg_register {
         struct ctrlmsg cmh;
-        uint8_t pad[2];
+        uint8_t flags;
+        uint8_t pad;
         uint8_t srvid_prefix_bits;
         uint8_t srvid_flags;
+        struct in_addr addr; /* When reregistering, this is the old address */
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 40)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 44)
+
+enum ctrlmsg_register_flags {
+        REG_FLAG_REREGISTER = 1,
+};
 
 #define CTRLMSG_REGISTER_SIZE (sizeof(struct ctrlmsg_register))
 #define CTRLMSG_UNREGISTER_SIZE (sizeof(struct ctrlmsg_register))

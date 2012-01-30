@@ -15,7 +15,8 @@ struct hostctrl_ops {
                                const char *to_iface);
         int (*service_register)(struct hostctrl *hc, 
                                 const struct service_id *srvid, 
-                                unsigned short prefix_bits);
+                                unsigned short prefix_bits,
+                                const struct in_addr *old_ip);
 	int (*service_unregister)(struct hostctrl *hc,
                                   const struct service_id *srvid, 
                                   unsigned short prefix_bits);

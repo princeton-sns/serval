@@ -114,10 +114,19 @@ static int local_service_get(struct hostctrl *hc,
 
 static int local_service_register_dummy(struct hostctrl *hc, 
                                         const struct service_id *srvid,
-                                        unsigned short prefix_bits)
+                                        unsigned short prefix_bits,
+                                        const struct in_addr *old_ip)
 {
         return 0;
 }
+
+static int local_service_unregister_dummy(struct hostctrl *hc, 
+                                          const struct service_id *srvid,
+                                          unsigned short prefix_bits)
+{
+        return 0;
+}
+
 
 static int local_interface_migrate(struct hostctrl *hc,
                                    const char *from_iface,
@@ -181,7 +190,7 @@ static int local_service_migrate(struct hostctrl *hc,
                 LOG_ERR("Undefined interface\n");
                 return -1;
         }
-
+        
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
         cm.cmh.len = sizeof(cm);
@@ -201,16 +210,22 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                 return 0;
 
         switch (cm->type) {
-        case CTRLMSG_TYPE_REGISTER:
-                ret = handle_service_change(hc, (struct ctrlmsg_register *)cm,
-                                            from,
-                                            hc->cbs->service_registration);
+        case CTRLMSG_TYPE_REGISTER: {
+                struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+                ret = hc->cbs->service_registration(hc, &cmr->srvid, 
+                                                    cmr->srvid_flags, 
+                                                    cmr->srvid_prefix_bits, 
+                                                    from, NULL);
                 break;
-        case CTRLMSG_TYPE_UNREGISTER:
-                ret = handle_service_change(hc, (struct ctrlmsg_register *)cm,
-                                            from,
-                                            hc->cbs->service_unregistration);
+        }
+        case CTRLMSG_TYPE_UNREGISTER: {
+                struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+                ret = hc->cbs->service_unregistration(hc, &cmr->srvid, 
+                                                      cmr->srvid_flags, 
+                                                      cmr->srvid_prefix_bits, 
+                                                      from);
                 break;
+        }
         case CTRLMSG_TYPE_RESOLVE:                
                 break;
         case CTRLMSG_TYPE_GET_SERVICE: {
@@ -251,7 +266,7 @@ struct hostctrl_ops local_ops = {
         .flow_migrate = local_flow_migrate,
         .service_migrate = local_service_migrate,
         .service_register = local_service_register_dummy,
-        .service_unregister = local_service_register_dummy,
+        .service_unregister = local_service_unregister_dummy,
 	.service_add = local_service_add,
 	.service_remove = local_service_remove,
 	.service_modify = local_service_modify,

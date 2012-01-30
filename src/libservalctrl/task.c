@@ -31,6 +31,8 @@
 static pthread_key_t task_key;
 static unsigned int num_threads = MAX_THREADS;
 
+#define LOG_TASK(format, ...) /* LOG_DBG() */
+
 enum task_state {
     TASK_CREATED,
     TASK_INITIALIZED,
@@ -131,7 +133,7 @@ static inline struct task *task_lookup(struct hashtable *table, const void *key)
 
 static void task_set_state(struct task *task, enum task_state state) 
 {
-    LOG_DBG("Task %lu %s->%s\n", 
+    LOG_TASK("Task %lu %s->%s\n", 
             task->id,
             task_state_str[task->state], 
             task_state_str[state]);
@@ -165,14 +167,14 @@ static void task_runner(void)
 {
     struct task *task = pthread_getspecific(task_key);
 
-    LOG_DBG("Starting task %lu on thread %lx\n",
+    LOG_TASK("Starting task %lu on thread %lx\n",
             task->id, pthread_self());
     
     task->func(task->data);
 
     task_set_state(task, TASK_FINISHED);
 
-    LOG_DBG("task %lu finished on thread %lx\n", task->id, pthread_self());
+    LOG_TASK("task %lu finished on thread %lx\n", task->id, pthread_self());
     
     swapcontext(&task->task_ctx, &task->loop_ctx);
 }
@@ -191,7 +193,7 @@ struct task *task_create(void *data, task_func_t tfunc)
 
     if (list_empty(&task_set.free_tasks)) {
 
-        LOG_DBG("Allocating new task\n");
+        LOG_TASK("Allocating new task\n");
 
         /* create a new task */
         task = (struct task *) malloc(sizeof(*task));
@@ -209,7 +211,7 @@ struct task *task_create(void *data, task_func_t tfunc)
         hashelm_init(&task->he, task_hashfn, task_equalfn, task_freefn);
     } else {
         /* Pick a task off the free list */
-        LOG_DBG("Picking task from free list\n");
+        LOG_TASK("Picking task from free list\n");
         task = list_first_entry(&task_set.free_tasks, struct task, head);
         list_del(&task->head);
         task_set.free_count--;
@@ -232,7 +234,7 @@ struct task *task_create(void *data, task_func_t tfunc)
     }
 
     /* Add to task table */
-    LOG_DBG("Adding task %lu to hash table\n", task->id);
+    LOG_TASK("Adding task %lu to hash table\n", task->id);
     hashelm_hash(&task_set.table, &task->he, &task->id);
 
     return task;
@@ -240,7 +242,7 @@ struct task *task_create(void *data, task_func_t tfunc)
 
 void task_destroy(struct task *task)
 {
-    LOG_DBG("destroying task: %lu\n", task->id);
+    LOG_TASK("destroying task: %lu\n", task->id);
     pthread_mutex_destroy(&task->lock);
     pthread_cond_destroy(&task->dead_cond);
     free(task);
@@ -260,15 +262,15 @@ int task_join(task_handle_t th)
     /* Join task */
     pthread_mutex_lock(&task->lock);
     
-    LOG_DBG("Joining with task %lu\n", task->id);
+    LOG_TASK("Joining with task %lu\n", task->id);
 
     while (task_get_state(task) != TASK_DEAD) {
         pthread_cond_wait(&task->dead_cond, &task->lock);
-        LOG_DBG("Checking TASK_DEAD condition\n");
+        LOG_TASK("Checking TASK_DEAD condition\n");
     }
     pthread_mutex_unlock(&task->lock);
 
-    LOG_DBG("Task %lu joined\n", task->id);
+    LOG_TASK("Task %lu joined\n", task->id);
 
     task_put(task);
     
@@ -281,17 +283,17 @@ static void _task_release(struct task *task)
     if (task == NULL)
         return;
 
-    LOG_DBG("releasing task %lu\n", task->id);                
+    LOG_TASK("releasing task %lu\n", task->id);                
     
     /* Remove the task from the task table */
     task_hold(task);
-    LOG_DBG("Removing task %lu from hash table\n", task->id);
+    LOG_TASK("Removing task %lu from hash table\n", task->id);
     hashelm_unhash(&task_set.table, &task->he);
     
     /* Synchronize around the TASK_DEAD state for other threads that
      * are joining on this task */
     task_set_state(task, TASK_DEAD);
-    LOG_DBG("Task %lu broadcast TASK_DEAD condition\n", task->id);
+    LOG_TASK("Task %lu broadcast TASK_DEAD condition\n", task->id);
     pthread_cond_broadcast(&task->dead_cond);
 
     pthread_mutex_lock(&task_set.lock);
@@ -311,7 +313,7 @@ static void _task_release(struct task *task)
 
     if (hashtable_count(&task_set.table) == 0) {
         task_queue.active = 0;
-        LOG_DBG("<<<<<<>>>>>>> No tasks left in hashtable,"
+        LOG_TASK("<<<<<<>>>>>>> No tasks left in hashtable,"
                 " raising exit condition\n");
         pthread_cond_broadcast(&task_queue.cond);
     }
@@ -324,7 +326,7 @@ static void reactor_reschedule(void *target)
     struct task *task = (struct task *) target;
     pthread_mutex_lock(&task->lock);
     if (task_get_state(task) == TASK_BLOCKED) {
-        LOG_DBG("Task %lu unblocks\n", task->id);
+        LOG_TASK("Task %lu unblocks\n", task->id);
         task_set_state(task, TASK_RUNNING);
     }
     _task_schedule(task);
@@ -336,7 +338,7 @@ static void task_thread_loop(void)
 {   
     struct task *task;
 
-    LOG_DBG("Thread %lx running task loop\n", 
+    LOG_TASK("Thread %lx running task loop\n", 
             pthread_self());
 
     pthread_mutex_lock(&task_queue.lock);
@@ -359,7 +361,7 @@ static void task_thread_loop(void)
         task->runner = pthread_self();
         pthread_mutex_unlock(&task_queue.lock);
         
-        /* LOG_DBG("Thread %lx acquired task %lu\n", 
+        /* LOG_TASK("Thread %lx acquired task %lu\n", 
            pthread_self(), task->id); */
 
         /* Make sure this task is marked as unqueued and scheduled on
@@ -369,7 +371,7 @@ static void task_thread_loop(void)
         /* Save the task pointer on the thread's TLS */
         pthread_setspecific(task_key, task);
         
-        LOG_DBG("Thread %lx running task %lu\n",
+        LOG_TASK("Thread %lx running task %lu\n",
                 pthread_self(), task->id);
         
         switch (task_get_state(task)) {
@@ -390,26 +392,26 @@ static void task_thread_loop(void)
             pthread_mutex_lock(&task->lock);
 
             if (task_get_state(task) == TASK_FINISHED) {
-                LOG_DBG("Task %lu finished, releasing\n", task->id);
+                LOG_TASK("Task %lu finished, releasing\n", task->id);
                 _task_release(task);
                 pthread_mutex_unlock(&task->lock);
                 task = NULL;
             } else {
                 /* Task yielded, run next task */
-                LOG_DBG("Task %lu yielded on thread=%lx\n", 
+                LOG_TASK("Task %lu yielded on thread=%lx\n", 
                         task->id, pthread_self());
                 pthread_mutex_unlock(&task->lock);
             }
             break;
         default:
-            LOG_DBG("Task %lu in bad state %u\n", 
+            LOG_TASK("Task %lu in bad state %u\n", 
                     task->id, task_get_state(task));
             pthread_mutex_unlock(&task->lock);
             break;
         case TASK_BLOCKED:
-            LOG_DBG("Task %lu in BLOCKED state\n", task->id);
+            LOG_TASK("Task %lu in BLOCKED state\n", task->id);
             if (task->should_exit) {
-                LOG_DBG("Task %lu should exit\n", task->id);
+                LOG_TASK("Task %lu should exit\n", task->id);
                 task_set_state(task, TASK_RESCHEDULE);
             }
             pthread_mutex_unlock(&task->lock);
@@ -430,7 +432,7 @@ static void task_thread_loop(void)
 
             if ((task_get_state(task) == TASK_RESCHEDULE || 
                  task->should_exit) && list_empty(&task->head)) {
-                LOG_DBG("task %lu rescheduling itself\n", task->id);
+                LOG_TASK("task %lu rescheduling itself\n", task->id);
                 list_add_tail(&task->head, &task_queue.head);
             }
         }
@@ -438,7 +440,7 @@ static void task_thread_loop(void)
     }
 out:
     
-    LOG_DBG("############ Thread %lx end of loop\n", pthread_self());
+    LOG_TASK("############ Thread %lx end of loop\n", pthread_self());
     task_queue.thread_count--;
     pthread_mutex_unlock(&task_queue.lock);
 }
@@ -481,7 +483,7 @@ int task_libinit(void)
     }
 #endif
 
-    LOG_DBG("Creating %u threads in pool\n",
+    LOG_TASK("Creating %u threads in pool\n",
             num_threads);
 
     thread_pool = malloc(sizeof(*thread_pool) * num_threads);
@@ -534,14 +536,14 @@ void task_libfini(void)
 {
     int i, ret = 0;
 
-    LOG_DBG("Cleaning up tasks\n");
+    LOG_TASK("Cleaning up tasks\n");
 
     reactor_stop(reactor);
 
     hashtable_for_each(&task_set.table, task_should_exit);
 
     for (i = 0; i < num_threads; i++) {
-        LOG_DBG("joining with thread %lx\n", 
+        LOG_TASK("joining with thread %lx\n", 
                 thread_pool[i]);
 
         ret = pthread_join(thread_pool[i], NULL);
@@ -551,7 +553,7 @@ void task_libfini(void)
         }
     }
 
-    LOG_DBG("All threads joined\n");
+    LOG_TASK("All threads joined\n");
 
     free(thread_pool);
 
@@ -593,13 +595,13 @@ static void _task_schedule(struct task *task)
         /* Thread still associated with this task, set state to
          * TASK_RESCHEDULE to let the runner thread itself reschedule
          * the task. */
-        LOG_DBG("Letting task %lu reschedule itself\n", task->id);
+        LOG_TASK("Letting task %lu reschedule itself\n", task->id);
         task_set_state(task, TASK_RESCHEDULE);
     } else { 
         if (list_empty(&task->head)) {
             int should_notify;
             /* Only schedule if not already in the queue and not executing */
-            LOG_DBG("Scheduling task %lu\n", task->id);
+            LOG_TASK("Scheduling task %lu\n", task->id);
             list_add_tail(&task->head, &task_queue.head);
             
             should_notify = !(task_queue.count) && task_queue.thread_count > 0;
@@ -607,16 +609,16 @@ static void _task_schedule(struct task *task)
             task_queue.count++;
             
             if (should_notify) {
-                LOG_DBG("Notifiying queue (cond_broadcast)\n");
+                LOG_TASK("Notifiying queue (cond_broadcast)\n");
                 pthread_cond_broadcast(&task_queue.cond);
             }
         } else {
-            LOG_DBG("Task %lu already scheduled\n", task->id);
+            LOG_TASK("Task %lu already scheduled\n", task->id);
         }
     }
     pthread_mutex_unlock(&task_queue.lock);
 
-    LOG_DBG("Task %lu scheduled!\n", task->id);
+    LOG_TASK("Task %lu scheduled!\n", task->id);
 }
 
 static void task_schedule(struct task *task)
@@ -747,17 +749,17 @@ int task_cancel(task_handle_t handle)
         return -1;
     }
 
-    LOG_DBG("Marking task %lu for exit\n", task->id);
+    LOG_TASK("Marking task %lu for exit\n", task->id);
 
     task->should_exit = 1;
     
     pthread_mutex_lock(&task->lock);
 
     if (task->state == TASK_BLOCKED) {
-        LOG_DBG("Task %lu is blocked, unblocking\n", task->id);
+        LOG_TASK("Task %lu is blocked, unblocking\n", task->id);
         reactor_remove(reactor, &task->rb);
     } else {
-        LOG_DBG("Task %lu is not blocked\n", task->id);
+        LOG_TASK("Task %lu is not blocked\n", task->id);
     }
     pthread_mutex_unlock(&task->lock);
 
@@ -795,12 +797,12 @@ int task_block(int fd, unsigned short flags)
                            reactor_reschedule, task, -1);
         reactor_add(reactor, &task->rb);
         
-        LOG_DBG("task %lu yields on blocking\n", task->id);
+        LOG_TASK("task %lu yields on blocking\n", task->id);
         task_set_state(task, TASK_BLOCKED);
         
         pthread_mutex_unlock(&task->lock);
         swapcontext(&task->task_ctx, &task->loop_ctx);
-        LOG_DBG("task %lu resumes from blocking\n", task->id);    
+        LOG_TASK("task %lu resumes from blocking\n", task->id);    
     } else {
         pthread_mutex_unlock(&task->lock);
     }        
@@ -813,7 +815,7 @@ void task_yield(void)
 
     task_schedule(task);
 
-    LOG_DBG("task %lu yields\n", task->id);
+    LOG_TASK("task %lu yields\n", task->id);
 
     swapcontext(&task->task_ctx, &task->loop_ctx); 
 }

@@ -28,7 +28,7 @@ int reactor_add(struct reactor *r, struct reactor_block *rb)
     if (rb->fd > 0)
         timer_queue_signal_raise(&r->tq);
 
-    LOG_DBG("Added reactor block fd=%d to reactor\n", rb->fd);
+    /* LOG_DBG("Added reactor block fd=%d to reactor\n", rb->fd); */
 
     return 0;
 }
@@ -49,7 +49,7 @@ void reactor_remove(struct reactor *r, struct reactor_block *rb)
     INIT_LIST_HEAD(&rb->block_node);
     r->num_blocks--;
     */
-    LOG_DBG("Removed reactor block fd=%d\n", rb->fd);
+    /* LOG_DBG("Removed reactor block fd=%d\n", rb->fd); */
     pthread_mutex_unlock(&r->lock);
     
     if (rb->timer.expires >= 0)
@@ -97,13 +97,12 @@ void reactor_loop(void *data)
         if (ret == 1)
             t = &timeout;
         
-        LOG_DBG("Reactor waiting\n");
+        /* LOG_DBG("Reactor waiting\n"); */
 
         ret = r->ops->wait(r, t);
 
         if (ret == REACTOR_TIMEOUT) {
             /* Timeout */
-            LOG_DBG("Timeout!\n");
             ret = timer_handle_timeout(&r->tq);
             check_for_cancelled_blocks(r, &priv_list);
         } else if (ret == REACTOR_ERROR) {
@@ -115,7 +114,6 @@ void reactor_loop(void *data)
             list_for_each_entry_safe(rb, tmp, &r->block_list, block_node) {
                 if (rb->revents || rb->cancel) {
                     list_del(&rb->block_node);
-                    LOG_DBG("reactor block fd=%d removed\n", rb->fd);
                     INIT_LIST_HEAD(&rb->block_node);
                     list_add(&rb->callback_node, &priv_list);
                     r->num_blocks--;
@@ -141,7 +139,7 @@ void reactor_loop(void *data)
                     INIT_LIST_HEAD(&rb->block_node);
                     list_add(&rb->callback_node, &priv_list);
                     r->num_blocks--;
-                    LOG_DBG("Setting cancel for reactor block for fd=%d\n", rb->fd);
+                    /* LOG_DBG("Setting cancel for reactor block for fd=%d\n", rb->fd); */
                 }
 
                 pthread_mutex_unlock(&r->lock);
@@ -158,7 +156,7 @@ void reactor_loop(void *data)
             rb = list_first_entry(&priv_list, struct reactor_block, callback_node);
             list_del(&rb->callback_node);
             INIT_LIST_HEAD(&rb->callback_node);
-            LOG_DBG("Executing callback for fd=%d\n", rb->fd);
+            /* LOG_DBG("Executing callback for fd=%d\n", rb->fd); */
             if (rb->callback)
                 rb->callback(rb->data);
         }
@@ -193,7 +191,7 @@ int reactor_block_init(struct reactor_block *rb,
     rb->fd = fd;
     rb->events = flags;
 
-    LOG_DBG("Initialized reactor block for fd=%d\n", fd);
+    /* LOG_DBG("Initialized reactor block for fd=%d\n", fd); */
 
     return 0;
 }

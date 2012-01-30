@@ -230,9 +230,9 @@ static int netlink_send_iov(message_channel_t *channel,
     if (datalen == 0 || veclen == 0)
         return 0;
 
-    LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", 
+    /* LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", 
             datalen);
-
+    */
     vec = (struct iovec *) malloc((veclen + 1) * sizeof(*vec));
     
     if (!vec)
@@ -249,7 +249,6 @@ static int netlink_send_iov(message_channel_t *channel,
 
     /* Request an ack from kernel by setting NLM_F_ACK. */
     if (mcn->reliable) {
-        LOG_DBG("Requesting ACK\n");
         nh.nlmsg_flags |= NLM_F_ACK;
     }
     ret = netlink_send_internal(mcn, vec, veclen + 1, datalen);
@@ -269,7 +268,7 @@ static int netlink_send(message_channel_t *channel, void *message,
 
     assert(channel);
 
-    LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", datalen);
+    /* LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", datalen); */
 
     memset(&nh, 0, sizeof(nh));
     nh.nlmsg_pid = mcn->base.peer.nl.nl_pid;
@@ -278,7 +277,6 @@ static int netlink_send(message_channel_t *channel, void *message,
 
     /* Request an ack from kernel by setting NLM_F_ACK. */
     if (mcn->reliable) {
-        LOG_DBG("Requesting ACK\n");
         nh.nlmsg_flags |= NLM_F_ACK;
     }
 
@@ -296,8 +294,8 @@ static int netlink_recv(message_channel_t *channel, const void *data,
     assert(channel);
 
     /* Channel already locked by receiver task */
-    LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
-            datalen);
+    /* LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
+       datalen); */
 
     for (nlm = (struct nlmsghdr *)data;
          NLMSG_OK(nlm, (unsigned int)datalen);
@@ -323,7 +321,6 @@ static int netlink_recv(message_channel_t *channel, const void *data,
         case NLMSG_ERROR:
             nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
             if (nlmerr->error == 0) {
-                LOG_DBG("NLMSG_ACK\n");
                 /*
                 if (mcn->reliable)
                     recv_ack(mcn, nlm->nlmsg_seq);

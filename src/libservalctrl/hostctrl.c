@@ -17,24 +17,6 @@ static struct hostctrl_ops *hops[] = {
 	[MSG_CHANNEL_UDP] = &remote_ops,
 };
 
-int handle_service_change(struct hostctrl *hc, 
-                          struct ctrlmsg_register *cmr,
-                          const struct in_addr *ip,
-                          int (*const callback)(struct hostctrl *hc,
-                                                const struct service_id *srvid,
-                                                unsigned short flags,
-                                                unsigned short prefix,
-                                                const struct in_addr *ip))
-{
-        if (!callback) {
-                LOG_DBG("Callback is NULL\n");
-                return 0;
-        }
-
-        return callback(hc, &cmr->srvid, cmr->srvid_flags, 
-                        cmr->srvid_prefix_bits, ip);
-}
-
 static int hostctrl_recv(struct message_channel_callback *mcb, 
                          struct message *m)
 {
@@ -135,7 +117,7 @@ hostctrl_remote_create_specific(const struct hostctrl_callback *cbs,
 					 peer, peer_len, 0);
         
 	if (!mc) {
-		LOG_DBG("Could not create local host control interface\n");
+		LOG_DBG("Could not create remote host control interface\n");
 		return NULL;
 	}
         
@@ -207,10 +189,11 @@ int hostctrl_service_migrate(struct hostctrl *hc, struct service_id *srvid,
 }
 
 int hostctrl_service_register(struct hostctrl *hc, 
-                         const struct service_id *srvid, 
-                         unsigned short prefix_bits)
+                              const struct service_id *srvid, 
+                              unsigned short prefix_bits,
+                              const struct in_addr *old_ip)
 {
-        return hc->ops->service_register(hc, srvid, prefix_bits);
+        return hc->ops->service_register(hc, srvid, prefix_bits, old_ip);
 }
 
 int hostctrl_service_unregister(struct hostctrl *hc,

@@ -1842,6 +1842,9 @@ static int serval_sal_ack_process(struct sock *sk,
                         memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
                         memset(&ssk->mig_daddr, 0, 4);
                         sk_dst_reset(sk);
+                        
+                        if (ssk->af_ops->migration_completed)
+                                ssk->af_ops->migration_completed(sk);
                 }
                 break;
         case SAL_RSYN_SENT_RECV:
@@ -1873,19 +1876,26 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
+                LOG_DBG("Migration completed!\n");
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
+
+                dev_get_ipv4_addr(ssk->mig_dev, &inet_sk(sk)->inet_saddr);
+                serval_sock_set_dev(sk, ssk->mig_dev);
+                serval_sock_set_mig_dev(sk, NULL);
+                sk_dst_reset(sk);
+
+                if (ssk->af_ops->migration_completed)
+                        ssk->af_ops->migration_completed(sk);
                 break;
         case SAL_RSYN_SENT_RECV:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+                memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
+                sk_dst_reset(sk);
                 break;
         default:
                 return 0;
         }
         
-        dev_get_ipv4_addr(ssk->mig_dev, &inet_sk(sk)->inet_saddr);
-        serval_sock_set_dev(sk, ssk->mig_dev);
-        serval_sock_set_mig_dev(sk, NULL);
-        sk_dst_reset(sk);
         ssk->rcv_seq.nxt = ctx->seqno + 1;
         
         return serval_sal_send_ack(sk);
@@ -3454,11 +3464,15 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /* TODO - prefix, flags??*/
         //ssk->srvid_flags;
         //ssk->srvid_prefix;
+
+        LOG_DBG("Resolving service %s\n",
+                service_id_to_str(&ssk->peer_srvid));
+
         se = service_find(&ssk->peer_srvid, 
                           sizeof(struct service_id) * 8);
 
 	if (!se) {
-		LOG_INF("service lookup failed for [%s]\n",
+		LOG_DBG("service lookup failed for [%s]\n",
                         service_id_to_str(&ssk->peer_srvid));
                 service_inc_stats(-1, -dlen);
                 kfree_skb(skb);

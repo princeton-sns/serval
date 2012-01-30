@@ -17,10 +17,11 @@
 #include <libservalctrl/init.h>
 #include <netinet/serval.h>
 #include <serval/platform.h>
-#include <serval/list.h>
 #include <common/timer.h>
 #include <common/debug.h>
+#include <common/list.h>
 #include <pthread.h>
+#include <poll.h>
 
 #if defined(OS_LINUX)
 #include "rtnl.h"
@@ -42,18 +43,27 @@ struct servd_context {
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
+        int reregister_signal_waiting;
+        int reregister_signal[2];
         unsigned int num_regs;
         pthread_mutex_t lock; /* Protects the registration list */
 };
 
+enum service_type {
+        SERVICE_LOCAL,
+        SERVICE_REMOTE,
+};
+
 struct registration {
         struct list_head lh;
+        enum service_type type;
         struct service_id srvid;
         struct in_addr ipaddr;
         int ip_set;
 };
 
 static struct registration *registration_add(struct servd_context *ctx,
+                                             enum service_type type,
                                              const struct service_id *srvid, 
                                              const struct in_addr *ipaddr)
 {
@@ -72,6 +82,7 @@ static struct registration *registration_add(struct servd_context *ctx,
                 r->ip_set = 1;
         }
 
+        r->type = type;
         pthread_mutex_lock(&ctx->lock);
         list_add_tail(&r->lh, &ctx->reglist);
         ctx->num_regs++;
@@ -103,7 +114,10 @@ static int registration_del(struct servd_context *ctx,
         return ret;
 }
 
-static int registration_redo(struct servd_context *ctx)
+static int registration_update_local(struct servd_context *ctx, 
+                                     const struct service_id *srvid,
+                                     const struct in_addr *new_ip,
+                                     struct in_addr *old_ip)
 {
         struct registration *r;
         int ret = 0;
@@ -111,14 +125,103 @@ static int registration_redo(struct servd_context *ctx)
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
-                printf("Reregistering service %s\n",
-                        service_id_to_str(&r->srvid));
+                if (r->type == SERVICE_LOCAL && 
+                    memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0) {
+                        if (old_ip)
+                                memcpy(old_ip, &r->ipaddr, 
+                                       sizeof(*old_ip));
+                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+                        ret = 1;
+                        break;
+                }
+        }
+        
+        pthread_mutex_unlock(&ctx->lock);
 
-                ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0);
+        return ret;
+        
+}
+
+static int registration_update_remote(struct servd_context *ctx, 
+                                      const struct service_id *srvid,
+                                      const struct in_addr *new_ip,
+                                      const struct in_addr *old_ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (r->type == SERVICE_REMOTE && 
+                    memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0 && 
+                    memcmp(&r->ipaddr, old_ip, 
+                           sizeof(*old_ip)) == 0) {
+                        /* The old IP matched the IP stored,
+                           so this is the old record. */
+                        memcpy(&r->ipaddr, new_ip, 
+                               sizeof(*new_ip));
+                        ret = 1;
+                }
+        }
+        
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
+}
+
+static int registration_redo(struct servd_context *ctx,
+                             const char *ifname,
+                             const struct in_addr *new_ip,
+                             const struct in_addr *old_ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                char ip1[18], ip2[18];
+
+                printf("Reregistering service %s new_ip=%s old_ip=%s\n",
+                       service_id_to_str(&r->srvid),
+                       inet_ntop(AF_INET, new_ip, ip1, 18),
+                       old_ip ? inet_ntop(AF_INET, old_ip, ip2, 18) : "none");
+                
+                ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0, 
+                                                old_ip);
                 
                 if (ret <= 0) {
                         fprintf(stderr, "Could not reregister service %s\n",
                                 service_id_to_str(&r->srvid));
+                }
+
+                memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+        }
+
+        pthread_mutex_unlock(&ctx->lock);
+
+        return ret;
+}
+
+static int registration_exists(struct servd_context *ctx, 
+                               enum service_type type,
+                               const struct service_id *srvid,
+                               const struct in_addr *ip)
+{
+        struct registration *r;
+        int ret = 0;
+
+        pthread_mutex_lock(&ctx->lock);
+        
+        list_for_each_entry(r, &ctx->reglist, lh) {
+                if (memcmp(&r->srvid, srvid, 
+                           sizeof(struct service_id)) == 0 &&
+                    r->type == type) {
+                        ret = 1;
+                        break;
                 }
         }
 
@@ -169,6 +272,99 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
+
+enum {
+        SIGNAL_ERROR = -1,
+        SIGNAL_TIMEOUT = 0,
+        SIGNAL_RAISED = 1,
+};
+
+static void signal_raise(int sig[2])
+{
+        struct pollfd fds;
+        const char r = 'r';
+        int ret = 0;
+
+        memset(&fds, 0, sizeof(fds));
+
+        fds.fd = sig[0];
+        fds.events = POLLIN;
+
+        if (poll(&fds, 1, 0) > 0) {
+                LOG_DBG("Signal already raised\n");
+                return;
+        }
+
+        ret = write(sig[1], &r, 1);
+
+        if (ret < 0) {
+                LOG_ERR("Could not signal quit!\n");
+        }
+}
+
+static int signal_lower(int sig[2])
+{
+        struct pollfd fds;
+        char r = 'r';
+        int ret = 0;
+
+        while (1) {
+                memset(&fds, 0, sizeof(fds));
+                
+                fds.fd = sig[0];
+                fds.events = POLLIN;
+                
+                if (poll(&fds, 1, 0) <= 0)
+                        break;
+                
+                ret = read(sig[0], &r, 1);
+        }
+
+        return ret;
+}
+
+static int signal_wait(int sig[2], int timeout)
+{
+        struct pollfd fds;
+        char r = 'r';
+        int ret = 0;
+        
+        memset(&fds, 0, sizeof(fds));
+        fds.fd = sig[0];
+        fds.events = POLLIN;
+        
+        ret = poll(&fds, 1, timeout);
+
+        if (ret <= 0) {
+                if (ret == 0) {
+                        printf("Signal timeout\n");
+                }
+                return ret;
+        }
+        ret = read(sig[0], &r, 1);
+
+        signal_lower(sig);
+
+        return SIGNAL_RAISED;
+}
+
+#ifdef ENABLE_NOT_USED
+static int signal_is_raised(int sig[2])
+{
+        struct pollfd fds;
+        
+        memset(&fds, 0, sizeof(fds));
+        
+        fds.fd = sig[0];
+        fds.events = POLLIN;
+        
+        if (poll(&fds, 1, 0) > 0)
+                return SIGNAL_SET;
+
+        return SIGNAL_TIMEOUT;
+}
+#endif
+
 static void signal_handler(int sig)
 {
         ssize_t ret;
@@ -182,10 +378,48 @@ static void signal_handler(int sig)
         }
 }
 
-int servd_interface_up(const char *ifname, void *context)
+/*
+static int get_interface_ip(const char *ifname, struct in_addr *ip)
+{
+	struct ifreq ifr;
+	struct sockaddr_in *sin = (struct sockaddr_in *) &ifr.ifr_addr;
+	int sock, ret = 0;
+
+	sock = socket(PF_INET, SOCK_STREAM, 0);
+
+	memset(&ifr, 0, sizeof(ifr));
+	strcpy(ifr.ifr_name, ifname);
+
+	ret = ioctl(sock, SIOCGIFADDR, &ifr);
+
+        if (ret == 0) {
+                memcpy(&ip, &sin->sin_addr, 
+                       sizeof(struct in_addr));
+                ret = 1;
+	}
+
+	close(sock);
+
+	return ret;
+}
+*/
+
+int servd_interface_up(const char *ifname, 
+                       const struct in_addr *new_ip,
+                       const struct in_addr *old_ip,
+                       void *context)
 {
         struct servd_context *ctx = context;
+        static int first_up_event = 0;
 
+        /* Ignore first interface up event since it is generated as a
+           result of detecting the interfaces when the app first
+           starts. */
+        if (first_up_event == 0) {
+                first_up_event = 1;
+                return 0;
+        }
+                
         /* Delay operations for a short time. The reason is that the
            stack doesn't seem to be immediately ready to use the newly
            assigned address. */
@@ -193,7 +427,7 @@ int servd_interface_up(const char *ifname, void *context)
 
         LOG_DBG("lhc=%p rhc=%p\n", ctx->lhc, ctx->rhc);
 
-	LOG_DBG("Interface %s changed address. Migrating flows\n", ifname);
+	printf("Interface %s changed address. Migrating flows\n", ifname);
         
         hostctrl_interface_migrate(ctx->lhc, ifname, ifname);
         
@@ -202,30 +436,50 @@ int servd_interface_up(const char *ifname, void *context)
            previously. Get any new information default route (default
            broadcast) and update it in the callback. */
         if (ctx->router_ip_set && !ctx->router) {
-                sleep(1);
+
+                /* Synchronize with callback before redoing
+                   registrations. We need the default service route to
+                   send them out. */
+                ctx->reregister_signal_waiting = 1;
+                
+                printf("Requesting default service route info\n");
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
+
+                signal_wait(ctx->reregister_signal, 5000);
+                ctx->reregister_signal_waiting = 0;
         }
 
         LOG_DBG("Resending registrations\n");
-
-        return registration_redo(ctx);
+        
+        return registration_redo(ctx, ifname, new_ip, old_ip);
 }
 
 static int register_service_remotely(struct hostctrl *hc,
                                      const struct service_id *srvid,
                                      unsigned short flags,
                                      unsigned short prefix,
-                                     const struct in_addr *local_ip)
+                                     const struct in_addr *local_ip,
+                                     const struct in_addr *prev_ip)
 {
         struct servd_context *ctx = hc->context;
-	int ret;
+        struct in_addr old_ip;
+        int ret = 0;
 
-	LOG_DBG("service=%s\n", service_id_to_str(srvid));
-
-        ret = hostctrl_service_register(ctx->rhc, srvid, prefix);
-    
-        registration_add(ctx, srvid, local_ip);
+	printf("Local service %s @ %s registered\n", 
+               service_id_to_str(srvid),
+               local_ip ? inet_ntoa(*local_ip) : "none");
+ 
+        if (registration_update_local(ctx, srvid, 
+                                      local_ip, &old_ip)) {
+                printf("reregistering\n");
+                ret = hostctrl_service_register(ctx->rhc, srvid, 
+                                                prefix, &old_ip);
+        } else {
+                registration_add(ctx, SERVICE_LOCAL, srvid, local_ip);
+                ret = hostctrl_service_register(ctx->rhc, srvid, 
+                                                prefix, NULL);
+        }
 
         return ret;
 }
@@ -239,11 +493,14 @@ static int unregister_service_remotely(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
         int ret;
 
-	LOG_DBG("serviceID=%s\n", service_id_to_str(srvid));
+	printf("Local service=%s unregistered\n", 
+               service_id_to_str(srvid));
 
-        ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
+        if (ctx->rhc) {
+                ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
     
-        registration_del(ctx, srvid);
+                registration_del(ctx, srvid);
+        }
 
         return ret;
 }
@@ -252,21 +509,43 @@ static int handle_incoming_registration(struct hostctrl *hc,
                                         const struct service_id *srvid,
                                         unsigned short flags,
                                         unsigned short prefix,
-                                        const struct in_addr *remote_ip)
+                                        const struct in_addr *remote_ip, 
+                                        const struct in_addr *old_ip)
 {
         struct servd_context *ctx = hc->context;
-
-#if defined(ENABLE_DEBUG)
-        {
+        int ret = 0;
+        char ip1[18], ip2[18];
+        
+        printf("Registration service %s @ %s %s\n", 
+               service_id_to_str(srvid), 
+               old_ip ? inet_ntop(AF_INET, old_ip, ip1, 18) : "none",
+               inet_ntop(AF_INET, remote_ip, ip2, 18));
+        
+        if (old_ip && registration_update_remote(ctx, srvid, 
+                                       remote_ip, old_ip)) {
                 char buf[18];
-                LOG_DBG("Remote service %s @ %s registered\n", 
-                        service_id_to_str(srvid), 
-                        inet_ntop(AF_INET, remote_ip, buf, 18));
+                        
+                printf("Remote service %s @ %s reregistered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
+                                              0, 0, old_ip, remote_ip);
+        } else {
+                /* Add this service the local service table. */
+                char buf[18];
+                
+                printf("Remote service %s @ %s registered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                registration_add(ctx, SERVICE_REMOTE, srvid, remote_ip);
+
+                ret = hostctrl_service_add(ctx->lhc, srvid, prefix, 
+                                           0, 0, remote_ip);
         }
-#endif
-        /* Addd this service the local service table. */
-        return hostctrl_service_add(ctx->lhc, srvid, prefix, 
-                                    0, 0, remote_ip);
+
+        return ret;
 }
 
 static int handle_incoming_unregistration(struct hostctrl *hc,
@@ -276,18 +555,22 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
                                           const struct in_addr *remote_ip)
 {
         struct servd_context *ctx = hc->context;
-
-#if defined(ENABLE_DEBUG)
-        {
+        int ret = 0;
+        
+        if (registration_exists(ctx, SERVICE_REMOTE, srvid, remote_ip)) {
                 char buf[18];
-                LOG_DBG("Remote service %s @ %s unregistered\n", 
-                        service_id_to_str(srvid), 
-                        inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                printf("Remote service %s @ %s unregistered\n", 
+                       service_id_to_str(srvid), 
+                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                
+                /* Remove this service from the local service
+                   table. */
+                ret = hostctrl_service_remove(ctx->lhc, srvid, prefix, 
+                                              remote_ip);
         }
-#endif
-        /* Register this service the local service table. */
-        return hostctrl_service_remove(ctx->lhc, srvid, prefix, 
-                                       remote_ip);
+
+        return ret;
 }
 
 /*
@@ -320,9 +603,10 @@ static int local_service_get_result(struct hostctrl *hc,
                 inet_ntop(AF_INET, ip, buf, 18),
                 inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
 #endif
-     
+        sleep(1);
+
         if (flags & SVSF_INVALID) {
-                LOG_DBG("No default service route set\n");
+                printf("No default service route set\n");
                 /* There was no existing route, the 'get' returned
                    nothing. Just add our default route */
                 ret = hostctrl_service_add(ctx->lhc, &default_service,
@@ -331,14 +615,25 @@ static int local_service_get_result(struct hostctrl *hc,
                    memcmp(&default_service, srvid, 
                           sizeof(default_service)) == 0 && 
                    memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
-                LOG_DBG("Replacing default route\n");
+                char buf[18], buf2[18];
+                printf("Replacing default route old=%s new=%s\n",
+                       inet_ntop(AF_INET, ip, buf, 18),
+                       inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
                 /* The 'get' for the default service returned
                    something. Update the existing entry */
                 ret = hostctrl_service_modify(ctx->lhc, srvid, 
                                               prefix, priority,
                                               weight, ip, &ctx->router_ip);
         }
-        
+
+        /* Check if we need to perform the deferred reregistration of
+           services now that we have a new default service router
+           (which was probably a result of an interface up/down). */
+        if (ctx->router_ip_set && !ctx->router && 
+            ctx->reregister_signal_waiting) {
+                signal_raise(ctx->reregister_signal);
+        }
+
         return ret;
 }
                                    
@@ -525,7 +820,14 @@ int main(int argc, char **argv)
 
         if (ret == -1) {
 		LOG_ERR("Could not open pipe\n");
-		goto fail_pipe;
+		goto fail_pipe1;
+        }
+
+	ret = pipe(ctx.reregister_signal);
+
+        if (ret == -1) {
+		LOG_ERR("Could not open reregister signal pipe\n");
+		goto fail_pipe2;
         }
 
 	ret = libservalctrl_init();
@@ -569,6 +871,18 @@ int main(int argc, char **argv)
 
         hostctrl_start(ctx.rhc);
         hostctrl_start(ctx.lhc);
+        /* If we are a client and have a fixed IP for the service
+           router, then replace an existing "default" service rule by
+           querying for the current one and modifying it in the
+           resulting callback. */
+        if (ctx.router_ip_set && !ctx.router) {
+                ctx.reregister_signal_waiting = 1;
+                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
+                printf("waiting on signal\n");
+                signal_wait(ctx.reregister_signal, 3000);
+                printf("done waiting on signal\n");
+                ctx.reregister_signal_waiting = 0;
+        }
 
 #if defined(OS_LINUX)
 	ret = rtnl_init(&nlh, &ctx);
@@ -583,7 +897,7 @@ int main(int argc, char **argv)
         if (ret < 0) {
                 LOG_ERR("Could not netlink request: %s\n",
                         strerror(errno));
-                rtnl_close(&nlh);
+                rtnl_fini(&nlh);
                 goto fail_netlink;
         }
 #endif
@@ -596,13 +910,6 @@ int main(int argc, char **argv)
                 goto fail_ifaddrs;
         }
 #endif
-        /* If we are a client and have a fixed IP for the service
-           router, then replace an existing "default" service rule by
-           querying for the current one and modifying it in the
-           resulting callback. */
-        if (ctx.router_ip_set && !ctx.router) {
-                hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-        }
 
 #define MAX(x,y) (x > y ? x : y)
 
@@ -643,7 +950,6 @@ int main(int argc, char **argv)
                         }
 #if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
-                                LOG_DBG("netlink readable\n");
                                 rtnl_read(&nlh);
                         }
 #endif
@@ -665,18 +971,22 @@ int main(int argc, char **argv)
 fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
-	rtnl_close(&nlh);
+	rtnl_fini(&nlh);
 fail_netlink:
 #endif
         hostctrl_free(ctx.rhc);
+        ctx.rhc = NULL;
 fail_hostctrl_remote:
         hostctrl_free(ctx.lhc);
 fail_hostctrl_local:
         libservalctrl_fini();
 fail_libservalctrl:
+        close(ctx.reregister_signal[0]);
+        close(ctx.reregister_signal[1]);
+ fail_pipe2:
 	close(p[0]);
 	close(p[1]);
-fail_pipe:
+fail_pipe1:
         timer_queue_fini(&tq);
 
         registration_clear(&ctx);

@@ -69,7 +69,7 @@ static void channel_stop(struct hashelm *elm)
 
 void message_channel_libfini(void)
 {
-    LOG_DBG("libfini\n");
+    //LOG_DBG("libfini\n");
     //hashtable_for_each(&channel_table, channel_stop);
     //hashtable_fini(&channel_table);
 }

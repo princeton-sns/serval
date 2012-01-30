@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <linux/if_ether.h>
 #include <string.h>
+#include <stdlib.h>
 #include <asm/types.h>
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
@@ -14,9 +15,12 @@
 #include <common/debug.h>
 #include "rtnl.h"
 
-extern int servd_interface_up(const char *ifname, void *arg);
-
+extern int servd_interface_up(const char *ifname, 
+                              const struct in_addr *new_ip,
+                              const struct in_addr *old_ip,
+                              void *arg);
 struct if_info {
+        struct list_head lh;
 	int msg_type;
 	int ifindex;
 	int isUp;
@@ -28,6 +32,82 @@ struct if_info {
 	struct sockaddr_in ipaddr;
 };
 
+static struct if_info *if_info_new(void)
+{
+        struct if_info *ifi;
+
+        ifi = malloc(sizeof(struct if_info));
+        
+        if (!ifi)
+                return NULL;
+
+        memset(ifi, 0, sizeof(struct if_info));
+        INIT_LIST_HEAD(&ifi->lh);
+        
+        return ifi;
+}
+
+static void if_info_free(struct if_info *ifi)
+{
+        free(ifi);
+}
+
+static void iflist_clear(struct list_head *list)
+{
+        while (!list_empty(list)) {
+                struct if_info *ifi = 
+                        list_first_entry(list, struct if_info, lh);
+                
+                list_del(&ifi->lh);
+                if_info_free(ifi);
+        }
+}
+
+static void iflist_add(struct list_head *list, struct if_info *ifi)
+{
+        list_add_tail(&ifi->lh, list);
+}
+
+/*
+static struct if_info *iflist_find_name(struct list_head *list, 
+                                        const char *name)
+{
+        struct if_info *ifi;
+
+        list_for_each_entry(ifi, list, lh) {
+                if (strcmp(ifi->ifname, name) == 0)
+                        return ifi;
+        }
+
+        return NULL;
+}
+*/
+
+static struct if_info *iflist_find(struct list_head *list, int ifindex)
+{
+        struct if_info *ifi;
+
+        list_for_each_entry(ifi, list, lh) {
+                if (ifi->ifindex == ifindex)
+                        return ifi;
+        }
+
+        return NULL;
+}
+
+/*
+static void iflist_del(struct list_head *list, int ifindex)
+{
+        struct if_info *ifi = iflist_find(list, ifindex);
+
+        if (ifi) {
+                list_del(&ifi->lh);
+                if_info_free(ifi);
+        }
+}
+*/
+
+#if defined(ENABLE_DEBUG)
 static char *eth_to_str(unsigned char *addr)
 {
 	static char buf[30];
@@ -39,6 +119,7 @@ static char *eth_to_str(unsigned char *addr)
 
 	return buf;
 }
+#endif
 
 static char *iface_blacklist[] = { "lo", "dummy", NULL };
 
@@ -77,6 +158,7 @@ int rtnl_init(struct netlink_handle *nlh, void *arg)
 	nlh->peer.nl_family = PF_NETLINK;
         nlh->data = arg;
 	nlh->fd = socket(PF_NETLINK, SOCK_RAW, NETLINK_ROUTE);
+        INIT_LIST_HEAD(&nlh->iflist);
 
 	if (!nlh->fd) {
 		LOG_DBG("Could not create netlink socket");
@@ -106,8 +188,10 @@ int rtnl_init(struct netlink_handle *nlh, void *arg)
 	return 0;
 }
 
-int rtnl_close(struct netlink_handle *nlh)
+int rtnl_fini(struct netlink_handle *nlh)
 {
+        iflist_clear(&nlh->iflist);
+
 	return close(nlh->fd);
 }
 
@@ -241,7 +325,8 @@ int rtnl_read(struct netlink_handle *nlh)
 	int len, num_msgs = 0;
 	socklen_t addrlen;
 	struct nlmsghdr *nlm;
-	struct if_info ifinfo;
+	struct if_info *ifi, *ifi2;
+        int msg_type = -1;
 #define BUFLEN 2000
 	char buf[BUFLEN];
 
@@ -258,24 +343,32 @@ int rtnl_read(struct netlink_handle *nlh)
 		return -1;
 	}
 
+        ifi = if_info_new();
+        
+        if (!ifi)
+                return -1;
+
 	for (nlm = (struct nlmsghdr *)buf; 
 	     NLMSG_OK(nlm, (unsigned int) len); 
 	     nlm = NLMSG_NEXT(nlm, len)) {
 		struct nlmsgerr *nlmerr = NULL;
 		int ret = 0;
 
-		memset(&ifinfo, 0, sizeof(struct if_info));
-
 		num_msgs++;
                 /*
                   LOG_DBG("Netlink message type %u\n", 
                         nlm->nlmsg_type);
                 */
-		switch (nlm->nlmsg_type) {
+
+                if (nlm->nlmsg_type != NLMSG_ERROR &&
+                    nlm->nlmsg_type != NLMSG_DONE)
+                        msg_type = nlm->nlmsg_type;
+
+		switch(nlm->nlmsg_type) {
 		case NLMSG_ERROR:
 			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
 			if (nlmerr->error == 0) {
-				LOG_DBG("NLMSG_ACK");
+				/* LOG_DBG("NLMSG_ACK"); */
 			} else {
 				LOG_DBG("NLMSG_ERROR, error=%d type=%d\n", 
 					nlmerr->error, nlmerr->msg.nlmsg_type);
@@ -285,61 +378,59 @@ int rtnl_read(struct netlink_handle *nlh)
 		{ 
 			//struct host_addr haddr = { 6 };
 			//struct as_addr aaddr = { 2 };
-			ret = rtnl_parse_link_info(nlm, &ifinfo);
+			ret = rtnl_parse_link_info(nlm, ifi);
 			                        
                         if (ret > 0) {
                                 LOG_DBG("Interface newlink %s %s %s\n", 
-                                        ifinfo.ifname, eth_to_str(ifinfo.mac), 
-                                        ifinfo.isUp ? "up" : "down");
+                                        ifi->ifname, eth_to_str(ifi->mac), 
+                                        ifi->isUp ? "up" : "down");
                                 
                                 /* TODO: Should find a good way to sort out
                                  * unwanted interfaces. */
                                 /*
-                                  if (ifinfo.isUp) {
-                                  if (get_ipconf(&ifinfo) < 0)
+                                  if (ifi->isUp) {
+                                  if (get_ipconf(&ifi) < 0)
 					break;
                                         
-                                        if (ifinfo.mac[0] == 0 &&
-                                        ifinfo.mac[1] == 0 &&
-                                        ifinfo.mac[2] == 0 &&
-                                        ifinfo.mac[3] == 0 &&
-                                        ifinfo.mac[4] == 0 &&
-                                        ifinfo.mac[5] == 0)
+                                        if (ifi->mac[0] == 0 &&
+                                        ifi->mac[1] == 0 &&
+                                        ifi->mac[2] == 0 &&
+                                        ifi->mac[3] == 0 &&
+                                        ifi->mac[4] == 0 &&
+                                        ifi->mac[5] == 0)
                                         break;
 					
-                                        servd_send_join(ifinfo.ifname);
+                                        servd_send_join(ifi->ifname);
                                         }
                                 */
                         }
 			break;
 		}
 		case RTM_DELLINK:
-                        ret = rtnl_parse_link_info(nlm, &ifinfo);
+                        ret = rtnl_parse_link_info(nlm, ifi);
 		
                         if (ret > 0) {
                                 LOG_DBG("Interface dellink %s %s\n", 
-                                        ifinfo.ifname, eth_to_str(ifinfo.mac));
+                                        ifi->ifname, eth_to_str(ifi->mac));
                         }
                         break;
 		case RTM_DELADDR:
-                        LOG_DBG("deladdr\n");
-			ret = rtnl_parse_addr_info(nlm, &ifinfo);
+                        /* LOG_DBG("deladdr\n"); */
+			ret = rtnl_parse_addr_info(nlm, ifi);
                         if (ret > 0) {
                                 LOG_DBG("Interface deladdr %s %s\n", 
-                                        ifinfo.ifname, 
-                                        inet_ntoa(ifinfo.ipaddr.sin_addr));
+                                        ifi->ifname, 
+                                        inet_ntoa(ifi->ipaddr.sin_addr));
                         }
 			break;
 		case RTM_NEWADDR:
-                        LOG_DBG("New addr\n");
-			ret = rtnl_parse_addr_info(nlm, &ifinfo);
+                        /* LOG_DBG("New addr\n"); */
+			ret = rtnl_parse_addr_info(nlm, ifi);
                         
-                        if (ret > 0 && !is_blacklist_iface(ifinfo.ifname)) {
+                        if (ret > 0) {
                                 LOG_DBG("Interface newaddr %s %s\n", 
-                                        ifinfo.ifname, 
-                                        inet_ntoa(ifinfo.ipaddr.sin_addr));
-                                
-                                servd_interface_up(ifinfo.ifname, nlh->data);
+                                        ifi->ifname, 
+                                        inet_ntoa(ifi->ipaddr.sin_addr));
                         }
 			break;
 		case NLMSG_DONE:
@@ -350,7 +441,36 @@ int rtnl_read(struct netlink_handle *nlh)
 			break;
 		}
 	}
-        LOG_DBG("read %u messages\n", num_msgs);
+
+        switch (msg_type) {
+        case RTM_NEWADDR:
+                ifi2 = iflist_find(&nlh->iflist, ifi->ifindex);
+                
+                if (ifi2 && !is_blacklist_iface(ifi->ifname)) {
+                        servd_interface_up(ifi->ifname,
+                                           &ifi->ipaddr.sin_addr,
+                                           &ifi2->ipaddr.sin_addr,
+                                           nlh->data);
+                        
+                        memcpy(&ifi2->ipaddr, &ifi->ipaddr, 
+                               sizeof(ifi->ipaddr));
+                        if_info_free(ifi);
+                } else if (!is_blacklist_iface(ifi->ifname)) {
+                        servd_interface_up(ifi->ifname,
+                                           &ifi->ipaddr.sin_addr,
+                                           NULL,
+                                           nlh->data);
+                        iflist_add(&nlh->iflist, ifi);
+                }
+                break;
+        case RTM_DELADDR:
+        case RTM_DELLINK:
+        default:
+                if_info_free(ifi);
+                break;
+        }
+
+        /* LOG_DBG("read %u messages\n", num_msgs); */
 
 	return num_msgs;
 }

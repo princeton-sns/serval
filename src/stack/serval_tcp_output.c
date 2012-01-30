@@ -100,7 +100,7 @@ static __u16 serval_tcp_advertise_mss(struct sock *sk)
 	if (dst) {
                 unsigned int metric;
                 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
                 metric = dst_metric(dst, RTAX_ADVMSS);
 #else
                 metric = dst_metric_advmss(dst);
@@ -1988,7 +1988,7 @@ static void serval_tcp_connect_init(struct sock *sk)
 	if (!tp->window_clamp)
 		tp->window_clamp = dst ? dst_metric(dst, RTAX_WINDOW) : 0;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	tp->advmss = dst ? dst_metric(dst, RTAX_ADVMSS) : SERVAL_TCP_MSS_INIT;
 #else
 	tp->advmss = dst ? dst_metric_advmss(dst) : SERVAL_TCP_MSS_INIT;
@@ -2137,7 +2137,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         int mss;
 
 #if defined(OS_LINUX_KERNEL)
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	mss = dst_metric(dst, RTAX_ADVMSS);
 #else
 	mss = dst_metric_advmss(dst);
@@ -2559,4 +2559,120 @@ void serval_tcp_send_ack(struct sock *sk)
 	/* Send it off, this clears delayed acks for us. */
 	TCP_SKB_CB(buff)->when = tcp_time_stamp;
 	serval_tcp_transmit_skb(sk, buff, 0, GFP_ATOMIC);
+}
+
+/* This routine sends a packet with an out of date sequence
+ * number. It assumes the other end will try to ack it.
+ *
+ * Question: what should we make while urgent mode?
+ * 4.4BSD forces sending single byte of data. We cannot send
+ * out of window data, because we have SND.NXT==SND.MAX...
+ *
+ * Current solution: to send TWO zero-length segments in urgent mode:
+ * one is with SEG.SEQ=SND.UNA to deliver urgent pointer, another is
+ * out-of-date with SND.UNA-1 to probe window.
+ */
+static int serval_tcp_xmit_probe_skb(struct sock *sk, int urgent)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb;
+
+	/* We don't queue it, tcp_transmit_skb() sets ownership. */
+	skb = alloc_skb(MAX_SERVAL_TCP_HEADER, GFP_ATOMIC);
+	if (skb == NULL)
+		return -1;
+
+	/* Reserve space for headers and set control bits. */
+	skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
+	/* Use a previous sequence.  This should cause the other
+	 * end to send an ack.  Don't queue or clone SKB, just
+	 * send it.
+	 */
+	serval_tcp_init_nondata_skb(skb, tp->snd_una - !urgent, TCPH_ACK);
+	TCP_SKB_CB(skb)->when = tcp_time_stamp;
+	return serval_tcp_transmit_skb(sk, skb, 0, GFP_ATOMIC);
+}
+
+/* Initiate keepalive or window probe from timer. */
+int serval_tcp_write_wakeup(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb;
+
+	if (sk->sk_state == TCP_CLOSE)
+		return -1;
+
+	if ((skb = serval_tcp_send_head(sk)) != NULL &&
+	    before(TCP_SKB_CB(skb)->seq, serval_tcp_wnd_end(tp))) {
+		int err;
+		unsigned int mss = serval_tcp_current_mss(sk);
+		unsigned int seg_size = serval_tcp_wnd_end(tp) - TCP_SKB_CB(skb)->seq;
+
+		if (before(tp->pushed_seq, TCP_SKB_CB(skb)->end_seq))
+			tp->pushed_seq = TCP_SKB_CB(skb)->end_seq;
+
+		/* We are probing the opening of a window
+		 * but the window size is != 0
+		 * must have been a result SWS avoidance ( sender )
+		 */
+		if (seg_size < TCP_SKB_CB(skb)->end_seq - TCP_SKB_CB(skb)->seq ||
+		    skb->len > mss) {
+			seg_size = min(seg_size, mss);
+			TCP_SKB_CB(skb)->flags |= TCPH_PSH;
+			if (serval_tcp_fragment(sk, skb, seg_size, mss))
+				return -1;
+		} else if (!serval_tcp_skb_pcount(skb))
+			serval_tcp_set_skb_tso_segs(sk, skb, mss);
+
+		TCP_SKB_CB(skb)->flags |= TCPH_PSH;
+		TCP_SKB_CB(skb)->when = tcp_time_stamp;
+		err = serval_tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
+		if (!err)
+			serval_tcp_event_new_data_sent(sk, skb);
+		return err;
+	} else {
+		if (between(tp->snd_up, tp->snd_una + 1, tp->snd_una + 0xFFFF))
+			serval_tcp_xmit_probe_skb(sk, 1);
+		return serval_tcp_xmit_probe_skb(sk, 0);
+	}
+}
+
+/* A window probe timeout has occurred.  If window is not closed send
+ * a partial packet else a zero probe.
+ */
+void serval_tcp_send_probe0(struct sock *sk)
+{
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	int err;
+
+	err = serval_tcp_write_wakeup(sk);
+
+	if (tp->packets_out || !serval_tcp_send_head(sk)) {
+		/* Cancel probe timer, if it is not required. */
+		tp->probes_out = 0;
+		tp->backoff = 0;
+		return;
+	}
+
+	if (err <= 0) {
+		if (tp->backoff < sysctl_serval_tcp_retries2)
+			tp->backoff++;
+		tp->probes_out++;
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_PROBE0,
+                                            min(tp->rto << tp->backoff, SERVAL_TCP_RTO_MAX),
+                                            SERVAL_TCP_RTO_MAX);
+	} else {
+		/* If packet was not sent due to local congestion,
+		 * do not backoff and do not remember icsk_probes_out.
+		 * Let local senders to fight for local resources.
+		 *
+		 * Use accumulated backoff yet.
+		 */
+		if (!tp->probes_out)
+			tp->probes_out = 1;
+		serval_tsk_reset_xmit_timer(sk, STSK_TIME_PROBE0,
+                                            min(tp->rto << tp->backoff,
+					      SERVAL_TCP_RESOURCE_PROBE_INTERVAL),
+					  SERVAL_TCP_RTO_MAX);
+	}
 }
