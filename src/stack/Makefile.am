@@ -94,7 +94,6 @@ endif
 # serval module
 KERNEL_VER=`uname -r`
 KDIR = /lib/modules/$(KERNEL_VER)/build
-TARGETS = serval.ko
 
 SERVAL_KERNEL_HDR = \
 	linux/log.h
@@ -129,6 +128,9 @@ endif
 
 serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
+install-data-local: serval.ko
+	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
 
 clean-local:
 if ENABLE_LINUX_MODULE
