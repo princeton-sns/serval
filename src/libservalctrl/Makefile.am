@@ -26,8 +26,8 @@ if OS_BSD
 libservalctrl_la_SOURCES += \
 	reactor_kqueue.c
 else
-libservalctrl_la_SOURCES += \
-	reactor_poll.c
+#libservalctrl_la_SOURCES += \
+#	reactor_poll.c
 endif
 endif
 
@@ -41,7 +41,9 @@ libservalctrl_la_include_HEADERS = \
 	$(top_srcdir)/include/libservalctrl/hostctrl.h
 
 noinst_HEADERS = \
+	message_channel_base.h \
 	message_channel_internal.h \
+	reactor_internal.h \
 	hostctrl_ops.h
 
 libservalctrl_la_CPPFLAGS = \

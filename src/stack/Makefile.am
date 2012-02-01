@@ -46,8 +46,11 @@ SERVAL_HDR = \
 	af_serval.h \
 	ctrl.h \
 	bst.h \
+	input.h \
 	service.h \
 	serval_sock.h \
+	serval_request_sock.h \
+	serval_tcp_request_sock.h \
 	serval_udp_sock.h \
 	serval_tcp_sock.h \
 	serval_ipv4.h \
@@ -68,8 +71,11 @@ SERVAL_HDR = \
 	$(SERVAL_INCLUDE_DIR)/serval/dst.h \
 	$(SERVAL_INCLUDE_DIR)/serval/netdevice.h \
 	$(SERVAL_INCLUDE_DIR)/serval/sock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/inet_sock.h \
+	$(SERVAL_INCLUDE_DIR)/serval/request_sock.h \
 	$(SERVAL_INCLUDE_DIR)/serval/skbuff.h \
 	$(SERVAL_INCLUDE_DIR)/serval/checksum.h \
+	$(SERVAL_INCLUDE_DIR)/serval/ktime.h \
 	$(SERVAL_INCLUDE_DIR)/serval/timer.h \
 	$(SERVAL_INCLUDE_DIR)/serval/wait.h
 
@@ -77,7 +83,8 @@ noinst_HEADERS = \
 	$(SERVAL_HDR) \
 	userlevel/packet.h \
 	userlevel/client_msg.h \
-	userlevel/client.h
+	userlevel/client.h \
+	userlevel/serval_tcp_user.h
 
 serval_includedir=$(includedir)/netinet
 serval_include_HEADERS = \

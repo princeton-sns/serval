@@ -37,6 +37,7 @@ noinst_HEADERS = \
 	close.hh \
 	connect.hh \
 	listen.hh \
+	lock.hh \
 	migrate.hh \
 	recv.hh \
 	send.hh \

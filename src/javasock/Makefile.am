@@ -3,7 +3,7 @@ JARFILE = serval-javasock.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)
 javasockdir = $(datadir)/java
-EXTRA_DIST = $(MANIFEST) README Android.mk
+EXTRA_DIST = $(MANIFEST) README
 CLASSFILES = $(shell find java -name *.class -print)
 
 classes.list: $(SUBDIRS) $(CLASSFILES)

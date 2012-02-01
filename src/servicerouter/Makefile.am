@@ -18,14 +18,17 @@ libservr_a_SOURCES = \
 
 libservr_headers = \
 	cmwc.h \
+	prefixtrie.h \
 	time_util.h \
 	service_types.h \
 	service_util.h \
-	prefixtrie.h \
 	service_table.h \
-	resolver_base.h \
+	server_resolver.h \
 	resolver.h \
-	resolver_messaging.h
+	resolver_base.h \
+	resolver_messaging.h \
+	resolver_protocol.h \
+	resolution_path.h 
 
 libservr_a_CPPFLAGS = \
 	-I$(top_srcdir)/include \
@@ -33,25 +36,25 @@ libservr_a_CPPFLAGS = \
 	-I$(top_srcdir)/src/libservalctrl \
 	$(GLIB_CFLAGS)
 
-utiltest_SOURCES = \
-	util_test.c
+#utiltest_SOURCES = \
+#	util_test.c
 
-utiltest_LDADD = \
-	libservr.a
+#utiltest_LDADD = \
+#	libservr.a
 
-utiltest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd/ \
-	-I$(top_srcdir)/src/libservalctrl \
-	$(GLIB_CFLAGS)
+#utiltest_CPPFLAGS = \
+#	-I$(top_srcdir)/include \
+#	-I$(top_srcdir)/src/servd/ \
+#	-I$(top_srcdir)/src/libservalctrl \
+#	$(GLIB_CFLAGS)
 
-utiltest_LDFLAGS = \
-	-L$(top_srcdir)/src/libservalctrl \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt
+#utiltest_LDFLAGS = \
+#	-L$(top_srcdir)/src/libservalctrl \
+#	-L$(top_srcdir)/src/libserval \
+#	-L$(top_srcdir)/src/servd \
+#	$(GLIB_LIBS) \
+#	-lpthread \
+#	-lrt
 
 #messagetest_SOURCES = \
 #	messaging_test.c
@@ -74,45 +77,45 @@ utiltest_LDFLAGS = \
 #	$(GLIB_LIBS) \
 #	-lpthread 
 
-trietest_SOURCES = \
-	prefixtrie_test.c
+#trietest_SOURCES = \
+#	prefixtrie_test.c
 
-trietest_LDADD = \
-	libservr.a
+#trietest_LDADD = \
+#	libservr.a
 
-trietest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libservalctrl \
-	$(GLIB_CFLAGS)
+#trietest_CPPFLAGS = \
+#	-I$(top_srcdir)/include \
+#	-I$(top_srcdir)/src/servd \
+#	-I$(top_srcdir)/src/libservalctrl \
+#	$(GLIB_CFLAGS)
 
-trietest_LDFLAGS = \
-	-L$(top_srcdir)/src/libservalctrl \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt
+#trietest_LDFLAGS = \
+#	-L$(top_srcdir)/src/libservalctrl \
+#	-L$(top_srcdir)/src/libserval \
+#	-L$(top_srcdir)/src/servd \
+#	$(GLIB_LIBS) \
+#	-lpthread \
+#	-lrt
 
-stabletest_CPPFLAGS = \
-	-I$(top_srcdir)/include \
-	-I$(top_srcdir)/src/servd \
-	-I$(top_srcdir)/src/libservalctrl \
-	$(GLIB_CFLAGS)
+#stabletest_CPPFLAGS = \
+#	-I$(top_srcdir)/include \
+#	-I$(top_srcdir)/src/servd \
+#	-I$(top_srcdir)/src/libservalctrl \
+#	$(GLIB_CFLAGS)
 
-stabletest_LDFLAGS = \
-	-L$(top_srcdir)/src/libservalctrl \
-	-L$(top_srcdir)/src/libserval \
-	-L$(top_srcdir)/src/servd \
-	$(GLIB_LIBS) \
-	-lpthread \
-	-lrt
+#stabletest_LDFLAGS = \
+#	-L$(top_srcdir)/src/libservalctrl \
+#	-L$(top_srcdir)/src/libserval \
+#	-L$(top_srcdir)/src/servd \
+#	$(GLIB_LIBS) \
+#	-lpthread \
+#	-lrt
 
-stabletest_SOURCES = \
-	service_table_test.c
+#stabletest_SOURCES = \
+#	service_table_test.c
 
-stabletest_LDADD = \
-	libservr.a
+#stabletest_LDADD = \
+#	libservr.a
 
 #tasktest_SOURCES = \
 #	task_test.c

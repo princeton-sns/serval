@@ -6,6 +6,7 @@ libcommon_a_SOURCES = \
 	timer.c 
 
 noinst_HEADERS = \
+	$(top_srcdir)/include/common/platform.h \
 	$(top_srcdir)/include/common/atomic.h \
 	$(top_srcdir)/include/common/debug.h \
 	$(top_srcdir)/include/common/hash.h \
