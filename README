@@ -119,4 +119,3 @@ Configuration Options
 /proc/sys/net/serval/sal_forward   - Enable/Disable forwarding in SAL
 
 /proc/sys/net/serval/udp_encap     - Enable/Disable UDP encapsulation.
-
