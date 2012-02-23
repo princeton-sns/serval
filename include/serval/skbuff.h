@@ -20,6 +20,19 @@ static inline struct net *dev_net(const struct net_device *dev)
 }
 #endif
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0))
+/**
+ * skb_frag_page - retrieve the page refered to by a paged fragment
+ * @frag: the paged fragment
+ *
+ * Returns the &struct page associated with @frag.
+ */
+static inline struct page *skb_frag_page(const skb_frag_t *frag)
+{
+        return frag->page;
+}
+#endif
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31))
 static inline void skb_dst_drop(struct sk_buff *skb)
 {

@@ -15,6 +15,9 @@
 #include <af_serval.h>
 
 #if defined(OS_LINUX_KERNEL)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+#include <linux/export.h>
+#endif
 #include <net/netdma.h>
 #define ENABLE_PAGE 1
 #endif
@@ -286,7 +289,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 				    skb->len - th->doff * 4);
 	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
 	TCP_SKB_CB(skb)->when	 = 0;
-	TCP_SKB_CB(skb)->flags	 = iph->tos;
+	TCP_SKB_CB(skb)->tcp_flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;        
         
         LOG_PKT("Received TCP %s rcv_nxt=%u snd_wnd=%u end_seq=%u datalen=%u\n",
@@ -433,7 +436,7 @@ static int serval_tcp_send_mss(struct sock *sk, int *size_goal, int flags)
 static inline void serval_tcp_mark_push(struct serval_tcp_sock *tp, 
                                  struct sk_buff *skb)
 {
-	TCP_SKB_CB(skb)->flags |= TCPH_PSH;
+	TCP_SKB_CB(skb)->tcp_flags |= TCPH_PSH;
 	tp->pushed_seq = tp->write_seq;
 }
 
@@ -491,7 +494,7 @@ static inline void skb_entail(struct sock *sk, struct sk_buff *skb)
 
 	skb->csum    = 0;
 	tcb->seq     = tcb->end_seq = tp->write_seq;
-	tcb->flags   = TCPH_ACK;
+	tcb->tcp_flags   = TCPH_ACK;
 	tcb->sacked  = 0;
 	skb_header_release(skb);
 	serval_tcp_add_write_queue_tail(sk, skb);
@@ -991,7 +994,7 @@ static ssize_t serval_do_tcp_sendpages(struct sock *sk, struct page **pages,
 		skb_shinfo(skb)->gso_segs = 0;
 
 		if (!copied)
-			TCP_SKB_CB(skb)->flags &= ~TCPH_PSH;
+			TCP_SKB_CB(skb)->tcp_flags &= ~TCPH_PSH;
 
 		copied += copy;
 		poffset += copy;
@@ -1231,7 +1234,7 @@ new_segment:
 			}
 
 			if (!copied)
-				TCP_SKB_CB(skb)->flags &= ~TCPH_PSH;
+				TCP_SKB_CB(skb)->tcp_flags &= ~TCPH_PSH;
 
 			tp->write_seq += copy;
 			TCP_SKB_CB(skb)->end_seq += copy;
@@ -1358,7 +1361,7 @@ void serval_tcp_cleanup_rbuf(struct sock *sk, int copied)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int time_to_ack = 0;
 
-#if TCP_DEBUG
+#ifdef TCP_DEBUG
         /*
 	struct sk_buff *skb = skb_peek(&sk->sk_receive_queue);
 	WARN(skb && !before(tp->copied_seq, TCP_SKB_CB(skb)->end_seq),

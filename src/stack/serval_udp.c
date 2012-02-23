@@ -14,6 +14,9 @@
 #if defined(OS_LINUX_KERNEL)
 #include <linux/ip.h>
 #include <net/udp.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+#include <linux/export.h>
+#endif
 #endif
 
 #if defined(OS_USER)

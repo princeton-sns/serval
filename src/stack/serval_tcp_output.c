@@ -564,7 +564,7 @@ static inline unsigned int serval_tcp_cwnd_test(struct serval_tcp_sock *tp,
 	u32 in_flight, cwnd;
 
 	/* Don't be strict about the congestion window for the final FIN.  */
-	if ((TCP_SKB_CB(skb)->flags & TCPH_FIN) &&
+	if ((TCP_SKB_CB(skb)->tcp_flags & TCPH_FIN) &&
 	    serval_tcp_skb_pcount(skb) == 1)
 		return 1;
 
@@ -621,7 +621,7 @@ static inline int serval_tcp_nagle_test(struct serval_tcp_sock *tp,
 	 * Nagle can be ignored during F-RTO too (see RFC4138).
 	 */
 	if (serval_tcp_urg_mode(tp) || (tp->frto_counter == 2) ||
-	    (TCP_SKB_CB(skb)->flags & TCPH_FIN))
+	    (TCP_SKB_CB(skb)->tcp_flags & TCPH_FIN))
 		return 1;
 
 	if (!serval_tcp_nagle_check(tp, skb, cur_mss, nonagle))
@@ -700,7 +700,7 @@ static void serval_tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 	skb->ip_summed = CHECKSUM_PARTIAL;
 	skb->csum = 0; 
 	
-        TCP_SKB_CB(skb)->flags = flags;
+        TCP_SKB_CB(skb)->tcp_flags = flags;
 	TCP_SKB_CB(skb)->sacked = 0;
 
 	skb_shinfo(skb)->gso_segs = 1;
@@ -762,20 +762,22 @@ static void __pskb_trim_head(struct sk_buff *skb, int len)
 
 	eat = len;
 	k = 0;
-	for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
-		if (skb_shinfo(skb)->frags[i].size <= eat) {
-			put_page(skb_shinfo(skb)->frags[i].page);
-			eat -= skb_shinfo(skb)->frags[i].size;
-		} else {
-			skb_shinfo(skb)->frags[k] = skb_shinfo(skb)->frags[i];
-			if (eat) {
-				skb_shinfo(skb)->frags[k].page_offset += eat;
-				skb_shinfo(skb)->frags[k].size -= eat;
-				eat = 0;
-			}
-			k++;
-		}
-	}
+        for (i = 0; i < skb_shinfo(skb)->nr_frags; i++) {
+                int size = skb_frag_size(&skb_shinfo(skb)->frags[i]);
+                
+                if (size <= eat) {
+                        skb_frag_unref(skb, i);
+                        eat -= size;
+                } else {
+                        skb_shinfo(skb)->frags[k] = skb_shinfo(skb)->frags[i];
+                        if (eat) {
+                                skb_shinfo(skb)->frags[k].page_offset += eat;
+                                skb_frag_size_sub(&skb_shinfo(skb)->frags[k], eat);
+                                eat = 0;
+                        }
+                        k++;
+                }
+        }
 	skb_shinfo(skb)->nr_frags = k;
 #endif
 	skb_reset_tail_pointer(skb);
@@ -825,9 +827,9 @@ int serval_tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
 
 	/* PSH and FIN should only be set in the second packet. */
-	flags = TCP_SKB_CB(skb)->flags;
-	TCP_SKB_CB(skb)->flags = flags & ~(TCPH_FIN | TCPH_PSH);
-	TCP_SKB_CB(buff)->flags = flags;
+	flags = TCP_SKB_CB(skb)->tcp_flags;
+	TCP_SKB_CB(skb)->tcp_flags = flags & ~(TCPH_FIN | TCPH_PSH);
+	TCP_SKB_CB(buff)->tcp_flags = flags;
 	TCP_SKB_CB(buff)->sacked = TCP_SKB_CB(skb)->sacked;
 
 	if (!skb_shinfo(skb)->nr_frags && skb->ip_summed != CHECKSUM_PARTIAL) {
@@ -1010,7 +1012,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
 
-	if (unlikely(tcb->flags & TCPH_SYN))
+	if (unlikely(tcb->tcp_flags & TCPH_SYN))
 		tcp_options_size = serval_tcp_syn_options(sk, skb, &opts, &md5);
 	else
 		tcp_options_size = serval_tcp_established_options(sk, skb, 
@@ -1033,9 +1035,9 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	th->seq			= htonl(tcb->seq);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					tcb->flags);
+					tcb->tcp_flags);
 
-	if (unlikely(tcb->flags & TCPH_SYN)) {
+	if (unlikely(tcb->tcp_flags & TCPH_SYN)) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
 		 */
@@ -1069,7 +1071,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 	
 	/*
-	if (likely((tcb->flags & TCPH_SYN) == 0))
+	if (likely((tcb->tcp_flags & TCPH_SYN) == 0))
 		TCP_ECN_send(sk, skb, tcp_header_size);
 	*/
 #ifdef CONFIG_TCP_MD5SIG_DISABLED
@@ -1084,7 +1086,7 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
         if (ssk->af_ops->send_check)
                 ssk->af_ops->send_check(sk, skb);
 
-	if (likely(tcb->flags & TCPH_ACK))
+	if (likely(tcb->tcp_flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
 
 	if (skb->len != tcp_header_size)
@@ -1149,7 +1151,7 @@ static void serval_tcp_collapse_retrans(struct sock *sk, struct sk_buff *skb)
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(next_skb)->end_seq;
 
 	/* Merge over control information. This moves PSH/FIN etc. over */
-	TCP_SKB_CB(skb)->flags |= TCP_SKB_CB(next_skb)->flags;
+	TCP_SKB_CB(skb)->tcp_flags |= TCP_SKB_CB(next_skb)->tcp_flags;
 
 	/* All done, get rid of second SKB and account for it so
 	 * packet counting does not break.
@@ -1201,7 +1203,7 @@ static void serval_tcp_retrans_try_collapse(struct sock *sk,
 	if (!sysctl_serval_tcp_retrans_collapse)
 		return;
 
-	if (TCP_SKB_CB(skb)->flags & TCPH_SYN)
+	if (TCP_SKB_CB(skb)->tcp_flags & TCPH_SYN)
 		return;
 
 	serval_tcp_for_write_queue_from_safe(skb, tmp, sk) {
@@ -1297,13 +1299,13 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 	 * since it is cheap to do so and saves bytes on the network.
 	 */
 	if (skb->len > 0 &&
-	    (TCP_SKB_CB(skb)->flags & TCPH_FIN) &&
+	    (TCP_SKB_CB(skb)->tcp_flags & TCPH_FIN) &&
 	    tp->snd_una == (TCP_SKB_CB(skb)->end_seq - 1)) {
 		if (!pskb_trim(skb, 0)) {
 			/* Reuse, even though it does some unnecessary work */
 			serval_tcp_init_nondata_skb(skb, 
                                                     TCP_SKB_CB(skb)->end_seq - 1,
-					     TCP_SKB_CB(skb)->flags);
+					     TCP_SKB_CB(skb)->tcp_flags);
 			skb->ip_summed = CHECKSUM_NONE;
 		}
 	}
@@ -1351,7 +1353,7 @@ static int serval_tcp_tso_should_defer(struct sock *sk, struct sk_buff *skb)
 	u32 send_win, cong_win, limit, in_flight;
 	int win_divisor;
 
-	if (TCP_SKB_CB(skb)->flags & TCPH_FIN)
+	if (TCP_SKB_CB(skb)->tcp_flags & TCPH_FIN)
 		goto send_now;
 
 	if (tp->ca_state != TCP_CA_Open)
@@ -1479,7 +1481,7 @@ static int serval_tcp_mtu_probe(struct sock *sk)
 
 	TCP_SKB_CB(nskb)->seq = TCP_SKB_CB(skb)->seq;
 	TCP_SKB_CB(nskb)->end_seq = TCP_SKB_CB(skb)->seq + probe_size;
-	TCP_SKB_CB(nskb)->flags = TCPH_ACK;
+	TCP_SKB_CB(nskb)->tcp_flags = TCPH_ACK;
 	TCP_SKB_CB(nskb)->sacked = 0;
 	nskb->csum = 0;
 	nskb->ip_summed = skb->ip_summed;
@@ -1499,11 +1501,11 @@ static int serval_tcp_mtu_probe(struct sock *sk)
 		if (skb->len <= copy) {
 			/* We've eaten all the data from this skb.
 			 * Throw it away. */
-			TCP_SKB_CB(nskb)->flags |= TCP_SKB_CB(skb)->flags;
+			TCP_SKB_CB(nskb)->tcp_flags |= TCP_SKB_CB(skb)->tcp_flags;
 			serval_tcp_unlink_write_queue(skb, sk);
 			sk_wmem_free_skb(sk, skb);
 		} else {
-			TCP_SKB_CB(nskb)->flags |= TCP_SKB_CB(skb)->flags &
+			TCP_SKB_CB(nskb)->tcp_flags |= TCP_SKB_CB(skb)->tcp_flags &
 						   ~(TCPH_FIN|TCPH_PSH);
 			if (!skb_shinfo(skb)->nr_frags) {
 				skb_pull(skb, copy);
@@ -1579,9 +1581,9 @@ static int serval_tso_fragment(struct sock *sk, struct sk_buff *skb,
 	TCP_SKB_CB(skb)->end_seq = TCP_SKB_CB(buff)->seq;
 
 	/* PSH and FIN should only be set in the second packet. */
-	flags = TCP_SKB_CB(skb)->flags;
-	TCP_SKB_CB(skb)->flags = flags & ~(TCPH_FIN | TCPH_PSH);
-	TCP_SKB_CB(buff)->flags = flags;
+	flags = TCP_SKB_CB(skb)->tcp_flags;
+	TCP_SKB_CB(skb)->tcp_flags = flags & ~(TCPH_FIN | TCPH_PSH);
+	TCP_SKB_CB(buff)->tcp_flags = flags;
 
 	/* This packet was never sent out yet, so no SACK bits. */
 	TCP_SKB_CB(buff)->sacked = 0;
@@ -2048,8 +2050,8 @@ static int serval_tcp_build_header(struct sock *sk,
 	th->seq	       	= htonl(seq);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					tcb->flags);
-        if (0 /*unlikely(tcb->flags & TCPH_SYN) */) {
+					tcb->tcp_flags);
+        if (0 /*unlikely(tcb->tcp_flags & TCPH_SYN) */) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
 		 */
@@ -2102,7 +2104,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 	th->seq		        = htonl(TCP_SKB_CB(skb)->seq);
 	th->ack_seq		= htonl(tp->rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-                                        TCP_SKB_CB(skb)->flags);
+                                        TCP_SKB_CB(skb)->tcp_flags);
         th->check = 0;
 	//tp->packets_out += serval_tcp_skb_pcount(skb);
 
@@ -2199,7 +2201,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
         th->seq = htonl(serval_tcp_rsk(req)->snt_isn);
 	th->ack_seq = htonl(serval_tcp_rsk(req)->rcv_isn + 1);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					TCP_SKB_CB(skb)->flags);
+					TCP_SKB_CB(skb)->tcp_flags);
         th->check = 0;
 	/* RFC1323: The window in SYN & SYN/ACK segments is never scaled. */
 	th->window = htons(min(req->rcv_wnd, 65535U));
@@ -2218,7 +2220,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
           FIXME: call serval_tcp_event_ack_sent? Not sure, since we
           haven't sent any data at this point. */
         /*
-	if (likely(tcb->flags & TCPH_ACK))
+	if (likely(tcb->tcp_flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
         */
 	serval_tcp_enter_cwr(sk, 1);
@@ -2247,7 +2249,7 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	th->ack_seq = htonl(tp->rcv_nxt);
         th->window = htons(serval_tcp_select_window(sk));
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					TCP_SKB_CB(skb)->flags);
+					TCP_SKB_CB(skb)->tcp_flags);
 	th->check = 0;
 	th->urg_ptr = 0;
 
@@ -2262,7 +2264,7 @@ int serval_tcp_connection_build_ack(struct sock *sk,
           FIXME: call serval_tcp_event_ack_sent? Not sure, since we
           haven't sent any data at this point. */
         /*
-	if (likely(tcb->flags & TCPH_ACK))
+	if (likely(tcb->tcp_flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
         */
 	serval_tcp_enter_cwr(sk, 1);
@@ -2502,7 +2504,7 @@ void serval_tcp_send_fin(struct sock *sk)
 	mss_now = serval_tcp_current_mss(sk);
 
 	if (serval_tcp_send_head(sk) != NULL) {
-		TCP_SKB_CB(skb)->flags |= TCPH_FIN;
+		TCP_SKB_CB(skb)->tcp_flags |= TCPH_FIN;
 		TCP_SKB_CB(skb)->end_seq++;
 		tp->write_seq++;
 	} else {
@@ -2618,13 +2620,13 @@ int serval_tcp_write_wakeup(struct sock *sk)
 		if (seg_size < TCP_SKB_CB(skb)->end_seq - TCP_SKB_CB(skb)->seq ||
 		    skb->len > mss) {
 			seg_size = min(seg_size, mss);
-			TCP_SKB_CB(skb)->flags |= TCPH_PSH;
+			TCP_SKB_CB(skb)->tcp_flags |= TCPH_PSH;
 			if (serval_tcp_fragment(sk, skb, seg_size, mss))
 				return -1;
 		} else if (!serval_tcp_skb_pcount(skb))
 			serval_tcp_set_skb_tso_segs(sk, skb, mss);
 
-		TCP_SKB_CB(skb)->flags |= TCPH_PSH;
+		TCP_SKB_CB(skb)->tcp_flags |= TCPH_PSH;
 		TCP_SKB_CB(skb)->when = tcp_time_stamp;
 		err = serval_tcp_transmit_skb(sk, skb, 1, GFP_ATOMIC);
 		if (!err)

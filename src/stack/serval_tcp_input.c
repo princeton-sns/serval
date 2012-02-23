@@ -2022,7 +2022,7 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 		 * connection startup slow start one packet too
 		 * quickly.  This is severely frowned upon behavior.
 		 */
-		if (!(scb->flags & TCPH_SYN)) {
+		if (!(scb->tcp_flags & TCPH_SYN)) {
 			flag |= FLAG_DATA_ACKED;
 		} else {
 			flag |= FLAG_SYN_ACKED;

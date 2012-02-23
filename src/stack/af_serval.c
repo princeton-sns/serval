@@ -12,7 +12,9 @@
 #include <linux/fs.h>
 #include <linux/string.h>
 #include <net/protocol.h>
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+#include <linux/export.h>
+#endif
 
 #elif defined(OS_USER)
 /* User-level declarations */

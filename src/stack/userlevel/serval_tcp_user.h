@@ -73,7 +73,7 @@ struct tcp_skb_cb {
 	uint32_t	seq;		/* Starting sequence number	*/
 	uint32_t	end_seq;	/* SEQ + FIN + SYN + datalen	*/
 	uint32_t	when;		/* used to compute rtt's	*/
-	uint8_t		flags;		/* TCP header flags.		*/
+	uint8_t		tcp_flags;	/* TCP header flags.		*/
 
 	/* NOTE: These must match up to the flags byte in a
 	 *       real TCP header.

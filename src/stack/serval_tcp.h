@@ -7,7 +7,10 @@
 
 #if defined(OS_LINUX_KERNEL)
 #include <net/tcp.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0))
+#define tcp_flags flags
 #endif
+#endif /* OS_LINUX_KERNEL */
 
 #if defined(OS_USER)
 #include <userlevel/serval_tcp_user.h>
