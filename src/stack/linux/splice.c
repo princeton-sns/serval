@@ -1,8 +1,8 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #if defined(ENABLE_SPLICE)
+#include <serval/skbuff.h>
 #include <linux/kernel.h>
 #include <linux/version.h>
-#include <linux/skbuff.h>
 #include <linux/splice.h>
 #include <linux/pagemap.h>
 #include <linux/fs.h>
