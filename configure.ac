@@ -223,27 +223,6 @@ esac],[kernel=yes])
 
 AM_CONDITIONAL([ENABLE_LINUX_MODULE], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
-AC_ARG_ENABLE([service_router],
-AS_HELP_STRING([--enable-service-router],[Turn on service router support]),
-[case "${enableval}" in
-  yes) service_router=yes ;;
-  no)  service_router=no ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --enable-service-router]) ;;
-esac],[service_router=no])
-
-dnl Check for glib
-have_glib2=no
-#PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
-
-AM_CONDITIONAL([HAVE_GLIB2], [test x$have_glib2 = xyes])
-
-if test "$service_router" = yes && [ test "$have_glib2" = no ]; then
-	service_router=no
-fi
-
-AM_CONDITIONAL([ENABLE_SERVICE_ROUTER], [test x$service_router = xyes])
-AM_CONDITIONAL([ENABLE_LIBRESOLVE], [test x$service_router = xyes])
-
 dnl Check for OpenSSL and development headers
 #AC_CHECK_LIB(crypto,DSA_sign,
 #                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)
@@ -276,7 +255,6 @@ AC_CONFIG_FILES([Makefile
 	src/stack/Kbuild	
 	src/libservalctrl/Makefile
 	src/libserval/Makefile
-	src/servicerouter/Makefile
 	src/servd/Makefile
 	src/translator/Makefile
 	src/tools/Makefile
@@ -291,7 +269,6 @@ AC_OUTPUT
 echo
 #echo "Build user level.........................$userlevel"
 echo "Build Linux kernel module.................$kernel"
-echo "Build service router......................$service_router (NOTE: this code is highly experimental, and likely broken)"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"
 echo "Enable Java bindings......................$java_bindings"
