@@ -53,7 +53,7 @@ static int reactor_kqueue_wait(struct reactor *r, const struct timespec *t)
 
     pthread_mutex_lock(&r->lock);
      
-    list_for_each_entry(rb, &r->block_list, lh) {
+    list_for_each_entry(rb, &r->block_list, block_node) {
         if (rb->fd > 0 && rb->events != 0) {
             int flags = 0;
             

@@ -3,7 +3,7 @@
 #define _IFADDRS_H_
 
 int ifaddrs_find(void);
-int ifaddrs_init(void);
-void ifaddrs_fini(void);
+int ifaddrs_init(struct timer_queue *tq);
+void ifaddrs_fini(struct timer_queue *tq);
 
 #endif /* _IFADDRS_H_ */

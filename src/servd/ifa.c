@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <string.h>
 #include <serval/list.h>
+#include <arpa/inet.h>
 #include <common/timer.h>
 #include <common/debug.h>
 #include "ifa.h"
@@ -21,7 +22,10 @@
   see which interfaces have gone up or down.
  */
 
-extern int servd_send_join(const char *ifname);
+extern int servd_interface_up(const char *ifname, 
+                              const struct in_addr *new_ip,
+                              const struct in_addr *old_ip,
+                              void *arg);
 
 static const char *blacklist[] = {
         "lo",
@@ -36,6 +40,7 @@ struct interface {
 
 static struct list_head interface_list = { &interface_list, &interface_list };
 static struct timer *iftimer;
+static struct timer_queue *timer_q = NULL;
 
 static int is_blacklist_interface(const char *ifname)
 {
@@ -141,7 +146,12 @@ static int ifaddrs_find(void)
                         
                         if (it->ifa_flags & IFF_UP) {
 				if (interface_list_add(it->ifa_name) == 1) {
-					servd_send_join(it->ifa_name);
+                                        /*
+                                        servd_interface_up(ifi->ifname,
+                                                           &ifi->ipaddr.sin_addr,
+                                                           &ifi2->ipaddr.sin_addr,
+                                                           nlh->data);
+                                        */
 				}
 			}
 		}
@@ -158,11 +168,13 @@ static int ifaddrs_timer_timeout(struct timer *t)
 {
 	ifaddrs_find();
 
-        return timer_schedule_secs(iftimer, 5);
+        return timer_schedule_secs(timer_q, iftimer, 5);
 }
 
-int ifaddrs_init(void)
+int ifaddrs_init(struct timer_queue *tq)
 {
+        timer_q = tq;
+
 	ifaddrs_find();
 
 	iftimer = timer_new_callback(ifaddrs_timer_timeout, NULL);
@@ -170,13 +182,13 @@ int ifaddrs_init(void)
 	if (!iftimer)
 		return -1;
 
-        return timer_schedule_secs(iftimer, 5);
+        return timer_schedule_secs(tq, iftimer, 5);
 }
 
-void ifaddrs_fini(void)
+void ifaddrs_fini(struct timer_queue *tq)
 {
 	if (iftimer) {
-                timer_del(iftimer);
+                timer_del(tq, iftimer);
 		timer_free(iftimer);
         }
 }

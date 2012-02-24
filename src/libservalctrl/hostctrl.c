@@ -12,7 +12,9 @@ extern struct hostctrl_ops local_ops;
 extern struct hostctrl_ops remote_ops;
 
 static struct hostctrl_ops *hops[] = {
+#if defined(OS_LINUX)
 	[MSG_CHANNEL_NETLINK] = &local_ops,
+#endif
 	[MSG_CHANNEL_UNIX] = &local_ops,
 	[MSG_CHANNEL_UDP] = &remote_ops,
 };

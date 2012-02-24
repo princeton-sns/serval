@@ -19,6 +19,7 @@ extern int servd_interface_up(const char *ifname,
                               const struct in_addr *new_ip,
                               const struct in_addr *old_ip,
                               void *arg);
+
 struct if_info {
         struct list_head lh;
 	int msg_type;

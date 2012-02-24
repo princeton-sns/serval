@@ -2344,10 +2344,10 @@ static int serval_do_tcp_getsockopt(struct sock *sk, int level,
 int serval_tcp_setsockopt(struct sock *sk, int level, int optname, 
                           char __user *optval, unsigned int optlen)
 {
+#if defined(OS_LINUX_KERNEL)
 	if (level != SOL_TCP)
 		return -EOPNOTSUPP;
 
-#if defined(OS_LINUX_KERNEL)
 	return serval_do_tcp_setsockopt(sk, level, optname, optval, optlen);
 #else
         return -EOPNOTSUPP;
@@ -2358,10 +2358,10 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
                           int optname, char __user *optval,
                           int __user *optlen)
 {
+#if defined(OS_LINUX_KERNEL)
 	if (level != SOL_TCP)
 		return -EOPNOTSUPP;
 
-#if defined(OS_LINUX_KERNEL)
 	return serval_do_tcp_getsockopt(sk, level, optname, optval, optlen);
 #else
         return -EOPNOTSUPP;

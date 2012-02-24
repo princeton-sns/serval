@@ -8,6 +8,7 @@
 #ifndef _LIST_H
 #define _LIST_H
 
+#include <stdlib.h>
 #include "platform.h"
 
 /*

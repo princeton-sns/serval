@@ -90,6 +90,10 @@ static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
 #include <net/ethernet.h>
 #endif
 #if defined(OS_BSD)
+#define ETH_ALEN ETHER_ADDR_LEN
+#define ETH_HLEN 14
+
+#define ETH_P_IP ETHERTYPE_IP
 
 struct ethhdr {
         u_char  h_dest[ETHER_ADDR_LEN];
@@ -101,7 +105,6 @@ struct ethhdr {
 
 struct sk_buff;
 struct packet_ops;
-
 
 #ifndef MAX_ADDR_LEN
 #define MAX_ADDR_LEN ETH_HLEN

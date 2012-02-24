@@ -903,7 +903,7 @@ int main(int argc, char **argv)
 #endif
 
 #if defined(OS_BSD)
-        ret = ifaddrs_init();
+        ret = ifaddrs_init(&tq);
 
         if (ret < 0) {
                 LOG_ERR("Could not discover interfaces\n");
@@ -967,7 +967,7 @@ int main(int argc, char **argv)
         }
 
 #if defined(OS_BSD)
-        ifaddrs_fini();
+        ifaddrs_fini(&tq);
 fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
