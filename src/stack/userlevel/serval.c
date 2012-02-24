@@ -499,7 +499,7 @@ int main(int argc, char **argv)
         ret = check_pid_file();
 
         if (ret == SERVAL_RUNNING) {
-                LOG_ERR("A Serval instance is already running!\n");
+                LOG_CRIT("A Serval instance is already running!\n");
                 return -1;
         } else if (ret == SERVAL_CRASHED) {
                 LOG_DBG("A previous Serval instance seems to have crashed!\n");
@@ -512,18 +512,15 @@ int main(int argc, char **argv)
                 unlink(UDP_SERVER_PATH);
         }
 
-        if (write_pid_file() != 0) {
-                LOG_ERR("Could not write PID file!\n");
-                return -1;
-        }
-	
 	if (getuid() != 0 && geteuid() != 0) {
-		LOG_ERR("%s must run as uid=0 (root)\n", progname);
-			return -1;
+		LOG_CRIT("%s must run as uid=0 (root)\n", progname);
+                return -1;
 	}
 
-        if (write_pid_file() != 0)
+        if (write_pid_file() != 0) {
+                LOG_CRIT("Could not write PID file!\n");
                 return -1;
+        }
 
 	memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -589,7 +586,7 @@ int main(int argc, char **argv)
                 ret = daemonize();
                 
                 if (ret < 0) {
-                        LOG_ERR("Could not make daemon\n");
+                        LOG_CRIT("Could not make daemon\n");
                         return -1;
                 }
         }
@@ -597,21 +594,22 @@ int main(int argc, char **argv)
 	ret = serval_init();
 
 	if (ret == -1) {
-		LOG_ERR("Could not initialize af_serval\n");   
+		LOG_CRIT("Could not initialize af_serval\n");   
                 goto cleanup_pid;
 	}
 	
 	ret = ctrl_init();
 	
 	if (ret == -1) {
-		LOG_ERR("Could not initialize ctrl socket\n");   
+		LOG_CRIT("Could not initialize ctrl socket.\n");
+		LOG_CRIT("Check if %s already exists.\n", SERVAL_STACK_CTRL_PATH);   
                 goto cleanup_serval;
 	}
 	
         ret = telnet_init();
 
         if (ret == -1) {
-		LOG_ERR("Could not initialize telnet server\n");
+		LOG_CRIT("Could not initialize telnet server\n");
                 goto cleanup_ctrl;
 	}
 
