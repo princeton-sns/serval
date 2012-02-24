@@ -89,8 +89,29 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 #endif
 
 	if (!mc) {
-		LOG_DBG("Could not create local host control interface\n");
-		return NULL;
+#if defined(OS_UNIX)
+                struct sockaddr_un local, peer;
+
+                memset(&local, 0, sizeof(local));
+                memset(&peer, 0, sizeof(peer));
+                
+                local.sun_family = PF_UNIX;
+                strcpy(local.sun_path, SERVAL_CLIENT_CTRL_PATH);
+                
+                peer.sun_family = PF_UNIX;
+                strcpy(peer.sun_path, SERVAL_STACK_CTRL_PATH);
+
+                mc = message_channel_get_generic(MSG_CHANNEL_UNIX, SOCK_DGRAM, 
+					 0, (struct sockaddr *)&local, 
+                                         sizeof(local), 
+					 (struct sockaddr *)&peer, 
+                                         sizeof(peer), 0);
+
+#endif
+                if (!mc) {
+                        LOG_DBG("Could not create local host control interface\n");
+                        return NULL;
+                }
 	}
 	
 	hc = hostctrl_create(mc, cbs, context);

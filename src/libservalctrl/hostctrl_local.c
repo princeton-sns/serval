@@ -33,6 +33,9 @@ static int local_service_generic(struct hostctrl *hc, int type,
 
         if (ipaddr)
                 memcpy(&req.cm.service[0].address, ipaddr, sizeof(*ipaddr));
+        
+        req.cm.service[0].if_index = -1;
+
 	/* strncpy(req.cm.ifname, ifname, IFNAMSIZ - 1); */
         
         LOG_DBG("op=%d prefix_bits=%u len=%u sizeof(req)=%zu %zu %s\n",      
@@ -92,6 +95,9 @@ static int local_service_modify(struct hostctrl *hc,
         memcpy(&req.service[0].srvid, srvid, sizeof(*srvid));
         memcpy(&req.service[0].address, old_ip, sizeof(*old_ip));
 
+        req.service[0].if_index = -1;
+        req.service[1].if_index = -1;
+
         if (!new_ip)
                 memcpy(&req.service[1].address, old_ip, sizeof(*old_ip));
         else
@@ -101,7 +107,6 @@ static int local_service_modify(struct hostctrl *hc,
         
         return message_channel_send(hc->mc, &req.cm, req.cm.cmh.len);
 }
-
 
 static int local_service_get(struct hostctrl *hc, 
                              const struct service_id *srvid,
@@ -126,7 +131,6 @@ static int local_service_unregister_dummy(struct hostctrl *hc,
 {
         return 0;
 }
-
 
 static int local_interface_migrate(struct hostctrl *hc,
                                    const char *from_iface,

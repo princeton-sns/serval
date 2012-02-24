@@ -1,13 +1,5 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * message_channel.c
- *
- *  Created on: Feb 11, 2011
- *      Author: daveds
- */
-
 #include <sys/socket.h>
-
 #include <assert.h>
 #include <string.h>
 #include <errno.h>

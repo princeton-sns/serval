@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/net.h>
+#include <net/route.h>
 #include <af_serval.h>
 #include <serval/debug.h>
 #include <serval/netdevice.h>
@@ -9,6 +10,7 @@
 #include <serval/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
+#include "serval_ipv4.h"
 
 MODULE_AUTHOR("Erik Nordstroem");
 MODULE_DESCRIPTION("Serval stack for Linux");
@@ -43,6 +45,32 @@ extern int __net_init serval_sysctl_register(struct net *net);
 extern void serval_sysctl_unregister(struct net *net);
 extern int udp_encap_init(void);
 extern void udp_encap_fini(void);
+
+struct net_device *resolve_dev_impl(const struct in_addr *addr,
+                                    int ifindex)
+{
+        struct net_device *dev;
+        struct rtable *rt;
+                
+        rt = serval_ip_route_output(&init_net, 
+                                    addr->s_addr,
+                                    0, 0, ifindex);
+        
+        if (!rt) {
+                LOG_DBG("Service address is not routable.\n");
+                return NULL;
+        }
+        
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
+        dev = rt->dst.dev;
+#else
+        dev = rt->u.dst.dev;
+#endif
+        dev_hold(dev);
+        ip_rt_put(rt);
+        
+        return dev;
+}
 
 static int dev_configuration(struct net_device *dev)
 {

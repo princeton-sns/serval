@@ -13,44 +13,18 @@
 #include "serval_sal.h"
 #include "serval_ipv4.h"
 
+extern struct net_device *resolve_dev_impl(const struct in_addr *addr,
+                                           int ifindex);
+
+static inline struct net_device *resolve_dev(struct service_info *entry)
+{
+        return resolve_dev_impl(&entry->address, entry->if_index);
+}
+
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
 	LOG_DBG("control message type %u\n", cm->type);
         return 0;
-}
-
-static struct net_device *resolve_dev(struct service_info *entry)
-{
-        struct net_device *dev;
-#if defined(OS_LINUX_KERNEL)
-        struct rtable *rt;
-                
-        rt = serval_ip_route_output(&init_net, 
-                                    entry->address.s_addr,
-                                    0, 0, entry->if_index);
-        
-        if (!rt) {
-                LOG_DBG("Service address is not routable.\n");
-                return NULL;
-        }
-        
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,35))
-        dev = rt->dst.dev;
-#else
-        dev = rt->u.dst.dev;
-#endif
-        dev_hold(dev);
-        ip_rt_put(rt);
-        
-#else
-        dev = dev_get_by_index(&init_net, entry->if_index);
-        
-        if (!dev) {                        
-                LOG_DBG("No device with id=%d\n",
-                        entry->if_index);
-        }
-#endif
-        return dev;
 }
 
 static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)

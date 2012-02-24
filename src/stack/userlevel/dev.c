@@ -5,6 +5,7 @@
 #include <serval/hash.h>
 #include <serval/net.h>
 #include <serval/skbuff.h>
+#include <netinet/serval.h>
 #include <net/if.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
@@ -118,6 +119,46 @@ static struct hlist_head *netdev_create_hash(void)
 			INIT_HLIST_HEAD(&hash[i]);
 
 	return hash;
+}
+
+struct net_device *resolve_dev_impl(const struct in_addr *addr,
+                                    int ifindex)
+{
+        struct net_device *dev = NULL, *best_guess_dev = NULL;
+        struct hlist_node *p;
+        int i;
+
+        read_lock(&dev_base_lock);
+
+        /* Find the best possible match by comparing prefixes */
+	for (i = 0; i < NETDEV_HASHENTRIES; i++) {
+                hlist_for_each_entry(dev, p, &dev_name_head[i], name_hlist) {
+                        uint32_t prefix1 = addr->s_addr & dev->ipv4.netmask;
+                        uint32_t prefix2 = dev->ipv4.addr & dev->ipv4.netmask;
+
+                        if (prefix1 == prefix2) {
+                                dev_hold(dev);
+                                return dev;
+                        }
+                        if (!best_guess_dev && strcmp(dev->name, "lo") != 0)
+                                best_guess_dev = dev;
+                }
+        }
+
+        if (best_guess_dev)
+                dev_hold(best_guess_dev);
+
+        read_unlock(&dev_base_lock);
+
+        /* Try with index if it is >= 0 */
+        dev = ifindex >= 0 ? dev_get_by_index(&init_net, ifindex) : NULL;
+        
+        if (dev && best_guess_dev)
+                dev_put(best_guess_dev);
+        else
+                dev = best_guess_dev;
+
+        return dev;
 }
 
 void ether_setup(struct net_device *dev)
@@ -392,10 +433,13 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 int netdev_populate_table(int sizeof_priv, 
                           void (*setup)(struct net_device *))
 {
+        struct service_id default_service;
         int fd, len = 0, ret = 0;
         struct ifconf ifc;
 	struct ifreq *ifr = NULL;
         char buff[8192];
+
+        memset(&default_service, 0, sizeof(default_service));
 
         if (ret == -1) {
                 LOG_ERR("could not get interface list\n");
@@ -536,11 +580,20 @@ int netdev_populate_table(int sizeof_priv,
 
                 while (dev->ipv4.netmask & (0x1 << prefix_len))
                        prefix_len++;
-             
-                service_add(NULL, 0, 0, 
+#if defined(ENABLE_DEBUG)
+                {
+                        char broad[18];
+
+                        LOG_DBG("Adding default service rule pointing to %s\n",
+                                inet_ntop(AF_INET, &dev->ipv4.broadcast,
+                                          broad, sizeof(broad)));
+                }
+#endif
+                service_add(&default_service, 0, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
-                            &dev->ipv4.broadcast, 4, dev, 0);
+                            &dev->ipv4.broadcast, 
+                            sizeof(dev->ipv4.broadcast), dev, 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 

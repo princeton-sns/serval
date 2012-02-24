@@ -14,6 +14,14 @@
 #include <common/debug.h>
 #include <netinet/serval.h>
 #include <sys/socket.h>
+#if defined(OS_LINUX)
+#include <linux/netlink.h>
+#endif
+#if defined(OS_UNIX)
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
 #include "message.h"
 
 typedef struct message_channel_callback {
@@ -28,7 +36,9 @@ typedef enum message_channel_type {
 #if defined(OS_LINUX)
     MSG_CHANNEL_NETLINK,
 #endif
+#if defined(OS_UNIX)
     MSG_CHANNEL_UNIX,
+#endif
     MSG_CHANNEL_UDP,
 } message_channel_type_t;
 

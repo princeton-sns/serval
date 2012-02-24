@@ -1,10 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * unix_message_channel.c
- *
- *  Created on: Feb 15, 2011
- *      Author: daveds
- */
 #include <sys/un.h>
 #include <assert.h>
 #include <string.h>
@@ -22,63 +16,22 @@
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
-#if 0
-static int message_channel_unix_initialize(message_channel_t *channel)
+static void message_channel_unix_finalize(message_channel_t *channel)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
-    int ret;
 
-    assert(channel);
+    message_channel_base_finalize(channel);
 
-    base->sock_type = SOCK_DGRAM;
-
-    ret = message_channel_base_initialize(channel);
-
-    if (ret)
-        return ret;
-
-    /*
-      Use the connect call to see if there is a control
-      socket available. This means the userlevel Serval
-      daemon is running. Since we are not a STREAM socket
-      the connection will fail, but that is our cue that
-      Serval is running.
-
-      Could this be accomplished by a sendto?
-    */
-    ret = connect(base->sock, (struct sockaddr *) &base->peer,
-                  sizeof(base->peer));
-
-    if (ret == -1) {
-        if (errno == ENOENT) {
-            /* This probably means we are not running the
-             * user space version of the Serval stack,
-             * therefore unregister this handler and exit
-             * without error. */
-            LOG_DBG("Serval unix control not supported, disabling\n");
-            goto error_connect;
-        } else if (errno == ECONNREFUSED) {
-            /* Success, daemon is running */
-            LOG_DBG("Serval unix connection refused\n");
-            ret = 0;
-        } else {
-            LOG_ERR("Serval unix connect error: %s\n", strerror(errno));
-            goto error_connect;
-        }
+    if (strcmp(base->local.un.sun_path, SERVAL_CLIENT_CTRL_PATH) == 0) {
+        unlink(SERVAL_CLIENT_CTRL_PATH);
     }
-
-    return ret;
-error_connect: 
-    channel->ops->finalize(channel);
-    return ret;
 }
-#endif /* DISABLED */
 
 struct message_channel_ops unix_ops = {
     .initialize = message_channel_base_initialize,
     .start = message_channel_base_start,
     .stop = message_channel_base_stop,
-    .finalize = message_channel_base_finalize,
+    .finalize = message_channel_unix_finalize,
     .hashfn = message_channel_internal_hashfn,
     .equalfn = message_channel_base_equalfn,
     .fillkey = message_channel_base_fillkey,

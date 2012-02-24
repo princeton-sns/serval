@@ -11,11 +11,15 @@ libservalctrl_la_SOURCES = \
 	message_channel.c \
 	message_channel_internal.c \
 	message_channel_base.c \
-	message_channel_unix.c \
 	message_channel_udp.c \
 	hostctrl.c \
 	hostctrl_local.c \
 	hostctrl_remote.c
+
+if OS_UNIX
+libservalctrl_la_SOURCES += \
+	message_channel_unix.c
+endif
 
 if OS_LINUX
 libservalctrl_la_SOURCES += \

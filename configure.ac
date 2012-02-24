@@ -29,12 +29,14 @@ AC_SUBST(top_dir)
 
 # Check for platform
 serval_os_linux=no
+serval_os_unix=no
 PLATFORM=
 
 AC_MSG_CHECKING([for Linux])
 case $host in
   *-*-linux*)
 	serval_os_linux=yes
+	serval_os_unix=yes
 	PLATFORM=linux
 	;;
 esac
@@ -48,6 +50,7 @@ case $host in
   *-*-darwin*)
 	serval_os_macosx=yes
 	serval_os_bsd=yes
+	serval_os_unix=yes
 	PLATFORM=darwin
 	;;
 esac
@@ -58,6 +61,7 @@ AC_MSG_RESULT([$serval_os_macosx])
 AM_CONDITIONAL(OS_LINUX, [test x$serval_os_linux = xyes])
 AM_CONDITIONAL(OS_MACOSX, [test x$serval_os_macosx = xyes])
 AM_CONDITIONAL(OS_BSD, [test x$serval_os_bsd = xyes])
+AM_CONDITIONAL(OS_UNIX, [test x$serval_os_unix = xyes])
 
 # Platform define could be set here or detected in platform.h header
 #if test x$serval_os_linux = xyes
