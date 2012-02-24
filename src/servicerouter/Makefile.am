@@ -164,6 +164,7 @@ servr_LDFLAGS = \
 	$(GLIB_LIBS)
 
 noinst_HEADERS = \
+	$(libservr_headers) \
 	$(servr_headers)
 
 indent:

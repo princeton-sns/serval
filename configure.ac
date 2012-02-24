@@ -224,12 +224,12 @@ esac],[kernel=yes])
 AM_CONDITIONAL([ENABLE_LINUX_MODULE], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
 AC_ARG_ENABLE([service_router],
-AS_HELP_STRING([--disable-service-router],[Turn off service router support]),
+AS_HELP_STRING([--enable-service-router],[Turn on service router support]),
 [case "${enableval}" in
   yes) service_router=yes ;;
   no)  service_router=no ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --disable-service-router]) ;;
-esac],[service_router=yes])
+  *) AC_MSG_ERROR([bad value ${enableval} for --enable-service-router]) ;;
+esac],[service_router=no])
 
 dnl Check for glib
 have_glib2=no
