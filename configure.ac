@@ -233,7 +233,7 @@ esac],[service_router=no])
 
 dnl Check for glib
 have_glib2=no
-PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
+#PKG_CHECK_MODULES([GLIB], [glib-2.0],[have_glib2=yes],[have_glib2=no])
 
 AM_CONDITIONAL([HAVE_GLIB2], [test x$have_glib2 = xyes])
 
@@ -291,7 +291,7 @@ AC_OUTPUT
 echo
 #echo "Build user level.........................$userlevel"
 echo "Build Linux kernel module.................$kernel"
-echo "Build service router......................$service_router"
+echo "Build service router......................$service_router (NOTE: this code is highly experimental, and likely broken)"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"
 echo "Enable Java bindings......................$java_bindings"
