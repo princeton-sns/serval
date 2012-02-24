@@ -278,6 +278,8 @@ AC_CONFIG_FILES([Makefile
 	src/libserval/Makefile
 	src/servicerouter/Makefile
 	src/servd/Makefile
+	src/translator/Makefile
+	src/tools/Makefile
 	src/test/Makefile
 	src/javasock/Makefile
 	src/javasock/java/Makefile	

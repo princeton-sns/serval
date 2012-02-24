@@ -16,36 +16,21 @@ bin_PROGRAMS = \
 	tcp_server \
 	tcp_servern \
 	tcp_inet_client \
-	servicetool \
-	migrate \
 	manysockets
 
 
 if OS_LINUX
 bin_PROGRAMS += \
 	nltest \
-	automigrated \
-	translator
+	automigrated
 
 nltest_SOURCES = nltest.c
-
-translator_SOURCES = translator.c
-translator_CPPFLAGS =-I$(top_srcdir)/include
-translator_LDFLAGS =-lpthread
 
 automigrated_SOURCES = automigrated.c
 automigrated_CPPFLAGS =-I$(top_srcdir)/include
 automigrated_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 
 endif
-
-migrate_SOURCES = migrate.c
-migrate_CPPFLAGS = -I$(top_srcdir)/include 
-migrate_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
-
-servicetool_SOURCES = servicetool.c
-servicetool_CPPFLAGS =-I$(top_srcdir)/include
-servicetool_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 
 manysockets_SOURCES = manysockets.c
 manysockets_CPPFLAGS =-I$(top_srcdir)/include 

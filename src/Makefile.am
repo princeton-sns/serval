@@ -14,5 +14,7 @@ endif
 
 SUBDIRS += \
 	servd \
+	tools \
+	translator \
 	test
 
