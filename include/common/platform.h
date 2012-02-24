@@ -12,6 +12,7 @@
 
 #if defined(__linux__)
 #define OS_LINUX 1
+#define OS_UNIX 1
 #if defined(__KERNEL__)
 #define OS_KERNEL 1
 #define OS_LINUX_KERNEL 1
@@ -22,11 +23,13 @@
 
 #if defined(__OpenBSD__) || defined(__FreeBSD__) || defined(__APPLE__)
 #define OS_BSD 1
+#define OS_UNIX 1
 #define OS_USER 1
 #endif
 
 #if defined(__APPLE__)
 #define OS_MACOSX 1
+#define OS_UNIX 1
 #define OS_USER 1
 #endif
 

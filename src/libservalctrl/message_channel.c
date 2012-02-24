@@ -22,7 +22,9 @@ static message_channel_constructor_t channel_constructor[] = {
 #if defined(OS_LINUX)
     [ MSG_CHANNEL_NETLINK ] = message_channel_netlink_create,
 #endif
+#if defined(OS_UNIX)
     [ MSG_CHANNEL_UNIX ] = message_channel_unix_create,
+#endif
     [ MSG_CHANNEL_UDP ] = message_channel_udp_create,
 };
 
@@ -30,7 +32,9 @@ static char *channel_name[] = {
 #if defined(OS_LINUX)
     [ MSG_CHANNEL_NETLINK ] = "NETLINK",
 #endif
+#if defined(OS_UNIX)
     [ MSG_CHANNEL_UNIX ] = "UNIX",
+#endif
     [ MSG_CHANNEL_UDP ] = "UDP",
 };
 
@@ -44,7 +48,9 @@ static message_channel_ops_t *channel_ops[] = {
 #if defined(OS_LINUX)
     [ MSG_CHANNEL_NETLINK ] = &netlink_ops,
 #endif
+#if defined(OS_UNIX)
     [ MSG_CHANNEL_UNIX ] = &unix_ops,
+#endif
     [ MSG_CHANNEL_UDP ] = &udp_ops,  
 };
 
