@@ -306,6 +306,15 @@ int main(int argc, char **argv)
 			strerror(errno));
                 goto fail;
 	}
+
+        ret = 1;
+        
+        ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ret, sizeof(ret));
+        
+        if (ret == -1) {
+                fprintf(stderr, "Could not set SO_REUSEADDR - %s\n",
+                        strerror(errno));
+        }
         
         memset(&saddr, 0, sizeof(saddr));
         saddr.sin_family = AF_INET;
@@ -331,14 +340,6 @@ int main(int argc, char **argv)
                 goto fail_bind_sock;
         }
 
-        ret = 1;
-        
-        ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ret, sizeof(ret));
-        
-        if (ret == -1) {
-                fprintf(stderr, "Could not set SO_REUSEADDR - %s\n",
-                        strerror(errno));
-        }
 
         while (1) {
                 int client_sock;
