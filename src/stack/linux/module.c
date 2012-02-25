@@ -51,13 +51,21 @@ struct net_device *resolve_dev_impl(const struct in_addr *addr,
 {
         struct net_device *dev;
         struct rtable *rt;
-                
+        
+        if (ifindex < 0)
+                ifindex = 0;
+
         rt = serval_ip_route_output(&init_net, 
                                     addr->s_addr,
                                     0, 0, ifindex);
         
         if (!rt) {
-                LOG_DBG("Service address is not routable.\n");
+#if defined(ENABLE_DEBUG)
+                char buf[18];
+                
+                LOG_DBG("Service address %s is not routable.\n",
+                        inet_ntop(AF_INET, addr, buf, 18));
+#endif
                 return NULL;
         }
         

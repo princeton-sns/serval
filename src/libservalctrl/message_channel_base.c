@@ -149,7 +149,6 @@ int message_channel_base_initialize(message_channel_t *channel)
             goto sock_error;
         }
     } else {
-        LOG_DBG("Using native socket\n");
         base->native_socket = 1;
     }
     
@@ -161,7 +160,6 @@ int message_channel_base_initialize(message_channel_t *channel)
 
     if (base->local_len > 0) {
         if (base->native_socket) {
-            LOG_DBG("Binding to address.\n");
             err = bind(base->sock, &base->local.sa, base->local_len);
         } 
 #if defined(ENABLE_USERMODE)
@@ -185,7 +183,6 @@ int message_channel_base_initialize(message_channel_t *channel)
     channel->state = CHANNEL_INITIALIZED;
     base->running = 1;
 
-    LOG_DBG("%s channel initialized\n", channel->name);
 out:
     return err;
 bind_error:

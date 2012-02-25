@@ -3,17 +3,24 @@
 #include <libservalctrl/task.h>
 #include "message_channel_internal.h"
 
+static int is_initialized = 0;
+
 //__onload
 int libservalctrl_init(void)
 {
-	task_libinit();
-	message_channel_libinit();
+    if (!is_initialized) {
+        task_libinit();
+        message_channel_libinit();
+        is_initialized = 1;
+    }
     return 0;
 }
 
 //__onexit
 void libservalctrl_fini(void)
 {
-	message_channel_libfini();
-    task_libfini();
+    if (is_initialized) {    
+        message_channel_libfini();
+        task_libfini();
+    }
 }

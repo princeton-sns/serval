@@ -11,12 +11,13 @@
 #include <libservalctrl/hostctrl.h>
 #include <netinet/serval.h>
 #include <netinet/in.h>
+#include "command.h"
 
-enum cmd_type {
+enum cmd_mig_type {
         CMD_MIGRATE_FLOW,
         CMD_MIGRATE_INTERFACE,
         CMD_MIGRATE_SERVICE,
-        __MAX_CMD_TYPE,
+        __CMD_MIGRATE_MAX,
 };
 
 #define MAX_ARGS 3
@@ -43,81 +44,138 @@ static struct {
         }
 };
 
-void print_usage(void) 
+static void migrate_print_usage(void) 
 {
         int i;
 
-        printf("Usage: migrate COMMAND [ ARGS ]\nCOMMANDs:\n");
+        printf("migrate COMMAND [ ARGS ]\nCOMMANDs:\n");
 
-        for (i = 0; i < __MAX_CMD_TYPE; i++) {
+        for (i = 0; i < __CMD_MIGRATE_MAX; i++) {
                 printf("\t%-30s %s\n",
                        commands[i].name,
                        commands[i].desc);
         }
 }
 
+struct arguments {
+        char *from_if;
+	char *to_if;
+        struct flow_id flow;
+        struct service_id service;
+        enum cmd_mig_type cmd;        
+};
+
+static int migrate_parse_args(int argc, char **argv, void **result)
+{
+        static struct arguments args;
+        
+        memset(&args, 0, sizeof(args));
+        args.cmd = __CMD_MIGRATE_MAX;
+
+        if (argc < 2)
+                return -1;
+
+        if (strcmp(argv[0], 
+                   commands[CMD_MIGRATE_FLOW].name) == 0) {
+                if (argc < 2) {
+                        printf("Too few arguments\n");
+                        return -1;
+                }
+                args.cmd = CMD_MIGRATE_FLOW;
+                args.flow.s_id32 = htonl(atoi(argv[1]));
+                args.to_if = argv[2];
+                
+                printf("Migrating flow %s to interface %s\n",
+                       flow_id_to_str(&args.flow), args.to_if);
+        } else if (strcmp(argv[0], 
+                          commands[CMD_MIGRATE_INTERFACE].name) == 0) {
+                if (argc < 2) {
+                        printf("Too few arguments\n");
+                        return -1;
+                }
+                args.cmd = CMD_MIGRATE_INTERFACE;
+                args.from_if = argv[1];
+                args.to_if = argv[2];
+                
+                printf("Migrating flows on interface %s to interface %s\n",
+                       args.from_if, args.to_if);
+        } else if (strcmp(argv[0], 
+                          commands[CMD_MIGRATE_SERVICE].name) == 0) {
+                if (argc < 2) {
+                        printf("Too few arguments\n");
+                        return -1;
+                }
+                args.cmd = CMD_MIGRATE_SERVICE;
+                args.service.s_sid32[0] = htonl(atoi(argv[1]));
+                args.to_if = argv[2];
+                
+                printf("Migrating flows of service %s to interface %s\n",
+                       service_id_to_str(&args.service), args.to_if);
+        }
+        
+        if (args.cmd == __CMD_MIGRATE_MAX)
+                return -1;
+
+        *result = &args;
+
+        return 0;
+}
+
+static int migrate_execute(struct hostctrl *hctl, void *in_args)
+{
+	int ret = 0;
+        struct arguments *args = (struct arguments *)in_args;
+
+	switch (args->cmd) {
+        case CMD_MIGRATE_FLOW:
+                ret = hostctrl_flow_migrate(hctl, &args->flow, args->to_if);
+                break;
+        case CMD_MIGRATE_INTERFACE:
+                ret = hostctrl_interface_migrate(hctl, args->from_if, args->to_if);
+                break;
+        case CMD_MIGRATE_SERVICE:
+                ret = hostctrl_service_migrate(hctl, &args->service, args->to_if);
+        default:
+                break;
+        }
+        
+	if (ret < 0) {
+		fprintf(stderr, "could not migrate\n");
+	}
+
+	return ret;
+}
+
+struct command migrate = {
+        .type = CMD_MIGRATE,
+        .name = "migrate",
+        .desc = "migrate flows",
+        .parse_args = migrate_parse_args,
+        .print_usage = migrate_print_usage,
+        .execute = migrate_execute,
+};
+
+#if defined(ENABLE_MAIN)
+
 int main(int argc, char **argv)
 {
 	int ret = 0;
-	char *from_if = NULL;
-	char *to_if = NULL;
-        struct flow_id flow;
-        struct service_id service;
-        enum cmd_type cmd = __MAX_CMD_TYPE;
-        struct hostctrl *hc;
-
-        memset(&flow, 0, sizeof(flow));
-        memset(&service, 0, sizeof(service));
+        struct hostctrl *hctl;
+        void *args;
 
         if (argc < 2) {
-                print_usage();
+                migrate.print_usage();
                 return 0;
         }
 
         argc--;
         argv++;
+
+        ret = migrate.parse_args(argc, argv, &args);
         
-        if (strcmp(argv[0], 
-                   commands[CMD_MIGRATE_FLOW].name) == 0) {
-                if (argc < 2) {
-                        printf("Too few arguments\n");
-                        goto fail_usage;
-                }
-                cmd = CMD_MIGRATE_FLOW;
-                flow.s_id32 = htonl(atoi(argv[1]));
-                to_if = argv[2];
-                
-                printf("Migrating flow %s to interface %s\n",
-                       flow_id_to_str(&flow), to_if);
-        } else if (strcmp(argv[0], 
-                          commands[CMD_MIGRATE_INTERFACE].name) == 0) {
-                if (argc < 2) {
-                        printf("Too few arguments\n");
-                        goto fail_usage;
-                }
-                cmd = CMD_MIGRATE_INTERFACE;
-                from_if = argv[1];
-                to_if = argv[2];
-                
-                printf("Migrating flows on interface %s to interface %s\n",
-                       from_if, to_if);
-        } else if (strcmp(argv[0], 
-                          commands[CMD_MIGRATE_SERVICE].name) == 0) {
-                if (argc < 2) {
-                        printf("Too few arguments\n");
-                        goto fail_usage;
-                }
-                cmd = CMD_MIGRATE_SERVICE;
-                service.s_sid32[0] = htonl(atoi(argv[1]));
-                to_if = argv[2];
-                
-                printf("Migrating flows of service %s to interface %s\n",
-                       service_id_to_str(&service), to_if);
-        }
-        
-        if (cmd == __MAX_CMD_TYPE) {
-                print_usage();
-                return 0;
+        if (ret == -1) {
+                migrate.print_usage();
+                return -1;
         }
 
 	ret = libservalctrl_init();
@@ -128,37 +186,23 @@ int main(int argc, char **argv)
 		goto fail_ctrl;
 	}
         
-        hc = hostctrl_local_create(NULL, NULL, HCF_START);
+        hctl = hostctrl_local_create(NULL, NULL, HCF_START);
 	
-        if (!hc) {
+        if (!hctl) {
                 ret = -1;
                 goto out;
         }
-
-	switch (cmd) {
-        case CMD_MIGRATE_FLOW:
-                ret = hostctrl_flow_migrate(hc, &flow, to_if);
-                break;
-        case CMD_MIGRATE_INTERFACE:
-                ret = hostctrl_interface_migrate(hc, from_if, to_if);
-                break;
-        case CMD_MIGRATE_SERVICE:
-                ret = hostctrl_service_migrate(hc, &service, to_if);
-        default:
-                break;
-        }
+        
+        migrate.execute(hctl, args);
         
 	if (ret < 0) {
 		fprintf(stderr, "could not migrate\n");
 	}
 
-        hostctrl_free(hc);
+        hostctrl_free(hctl);
 out:
         libservalctrl_fini();
 fail_ctrl:
 	return ret;
-
-fail_usage:
-        print_usage();
-        return 0;
 }
+#endif /* ENABLE_MAIN */

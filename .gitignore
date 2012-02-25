@@ -23,10 +23,7 @@ src/servicerouter/utiltest
 src/stack/Kbuild
 src/stack/serval
 src/test/nltest
-src/test/translator
 src/test/tcp_inet_client
-src/test/servicetool
-src/test/migrate
 src/test/manysockets
 src/test/send_udp_packet
 src/test/send_udp_packetn
@@ -45,6 +42,10 @@ src/test/tcp_clientn
 src/test/tcp_server
 src/test/tcp_servern
 src/test/automigrated
+src/translator/translator
+src/tools/serv
+src/tools/servicetool
+src/tools/migrate
 src/javasock/classes.list
 src/javasock/sources.list
 src/javasock/bin/

@@ -188,7 +188,6 @@ int hostctrl_start(struct hostctrl *hc)
 
 void hostctrl_free(struct hostctrl *hc)
 {
-        LOG_DBG("finish channel\n");
         message_channel_stop(hc->mc);
 	message_channel_unregister_callback(hc->mc, &hc->mccb);
 	message_channel_put(hc->mc);

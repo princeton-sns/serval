@@ -9,8 +9,9 @@ SUBDIRS += javasock
 endif
 
 SUBDIRS += \
+	test \
 	servd \
-	tools \
 	translator \
-	test
+	tools
+
 

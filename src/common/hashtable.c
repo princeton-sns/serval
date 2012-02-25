@@ -27,7 +27,7 @@ int hashtable_init(struct hashtable *table,
     table->mask = size - 1;
     atomic_set(&table->count, 0);
 
-    LOG_DBG("Initializing hash table\n");
+    /* LOG_DBG("Initializing hash table\n"); */
 
 	for (i = 0; i <= table->mask; i++) {
 		INIT_HLIST_HEAD(&table->hash[i].head);

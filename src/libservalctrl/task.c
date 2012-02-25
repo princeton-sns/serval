@@ -147,6 +147,19 @@ static enum task_state task_get_state(struct task *task)
     return (enum task_state)task->state;
 }
 
+/*
+static void _print_task(hashelm_t *elm)
+{
+    struct task *task = container_of(elm, struct task, he);
+    printf("task id %lu\n", task->id);
+}
+
+static void task_list_print(void)
+{
+    hashtable_for_each(&task_set.table, _print_task);
+}
+*/
+
 void task_hold(struct task *task)
 {
     hashelm_hold(&task->he);

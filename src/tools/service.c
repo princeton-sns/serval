@@ -15,6 +15,7 @@
 #include <sys/types.h>   
 #include <sys/socket.h>
 #include <netdb.h>
+#include "command.h"
 
 int name_to_inet_addr(const char *name, struct in_addr *ip)
 {
@@ -46,7 +47,7 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
-enum {
+enum service_op {
         SERVICE_OP_ADD,
         SERVICE_OP_DEL,
         SERVICE_OP_MOD,
@@ -63,48 +64,53 @@ static const struct opname opnames[] = {
         { "del", "delete" },
         { "mod", "modify" }
 };
-        
-int main(int argc, char **argv)
+
+static void service_print_usage(void)
 {
-	int ret = 0, op = SERVICE_OP_ADD;
-	struct service_id srvid;
+        printf("service OP\n");
+        printf("\tadd|del|mod SERVICEID[:PREFIX_BITS]"
+               " IPADDR [IPADDR]\n");
+        printf("\tSERVICEID can be decimal or hexadecimal"
+               " (use 0x prefix).\n");
+}
+        
+struct arguments {
+        enum service_op op;
+        struct service_id srvid;
+	struct in_addr ipaddr1, ipaddr2, *ip1, *ip2;
+        unsigned short prefix_bits;
+};
+
+static int service_parse_args(int argc, char **argv, void **result)
+{
+        static struct arguments args;
 	char *ptr, *prefix = NULL;
-        hostctrl_t *hctl;
-	struct in_addr ipaddr1, ipaddr2, *ip1 = NULL, *ip2 = NULL;
-        unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-        int i;
+        int i, ret;
 
-	if (argc < 3) {
-        usage:
-		fprintf(stderr, "Usage: %s add|del|mod SERVICEID[:PREFIX_BITS]"
-                        " IPADDR [IPADDR]\n", basename(argv[0]));
-                fprintf(stderr, "SERVICEID can be decimal or hexadecimal"
-                        " (use 0x prefix).\n");
-		return 0;
-	}
+        memset(&args, 0, sizeof(args));
+        args.op = __SERVICE_OP_MAX;
+        args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
+	if (argc < 2)
+                return -1;
+        
         for (i = 0; i < __SERVICE_OP_MAX; i++) {
-                if (strcmp(argv[1], opnames[i].name) == 0 ||
-                    strcmp(argv[1], opnames[i].long_name) == 0) {
-                        op = i;
+                if (strcmp(argv[0], opnames[i].name) == 0 ||
+                    strcmp(argv[0], opnames[i].long_name) == 0) {
+                        args.op = i;
                         break;
                 }
         }
 
-        if (i == __SERVICE_OP_MAX)
-                goto usage;
+        if (args.op == __SERVICE_OP_MAX)
+                return -1;
 
-        argc--;
-        argv++;
-        
-	memset(&srvid, 0, sizeof(srvid));
-        
         /* Check for hexadecimal serviceID. */
-        if (strcmp(argv[0], "default") == 0) {
+        if (strcmp(argv[1], "default") == 0) {
                 /* Do nothing, serviceID already set to zero */
         } else if (argv[1][0] == '0' && argv[1][1] == 'x') {
                 int len, i = 0;
-
+                
                 argv[1] += 2;
                 ptr = argv[1];
 
@@ -137,7 +143,7 @@ int main(int argc, char **argv)
                                 return -1;
                         }
 
-                        srvid.s_sid32[i++] = ntohl(id);
+                        args.srvid.s_sid32[i++] = ntohl(id);
                         len -= 8;
                 }
         } else {
@@ -152,51 +158,116 @@ int main(int argc, char **argv)
                 if (*ptr == ':')
                         prefix = ++ptr;
 
-                srvid.s_sid32[0] = ntohl(id);
+                args.srvid.s_sid32[0] = ntohl(id);
         }
         
         if (prefix) {
-                prefix_bits = strtoul(prefix, &ptr, 10);
+                args.prefix_bits = strtoul(prefix, &ptr, 10);
                 
                 if (!(*ptr == '\0' && prefix != '\0')) {
                         fprintf(stderr, "bad prefix string %s\n",
                                 prefix);
                         return -1;
                 }
-                if (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS || 
-                    prefix_bits == 0)
-                        prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                if (args.prefix_bits > SERVICE_ID_MAX_PREFIX_BITS || 
+                    args.prefix_bits == 0)
+                        args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         }
 
         if (argc >= 3) {
-                ret = name_to_inet_addr(argv[2], &ipaddr1);
+                ret = name_to_inet_addr(argv[2], &args.ipaddr1);
 
                 if (ret != 1) {
                         fprintf(stderr, "bad IP address: '%s'\n",
                                 argv[2]);
                         return -1;
                 }
-                ip1 = &ipaddr1;
+                args.ip1 = &args.ipaddr1;
         }
 
         if (argc == 4) {
-                ret = name_to_inet_addr(argv[3], &ipaddr2);
+                ret = name_to_inet_addr(argv[3], &args.ipaddr2);
 
                 if (ret != 1) {
                         fprintf(stderr, "bad IP address: '%s'\n",
                                 argv[2]);
                         return -1;
                 }
-                ip2 = &ipaddr2;
+                args.ip2 = &args.ipaddr2;
         }
         {
                 char buf[18];
                 printf("%s %s:%u %s\n",
-                       opnames[op].long_name,
-                       service_id_to_str(&srvid), 
-                       prefix_bits, 
-                       inet_ntop(AF_INET, &ipaddr1, buf, 18));
+                       opnames[args.op].long_name,
+                       service_id_to_str(&args.srvid), 
+                       args.prefix_bits, 
+                       inet_ntop(AF_INET, &args.ipaddr1, buf, 18));
         }
+
+        *result = &args;
+
+        return 0;
+}
+
+static int service_execute(struct hostctrl *hctl, void *in_args)
+{
+	int ret = 0;
+        struct arguments *args = (struct arguments *)in_args;
+
+        switch (args->op) {
+        case SERVICE_OP_ADD:
+                ret = hostctrl_service_add(hctl, &args->srvid, args->prefix_bits, 
+                                           0, 0, args->ip1);
+                break;
+        case SERVICE_OP_DEL:
+                ret = hostctrl_service_remove(hctl, &args->srvid, args->prefix_bits, args->ip1);
+                break;
+        case SERVICE_OP_MOD:
+                ret = hostctrl_service_modify(hctl, &args->srvid, args->prefix_bits, 
+                                              0, 0, args->ip1, args->ip2);
+                break;
+        default:
+                break;
+        }
+
+	if (ret < 0) {
+		fprintf(stderr, "could not %s service\n", 
+                        opnames[args->op].long_name);
+	}
+
+	return ret;
+}
+
+struct command service = {
+        .type = CMD_SERVICE,
+        .name = "service",
+        .desc = "manipulate service table",
+        .print_usage = service_print_usage,
+        .parse_args = service_parse_args,
+        .execute = service_execute,
+};
+
+#if defined(ENABLE_MAIN)
+int main(int argc, char **argv)
+{
+	int ret = 0;
+        hostctrl_t *hctl;
+        void *args;
+
+	if (argc < 3) {
+                service.print_usage();
+		return 0;
+	}
+
+        ret = service.parse_args(argc, argv, &args);
+
+        if (ret == -1) {
+                service.print_usage();
+                return -1;
+        }
+
+        argc--;
+        argv++;
 
         libservalctrl_init();
 
@@ -207,27 +278,8 @@ int main(int argc, char **argv)
 		ret = -1;
 		goto fail_hostctrl;
 	}
-	
-        switch (op) {
-        case SERVICE_OP_ADD:
-                ret = hostctrl_service_add(hctl, &srvid, prefix_bits, 
-                                           0, 0, ip1);
-                break;
-        case SERVICE_OP_DEL:
-                ret = hostctrl_service_remove(hctl, &srvid, prefix_bits, ip1);
-                break;
-        case SERVICE_OP_MOD:
-                ret = hostctrl_service_modify(hctl, &srvid, prefix_bits, 
-                                              0, 0, ip1, ip2);
-                break;
-        default:
-                break;
-        }
 
-	if (ret < 0) {
-		fprintf(stderr, "could not %s service\n", 
-                        opnames[op].long_name);
-	}
+        ret = service.execute(hctl, args);
 
         hostctrl_free(hctl);
 fail_hostctrl:
@@ -235,3 +287,4 @@ fail_hostctrl:
 
 	return ret;
 }
+#endif /* ENABLE_MAIN */
