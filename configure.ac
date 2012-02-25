@@ -1,6 +1,10 @@
 AC_INIT([Serval], 0.1, [serval@lists.cs.princeton.edu])
 
-dnl support for cross compiling
+# Use the silent-rules feature when possible.
+m4_ifndef([AM_SILENT_RULES], [m4_define([AM_SILENT_RULES],[])])
+AM_SILENT_RULES([yes])
+
+# support for cross compiling
 AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE

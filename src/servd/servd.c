@@ -491,7 +491,7 @@ static int unregister_service_remotely(struct hostctrl *hc,
                                        const struct in_addr *local_ip)
 {
         struct servd_context *ctx = hc->context;
-        int ret;
+        int ret = 0;
 
 	printf("Local service=%s unregistered\n", 
                service_id_to_str(srvid));

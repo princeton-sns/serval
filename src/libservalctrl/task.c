@@ -43,6 +43,7 @@ enum task_state {
     TASK_DEAD,
 };
 
+#if 0
 static char *task_state_str[] = {
     [TASK_CREATED] = "TASK_CREATED",
     [TASK_INITIALIZED] = "TASK_INITIALIZED",
@@ -52,6 +53,7 @@ static char *task_state_str[] = {
     [TASK_FINISHED] = "TASK_FINISHED",
     [TASK_DEAD] = "TASK_DEAD",
 };
+#endif
 
 struct task {
     struct hashelm he;
