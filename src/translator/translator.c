@@ -16,6 +16,8 @@
 #include <pthread.h>
 #include <sys/select.h>
 #include <signal.h>
+#include <netdb.h>
+#include "log.h"
 
 static unsigned int client_num = 0;
 
@@ -32,6 +34,7 @@ struct client {
 
 static unsigned short translator_port = 8080;
 static const char *server_ip = "192.168.56.101";
+static LOG_DEFINE(logh);
 
 static ssize_t forward_data(int from, int to, int pipefd[2])
 {
@@ -234,7 +237,8 @@ void print_usage(void)
 {
         printf("Usage: translator OPTIONS\n");
         printf("OPTIONS:\n");
-        printf("\t-p, --port PORT\t\t port to listen on\n");
+        printf("\t-p, --port PORT\t\t port to listen on.\n");
+        printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
 }
 
 int main(int argc, char **argv)
@@ -250,14 +254,38 @@ int main(int argc, char **argv)
 	while (argc) {
                 if (strcmp(argv[0], "-p") == 0 ||
 		    strcmp(argv[0], "--port") == 0) {
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        
                         translator_port = atoi(argv[1]);
-			argv++;
-			argc--;
+                        argv++;
+                        argc--;
                 } else if (strcmp(argv[0], "-h") == 0 ||
                            strcmp(argv[0], "--help") ==  0) {
                         print_usage();
-                        return 0;
+                        goto fail;
+                } else if (strcmp(argv[0], "-l") == 0 ||
+                           strcmp(argv[0], "--log") ==  0) {
+                        if (argc == 1 || log_is_open(&logh)) {
+                                print_usage();
+                                goto fail;
+                        }
+                        ret = log_open(&logh, argv[1]);
+
+                        if (ret == -1) {
+                                fprintf(stderr, "bad log file %s\n",
+                                        argv[1]);
+                                goto fail;
+                        }
+
+                        printf("Writing client log to '%s'\n",
+                               argv[1]);
+                        argv++;
+                        argc--;
                 }
+
 		argc--;
 		argv++;
 	}	
@@ -276,7 +304,7 @@ int main(int argc, char **argv)
 	if (sock == -1) {
 		fprintf(stderr, "inet socket: %s\n",
 			strerror(errno));
-                goto fail_sock;
+                goto fail;
 	}
         
         memset(&saddr, 0, sizeof(saddr));
@@ -334,14 +362,8 @@ int main(int argc, char **argv)
                                         strerror(errno));
                         }
                         break;
-                } else {
-                        char buf[18];
-                        
-                        printf("client connected from %s\n",
-                               inet_ntop(AF_INET, &saddr.sin_addr, 
-                                         buf, sizeof(buf)));
-                }
-                
+                } 
+
                 c = client_create(client_sock, family, 
                                   (struct sockaddr *)&saddr, addrlen);
 
@@ -367,12 +389,28 @@ int main(int argc, char **argv)
                                 strerror(errno));
                         break;
                 }
+                
+                /* Make a note in our client log */
+                if (log_is_open(&logh)) {
+                        struct hostent *h;
+                        char buf[18];
+                                                
+                        h = gethostbyaddr(&saddr.sin_addr, 4, AF_INET);
+
+                        log_write_line(&logh, "c %s %s",
+                                       inet_ntop(AF_INET, &saddr.sin_addr, 
+                                                 buf, sizeof(buf)),
+                                       h ? h->h_name : "unknown hostname");
+                }
+                
         }
         
         printf("Translator exits.\n");
 fail_bind_sock:
 	close(sock);
-fail_sock:
+fail:
+        if (log_is_open(&logh))
+                log_close(&logh);
 
 	return ret;
 }
