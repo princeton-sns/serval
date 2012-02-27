@@ -20,16 +20,18 @@ public class ServiceID {
        based on a short integer (2 bytes).
      */
     public ServiceID(short id) {
-        this.identifier = new byte[32];        
-        this.identifier[0] = (byte)((id >> 8) & 0xff);
-        this.identifier[1] = (byte)((id) & 0xff);
+        this.identifier = new byte[32];
+        this.identifier[0] = 0;
+        this.identifier[1] = 0;
+        this.identifier[2] = (byte)((id >> 8) & 0xff);
+        this.identifier[3] = (byte)((id) & 0xff);
     }
     /*
        Convenience function that allows one to create a serviceID
        based on a integer (4 bytes).
      */
     public ServiceID(int id) {
-        this.identifier = new byte[32];        
+        this.identifier = new byte[32];
         this.identifier[0] = (byte)((id >> 24) & 0xff);
         this.identifier[1] = (byte)((id >> 16) & 0xff);
         this.identifier[2] = (byte)((id >> 8) & 0xff);
