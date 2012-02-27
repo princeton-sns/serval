@@ -3196,6 +3196,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
                                                       src, 18));
                             }
 #endif
+                            skb_set_dev(skb, ssk->mig_dev);
         	    }
 
         	    if (ssk->sal_state == SAL_RSYN_RECV) {
@@ -3210,7 +3211,6 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         	            memcpy(&inet_sk(sk)->inet_daddr, 
                                    &ssk->mig_daddr, 4);
         	    }
-                    /* skb_set_dev(skb, ssk->mig_dev); */
                     
                     /* Must remove any cached route */
                     sk_dst_reset(sk);
