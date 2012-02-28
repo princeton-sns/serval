@@ -145,30 +145,35 @@ AS_HELP_STRING([--disable-java-bindings], [Disable libhaggle Java bindings]),
 esac],[java_bindings=yes])
 
 have_jni=no;
+JAVAC=
 
 dnl Check for Java JDK
 AC_JAVA_OPTIONS
 AC_CHECK_JAVA_HOME
 AC_PROG_JAVAC
 
-dnl Check for JNI headers
-AC_JNI_INCLUDE_DIR
+AC_MSG_CHECKING(for jni.h)
 
-JAVA_INCLUDE=
-
-for jni_inc in $JNI_INCLUDE_DIRS
-do
-	JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
-done
-
-if test "x$JAVA_INCLUDE" = 'x';
+if test x"$JAVAC" != x;
 then
-	have_jni=no
-else
-	have_jni=yes
+	dnl Check for JNI headers
+	AC_JNI_INCLUDE_DIR
+
+	JAVA_INCLUDE=
+
+	for jni_inc in $JNI_INCLUDE_DIRS
+	do
+		JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
+	done
+
+	if test "x$JAVA_INCLUDE" = 'x';
+	then
+		have_jni=no
+	else
+		have_jni=yes
+	fi
 fi
 
-AC_MSG_CHECKING(for jni.h)
 AC_MSG_RESULT([$have_jni])
 
 AC_SUBST(JAVA_INCLUDE)

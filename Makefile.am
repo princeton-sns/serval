@@ -11,4 +11,4 @@ clean-local:
 	rm -f include/libservalctrl/*~
 	rm -f include/libserval/*~
 
-EXTRA_DIST=Android.mk
+EXTRA_DIST = Android.mk

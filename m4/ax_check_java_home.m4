@@ -76,5 +76,5 @@ do
   AC_MSG_NOTICE([Could not compute JAVA_HOME])
   break
 done
-AC_MSG_RESULT([$JAVA_HOME])
+#AC_MSG_RESULT([$JAVA_HOME])
 ])
