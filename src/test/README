@@ -1,0 +1,44 @@
+Serval test applications
+========================
+
+This directory contains small programs that test common functionality
+in the Serval stack. They may also serve as examples of how to write
+applications that use the PF_SERVAL protocol family.
+
+Some applications are compiled into two versions. Binaries that have
+the "_user" suffix work with the user-level version of the stack,
+while other binaries are for the kernel version.
+
+The following provides a brief description of each application:
+
+send_udp_packet - Sends a single Serval UDP packet to a given
+		  destination IP. This can be used to, e.g., test
+		  wide-area connectivity where NATs or other
+		  middleboxes may interfer with Serval.
+
+recv_udp_packet - Receive a Serval UDP packet on a serviceID. This is
+		  the receiver side of send_udp_packet.
+
+bindtest - Tests the functionality of the bind() call.
+
+listentest - Tests the functionality of the listen() call.
+
+udp_server - A server that runs "connected UDP" and prints received
+	     text to stdout. The received text is also converted to
+	     upper case and echoed back to the client
+
+udp_client - The client connnecting to udp_server. Takes input from
+	     stdin and sends to the server, essentially implementing a
+	     chat client.
+
+tcp_client - A Serval TCP client that sends a data stream (either a
+	     file or random data) to a Serval TCP server sink. Can
+	     also run "regular" TCP over PF_INET sockets, allowing a
+	     direct performance comparison between Serval and the
+	     regular TCP/IP stack.
+
+tcp_server - The server sink for tcp_client.
+
+manysockets - Program that simply creates a number of sockets,
+	      allowing the stack to be stress tested.
+
