@@ -49,8 +49,49 @@ static void serval_udp_v4_send_check(struct sock *sk, struct sk_buff *skb);
 static void serval_udp_v4_encap_send_check(struct sock *sk, 
                                            struct sk_buff *skb);
 
+/*
+  For connected UDP we do nothing more for the SYN than adding an
+  empty header. This is needed for checksumming to work 
+*/
+static int serval_udp_build_syn(struct sock *sk, struct sk_buff *skb)
+{
+        struct udphdr *uh;
+
+        uh = (struct udphdr *)skb_push(skb, sizeof(struct udphdr));
+
+        if (!uh)
+                return -1;
+        
+        skb_reset_transport_header(skb);
+        uh->source = 0;
+        uh->dest = 0;
+        uh->len = htons(skb->len);
+        uh->check = 0;
+        skb->ip_summed = CHECKSUM_NONE;
+        skb->protocol = IPPROTO_UDP;
+        
+        return 0;
+}
+
+static int serval_udp_build_synack(struct sock *sk,
+                                   struct dst_entry *dst,
+                                   struct request_sock *req, 
+                                   struct sk_buff *skb)
+{
+        return serval_udp_build_syn(sk, skb);
+}
+
+static int serval_udp_build_ack(struct sock *sk,
+                                struct sk_buff *skb)
+{
+        return serval_udp_build_syn(sk, skb);
+}
+
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+        .conn_build_syn = serval_udp_build_syn,
+        .conn_build_synack = serval_udp_build_synack,
+        .conn_build_ack = serval_udp_build_ack,
         .send_check = serval_udp_v4_send_check,
         .queue_xmit = serval_ipv4_xmit,
         .receive = serval_udp_rcv,
@@ -62,6 +103,9 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
 
 static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+        .conn_build_syn = serval_udp_build_syn,
+        .conn_build_synack = serval_udp_build_synack,
+        .conn_build_ack = serval_udp_build_ack,
         .send_check = serval_udp_v4_encap_send_check,
         .encap_queue_xmit = serval_ipv4_xmit,
         .queue_xmit = serval_udp_encap_xmit,
@@ -837,6 +881,7 @@ static int serval_udp_getsockopt(struct sock *sk, int level,
 {
         return -EOPNOTSUPP;
 }
+
 
 struct request_sock_ops udp_request_sock_ops __read_mostly = {
 	.family		=	PF_INET,

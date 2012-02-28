@@ -86,21 +86,23 @@ udp_clientn_SOURCES = udp_client.c
 udp_clientn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
 udp_clientn_LDFLAGS =
 
+if HAVE_SSL
 tcp_client_SOURCES = tcp_client.c common.c
-tcp_client_CPPFLAGS =-I$(top_srcdir)/include
-tcp_client_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval -lcrypto
+tcp_client_CPPFLAGS =-I$(top_srcdir)/include $(OPENSSL_INCLUDES)
+tcp_client_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval $(OPENSSL_LDFLAGS) -lcrypto
 
 tcp_clientn_SOURCES = tcp_client.c common.c
-tcp_clientn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
-tcp_clientn_LDFLAGS =-lcrypto
+tcp_clientn_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include $(OPENSSL_INCLUDES)
+tcp_clientn_LDFLAGS =$(OPENSSL_LDFLAGS) -lcrypto
 
 tcp_server_SOURCES = tcp_server.c common.c
-tcp_server_CPPFLAGS =-I$(top_srcdir)/include
-tcp_server_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval -lcrypto
+tcp_server_CPPFLAGS =-I$(top_srcdir)/include $(OPENSSL_INCLUDES)
+tcp_server_LDFLAGS =-L$(top_srcdir)/src/libserval -lserval $(OPENSSL_LDFLAGS) -lcrypto
 
 tcp_servern_SOURCES = tcp_server.c common.c
-tcp_servern_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include
-tcp_servern_LDFLAGS =-lcrypto
+tcp_servern_CPPFLAGS =-DSERVAL_NATIVE -I$(top_srcdir)/include $(OPENSSL_INCLUDES)
+tcp_servern_LDFLAGS =$(OPENSSL_LDFLAGS) -lcrypto
+endif
 
 noinst_HEADERS = \
 	common.h
