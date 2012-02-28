@@ -93,7 +93,7 @@ static int service_parse_args(int argc, char **argv, void **result)
 
 	if (argc < 2)
                 return -1;
-        
+
         for (i = 0; i < __SERVICE_OP_MAX; i++) {
                 if (strcmp(argv[0], opnames[i].name) == 0 ||
                     strcmp(argv[0], opnames[i].long_name) == 0) {
@@ -104,7 +104,7 @@ static int service_parse_args(int argc, char **argv, void **result)
 
         if (args.op == __SERVICE_OP_MAX)
                 return -1;
-
+        
         /* Check for hexadecimal serviceID. */
         if (strcmp(argv[1], "default") == 0) {
                 /* Do nothing, serviceID already set to zero */
@@ -259,15 +259,15 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+        argc--;
+        argv++;
+
         ret = service.parse_args(argc, argv, &args);
 
         if (ret == -1) {
                 service.print_usage();
                 return -1;
         }
-
-        argc--;
-        argv++;
 
         libservalctrl_init();
 

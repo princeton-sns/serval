@@ -72,7 +72,7 @@ Makefile
 *.order
 *.lo
 *.la
-*.libs
+*.libs/
 *.class
 *.stamp
 *.jar
