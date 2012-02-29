@@ -1,24 +1,4 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-/* 
-   Copyright (c) 2010 The Trustees of Princeton University (Trustees)
-
-   Permission is hereby granted, free of charge, to any person obtaining a
-   copy of this software and/or hardware specification (the “Work”) to deal
-   in the Work without restriction, including without limitation the rights
-   to use, copy, modify, merge, publish, distribute, sublicense, and/or
-   sell copies of the Work, and to permit persons to whom the Work is
-   furnished to do so, subject to the following conditions: The above
-   copyright notice and this permission notice shall be included in all
-   copies or substantial portions of the Work.
-   
-   THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-   THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER
-   DEALINGS IN THE WORK.
-*/
 #include <sys/time.h>
 #include <assert.h>
 #include <stdio.h>
@@ -35,8 +15,8 @@
 #include "common.h"
 
 static const char *progname = "foo";
-static unsigned short DEFAULT_LISTEN_SID = 16385;
-static struct service_id listen_srvid;
+static unsigned short DEFAULT_SERVER_SID = 16385;
+static struct service_id server_srvid;
 static int should_exit = 0;
 #define RECVBUF_SIZE (sizeof(long) * 1460)
 
@@ -59,43 +39,7 @@ static int set_reuse_ok(int soc)
         return 0;
 }
 
-static int check_migration(int sock, size_t offset)
-{
-        int ret = 0; // assume error
-        /*
-        uint32_t network_offset = htonl(offset);
-
-        switch (errno) {
-
-        case EFRESYNCPROG:
-                printf("resync after failover in progress\n");
-                break;
-        case EFRESYNCFAIL:
-                printf("resync after failover failed\n");
-                break;
-        case ENEWINSTANCE:
-                printf("Sending data offset %zu to server\n", offset);
-            
-                ret = send_sv(sock, &network_offset, sizeof(network_offset), 0);
-
-                if (ret < 0) {
-                        fprintf(stderr, "cannot send initial offset to server: %s\n", 
-                                strerror_sv(errno));
-                        ret = -1;
-                } else {
-                        printf("Sent offset %zu to server\n", offset);
-                        ret = 1; // Migration happened
-                }
-                break;
-                
-        default:
-                break;
-        }
-        */
-        return ret;
-}
-
-static int recv_file(int sock, const char *filepath, int handle_migration,
+static int recv_file(int sock, const char *filepath,
                      unsigned char digest[SHA_DIGEST_LENGTH])
 {
         char recvbuf[RECVBUF_SIZE];
@@ -119,18 +63,6 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
 
         SHA1_Init(&ctx);
 
-        if (handle_migration) {
-                uint32_t offset = 0;
-                printf("Sending data offset %u to server\n", offset);
-                ret = send_sv(sock, &offset, sizeof(offset), 0);
-
-                if (ret < 0) {
-                        fprintf(stderr, 
-                                "cannot send initial offset to server: %s\n", 
-                                strerror_sv(errno));
-                        return EXIT_FAILURE;
-                }
-        }
         gettimeofday(&start_time, NULL);
 
         printf("Writing data to %s\n", filepath);
@@ -141,17 +73,6 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
                 /* printf("received %zd bytes\n", n); */
 
                 if (n < 0) {
-                        ret = check_migration(sock, total_bytes);
-            
-                        if (ret == 1) {
-                                printf("\rRecovery after server failure.\n"
-                                       "Read %zu bytes in session for a total of %zu.\n"
-                                       "Got error: %s.\n", 
-                                       total_bytes_session, total_bytes, 
-                                       strerror_sv(errno));
-                                total_bytes_session = 0;
-                                continue;
-                        } 
                         fprintf(stderr, "\rerror receiving data: %s\n",
                                 strerror(errno));
                         ret = EXIT_FAILURE;
@@ -197,7 +118,7 @@ static int recv_file(int sock, const char *filepath, int handle_migration,
         return ret;
 }
 
-static int client(const char *filepath, int handle_migration, 
+static int client(const char *filepath, 
                   struct in_addr *srv_inetaddr, int port)
 {
         int sock, ret = EXIT_FAILURE;
@@ -228,7 +149,7 @@ static int client(const char *filepath, int handle_migration,
                 cliaddr.serval.sv_srvid.s_sid32[0] = htonl(getpid());
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
-                       &listen_srvid, sizeof(listen_srvid));
+                       &server_srvid, sizeof(server_srvid));
                 addrlen = sizeof(cliaddr.serval);
                 /* srvaddr.sv_flags = SV_WANT_FAILOVER; */
         }
@@ -301,7 +222,7 @@ static int client(const char *filepath, int handle_migration,
 #endif
         printf("Connected successfully!\n");
         
-        ret = recv_file(sock, filepath, handle_migration, digest);
+        ret = recv_file(sock, filepath, digest);
         
         if (ret == EXIT_SUCCESS) {
                 printf("SHA1 digest is [%s]\n", digest_to_str(digest));
@@ -317,11 +238,11 @@ out:
 
 static void print_help()
 {
-        printf("Usage: %s [-hfm]\n", progname);
-        printf("-h, --help              - Print this information.\n"
-               "-f, --file FILE         - Write data to FILE.\n"
-               "-m, --migration         - Handle migration.\n"
-               "-i, --inet IP_ADDR      - Use AF_INET\n");
+        printf("Usage: %s [OPTIONS]\n", progname);
+        printf("-h, --help                        - Print this information.\n"
+               "-f, --file FILE                   - Write data to FILE.\n"
+               "-s, --serviceid SERVICE_ID        - ServiceID to connect to.\n"
+               "-i, --inet IP_ADDR                - Use AF_INET\n");
 }
 
 static int parse_inet_str(char *inet_str, 
@@ -353,12 +274,11 @@ main(int argc, char **argv)
 {
 	struct sigaction action;
         char *filepath = NULL;
-        int handle_migration = 0;
         struct in_addr srv_inetaddr;
-        int port = DEFAULT_LISTEN_SID;
+        int port = DEFAULT_SERVER_SID;
         int family = AF_SERVAL;
 
-        listen_srvid.s_sid32[0] = htonl(DEFAULT_LISTEN_SID);    
+        server_srvid.s_sid32[0] = htonl(DEFAULT_SERVER_SID);    
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -393,19 +313,17 @@ main(int argc, char **argv)
                            strcmp("--help", argv[0]) == 0) {
                         print_help();
                         return EXIT_SUCCESS;
-                } else if (strcmp("-m", argv[0]) == 0 || 
-                           strcmp("--migration", argv[0]) == 0) {
-                        handle_migration = 1;
-                }  else if (strcmp("-s", argv[0]) == 0 ||
+                } else if (strcmp("-s", argv[0]) == 0 ||
                             strcmp("--serviceid", argv[0]) == 0) {
-                        long v = strtol(argv[1], NULL, 10);
-                        if (v > 65535 || v < 0) {
-                                fprintf(stderr, "invalid service id %ld", v);
+                        char *endptr = NULL;
+                        unsigned long sid = strtoul(argv[1], &endptr, 10);
+
+                        if (*endptr != '\0') {
+                                fprintf(stderr, "invalid service id %s", 
+                                        argv[1]);
                                 return EXIT_FAILURE;
                         } else  {
-                                listen_srvid.s_sid32[0] = htonl((short)v);
-                                printf("listen service id: %s\n", 
-                                       service_id_to_str(&listen_srvid));
+                                server_srvid.s_sid32[0] = htonl(sid);
                         }
                         argc--;
                         argv++;
@@ -417,6 +335,5 @@ main(int argc, char **argv)
                 argv++;
         }
     
-        return client(filepath, handle_migration, 
-                      family == AF_INET ? &srv_inetaddr : NULL, port);
+        return client(filepath, family == AF_INET ? &srv_inetaddr : NULL, port);
 }

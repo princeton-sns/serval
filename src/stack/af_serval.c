@@ -943,15 +943,6 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
         lock_sock(sk);
 
 	switch (cmd) {
-/*
-		case SIOCSFMIGRATE:
-                        if (sk->sk_state != SERVAL_CONNECTED) {
-                                ret = -EINVAL;
-                                break;
-                        }
-                        ret = sfnet_handle_migrate_socket(sk);
-			break;
-*/
 		default:
 			ret = -ENOIOCTLCMD;
 			break;
