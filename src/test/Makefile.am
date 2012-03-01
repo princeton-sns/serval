@@ -11,11 +11,15 @@ bin_PROGRAMS = \
 	udp_server \
 	udp_client_user \
 	udp_client \
-	tcp_client_user \
-	tcp_client \
+	manysockets
+
+if HAVE_SSL
+bin_PROGRAMS += \
 	tcp_server_user \
 	tcp_server \
-	manysockets
+	tcp_client_user \
+	tcp_client
+endif
 
 if OS_LINUX
 bin_PROGRAMS += \
@@ -31,8 +35,6 @@ automigrated_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 endif
 
 EXTRA_DIST = README
-
-manysockets_SOURCES = manysockets.c
 manysockets_CPPFLAGS =-I$(top_srcdir)/include 
 manysockets_LDFLAGS =
 
