@@ -31,34 +31,29 @@ CloseReq::CloseReq()
     set_pld_len_v(serial_pld_len());
 }
 
-int
-CloseReq::check_type() const
+int CloseReq::check_type() const
 {
     return _type == CLOSE_REQ;
 }
 
-uint16_t
-CloseReq::serial_pld_len() const
+uint16_t CloseReq::serial_pld_len() const
 {
     return 0;
 }
 
-int
-CloseReq::write_serial_payload(unsigned char *buf) const
+int CloseReq::write_serial_payload(unsigned char *buf) const
 {
     buf = NULL; // purge compilation warning
     return 0;
 }
 
-int
-CloseReq::read_serial_payload(const unsigned char *buf)
+int CloseReq::read_serial_payload(const unsigned char *buf)
 {
     buf = NULL; // purge compilation warning
     return 0;
 }
 
-void
-CloseReq::print(const char *label) const
+void CloseReq::print(const char *label) const
 {
     Message::print(label);
     info("%s: close req", label);
@@ -67,8 +62,6 @@ CloseReq::print(const char *label) const
 //
 // CloseRsp
 //
-
-
 CloseRsp::CloseRsp()
         : Message(CLOSE_RSP), _err(0)
 {
@@ -82,36 +75,31 @@ CloseRsp::CloseRsp(sv_err_t err)
     set_pld_len_v(serial_pld_len());
 }
 
-int
-CloseRsp::check_type() const
+int CloseRsp::check_type() const
 {
     return _type == CLOSE_RSP;
 }
 
-uint16_t
-CloseRsp::serial_pld_len() const
+uint16_t CloseRsp::serial_pld_len() const
 {
     return sizeof(_err);
 }
 
-int
-CloseRsp::write_serial_payload(unsigned char *buf) const
+int CloseRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-CloseRsp::read_serial_payload(const unsigned char *buf)
+int CloseRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-CloseRsp::print(const char *label) const
+void CloseRsp::print(const char *label) const
 {
     Message::print(label);
     info("%s: err=%d", label, _err.v);

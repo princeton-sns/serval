@@ -141,11 +141,11 @@ void garbage_collect_clients(unsigned long data)
 #define NUM_SERVER_SOCKS 2
 
 #if defined(OS_ANDROID)
-#define UDP_SERVER_PATH "/data/local/tmp/serval-udp-0.sock"
-#define TCP_SERVER_PATH "/data/local/tmp/serval-tcp-0.sock"
+#define UDP_SERVER_PATH "/data/local/tmp/serval-udp.sock"
+#define TCP_SERVER_PATH "/data/local/tmp/serval-tcp.sock"
 #else
-#define UDP_SERVER_PATH "/tmp/serval-udp-0.sock"
-#define TCP_SERVER_PATH "/tmp/serval-tcp-0.sock"
+#define UDP_SERVER_PATH "/tmp/serval-udp.sock"
+#define TCP_SERVER_PATH "/tmp/serval-tcp.sock"
 #endif 
 
 static char *server_sock_path[] = {
@@ -487,6 +487,17 @@ extern atomic_t num_skb_alloc;
 extern atomic_t num_skb_free;
 extern atomic_t num_skb_clone;
 
+static void print_usage()
+{
+        printf("Usage: %s [OPTIONS]\n", progname);
+        printf("-h, --help                        - Print this information.\n"
+               "-i, --interface IFACE             - Use only the specified interface.\n"
+               "-u, --udp-encap                   - Enable UDP encapsulation.\n"
+               "-d, --daemon                      - Run in the background as a daemon.\n"
+               "-l, --debug-level LEVEL           - Set the level of debug output.\n"
+               "-s, --sal-forward                 - Enable SAL forwarding.\n");
+}
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
@@ -552,11 +563,15 @@ int main(int argc, char **argv)
 		} else if (strcmp(argv[0], "-ipf") == 0 ||
                            strcmp(argv[0], "--ip-forward") == 0) {
                         /* How do we set this? */
-                } else if (strcmp(argv[0], "-sf") == 0 ||
+                } else if (strcmp(argv[0], "-h") == 0 ||
+                           strcmp(argv[0], "--help") == 0) {
+                        print_usage();
+                        return -1;
+                } else if (strcmp(argv[0], "-s") == 0 ||
                            strcmp(argv[0], "--sal-forward") == 0) {
                         LOG_DBG("Enabling SAL forwarding\n");
                         net_serval.sysctl_sal_forward = 1;
-                } else if (strcmp(argv[0], "-encap") == 0 ||
+                } else if (strcmp(argv[0], "-u") == 0 ||
                            strcmp(argv[0], "--udp-encap") == 0) {
                         net_serval.sysctl_udp_encap = 1;
                 } else if (strcmp(argv[0], "-d") == 0 ||
@@ -576,7 +591,12 @@ int main(int argc, char **argv)
                         } else {
                                 fprintf(stderr, "Invalid debug setting %s\n",
                                         argv[1]);
+                                print_usage();
+                                return -1;
                         }
+                } else {
+                        print_usage();
+                        return -1;
                 }
 		argc--;
 		argv++;

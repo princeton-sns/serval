@@ -34,8 +34,8 @@ void server(void)
         struct sockaddr_sv servaddr, cliaddr;  
     
         if ((sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP)) < 0) {
-                fprintf(stderr, "error creating AF_SERVAL socket: %s", 
-                        strerror(errno));
+                fprintf(stderr, "error creating AF_SERVAL socket: %s\n", 
+                        strerror_sv(errno));
                 exit(EXIT_FAILURE);
         }
   
@@ -46,7 +46,8 @@ void server(void)
         set_reuse_ok(sock);
   
         if (bind_sv(sock, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
-                fprintf(stderr, "error binding socket: %s", strerror(errno));
+                fprintf(stderr, "error binding socket: %s\n", 
+                        strerror_sv(errno));
                 close_sv(sock);
                 exit(EXIT_FAILURE);
         }
@@ -60,7 +61,8 @@ void server(void)
                 printf("calling accept\n");
                 int fd = accept_sv(sock, (struct sockaddr *)&cliaddr, &l);
                 if (fd < 0) {
-                        fprintf(stderr, "error accepting new conn %s", strerror_sv(errno));
+                        fprintf(stderr, "error accepting new conn %s\n", 
+                                strerror_sv(errno));
                         exit(EXIT_FAILURE);
                 }
 
@@ -77,7 +79,7 @@ void server(void)
                         if ((n = recv_sv(fd, buf, N, 0)) < 0) {
                                 fprintf(stderr, 
                                         "server: error receiving client request: %s\n",
-                                        strerror(errno));
+                                        strerror_sv(errno));
                                 break;
                         }
                         if (n == 0) {

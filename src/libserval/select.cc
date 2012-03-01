@@ -29,34 +29,29 @@ HaveData::HaveData()
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-HaveData::serial_pld_len() const
+uint16_t HaveData::serial_pld_len() const
 {
     return 0;
 }
 
-int
-HaveData::check_type() const
+int HaveData::check_type() const
 {
     return _type == HAVE_DATA;
 }
 
-int
-HaveData::write_serial_payload(unsigned char *buf) const
+int HaveData::write_serial_payload(unsigned char *buf) const
 {
     buf = NULL; // avoid compilation warning for unused variable.
     return 0;
 }
 
-int
-HaveData::read_serial_payload(const unsigned char *buf)
+int HaveData::read_serial_payload(const unsigned char *buf)
 {
     buf = NULL; // avoid compilation warning for unused variable.
     return 0;
 }
 
-void
-HaveData::print(const char *label) const
+void HaveData::print(const char *label) const
 {
     Message::print(label);
     info("%s", label);
@@ -72,34 +67,29 @@ ClearData::ClearData()
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-ClearData::serial_pld_len() const
+uint16_t ClearData::serial_pld_len() const
 {
     return 0;
 }
 
-int
-ClearData::check_type() const
+int ClearData::check_type() const
 {
     return _type == HAVE_DATA;
 }
 
-int
-ClearData::write_serial_payload(unsigned char *buf) const
+int ClearData::write_serial_payload(unsigned char *buf) const
 {
     buf = NULL; // avoid compilation warning for unused variable.
     return 0;
 }
 
-int
-ClearData::read_serial_payload(const unsigned char *buf)
+int ClearData::read_serial_payload(const unsigned char *buf)
 {
     buf = NULL; // avoid compilation warning for unused variable.
     return 0;
 }
 
-void
-ClearData::print(const char *label) const
+void ClearData::print(const char *label) const
 {
     Message::print(label);
     info("%s", label);

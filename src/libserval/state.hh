@@ -5,9 +5,6 @@
 #include <netinet/serval.h>
 #include "types.h"
 
-const char *
-oid_to_str(const sv_srvid_t *oid);
-
 #define CRC_LEN 4
 
 class State {

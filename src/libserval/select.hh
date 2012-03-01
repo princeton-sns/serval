@@ -28,4 +28,4 @@ class ClearData : public Message {
     void print(const char *label) const;
 };
 
-#endif
+#endif /* SELECT_HH */

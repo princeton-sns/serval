@@ -8,10 +8,8 @@
 #include "sockio.hh"
 #include "log.hh"
 
-// todo: add pid to message hdr
-
 class Message {
-  public:
+public:
     typedef enum { UNKNOWN, BIND_REQ, BIND_RSP,
                    CONNECT_REQ, CONNECT_RSP,
                    LISTEN_REQ, LISTEN_RSP,
@@ -64,22 +62,21 @@ class Message {
 
     static const unsigned char version = 1;
 
-  protected:
+protected:
 
     int check_buf(const unsigned char *buf,
                   const char *file, unsigned line) const;
     int check_hdr() const;
     int check_len() const  { return _pld_len_v >= pld_len(); }
 
-  protected:
+protected:
     unsigned char _version;
     unsigned char _type;
     uint16_t _pld_len_v;
 };
 
-inline int
-Message::check_buf(const unsigned char *buf,
-                   const char *file, unsigned line) const
+inline int Message::check_buf(const unsigned char *buf,
+                              const char *file, unsigned line) const
 {
     if (!buf) {
         lerr("%s:$s null buf during read/write of scafd messages",
@@ -89,8 +86,7 @@ Message::check_buf(const unsigned char *buf,
     return 0;
 }
 
-inline int
-Message::check_hdr() const
+inline int Message::check_hdr() const
 {
     if (_version != version) {
         lerr("bad version");
@@ -107,72 +103,66 @@ Message::check_hdr() const
     return 0;
 }
 
-inline uint16_t
-Message::total_len() const
+inline uint16_t Message::total_len() const
 {
     return serial_len() + nonserial_pld_len();
 }
 
-inline uint16_t
-Message::serial_len() const
+inline uint16_t Message::serial_len() const
 {
     return hdr_len() + serial_pld_len();
 }
 
-inline uint16_t
-Message::pld_len() const
+inline uint16_t Message::pld_len() const
 {
     return serial_pld_len() + nonserial_pld_len();
 }
 
-inline uint16_t
-Message::hdr_len() const
+inline uint16_t Message::hdr_len() const
 {
     return sizeof(_version) +
-            sizeof(_type) +
-            sizeof(_pld_len_v);
+        sizeof(_type) +
+        sizeof(_pld_len_v);
 }
 
 #ifdef ENABLE_DEBUG
-inline void
-Message::print(const char *label) const
+inline void Message::print(const char *label) const
 #else
-        inline void
-        Message::print(const char *) const
+    inline void
+    Message::print(const char *) const
 #endif
 {
     info("%s: version = %d, type = %s, len = %d",
          label, _version, type_cstr(), _pld_len_v);
 }
 
-inline const char *
-Message::type_cstr() const
+inline const char *Message::type_cstr() const
 {
     switch (_type) {
-        case UNKNOWN:     return "unknown";
-        case BIND_REQ:    return "bind_req";
-        case BIND_RSP:    return "bind_rsp";
-        case CONNECT_REQ: return "connect_req";
-        case CONNECT_RSP: return "connect_rsp";
-        case LISTEN_REQ:  return "listen_req";
-        case LISTEN_RSP:  return "listen_rsp";
-        case ACCEPT_REQ:  return "accept_req";
-        case ACCEPT_RSP:  return "accept_rsp";
-        case ACCEPT_REQ2: return "accept_req2";
-        case ACCEPT_RSP2: return "accept_rsp2";
-        case SEND_REQ:    return "send_req";
-        case SEND_RSP:    return "send_rsp";
-        case RECV_REQ:    return "recv_req";
-        case RECV_RSP:    return "recv_rsp";
-        case MIG_REQ:     return "mig_req";
-        case MIG_RSP:     return "mig_rsp";
-        case CLOSE_REQ:   return "close_req";
-        case CLOSE_RSP:   return "close_rsp";
-        case CLEAR_DATA:  return "clear_data";
-        case HAVE_DATA:   return "have_data";
-        default:
-            return "unknown";
+    case UNKNOWN:     return "unknown";
+    case BIND_REQ:    return "bind_req";
+    case BIND_RSP:    return "bind_rsp";
+    case CONNECT_REQ: return "connect_req";
+    case CONNECT_RSP: return "connect_rsp";
+    case LISTEN_REQ:  return "listen_req";
+    case LISTEN_RSP:  return "listen_rsp";
+    case ACCEPT_REQ:  return "accept_req";
+    case ACCEPT_RSP:  return "accept_rsp";
+    case ACCEPT_REQ2: return "accept_req2";
+    case ACCEPT_RSP2: return "accept_rsp2";
+    case SEND_REQ:    return "send_req";
+    case SEND_RSP:    return "send_rsp";
+    case RECV_REQ:    return "recv_req";
+    case RECV_RSP:    return "recv_rsp";
+    case MIG_REQ:     return "mig_req";
+    case MIG_RSP:     return "mig_rsp";
+    case CLOSE_REQ:   return "close_req";
+    case CLOSE_RSP:   return "close_rsp";
+    case CLEAR_DATA:  return "clear_data";
+    case HAVE_DATA:   return "have_data";
+    default:
+        return "unknown";
     }
 }
 
-#endif
+#endif /* MESSAGE_H */

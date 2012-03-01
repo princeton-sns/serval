@@ -55,24 +55,16 @@ const char *PacketType::packettype_str[] = {
     "rsynack"
 };
 
-const char *
-State::state_s(const State::Type &v)
+const char *State::state_s(const State::Type &v)
 {
     if ((unsigned)v < State::MAX_STATES)
     return state_str[v];
     return "unknown";
 }
 
-const char *
-PacketType::packettype_s(const PacketType::Type &v)
+const char *PacketType::packettype_s(const PacketType::Type &v)
 {
     return packettype_str[v];
-}
-
-const char *
-oid_to_str(const sv_srvid_t *oid)
-{
-    return service_id_to_str(oid);
 }
 
 struct service_id _controller_srvid;

@@ -8,7 +8,7 @@ class ListenReq : public Message {
   public:
     ListenReq();
     ListenReq(int backlog);
-    ListenReq(sv_srvid_t local_obj_id, int backlog);
+    ListenReq(sv_srvid_t local_service_id, int backlog);
 
     int write_serial_payload(unsigned char *buf) const;
     int read_serial_payload(const unsigned char *buf);
@@ -16,14 +16,14 @@ class ListenReq : public Message {
     void print(const char *label) const;
 
     bool use_first() const        { return _use_first; }
-    sv_srvid_t local_obj_id() const { return _local_obj_id;}
+    sv_srvid_t local_service_id() const { return _local_service_id;}
     uint16_t backlog() const      { return _backlog; }
 
     static const unsigned int DEFAULT_BACKLOG = 16;
 
   private:
     bool     _use_first;
-    sv_srvid_t _local_obj_id;
+    sv_srvid_t _local_service_id;
     uint16_t _backlog;
 };
 

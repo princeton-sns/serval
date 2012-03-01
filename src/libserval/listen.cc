@@ -27,56 +27,52 @@
 ListenReq::ListenReq()
         :Message(LISTEN_REQ), _use_first(true), _backlog(DEFAULT_BACKLOG)
 {
-    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
+    memset(&_local_service_id, 0xff, sizeof(_local_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
 ListenReq::ListenReq(int backlog)
         :Message(LISTEN_REQ), _use_first(true), _backlog(backlog)
 {
-    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
+    memset(&_local_service_id, 0xff, sizeof(_local_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-ListenReq::ListenReq(sv_srvid_t obj_id, int backlog)
+ListenReq::ListenReq(sv_srvid_t service_id, int backlog)
         :Message(LISTEN_REQ), _use_first(false), _backlog(backlog)
 {
-    memcpy(&_local_obj_id, &obj_id, sizeof(obj_id));
+    memcpy(&_local_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-ListenReq::serial_pld_len() const
+uint16_t ListenReq::serial_pld_len() const
 {
-    return sizeof(_use_first) + sizeof(_local_obj_id) + sizeof(_backlog);
+    return sizeof(_use_first) + sizeof(_local_service_id) + sizeof(_backlog);
 }
 
-int
-ListenReq::write_serial_payload(unsigned char *buf) const
+int ListenReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_use_first, p);
-    p += serial_write(_local_obj_id, p);
+    p += serial_write(_local_service_id, p);
     p += serial_write(_backlog, p);
     return p - buf;
 }
 
-int
-ListenReq::read_serial_payload(const unsigned char *buf)
+int ListenReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_use_first, p);
-    p += serial_read(&_local_obj_id, p);
+    p += serial_read(&_local_service_id, p);
     p += serial_read(&_backlog, p);
     return p - buf;
 }
 
-void
-ListenReq::print(const char *label) const
+void ListenReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: use_first=%s, local_obj_id=%s, backlog=%d\n", label,
-         (_use_first ? "t" : "f"), oid_to_str(&_local_obj_id), _backlog);
+    info("%s: use_first=%s, local_service_id=%s, backlog=%d\n", label,
+         (_use_first ? "t" : "f"), service_id_to_str(&_local_service_id), _backlog);
 }
 
 //
@@ -95,30 +91,26 @@ ListenRsp::ListenRsp(sv_err_t err)
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-ListenRsp::serial_pld_len() const
+uint16_t ListenRsp::serial_pld_len() const
 {
     return sizeof(_err);
 }
 
-int
-ListenRsp::write_serial_payload(unsigned char *buf) const
+int ListenRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-ListenRsp::read_serial_payload(const unsigned char *buf)
+int ListenRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-ListenRsp::print(const char *label) const
+void ListenRsp::print(const char *label) const
 {
     Message::print(label);
     info("%s: err=%d\n", label, _err.v);

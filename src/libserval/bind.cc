@@ -26,54 +26,50 @@
 BindReq::BindReq()
         : Message(BIND_REQ), _flags(0), _prefix(0)
 {
-    memset(&_obj_id, 0, sizeof(_obj_id));
+    memset(&_service_id, 0, sizeof(_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindReq::BindReq(const sv_srvid_t& obj_id, uint8_t flags, uint8_t prefix)
+BindReq::BindReq(const sv_srvid_t& service_id, uint8_t flags, uint8_t prefix)
         : Message(BIND_REQ), _flags(flags), _prefix(prefix)
 {
-    memcpy(&_obj_id, &obj_id, sizeof(obj_id));
+    memcpy(&_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-int
-BindReq::check_type() const
+int BindReq::check_type() const
 {
     return _type == BIND_REQ;
 }
 
-uint16_t
-BindReq::serial_pld_len() const
+uint16_t BindReq::serial_pld_len() const
 {
-    return sizeof(_obj_id) + 2;
+    return sizeof(_service_id) + 2;
 }
 
-int
-BindReq::write_serial_payload(unsigned char *buf) const
+int BindReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_flags, p);
     p += serial_write(_prefix, p);
-    p += serial_write(_obj_id, p);
+    p += serial_write(_service_id, p);
     return p - buf;
 }
 
-int
-BindReq::read_serial_payload(const unsigned char *buf)
+int BindReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_flags, p);
     p += serial_read(&_prefix, p);
-	p += serial_read(&_obj_id, p);
+	p += serial_read(&_service_id, p);
     return p - buf;
 }
 
-void
-BindReq::print(const char *label) const
+void BindReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: flags=%i prefix=%i obj_id=%s", label, _flags, _prefix, oid_to_str(&_obj_id));
+    info("%s: flags=%i prefix=%i service_id=%s", 
+         label, _flags, _prefix, service_id_to_str(&_service_id));
 }
 
 //
@@ -83,51 +79,46 @@ BindReq::print(const char *label) const
 BindRsp::BindRsp()
         : Message(BIND_RSP), _err(0)
 {
-    memset(&_obj_id, 0, sizeof(_obj_id));
+    memset(&_service_id, 0, sizeof(_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindRsp::BindRsp(const sv_srvid_t& obj_id, sv_err_t err)
+BindRsp::BindRsp(const sv_srvid_t& service_id, sv_err_t err)
         : Message(BIND_RSP), _err(err)
 {
-    memcpy(&_obj_id, &obj_id, sizeof(obj_id));
+    memcpy(&_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-int
-BindRsp::check_type() const
+int BindRsp::check_type() const
 {
     return _type == BIND_RSP;
 }
 
-uint16_t
-BindRsp::serial_pld_len() const
+uint16_t BindRsp::serial_pld_len() const
 {
-    return sizeof(_obj_id) + sizeof(_err);
+    return sizeof(_service_id) + sizeof(_err);
 }
 
-int
-BindRsp::write_serial_payload(unsigned char *buf) const
+int BindRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
-    p += serial_write(_obj_id, p);
+    p += serial_write(_service_id, p);
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-BindRsp::read_serial_payload(const unsigned char *buf)
+int BindRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
-    p += serial_read(&_obj_id, p);
+    p += serial_read(&_service_id, p);
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-BindRsp::print(const char *label) const
+void BindRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s, err=%s", label, oid_to_str(&_obj_id),
+    info("%s: service_id=%s, err=%s", label, service_id_to_str(&_service_id),
          _err.v ? "t" : "f");
 }

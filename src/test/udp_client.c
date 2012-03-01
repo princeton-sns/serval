@@ -118,7 +118,7 @@ int client(void) {
                 printf("client: waiting on user input :>");
 	}
 	if (close_sv(sock) < 0)
-		fprintf(stderr, "close: %s", 
+		fprintf(stderr, "close: %s\n", 
                         strerror_sv(errno));
 
         return 0;

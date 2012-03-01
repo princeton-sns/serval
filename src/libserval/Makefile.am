@@ -6,7 +6,6 @@ COMMON_SRC = \
 	close.cc \
 	connect.cc \
 	listen.cc \
-	migrate.cc \
 	message.cc \
 	recv.cc \
 	send.cc \
@@ -17,7 +16,7 @@ COMMON_SRC = \
 
 libserval_la_SOURCES = \
 	$(COMMON_SRC) \
-	sf.cc \
+	api.cc \
 	socket.cc \
 	cli.cc
 
@@ -38,7 +37,6 @@ noinst_HEADERS = \
 	connect.hh \
 	listen.hh \
 	lock.hh \
-	migrate.hh \
 	recv.hh \
 	send.hh \
 	select.hh \
