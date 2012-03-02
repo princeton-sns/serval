@@ -241,7 +241,7 @@ int SVSockLib::check_state_for_connect(const Cli &cli, sv_err_t &err) const
             lerr("strange state %s found while %s expected",
                  State::state_s(cli.state()), 
                  State::state_s(State::UNBOUND));
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
         }
         return SERVAL_SOCKET_ERROR;
     }
@@ -261,7 +261,7 @@ int SVSockLib::check_state_for_connect(const Cli &cli, sv_err_t &err) const
     if (cli.state() != State::UNBOUND && cli.state() != State::CLOSED) {
         // CLOSED is a valid state in case a client app does not want to
         // register its service id with the service router
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         info("error %s", strerror_sv(err.v));
         return SERVAL_SOCKET_ERROR;
     }
@@ -388,23 +388,24 @@ int SVSockLib::getsockopt_sv(int soc, int level, int option_name,
 
         ConnectRsp cresp;
         int atleast = cresp.total_len();
-        bool v = false;
-        if (cli.has_unread_data(atleast, v, err) < 0) {
-            if (err.v == EWOULDBLOCK || err.v == EAGAIN) {
-                lerr("cli %s returned EWOULDBLOCK", cli.s());
-                *option = EWOULDBLOCK;
-                //*option = EINPROGRESS;
-                return 0;
-            } else {
+
+        switch (cli.has_unread_data(atleast, err)) {
+        case Cli::DATA_ERROR:
                 lerr("cli %s has no unread data", cli.s());
                 return SERVAL_SOCKET_ERROR;
-            }
-        }
-
-        if (!v) {
+        case Cli::DATA_NOT_ENOUGH:
             info("no async errors to read; still connecting");
             *option = EINPROGRESS;
+            return -1;
+        case Cli::DATA_WOULD_BLOCK:
+            lerr("cli %s returned EWOULDBLOCK", cli.s());
+                *option = EWOULDBLOCK;
+                //*option = EINPROGRESS;
+                return -1;
+        case Cli::DATA_CLOSED:
             return 0;
+        case Cli::DATA_READY:
+            break;
         }
     
         SimpleLock slock(cli.get_lock());
@@ -557,7 +558,6 @@ int SVSockLib::query_serval_listen(int backlog, Cli &cli, sv_err_t &err)
 //
 // Accept
 //
-
 int SVSockLib::accept_sv(int soc, struct sockaddr *addr, socklen_t *addr_len,
                          sv_err_t &err)
 {
@@ -715,12 +715,12 @@ int SVSockLib::delete_cli(Cli *cli, sv_err_t &err)
     if (cli->fd() >= 0)
         if (::close(cli->fd()) < 0) {
             //lerr("error closing fd %d", cli->fd());
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return SERVAL_SOCKET_ERROR;
         }
   
     if (get_cli(cli->fd(), err).is_null()) {
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return SERVAL_SOCKET_ERROR;
     }
   
@@ -742,13 +742,19 @@ int SVSockLib::query_serval_accept1(bool nb, Cli &cli, AcceptRsp &aresp,
 
     if (nb) {
         int size = aresp.total_len();
-        bool v;
-        if (cli.has_unread_data(size, v, err) < 0)
+
+        switch (cli.has_unread_data(size, err)) {
+        case Cli::DATA_ERROR:
             return SERVAL_SOCKET_ERROR;
-        if (!v) {
+        case Cli::DATA_WOULD_BLOCK:
+        case Cli::DATA_NOT_ENOUGH:
             lerr("accept1: no data to read");
             err = EAGAIN; // or EWOULDBLOCK
             return SERVAL_SOCKET_ERROR;
+        case Cli::DATA_CLOSED:
+            return 0;
+        case Cli::DATA_READY:
+            break;
         }
     }
   
@@ -1008,7 +1014,7 @@ int SVSockLib::query_serval_send(bool nb, const void *buffer,
         if (m.type() != Message::SEND_RSP) {
             lerr("expected SendRsp message got %d type", 
                  m.type());
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return SERVAL_SOCKET_ERROR;
         }
     } else if (errno == EAGAIN)
@@ -1068,7 +1074,7 @@ int SVSockLib::query_serval_sendto(const sv_srvid_t& dst_service_id,
         m.read_hdr_from_stream_soc(cli.fd(), err);
         if (m.type() != Message::SEND_RSP) {
             lerr("expected SendRsp message got %d type", m.type());
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return SERVAL_SOCKET_ERROR;
         }
     } else if (errno == EAGAIN) {
@@ -1133,7 +1139,7 @@ ssize_t SVSockLib::recv_sv(int soc, void *buffer, size_t length, int flags,
     }
     cli.restore_flags();
   
-    info("received %ld bytes data", length);
+    info("received %zu bytes data", length);
 
     return length;
 }
@@ -1216,15 +1222,20 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         info("non-blocking socket %i, type = %i", cli.fd(), cli.proto().v);
         HaveData hdata;
         int size = hdata.total_len();
-        bool v;
-        if (cli.has_unread_data(size, v, err) < 0) {
+
+        switch (cli.has_unread_data(size, err)) {
+        case Cli::DATA_ERROR:
             lerr("has_unread_data returned error");
             return SERVAL_SOCKET_ERROR;
-        }
-        if (!v) {
+        case Cli::DATA_WOULD_BLOCK:
+        case Cli::DATA_NOT_ENOUGH:
             err = EWOULDBLOCK;           // or EAGAIN
             lerr("non-blocking would block");
             return SERVAL_SOCKET_ERROR;
+        case Cli::DATA_CLOSED:
+            return 0;
+        case Cli::DATA_READY:
+            break;
         }
         info("reading hdata in nb mode");
         hdata.read_from_stream_soc(cli.fd(), err);
@@ -1235,26 +1246,35 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         // This allows select() to wake up without
         // reading anything from the socket buffers
         info("recv_sv on blocking socket %i",cli.fd());
-        bool v;
-        if (cli.has_unread_data(1, v, err) >= 0) {
-            if (v) {
-                // This must be HaveData
-                info("reading hdata in blocking mode");
-                HaveData hdata;
-                //int size = hdata.total_len();
-                if (hdata.read_from_stream_soc(cli.fd(), err) < 0) {
-                    lerr("found unexpected msg (want HaveData)");
-                    err = ESFINTERNAL;
-                    return SERVAL_SOCKET_ERROR;
-                } else {
-                    info("Got HaveData Msg");
-                    hdata.print("hdata:app:rx");
-                    got_havedata_msg = true;
-                }
+        
+        switch (cli.has_unread_data(1, err)) {
+        case Cli::DATA_ERROR:
+            return -1;
+        case Cli::DATA_WOULD_BLOCK:
+            break;
+        case Cli::DATA_NOT_ENOUGH:
+            break;
+        case Cli::DATA_CLOSED:
+            return 0;
+        case Cli::DATA_READY:
+            // This must be HaveData
+            HaveData hdata;
+            //int size = hdata.total_len();
+            int len = hdata.read_from_stream_soc(cli.fd(), err);
+
+            if (len < 0) {
+                lerr("found unexpected msg (want HaveData)");
+                err = ESVINTERNAL;
+                return SERVAL_SOCKET_ERROR;
+            } else {
+                info("Got HaveData Msg len=%d", len);
+                hdata.print("hdata:app:rx");
+                got_havedata_msg = true;
             }
-        } else if (errno == EAGAIN)
-            info("no data to read; ok to send req");
+            break;
+        }
     }
+
     // Now ready to send read request
     info("sending recv req of len %d", len);
     RecvReq rreq(len, flags);
@@ -1263,7 +1283,6 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         return SERVAL_SOCKET_ERROR;
     }
     rreq.print("recv:app:tx");
-    //}
 
     // In 3 diff cases, we still reach here
     // TCP non-blocking, we found a HaveData message,
@@ -1275,6 +1294,8 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         lerr("Cannot read response message from stream");
         return SERVAL_SOCKET_ERROR;
     }
+
+    info("read message type=%s", m.type_cstr());
 
     //if (cli.proto().v == SERVAL_PROTO_TCP && m.type() == Message::HAVE_DATA) {
     if (m.type() == Message::HAVE_DATA) {
@@ -1289,7 +1310,7 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         if (m.type() != Message::RECV_RSP) {
             lerr("expected RecvRsp message got %d type", 
                  m.type());
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return SERVAL_SOCKET_ERROR;
         }
     }
@@ -1308,6 +1329,7 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
     }
 
     m.print("recv:app:rx:hdr");
+
     if (m.pld_len_v()) {
         RecvRsp rresp(SERVAL_OK);
         uint16_t nonserial_len = m.pld_len_v() - rresp.serial_pld_len();
@@ -1333,7 +1355,8 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
 
         if (len > rresp.nonserial_pld_len())
             len = rresp.nonserial_pld_len();
-        memcpy(&src_service_id, &rresp.src_service_id(), sizeof(src_service_id));
+        memcpy(&src_service_id, &rresp.src_service_id(), 
+               sizeof(src_service_id));
         src_ipaddr = rresp.src_ipaddr();
     } else {
         info("recv: expected to read data, found EOF on soc %s", 

@@ -10,18 +10,27 @@
 
 class Message {
 public:
-    typedef enum { UNKNOWN, BIND_REQ, BIND_RSP,
-                   CONNECT_REQ, CONNECT_RSP,
-                   LISTEN_REQ, LISTEN_RSP,
-                   ACCEPT_REQ, ACCEPT_RSP,
-                   ACCEPT_REQ2, ACCEPT_RSP2,
-                   SEND_REQ, SEND_RSP,
-                   RECV_REQ, RECV_RSP,
-                   MIG_REQ, MIG_RSP,
-                   RECONN_REQ, RECONN_RSP,
-                   CLOSE_REQ, CLOSE_RSP,
-                   RECVMESG, 
-                   CLEAR_DATA, HAVE_DATA
+    typedef enum { 
+        UNKNOWN, 
+        BIND_REQ, 
+        BIND_RSP,
+        CONNECT_REQ, 
+        CONNECT_RSP,
+        LISTEN_REQ, 
+        LISTEN_RSP,
+        ACCEPT_REQ, 
+        ACCEPT_RSP,
+        ACCEPT_REQ2, 
+        ACCEPT_RSP2,
+        SEND_REQ, 
+        SEND_RSP,
+        RECV_REQ, 
+        RECV_RSP,
+        CLOSE_REQ, 
+        CLOSE_RSP,
+        RECVMESG, 
+        CLEAR_DATA, 
+        HAVE_DATA
     } Type;
     Message()
         : _version(version), _type(UNKNOWN), _pld_len_v(0) { }
@@ -63,7 +72,7 @@ public:
     static const unsigned char version = 1;
 
 protected:
-
+    
     int check_buf(const unsigned char *buf,
                   const char *file, unsigned line) const;
     int check_hdr() const;
@@ -73,6 +82,8 @@ protected:
     unsigned char _version;
     unsigned char _type;
     uint16_t _pld_len_v;
+private:
+    static const char *msg_str[];
 };
 
 inline int Message::check_buf(const unsigned char *buf,
@@ -138,31 +149,7 @@ inline void Message::print(const char *label) const
 
 inline const char *Message::type_cstr() const
 {
-    switch (_type) {
-    case UNKNOWN:     return "unknown";
-    case BIND_REQ:    return "bind_req";
-    case BIND_RSP:    return "bind_rsp";
-    case CONNECT_REQ: return "connect_req";
-    case CONNECT_RSP: return "connect_rsp";
-    case LISTEN_REQ:  return "listen_req";
-    case LISTEN_RSP:  return "listen_rsp";
-    case ACCEPT_REQ:  return "accept_req";
-    case ACCEPT_RSP:  return "accept_rsp";
-    case ACCEPT_REQ2: return "accept_req2";
-    case ACCEPT_RSP2: return "accept_rsp2";
-    case SEND_REQ:    return "send_req";
-    case SEND_RSP:    return "send_rsp";
-    case RECV_REQ:    return "recv_req";
-    case RECV_RSP:    return "recv_rsp";
-    case MIG_REQ:     return "mig_req";
-    case MIG_RSP:     return "mig_rsp";
-    case CLOSE_REQ:   return "close_req";
-    case CLOSE_RSP:   return "close_rsp";
-    case CLEAR_DATA:  return "clear_data";
-    case HAVE_DATA:   return "have_data";
-    default:
-        return "unknown";
-    }
+    return msg_str[_type];
 }
 
 #endif /* MESSAGE_H */

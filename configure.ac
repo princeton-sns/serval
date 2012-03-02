@@ -221,10 +221,20 @@ AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
 [case "${enableval}" in
   yes) kernel=yes ;;
   no)  kernel=no ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-kernel]) ;;
 esac],[kernel=yes])
 
 AM_CONDITIONAL([ENABLE_LINUX_MODULE], [test x$kernel = xyes && test x$serval_os_linux = xyes])
+
+AC_ARG_ENABLE([usermode],
+AS_HELP_STRING([--disable-usermode],[Disable user mode stack]),
+[case "${enableval}" in
+  yes) usermode=yes ;;
+  no)  usermode=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-usermode]) ;;
+esac],[usermode=yes])
+
+AM_CONDITIONAL([ENABLE_USERMODE], [test x$usermode = xyes])
 
 dnl export these variable (so Makefile substitutions
 dnl can be made. 
@@ -258,7 +268,7 @@ AC_CONFIG_FILES([Makefile
 AC_OUTPUT
 
 echo
-#echo "Build user level.........................$userlevel"
+echo "Build user-mode stack.....................$usermode"
 echo "Build Linux kernel module.................$kernel"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"

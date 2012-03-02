@@ -73,7 +73,7 @@ int Cli::bind(sv_err_t &err)
   
     if (_fd < 0) {
         lerr("Cli::bind() fd < 0");
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return -1;
     }
   
@@ -280,27 +280,33 @@ int Cli::reset_writability(sv_err_t &err)
     return 0;
 }
 
-int Cli::has_unread_data(int atleast, bool &v, sv_err_t &err) const
+enum Cli::data_val Cli::has_unread_data(int atleast, sv_err_t &err) const
 {
     char buf[atleast];
     int n;
-    if ((n = recv(_fd, buf, atleast, MSG_PEEK | MSG_DONTWAIT)) < 0) {
 
-        if (errno == EWOULDBLOCK) {
-            v = false;
-            return 0;
+    n = recv(_fd, buf, atleast, MSG_PEEK | MSG_DONTWAIT);
+    
+    if (n < 0) {
+        if (errno == EWOULDBLOCK ||
+            errno == EAGAIN) {
+            return DATA_WOULD_BLOCK;
         }
         lerr("Cli::has_unread_data cannot PEEK socket : %s", strerror(errno));
         err = errno;
-        return -1;
+        return DATA_ERROR;
     }
+    
     info("has_unread_data: found %d bytes, need atleast %d bytes type: %i",
          n, atleast, buf[1]);
+
+    if (n == 0)
+        return DATA_CLOSED;
+
     if (n >= atleast)
-        v = true;
-    else
-        v = false;
-    return 0;
+        return DATA_NOT_ENOUGH;
+
+    return DATA_READY;
 }
 
 const char *Cli::s(char *buf, size_t buflen) const

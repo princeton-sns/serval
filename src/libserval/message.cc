@@ -32,6 +32,30 @@
 #include <sys/un.h>
 #include <assert.h>
 
+const char *Message::msg_str[] = {
+    "MSG_UNKNOWN",
+    "MSG_BIND_REQ", 
+    "MSG_BIND_RSP",
+    "MSG_CONNECT_REQ", 
+    "MSG_CONNECT_RSP",
+    "MSG_LISTEN_REQ", 
+    "MSG_LISTEN_RSP",
+    "MSG_ACCEPT_REQ", 
+    "MSG_ACCEPT_RSP",
+    "MSG_ACCEPT2_REQ", 
+    "MSG_ACCEPT2_RSP",
+    "MSG_SEND_REQ", 
+    "MSG_SEND_RSP",
+    "MSG_RECV_REQ", 
+    "MSG_RECV_RSP",
+    "MSG_CLOSE_REQ", 
+    "MSG_CLOSE_RSP",
+    "MSG_RECVMESG", 
+    "MSG_CLEAR_DATA", 
+    "MSG_HAVE_DATA",
+    NULL
+};
+
 int Message::read_hdr(const unsigned char *buf)
 {
     if (check_buf(buf, __FILE__, __LINE__) < 0) {
@@ -91,7 +115,7 @@ int Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
 
     if (write_serial(buf) < 0) {
         delete[] buf;
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return -1;
     }
 
@@ -111,7 +135,7 @@ int Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
         delete[] vec;
         if (n == 0)  // EOF
             return 0;
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return -1;
     }
     delete[] buf;
@@ -192,7 +216,7 @@ int Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
         if (n < 0 || read_serial_payload(buf) < 0) {
             delete[] buf;
             lerr("Message::read_pld_from_stream_soc failed");
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return -1;
         }
         SockIO::print("Message::read_pld_from_stream_soc", buf, slen);
@@ -211,7 +235,7 @@ int Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
         }
 
         if (n < 0) {
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             lerr("Message::read_from_stream_soc reading "
                  "non-serial payload failed");
             return -1;

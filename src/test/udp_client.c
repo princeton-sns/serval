@@ -25,8 +25,8 @@
 #include <unistd.h>
 #include <signal.h>
 
-static unsigned short CLIENT_OBJECT_ID = 32769;
-static unsigned short ECHO_OBJECT_ID = 16385;
+static unsigned short CLIENT_SERVICE_ID = 32769;
+static unsigned short ECHO_SERVICE_ID = 16385;
 
 static int sock;
 
@@ -51,17 +51,17 @@ int set_reuse_ok(int soc)
 int client(void) {
 	struct sockaddr_sv cliaddr;
 	struct sockaddr_sv srvaddr;
-	int n;
+	int ret = 0;
 	unsigned N = 2000;
 	char sbuf[N], rbuf[N + 1];
 
 	bzero(&cliaddr, sizeof(cliaddr));
 	cliaddr.sv_family = AF_SERVAL;
-	cliaddr.sv_srvid.s_sid32[0] = htonl(CLIENT_OBJECT_ID);
+	cliaddr.sv_srvid.s_sid32[0] = htonl(CLIENT_SERVICE_ID);
 
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sv_family = AF_SERVAL;
-	srvaddr.sv_srvid.s_sid32[0] = htonl(ECHO_OBJECT_ID);
+	srvaddr.sv_srvid.s_sid32[0] = htonl(ECHO_SERVICE_ID);
   
 	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
 
@@ -73,13 +73,17 @@ int client(void) {
 
 	set_reuse_ok(sock);
 
-	if (bind_sv(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr)) < 0) {
+        ret = bind_sv(sock, (struct sockaddr *) &cliaddr, sizeof(cliaddr));
+
+	if (ret < 0) {
 		fprintf(stderr, "bind: %s\n", 
                         strerror_sv(errno));
 		return -1;
 	}
 
-	if (connect_sv(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr)) < 0) {
+        ret = connect_sv(sock, (struct sockaddr *)&srvaddr, sizeof(srvaddr));
+
+	if (ret < 0) {
 		fprintf(stderr, "connect: %s\n",
 			strerror_sv(errno));
 		return -1;
@@ -95,33 +99,39 @@ int client(void) {
 		if (strlen(sbuf) < N) // remove new line
 			sbuf[strlen(sbuf) - 1] = '\0';
 
-		printf("client: sending \"%s\" to object ID %s\n", 
+		printf("client: sending \"%s\" to service ID %s\n", 
                        sbuf, service_id_to_str(&srvaddr.sv_srvid));
                 
-		if (send_sv(sock, sbuf, strlen(sbuf), 0) < 0) {
+                ret = send_sv(sock, sbuf, strlen(sbuf), 0);
+
+		if (ret < 0) {
 			fprintf(stderr, "send failed (%s)\n", 
                                 strerror_sv(errno));
-			return -1;
+                        break;
 		}
-		n = recv_sv(sock, rbuf, N, 0);
-		rbuf[n] = 0;
 
-                if (n == -1) {
+		ret = recv_sv(sock, rbuf, N, 0);
+		rbuf[ret] = 0;
+
+                if (ret == -1) {
                         fprintf(stderr, "recv: %s\n", strerror_sv(errno));
+                } else if (ret == 0) {
+                        printf("server closed\n");
+                        break;
                 } else {
                         printf("Response from server: %s\n", rbuf);
                         
                         if (strcmp(sbuf, "quit") == 0)
                                 break;
                 }
-                
                 printf("client: waiting on user input :>");
 	}
+
 	if (close_sv(sock) < 0)
 		fprintf(stderr, "close: %s\n", 
                         strerror_sv(errno));
 
-        return 0;
+        return ret;
 }
 
 int main(int argc, char **argv)

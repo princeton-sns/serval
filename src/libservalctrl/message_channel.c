@@ -89,7 +89,6 @@ static inline int equal_wrapper(const struct hashelm *elm, const void *key)
 static inline void free_wrapper(struct hashelm *elm)
 {
     struct message_channel *c = container_of(elm, struct message_channel, he);
-    LOG_DBG("freeing channel %s\n", c->name);
     c->ops->finalize(c);
     pthread_mutex_destroy(&c->lock);
     free(c);
@@ -200,11 +199,21 @@ message_channel_t *message_channel_get(message_channel_type_t type)
    
 void message_channel_hold(message_channel_t *channel)
 {
+    /*
+    LOG_DBG("%s refcount is %u\n", 
+            channel->name,
+            atomic_read(&channel->he.refcount) + 1);
+    */
     return channel->ops->hold(channel);
 }
 
 void message_channel_put(message_channel_t *channel)
 {
+    /*
+    LOG_DBG("%s refcount is %u\n", 
+            channel->name,
+            atomic_read(&channel->he.refcount) - 1);
+    */
     return channel->ops->put(channel);
 }
 

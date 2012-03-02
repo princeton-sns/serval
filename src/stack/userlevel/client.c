@@ -85,30 +85,26 @@ static int client_handle_have_data_msg(struct client *c,
                                        struct client_msg *msg);
 
 msg_handler_t msg_handlers[] = {
-	dummy_msg_handler,
-	client_handle_bind_req_msg,
-	dummy_msg_handler,
-	client_handle_connect_req_msg,
-	dummy_msg_handler,
-	client_handle_listen_req_msg,
-	dummy_msg_handler,
-	client_handle_accept_req_msg,
-	dummy_msg_handler,
-	client_handle_accept2_req_msg,
-	dummy_msg_handler,
-	client_handle_send_req_msg,
-	dummy_msg_handler,
-	client_handle_recv_req_msg,
-	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler,
-	dummy_msg_handler,
-	client_handle_close_req_msg,
-	dummy_msg_handler,
-	dummy_msg_handler,
-	client_handle_clear_data_msg,
-	client_handle_have_data_msg
+	[MSG_UNKNOWN] = dummy_msg_handler,
+        [MSG_BIND_REQ] = client_handle_bind_req_msg, 
+	[MSG_BIND_RSP] = dummy_msg_handler,
+	[MSG_CONNECT_REQ] = client_handle_connect_req_msg,
+	[MSG_CONNECT_RSP] = dummy_msg_handler,
+	[MSG_LISTEN_REQ] = client_handle_listen_req_msg,
+	[MSG_LISTEN_RSP] = dummy_msg_handler,
+	[MSG_ACCEPT_REQ] = client_handle_accept_req_msg,
+	[MSG_ACCEPT_RSP] = dummy_msg_handler,
+	[MSG_ACCEPT2_REQ] = client_handle_accept2_req_msg,
+	[MSG_ACCEPT2_RSP] = dummy_msg_handler,
+	[MSG_SEND_REQ] = client_handle_send_req_msg,
+	[MSG_SEND_RSP] = dummy_msg_handler,
+	[MSG_RECV_REQ] = client_handle_recv_req_msg,
+	[MSG_RECV_RSP] = dummy_msg_handler,
+	[MSG_CLOSE_REQ] = client_handle_close_req_msg,
+	[MSG_CLOSE_RSP] = dummy_msg_handler,
+	[MSG_RECVMESG] = dummy_msg_handler, 
+	[MSG_CLEAR_DATA] = client_handle_clear_data_msg,
+	[MSG_HAVE_DATA] = client_handle_have_data_msg
 };
 	
 static void dummy_timer_callback(unsigned long data)
@@ -707,17 +703,19 @@ int client_send_have_data_msg(struct client *c)
 static int client_handle_msg(struct client *c)
 {
 	struct client_msg *msg;
-	int ret;
+	int ret, msg_size;
 	
-	ret = client_msg_read(c->fd, &msg);
+	msg_size = client_msg_read(c->fd, &msg);
 
-	if (ret < 1)
-		return ret;
+	if (msg_size < 1)
+		return msg_size;
 
 	ret = msg_handlers[msg->type](c, msg);
 
         if (ret == -1) {
                 LOG_ERR("message handler error: %s\n", strerror(errno));
+        } else {
+                ret = msg_size;
         }
         
 	client_msg_free(msg);

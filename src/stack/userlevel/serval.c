@@ -328,7 +328,8 @@ static int server_run(void)
 				LOG_INF("client event\n");
 				
 				client_sock = accept(server_sock[i], 
-						     (struct sockaddr *)&sa, &addrlen);
+						     (struct sockaddr *)&sa, 
+                                                     &addrlen);
 				
 				if (client_sock == -1) {
 					LOG_ERR("accept() failed : %s\n", 
@@ -347,7 +348,8 @@ static int server_run(void)
 				if (!c) {
 					close(client_sock);
 				} else {
-					LOG_INF("accepted new client %u\n", client_get_id(c));
+					LOG_INF("accepted new client %u\n", 
+                                                client_get_id(c));
 					
 					client_list_add(c, &client_list);
 					

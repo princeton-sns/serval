@@ -38,7 +38,14 @@ public:
     bool is_blocking() const;
     bool is_non_blocking() const;
     bool is_connecting() const       { return _connect_in_progress; }
-    int has_unread_data(int atleast, bool &v, sv_err_t &err) const;
+    enum data_val {
+        DATA_ERROR = -1,
+        DATA_CLOSED,
+        DATA_NOT_ENOUGH,
+        DATA_WOULD_BLOCK,
+        DATA_READY,
+    };
+    enum data_val has_unread_data(int atleast, sv_err_t &err) const;
     State::Type state() const              { return _state; } 
     sv_proto_t proto() const         { return _proto; }
   

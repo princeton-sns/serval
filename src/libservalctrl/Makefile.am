@@ -55,10 +55,17 @@ libservalctrl_la_CPPFLAGS = \
 
 libservalctrl_la_LDFLAGS = \
 	-L$(top_srcdir)/src/common \
-	-lcommon
-	-lpthread \
+	-lcommon \
+	-lpthread
+
+if ENABLE_USERMODE
+libservalctrl_la_CPPFLAGS += \
+	-DENABLE_USERMODE
+
+libservalctrl_la_LDFLAGS += \
 	-L$(top_srcdir)/src/libserval \
 	-lserval
+endif
 
 if OS_LINUX
 libservalctrl_la_LDFLAGS += \
