@@ -48,7 +48,7 @@ static void migrate_print_usage(void)
 {
         int i;
 
-        printf("migrate COMMAND [ ARGS ]\nCOMMANDs:\n");
+        printf("migrate:\n");
 
         for (i = 0; i < __CMD_MIGRATE_MAX; i++) {
                 printf("\t%-30s %s\n",
@@ -157,6 +157,12 @@ struct command migrate = {
 
 #if defined(ENABLE_MAIN)
 
+static void print_usage(void)
+{
+        printf("migrate COMMAND [ARGS]\n");
+        migrate.print_usage();
+}
+
 int main(int argc, char **argv)
 {
 	int ret = 0;
@@ -164,7 +170,7 @@ int main(int argc, char **argv)
         void *args;
 
         if (argc < 2) {
-                migrate.print_usage();
+                print_usage();
                 return 0;
         }
 
@@ -174,7 +180,7 @@ int main(int argc, char **argv)
         ret = migrate.parse_args(argc, argv, &args);
         
         if (ret == -1) {
-                migrate.print_usage();
+                print_usage();
                 return -1;
         }
 
