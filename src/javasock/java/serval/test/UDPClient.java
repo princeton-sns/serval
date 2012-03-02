@@ -62,9 +62,9 @@ public class UDPClient {
     }
     private void run() {
         try {
-            sock = new ServalDatagramSocket(new ServiceID((short) 32769));
+            sock = new ServalDatagramSocket(new ServiceID(32769));
             sock.setSoTimeout(5000);
-            sock.connect(new ServiceID((short) 16385), 4000);
+            sock.connect(new ServiceID(16385), 4000);
         } catch (Exception e) {
             System.out.println("failure: " + e.getMessage());
             
