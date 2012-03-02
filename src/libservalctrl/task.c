@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * task.c
- *
- *  Created on: Feb 19, 2011
- *      Author: daveds, Erik Nordstrom
- */
-
 #include <serval/list.h>
 #include <serval/hash.h>
 #include <serval/atomic.h>

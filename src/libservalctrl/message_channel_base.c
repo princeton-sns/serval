@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * base_message_channel.c
- *
- *  Created on: Apr 14, 2011
- *      Author: daveds
- */
-
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
