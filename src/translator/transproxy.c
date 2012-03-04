@@ -166,9 +166,12 @@ void *client_thread(void *arg)
         int inet_port = 49254;
         char srcstr[18];
         char origstr[24] = "\0";
+        struct sockaddr_in empty_addr;
         int ret;
 
         memset(&addr, 0, sizeof(addr));
+        memset(&orig_addr, 0, sizeof(orig_addr));
+        memset(&empty_addr, 0, sizeof(empty_addr));
         
         if (c->family == AF_SERVAL) {
                 addr.sv.sv_family = c->family;
@@ -226,18 +229,22 @@ void *client_thread(void *arg)
                                  * legacy endpoint this connection is trying
                                  * to reach. */
                                 if (!c->established) {
-                                        getsockopt(c->inet_sock, SOL_IP, 
+                                        orig_addrlen = sizeof(orig_addr);
+                                        int x = getsockopt(c->inet_sock, SOL_IP, 
                                                    SO_ORIGINAL_DST, &orig_addr,
                                                    &orig_addrlen);
+                                        if (x < 0)
+                                            printf("Damn %s\n", strerror(errno));
                                         sprintf(origstr, "%s %d\n", 
                                                 inet_ntop(AF_INET, 
                                                 &orig_addr.sin_addr, origstr, 
                                                 sizeof(origstr)), 
                                                 ntohs(orig_addr.sin_port));
                                         c->established = 1;
-                                        printf("Connection original: %s\n", 
-                                               origstr);
-                                        forward_buf(c->serval_sock,origstr,24);
+                                        printf("%d: Connection original: %s", 
+                                                    c->id, origstr);
+                                        forward_buf(c->serval_sock, 
+                                                    origstr, 24);
                                 }
                                 
                                 bytes = legacy_to_serval(c);
