@@ -137,8 +137,7 @@ void client_free(struct client *c)
 void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
-        int ret, idx;
-        char charbuf[1];
+        int ret;
         char initbuf[24] = "\0";
         char *dest, *port, *saveptr;
         struct addrinfo hints, *res;
@@ -146,17 +145,10 @@ void *client_thread(void *arg)
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
-        idx = 0;
-        while (read(c->serval_sock, charbuf, 1) > 0) {
-                if (charbuf[0] == '\n')
-                        break;
-                initbuf[idx] = charbuf[0];
-                idx++;
-        }
-        printf("Init: %s\n", initbuf);
+	read(c->serval_sock, initbuf, 24);
+        printf("Init: %s", initbuf);
         dest = strtok_r(initbuf, " ", &saveptr);
-        port = "80";
-        //port = strtok_r(NULL, " ", &saveptr);
+        port = strtok_r(NULL, "\n", &saveptr);
         printf("Dest: %s %s\n", dest, port);
 
         /* connect to the remote server */
@@ -164,7 +156,7 @@ void *client_thread(void *arg)
 
         if (ret != 0) {
                 fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(ret));
-                goto exit;
+                goto noconn;
         }
         c->inet_sock = socket(res->ai_family, res->ai_socktype,
                               res->ai_protocol);
@@ -223,6 +215,7 @@ void *client_thread(void *arg)
 
 exit:
         freeaddrinfo(res);
+noconn:
         printf("client %u exits\n", c->id);
 
         client_free(c);
