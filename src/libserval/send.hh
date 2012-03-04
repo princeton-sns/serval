@@ -9,9 +9,9 @@ class SendReq : public Message {
     SendReq();
     SendReq(bool nb, unsigned char *buf, 
             uint16_t len, int flags);    // bound flow
-    SendReq(sv_srvid_t dst_obj_id, unsigned char *buf, uint16_t len,
+    SendReq(sv_srvid_t dst_service_id, unsigned char *buf, uint16_t len,
             int flags);                                      // unbound flow
-    SendReq(sv_srvid_t dst_obj_id, uint32_t ipaddr, 
+    SendReq(sv_srvid_t dst_service_id, uint32_t ipaddr, 
             unsigned char *buf, uint16_t len, int flags);  
     ~SendReq() { }  // user manages nsfbuf alloc/dealloc
 
@@ -27,13 +27,13 @@ class SendReq : public Message {
     unsigned char *nonserial_buf_mutable()     { return _nsbuf; }
     const unsigned char *nonserial_buf() const { return _nsbuf; }
 
-    sv_srvid_t dst_obj_id() const         { return _dst_obj_id; }
+    sv_srvid_t dst_service_id() const         { return _dst_service_id; }
     uint32_t dst_ipaddr() const { return _ipaddr; }
     void print(const char *label) const;
 
   private:
     bool _nb; // non-blocking
-    sv_srvid_t _dst_obj_id;        // don't care for conn. mode
+    sv_srvid_t _dst_service_id;        // don't care for conn. mode
     uint32_t _ipaddr;
     unsigned char *_nsbuf;
     uint16_t _nonserial_len;

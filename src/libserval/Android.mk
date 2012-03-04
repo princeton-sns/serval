@@ -12,7 +12,6 @@ LOCAL_HDR_FILES := \
 	listen.hh \
 	log.hh \
 	message.hh \
-	migrate.hh \
 	recv.hh \
 	select.hh \
 	send.hh \
@@ -21,6 +20,7 @@ LOCAL_HDR_FILES := \
 	state.hh
 
 LOCAL_SRC_FILES := \
+	api.cc \
 	accept.cc \
 	bind.cc \
 	cli.cc \
@@ -29,11 +29,9 @@ LOCAL_SRC_FILES := \
 	listen.cc \
 	log.cc \
 	message.cc \
-	migrate.cc \
 	recv.cc \
 	select.cc \
 	send.cc \
-	sf.cc \
 	socket.cc \
 	sockio.cc \
 	state.cc

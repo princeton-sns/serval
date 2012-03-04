@@ -91,7 +91,7 @@ public class TCPServer {
     public void run() {
 	    try {
 		    serverSock = 
-                new ServalServerSocket(new ServiceID((short) 16385), 8);
+                new ServalServerSocket(new ServiceID(16385));
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
             return;

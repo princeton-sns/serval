@@ -65,7 +65,7 @@ public class TCPClient {
     private void run() {
         try {
         	//ServiceID localServiceID = new ServiceID((short) 32769)
-            sock = new ServalSocket(new ServiceID((short) 16385));
+            sock = new ServalSocket(new ServiceID(16385));
             //sock.setSoTimeout(5000);
             //sock.connect(new ServiceID((short) 16385), 4000);
         } catch (Exception e) {

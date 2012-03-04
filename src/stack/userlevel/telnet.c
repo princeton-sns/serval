@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <service.h>
+#include <serval_sock.h>
 
 #define TELNET_ADDR "127.0.0.1"
 #define TELNET_PORT 9999
@@ -43,21 +44,20 @@ static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
 	send(tc->sock, buf, ret, 0);	
 }
 
-/*
-static void cmd_neighbors_print(struct telnet_client *tc, char *buf, int buflen)
+
+static void cmd_flows_print(struct telnet_client *tc, char *buf, int buflen)
 {
 	int ret;
 	
-	ret = sprintf(buf, "# Neighbor table:\n");
+	ret = sprintf(buf, "# Flow table:\n");
 
-	ret += neighbors_print(buf + ret, buflen - ret);
+	ret += flow_table_print(buf + ret, buflen - ret);
 	
 	if (ret < 0)
 		return;
 
 	send(tc->sock, buf, ret, 0);	
 }
-*/
 
 static void cmd_quit(struct telnet_client *tc, char *buf, int buflen)
 {
@@ -70,8 +70,8 @@ static struct command command_list[] = {
 	{ "help", "h", "print help (this info)", cmd_help },
 	{ "quit", "q", "quit telnet session", cmd_quit },
 	{ "exit", "e", "quit telnet session", cmd_quit },
-/*	{ "neighbors", "nt", "print neighbor table", cmd_neighbors_print }, */
-	{ "services", "st", "print service table", cmd_services_print },
+	{ "flows", "f", "print neighbor table", cmd_flows_print },
+	{ "services", "s", "print service table", cmd_services_print },
 	{ NULL, NULL, NULL, NULL }
 };
 

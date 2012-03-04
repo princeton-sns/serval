@@ -1,4 +1,5 @@
 AC_INIT([Serval], 0.1, [serval@lists.cs.princeton.edu])
+AC_CONFIG_MACRO_DIR([m4])
 
 # Use the silent-rules feature when possible.
 m4_ifndef([AM_SILENT_RULES], [m4_define([AM_SILENT_RULES],[])])
@@ -92,7 +93,8 @@ dnl Put in config.h
 AC_DEFINE_UNQUOTED([SERVAL_LDFLAGS], "${SERVAL_LDFLAGS}", [Library and include paths for Serval])
 
 dnl Check for OpenSSL development headers
-AC_CHECK_HEADER(openssl/ssl.h,, AC_MSG_ERROR([could not find OpenSSL development headers]),)
+AX_CHECK_OPENSSL(have_ssl=yes, have_ssl=no)
+AM_CONDITIONAL([HAVE_SSL], [test x$have_ssl = xyes])
 
 dnl Preset $prefix and $exec_prefix.
 test "x$prefix" = xNONE && prefix=$ac_default_prefix
@@ -143,43 +145,36 @@ AS_HELP_STRING([--disable-java-bindings], [Disable libhaggle Java bindings]),
 esac],[java_bindings=yes])
 
 have_jni=no;
+JAVAC=
 
-AC_ARG_VAR([JAVA_HOME], [Java Runtime Environment (JRE) location])
+dnl Check for Java JDK
+AC_JAVA_OPTIONS
+AC_CHECK_JAVA_HOME
+AC_PROG_JAVAC
 
-dnl Allow the user to set the JAVA_HOME dir?
-AC_ARG_WITH(java-home,
-	    AS_HELP_STRING([--with-java-home=DIR],[DIR to look for Java headers]),
-	    [JAVA_HOME=$withval],)
+AC_MSG_CHECKING(for jni.h)
 
-dnl Default to some qualified path guessing...
-java_dirs="/usr /usr/local /usr/lib/jvm/java-5-sun /usr/lib/jvm/java-6-sun /usr/lib/jvm/java-6-openjdk /usr/lib/jvm/java /System/Library/Frameworks/JavaVM.framework/Versions/Current /System/Library/Frameworks/JavaVM.framework /opt /mingw"
-java_inc_dirs="include include/libgcj Headers"
+if test x"$JAVAC" != x;
+then
+	dnl Check for JNI headers
+	AC_JNI_INCLUDE_DIR
 
-AC_CHECK_PROG(JAVA, javac, javac)
-AC_MSG_CHECKING([for jni.h])
+	JAVA_INCLUDE=
 
-dnl Try to locate jni.h
-for java_dir in $JAVA_HOME $java_dirs;
-do
-	for java_inc_dir in $java_inc_dirs
+	for jni_inc in $JNI_INCLUDE_DIRS
 	do
-		#AC_MSG_RESULT("${java_dir}/${java_inc_dir}/jni.h")	
-		if test -r "${java_dir}/${java_inc_dir}/jni.h"; 
-		then
-			have_jni=yes
-			JAVA_PATH=${java_dir}
-  			break
-       		fi
+		JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
 	done
-	if test x$have_jni = xyes;
+
+	if test "x$JAVA_INCLUDE" = 'x';
 	then
-		break
+		have_jni=no
+	else
+		have_jni=yes
 	fi
-done
+fi
 
 AC_MSG_RESULT([$have_jni])
-
-JAVA_INCLUDE="-I${JAVA_PATH}/${java_inc_dir} -I${JAVA_PATH}/${java_inc_dir}/${PLATFORM}"
 
 AC_SUBST(JAVA_INCLUDE)
 
@@ -191,7 +186,7 @@ then
    	   	AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
 		java_bindings=no
 	else
-		if test "x$JAVA" == 'x'; 
+		if test "x$JAVAC" = 'x'; 
 		then
 			AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
 			java_bindings=no
@@ -226,19 +221,21 @@ AS_HELP_STRING([--disable-kernel],[Disable kernel module]),
 [case "${enableval}" in
   yes) kernel=yes ;;
   no)  kernel=no ;;
-  *) AC_MSG_ERROR([bad value ${enableval} for --enable-kernel]) ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-kernel]) ;;
 esac],[kernel=yes])
 
 AM_CONDITIONAL([ENABLE_LINUX_MODULE], [test x$kernel = xyes && test x$serval_os_linux = xyes])
 
-dnl Check for OpenSSL and development headers
-#AC_CHECK_LIB(crypto,DSA_sign,
-#                [AC_CHECK_HEADERS([openssl/rsa.h],,AC_MSG_ERROR(You have openssl but not the development headers))],AC_MSG_ERROR(openssl library is not found...),)
+AC_ARG_ENABLE([usermode],
+AS_HELP_STRING([--disable-usermode],[Disable user mode stack]),
+[case "${enableval}" in
+  yes) usermode=yes ;;
+  no)  usermode=no ;;
+  *) AC_MSG_ERROR([bad value ${enableval} for --disable-usermode]) ;;
+esac],[usermode=yes])
 
-#CPPFLAGS="${SAVE_CPPFLAGS}"
-#CFLAGS="${SAVE_CFLAGS}"
-#LDFLAGS="${SAVE_LDFLAGS}"
-#EXTRA_CFLAGS=
+AM_CONDITIONAL([ENABLE_USERMODE], [test x$usermode = xyes])
+
 dnl export these variable (so Makefile substitutions
 dnl can be made. 
 CPPFLAGS="${CPPFLAGS} ${EXTRA_DEFINES}"
@@ -247,10 +244,6 @@ CPPFLAGS="${CPPFLAGS} ${EXTRA_DEFINES}"
 
 AC_SUBST(EXTRA_DEFINES)
 AC_SUBST(KERNEL_EXTRA_CFLAGS)
-#AC_SUBST(CFLAGS)
-#AC_SUBST(CXXFLAGS)
-#AC_SUBST(LDFLAGS)
-#AC_SUBST(CPPFLAGS)
 
 dnl
 dnl Output
@@ -275,7 +268,7 @@ AC_CONFIG_FILES([Makefile
 AC_OUTPUT
 
 echo
-#echo "Build user level.........................$userlevel"
+echo "Build user-mode stack.....................$usermode"
 echo "Build Linux kernel module.................$kernel"
 #echo "Build unit tests.........................$unittest"
 echo "Enable debug output.......................$debug"

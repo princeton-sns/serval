@@ -11,7 +11,6 @@ struct sockaddr_un unaddr;
 
 #define RCV_BUFSIZE 2048
 static unsigned char rbuf[RCV_BUFSIZE];
-static unsigned char sbuf[RCV_BUFSIZE];
 
 extern ctrlmsg_handler_t handlers[];
 
@@ -62,25 +61,15 @@ int ctrl_recvmsg(void)
 
 int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
 {
-	struct msghdr *mh = (struct msghdr *)sbuf;
-	struct iovec iov = { msg, msg->len };
 	int ret;
 
-	memset(mh, 0, sizeof(*mh));
-        memset(&iov, 0, sizeof(iov));
-	mh->msg_name = &unaddr;
-	mh->msg_namelen = sizeof(unaddr);
-	mh->msg_iov = &iov;
-	mh->msg_iovlen = 1;
-
-	ret = sendmsg(ctrl_sock, mh, 0);
+        ret = sendto(ctrl_sock, msg, msg->len, 0,
+                     (struct sockaddr *)&unaddr, sizeof(unaddr));
 
 	if (ret == -1) {
-		LOG_ERR("sendmsg failure on ctrl sock %i: %s\n", 
+		LOG_ERR("send failure on ctrl sock %i: %s\n", 
                         ctrl_sock, strerror(errno));
-	} else {
-		LOG_DBG("sent msg(%i) of %d bytes\n", 
-                        msg->type, ret, ctrl_sock);
+	} else if (ret == 0) {
                 ret = 0;
 	}
 

@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * task.c
- *
- *  Created on: Feb 19, 2011
- *      Author: daveds, Erik Nordstrom
- */
-
 #include <serval/list.h>
 #include <serval/hash.h>
 #include <serval/atomic.h>
@@ -31,8 +24,6 @@
 static pthread_key_t task_key;
 static unsigned int num_threads = MAX_THREADS;
 
-#define LOG_TASK(format, ...) /* LOG_DBG() */
-
 enum task_state {
     TASK_CREATED,
     TASK_INITIALIZED,
@@ -43,7 +34,11 @@ enum task_state {
     TASK_DEAD,
 };
 
-#if 0
+/* #define ENABLE_TASK_DBG 1 */
+
+#if defined(ENABLE_TASK_DBG)
+#define LOG_TASK(format, ...) LOG_DBG(format, ## __VA_ARGS__) 
+
 static char *task_state_str[] = {
     [TASK_CREATED] = "TASK_CREATED",
     [TASK_INITIALIZED] = "TASK_INITIALIZED",
@@ -53,6 +48,8 @@ static char *task_state_str[] = {
     [TASK_FINISHED] = "TASK_FINISHED",
     [TASK_DEAD] = "TASK_DEAD",
 };
+#else
+#define LOG_TASK(format, ...)
 #endif
 
 struct task {
@@ -800,6 +797,7 @@ int task_free_count(void)
 int task_block(int fd, unsigned short flags)
 {
     struct task *task = pthread_getspecific(task_key);
+    int ret = 0;
 
     if (task->should_exit)
         return -1;
@@ -814,14 +812,18 @@ int task_block(int fd, unsigned short flags)
         
         LOG_TASK("task %lu yields on blocking\n", task->id);
         task_set_state(task, TASK_BLOCKED);
-        
+
         pthread_mutex_unlock(&task->lock);
         swapcontext(&task->task_ctx, &task->loop_ctx);
-        LOG_TASK("task %lu resumes from blocking\n", task->id);    
+        LOG_TASK("task %lu resumes from blocking\n", task->id);
+
+        if (task->should_exit)
+            ret = -1;
     } else {
         pthread_mutex_unlock(&task->lock);
+        ret = -1;
     }        
-    return 0;
+    return ret;
 }
 
 void task_yield(void)

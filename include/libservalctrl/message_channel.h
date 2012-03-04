@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * message_channel.h
- *
- *  Created on: Feb 11, 2011
- *      Author: daveds
- */
-
 #ifndef MESSAGE_CHANNEL_H_
 #define MESSAGE_CHANNEL_H_
 

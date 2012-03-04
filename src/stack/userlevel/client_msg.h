@@ -21,10 +21,6 @@ typedef enum client_msg_type {
 	MSG_SEND_RSP,
 	MSG_RECV_REQ, 
 	MSG_RECV_RSP,
-	MSG_MIG_REQ, 
-	MSG_MIG_RSP,
-	MSG_RECONN_REQ, 
-	MSG_RECONN_RSP,
 	MSG_CLOSE_REQ, 
 	MSG_CLOSE_RSP,
 	MSG_RECVMESG, 
@@ -191,34 +187,6 @@ struct client_msg_recv_rsp {
 } __attribute__((packed));
 
 #define CLIENT_MSG_RECV_RSP_LEN (sizeof(struct client_msg_recv_rsp))
-
-/* Migrate messages */
-struct client_msg_mig_req {
-	struct client_msg msghdr;
-} __attribute__((packed));
-
-#define CLIENT_MSG_MIG_REQ_LEN (sizeof(struct client_msg_mig_req))
-
-struct client_msg_mig_rsp {
-	struct client_msg msghdr;
-	uint8_t error;
-} __attribute__((packed));
-
-#define CLIENT_MSG_MIG_RSP_LEN (sizeof(struct client_msg_mig_rsp))
-
-/* Reconnect messages */
-struct client_msg_reconn_req {
-	struct client_msg msghdr;
-} __attribute__((packed));
-
-#define CLIENT_MSG_RECONN_REQ_LEN (sizeof(struct client_msg_reconn_req))
-
-struct client_msg_reconn_rsp {
-	struct client_msg msghdr;
-	uint8_t error;
-} __attribute__((packed));
-
-#define CLIENT_MSG_RECONN_RSP_LEN (sizeof(struct client_msg_reconn_rsp))
 
 /* Recvmsg */
 struct client_msg_recvmsg {

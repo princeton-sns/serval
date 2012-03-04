@@ -2,21 +2,12 @@
 #ifndef SOCKIO_HH
 #define SOCKIO_HH
 
-#if defined(__KERNEL__)
-#include <linux/types.h>
-#include <linux/socket.h>
-#else
 #include <sys/types.h>
 #include <stdio.h>
-#endif
 
 class SockIO {
   public:
-#if defined(__KERNEL__)
-    typedef struct socket* io_sock_t;
-#else
     typedef int io_sock_t;
-#endif
     static int writen(io_sock_t fd, const void *vptr, int n);
     static int writev(io_sock_t fd, struct iovec *iov, int iovcnt);
     static int readn(io_sock_t fd, void *vptr, int n);
@@ -28,19 +19,19 @@ class SockIO {
 };
 
 template<typename T> size_t
-serial_read(T *obj, const unsigned char *buf)
+serial_read(T *service, const unsigned char *buf)
 {
-    size_t u = sizeof(*obj);
-    memcpy(obj, buf, u);
+    size_t u = sizeof(*service);
+    memcpy(service, buf, u);
     return u;
 }
 
 template<typename T> size_t
-serial_write(const T &obj, unsigned char *buf)
+serial_write(const T &service, unsigned char *buf)
 {
-    size_t u = sizeof(obj);
-    memcpy(buf, &obj, u);
+    size_t u = sizeof(service);
+    memcpy(buf, &service, u);
     return u;
 }
 
-#endif
+#endif /* SOCKIO_HH */

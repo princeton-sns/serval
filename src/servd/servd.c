@@ -420,17 +420,13 @@ int servd_interface_up(const char *ifname,
                 return 0;
         }
                 
-        /* Delay operations for a short time. The reason is that the
+        /* HACK: Delay operations for a short time. The reason is that the
            stack doesn't seem to be immediately ready to use the newly
            assigned address. */
         sleep(1);
 
         LOG_DBG("lhc=%p rhc=%p\n", ctx->lhc, ctx->rhc);
 
-	printf("Interface %s changed address. Migrating flows\n", ifname);
-        
-        hostctrl_interface_migrate(ctx->lhc, ifname, ifname);
-        
         /* Make sure our service router entry is present. It might
            have been purged when the interface went down
            previously. Get any new information default route (default
@@ -938,7 +934,7 @@ int main(int argc, char **argv)
                         ret = timer_handle_timeout(&tq);
                 } else if (ret == -1) {
 			if (errno == EINTR) {
-				should_exit = 1;
+                                LOG_DBG("Interruped!\n");
 			} else {
 				LOG_ERR("select: %s\n", 
 					strerror(errno));

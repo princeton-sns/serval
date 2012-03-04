@@ -24,7 +24,7 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
                                   .ai_socktype = 0,
                                   .ai_protocol = 0, };
         int ret;
-
+        
         ret = getaddrinfo(name, "0", &hints, &ai);
         
         if (ret != 0) {
@@ -67,9 +67,9 @@ static const struct opname opnames[] = {
 
 static void service_print_usage(void)
 {
-        printf("service OP\n");
+        printf("service:\n");
         printf("\tadd|del|mod SERVICEID[:PREFIX_BITS]"
-               " IPADDR [IPADDR]\n");
+               " IPADDR [IPADDR] [priority NUM] [weight NUM]\n");
         printf("\tSERVICEID can be decimal or hexadecimal"
                " (use 0x prefix).\n");
 }
@@ -78,6 +78,8 @@ struct arguments {
         enum service_op op;
         struct service_id srvid;
 	struct in_addr ipaddr1, ipaddr2, *ip1, *ip2;
+        unsigned int priority;
+        unsigned int weight;
         unsigned short prefix_bits;
 };
 
@@ -90,10 +92,12 @@ static int service_parse_args(int argc, char **argv, void **result)
         memset(&args, 0, sizeof(args));
         args.op = __SERVICE_OP_MAX;
         args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+        args.priority = 1;
+        args.weight = 0;
 
-	if (argc < 2)
+	if (argc < 3)
                 return -1;
-        
+
         for (i = 0; i < __SERVICE_OP_MAX; i++) {
                 if (strcmp(argv[0], opnames[i].name) == 0 ||
                     strcmp(argv[0], opnames[i].long_name) == 0) {
@@ -104,15 +108,18 @@ static int service_parse_args(int argc, char **argv, void **result)
 
         if (args.op == __SERVICE_OP_MAX)
                 return -1;
+        
+        argc--;
+        argv++;
 
         /* Check for hexadecimal serviceID. */
-        if (strcmp(argv[1], "default") == 0) {
+        if (strcmp(argv[0], "default") == 0) {
                 /* Do nothing, serviceID already set to zero */
-        } else if (argv[1][0] == '0' && argv[1][1] == 'x') {
+        } else if (argv[0][0] == '0' && argv[0][1] == 'x') {
                 int len, i = 0;
                 
-                argv[1] += 2;
-                ptr = argv[1];
+                argv[0] += 2;
+                ptr = argv[0];
 
                 while (*ptr != ':' && *ptr != '\0')
                         ptr++;
@@ -122,7 +129,7 @@ static int service_parse_args(int argc, char **argv, void **result)
                         *ptr = '\0';
                 }
                
-                len = strlen(argv[1]);
+                len = strlen(argv[0]);
 
                 if (len > 64)
                         len = 64;
@@ -132,14 +139,14 @@ static int service_parse_args(int argc, char **argv, void **result)
                         unsigned long id;
 
                         memset(hex32, '0', sizeof(hex32));
-                        strncpy(hex32, argv[1] + (i * 8), len < 8 ? len : 8);
+                        strncpy(hex32, argv[0] + (i * 8), len < 8 ? len : 8);
                         hex32[8] = '\0';
                         
                         id = strtoul(hex32, &ptr, 16);
 
                         if (!(*ptr == '\0' && hex32[0] != '\0')) {
                                 fprintf(stderr, "bad service id format '%s'\n",
-                                        argv[1]);
+                                        argv[0]);
                                 return -1;
                         }
 
@@ -147,12 +154,12 @@ static int service_parse_args(int argc, char **argv, void **result)
                         len -= 8;
                 }
         } else {
-                unsigned long id = strtoul(argv[1], &ptr, 10);
+                unsigned long id = strtoul(argv[0], &ptr, 10);
                 
-                if (!((*ptr == '\0' || *ptr == ':') && argv[1] != '\0')) {
+                if (!((*ptr == '\0' || *ptr == ':') && argv[0] != '\0')) {
                         fprintf(stderr, "bad service id format '%s',"
                                 " should be short integer string\n",
-                                argv[1]);
+                                argv[0]);
                         return -1;
                 }
                 if (*ptr == ':')
@@ -174,36 +181,88 @@ static int service_parse_args(int argc, char **argv, void **result)
                         args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         }
 
-        if (argc >= 3) {
-                ret = name_to_inet_addr(argv[2], &args.ipaddr1);
+        argc--;
+        argv++;
 
-                if (ret != 1) {
-                        fprintf(stderr, "bad IP address: '%s'\n",
-                                argv[2]);
-                        return -1;
-                }
-                args.ip1 = &args.ipaddr1;
+        if (argc == 0) {
+                fprintf(stderr, "No target IP in rule\n");
+                return -1;
+        }
+        
+        ret = name_to_inet_addr(argv[0], &args.ipaddr1);
+        
+        if (ret != 1) {
+                fprintf(stderr, "bad IP address: '%s'\n",
+                        argv[2]);
+                return -1;
         }
 
-        if (argc == 4) {
-                ret = name_to_inet_addr(argv[3], &args.ipaddr2);
+        args.ip1 = &args.ipaddr1;
 
-                if (ret != 1) {
-                        fprintf(stderr, "bad IP address: '%s'\n",
-                                argv[2]);
-                        return -1;
+        argc--;
+        argv++;
+
+        while (argc) {
+                if (strcmp("priority", argv[0]) == 0) {
+                        char *ptr = NULL;
+                        
+                        if (argc < 2) {
+                                fprintf(stderr, "No priority number given\n");
+                                return -1;
+                        }
+                        
+                        args.priority = strtoul(argv[1], &ptr, 10);
+                        
+                        if (*ptr != '\0' || argv[1][0] == '\0') {
+                                fprintf(stderr, "Bad priority %s\n",
+                                        argv[1]);
+                                return -1;
+                        }
+
+                        argc--;
+                        argv++;
+                } else if (strcmp("weight", argv[0]) == 0) {
+                        char *ptr = NULL;
+                        
+                        if (argc < 2) {
+                                fprintf(stderr, "No weight given\n");
+                                return -1;
+                        }
+                        
+                        args.weight = strtoul(argv[1], &ptr, 10);
+                        
+                        if (*ptr != '\0' || argv[1][0] == '\0') {
+                                fprintf(stderr, "Bad weight %s\n",
+                                        argv[1]);
+                                return -1;
+                        }
+
+                        argc--;
+                        argv++;
+                } else {
+                        ret = name_to_inet_addr(argv[3], &args.ipaddr2);
+                        
+                        if (ret != 1) {
+                                fprintf(stderr, "Bad IP address: '%s'\n",
+                                        argv[2]);
+                                return -1;
+                        }
+                        args.ip2 = &args.ipaddr2;
                 }
-                args.ip2 = &args.ipaddr2;
+                argc--;
+                argv++;
         }
         {
                 char buf[18];
-                printf("%s %s:%u %s\n",
+                printf("%s %s:%u %s priority=%u weight=%u\n",
                        opnames[args.op].long_name,
                        service_id_to_str(&args.srvid), 
                        args.prefix_bits, 
-                       inet_ntop(AF_INET, &args.ipaddr1, buf, 18));
+                       inet_ntop(AF_INET, &args.ipaddr1, buf, 18),
+                       args.priority,
+                       args.weight);
         }
-
+        
         *result = &args;
 
         return 0;
@@ -216,15 +275,21 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
 
         switch (args->op) {
         case SERVICE_OP_ADD:
-                ret = hostctrl_service_add(hctl, &args->srvid, args->prefix_bits, 
-                                           0, 0, args->ip1);
+                ret = hostctrl_service_add(hctl, &args->srvid, 
+                                           args->prefix_bits, 
+                                           args->priority, 
+                                           args->weight, args->ip1);
                 break;
         case SERVICE_OP_DEL:
-                ret = hostctrl_service_remove(hctl, &args->srvid, args->prefix_bits, args->ip1);
+                ret = hostctrl_service_remove(hctl, &args->srvid, 
+                                              args->prefix_bits, args->ip1);
                 break;
         case SERVICE_OP_MOD:
-                ret = hostctrl_service_modify(hctl, &args->srvid, args->prefix_bits, 
-                                              0, 0, args->ip1, args->ip2);
+                ret = hostctrl_service_modify(hctl, &args->srvid, 
+                                              args->prefix_bits, 
+                                              args->priority, 
+                                              args->weight, 
+                                              args->ip1, args->ip2);
                 break;
         default:
                 break;
@@ -248,6 +313,13 @@ struct command service = {
 };
 
 #if defined(ENABLE_MAIN)
+
+static void print_usage(void)
+{
+        printf("service COMMAND [ARGS]\n");
+        service.print_usage();
+}
+
 int main(int argc, char **argv)
 {
 	int ret = 0;
@@ -255,19 +327,19 @@ int main(int argc, char **argv)
         void *args;
 
 	if (argc < 3) {
-                service.print_usage();
+                print_usage();
 		return 0;
 	}
+
+        argc--;
+        argv++;
 
         ret = service.parse_args(argc, argv, &args);
 
         if (ret == -1) {
-                service.print_usage();
+                print_usage();
                 return -1;
         }
-
-        argc--;
-        argv++;
 
         libservalctrl_init();
 

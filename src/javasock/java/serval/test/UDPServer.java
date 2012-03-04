@@ -18,7 +18,7 @@ public class UDPServer {
 	private class Client implements Runnable {
         ServalDatagramSocket sock;
         int id;
-
+        
         ServalDatagramPacket pack = 
             new ServalDatagramPacket(new byte[1024], 1024);
 
@@ -68,7 +68,7 @@ public class UDPServer {
     public void run() {
 	    try {
 		    serverSock = 
-                new ServalServerDatagramSocket(new ServiceID((short) 16385), 8);
+                new ServalServerDatagramSocket(new ServiceID(16385));
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
             return;

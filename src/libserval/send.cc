@@ -23,12 +23,11 @@
 //
 // SendReq
 //
-
 SendReq::SendReq()
     :Message(SEND_REQ), _nb(false), _ipaddr(0),
      _nsbuf(0), _nonserial_len(0), _flags(0)
 {
-    memset(&_dst_obj_id, 0xff, sizeof(_dst_obj_id));
+    memset(&_dst_service_id, 0xff, sizeof(_dst_service_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
@@ -37,75 +36,68 @@ SendReq::SendReq(bool nb,
     :Message(SEND_REQ), _nb(nb), _ipaddr(0),
      _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
 {
-    memset(&_dst_obj_id, 0xff, sizeof(_dst_obj_id));
+    memset(&_dst_service_id, 0xff, sizeof(_dst_service_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
-SendReq::SendReq(sv_srvid_t dst_obj_id,
+SendReq::SendReq(sv_srvid_t dst_service_id,
                  unsigned char *buf, uint16_t buflen, int flags)
     :Message(SEND_REQ), _nb(false), _ipaddr(0),
      _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
 {
-    memcpy(&_dst_obj_id, &dst_obj_id, sizeof(dst_obj_id));
+    memcpy(&_dst_service_id, &dst_service_id, sizeof(dst_service_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
-SendReq::SendReq(sv_srvid_t dst_obj_id, uint32_t ipaddr,
+SendReq::SendReq(sv_srvid_t dst_service_id, uint32_t ipaddr,
                  unsigned char *buf, uint16_t buflen, int flags)
     :Message(SEND_REQ), _nb(false), _ipaddr(ipaddr),
      _nsbuf(buf), _nonserial_len(buflen), _flags(flags)
 {
-    memcpy(&_dst_obj_id, &dst_obj_id, sizeof(dst_obj_id));
+    memcpy(&_dst_service_id, &dst_service_id, sizeof(dst_service_id));
     set_pld_len_v(serial_pld_len() + nonserial_pld_len());
 }
 
-uint16_t
-SendReq::serial_pld_len() const
+uint16_t SendReq::serial_pld_len() const
 {
     return sizeof(_nb) + 
-        sizeof(_dst_obj_id) + sizeof(_ipaddr) + 
+        sizeof(_dst_service_id) + sizeof(_ipaddr) + 
         sizeof(_nonserial_len) + sizeof(_flags);
 }
 
-int
-SendReq::check_type() const
+int SendReq::check_type() const
 {
     return _type == SEND_REQ;
 }
 
-int
-SendReq::write_serial_payload(unsigned char *buf) const
+int SendReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_nb, p);
-    p += serial_write(_dst_obj_id, p);
+    p += serial_write(_dst_service_id, p);
     p += serial_write(_ipaddr, p);
     p += serial_write(_nonserial_len, p);
     p += serial_write(_flags, p);
     return p - buf;
 }
 
-int
-SendReq::read_serial_payload(const unsigned char *buf)
+int SendReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_nb, p);
-    p += serial_read(&_dst_obj_id, p);
+    p += serial_read(&_dst_service_id, p);
     p += serial_read(&_ipaddr, p);
     p += serial_read(&_nonserial_len, p);
     p += serial_read(&_flags, p);
     return p - buf;
 }
 
-void
-SendReq::print(const char *label) const
+void SendReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: dst_obj_id = %s, ipaddr = %i, buflen=%d, flags=%d\n",
-         label, oid_to_str(&_dst_obj_id), _ipaddr, _nonserial_len, _flags);
+    info("%s: dst_service_id = %s, ipaddr = %i, buflen=%d, flags=%d\n",
+         label, service_id_to_str(&_dst_service_id), _ipaddr, _nonserial_len, _flags);
 }
-
-
 
 //
 // SendRsp
@@ -123,36 +115,31 @@ SendRsp::SendRsp(sv_err_t err)
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-SendRsp::serial_pld_len() const
+uint16_t SendRsp::serial_pld_len() const
 {
     return sizeof(_err);
 }
 
-int
-SendRsp::check_type() const
+int SendRsp::check_type() const
 {
     return SEND_RSP;
 }
 
-int
-SendRsp::write_serial_payload(unsigned char *buf) const
+int SendRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-SendRsp::read_serial_payload(const unsigned char *buf)
+int SendRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-SendRsp::print(const char *label) const
+void SendRsp::print(const char *label) const
 {
     Message::print(label);
     info("%s: err=%s", label, _err.v ? "t" : "f");

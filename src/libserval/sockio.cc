@@ -20,10 +20,6 @@
 
 #include "sockio.hh"
 
-#if defined(__KERNEL__)
-#include <linux/types.h>
-#include <linux/socket.h>
-#else
 #include <sys/types.h>
 #include <string.h>
 #include <sys/types.h>
@@ -32,14 +28,12 @@
 #include <errno.h>
 #include <stdio.h>
 #include <unistd.h>
-#endif
 
 #include "log.hh"
 
 #ifdef DEBUG_MODE
 #define MAX_DBG_STRLEN 512
-void
-SockIO::print(const char *label, const unsigned char *buf, int buflen)
+void SockIO::print(const char *label, const unsigned char *buf, int buflen)
 {
     return;
     char str[MAX_DBG_STRLEN + 1];
@@ -55,13 +49,8 @@ SockIO::print(const char *label, const unsigned char *buf, int buflen)
 //
 // SockIO, only blocking I/O
 //
-int
-SockIO::readn(io_sock_t fd, void *vptr, int n)
+int SockIO::readn(io_sock_t fd, void *vptr, int n)
 {
-#if defined(__KERNEL__)
-    // TODO: fill in
-    return 0;
-#else
     size_t nleft;
     int nr;
     char *ptr;
@@ -95,16 +84,10 @@ SockIO::readn(io_sock_t fd, void *vptr, int n)
     }
     info("SockIO:readn read %d bytes", n - nleft);
     return (n - nleft);
-#endif
 }
 
-int
-SockIO::writen(io_sock_t fd, const void *vptr, int n)
+int SockIO::writen(io_sock_t fd, const void *vptr, int n)
 {
-#if defined(__KERNEL__)
-    // TODO: fill in
-    return 0;
-#else
     int nleft;
     int nwritten;
     const char *ptr;
@@ -133,16 +116,10 @@ SockIO::writen(io_sock_t fd, const void *vptr, int n)
     }
     info("SockIO:writen wrote %d bytes", n);
     return n;
-#endif
 }
 
-int
-SockIO::writev(io_sock_t fd, struct iovec *iov, int iovcnt)
+int SockIO::writev(io_sock_t fd, struct iovec *iov, int iovcnt)
 {
-#if defined(__KERNEL__)
-    // TODO: fill in
-    return 0;
-#else
     size_t nleft;
     ssize_t nwritten;
     struct iovec *fptr = iov;
@@ -183,5 +160,4 @@ SockIO::writev(io_sock_t fd, struct iovec *iov, int iovcnt)
     }
     info("SockIO:writev wrote %d bytes %d chunks", nbytes, iovcnt);
     return nbytes;
-#endif
 }

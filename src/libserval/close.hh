@@ -32,5 +32,4 @@ class CloseRsp : public Message {
     sv_err_t _err;
 };
 
-
-#endif
+#endif /* CLOSE_HH */

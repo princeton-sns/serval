@@ -91,7 +91,7 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 #endif
 
 	if (!mc) {
-#if defined(OS_UNIX)
+#if defined(OS_UNIX) && defined(ENABLE_USERMODE)
                 struct sockaddr_un local, peer;
 
                 memset(&local, 0, sizeof(local));

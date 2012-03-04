@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * task.h
- *
- *  Created on: Feb 16, 2011
- *      Author: daveds
- */
-
 #ifndef TASK_H_
 #define TASK_H_
 

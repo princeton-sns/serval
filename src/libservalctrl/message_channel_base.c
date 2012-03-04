@@ -1,11 +1,4 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-/*
- * base_message_channel.c
- *
- *  Created on: Apr 14, 2011
- *      Author: daveds
- */
-
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
@@ -22,6 +15,10 @@
 #include <libservalctrl/task.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
+
+#if defined(ENABLE_USERMODE)
+#include <libserval/serval.h>
+#endif
 
 static int make_async(int fd)
 {
@@ -112,9 +109,14 @@ int message_channel_base_initialize(message_channel_t *channel)
         LOG_ERR("Channel in bad state\n");
         return -1;
     }
-
+    
     base->buffer = malloc(base->buffer_len);
+
+    if (!base->buffer)
+        return -1;
+
     memset(base->buffer, 0, base->buffer_len);
+    base->native_socket = 1;
 
     base->sock = socket(base->local.sa.sa_family, 
                         base->sock_type, base->protocol);
@@ -123,23 +125,26 @@ int message_channel_base_initialize(message_channel_t *channel)
         switch (errno) {
         case EAFNOSUPPORT:
         case EPROTONOSUPPORT:
-            LOG_ERR("%s %s sock_type=%d protocol=%d\n",
-                    channel->name, strerror(errno), 
-                    base->sock_type, base->protocol);
 #if defined(ENABLE_USERMODE)
             /* Try libserval */
-            base->sock = socket_sv(base->local->sa.sa_family, 
-                                       base->sock_type, 0);
+            LOG_DBG("%s is usermode channel\n",
+                    channel->name);
+
+            base->sock = socket_sv(base->local.sa.sa_family,
+                                   base->sock_type, base->protocol);
             
             if (base->sock == -1) {
-                LOG_ERR("Could not create controller socket: %s\n",
+                LOG_ERR("Could not create socket: %s\n",
                         strerror_sv(errno));
                 err = -1;
                 goto sock_error;
             }
             base->native_socket = 0;
 #else
-            return -1;
+            LOG_ERR("%s %s sock_type=%d protocol=%d\n",
+                    channel->name, strerror(errno), 
+                    base->sock_type, base->protocol);
+            goto sock_error;
 #endif /* ENABLE_USERMODE */
             break;
         default:
@@ -148,16 +153,16 @@ int message_channel_base_initialize(message_channel_t *channel)
             err = -1;
             goto sock_error;
         }
-    } else {
-        base->native_socket = 1;
-    }
+    } 
     
     if (base->sock == -1) {
         LOG_ERR("%s\n", strerror(errno));
         err = -1;
         goto sock_error;
     }
-
+    
+    err = -1;
+    
     if (base->local_len > 0) {
         if (base->native_socket) {
             err = bind(base->sock, &base->local.sa, base->local_len);
@@ -166,9 +171,6 @@ int message_channel_base_initialize(message_channel_t *channel)
         else {
             err = bind_sv(base->sock, &base->local.sa, base->local_len);
         }
-#else
-        else 
-            err = -1;
 #endif
     }
     
@@ -186,7 +188,13 @@ int message_channel_base_initialize(message_channel_t *channel)
 out:
     return err;
 bind_error:
-    close(base->sock);
+    if (base->native_socket)
+        close(base->sock);
+#if defined(ENABLE_USERMODE)
+    else
+        close_sv(base->sock);
+#endif
+
     base->sock = -1;
 sock_error:
     free(base->buffer);
@@ -204,17 +212,24 @@ void message_channel_base_finalize(message_channel_t *channel)
 
     assert(channel);
 
+    LOG_DBG("%s finalizing\n", base->channel.name);
+
     if (channel->state == CHANNEL_RUNNING)
         base->channel.ops->stop(channel);
 
     if (base->sock > 0) {
-        close(base->sock);
+        if (base->native_socket)
+            close(base->sock);
+#if defined(ENABLE_USERMODE)
+        else
+            close_sv(base->sock);
+#endif
         base->sock = -1;
     }
-
+    
     if (base->buffer) {
+        LOG_DBG("%s free buffer\n", channel->name);
         free(base->buffer);
-        base->buffer = NULL;
     }
 
     channel->state = CHANNEL_CREATED;
@@ -225,7 +240,7 @@ static void message_channel_base_task(void *channel)
     message_channel_base_t *base = (message_channel_base_t *)channel;
     channel_addr_t peer;
     socklen_t addrlen = sizeof(peer);
-    ssize_t ret;
+    ssize_t ret = -1;
 
     while (base->running) {
         /* LOG_DBG("%s receive task running\n", base->channel.name); */
@@ -234,34 +249,38 @@ static void message_channel_base_task(void *channel)
             ret = recvfrom(base->sock, base->buffer,
                            base->buffer_len, 0,
                            &peer.sa, &addrlen);
-        } else {
+        } 
 #if defined(ENABLE_USERMODE)
+        else {
             ret = recvfrom_sv(base->sock, base->buffer,
                               base->buffer_len, 0,
-                              &peer, &addrlen);
-#else
-            ret = -1;
-#endif
+                              &peer.sa, &addrlen);
         }
-        
+#endif
         if (ret == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                if (task_block(base->sock, FD_READ) == 0) {
+            if (errno == EAGAIN || 
+                errno == EWOULDBLOCK) {
+                
+                ret = task_block(base->sock, FD_READ);
+
+                if (ret == 0)
                     continue;
-                }
+                else if (ret == -1)
+                    base->running = 0;
+            } else {
+                LOG_ERR("%s recv error: %s\n",
+                        base->channel.name, strerror(errno));
+                base->running = 0;
             }
-            
-            LOG_ERR("%s recv error: %s\n",
-                    base->channel.name, strerror(errno));
-            
+        } else if (ret == 0) {
+            LOG_DBG("%s other end closed\n",
+                    base->channel.name);
             base->running = 0;
         } else {
             /* LOG_DBG("%s Received a message len=%zd\n", 
                base->channel.name, ret); */
-            //pthread_mutex_lock(&channel->lock);
             base->channel.ops->recv(&base->channel, base->buffer, (size_t)ret, 
                                     &peer.sa, addrlen);
-            //pthread_mutex_unlock(&channel->lock);
         }
     }
     LOG_DBG("%s task exits\n", base->channel.name);
@@ -285,13 +304,6 @@ int message_channel_base_send(message_channel_t *channel,
     
     if (msglen == 0)
         return 0;
-    /*
-    if (!base->running) {
-        LOG_ERR("%s channel is not running\n",
-                base->channel.name);
-        return -1;
-    }
-    */
 
     /*
     LOG_DBG("%s Sending %zu byte message\n",
@@ -299,18 +311,16 @@ int message_channel_base_send(message_channel_t *channel,
     */
 
     while (retries++ <= MAX_SEND_RETRIES && ret == -1) {
-
-#if defined(ENABLE_USERMODE)
-        if (!base->native_socket) {
-            ret = sendto_sv(base->sock, msg, msglen, 0,
-                            (struct sockaddr *) &base->peer, 
-                            base->peer_len);
-        } else 
-#else
-        {
+        if (base->native_socket) {
             ret = sendto(base->sock, msg, msglen, 0,
                          (struct sockaddr *) &base->peer, 
                          base->peer_len);
+        } 
+#if defined(ENABLE_USERMODE)
+        else {
+            ret = sendto_sv(base->sock, msg, msglen, 0,
+                            (struct sockaddr *) &base->peer, 
+                            base->peer_len);
         }
 #endif
         if (ret == -1) {
@@ -326,7 +336,7 @@ int message_channel_base_send(message_channel_t *channel,
         }
     }
 
-    LOG_DBG("Sent %d\n", ret);
+    /* LOG_DBG("Sent %d\n", ret); */
 
     return ret;
 }
@@ -356,27 +366,17 @@ int message_channel_base_send_iov(message_channel_t *channel, struct iovec *iov,
         return 0;
 
     /*
-    if (!base->running) {
-        LOG_ERR("%s channel is not running\n",
-                base->channel.name);
-        return -1;
-    }
-    */
-
-    /*
     LOG_DBG("%s Sending %zu byte message to the local stack\n", 
             channel->name, msglen);
     */
 
     while (retries++ <= MAX_SEND_RETRIES && ret == -1) {
-
-#if defined(ENABLE_USERMODE)
-        if (!base->native_socket) {
-            ret = sendmsg_sv(base->sock, &mh, 0);
-        } else
-#else
-        {
+        if (base->native_socket) {
             ret = sendmsg(base->sock, &mh, 0);
+        } 
+#if defined(ENABLE_USERMODE)
+        else {
+            ret = sendmsg_sv(base->sock, &mh, 0);
         }
 #endif
         if (ret == -1) {

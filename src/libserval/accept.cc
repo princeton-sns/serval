@@ -30,36 +30,31 @@ AcceptReq::AcceptReq()
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-AcceptReq::serial_pld_len() const
+uint16_t AcceptReq::serial_pld_len() const
 {
     return sizeof(_nb);
 }
 
-int
-AcceptReq::check_type() const
+int AcceptReq::check_type() const
 {
     return _type == ACCEPT_REQ;
 }
 
-int
-AcceptReq::write_serial_payload(unsigned char *buf) const
+int AcceptReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_nb, p);
     return p - buf;
 }
 
-int
-AcceptReq::read_serial_payload(const unsigned char *buf)
+int AcceptReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_nb, p);
     return p - buf;
 }
 
-void
-AcceptReq::print(const char *label) const
+void AcceptReq::print(const char *label) const
 {
     Message::print(label);
     info("%s", label);
@@ -71,69 +66,63 @@ AcceptReq::print(const char *label) const
 AcceptRsp::AcceptRsp()
         : Message(ACCEPT_RSP), _err(0)
 {
-    memset(&_local_obj_id, 0xff, sizeof(_local_obj_id));
-    memset(&_remote_obj_id, 0xff, sizeof(_remote_obj_id));
+    memset(&_local_service_id, 0xff, sizeof(_local_service_id));
+    memset(&_remote_service_id, 0xff, sizeof(_remote_service_id));
     memset(&_flow_id, 0xff, sizeof(_flow_id));
     set_pld_len_v(serial_pld_len());
 }
 
-
-AcceptRsp::AcceptRsp(const sv_srvid_t& local_obj_id, 
-                     const sv_srvid_t& remote_obj_id,
+AcceptRsp::AcceptRsp(const sv_srvid_t& local_service_id, 
+                     const sv_srvid_t& remote_service_id,
                      sv_sock_t flow_id, sv_err_t err)
         : Message(ACCEPT_RSP),
           _flow_id(flow_id),
           _err(err)
 {
-    memcpy(&_local_obj_id, &local_obj_id, sizeof(local_obj_id));
-    memcpy(&_remote_obj_id, &remote_obj_id, sizeof(remote_obj_id));
+    memcpy(&_local_service_id, &local_service_id, sizeof(local_service_id));
+    memcpy(&_remote_service_id, &remote_service_id, sizeof(remote_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-AcceptRsp::serial_pld_len() const
+uint16_t AcceptRsp::serial_pld_len() const
 {
-    return sizeof(_local_obj_id)
-            + sizeof(_remote_obj_id)
+    return sizeof(_local_service_id)
+            + sizeof(_remote_service_id)
             + sizeof(_flow_id)
             + sizeof(_err);
 }
 
-int
-AcceptRsp::check_type() const
+int AcceptRsp::check_type() const
 {
     return _type == ACCEPT_RSP;
 }
 
-int
-AcceptRsp::write_serial_payload(unsigned char *buf) const
+int AcceptRsp::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
-    p += serial_write(_local_obj_id, p);
-    p += serial_write(_remote_obj_id, p);
+    p += serial_write(_local_service_id, p);
+    p += serial_write(_remote_service_id, p);
     p += serial_write(_flow_id, p);
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-AcceptRsp::read_serial_payload(const unsigned char *buf)
+int AcceptRsp::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
-    p += serial_read(&_local_obj_id, p);
-    p += serial_read(&_remote_obj_id, p);
+    p += serial_read(&_local_service_id, p);
+    p += serial_read(&_remote_service_id, p);
     p += serial_read(&_flow_id, p);
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-AcceptRsp::print(const char *label) const
+void AcceptRsp::print(const char *label) const
 {
     Message::print(label);
-    info("%s: local_obj_id=%s, remote_obj_id=%s, flow_id = %s, err=%s",
-         label, service_id_to_str(&_local_obj_id), 
-         service_id_to_str(&_remote_obj_id),
+    info("%s: local_service_id=%s, remote_service_id=%s, flow_id = %s, err=%s",
+         label, service_id_to_str(&_local_service_id), 
+         service_id_to_str(&_remote_service_id),
          flow_id_to_str(&_flow_id), _err.v ? "t" : "f");
 }
 
@@ -144,57 +133,52 @@ AcceptReq2::AcceptReq2()
         : Message(ACCEPT_REQ2), _nb(false)
 {
 
-    memset(&_obj_id, 0xff, sizeof(_obj_id));
+    memset(&_service_id, 0xff, sizeof(_service_id));
     memset(&_flow_id, 0xff, sizeof(_flow_id));
     set_pld_len_v(serial_pld_len());
 }
 
 
-AcceptReq2::AcceptReq2(const sv_srvid_t& obj_id, sv_sock_t flow_id, bool nb)
+AcceptReq2::AcceptReq2(const sv_srvid_t& service_id, sv_sock_t flow_id, bool nb)
         : Message(ACCEPT_REQ2), _flow_id(flow_id), _nb(nb)
 {
-    memcpy(&_obj_id, &obj_id, sizeof(obj_id));
+    memcpy(&_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-AcceptReq2::serial_pld_len() const
+uint16_t AcceptReq2::serial_pld_len() const
 {
-    return sizeof(_obj_id) + sizeof(_flow_id) + sizeof(_nb);
+    return sizeof(_service_id) + sizeof(_flow_id) + sizeof(_nb);
 }
 
-int
-AcceptReq2::check_type() const
+int AcceptReq2::check_type() const
 {
     return _type == ACCEPT_REQ2;
 }
 
-int
-AcceptReq2::write_serial_payload(unsigned char *buf) const
+int AcceptReq2::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
-    p += serial_write(_obj_id, p);
+    p += serial_write(_service_id, p);
     p += serial_write(_flow_id, p);
     p += serial_write(_nb, p);
     return p - buf;
 }
 
-int
-AcceptReq2::read_serial_payload(const unsigned char *buf)
+int AcceptReq2::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
-    p += serial_read(&_obj_id, p);
+    p += serial_read(&_service_id, p);
     p += serial_read(&_flow_id, p);
     p += serial_read(&_nb, p);
     return p - buf;
 }
 
-void
-AcceptReq2::print(const char *label) const
+void AcceptReq2::print(const char *label) const
 {
     Message::print(label);
-    info("%s: obj_id=%s, flow_id = %s, nb = %s", 
-         label, service_id_to_str(&_obj_id), flow_id_to_str(&_flow_id),
+    info("%s: service_id=%s, flow_id = %s, nb = %s", 
+         label, service_id_to_str(&_service_id), flow_id_to_str(&_flow_id),
          _nb ? "t" : "f");
 }
 
@@ -214,36 +198,31 @@ AcceptRsp2::AcceptRsp2(sv_err_t err)
     set_pld_len_v(serial_pld_len());
 }
 
-uint16_t
-AcceptRsp2::serial_pld_len() const
+uint16_t AcceptRsp2::serial_pld_len() const
 {
     return sizeof(_err);
 }
 
-int
-AcceptRsp2::check_type() const
+int AcceptRsp2::check_type() const
 {
     return ACCEPT_RSP2;
 }
 
-int
-AcceptRsp2::write_serial_payload(unsigned char *buf) const
+int AcceptRsp2::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
     p += serial_write(_err, p);
     return p - buf;
 }
 
-int
-AcceptRsp2::read_serial_payload(const unsigned char *buf)
+int AcceptRsp2::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
     p += serial_read(&_err, p);
     return p - buf;
 }
 
-void
-AcceptRsp2::print(const char *label) const
+void AcceptRsp2::print(const char *label) const
 {
     Message::print(label);
     info("%s: err=%s", label, _err.v ? "t" : "f");

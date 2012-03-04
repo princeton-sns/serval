@@ -18,20 +18,11 @@ typedef struct {
 	uint8_t v;
 } sv_proto_t;
 
-#define SERVAL_OK                  0
+#define SERVAL_OK            0
 #define ESOCKIDNOTAVAIL      200   /* Exhausted socket ids for host */
 #define ESCAFDUNREACH        201   /* Cannot reach Scafd daemon */
-#define ESFINTERNAL          202   /* undiagnosed internal SF errors */
+#define ESVINTERNAL          202   /* undiagnosed internal Serval errors */
 #define ESOCKNOTBOUND        203   /* all SF sockets must call bind()
                                       prior to send, sendto, recv, recvfrom */
-#define ENOTRECONN           204
-#define EFAILOVER            205   /* cannot do operation since 
-                                      socket is in failover mode */
-
-#define ENEWINSTANCE         206   /* connected to a new instance 
-                                      do recovery if needed
-                                   */
-#define EFRESYNCPROG         207   /* resync after failover in progress */
-#define EFRESYNCFAIL         208   /* resync after failover failed */
 
 #endif /* _TYPES_H_ */

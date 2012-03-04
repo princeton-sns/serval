@@ -58,8 +58,8 @@ void reactor_remove(struct reactor *r, struct reactor_block *rb)
     timer_queue_signal_raise(&r->tq);
 }
 
-static void check_for_cancelled_blocks(struct reactor *r, 
-                                       struct list_head *cancel_list)
+static void check_for_canceled_blocks(struct reactor *r, 
+                                      struct list_head *cancel_list)
 {
     struct reactor_block *rb, *tmp;
     /* Check for cancelled blocks */
@@ -72,7 +72,7 @@ static void check_for_cancelled_blocks(struct reactor *r,
             list_add(&rb->callback_node, cancel_list);
             r->num_blocks--;
             rb->cancel = 0;
-            LOG_DBG("Cancelling reactor block for fd=%d\n", rb->fd);
+            LOG_DBG("Canceling reactor block for fd=%d\n", rb->fd);
         }
     }
     pthread_mutex_unlock(&r->lock);
@@ -104,7 +104,7 @@ void reactor_loop(void *data)
         if (ret == REACTOR_TIMEOUT) {
             /* Timeout */
             ret = timer_handle_timeout(&r->tq);
-            check_for_cancelled_blocks(r, &priv_list);
+            check_for_canceled_blocks(r, &priv_list);
         } else if (ret == REACTOR_ERROR) {
             /* Error */
             LOG_DBG("wait error  %s\n", strerror(errno));
@@ -147,7 +147,7 @@ void reactor_loop(void *data)
             } else if (ret == TIMER_SIGNAL_SET) {
                 /* Reschedule timers */
                 //LOG_DBG("Rescheduling wait\n");
-                check_for_cancelled_blocks(r, &priv_list);
+                check_for_canceled_blocks(r, &priv_list);
             }
         }
 

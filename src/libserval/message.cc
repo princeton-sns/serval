@@ -20,12 +20,6 @@
 
 #include "message.hh"
 
-#if defined(__KERNEL__)
-#include <linux/string.h>
-#include <linux/socket.h>
-#include <linux/net.h>
-#include <linux/in.h>
-#else
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -37,10 +31,32 @@
 #include <ctype.h>
 #include <sys/un.h>
 #include <assert.h>
-#endif
 
-int
-Message::read_hdr(const unsigned char *buf)
+const char *Message::msg_str[] = {
+    "MSG_UNKNOWN",
+    "MSG_BIND_REQ", 
+    "MSG_BIND_RSP",
+    "MSG_CONNECT_REQ", 
+    "MSG_CONNECT_RSP",
+    "MSG_LISTEN_REQ", 
+    "MSG_LISTEN_RSP",
+    "MSG_ACCEPT_REQ", 
+    "MSG_ACCEPT_RSP",
+    "MSG_ACCEPT2_REQ", 
+    "MSG_ACCEPT2_RSP",
+    "MSG_SEND_REQ", 
+    "MSG_SEND_RSP",
+    "MSG_RECV_REQ", 
+    "MSG_RECV_RSP",
+    "MSG_CLOSE_REQ", 
+    "MSG_CLOSE_RSP",
+    "MSG_RECVMESG", 
+    "MSG_CLEAR_DATA", 
+    "MSG_HAVE_DATA",
+    NULL
+};
+
+int Message::read_hdr(const unsigned char *buf)
 {
     if (check_buf(buf, __FILE__, __LINE__) < 0) {
         lerr("check_buf failed");
@@ -62,8 +78,7 @@ Message::read_hdr(const unsigned char *buf)
     return p - buf;
 }
 
-int
-Message::write_hdr(unsigned char *buf) const
+int Message::write_hdr(unsigned char *buf) const
 {
     if (check_buf(buf, __FILE__, __LINE__) < 0)
         return -1;
@@ -76,8 +91,7 @@ Message::write_hdr(unsigned char *buf) const
     return p - buf;
 }
 
-int
-Message::write_to_stream_soc(int soc)
+int Message::write_to_stream_soc(int soc)
 {
     sv_err_t err;
     if (write_to_stream_soc(soc, err) < 0) {
@@ -88,8 +102,7 @@ Message::write_to_stream_soc(int soc)
     return 0;
 }
 
-int                             /* not const due to writev().. */
-Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
+int Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
 {
     int slen = serial_len();
     info("writing %d bytes to stream soc %d", slen, soc);
@@ -102,7 +115,7 @@ Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
 
     if (write_serial(buf) < 0) {
         delete[] buf;
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return -1;
     }
 
@@ -122,7 +135,7 @@ Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
         delete[] vec;
         if (n == 0)  // EOF
             return 0;
-        err = ESFINTERNAL;
+        err = ESVINTERNAL;
         return -1;
     }
     delete[] buf;
@@ -135,8 +148,7 @@ Message::write_to_stream_soc(int soc, sv_err_t &err) /*  const */
     return n;
 }
 
-int
-Message::read_from_stream_soc(int soc, sv_err_t &err)
+int Message::read_from_stream_soc(int soc, sv_err_t &err)
 {
     int r1 = read_hdr_from_stream_soc(soc, err);
     if (r1 == 0) {
@@ -158,8 +170,7 @@ Message::read_from_stream_soc(int soc, sv_err_t &err)
     return r1+r2;
 }
 
-int
-Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
+int Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
 {
     int len = hdr_len();
     unsigned char *buf = new unsigned char[len];
@@ -184,8 +195,7 @@ Message::read_hdr_from_stream_soc(int soc, sv_err_t &err)
     return len;
 }
 
-int
-Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
+int Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
 {
     if (!pld_len())
         return 0;
@@ -206,7 +216,7 @@ Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
         if (n < 0 || read_serial_payload(buf) < 0) {
             delete[] buf;
             lerr("Message::read_pld_from_stream_soc failed");
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             return -1;
         }
         SockIO::print("Message::read_pld_from_stream_soc", buf, slen);
@@ -225,7 +235,7 @@ Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
         }
 
         if (n < 0) {
-            err = ESFINTERNAL;
+            err = ESVINTERNAL;
             lerr("Message::read_from_stream_soc reading "
                  "non-serial payload failed");
             return -1;
@@ -236,8 +246,7 @@ Message::read_pld_from_stream_soc(int soc, sv_err_t &err)
     return pld_len();
 }
 
-int
-Message::write_serial(unsigned char *buf) const
+int Message::write_serial(unsigned char *buf) const
 {
     if (check_buf(buf, __FILE__, __LINE__) < 0)
         return -1;

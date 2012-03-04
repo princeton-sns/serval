@@ -5,9 +5,6 @@
 #include <netinet/serval.h>
 #include "types.h"
 
-const char *
-oid_to_str(const sv_srvid_t *oid);
-
 #define CRC_LEN 4
 
 class State {
@@ -25,7 +22,6 @@ class State {
         CLOSING,  // bound dgram only
         TIMEWAIT, // bound dgram only
         UNREGISTER,
-        FAILOVER_WAIT,
         RECONNECT,
         RRESPOND,
         LISTEN,
@@ -42,8 +38,16 @@ class State {
 class PacketType {
     static const char *packettype_str[];
   public:
-    enum Type { DATA = 0, SYN = 1, SYNACK = 2, ACK = 3, RESET = 4, CLOSE = 5,
-                MIG = 6, RSYN = 7, MIGDATA = 8, RSYNACK = 9 }; // sko
+    enum Type { 
+        DATA = 0, 
+        SYN, 
+        SYNACK, 
+        ACK, 
+        RESET, 
+        CLOSE,
+        RSYN, 
+        RSYNACK, 
+    };
     static const char *packettype_s(const PacketType::Type &);
 };
 
@@ -163,26 +167,11 @@ _strerror_sv_r(int errnum, char *buf, size_t buflen)
             snprintf(buf, buflen, "%s", 
                      "local SERVAL daemon unreachable");
             break;
-        case ESFINTERNAL:
-            snprintf(buf, buflen, "%s", 
-                     "internal error in SERVAL socket library");
             break;
         case ESOCKNOTBOUND: 
             snprintf(buf, buflen, "%s", 
                      "SERVAL sockets must bind using bind() "
                      "prior to send, sendto, recv, recvfrom");
-            break;
-        case EFRESYNCPROG:
-            snprintf(buf, buflen, "%s", 
-                     "Connection to new instance in progress after failover");
-            break;
-        case EFRESYNCFAIL:
-            snprintf(buf, buflen, "%s", 
-                     "Connection to new instance failed");
-            break;
-        case ENEWINSTANCE:
-            snprintf(buf, buflen, "%s", 
-                     "Connected to new instance. Needs recovery.");
             break;
         default: 
 #if defined(_GNU_SOURCE)

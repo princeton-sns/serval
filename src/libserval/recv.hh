@@ -8,7 +8,7 @@ class RecvRsp : public Message {
   public:
     RecvRsp(int err = SERVAL_OK);
     RecvRsp(unsigned char *buf, uint16_t len, int flags, int err = SERVAL_OK);
-    RecvRsp(const sv_srvid_t& src_obj_id,
+    RecvRsp(const sv_srvid_t& src_service_id,
             unsigned char *buf, uint16_t len, int flags);
     ~RecvRsp() { }
     
@@ -27,11 +27,11 @@ class RecvRsp : public Message {
     void print(const char *label) const;
 
     unsigned char *nsbuf()             { return _nsbuf; }
-    const sv_srvid_t& src_obj_id() const        { return _src_obj_id; }
+    const sv_srvid_t& src_service_id() const        { return _src_service_id; }
     const uint32_t& src_ipaddr() const {return _ipaddr;}
 
   private:
-    sv_srvid_t _src_obj_id;
+    sv_srvid_t _src_service_id;
     uint32_t _ipaddr;
     unsigned char *_nsbuf;
     uint16_t _nonserial_len;

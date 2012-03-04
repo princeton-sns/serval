@@ -10,9 +10,10 @@
 #include <serval/ctrlmsg.h>
 #include <ctrl.h>
 #include <service.h>
-#include "serval_ipv4.h"
+#include <serval_ipv4.h>
+#include <serval_sock.h>
 
-MODULE_AUTHOR("Erik Nordstroem");
+MODULE_AUTHOR("Erik Nordström");
 MODULE_DESCRIPTION("Serval stack for Linux");
 MODULE_LICENSE("GPL");
 MODULE_VERSION("0.1");
@@ -170,8 +171,9 @@ static int serval_inetaddr_event(struct notifier_block *this,
 	switch (event) {
 	case NETDEV_UP:
         {
-                LOG_DBG("inetdev UP %s\n", dev->name);
+                LOG_DBG("inetdev UP %s - migrating\n", dev->name);
                 dev_configuration(dev);
+                serval_sock_migrate_iface(dev, dev);
                 break;
         }
 	case NETDEV_GOING_DOWN:

@@ -1,23 +1,4 @@
 /* -*- Mode: C++; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-/* Copyright (c) 2010 The Trustees of Princeton University (Trustees)
-
-   Permission is hereby granted, free of charge, to any person obtaining a
-   copy of this software and/or hardware specification (the “Work”) to deal
-   in the Work without restriction, including without limitation the rights
-   to use, copy, modify, merge, publish, distribute, sublicense, and/or
-   sell copies of the Work, and to permit persons to whom the Work is
-   furnished to do so, subject to the following conditions: The above
-   copyright notice and this permission notice shall be included in all
-   copies or substantial portions of the Work.
-   
-   THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-   THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
-   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-   ARISING FROM, OUT OF OR IN CONNECTION WITH THE WORK OR THE USE OR OTHER
-   DEALINGS IN THE WORK.
-*/
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +12,7 @@
 #include <netinet/serval.h>
 #include "common.h"
 
-static const char *progname = "foo";
+static const char *progname;
 static unsigned short DEFAULT_LISTEN_SID = 16385;
 static struct service_id listen_srvid;
 static int should_exit = 0;
@@ -74,41 +55,8 @@ static int set_reuse_ok(int soc)
         return 0;
 }
 
-static int check_migrate(int sock, size_t offset, 
-                         unsigned long migrate_offset)
-{
-        int ret = 0;
-
-        if (offset >= migrate_offset) {
-                printf("Calling migrate()\n");
-
-                ret = migrate_sv(sock);
-
-                if (ret >= 0) {
-                        ret = 1;
-                }
-        }
-        return ret;
-}
-
-static int recv_offset(int sock, long *in_offset)
-{
-        int ret = 0;
-        uint32_t offset = 0;
-    
-        ret = recv_sv(sock, &offset, sizeof(offset), 0);
-    
-        if (ret < 0)
-                return -1;
-    
-        *in_offset = ntohl(offset);
-    
-        return ret;
-}
-
 static int send_file(int sock, const char *filepath,
                      long file_offset,
-                     unsigned long migrate_offset, 
                      unsigned char digest[SHA_DIGEST_LENGTH])
 {
         int ret = EXIT_FAILURE;
@@ -116,7 +64,7 @@ static int send_file(int sock, const char *filepath,
         static size_t total_bytes = 0;
         size_t total_bytes_session = 0, nread = 0;
         char sendbuf[SENDBUF_SIZE];
-        int has_migrated = 0, stop_sending = 0;
+        int stop_sending = 0;
         SHA_CTX ctx;
         FILE *f;
 
@@ -145,7 +93,7 @@ static int send_file(int sock, const char *filepath,
         printf("sending file %s, starting at offset %ld\n", 
                filepath, file_offset);
 
-        while (!stop_sending && !has_migrated) {
+        while (!stop_sending) {
                 long pos = ftell(f);
                 size_t count = fread(sendbuf, SENDBUF_SIZE, 1, f);
         
@@ -174,7 +122,7 @@ static int send_file(int sock, const char *filepath,
 
                 SHA1_Update(&ctx, sendbuf, nread);
 
-                while (!stop_sending && !has_migrated && count < nread) {
+                while (!stop_sending && count < nread) {
 
                         n = send_sv(sock, sendbuf + count, nread - count, 0);
 
@@ -200,22 +148,6 @@ static int send_file(int sock, const char *filepath,
                         count =+ n;
                         total_bytes += n;
                         total_bytes_session += n;
-            
-                        if (migrate_offset > 0) {
-                                int ret = check_migrate(sock, 
-                                                        total_bytes_session, 
-                                                        migrate_offset);
-                
-                                if (ret < 0) {
-                                        fprintf(stderr, 
-                                                "\rMigration check failed\n");
-                                } else if (ret == 1) {
-                                        printf("\rSession did failover after %zu bytes sent.\n", 
-                                               total_bytes_session);
-                                        has_migrated = 1;
-                                        break;
-                                }
-                        }
                 }
         }
     
@@ -283,9 +215,10 @@ static int send_memory_buffer(int sock, size_t bytes_to_send,
              
                         count += n;
                         total_bytes += n;
-            
+                        /*
                         printf("Sent %zd bytes, total %zu bytes\n", 
                                n, total_bytes);
+                        */
                 }
                 bytes_to_send -= count;
         }
@@ -297,8 +230,9 @@ static int send_memory_buffer(int sock, size_t bytes_to_send,
         return ret;
 }
 
-static int server(const char *filepath, size_t send_memory_buffer_size, 
-                  unsigned long migrate_offset, int family)
+static int server(const char *filepath, 
+                  size_t send_memory_buffer_size, 
+                  int family)
 {
         int sock;
         int backlog = 8;    
@@ -351,7 +285,7 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                 printf("server: bound to port %u\n",
                        srv_inetport);
         } else {
-                printf("server: bound to object id %s\n", 
+                printf("server: bound to service id %s\n", 
                        service_id_to_str(&listen_srvid));
         }
         
@@ -378,16 +312,6 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                                 strerror_sv(errno));
                         continue;
                 }
-
-                if (migrate_offset > 0) {
-                        ret = recv_offset(client_sock, &offset);
-            
-                        if (ret < 0) {
-                                fprintf(stderr, "cannot read offset: %s\n", 
-                                        strerror_sv(errno));
-                                continue;
-                        }
-                }
                 
                 if (family == AF_INET) {
                         char buf[18];
@@ -396,7 +320,7 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                                          &cliaddr.inet.sin_addr, buf, 18),
                                ntohs(cliaddr.inet.sin_port));
                 } else {
-                        printf("Connect req from object id %s (sock = %d)\n",
+                        printf("Connect req from service id %s (sock = %d)\n",
                                service_id_to_str(&cliaddr.serval.sv_srvid), 
                                client_sock);
                 }
@@ -407,7 +331,7 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
                                                  digest);
                 else
                         ret = send_file(client_sock, filepath, offset, 
-                                        migrate_offset, digest);
+                                        digest);
 
                 if (ret == EXIT_SUCCESS) {
                         printf("Send successful\n");
@@ -426,23 +350,22 @@ static int server(const char *filepath, size_t send_memory_buffer_size,
 
 static void print_help()
 {
-        printf("Usage: %s [-hfmbs]\n", progname);
-        printf("-h, --help              - Print this information.\n"
-               "-f, --file FILE         - Read data from FILE.\n"
-               "-m, --migrate BYTE      - Migrate at every sent data byte BYTE.\n"
-               "-b, --buffer BYTES      - Generate BYTES bytes random data using a memory buffer.\n"
-               "-s, --seed SEED         - Set PRNG seed to SEED.\n"
-               "-i, --inet              - Use AF_INET\n");
+        printf("Usage: %s [OPTIONS]\n", progname);
+        printf("-h, --help                        - Print this information.\n"
+               "-f, --file FILE                   - Read data from FILE.\n"
+               "-b, --buffer BYTES                - Generate BYTES bytes random data using a memory buffer.\n"
+               "-e, --seed SEED                   - Set PRNG seed to SEED.\n"
+               "-s, --serviceid SERVICE_ID        - Set the serviceID to listen on\n"
+               "-i, --inet                        - Use AF_INET\n");
 }
 
 int
 main(int argc, char **argv)
 {
         struct sigaction action;
-        size_t send_memory_buffer = 0;
+        size_t send_memory_buffer = 10000000; /* Send 10 Mb by default */
         char *filepath = NULL;
         unsigned int seed = 2;
-        unsigned long migrate_offset = 0;
         int family = AF_SERVAL;
 
         listen_srvid.s_sid32[0] = htonl(DEFAULT_LISTEN_SID);
@@ -464,6 +387,7 @@ main(int argc, char **argv)
                     strcmp("--file", argv[0]) == 0) {
                         if (argv[1]) {
                                 filepath = argv[1];
+                                send_memory_buffer = 0;
                                 argc--;
                                 argv++;
                         }
@@ -485,7 +409,7 @@ main(int argc, char **argv)
                                         argv++;
                                 }
                         }
-                } else if (strcmp("-s", argv[0]) == 0 || 
+                } else if (strcmp("-e", argv[0]) == 0 || 
                            strcmp("--seed", argv[0]) == 0) {
                         if (argv[1]) {
                                 char *endptr = NULL;
@@ -501,18 +425,18 @@ main(int argc, char **argv)
                                 argc--;
                                 argv++;
                         }
-                } else if (strcmp("-m", argv[0]) == 0 || 
-                           strcmp("--migrate", argv[0]) == 0) {
+                } else if (strcmp("-s", argv[0]) == 0 || 
+                           strcmp("--serviceid", argv[0]) == 0) {
                         if (argv[1]) {
                                 char *endptr = NULL;
-                                migrate_offset = strtoul(argv[1], &endptr, 10);
+                                unsigned long sid;
 
+                                sid = strtoul(argv[1], &endptr, 10);
+                                
                                 if (*endptr != '\0') {
                                         // conversion failure
-                                        migrate_offset = 0;
                                 } else {
-                                        printf("Migration byte is %lu\n", 
-                                               migrate_offset);
+                                        listen_srvid.s_sid32[0] = htonl(sid);
                                 }
                                 argc--;
                                 argv++;
@@ -521,16 +445,6 @@ main(int argc, char **argv)
                            strcmp("--help", argv[0]) == 0) {
                         print_help();
                         return EXIT_SUCCESS;
-                } else if (strcmp("-o", argv[0]) == 0 ||
-                           strcmp("--object", argv[0]) == 0) {
-                        long v = strtol(argv[1], NULL, 10);
-                        if (v > 65535 || v < 0) {
-                                fprintf(stderr, "invalid object id %ld", v);
-                                return EXIT_FAILURE;
-                        } else 
-                                listen_srvid.s_sid32[0] = htonl((short)v);
-                        argc--;
-                        argv++;
                 } else {
                         print_help();
                         return EXIT_FAILURE;
@@ -539,12 +453,7 @@ main(int argc, char **argv)
                 argv++;
         }
     
-        if (migrate_offset > 0 && send_memory_buffer > 0) {
-                fprintf(stderr, "Incompatible options -b and -m\n");
-                return EXIT_SUCCESS;
-        }
-
         srandom(seed);
         
-        return server(filepath, send_memory_buffer, migrate_offset, family);
+        return server(filepath, send_memory_buffer, family);
 }

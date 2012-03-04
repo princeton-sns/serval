@@ -278,25 +278,25 @@ message_channel_t *message_channel_udp_create(channel_key_t *key)
         free(mcu);
         return NULL;
     }
-
+    
     memcpy(&mcu->peer, key->peer, key->peer_len);
     mcu->peer_len = key->peer_len;
-
+    
     mcu->base = (message_channel_base_t *)
         message_channel_lookup(&base_key, udp_base_ops.hashfn);
     
     if (!mcu->base) {
         mcu->base = message_channel_base_create(&base_key, &udp_base_ops);
         mcu->base->channel.name = udp_base_name;
-
+        
         if (!mcu->base) {
-            free(mcu);
+            message_channel_put(&mcu->channel);
             return NULL;
         }
 
         if (mcu->base->channel.ops->initialize(&mcu->base->channel)) {
             LOG_ERR("Channel initialization failed\n");
-            goto fail_base;
+            goto fail_base_init;
         }
         /*
         message_channel_hash(&mcu->base->channel);
@@ -309,8 +309,8 @@ message_channel_t *message_channel_udp_create(channel_key_t *key)
     }
 
     return &mcu->channel;
-fail_base:
-    mcu->base->channel.ops->put(&mcu->base->channel);
-    free(mcu);
+ fail_base_init:
+    message_channel_put(&mcu->base->channel);
+    message_channel_put(&mcu->channel);
     return NULL;
 }
