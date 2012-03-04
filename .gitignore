@@ -44,6 +44,7 @@ src/test/tcp_servern
 src/test/automigrated
 src/translator/translator
 src/translator/transproxy
+src/translator/servtransproxy
 src/tools/serv
 src/tools/servicetool
 src/tools/migrate

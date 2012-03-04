@@ -1,6 +1,6 @@
 if OS_LINUX
 
-bin_PROGRAMS = translator transproxy
+bin_PROGRAMS = translator transproxy servtransproxy
 
 translator_SOURCES = \
 	translator.c \
@@ -8,6 +8,10 @@ translator_SOURCES = \
 
 transproxy_SOURCES = \
 	transproxy.c \
+	log.c
+
+servtransproxy_SOURCES = \
+	servtransproxy.c \
 	log.c
 
 noinst_HEADERS = \
@@ -18,6 +22,9 @@ translator_LDFLAGS =-lpthread
 
 transproxy_CPPFLAGS =-I$(top_srcdir)/include
 transproxy_LDFLAGS =-lpthread
+
+servtransproxy_CPPFLAGS =-I$(top_srcdir)/include
+servtransproxy_LDFLAGS=-lpthread
 
 endif
 

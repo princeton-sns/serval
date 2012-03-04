@@ -26,18 +26,17 @@ static unsigned int client_num = 0;
 struct client {
         int family;
         unsigned int id;
-        struct sockaddr_in saddr;
+        struct sockaddr_sv saddr;
         pthread_t thr;
         int inet_sock;
         int serval_sock;
         int pipefd[2];
         int should_exit;
-    
+
         int established;
 };
 
 static unsigned short translator_port = 8080;
-static const char *server_ip = "192.168.56.101";
 static LOG_DEFINE(logh);
 
 static ssize_t forward_data(int from, int to, int pipefd[2])
@@ -46,7 +45,6 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
 
          rlen = splice(from, NULL, pipefd[1], NULL, 
                        INT_MAX, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
-        
         if (rlen == -1) {
                 fprintf(stderr, "splice1: %s\n",
                         strerror(errno));
@@ -75,22 +73,6 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
         return wlen;
 }
 
-static ssize_t forward_buf(int to, char *buf, int buf_len)
-{
-        ssize_t rlen = buf_len, wlen = 0;
-        while (rlen) {
-                ssize_t w = write(to, buf, rlen);
-                if (w < 0) {
-                        fprintf(stderr, "write: %s\n", strerror(errno));
-                        break;
-                }
-                wlen += w;
-                rlen -= w;
-        }
-        
-        return wlen;
-}
-
 static ssize_t legacy_to_serval(struct client *c)
 {
         return forward_data(c->inet_sock, c->serval_sock, c->pipefd);
@@ -101,7 +83,7 @@ static ssize_t serval_to_legacy(struct client *c)
         return forward_data(c->serval_sock, c->inet_sock, c->pipefd);
 }
 
-struct client *client_create(int inet_sock, int family, 
+struct client *client_create(int serval_sock, int family, 
                              struct sockaddr *sa, socklen_t salen)
 {
         struct client *c;
@@ -112,7 +94,7 @@ struct client *client_create(int inet_sock, int family,
         if (c) {
                 memset(c, 0, sizeof(*c));
                 c->id = client_num++;
-                c->inet_sock = inet_sock;
+                c->serval_sock = serval_sock;
         }        
         c->family = family;
 
@@ -124,9 +106,9 @@ struct client *client_create(int inet_sock, int family,
                 goto fail_pipe;
         }
         
-        c->serval_sock = socket(family, SOCK_STREAM, 0);
+        c->inet_sock = socket(family, SOCK_STREAM, 0);
         
-	if (c->serval_sock == -1) {
+	if (c->inet_sock == -1) {
 		fprintf(stderr, "serval socket: %s\n",
 			strerror(errno));
                 goto fail_sock;
@@ -155,54 +137,47 @@ void client_free(struct client *c)
 void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
-        union {
-                struct sockaddr sa;
-                struct sockaddr_sv sv;
-                struct sockaddr_in in;
-        } addr;
-        socklen_t addrlen;
-        struct sockaddr_in orig_addr;
-        socklen_t orig_addrlen;
-        int inet_port = 49254;
-        char srcstr[18];
-        char origstr[24] = "\0";
-        int ret;
+        int ret, idx;
+        char charbuf[1];
+        char initbuf[24] = "\0";
+        char *dest, *port, *saveptr;
+        struct addrinfo hints, *res;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;
+        hints.ai_socktype = SOCK_STREAM;
 
-        memset(&addr, 0, sizeof(addr));
-        
-        if (c->family == AF_SERVAL) {
-                addr.sv.sv_family = c->family;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(translator_port);
-                addrlen = sizeof(addr.sv);
-        } else {
-                addr.in.sin_family = c->family;
-                inet_pton(AF_INET, server_ip, &addr.in.sin_addr);
-                addr.in.sin_port = htons(inet_port);
-                addrlen = sizeof(addr.in);
+        idx = 0;
+        while (read(c->serval_sock, charbuf, 1) > 0) {
+                if (charbuf[0] == '\n')
+                        break;
+                initbuf[idx] = charbuf[0];
+                idx++;
         }
-        
-        inet_ntop(AF_INET, &c->saddr.sin_addr, 
-                  srcstr, sizeof(srcstr));
-        
-        if (c->family == AF_SERVAL) {
-                printf("client %u from %s connecting to service %s...\n",
-                       c->id, srcstr, service_id_to_str(&addr.sv.sv_srvid));
-        } else {
-                printf("client %u from %s connecting to %s:%u...\n",
-                       c->id, srcstr, server_ip, inet_port);
+        printf("Init: %s\n", initbuf);
+        dest = strtok_r(initbuf, " ", &saveptr);
+        port = "80";
+        //port = strtok_r(NULL, " ", &saveptr);
+        printf("Dest: %s %s\n", dest, port);
+
+        /* connect to the remote server */
+        ret = getaddrinfo(dest, port, &hints, &res);
+
+        if (ret != 0) {
+                fprintf(stderr, "getaddrinfo(): %s\n", gai_strerror(ret));
+                goto exit;
         }
-
-        ret = connect(c->serval_sock, &addr.sa, addrlen);
-
-        if (ret == -1) {
-                fprintf(stderr, "connect failed: %s\n",
-                        strerror(errno));
-                client_free(c);
-                return NULL;
+        c->inet_sock = socket(res->ai_family, res->ai_socktype,
+                              res->ai_protocol);
+        if (c->inet_sock < 0) {
+                fprintf(stderr, "socket() fail.\n");
+                goto exit;
+        }
+        if (connect(c->inet_sock, res->ai_addr, res->ai_addrlen) < 0) {
+                fprintf(stderr, "connect() fail.\n");
+                goto exit;
         }
 
         printf("client %u connected successfully!\n", c->id);
-        c->established = 0;
 
         while (!c->should_exit) {
                 fd_set fds;
@@ -211,7 +186,8 @@ void *client_thread(void *arg)
                         c->serval_sock : c->inet_sock;
 
                 FD_ZERO(&fds);
-                FD_SET(c->inet_sock, &fds);
+                if (c->inet_sock > 0)
+                        FD_SET(c->inet_sock, &fds);
                 FD_SET(c->serval_sock, &fds);
                 
                 ret = select(maxfd + 1, &fds, NULL, NULL, NULL);
@@ -222,24 +198,6 @@ void *client_thread(void *arg)
                         break;
                 } else if (ret > 0) {
                         if (FD_ISSET(c->inet_sock, &fds)) {
-                                /* This lets the reverse-transproxy know what
-                                 * legacy endpoint this connection is trying
-                                 * to reach. */
-                                if (!c->established) {
-                                        getsockopt(c->inet_sock, SOL_IP, 
-                                                   SO_ORIGINAL_DST, &orig_addr,
-                                                   &orig_addrlen);
-                                        sprintf(origstr, "%s %d\n", 
-                                                inet_ntop(AF_INET, 
-                                                &orig_addr.sin_addr, origstr, 
-                                                sizeof(origstr)), 
-                                                ntohs(orig_addr.sin_port));
-                                        c->established = 1;
-                                        printf("Connection original: %s\n", 
-                                               origstr);
-                                        forward_buf(c->serval_sock,origstr,24);
-                                }
-                                
                                 bytes = legacy_to_serval(c);
 
                                 if (bytes == 0) {
@@ -263,6 +221,8 @@ void *client_thread(void *arg)
                 }
         }
 
+exit:
+        freeaddrinfo(res);
         printf("client %u exits\n", c->id);
 
         client_free(c);
@@ -287,8 +247,9 @@ int main(int argc, char **argv)
 {       
 	struct sigaction action;
 	int sock, ret = 0;
-	struct sockaddr_in saddr;
-	int family = AF_SERVAL;
+	struct sockaddr_sv saddr;
+    struct service_id listen_srvid;
+	int family = AF_INET;
 
         argc--;
 	argv++;
@@ -341,7 +302,7 @@ int main(int argc, char **argv)
 	sigaction(SIGINT, &action, 0);
         sigaction(SIGPIPE, &action, 0);
 	
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+	sock = socket(AF_SERVAL, SOCK_STREAM, 0);
 
 	if (sock == -1) {
 		fprintf(stderr, "inet socket: %s\n",
@@ -358,13 +319,16 @@ int main(int argc, char **argv)
                         strerror(errno));
         }
         
+        bzero(&listen_srvid, sizeof(listen_srvid));
+        listen_srvid.s_sid32[0] = htonl(translator_port);
         memset(&saddr, 0, sizeof(saddr));
-        saddr.sin_family = AF_INET;
-        saddr.sin_addr.s_addr = INADDR_ANY;
-        saddr.sin_port = htons(translator_port);
+        saddr.sv_family = AF_SERVAL;
+        memcpy(&saddr.sv_srvid, &listen_srvid, sizeof(listen_srvid));
+        //saddr.sin_addr.s_addr = INADDR_ANY;
+        //saddr.sin_port = htons(translator_port);
 
-        printf("Serval translator running on port %u\n", 
-               translator_port);
+        printf("Serval translator running on port %s\n", 
+               service_id_to_str(&listen_srvid));
 
         ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
 
@@ -434,7 +398,7 @@ int main(int argc, char **argv)
                 }
                 
                 /* Make a note in our client log */
-                if (log_is_open(&logh)) {
+                /*if (log_is_open(&logh)) {
                         struct hostent *h;
                         char buf[18];
                                                 
@@ -444,7 +408,7 @@ int main(int argc, char **argv)
                                        inet_ntop(AF_INET, &saddr.sin_addr, 
                                                  buf, sizeof(buf)),
                                        h ? h->h_name : "unknown hostname");
-                }
+                }*/
                 
         }
         
