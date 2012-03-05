@@ -27,10 +27,8 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
         
         ret = getaddrinfo(name, "0", &hints, &ai);
         
-        if (ret != 0) {
-                fprintf(stderr, "getaddrinfo error=%d\n", ret);
+        if (ret != 0)
                 return -1;
-        }
 
         while (ai) {
                 if (ai->ai_family == AF_INET) {
@@ -192,8 +190,8 @@ static int service_parse_args(int argc, char **argv, void **result)
         ret = name_to_inet_addr(argv[0], &args.ipaddr1);
         
         if (ret != 1) {
-                fprintf(stderr, "bad IP address: '%s'\n",
-                        argv[2]);
+                fprintf(stderr, "Bad IP address: '%s'\n",
+                        argv[0]);
                 return -1;
         }
 
@@ -240,11 +238,11 @@ static int service_parse_args(int argc, char **argv, void **result)
                         argc--;
                         argv++;
                 } else {
-                        ret = name_to_inet_addr(argv[3], &args.ipaddr2);
+                        ret = name_to_inet_addr(argv[0], &args.ipaddr2);
                         
                         if (ret != 1) {
                                 fprintf(stderr, "Bad IP address: '%s'\n",
-                                        argv[2]);
+                                        argv[0]);
                                 return -1;
                         }
                         args.ip2 = &args.ipaddr2;
