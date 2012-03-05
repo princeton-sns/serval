@@ -32,8 +32,6 @@ struct client {
         int serval_sock;
         int pipefd[2];
         int should_exit;
-
-        int established;
 };
 
 static unsigned short translator_port = 8080;
@@ -43,8 +41,8 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
 {
         ssize_t rlen, wlen = 0;
 
-         rlen = splice(from, NULL, pipefd[1], NULL, 
-                       INT_MAX, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+        rlen = splice(from, NULL, pipefd[1], NULL, 
+                      INT_MAX, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
         if (rlen == -1) {
                 fprintf(stderr, "splice1: %s\n",
                         strerror(errno));
@@ -53,7 +51,7 @@ static ssize_t forward_data(int from, int to, int pipefd[2])
                 printf("Other end closed\n");
         }
         
-        /* printf("splice1 %zd bytes\n", rlen); */
+        /*printf("splice1 %zd bytes\n", rlen);*/
         
         while (rlen) {
                 ssize_t w = splice(pipefd[0], NULL, to, NULL,
@@ -146,7 +144,6 @@ void *client_thread(void *arg)
         hints.ai_socktype = SOCK_STREAM;
 
 	read(c->serval_sock, initbuf, 24);
-        printf("Init: %s", initbuf);
         dest = strtok_r(initbuf, " ", &saveptr);
         port = strtok_r(NULL, "\n", &saveptr);
         printf("Dest: %s %s\n", dest, port);
@@ -331,7 +328,7 @@ int main(int argc, char **argv)
                 goto fail_bind_sock;
 	}
 
-        ret = listen(sock, 10);
+        ret = listen(sock, 100);
 
         if (ret == -1) {
                 fprintf(stderr, "inet listen: %s\n",
