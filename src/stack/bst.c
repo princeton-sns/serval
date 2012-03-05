@@ -13,6 +13,15 @@
 #endif
 #include "bst.h"
 
+/*
+ * This is an implementation of a binary search trie (bst), or bitwise
+ * trie, for LPM lookups of arbitrary length bit strings. Do not
+ * confuse with binary search trees.
+ * 
+ * The code is not particularly optimized at this point.
+ * 
+ * Author: Erik Nordström <enordstr@cs.princeton.edu>
+ */
 #define PREFIX_BYTE(bits) ((bits) / 8)
 #define PREFIX_SIZE(bits) (PREFIX_BYTE(bits) + (((bits) % 8) ? 1 : 0))
 #define CHECK_BIT(prefix, bitoffset) (((char *)prefix)[PREFIX_BYTE(bitoffset)] \
@@ -21,13 +30,13 @@
 /*
   struct bst_node:
 
-  A node in a prefix-based binary search tree.
+  A node in a bitwise trie.
 
   flags: 
 
   BST_FLAG_ACTIVE: set if the node is an active prefix, i.e., the node
   represents is not just a necessary node because of active prefixes
-  in its sub trees.
+  in its sub tree.
  */
 
 enum bst_node_flag {
