@@ -65,7 +65,7 @@ static const struct opname opnames[] = {
 
 static void service_print_usage(void)
 {
-        printf("service:\n");
+        printf("service OPTIONS:\n");
         printf("\tadd|del|mod SERVICEID[:PREFIX_BITS]"
                " IPADDR [IPADDR] [priority NUM] [weight NUM]\n");
         printf("\tSERVICEID can be decimal or hexadecimal"
@@ -314,7 +314,7 @@ struct command service = {
 
 static void print_usage(void)
 {
-        printf("service COMMAND [ARGS]\n");
+        printf("service COMMAND [ OPTIONS ]\n");
         service.print_usage();
 }
 

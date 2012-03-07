@@ -34,7 +34,7 @@ static int packet_raw_init(struct net_device *dev)
         /* Bind the raw IP socket to the device */
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
-	dev_get_ipv4_addr(dev, &addr.sin_addr);
+	dev_get_ipv4_addr(dev, IFADDR_LOCAL, &addr.sin_addr);
 	addr.sin_port = 0;
 	       
         ret = bind(dev->fd, (struct sockaddr *)&addr, sizeof(addr));

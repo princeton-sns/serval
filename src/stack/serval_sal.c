@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+ *
+ * Implementation of the Service Access layer (SAL).
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/platform_tcpip.h>
 #include <serval/skbuff.h>
@@ -352,7 +363,7 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
                 return -1;
 
         /*
-        dev_get_ipv4_addr(skb->dev, &addr);
+        dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &addr);
 
         for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
                 if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
@@ -1519,7 +1530,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
          * should probably route the reply here somehow in case we
          * want to reply on another interface than the incoming one.
          */
-        if (!dev_get_ipv4_addr(skb->dev, &myaddr)) {
+        if (!dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &myaddr)) {
                 LOG_ERR("No source address for interface %s\n",
                         skb->dev);
                 goto drop;
@@ -1879,7 +1890,8 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                 LOG_DBG("Migration completed!\n");
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
 
-                dev_get_ipv4_addr(ssk->mig_dev, &inet_sk(sk)->inet_saddr);
+                dev_get_ipv4_addr(ssk->mig_dev, IFADDR_LOCAL, 
+                                  &inet_sk(sk)->inet_saddr);
                 serval_sock_set_dev(sk, ssk->mig_dev);
                 serval_sock_set_mig_dev(sk, NULL);
                 sk_dst_reset(sk);
@@ -3185,6 +3197,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
         	    if (ssk->mig_dev) {
                             dev_get_ipv4_addr(ssk->mig_dev,
+                                              IFADDR_LOCAL,
                                               &inet_sk(sk)->inet_saddr);
 #if defined(ENABLE_DEBUG)
                             {
@@ -3241,7 +3254,8 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
                 if (ssk->mig_dev) {
-                        dev_get_ipv4_addr(ssk->dev, 
+                        dev_get_ipv4_addr(ssk->dev,
+                                          IFADDR_LOCAL,
                                           &inet_sk(sk)->inet_saddr);
                 }
 
@@ -3350,7 +3364,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct dest *dest;
         struct serval_hdr *sh;
         int hdr_len = sizeof(*sh);
-	int err = 0;
+	int err = -1;
         struct service_resolution_iter iter;
         struct sk_buff *cskb = NULL;
         int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
@@ -3498,7 +3512,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	while (dest) {
 		struct dest *next_dest;
                 struct net_device *dev = NULL;
-               
+                int local_err = 0;
+
                 if (cskb == NULL) {
                         service_resolution_iter_inc_stats(&iter, 1, dlen);
                 }
@@ -3557,7 +3572,13 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
                 /* Need also to set the source address for
                    checksum calculation */
-                dev_get_ipv4_addr(dev, &inet->inet_saddr);
+                if (!dev_get_ipv4_addr(dev, IFADDR_LOCAL,
+                                       &inet->inet_saddr)) {
+                        LOG_ERR("No source IPv4 address for interface %s\n",
+                                dev->name);
+                        dest = next_dest;
+                        continue;
+                }
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -3600,11 +3621,26 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    transport header */
                 skb_reset_transport_header(cskb);
 
-		err = ssk->af_ops->queue_xmit(cskb);
+		local_err = ssk->af_ops->queue_xmit(cskb);
 
-		if (err < 0) {
-			LOG_ERR("xmit failed on queue_xmit err=%d\n", err);
-		}
+		if (local_err < 0) {
+			LOG_ERR("xmit failed on queue_xmit err=%d\n", 
+                                local_err);
+                        /* Only set error in case we haven't succeeded
+                           in transmitting any packet. See comment
+                           below. */
+                        if (err != 0)
+                                err = local_err;
+		} else {
+                        /* Since we may send a SYN on multiple
+                           interfaces, we only want to return an error
+                           message in case transmission failed on all
+                           interfaces. Once we succeed on any
+                           interface, we set return value to
+                           success. */
+                        err = 0;
+                }
+                
 		dest = next_dest;
 	}
         

@@ -92,7 +92,10 @@ static int dev_configuration(struct net_device *dev)
         if (ifname && strcmp(dev->name, ifname) != 0)
                 return 0;
 
-        ret = dev_get_ipv4_broadcast(dev, &dst);
+        if (dev->flags & IFF_POINTOPOINT)
+                ret = dev_get_ipv4_addr(dev, IFADDR_ADDRESS, &dst);
+        else
+                ret = dev_get_ipv4_addr(dev, IFADDR_BROADCAST, &dst);
 
         if (ret == 1) {
 #if defined(ENABLE_DEBUG)
@@ -107,15 +110,6 @@ static int dev_configuration(struct net_device *dev)
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
                             &dst, sizeof(dst), dev, GFP_ATOMIC);
-                /*
-                dev_get_ipv4_netmask(dev, &mask);
-                
-                while (mask & (0x1 << prefix_len))
-                        prefix_len++;
-
-                neighbor_add(&dst, prefix_len, dev, dev->broadcast, 
-                             dev->addr_len, GFP_ATOMIC);
-                */
         } 
         return ret;
 }
@@ -142,7 +136,6 @@ static int serval_netdev_event(struct notifier_block *this,
         {           
                 LOG_DBG("netdev GOING DOWN %s\n", dev->name);
                 service_del_dev_all(dev->name);
-                // neighbor_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:
@@ -178,7 +171,6 @@ static int serval_inetaddr_event(struct notifier_block *this,
         }
 	case NETDEV_GOING_DOWN:
         {
-                //LOG_DBG("inetdev GOING_DOWN %s\n", dev->name);
 		break;
         }
 	case NETDEV_DOWN:

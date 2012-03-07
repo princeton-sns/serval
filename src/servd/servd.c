@@ -1,4 +1,17 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * A service daemon for end-hosts that forwards stack events to a
+ * "service router". The deamon can also run on a service router,
+ * taking registrations and unregistrations.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -704,6 +717,19 @@ static int daemonize(void)
         return 0;
 }
 
+static void print_usage(void)
+{
+        printf("Usage: servd [ OPTIONS ]\n"
+               "where OPTIONS:\n"
+               "\t-d,--daemon\t\t\t - Run in the background as a daemon.\n"
+               "\t-r,--router\t\t\t - Run in router mode, accepting registrations.\n"
+               "\t-rid,--router-id SERVICEID\t - Specify the SERVICEID of a router.\n"
+               "\t-cid,--client-id SERVICEID\t - Specify the SERVICEID of a client.\n"
+               "\t-rip,--router-ip ROUTER_IP\t - Specify the IP of a service router.\n"
+               "\t-h,--help\t\t\t - Print this help message.\n");
+}
+
+
 int main(int argc, char **argv)
 {
 	struct sigaction sigact;
@@ -732,7 +758,11 @@ int main(int argc, char **argv)
 	argv++;
         
 	while (argc) {
-                if (strcmp(argv[0], "-d") == 0 ||
+                if (strcmp(argv[0], "-h") == 0 ||
+                    strcmp(argv[0], "--help") == 0) {
+                        print_usage();
+                        return 0;
+                } else if (strcmp(argv[0], "-d") == 0 ||
                     strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
                 } else if (strcmp(argv[0], "-r") == 0 ||

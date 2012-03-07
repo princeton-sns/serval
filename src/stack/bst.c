@@ -1,4 +1,19 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * This is an implementation of a binary search trie (bst), also
+ * called a bitwise trie. It works well for LPM lookups of arbitrary
+ * length bit strings. Do not confuse with binary search trees.
+ * 
+ * The code is not particularly optimized at this point.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/debug.h>
 #include <serval/list.h>
@@ -13,15 +28,6 @@
 #endif
 #include "bst.h"
 
-/*
- * This is an implementation of a binary search trie (bst), or bitwise
- * trie, for LPM lookups of arbitrary length bit strings. Do not
- * confuse with binary search trees.
- * 
- * The code is not particularly optimized at this point.
- * 
- * Author: Erik Nordström <enordstr@cs.princeton.edu>
- */
 #define PREFIX_BYTE(bits) ((bits) / 8)
 #define PREFIX_SIZE(bits) (PREFIX_BYTE(bits) + (((bits) % 8) ? 1 : 0))
 #define CHECK_BIT(prefix, bitoffset) (((char *)prefix)[PREFIX_BYTE(bitoffset)] \

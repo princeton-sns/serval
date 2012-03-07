@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * IPv4 functionality for Serval.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/skbuff.h>
 #include <serval/debug.h>
@@ -310,7 +321,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
                         FREE_SKB(skb);
                         return -ENODEV;
                 }
-                dev_get_ipv4_addr(skb->dev, &saddr);
+                dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &saddr);
         }
 
         err = serval_ipv4_fill_in_hdr(sk, skb, saddr, daddr);
@@ -510,7 +521,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 goto drop;
         }
 
-        if (!dev_get_ipv4_addr(skb->dev, &saddr)) {
+        if (!dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &saddr)) {
             LOG_ERR("No device IP set for device %s\n",
                     skb->dev->name);
             err = -ENODEV;

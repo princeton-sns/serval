@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Code for ensuring compatibility with various platforms.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #ifndef _PLATFORM_H
 #define _PLATFORM_H
 
@@ -348,7 +359,6 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 
 #endif /* OS_USER */
 
-uint16_t in_cksum(const void *data, size_t len);
 const char *mac_ntop(const void *src, char *dst, size_t size);
 const char *get_strtime(void);
 

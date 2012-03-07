@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Handlers for Serval's control channel.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/debug.h>
 #include <serval/platform.h>
 #include <serval/netdevice.h>
@@ -101,14 +112,12 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                              sizeof(struct service_info_stat) * num_res];
         struct ctrlmsg_service_info_stat *cms = 
                 (struct ctrlmsg_service_info_stat *)buffer;
-        struct in_addr null_ip = { 0 };
         struct service_id null_service = { .s_sid = { 0 } };
         unsigned int i = 0;
         int index = 0;
         int err = 0;
 
 #if defined(ENABLE_DEBUG)
-        //char ipstr[20];
         LOG_DBG("deleting %u services\n", num_res);
 #endif
 
@@ -118,12 +127,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 struct dest_stats dstat;
                 struct service_entry *se;
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-                struct in_addr *ip = NULL;
-
-                if (memcmp(&entry->address, &null_ip, 
-                           sizeof(null_ip)) != 0) {
-                        ip = &entry->address;
-                }
 
                 /*
                   We might be trying to delete the "default" entry. In
@@ -145,9 +148,9 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 }
 
                 memset(&dstat, 0, sizeof(dstat));
-
-                err = service_entry_remove_dest(se, ip, ip ? 
-                                                sizeof(entry->address) : 0, 
+                
+                err = service_entry_remove_dest(se, &entry->address, 
+                                                sizeof(entry->address), 
                                                 &dstat);
 
                 if (err > 0) {
@@ -265,7 +268,6 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         int i = 0;
 
 #if defined(ENABLE_DEBUG)
-        //char ipstr[20];
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
 #endif
@@ -314,7 +316,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                 service_entry_put(se);
 
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);
-                FREE(cres);
+                kfree(cres);
         } else {
                 cmg->service[0].srvid_flags = SVSF_INVALID;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
@@ -363,7 +365,7 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
         
         new_dev = dev_get_by_name(&init_net, cmm->to_i);
 
-        // Check that migration destination is valid.
+        /* Check that migration destination is valid. */
         if (!new_dev) {
                 LOG_ERR("No new interface %s\n", cmm->to_i);
                 return -1;
