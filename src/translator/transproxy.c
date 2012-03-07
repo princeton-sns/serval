@@ -225,16 +225,15 @@ void *client_thread(void *arg)
                         break;
                 } else if (ret > 0) {
                         if (FD_ISSET(c->inet_sock, &fds)) {
+                                
                                 /* This lets the reverse-transproxy know what
                                  * legacy endpoint this connection is trying
                                  * to reach. */
                                 if (!c->established) {
                                         orig_addrlen = sizeof(orig_addr);
-                                        int x = getsockopt(c->inet_sock, SOL_IP, 
+                                        getsockopt(c->inet_sock, SOL_IP, 
                                                    SO_ORIGINAL_DST, &orig_addr,
                                                    &orig_addrlen);
-                                        if (x < 0)
-                                            printf("Damn %s\n", strerror(errno));
                                         sprintf(origstr, "%s %d\n", 
                                                 inet_ntop(AF_INET, 
                                                 &orig_addr.sin_addr, origstr, 
@@ -246,7 +245,6 @@ void *client_thread(void *arg)
                                         forward_buf(c->serval_sock, 
                                                     origstr, 24);
                                 }
-                                
                                 bytes = legacy_to_serval(c);
 
                                 if (bytes == 0) {
@@ -381,7 +379,7 @@ int main(int argc, char **argv)
                 goto fail_bind_sock;
 	}
 
-        ret = listen(sock, 10);
+        ret = listen(sock, 25);
 
         if (ret == -1) {
                 fprintf(stderr, "inet listen: %s\n",
