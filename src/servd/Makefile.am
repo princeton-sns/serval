@@ -26,10 +26,12 @@ servd_LDFLAGS = \
 	-L$(top_srcdir)/src/common \
 	-L$(top_srcdir)/src/libservalctrl \
 	-L$(top_srcdir)/src/libserval \
-	-lcommon \
 	-lservalctrl \
 	-lserval \
 	-lpthread
+
+servd_LDADD = \
+	$(top_srcdir)/src/common/libcommon.la
 
 noinst_HEADERS = \
 	$(servd_headers)

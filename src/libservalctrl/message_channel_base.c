@@ -1,4 +1,16 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*-
+ *
+ * Socket-based message channel.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
@@ -7,12 +19,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
-
 #include <common/platform.h>
 #include <common/atomic.h>
 #include <common/hash.h>
 #include <common/debug.h>
-#include <libservalctrl/task.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -54,7 +64,8 @@ int message_channel_base_equalfn(const message_channel_t *channel,
                                  const void *_key)
 {
     channel_key_t *key = (channel_key_t *)_key;
-    const message_channel_base_t *base = (const message_channel_base_t *)channel;
+    const message_channel_base_t *base = 
+        (const message_channel_base_t *)channel;
 
     if (key->type != channel->type ||
         //key->sock_type != base->sock_type ||
@@ -110,12 +121,11 @@ int message_channel_base_initialize(message_channel_t *channel)
         return -1;
     }
     
-    base->buffer = malloc(base->buffer_len);
+    err = pipe(base->pipefd);
 
-    if (!base->buffer)
+    if (err == -1)
         return -1;
 
-    memset(base->buffer, 0, base->buffer_len);
     base->native_socket = 1;
 
     base->sock = socket(base->local.sa.sa_family, 
@@ -197,8 +207,6 @@ bind_error:
 
     base->sock = -1;
 sock_error:
-    free(base->buffer);
-    base->buffer = NULL;
     goto out;
 }
 
@@ -226,16 +234,14 @@ void message_channel_base_finalize(message_channel_t *channel)
 #endif
         base->sock = -1;
     }
-    
-    if (base->buffer) {
-        LOG_DBG("%s free buffer\n", channel->name);
-        free(base->buffer);
-    }
+
+    close(base->pipefd[0]);
+    close(base->pipefd[1]);
 
     channel->state = CHANNEL_CREATED;
 }
 
-static void message_channel_base_task(void *channel)
+static void *message_channel_base_task(void *channel)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
     channel_addr_t peer;
@@ -243,7 +249,6 @@ static void message_channel_base_task(void *channel)
     ssize_t ret = -1;
 
     while (base->running) {
-        /* LOG_DBG("%s receive task running\n", base->channel.name); */
 
         if (base->native_socket) {
             ret = recvfrom(base->sock, base->buffer,
@@ -260,13 +265,35 @@ static void message_channel_base_task(void *channel)
         if (ret == -1) {
             if (errno == EAGAIN || 
                 errno == EWOULDBLOCK) {
-                
-                ret = task_block(base->sock, FD_READ);
+                struct pollfd pfd[2];
 
-                if (ret == 0)
-                    continue;
-                else if (ret == -1)
+                pfd[0].fd = base->sock;
+                pfd[0].events = POLLIN | POLLERR | POLLHUP;
+                pfd[0].revents = 0;
+                
+                pfd[1].fd = base->pipefd[0];
+                pfd[1].events = POLLIN | POLLERR | POLLHUP;
+                pfd[1].revents = 0;
+                
+                ret = poll(pfd, 2, -1);
+
+                if (ret > 0) {
+                    if (pfd[0].revents & POLLIN)
+                        continue;
+                    else if (pfd[0].revents & POLLHUP) {
+                        LOG_DBG("%s other end closed?\n",
+                                base->channel.name);
+                        base->running = 0;
+                    } else if (pfd[1].revents) {
+                        /* Check for exit signal */
+                        LOG_DBG("%s should exit\n", base->channel.name);
+                        base->running = 0;
+                    } 
+                } else if (ret == -1) {
+                    LOG_ERR("%s poll error: %s\n",
+                            base->channel.name, strerror(errno));
                     base->running = 0;
+                }
             } else {
                 LOG_ERR("%s recv error: %s\n",
                         base->channel.name, strerror(errno));
@@ -285,6 +312,8 @@ static void message_channel_base_task(void *channel)
     }
     LOG_DBG("%s task exits\n", base->channel.name);
     base->channel.state = CHANNEL_STOPPED;
+
+    return NULL;
 }
 
 /*
@@ -381,7 +410,7 @@ int message_channel_base_send_iov(message_channel_t *channel, struct iovec *iov,
 #endif
         if (ret == -1) {
             if (errno == EWOULDBLOCK || errno == EAGAIN) {
-                //task_block(base->sock, FD_WRITE);
+                /* Retry... */
             } else {
                 LOG_ERR("%s sendmsg error: %s\n", 
                         channel->name, strerror(errno));
@@ -405,8 +434,8 @@ int message_channel_base_start(message_channel_t *channel)
     if (channel->state == CHANNEL_INITIALIZED) {
         channel->state = CHANNEL_RUNNING;
         
-        ret = task_add(&base->task, message_channel_base_task, base);
-
+        ret = pthread_create(&base->thread, NULL, 
+                             message_channel_base_task, channel);
         if (ret != 0) {
             channel->state = CHANNEL_INITIALIZED;
         }
@@ -424,12 +453,28 @@ void message_channel_base_stop(message_channel_t *channel)
 
     pthread_mutex_lock(&channel->lock);
 
-    if (channel->state == CHANNEL_RUNNING && base->running) {
+    if (channel->state == CHANNEL_RUNNING) {
+        char c = 1;
+        int ret;
+
         LOG_DBG("Stopping %s channel\n", channel->name);
         base->running = 0;
         pthread_mutex_unlock(&channel->lock);
-        task_cancel(base->task);
-        task_join(base->task);
+
+        ret = write(base->pipefd[1], &c, 1);
+
+        if (ret == -1) {
+            LOG_ERR("Could not write to pipe\n");
+        } else {
+
+            ret = pthread_join(base->thread, NULL);
+            
+            if (ret != 0) {
+                LOG_ERR("Could not join with send channel thread\n");
+            } else {
+                LOG_DBG("Channel %s stopped\n", channel->name);
+            }
+        }
         return;
     }
     pthread_mutex_unlock(&channel->lock);
@@ -517,7 +562,6 @@ int message_channel_base_init(message_channel_base_t *base,
 
     base->sock_type = sock_type;
     base->protocol = protocol;
-    base->buffer_len = RECV_BUFFER_SIZE;
 
     if (peer && peer_len > 0) {
         memcpy(&base->peer, peer, peer_len);
@@ -540,18 +584,19 @@ message_channel_base_t *message_channel_base_create(channel_key_t *key,
 {
     message_channel_base_t *base;
 
-    base = malloc(sizeof(message_channel_base_t));
-
+    base = malloc(sizeof(message_channel_base_t) + RECV_BUFFER_SIZE);
+    
     if (!base)
         return NULL;
 
-    memset(base, 0, sizeof(message_channel_base_t));
+    memset(base, 0, sizeof(message_channel_base_t) + RECV_BUFFER_SIZE);
+    base->buffer_len = RECV_BUFFER_SIZE;
 
     if (message_channel_base_init(base, key->type,
                                   key->sock_type,
                                   key->protocol,
                                   key->local, key->local_len, 
-                                  key->peer, key->peer_len, ops)) {
+                                  key->peer, key->peer_len, ops) == -1) {
         free(base);
         return NULL;
     }

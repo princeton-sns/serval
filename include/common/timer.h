@@ -4,6 +4,7 @@
 
 #include <sys/types.h>
 #include <sys/time.h>
+#include <pthread.h>
 #include "heap.h"
 
 struct timer {

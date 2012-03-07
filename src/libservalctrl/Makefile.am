@@ -5,8 +5,6 @@ libservalctrl_la_DEPENDENCIES = \
 
 libservalctrl_la_SOURCES = \
 	init.c \
-	task.c \
-	reactor.c \
 	message.c \
 	message_channel.c \
 	message_channel_internal.c \
@@ -23,31 +21,19 @@ endif
 
 if OS_LINUX
 libservalctrl_la_SOURCES += \
-	reactor_epoll.c \
 	message_channel_netlink.c
-else
-if OS_BSD
-libservalctrl_la_SOURCES += \
-	reactor_kqueue.c
-else
-#libservalctrl_la_SOURCES += \
-#	reactor_poll.c
-endif
 endif
 
 libservalctrl_la_includedir=$(includedir)/libservalctrl
 libservalctrl_la_include_HEADERS = \
 	$(top_srcdir)/include/libservalctrl/init.h \
-	$(top_srcdir)/include/libservalctrl/reactor.h \
 	$(top_srcdir)/include/libservalctrl/message.h \
 	$(top_srcdir)/include/libservalctrl/message_channel.h \
-	$(top_srcdir)/include/libservalctrl/task.h \
 	$(top_srcdir)/include/libservalctrl/hostctrl.h
 
 noinst_HEADERS = \
 	message_channel_base.h \
 	message_channel_internal.h \
-	reactor_internal.h \
 	hostctrl_ops.h
 
 libservalctrl_la_CPPFLAGS = \

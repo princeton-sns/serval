@@ -1,18 +1,29 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-#include <sys/un.h>
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
+ *
+ * UNIX domain socket backend for message channels.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <assert.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
-
+#include <pthread.h>
 #include <common/platform.h>
 #include <common/atomic.h>
 #include <common/debug.h>
 #include <serval/ctrlmsg.h>
 #include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 

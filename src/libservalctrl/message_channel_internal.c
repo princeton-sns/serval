@@ -1,9 +1,9 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 #include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
 #include <netinet/in.h>
 #include <netinet/serval.h>
 #include <assert.h>
+#include <pthread.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 

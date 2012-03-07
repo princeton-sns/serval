@@ -6,6 +6,7 @@
 #include <common/hashtable.h>
 #include <libservalctrl/message_channel.h>
 #include <sys/types.h>
+#include <pthread.h>
 
 /* 
    Key used for hashing and argument passing.

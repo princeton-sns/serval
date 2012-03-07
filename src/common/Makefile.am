@@ -1,6 +1,6 @@
-lib_LIBRARIES = libcommon.a
+noinst_LTLIBRARIES = libcommon.la
 
-libcommon_a_SOURCES = \
+libcommon_la_SOURCES = \
 	hashtable.c \
 	heap.c \
 	timer.c 
@@ -15,8 +15,11 @@ noinst_HEADERS = \
 	$(top_srcdir)/include/common/list.h \
 	$(top_srcdir)/include/common/timer.h
 
-libcommon_a_CPPFLAGS = \
+libcommon_la_CPPFLAGS = \
 	-I$(top_srcdir)/include
 
-libcommon_a_CFLAGS = \
+libcommon_la_CFLAGS = \
 	-fPIC
+
+libcommon_la_LIBADD = \
+	-lrt

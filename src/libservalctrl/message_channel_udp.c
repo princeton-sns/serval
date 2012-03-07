@@ -1,16 +1,27 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
+ *
+ * UDP-based backend for message channels.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <sys/socket.h>
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <unistd.h>
-
+#include <pthread.h>
 #include <common/debug.h>
 #include <common/platform.h>
 #include <common/atomic.h>
 #include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
 #include <libserval/serval.h>
 
 #include "message_channel_internal.h"
@@ -20,13 +31,17 @@
 #define UDP_BUFFER_SIZE 2048
 
 /*
- * Serval unconnected UDP message channels differ from unix and udp
- * channels in that they are point to multi-point, where as the other two
- * are effectively point to point channels. As such, it requires a shared
+ * Serval unconnected UDP message channels differ from UNIX and UDP
+ * channels in that they are point-to-multipoint, while the other two
+ * are effectively point-to-point channels. As such, it requires a shared
  * dispatch facility on recv() to shuttle in-bound packets to the proper
- * message channel per remote peer SID
+ * message channel per remote peer ServiceID.
+ *
+ * This means that all UDP channels that want to receive on the same
+ * port must share a socket, and therefore also a message_channel_base
+ * handle. We wrap each unique UDP handle around this shared base
+ * handle and use locks to handle simultaneous access.
  */
-
 typedef struct message_channel_udp {
     message_channel_t channel;
     message_channel_base_t *base;
