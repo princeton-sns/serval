@@ -53,11 +53,6 @@ libservalctrl_la_LDFLAGS += \
 	-lserval
 endif
 
-if OS_LINUX
-libservalctrl_la_LDFLAGS += \
-	-lrt
-endif
-
 clean-local:
 	rm -f *~
 

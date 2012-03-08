@@ -21,5 +21,7 @@ libcommon_la_CPPFLAGS = \
 libcommon_la_CFLAGS = \
 	-fPIC
 
+if OS_LINUX
 libcommon_la_LIBADD = \
 	-lrt
+endif

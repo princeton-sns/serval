@@ -78,8 +78,8 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 		}
 
                 va_start(ap, format);
-		fprintf(s, "%s{0x%x}[%3s]%s: ", 
-			get_strtime(), (unsigned int)pthread_self(), 
+		fprintf(s, "%s{0x%lx}[%3s]%s: ", 
+			get_strtime(), (unsigned long)pthread_self(), 
                         log_level_str[level], func);
 		vfprintf(s, format, ap);
                 va_end(ap);
