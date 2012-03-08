@@ -49,7 +49,8 @@ static inline struct net_device *resolve_dev(struct service_info *entry)
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
-	LOG_DBG("control message type %s\n", ctrlmsg_str[cm->type]);
+        const char *type = ctrlmsg_str[cm->type];
+	LOG_DBG("control message type %s\n", type);
         return 0;
 }
 

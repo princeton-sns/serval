@@ -139,11 +139,20 @@ void *client_thread(void *arg)
         char initbuf[24] = "\0";
         char *dest, *port, *saveptr;
         struct addrinfo hints, *res;
+        ssize_t len;
+
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
-	read(c->serval_sock, initbuf, 24);
+	len = read(c->serval_sock, initbuf, 24);
+        
+        if (len == -1) {
+                fprintf(stderr, "read failed: %s\n",
+                        strerror(errno));
+                return NULL;
+        }
+        
         dest = strtok_r(initbuf, " ", &saveptr);
         port = strtok_r(NULL, "\n", &saveptr);
         printf("Dest: %s %s\n", dest, port);
@@ -227,7 +236,7 @@ static void signal_handler(int sig)
 
 void print_usage(void)
 {
-        printf("Usage: translator OPTIONS\n");
+        printf("Usage: servtransproxy OPTIONS\n");
         printf("OPTIONS:\n");
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
