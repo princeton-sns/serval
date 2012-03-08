@@ -24,6 +24,21 @@
 #include "serval_sal.h"
 #include "serval_ipv4.h"
 
+static const char *ctrlmsg_str[] = {
+        [CTRLMSG_TYPE_REGISTER] = "CTRLMSG_TYPE_REGISTER",
+        [CTRLMSG_TYPE_UNREGISTER] = " CTRLMSG_TYPE_UNREGISTER",
+        [CTRLMSG_TYPE_RESOLVE] = "CTRLMSG_TYPE_RESOLVE",
+        [CTRLMSG_TYPE_ADD_SERVICE] = "CTRLMSG_TYPE_ADD_SERVICE",
+        [CTRLMSG_TYPE_DEL_SERVICE] = "CTRLMSG_TYPE_DEL_SERVICE",
+        [CTRLMSG_TYPE_MOD_SERVICE] = "CTRLMSG_TYPE_MOD_SERVICE",
+        [CTRLMSG_TYPE_GET_SERVICE] = "CTRLMSG_TYPE_GET_SERVICE",
+        [CTRLMSG_TYPE_SERVICE_STAT] = "CTRLMSG_TYPE_SERVICE_STAT",
+        [CTRLMSG_TYPE_CAPABILITIES] = "CTRLMSG_TYPE_CAPABILITIES",
+        [CTRLMSG_TYPE_MIGRATE] = "CTRLMSG_TYPE_MIGRATE",
+        [CTRLMSG_TYPE_DUMMY] = "CTRLMSG_TYPE_DUMMY",
+        NULL
+};
+
 extern struct net_device *resolve_dev_impl(const struct in_addr *addr,
                                            int ifindex);
 
@@ -34,7 +49,7 @@ static inline struct net_device *resolve_dev(struct service_info *entry)
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
-	LOG_DBG("control message type %u\n", cm->type);
+	LOG_DBG("control message type %s\n", ctrlmsg_str[cm->type]);
         return 0;
 }
 
@@ -411,5 +426,6 @@ ctrlmsg_handler_t handlers[] = {
         ctrl_handle_get_service_msg,
         ctrl_handle_service_stats_msg,
         ctrl_handle_capabilities_msg,
-        ctrl_handle_migrate_msg
+        ctrl_handle_migrate_msg,
+        dummy_ctrlmsg_handler,
 };

@@ -1671,6 +1671,8 @@ serval_sal_create_respond_sock(struct sock *sk,
 
         nsk = sk_clone(sk, GFP_ATOMIC);
 
+        /* Cloned sock has lock held */
+
         if (nsk) {
                 struct serval_sock *nssk = serval_sk(nsk);
                 int ret;
@@ -1775,8 +1777,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                                 return NULL;
 
                         /* Move request sock to accept queue */
-                        list_del(&srsk->lh);
-                        list_add_tail(&srsk->lh, &ssk->accept_queue);
+                        list_move_tail(&srsk->lh, &ssk->accept_queue);
                         nsk->sk_ack_backlog = 0;
 
                         newinet = inet_sk(nsk);
@@ -2152,6 +2153,8 @@ static int serval_sal_child_process(struct sock *parent,
         int ret = 0;
         int state = child->sk_state;
 
+        /* child sock is already locked here */
+
         serval_sk(child)->dev = NULL;        
 
         /* Check lock on child socket, similarly to how we handled the
@@ -2204,6 +2207,8 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         
                         nsk = serval_sal_request_sock_handle(sk, skb, ctx);
                         
+                        /* The new sock is already locked here */
+
                         if (nsk && nsk != sk) {
                                 return serval_sal_child_process(sk, nsk,
                                                                 skb, ctx);
@@ -3192,9 +3197,10 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
       	uint32_t temp_daddr = 0;
+        u8 skb_flags = SERVAL_SKB_CB(skb)->flags;
         int err = 0;
 
-        if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
+        if (skb_flags & SVH_RSYN) {
         	    if (ssk->mig_dev) {
                             dev_get_ipv4_addr(ssk->mig_dev,
                                               IFADDR_LOCAL,
@@ -3251,7 +3257,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         
         err = ssk->af_ops->queue_xmit(skb);
         
-        if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
+        if (skb_flags & SVH_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
                 if (ssk->mig_dev) {
                         dev_get_ipv4_addr(ssk->dev,

@@ -69,13 +69,13 @@ void hashtable_fini(struct hashtable *table)
 		table->hash[i].count = 0;
         pthread_mutex_unlock(&table->hash[i].lock);
 		pthread_mutex_destroy(&table->hash[i].lock);
-
 	}
     atomic_set(&table->count, 0);
 }
 
 int hashtable_for_each(struct hashtable *table, 
-                       void (*action)(struct hashelm *))
+                       void (*action)(struct hashelm *, void *), 
+                       void *data)
 {
     int i, n = 0;
 
@@ -90,7 +90,7 @@ int hashtable_for_each(struct hashtable *table,
         
         hlist_for_each_entry_safe(he, walk, tmp, 
                                   &table->hash[i].head, node) {
-            action(he);
+            action(he, data);
             n++;
         }
         pthread_mutex_unlock(&table->hash[i].lock);
@@ -148,6 +148,17 @@ void hashelm_unhash(struct hashtable *table, struct hashelm *he)
     atomic_dec(&table->count);
     hashelm_put(he);
     pthread_mutex_unlock(&slot->lock);
+}
+
+void __hashelm_unhash(struct hashtable *table, struct hashelm *he)
+{
+    struct hashslot *slot;    
+
+    slot = get_slot(table, he->hash);
+    hlist_del_init(&he->node);
+    slot->count--;
+    atomic_dec(&table->count);
+    hashelm_put(he);
 }
 
 void hashelm_hold(struct hashelm *he)

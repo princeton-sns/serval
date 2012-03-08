@@ -138,6 +138,7 @@ struct net_device *resolve_dev_impl(const struct in_addr *addr,
 
                         if (prefix1 == prefix2) {
                                 dev_hold(dev);
+                                read_unlock(&dev_base_lock);
                                 return dev;
                         }
                         if (!best_guess_dev && strcmp(dev->name, "lo") != 0)

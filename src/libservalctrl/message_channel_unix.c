@@ -17,6 +17,7 @@
 #include <sys/un.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <common/platform.h>
@@ -30,16 +31,37 @@
 static void message_channel_unix_finalize(message_channel_t *channel)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
-
     message_channel_base_finalize(channel);
+    unlink(base->local.un.sun_path);
+}
 
-    if (strcmp(base->local.un.sun_path, SERVAL_CLIENT_CTRL_PATH) == 0) {
-        unlink(SERVAL_CLIENT_CTRL_PATH);
+static int message_channel_unix_initialize(message_channel_t *channel)
+{
+    struct ctrlmsg cm;
+    message_channel_base_t *base = (message_channel_base_t *)channel;
+    ssize_t ret;
+
+    message_channel_base_initialize(channel);
+
+    /* Send a dummy message to make the stack aware of this channel
+       client */
+    memset(&cm, 0, sizeof(cm));
+    cm.type = CTRLMSG_TYPE_DUMMY;
+    cm.len = sizeof(cm);
+
+    ret = sendto(base->sock, &cm, cm.len, 0, 
+                 &base->peer.sa, base->peer_len);
+    
+    if (ret == -1) {
+        LOG_ERR("%s could not send hello message on channel: %s\n",
+                channel->name, strerror(errno));
     }
+
+    return ret >= 0 ? 0 : ret;
 }
 
 struct message_channel_ops unix_ops = {
-    .initialize = message_channel_base_initialize,
+    .initialize = message_channel_unix_initialize,
     .start = message_channel_base_start,
     .stop = message_channel_base_stop,
     .finalize = message_channel_unix_finalize,

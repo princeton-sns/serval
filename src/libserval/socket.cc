@@ -1189,11 +1189,6 @@ ssize_t SVSockLib::recvfrom_sv(int soc, void *buffer, size_t length, int flags,
     sv_addr->sv_family = AF_SERVAL;
     memcpy(&sv_addr->sv_srvid, &src_service_id, sizeof(sv_addr->sv_srvid));
 
-    //  if (*addr_len >= 2 * (socklen_t)sizeof(struct sockaddr_sv)) {
-    //    struct sockaddr_sv *sv_addr2 = (struct sockaddr_sv *)&src_addr[1];
-    //    sv_addr2->sv_family = AF_SERVAL;
-    //    memcpy(&sv_addr2->sv_srvid, SERVAL_NULL_SID, sizeof(sv_addr2->sv_srvid));
-    //    *addr_len = 2 * sizeof(struct sockaddr_sv);
     if (*addr_len >= sizeof(struct sockaddr_sv) + sizeof(struct sockaddr_in)) {
         struct sockaddr_in* saddr = (struct sockaddr_in*) (sv_addr + 1);
         saddr->sin_family = AF_INET;
@@ -1233,6 +1228,7 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
             lerr("non-blocking would block");
             return SERVAL_SOCKET_ERROR;
         case Cli::DATA_CLOSED:
+            len = 0;
             return 0;
         case Cli::DATA_READY:
             break;
@@ -1255,6 +1251,7 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         case Cli::DATA_NOT_ENOUGH:
             break;
         case Cli::DATA_CLOSED:
+            len = 0;
             return 0;
         case Cli::DATA_READY:
             // This must be HaveData
@@ -1364,7 +1361,7 @@ int SVSockLib::query_serval_recv(bool nb, unsigned char *buffer, size_t &len,
         len = 0;
         return 0;
     }
-    info("returning");
+    info("returning length=%u", len);
     //SockIO::print("recv:app:data", (const unsigned char *)buffer, len);
     return 0;
 }

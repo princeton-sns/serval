@@ -33,6 +33,7 @@ enum ctrlmsg_type {
         CTRLMSG_TYPE_SERVICE_STAT,
         CTRLMSG_TYPE_CAPABILITIES,
         CTRLMSG_TYPE_MIGRATE,
+        CTRLMSG_TYPE_DUMMY,
         _CTRLMSG_TYPE_MAX,
 };
 
@@ -245,10 +246,8 @@ enum {
 
 #if defined(OS_ANDROID)
 #define SERVAL_STACK_CTRL_PATH "/data/local/tmp/serval-stack-ctrl.sock"
-#define SERVAL_CLIENT_CTRL_PATH "/data/local/tmp/serval-client-ctrl.sock"
 #else
 #define SERVAL_STACK_CTRL_PATH "/tmp/serval-stack-ctrl.sock"
-#define SERVAL_CLIENT_CTRL_PATH "/tmp/serval-client-ctrl.sock"
 #endif
 
 #endif /* _SERVAL_CTRLMSG_H */

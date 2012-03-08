@@ -77,7 +77,7 @@ struct request_sock_ops;
 #define RCV_SHUTDOWN	1
 #define SEND_SHUTDOWN	2
 
-//#define SOCK_REFCNT_DEBUG 1
+/* #define SOCK_REFCNT_DEBUG 1 */
 
 typedef struct {
         pthread_mutex_t slock;
@@ -482,7 +482,7 @@ static inline void sock_hold_real(struct sock *sk)
                 sock_hold_real(sk);                                     \
                 printf("%s:%d/%s() sock_hold: %p refcnt=%u\n",          \
                        __FILE__, __LINE__, __func__,                    \
-                       sk, atomic_read(&sk->sk_refcnt));                \
+                       (sk), atomic_read(&(sk)->sk_refcnt));            \
         } while (0)                                            
 #else
 #define sock_hold(sk) sock_hold_real(sk)

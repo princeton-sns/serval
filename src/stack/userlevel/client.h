@@ -45,6 +45,8 @@ unsigned int client_get_id(struct client *c);
 pthread_t client_get_thread(struct client *c);
 int client_get_sockfd(struct client *c);
 int client_get_signalfd(struct client *c);
+const struct sockaddr *client_get_sockaddr(struct client *c);
+socklen_t client_get_addrlen(struct client *c);
 int client_has_data(struct client *c);
 void client_hold(struct client *c);
 void client_put(struct client *c);

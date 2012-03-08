@@ -1,5 +1,15 @@
-
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Receive/send Serval packets on a RAW IP socket.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/netdevice.h>
 #include <serval/skbuff.h>
 #include <serval/debug.h>
@@ -89,7 +99,7 @@ static int packet_raw_recv(struct net_device *dev)
 		return -1;
 	}
 
-	//skb_reserve(skb, SKB_HEADROOM_RESERVE);
+	/* skb_reserve(skb, SKB_HEADROOM_RESERVE); */
         
 	ret = recvfrom(dev->fd, skb->data, RCVLEN, 0, 
                        (struct sockaddr *)&addr, &addrlen);

@@ -304,8 +304,8 @@ static void *message_channel_base_task(void *channel)
                     base->channel.name);
             base->running = 0;
         } else {
-            /* LOG_DBG("%s Received a message len=%zd\n", 
-               base->channel.name, ret); */
+            LOG_DBG("%s Received a message len=%zd\n", 
+               base->channel.name, ret);
             base->channel.ops->recv(&base->channel, base->buffer, (size_t)ret, 
                                     &peer.sa, addrlen);
         }

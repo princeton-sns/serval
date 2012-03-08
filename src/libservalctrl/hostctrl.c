@@ -1,11 +1,16 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <libservalctrl/hostctrl.h>
+#include <serval/platform.h>
 #include <serval/ctrlmsg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <netinet/serval.h>
+#if defined(OS_UNIX)
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
 #include "hostctrl_ops.h"
 
 extern struct hostctrl_ops local_ops;
@@ -98,7 +103,9 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
                 memset(&peer, 0, sizeof(peer));
                 
                 local.sun_family = PF_UNIX;
-                strcpy(local.sun_path, SERVAL_CLIENT_CTRL_PATH);
+                snprintf(local.sun_path, sizeof(local.sun_path), 
+                         "/tmp/serval-client-%u-ctrl.sock", 
+                         getpid());
                 
                 peer.sun_family = PF_UNIX;
                 strcpy(peer.sun_path, SERVAL_STACK_CTRL_PATH);
