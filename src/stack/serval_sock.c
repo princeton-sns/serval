@@ -196,6 +196,34 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         LOG_DBG("Migrated %d flows\n", n);
 }
 
+void serval_sock_freeze_flows(struct net_device *dev)
+{
+        int i;
+
+        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+                struct serval_hslot *slot;
+                struct hlist_node *walk;
+                struct sock *sk;                
+                
+                slot = &established_table.hash[i];
+                
+                spin_lock_bh(&slot->lock);
+                                
+                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
+                        struct serval_sock *ssk = serval_sk(sk);
+                        
+                        lock_sock(sk);
+                
+                        if (serval_sk(sk)->dev && 
+                            serval_sk(sk)->dev->ifindex == dev->ifindex) {
+                                if (ssk->af_ops->freeze_flow)
+                                        ssk->af_ops->freeze_flow(sk);
+                        }
+                        release_sock(sk);
+                }
+                spin_unlock_bh(&slot->lock);
+        }
+}
 
 void serval_sock_migrate_flow(struct flow_id *old_f,
                               struct net_device *new_if)

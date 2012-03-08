@@ -887,11 +887,12 @@ static inline int serval_tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 		BUG_ON(sock_owned_by_user(sk));
 
 		while ((skb1 = __skb_dequeue(&tp->ucopy.prequeue)) != NULL) {
+                        /* We handle backlog elsewhere */
 			/* sk_backlog_rcv(sk, skb1); */
 
                         serval_tcp_do_rcv(sk, skb1);
-			//NET_INC_STATS_BH(sock_net(sk),
-			//		 LINUX_MIB_TCPPREQUEUEDROPPED);
+			/* NET_INC_STATS_BH(sock_net(sk),
+					 LINUX_MIB_TCPPREQUEUEDROPPED); */
 		}
 
 		tp->ucopy.memory = 0;

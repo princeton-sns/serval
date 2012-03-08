@@ -171,6 +171,9 @@ static int serval_inetaddr_event(struct notifier_block *this,
         }
 	case NETDEV_GOING_DOWN:
         {
+                LOG_DBG("inetdev GOING DOWN %s - Freezing all flows\n",
+                        dev->name);
+                serval_sock_freeze_flows(dev);
 		break;
         }
 	case NETDEV_DOWN:

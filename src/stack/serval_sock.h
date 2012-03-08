@@ -113,7 +113,8 @@ struct serval_sock_af_ops {
                                            struct dst_entry *dst);
 	u16	        net_header_len;
 	u16	        sockaddr_len;
-        void            (*migration_completed)(struct sock *sk);
+        int             (*migration_completed)(struct sock *sk);
+        int             (*freeze_flow)(struct sock *sk);
         int             (*send_shutdown)(struct sock *sk);
         int             (*recv_shutdown)(struct sock *sk);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
@@ -237,6 +238,7 @@ void serval_sock_migrate_flow(struct flow_id *old_f,
                               struct net_device *new_if);
 void serval_sock_migrate_service(struct service_id *old_s,
                                  struct net_device *new_if);
+void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
 
