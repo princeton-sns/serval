@@ -796,6 +796,7 @@ static inline u32 __serval_sal_set_rto(const struct serval_sock *ssk)
 {
 	return (ssk->srtt >> 3) + ssk->rttvar;
 }
+
 /* Calculate rto without backoff.  This is the second half of Van Jacobson's
  * routine referred to above.
  */
@@ -837,7 +838,6 @@ static void serval_sal_rearm_rto(struct sock *sk)
 	}
 }
 
-
 static inline void serval_sal_ack_update_rtt(struct sock *sk,
                                              const s32 seq_rtt)
 {
@@ -870,12 +870,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
                         serval_sal_unlink_ctrl_queue(skb, sk);
                         LOG_PKT("cleaned rtx queue seqno=%u\n", 
                                 SERVAL_SKB_CB(skb)->seqno);
-                        kfree_skb(skb);
-                        skb = serval_sal_ctrl_queue_head(sk);
-                        if (skb)
-                                ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
-                        num++;
-                        
+
                         if (SERVAL_SKB_CB(skb)->flags & SVH_RETRANS) {
                                 seq_rtt = -1;
                         } else {
@@ -883,6 +878,12 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
                                 serval_sal_ack_update_rtt(sk, seq_rtt);
                                 serval_sal_rearm_rto(sk);
                         }
+
+                        kfree_skb(skb);
+                        skb = serval_sal_ctrl_queue_head(sk);
+                        if (skb)
+                                ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
+                        num++;                        
                 } else {
                         break;
                 }
