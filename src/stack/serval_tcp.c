@@ -2380,28 +2380,32 @@ static int serval_tcp_freeze_flow(struct sock *sk)
 static int serval_tcp_migration_completed(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        const unsigned long now = jiffies;
+        unsigned long t = jiffies;
 
         LOG_DBG("Unfreezing TCP flow %s\n", 
                 flow_id_to_str(&serval_sk(sk)->local_flowid));
 
         /* Restart retransmission timer */
         if (tp->packets_out) {
-                if (tp->timeout > now) {
-                        serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
-                                                    tp->timeout - now, 
-                                                    SERVAL_TCP_RTO_MAX);
-                } else {
-                        serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
-                                                    1, 
-                                                    SERVAL_TCP_RTO_MAX);  
-                }
+                /* if (tp->timeout > t)
+                        t = tp->timeout - t;
+                else
+                */
+                t = 1;
+
+                LOG_DBG("Resetting rexmit timer to %lu\n", t);
+                
+                serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS, t,
+                                            SERVAL_TCP_RTO_MAX);
         }
 
-        if (tp->snd_wnd == 0) 
+        if (tp->snd_wnd == 0) {
+                LOG_DBG("Zero snd_wnd, sending probe\n");
                 serval_tcp_send_probe0(sk);
-        else 
+        } else {
+                LOG_DBG("Non-zero snd_wnd, pushing frames\n");
                 serval_tcp_push_pending_frames(sk);
+        }
 
         return 0;
 }

@@ -600,9 +600,11 @@ void serval_sock_init(struct sock *sk)
         /* Default to stop-and-wait behavior */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
+        ssk->retransmits = 0;
+        ssk->backoff = 0;
         ssk->srtt = 0;
-        ssk->rto = SERVAL_INITIAL_RTO;
-
+        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_TIMEOUT_INIT;
+        ssk->rto = SAL_TIMEOUT_INIT;
         write_lock_bh(&sock_list_lock);
         list_add_tail(&ssk->sock_node, &sock_list);
         write_unlock_bh(&sock_list_lock);

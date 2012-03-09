@@ -36,6 +36,7 @@ struct service_entry;
  struct serval_skb_cb {
          u8 flags;
          u32 seqno;
+         u32 when;
          struct service_id *srvid;
  };
 
@@ -48,7 +49,10 @@ enum serval_ctrl_flags {
         SVH_CONN_ACK  = 1 << 5, /* Only used internally to signal that
                                    the ACK should carry a connection
                                    extension (for SYN-ACKs). */
+        SVH_RETRANS   = 1 << 6,
 };
+
+#define sal_time_stamp ((u32)(jiffies))
 
 static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
 {

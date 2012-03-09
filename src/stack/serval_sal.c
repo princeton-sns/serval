@@ -87,9 +87,6 @@ struct serval_context {
         struct serval_migrate_ext *mig_ext;
 };
 
-/* Backoff multipliers for retransmission, fail when reaching 0. */
-static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
-
 #if defined(OS_LINUX_KERNEL)
 extern int serval_udp_encap_skb(struct sk_buff *skb, 
                                 __u32 saddr, __u32 daddr, 
@@ -702,6 +699,153 @@ static inline void serval_sal_send_check(struct serval_hdr *sh)
         sh->check = serval_sal_csum(sh, ntohs(sh->length));
 }
 
+/* Compute the actual rto_min value */
+static inline u32 serval_sal_rto_min(struct sock *sk)
+{
+	u32 rto_min = SAL_RTO_MIN;
+#if defined(OS_LINUX_KERNEL)
+	struct dst_entry *dst = __sk_dst_get(sk);
+	if (dst && dst_metric_locked(dst, RTAX_RTO_MIN))
+		rto_min = dst_metric_rtt(dst, RTAX_RTO_MIN);
+#endif
+	return rto_min;
+}
+
+/* The RTO estimation for the SAL is taken directly from the Linux
+   kernel TCP code. */
+/* Called to compute a smoothed rtt estimate. The data fed to this
+ * routine either comes from timestamps, or from segments that were
+ * known _not_ to have been retransmitted [see Karn/Partridge
+ * Proceedings SIGCOMM 87]. The algorithm is from the SIGCOMM 88
+ * piece by Van Jacobson.
+ * NOTE: the next three routines used to be one big routine.
+ * To save cycles in the RFC 1323 implementation it was better to break
+ * it up into three procedures. -- erics
+ */
+static void serval_sal_rtt_estimator(struct sock *sk, const __u32 mrtt)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+	long m = mrtt; /* RTT */
+
+	/*	The following amusing code comes from Jacobson's
+	 *	article in SIGCOMM '88.  Note that rtt and mdev
+	 *	are scaled versions of rtt and mean deviation.
+	 *	This is designed to be as fast as possible
+	 *	m stands for "measurement".
+	 *
+	 *	On a 1990 paper the rto value is changed to:
+	 *	RTO = rtt + 4 * mdev
+	 *
+	 * Funny. This algorithm seems to be very broken.
+	 * These formulae increase RTO, when it should be decreased, increase
+	 * too slowly, when it should be increased quickly, decrease too quickly
+	 * etc. I guess in BSD RTO takes ONE value, so that it is absolutely
+	 * does not matter how to _calculate_ it. Seems, it was trap
+	 * that VJ failed to avoid. 8)
+	 */
+	if (m == 0)
+		m = 1;
+	if (ssk->srtt != 0) {
+		m -= (ssk->srtt >> 3);	/* m is now error in rtt est */
+		ssk->srtt += m;		/* rtt = 7/8 rtt + 1/8 new */
+		if (m < 0) {
+			m = -m;		/* m is now abs(error) */
+			m -= (ssk->mdev >> 2);   /* similar update on mdev */
+			/* This is similar to one of Eifel findings.
+			 * Eifel blocks mdev updates when rtt decreases.
+			 * This solution is a bit different: we use finer gain
+			 * for mdev in this case (alpha*beta).
+			 * Like Eifel it also prevents growth of rto,
+			 * but also it limits too fast rto decreases,
+			 * happening in pure Eifel.
+			 */
+			if (m > 0)
+				m >>= 3;
+		} else {
+			m -= (ssk->mdev >> 2);   /* similar update on mdev */
+		}
+		ssk->mdev += m;	    	/* mdev = 3/4 mdev + 1/4 new */
+		if (ssk->mdev > ssk->mdev_max) {
+			ssk->mdev_max = ssk->mdev;
+			if (ssk->mdev_max > ssk->rttvar)
+				ssk->rttvar = ssk->mdev_max;
+		}
+		if (after(ssk->snd_seq.una, ssk->rtt_seq)) {
+			if (ssk->mdev_max < ssk->rttvar)
+				ssk->rttvar -= (ssk->rttvar - ssk->mdev_max) >> 2;
+			ssk->rtt_seq = ssk->snd_seq.nxt;
+			ssk->mdev_max = serval_sal_rto_min(sk);
+		}
+	} else {
+		/* no previous measure. */
+		ssk->srtt = m << 3;	/* take the measured time to be rtt */
+		ssk->mdev = m << 1;	/* make sure rto = 3*rtt */
+		ssk->mdev_max = ssk->rttvar = max(ssk->mdev, 
+                                                  serval_sal_rto_min(sk));
+		ssk->rtt_seq = ssk->snd_seq.nxt;
+	}
+}
+
+static inline void serval_sal_bound_rto(const struct sock *sk)
+{
+	if (serval_sk(sk)->rto > SAL_RTO_MAX)
+		serval_sk(sk)->rto = SAL_RTO_MAX;
+}
+
+static inline u32 __serval_sal_set_rto(const struct serval_sock *ssk)
+{
+	return (ssk->srtt >> 3) + ssk->rttvar;
+}
+/* Calculate rto without backoff.  This is the second half of Van Jacobson's
+ * routine referred to above.
+ */
+static inline void serval_sal_set_rto(struct sock *sk)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+	/* Old crap is replaced with new one. 8)
+	 *
+	 * More seriously:
+	 * 1. If rtt variance happened to be less 50msec, it is hallucination.
+	 *    It cannot be less due to utterly erratic ACK generation made
+	 *    at least by solaris and freebsd. "Erratic ACKs" has _nothing_
+	 *    to do with delayed acks, because at cwnd>2 true delack timeout
+	 *    is invisible. Actually, Linux-2.4 also generates erratic
+	 *    ACKs in some circumstances.
+	 */
+	ssk->rto = __serval_sal_set_rto(ssk);
+
+	/* 2. Fixups made earlier cannot be right.
+	 *    If we do not estimate RTO correctly without them,
+	 *    all the algo is pure shit and should be replaced
+	 *    with correct one. It is exactly, which we pretend to do.
+	 */
+
+	/* NOTE: clamping at SAL_RTO_MIN is not required, current algo
+	 * guarantees that rto is higher.
+	 */
+	serval_sal_bound_rto(sk);
+}
+
+static void serval_sal_rearm_rto(struct sock *sk)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+
+	if (!serval_sal_ctrl_queue_head(sk)) {
+		serval_sock_clear_xmit_timer(sk);
+	} else {
+		serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
+	}
+}
+
+
+static inline void serval_sal_ack_update_rtt(struct sock *sk,
+                                             const s32 seq_rtt)
+{
+        serval_sal_rtt_estimator(sk, seq_rtt);
+	serval_sal_set_rto(sk);
+	serval_sk(sk)->backoff = 0;       
+}
+
 /*
   Given an ACK, clean all packets from the control queue that this ACK
   acknowledges. Or, alternatively, clean all packets if indicated by
@@ -716,6 +860,8 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb, *fskb = serval_sal_ctrl_queue_head(sk);
         unsigned int num = 0;
+        u32 now = sal_time_stamp;
+        s32 seq_rtt = -1;
         int err = 0;
        
         while ((skb = serval_sal_ctrl_queue_head(sk)) && 
@@ -729,6 +875,14 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
                         if (skb)
                                 ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
                         num++;
+                        
+                        if (SERVAL_SKB_CB(skb)->flags & SVH_RETRANS) {
+                                seq_rtt = -1;
+                        } else {
+                                seq_rtt = now - SERVAL_SKB_CB(skb)->when;
+                                serval_sal_ack_update_rtt(sk, seq_rtt);
+                                serval_sal_rearm_rto(sk);
+                        }
                 } else {
                         break;
                 }
@@ -739,15 +893,13 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         
         /* Did we remove the first packet in the queue? */
         if (serval_sal_ctrl_queue_head(sk) != fskb) {
-                sk_stop_timer(sk, &serval_sk(sk)->retransmit_timer);
-                ssk->retransmits = 0;
+                serval_sock_clear_xmit_timer(sk);
         }
 
         if (serval_sal_ctrl_queue_head(sk)) {
                 LOG_PKT("Setting retrans timer, queue len=%u\n",
                         serval_sal_ctrl_queue_len(sk));
-                sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
-                               jiffies + msecs_to_jiffies(ssk->rto));
+                serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
         }
 
         return err;
@@ -836,11 +988,9 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         /* 
            Set retransmission timer.
         */
-        if (skb == serval_sal_ctrl_queue_head(sk)) {
-                sk_reset_timer(sk, &ssk->retransmit_timer,
-                               jiffies + msecs_to_jiffies(ssk->rto));
-        }
-        
+        if (skb == serval_sal_ctrl_queue_head(sk))
+                serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
+
         /* 
            Write packets in queue to network.
         */
@@ -3143,6 +3293,8 @@ static int serval_sal_rexmit(struct sock *sk)
                 return -1;
         }
 
+        SERVAL_SKB_CB(skb)->flags |= SVH_RETRANS;
+
         /* Always clone retransmitted packets */
         err = serval_sal_transmit_skb(sk, skb, 1, GFP_ATOMIC);
         
@@ -3160,25 +3312,24 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock(sk);
 
-        LOG_DBG("Transmit timeout sock=%p num=%u backoff=%u\n", 
-                sk, ssk->retransmits, backoff[ssk->retransmits]);
+        LOG_DBG("Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
+                sk, jiffies_to_msecs(ssk->rto), ssk->backoff);
         
-        if (backoff[ssk->retransmits + 1] == 0) {
+        if (ssk->retransmits == 10) {
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer! Closing socket\n");
                 sk->sk_err = ETIMEDOUT;
                 serval_sal_done(sk);
         } else {
                 LOG_DBG("ReXmit and rescheduling timer\n");
-
                 serval_sal_rexmit(sk);
 
-                sk_reset_timer(sk, &ssk->retransmit_timer,
-                               jiffies + (msecs_to_jiffies(ssk->rto) * 
-                                          backoff[ssk->retransmits]));
+                ssk->backoff++;
+                ssk->retransmits++;
                 
-                if (backoff[ssk->retransmits + 1] != 0)
-                        ssk->retransmits++;
+                serval_sock_reset_xmit_timer(sk, min(ssk->rto << ssk->backoff, 
+                                                     SAL_RTO_MAX),
+                                             SAL_RTO_MAX);
         }
         bh_unlock_sock(sk);
         sock_put(sk);
@@ -3630,7 +3781,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    calculation since send_check requires access to
                    transport header */
                 skb_reset_transport_header(cskb);
-
+                SERVAL_SKB_CB(skb)->when = sal_time_stamp;
 		local_err = ssk->af_ops->queue_xmit(cskb);
 
 		if (local_err < 0) {
