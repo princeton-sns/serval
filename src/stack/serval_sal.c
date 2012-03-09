@@ -841,9 +841,13 @@ static void serval_sal_rearm_rto(struct sock *sk)
 static inline void serval_sal_ack_update_rtt(struct sock *sk,
                                              const s32 seq_rtt)
 {
+        u32 rto = serval_sk(sk)->rto;
         serval_sal_rtt_estimator(sk, seq_rtt);
 	serval_sal_set_rto(sk);
-	serval_sk(sk)->backoff = 0;       
+	serval_sk(sk)->backoff = 0; 
+
+        LOG_DBG("Updated RTO HZ=%u seq_rtt=%d rto_old=%u rto_new=%u\n",
+                HZ, seq_rtt, rto, serval_sk(sk)->rto);
 }
 
 /*
@@ -868,16 +872,18 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
                skb != serval_sal_send_head(sk)) {
                 if (ackno > SERVAL_SKB_CB(skb)->seqno || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
-                        LOG_PKT("cleaned rtx queue seqno=%u\n", 
-                                SERVAL_SKB_CB(skb)->seqno);
 
                         if (SERVAL_SKB_CB(skb)->flags & SVH_RETRANS) {
                                 seq_rtt = -1;
-                        } else {
+                        } else if (!all) {
                                 seq_rtt = now - SERVAL_SKB_CB(skb)->when;
                                 serval_sal_ack_update_rtt(sk, seq_rtt);
                                 serval_sal_rearm_rto(sk);
                         }
+
+                        LOG_PKT("cleaned rtxQ seqno=%u HZ=%u seq_rtt=%d\n", 
+                                SERVAL_SKB_CB(skb)->seqno, 
+                                HZ, seq_rtt);
 
                         kfree_skb(skb);
                         skb = serval_sal_ctrl_queue_head(sk);
@@ -898,8 +904,9 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         }
 
         if (serval_sal_ctrl_queue_head(sk)) {
-                LOG_PKT("Setting retrans timer, queue len=%u\n",
-                        serval_sal_ctrl_queue_len(sk));
+                LOG_PKT("Setting retrans timer, queue len=%u rto=%u (ms)\n",
+                        serval_sal_ctrl_queue_len(sk), 
+                        jiffies_to_msecs(ssk->rto));
                 serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
         }
 
@@ -942,12 +949,17 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
         LOG_PKT("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
                 ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
         
+        LOG_DBG("RTO HZ=%u rto=%u rto_msec=%u\n",
+                HZ, ssk->rto, jiffies_to_msecs(ssk->rto));
+
 	while ((skb = serval_sal_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                 
                 if (limit && num == limit)
                         break;
 
+                SERVAL_SKB_CB(skb)->when = sal_time_stamp;
+                                
                 err = serval_sal_transmit_skb(sk, skb, 1, gfp);
                 
                 if (err < 0) {
@@ -2126,6 +2138,8 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         /* FIXME: should the RSYN-ACK be queued for retransmission? I
            guess it is not necessary since the peer that sent the RSYN
            would retransmit. */
+        SERVAL_SKB_CB(skb)->when = sal_time_stamp;
+
         return serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
 }
 
@@ -3782,7 +3796,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    calculation since send_check requires access to
                    transport header */
                 skb_reset_transport_header(cskb);
-                SERVAL_SKB_CB(skb)->when = sal_time_stamp;
+
 		local_err = ssk->af_ops->queue_xmit(cskb);
 
 		if (local_err < 0) {
