@@ -1849,7 +1849,8 @@ static int serval_sal_ack_process(struct sock *sk,
         switch (ssk->sal_state) {
         case SAL_RSYN_RECV:
                 if (!ctx->hdr->rsyn) {
-                        LOG_DBG("Migration complete\n");
+                        LOG_DBG("Migration complete for flow %s\n",
+                                flow_id_to_str(&ssk->local_flowid));
                         serval_sock_set_sal_state(sk, SAL_INITIAL);
                         memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
                         memset(&ssk->mig_daddr, 0, 4);
@@ -1888,7 +1889,8 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
-                LOG_DBG("Migration completed!\n");
+                LOG_DBG("Migration complete for flow %s!\n",
+                        flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
 
                 dev_get_ipv4_addr(ssk->mig_dev, IFADDR_LOCAL, 
@@ -1943,6 +1945,8 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         switch(ssk->sal_state) {
         case SAL_INITIAL:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+                if (ssk->af_ops->freeze_flow)
+                        ssk->af_ops->freeze_flow(sk);
                 break;
         case SAL_RSYN_SENT:
                 serval_sock_set_sal_state(sk, SAL_RSYN_SENT_RECV);

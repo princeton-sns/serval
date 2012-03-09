@@ -617,7 +617,8 @@ static inline void serval_tcp_insert_write_queue_before(struct sk_buff *new,
 		sk->sk_send_head = new;
 }
 
-static inline void serval_tcp_unlink_write_queue(struct sk_buff *skb, struct sock *sk)
+static inline void serval_tcp_unlink_write_queue(struct sk_buff *skb, 
+                                                 struct sock *sk)
 {
 	__skb_unlink(skb, &sk->sk_write_queue);
 }

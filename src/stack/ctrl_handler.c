@@ -24,6 +24,7 @@
 #include "serval_sal.h"
 #include "serval_ipv4.h"
 
+#if defined(ENABLE_DEBUG)
 static const char *ctrlmsg_str[] = {
         [CTRLMSG_TYPE_REGISTER] = "CTRLMSG_TYPE_REGISTER",
         [CTRLMSG_TYPE_UNREGISTER] = " CTRLMSG_TYPE_UNREGISTER",
@@ -38,6 +39,7 @@ static const char *ctrlmsg_str[] = {
         [CTRLMSG_TYPE_DUMMY] = "CTRLMSG_TYPE_DUMMY",
         NULL
 };
+#endif
 
 extern struct net_device *resolve_dev_impl(const struct in_addr *addr,
                                            int ifindex);
@@ -49,8 +51,7 @@ static inline struct net_device *resolve_dev(struct service_info *entry)
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
-        const char *type = ctrlmsg_str[cm->type];
-	LOG_DBG("control message type %s\n", type);
+	LOG_DBG("control message type %s\n", ctrlmsg_str[cm->type]);
         return 0;
 }
 

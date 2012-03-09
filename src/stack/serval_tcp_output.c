@@ -1110,7 +1110,6 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #endif
 
 	err = serval_sal_xmit_skb(skb);
-        //ssk->af_ops->queue_xmit(skb);
 
 	if (likely(err <= 0))
 		return err;
