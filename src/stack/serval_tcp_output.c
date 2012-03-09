@@ -2465,20 +2465,13 @@ begin_fwd:
 
 		} else {
 			last_lost = TCP_SKB_CB(skb)->end_seq;
-                        /*
-			if (icsk->icsk_ca_state != TCP_CA_Loss)
-				mib_idx = LINUX_MIB_TCPFASTRETRANS;
-			else
-				mib_idx = LINUX_MIB_TCPSLOWSTARTRETRANS;
-                        */
-		}
+                }
 
 		if (sacked & (TCPCB_SACKED_ACKED|TCPCB_SACKED_RETRANS))
 			continue;
 
 		if (serval_tcp_retransmit_skb(sk, skb))
 			return;
-		//NET_INC_STATS_BH(sock_net(sk), mib_idx);
 
 		if (skb == serval_tcp_write_queue_head(sk))
 			serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,

@@ -2373,25 +2373,35 @@ static int serval_tcp_freeze_flow(struct sock *sk)
         LOG_DBG("Freezing TCP flow %s\n", 
                 flow_id_to_str(&serval_sk(sk)->local_flowid));
         serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
+        
         return 0;
 }
 
 static int serval_tcp_migration_completed(struct sock *sk)
 {
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        const unsigned long now = jiffies;
+
         LOG_DBG("Unfreezing TCP flow %s\n", 
                 flow_id_to_str(&serval_sk(sk)->local_flowid));
-        
-        serval_tcp_send_probe0(sk);
-        serval_tcp_push_pending_frames(sk);
-        serval_tcp_xmit_retransmit_queue(sk);
-        /*
-	if (!tp->packets_out) {
-		serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
-	} else {
-		serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
-                                            tp->rto, SERVAL_TCP_RTO_MAX);
-	}
-        */
+
+        /* Restart retransmission timer */
+        if (tp->packets_out) {
+                if (tp->timeout > now) {
+                        serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
+                                                    tp->timeout - now, 
+                                                    SERVAL_TCP_RTO_MAX);
+                } else {
+                        serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS,
+                                                    1, 
+                                                    SERVAL_TCP_RTO_MAX);  
+                }
+        }
+
+        if (tp->snd_wnd == 0) 
+                serval_tcp_send_probe0(sk);
+        else 
+                serval_tcp_push_pending_frames(sk);
 
         return 0;
 }
