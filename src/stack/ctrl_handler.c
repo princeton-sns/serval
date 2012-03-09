@@ -283,10 +283,9 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         struct dest *dst;
         int i = 0;
 
-#if defined(ENABLE_DEBUG)
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
-#endif
+
         if (cmg->service[0].srvid_prefix_bits > 0)
                 prefix_bits = cmg->service[0].srvid_prefix_bits;
 
@@ -333,9 +332,14 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);
                 kfree(cres);
+                LOG_DBG("Service %s matched %u entries. msg_len=%u\n",
+                        service_id_to_str(&cmg->service[0].srvid),
+                        se->count, cres->cmh.len);
         } else {
                 cmg->service[0].srvid_flags = SVSF_INVALID;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
+                LOG_DBG("Service %s not found\n",
+                        service_id_to_str(&cmg->service[0].srvid));
         }
 
         return 0;

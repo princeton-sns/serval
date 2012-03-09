@@ -348,12 +348,9 @@ static int signal_wait(int sig[2], int timeout)
         
         ret = poll(&fds, 1, timeout);
 
-        if (ret <= 0) {
-                if (ret == 0) {
-                        printf("Signal timeout\n");
-                }
+        if (ret <= 0)
                 return ret;
-        }
+
         ret = read(sig[0], &r, 1);
 
         signal_lower(sig);
@@ -615,7 +612,7 @@ static int local_service_get_result(struct hostctrl *hc,
         sleep(1);
 
         if (flags & SVSF_INVALID) {
-                printf("No default service route set\n");
+                LOG_DBG("No default service route set\n");
                 /* There was no existing route, the 'get' returned
                    nothing. Just add our default route */
                 ret = hostctrl_service_add(ctx->lhc, &default_service,
@@ -624,10 +621,12 @@ static int local_service_get_result(struct hostctrl *hc,
                    memcmp(&default_service, srvid, 
                           sizeof(default_service)) == 0 && 
                    memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
+#if defined(ENABLE_DEBUG)
                 char buf[18], buf2[18];
-                printf("Replacing default route old=%s new=%s\n",
-                       inet_ntop(AF_INET, ip, buf, 18),
-                       inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+                LOG_DBG("Replacing default route old=%s new=%s\n",
+                        inet_ntop(AF_INET, ip, buf, 18),
+                        inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+#endif
                 /* The 'get' for the default service returned
                    something. Update the existing entry */
                 ret = hostctrl_service_modify(ctx->lhc, srvid, 
@@ -897,6 +896,7 @@ int main(int argc, char **argv)
 
         hostctrl_start(ctx.rhc);
         hostctrl_start(ctx.lhc);
+
         /* If we are a client and have a fixed IP for the service
            router, then replace an existing "default" service rule by
            querying for the current one and modifying it in the
@@ -904,9 +904,9 @@ int main(int argc, char **argv)
         if (ctx.router_ip_set && !ctx.router) {
                 ctx.reregister_signal_waiting = 1;
                 hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-                printf("waiting on signal\n");
-                signal_wait(ctx.reregister_signal, 3000);
-                printf("done waiting on signal\n");
+                if (signal_wait(ctx.reregister_signal, 3000) == 0) {
+                        LOG_DBG("Timeout when retrieving default entry\n");
+                }
                 ctx.reregister_signal_waiting = 0;
         }
 

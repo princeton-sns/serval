@@ -120,7 +120,6 @@ static void serval_tcp_mtu_probing(struct serval_tcp_sock *tp,
 	}
 }
 
-
 /* This function calculates a "timeout" which is equivalent to the timeout of a
  * TCP connection after "boundary" unsuccessful, exponentially backed-off
  * retransmissions with an initial RTO of TCP_RTO_MIN or TCP_TIMEOUT_INIT if

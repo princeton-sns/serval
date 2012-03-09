@@ -2370,6 +2370,8 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 
 static int serval_tcp_freeze_flow(struct sock *sk)
 {
+        LOG_DBG("Freezing TCP flow %s\n", 
+                flow_id_to_str(&serval_sk(sk)->local_flowid));
         serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
         return 0;
 }
@@ -2377,6 +2379,9 @@ static int serval_tcp_freeze_flow(struct sock *sk)
 static int serval_tcp_migration_completed(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        
+        LOG_DBG("Unfreezing TCP flow %s\n", 
+                flow_id_to_str(&serval_sk(sk)->local_flowid));
         
         serval_tcp_send_probe0(sk);
 

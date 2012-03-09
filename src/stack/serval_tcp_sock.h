@@ -236,13 +236,10 @@ static inline struct serval_tcp_sock *serval_tcp_sk(const struct sock *sk)
 	return (struct serval_tcp_sock *)sk;
 }
 
-
 /* urg_data states */
 #define TCP_URG_VALID	0x0100
 #define TCP_URG_NOTYET	0x0200
 #define TCP_URG_READ	0x0400
-
-
 
 #define STSK_TIME_RETRANS	1	/* Retransmit timer */
 #define STSK_TIME_DACK		2	/* Delayed ack timer */

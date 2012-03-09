@@ -1,7 +1,7 @@
 lib_LTLIBRARIES = libservalctrl.la
 
 libservalctrl_la_DEPENDENCIES = \
-	$(top_srcdir)/src/common/libcommon.a
+	$(top_srcdir)/src/common/libcommon.la
 
 libservalctrl_la_SOURCES = \
 	init.c \
@@ -41,8 +41,10 @@ libservalctrl_la_CPPFLAGS = \
 
 libservalctrl_la_LDFLAGS = \
 	-L$(top_srcdir)/src/common \
-	-lcommon \
 	-lpthread
+
+libservalctrl_la_LIBADD = \
+	$(top_srcdir)/src/common/libcommon.la
 
 if ENABLE_USERMODE
 libservalctrl_la_CPPFLAGS += \
