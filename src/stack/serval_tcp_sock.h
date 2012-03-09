@@ -286,14 +286,10 @@ static inline void serval_tsk_clear_xmit_timer(struct sock *sk, const int what)
 	
 	if (what == STSK_TIME_RETRANS || what == STSK_TIME_PROBE0) {
 		tp->pending = 0;
-#ifdef INET_CSK_CLEAR_TIMERS
 		sk_stop_timer(sk, &tp->retransmit_timer);
-#endif
 	} else if (what == STSK_TIME_DACK) {
                 tp->tp_ack.blocked = tp->tp_ack.pending = 0;
-#ifdef INET_CSK_CLEAR_TIMERS
 		sk_stop_timer(sk, &tp->delack_timer);
-#endif
 	}
 }
 
