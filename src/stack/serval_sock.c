@@ -214,8 +214,8 @@ void serval_sock_freeze_flows(struct net_device *dev)
                         
                         lock_sock(sk);
                 
-                        if (serval_sk(sk)->dev && 
-                            serval_sk(sk)->dev->ifindex == dev->ifindex) {
+                        if (ssk->dev && 
+                            ssk->dev->ifindex == dev->ifindex) {
                                 if (ssk->af_ops->freeze_flow)
                                         ssk->af_ops->freeze_flow(sk);
                         }
