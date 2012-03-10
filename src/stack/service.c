@@ -3,6 +3,7 @@
  * Serval's service table.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
  * 
  *
  *	This program is free software; you can redistribute it and/or
@@ -50,7 +51,8 @@ static void service_entry_destroy(struct bst_node *n);
 static struct service_table srvtable;
 static struct service_id default_service;
 
-static struct target *target_create(const void *dst, int dstlen, 
+static struct target *target_create(service_rule_type_t type,
+                                    const void *dst, int dstlen,
                                     const union target_out out, 
                                     uint32_t weight,
                                     gfp_t alloc) 
@@ -66,6 +68,7 @@ static struct target *target_create(const void *dst, int dstlen,
                 return NULL;
 
         memset(t, 0, sizeof(*t) + dstlen);
+        t->type = type;
         t->weight = weight;
         t->dstlen = dstlen;
 
@@ -150,7 +153,8 @@ enum {
         MATCH_ANY_PROTOCOL = 0,
 };
 
-static struct target * __service_entry_get_target(struct service_entry *se, 
+static struct target * __service_entry_get_target(struct service_entry *se,
+                                                  service_rule_type_t type,
                                                   const void *dst,
                                                   int dstlen,
                                                   const union target_out out,
@@ -162,18 +166,18 @@ static struct target * __service_entry_get_target(struct service_entry *se,
 
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
-                        if (is_sock_target(t) && dstlen == 0) {
-                                struct sock *sk = t->out.sk;
-                                if (sk->sk_protocol == protocol || 
+                        if (t->type != type )
+                                continue;
+
+                        if (type == RULE_DEMUX) {
+                                if (t->out.sk->sk_protocol == protocol || 
                                     protocol == MATCH_ANY_PROTOCOL) {
                                         if (set_p)
                                                 *set_p = set;
                                         return t;
                                 }
-                        } else if (!is_sock_target(t) && 
-                                   memcmp(t->dst, dst, dstlen) == 0 
-                                   /* && 
-                                      (!dev || dev->ifindex == t->out.dev->ifindex) */) {
+                        } else if (type == RULE_FORWARD && 
+                                   memcmp(t->dst, dst, dstlen) == 0) {
                                 if (set_p)
                                         *set_p = set;
                                 return t;
@@ -206,7 +210,8 @@ struct net_device *service_entry_get_dev(struct service_entry *se,
         return t ? t->out.dev : NULL;
 }
 
-static void target_set_add_target(struct target_set* set, struct target* t) 
+static void target_set_add_target(struct target_set *set, 
+                                  struct target *t) 
 {
         list_add_tail(&t->lh, &set->list);
         set->normalizer += t->weight;
@@ -242,6 +247,7 @@ __service_entry_get_target_set(struct service_entry *se,
 }
 
 static int __service_entry_add_target(struct service_entry *se, 
+                                      service_rule_type_t type,
                                       uint16_t flags, uint32_t priority,
                                       uint32_t weight, const void *dst, 
                                       int dstlen, const union target_out out, 
@@ -250,9 +256,8 @@ static int __service_entry_add_target(struct service_entry *se,
         struct target_set *set = NULL;
         struct target *t;
         
-        t = __service_entry_get_target(se, dst, dstlen,
-                                       out, 
-                                       &set,
+        t = __service_entry_get_target(se, type, dst, dstlen,
+                                       out, &set,
                                        dstlen == 0 ? 
                                        out.sk->sk_protocol :
                                        MATCH_NO_PROTOCOL);
@@ -265,7 +270,7 @@ static int __service_entry_add_target(struct service_entry *se,
                 return 0;
         }
         
-        t = target_create(dst, dstlen, out, weight, alloc);
+        t = target_create(type, dst, dstlen, out, weight, alloc);
 
         if (!t)
                 return -ENOMEM;
@@ -289,7 +294,8 @@ static int __service_entry_add_target(struct service_entry *se,
         return 1;
 }
 
-int service_entry_add_target(struct service_entry *se, uint16_t flags, 
+int service_entry_add_target(struct service_entry *se, 
+                             service_rule_type_t type, uint16_t flags, 
                              uint32_t priority, uint32_t weight, 
                              const void *dst, int dstlen, 
                              const union target_out out, gfp_t alloc) 
@@ -303,7 +309,7 @@ int service_entry_add_target(struct service_entry *se, uint16_t flags,
            GFP_KERNEL, we should probably restructure the code so that
            new memory is allocated before we lock the table.
         */
-        ret = __service_entry_add_target(se, flags, priority, 
+        ret = __service_entry_add_target(se, type, flags, priority, 
                                          weight, dst, dstlen, 
                                          out, GFP_ATOMIC);
         write_unlock_bh(&se->lock);
@@ -311,14 +317,15 @@ int service_entry_add_target(struct service_entry *se, uint16_t flags,
         return ret;
 }
 
-static void target_set_remove_target(struct target_set* set, struct target* t) 
+static void target_set_remove_target(struct target_set *set, struct target* t) 
 {
         set->normalizer -= t->weight;
         list_del(&t->lh);
         set->count--;
 }
 
-static int __service_entry_modify_target(struct service_entry *se, 
+static int __service_entry_modify_target(struct service_entry *se,
+                                         service_rule_type_t type,
                                          uint16_t flags, uint32_t priority,
                                          uint32_t weight, 
                                          const void *dst, 
@@ -336,7 +343,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                 return -1;
         }
         
-        t = __service_entry_get_target(se, dst, dstlen, 
+        t = __service_entry_get_target(se, type, dst, dstlen, 
                                        out, &set,
                                        MATCH_NO_PROTOCOL);
         
@@ -347,16 +354,20 @@ static int __service_entry_modify_target(struct service_entry *se,
         
 #if defined(OS_LINUX_KERNEL)
         /* Make sure it makes sense to add this target address on this
-           interace */
+           interface */
         {
                 struct rtable *rt;
                 __be32 dst_ip = *((__be32 *)new_dst);
-
+                
+                /* FIXME: This routing does not work as expected. It
+                   returns a valid entry even if the dst_ip does not
+                   really match the subnet/destination of the returned
+                   routing entry. We're probably giving some weird
+                   input... */
                 rt = serval_ip_route_output(&init_net, 
                                             dst_ip,
                                             0, 0, 
                                             t->out.dev->ifindex);
-
                 if (!rt)
                         return 0;
         }
@@ -369,7 +380,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                 struct target_set *nset;
 
                 nset = __service_entry_get_target_set(se, priority);
-
+                
                 if (!nset) {
                         nset = target_set_create(flags, priority, alloc);
 
@@ -400,6 +411,7 @@ static int __service_entry_modify_target(struct service_entry *se,
 }
 
 int service_entry_modify_target(struct service_entry *se, 
+                                service_rule_type_t type,
                                 uint16_t flags, uint32_t priority,
                                 uint32_t weight, 
                                 const void *dst, 
@@ -412,8 +424,8 @@ int service_entry_modify_target(struct service_entry *se,
         int ret = 0;
         
         write_lock_bh(&se->lock);
-        ret = __service_entry_modify_target(se, flags, priority, weight, 
-                                            dst, dstlen, 
+        ret = __service_entry_modify_target(se, type, flags, priority, 
+                                            weight, dst, dstlen, 
                                             new_dst, new_dstlen,
                                             out, alloc);
         write_unlock_bh(&se->lock);
@@ -423,11 +435,12 @@ int service_entry_modify_target(struct service_entry *se,
 
 
 static void __service_entry_inc_target_stats(struct service_entry *se, 
+                                             service_rule_type_t type,
                                              const void *dst, int dstlen, 
                                              int packets, int bytes) 
 {
         struct target_set* set = NULL;
-        struct target *t = __service_entry_get_target(se, dst, dstlen, 
+        struct target *t = __service_entry_get_target(se, type, dst, dstlen, 
                                                       make_target(NULL), &set, 
                                                       MATCH_NO_PROTOCOL);
 
@@ -455,14 +468,15 @@ static void __service_entry_inc_target_stats(struct service_entry *se,
         }
 
 }
-void service_entry_inc_target_stats(struct service_entry *se, 
+void service_entry_inc_target_stats(struct service_entry *se,
+                                    service_rule_type_t type,
                                     const void* dst, int dstlen, 
                                     int packets, int bytes) 
 {
         /* using a read lock since we are atomically updating stats and
            not modifying the set/target itself */
         read_lock_bh(&se->lock);
-        __service_entry_inc_target_stats(se, dst, dstlen, packets, bytes);
+        __service_entry_inc_target_stats(se, type, dst, dstlen, packets, bytes);
         read_unlock_bh(&se->lock);
 }
 
@@ -477,7 +491,7 @@ int __service_entry_remove_target_by_dev(struct service_entry *se,
 
         list_for_each_entry_safe(set, setemp, &se->target_set, lh) {
                 list_for_each_entry_safe(t, dtemp, &set->list, lh) {
-                        if (!is_sock_target(t) && t->out.dev && 
+                        if (t->type == RULE_FORWARD && t->out.dev && 
                             strcmp(t->out.dev->name, ifname) == 0) {
                                 target_set_remove_target(set, t);
                                 target_free(t);
@@ -524,6 +538,7 @@ int service_entry_remove_target_by_dev(struct service_entry *se,
 }
 
 int __service_entry_remove_target(struct service_entry *se, 
+                                  service_rule_type_t type,
                                   const void *dst, int dstlen,
                                   struct target_stats* stats) 
 {
@@ -532,9 +547,10 @@ int __service_entry_remove_target(struct service_entry *se,
         
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
-                        if ((is_sock_target(t) && dstlen == 0) || 
-                            (!is_sock_target(t) && memcmp(t->dst, dst,
-                                                          dstlen) == 0)) {
+                        if (t->type == type && 
+                            ((t->type == RULE_DEMUX && dstlen == 0) || 
+                            (t->type == RULE_FORWARD && 
+                             memcmp(t->dst, dst, dstlen) == 0))) {
                                 target_set_remove_target(set, t);
 
                                 if (stats) {
@@ -558,7 +574,8 @@ int __service_entry_remove_target(struct service_entry *se,
         return 0;
 }
 
-int service_entry_remove_target(struct service_entry *se, 
+int service_entry_remove_target(struct service_entry *se,
+                                service_rule_type_t type,
                                 const void *dst, int dstlen,
                                 struct target_stats *stats) 
 {
@@ -567,7 +584,7 @@ int service_entry_remove_target(struct service_entry *se,
         local_bh_disable();
 
         write_lock(&se->lock);
-        ret = __service_entry_remove_target(se, dst, dstlen, stats);
+        ret = __service_entry_remove_target(se, type, dst, dstlen, stats);
 
         if (ret > 0) {
                 srvtable.instances--;
@@ -598,7 +615,6 @@ static struct service_entry *service_entry_create(gfp_t alloc)
                 return NULL;
 
         memset(se, 0, sizeof(*se));
-
         INIT_LIST_HEAD(&se->target_set);
         rwlock_init(&se->lock);
         atomic_set(&se->refcnt, 1);
@@ -651,30 +667,41 @@ void service_entry_destroy(struct bst_node *n)
         service_entry_put(get_service(n));
 }
 
-void service_resolution_iter_init(struct service_resolution_iter* iter, 
-                                  struct service_entry *se,
-                                  iter_mode_t mode) 
+int service_iter_init(struct service_iter *iter, 
+                      struct service_entry *se,
+                      iter_mode_t mode) 
 {
-        /* lock the se, take the top priority entry and determine the
-         * extent of iteration */
+        /* lock the service entry, take the top priority entry and
+         * determine the extent of iteration */
         struct target_set *set;
 
         memset(iter, 0, sizeof(*iter));
+        
+        iter->mode = mode;
         iter->entry = se;
         read_lock_bh(&se->lock);
 
         if (se->count == 0 || list_empty(&se->target_set))
-                return;
+                return -1;
 
         set = list_first_entry(&se->target_set, struct target_set, lh);
 
+        if (!set)
+                return -1;
+        
+        if (mode == SERVICE_ITER_ANYCAST &&
+            set->flags & SVSF_MULTICAST)
+                return -1;
+ 
         /* round robin or sample */
-        if (mode == SERVICE_ITER_ALL || (set->flags & SVSF_MULTICAST)) {
+        if (mode == SERVICE_ITER_ALL ||
+            mode == SERVICE_ITER_DEMUX ||
+            mode == SERVICE_ITER_FORWARD) {
                 iter->pos = set->list.next;
                 iter->set = set;
         } else {
 #define SAMPLE_SHIFT 32
-                struct target *dst = NULL;
+                struct target *t = NULL;
                 uint64_t sample, sumweight = 0;
 #if defined(OS_LINUX_KERNEL)
                 uint32_t rand;
@@ -684,8 +711,6 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
                 sample = sample << SAMPLE_SHIFT;
                 rem = 0xffffffff;
                 rem = do_div(sample, rem);
-
-                /*sample = (sample << SAMPLE_SHIFT) / 0xffffffff; */
 #else
                 sample = random();
                 sample = (sample << SAMPLE_SHIFT) / RAND_MAX;
@@ -696,57 +721,72 @@ void service_resolution_iter_init(struct service_resolution_iter* iter,
                   LOG_DBG("sample=%llu normalizer=%u\n", 
                   sample, set->normalizer);
                 */
-                list_for_each_entry(dst, &set->list, lh) {
-                        uint64_t weight = dst->weight;
+                list_for_each_entry(t, &set->list, lh) {
+                        uint64_t weight = t->weight;
                         
                         sumweight += (weight << SAMPLE_SHIFT);
 
                         if (sample <= sumweight) {
-                                iter->pos = &dst->lh;
+                                iter->pos = &t->lh;
                                 iter->set = NULL;
-                                return;
+                                return 0;
                         }
                 }
                 
-                if (dst) {
-                        iter->pos = &dst->lh;
+                if (t) {
+                        iter->pos = &t->lh;
                         iter->set = NULL;
                 }
         }
+        return 0;
 }
 
-void service_resolution_iter_destroy(struct service_resolution_iter* iter) 
+void service_iter_destroy(struct service_iter *iter) 
 {
         iter->pos = NULL;
         iter->set = NULL;
         read_unlock_bh(&iter->entry->lock);
 }
 
-struct target *service_resolution_iter_next(struct service_resolution_iter* iter)
+struct target *service_iter_next(struct service_iter *iter)
 {
-        struct target *dst;
+        struct target *t;
 
         iter->last_pos = iter->pos;
 
         if (iter->pos == NULL)
                 return NULL;
 
-        dst = list_entry(iter->pos, struct target, lh);
-
-        if (iter->set) {
-                if (iter->pos == &iter->set->list) {
-                        dst = NULL;
+        while (1) {
+                t = list_entry(iter->pos, struct target, lh);
+                
+                if (iter->set) {
+                        if (iter->pos == &iter->set->list) {
+                                /* We've reached the head again. */
+                                t = NULL;
+                                break;
+                        } else {
+                                iter->pos = t->lh.next;
+                                
+                                if (iter->mode == SERVICE_ITER_ALL)
+                                        break;
+                                else if (iter->mode == SERVICE_ITER_DEMUX &&
+                                         t->type == RULE_DEMUX)
+                                        break;
+                                else if (iter->mode == SERVICE_ITER_FORWARD &&
+                                         t->type == RULE_FORWARD)
+                                        break;
+                        }
                 } else {
-                        iter->pos = dst->lh.next;
+                        iter->pos = NULL;
+                        break;
                 }
-        } else {
-                iter->pos = NULL;
         }
 
-        return dst;
+        return t;
 }
 
-void service_resolution_iter_inc_stats(struct service_resolution_iter *iter, 
+void service_iter_inc_stats(struct service_iter *iter, 
                                        int packets, int bytes) 
 {
         struct target *dst = NULL;
@@ -784,7 +824,7 @@ void service_resolution_iter_inc_stats(struct service_resolution_iter *iter,
         }
 }
 
-int service_resolution_iter_get_priority(struct service_resolution_iter* iter) 
+int service_iter_get_priority(struct service_iter* iter) 
 {
         if (iter == NULL)
                 return 0;
@@ -795,7 +835,7 @@ int service_resolution_iter_get_priority(struct service_resolution_iter* iter)
         return 0;
 }
 
-int service_resolution_iter_get_flags(struct service_resolution_iter* iter)
+int service_iter_get_flags(struct service_iter *iter)
 {
         if (iter == NULL)
                 return 0;
@@ -806,21 +846,17 @@ int service_resolution_iter_get_flags(struct service_resolution_iter* iter)
         return 0;
 }
 
-/*
-  typedef enum {
-  FORWARD,
-  DEMUX,
-  DELAY,
-  DROP,        
-  } service_rule_type_t;
+static const char *rule_str[] = {
+        [RULE_FORWARD] = "FWD",
+        [RULE_DEMUX] = "DMX",
+        [RULE_DELAY] = "DLY",
+        [RULE_DROP] = "DRP"
+};
 
-  static const char *rule_type_names[] = {
-  [FORWARD] = "FWD",
-  [DEMUX] = "DMX",
-  [DELAY] = "DLY",
-  [DROP] = "DRP"
-  };
-*/
+static const char *rule_to_str(service_rule_type_t type)
+{
+        return rule_str[type];
+}
 
 static const char *protocol_to_str(int protocol)
 {
@@ -868,9 +904,10 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
                         len = snprintf(buf + len, buflen - len, 
-                                       "%-64s %-6u %-6u %-6u %-6u %-10u %-10u ", 
+                                       "%-64s %-4u %-4s %-5u %-6u %-6u %-8u %-7u ", 
                                        prefix,
                                        bits,
+                                       rule_to_str(t->type),
                                        set->flags, 
                                        set->priority, 
                                        t->weight,
@@ -884,7 +921,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                         else
                                 len = tot_len;
 
-                        if (is_sock_target(t) && t->out.sk) {
+                        if (t->type == RULE_DEMUX && t->out.sk) {
                                 len = snprintf(buf + len, buflen - len, 
                                                "%-5s %s\n", 
                                                t->out.sk ? 
@@ -897,7 +934,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                                         len = 0;
                                 else
                                         len = tot_len;
-                        } else if (!is_sock_target(t) && t->out.dev) {
+                        } else if (t->type == RULE_FORWARD && t->out.dev) {
                                 len = snprintf(buf + len, buflen - len, 
                                                "%-5s %s\n",
                                                t->out.dev ? 
@@ -969,8 +1006,8 @@ int __service_table_print(char *buf, int buflen)
                 len = tot_len;
 #endif
         len = snprintf(buf + len, buflen + len, 
-                       "%-64s %-6s %-6s %-6s %-6s %-10s %-10s %s\n", 
-                       "prefix", "bits", "flags", "prio", "weight", 
+                       "%-64s %-4s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
+                       "prefix", "bits", "type", "flags", "prio", "weight", 
                        "resolved", "dropped", "target(s)");
         
         tot_len += len;
@@ -1000,13 +1037,13 @@ int service_table_print(char *buf, int buflen)
 static int service_entry_local_match(struct bst_node *n)
 {
         struct service_entry *se = get_service(n);
-        struct target *dst;
+        struct target *t;
 
-        dst = __service_entry_get_target(se, NULL, 0, 
-                                         make_target(NULL), NULL, 
-                                         MATCH_ANY_PROTOCOL);
+        t = __service_entry_get_target(se, RULE_DEMUX, NULL, 0, 
+                                       make_target(NULL), NULL, 
+                                       MATCH_ANY_PROTOCOL);
         
-        if (dst && is_sock_target(dst) && dst->out.sk) 
+        if (t && t->out.sk) 
                 return 1;
 
         return 0;
@@ -1015,13 +1052,13 @@ static int service_entry_local_match(struct bst_node *n)
 static int service_entry_global_match(struct bst_node *n)
 {
         struct service_entry *se = get_service(n);        
-        struct target *dst;
+        struct target *t;
 
-        dst = __service_entry_get_target(se, NULL, 0, 
-                                         make_target(NULL), NULL, 
-                                         MATCH_NO_PROTOCOL);
+        t = __service_entry_get_target(se, RULE_FORWARD, NULL, 0, 
+                                       make_target(NULL), NULL, 
+                                       MATCH_NO_PROTOCOL);
         
-        if (dst && !is_sock_target(dst)) 
+        if (t)
                 return 1;
 
         return 0;
@@ -1029,38 +1066,39 @@ static int service_entry_global_match(struct bst_node *n)
 
 static int service_entry_any_match(struct bst_node *n)
 {
+        /* Any entry will match */        
         return 1;
 }
 
 static struct service_entry *__service_table_find(struct service_table *tbl,
                                                   struct service_id *srvid, 
                                                   int prefix, 
-                                                  service_entry_type_t type) 
+                                                  rule_match_t match) 
 {
         struct service_entry *se = NULL;
         struct bst_node *n;
-        int (*match)(struct bst_node *) = NULL;
+        int (*func)(struct bst_node *) = NULL;
 
         if (!srvid)
                 return NULL;
         
-        switch (type) {
-        case SERVICE_ENTRY_LOCAL:
-                match = service_entry_local_match;
+        switch (match) {
+        case RULE_MATCH_LOCAL:
+                func = service_entry_local_match;
                 break;
-        case SERVICE_ENTRY_GLOBAL:
-        case SERVICE_ENTRY_EXACT:
-                match = service_entry_global_match;
+        case RULE_MATCH_GLOBAL:
+        case RULE_MATCH_EXACT:
+                func = service_entry_global_match;
                 break;
-        case SERVICE_ENTRY_ANY:
-                match = service_entry_any_match;
+        case RULE_MATCH_ANY:
+                func = service_entry_any_match;
                 break;
         }
 
-        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, match);
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, func);
         
         if (n) {
-                if (type != SERVICE_ENTRY_EXACT ||
+                if (match != RULE_MATCH_EXACT ||
                     bst_node_get_prefix_bits(n) == prefix)
                         se = get_service(n);
         }
@@ -1071,13 +1109,13 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
 static struct service_entry *service_table_find(struct service_table *tbl,
                                                 struct service_id *srvid, 
                                                 int prefix, 
-                                                service_entry_type_t type)
+                                                rule_match_t match)
 {
         struct service_entry *se = NULL;
 
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, type);
+        se = __service_table_find(tbl, srvid, prefix, match);
 
         if (se)
                 service_entry_hold(se);
@@ -1093,22 +1131,22 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
 {
         struct service_entry *se = NULL;
         struct sock *sk = NULL;
-        struct target *dst = NULL;
         
         if (!srvid)
                 return NULL;
         
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, SERVICE_ENTRY_LOCAL);
+        se = __service_table_find(tbl, srvid, prefix, RULE_MATCH_LOCAL);
         
         if (se) {
-                dst = __service_entry_get_target(se, NULL, 0, 
-                                                 make_target(NULL), 
-                                                 NULL, protocol);
+                struct target *t;
+                t = __service_entry_get_target(se, RULE_DEMUX, NULL, 0, 
+                                               make_target(NULL), 
+                                               NULL, protocol);
                 
-                if (dst && is_sock_target(dst)) {
-                        sk = dst->out.sk;
+                if (t) {
+                        sk = t->out.sk;
                         sock_hold(sk);
                 }
         }
@@ -1160,9 +1198,9 @@ void service_get_stats(struct table_stats* tstats)
 }
 
 struct service_entry *service_find_type(struct service_id *srvid, int prefix,
-                                        service_entry_type_t type) 
+                                        rule_match_t match) 
 {
-        return service_table_find(&srvtable, srvid, prefix, type);
+        return service_table_find(&srvtable, srvid, prefix, match);
 }
 
 struct sock *service_find_sock(struct service_id *srvid, int prefix, 
@@ -1171,9 +1209,10 @@ struct sock *service_find_sock(struct service_id *srvid, int prefix,
         return service_table_find_sock(&srvtable, srvid, prefix, protocol);
 }
 
-static int service_table_modify(struct service_table *tbl, 
+static int service_table_modify(struct service_table *tbl,
                                 struct service_id *srvid,
-                                uint16_t prefix_bits, 
+                                uint16_t prefix_bits,
+                                service_rule_type_t type,
                                 uint16_t flags, 
                                 uint32_t priority, 
                                 uint32_t weight, 
@@ -1198,7 +1237,7 @@ static int service_table_modify(struct service_table *tbl,
         
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 if (dst || dstlen == 0) {                        
-                        ret = service_entry_modify_target(get_service(n), 
+                        ret = service_entry_modify_target(get_service(n), type, 
                                                           flags, priority, 
                                                           weight, dst, dstlen,
                                                           new_dst, new_dstlen,
@@ -1217,6 +1256,7 @@ static int service_table_modify(struct service_table *tbl,
 
 int service_modify(struct service_id *srvid, 
                    uint16_t prefix_bits, 
+                   service_rule_type_t type,
                    uint16_t flags,
                    uint32_t priority, 
                    uint32_t weight, 
@@ -1226,15 +1266,16 @@ int service_modify(struct service_id *srvid,
                    int new_dstlen, 
                    const union target_out out) 
 {
-        return service_table_modify(&srvtable, srvid, prefix_bits, flags,
+        return service_table_modify(&srvtable, srvid, prefix_bits, type, flags,
                                     priority, weight == 0 ? 1 : weight, 
                                     dst, dstlen, new_dst, new_dstlen, 
                                     out);
 }
 
-static int service_table_add(struct service_table *tbl, 
+static int service_table_add(struct service_table *tbl,
                              struct service_id *srvid,
                              uint16_t prefix_bits, 
+                             service_rule_type_t type,
                              uint16_t flags, 
                              uint32_t priority, 
                              uint32_t weight, 
@@ -1248,6 +1289,22 @@ static int service_table_add(struct service_table *tbl,
         
         if (!srvid)
                 return -EINVAL;
+
+        switch (type) {
+        case RULE_FORWARD:
+                if (dstlen == 0 || dst == NULL)
+                        return -EINVAL;
+                break;
+        case RULE_DEMUX:
+                if (dstlen > 0)
+                        return -EINVAL;
+                break;
+        case RULE_DROP:
+        case RULE_DELAY:
+                LOG_ERR("Rule %s not supported yet!\n",
+                        rule_to_str(type));
+                return -EINVAL;
+        }
 
         if (memcmp(srvid, &default_service, sizeof(default_service)) == 0)
                 prefix_bits = 0;
@@ -1267,7 +1324,8 @@ static int service_table_add(struct service_table *tbl,
                            the table.
                         */
 
-                        ret = __service_entry_add_target(get_service(n), 
+                        ret = __service_entry_add_target(get_service(n),
+                                                         type,
                                                          flags, priority, 
                                                          weight, dst, dstlen,
                                                          out, GFP_ATOMIC);
@@ -1283,7 +1341,7 @@ static int service_table_add(struct service_table *tbl,
         }
 
         if (out.raw) {
-                ret = __service_entry_add_target(se, flags, priority, 
+                ret = __service_entry_add_target(se, type, flags, priority, 
                                                  weight, dst, dstlen, out,
                                                  GFP_ATOMIC);
 
@@ -1323,9 +1381,9 @@ void service_inc_stats(int packets, int bytes)
         }
 }
 
-
 int service_add(struct service_id *srvid, 
                 uint16_t prefix_bits, 
+                service_rule_type_t type,
                 uint16_t flags, 
                 uint32_t priority,
                 uint32_t weight, 
@@ -1334,8 +1392,8 @@ int service_add(struct service_id *srvid,
                 const union target_out out, 
                 gfp_t alloc) 
 {
-        return service_table_add(&srvtable, srvid, 
-                                 prefix_bits, flags, priority, 
+        return service_table_add(&srvtable, srvid, prefix_bits, 
+                                 type, flags, priority, 
                                  weight == 0 ? 1 : weight, dst, dstlen,
                                  out, alloc);
 }
@@ -1362,7 +1420,8 @@ void service_del(struct service_id *srvid, uint16_t prefix_bits)
 
 static void service_table_del_target(struct service_table *tbl, 
                                      struct service_id *srvid,
-                                     uint16_t prefix_bits, 
+                                     uint16_t prefix_bits,
+                                     service_rule_type_t type,
                                      const void *dst, 
                                      int dstlen, 
                                      struct target_stats* stats) {
@@ -1376,7 +1435,7 @@ static void service_table_del_target(struct service_table *tbl,
 
         if (n) {
                 write_lock(&get_service(n)->lock);
-                ret = __service_entry_remove_target(get_service(n), 
+                ret = __service_entry_remove_target(get_service(n), type,
                                                     dst, dstlen, stats);
                 if (ret > 0) {
                         tbl->instances--;
@@ -1396,10 +1455,11 @@ static void service_table_del_target(struct service_table *tbl,
 
 void service_del_target(struct service_id *srvid, 
                         uint16_t prefix_bits, 
+                        service_rule_type_t type,
                         const void *dst, int dstlen,
                         struct target_stats* stats) 
 {
-        return service_table_del_target(&srvtable, srvid, prefix_bits, 
+        return service_table_del_target(&srvtable, srvid, prefix_bits, type,
                                         dst, dstlen, stats);
 }
 
@@ -1457,6 +1517,7 @@ static int del_target_func(struct bst_node *n, void *arg)
 {
         struct service_entry *se = get_service(n);
         struct _d {
+                service_rule_type_t type;
                 const void *d_dst;
                 int d_len;
         } *d = (struct _d *)arg;
@@ -1464,7 +1525,8 @@ static int del_target_func(struct bst_node *n, void *arg)
 
         write_lock_bh(&se->lock);
 
-        ret = __service_entry_remove_target(se, d->d_dst, d->d_len, NULL);
+        ret = __service_entry_remove_target(se, d->type, 
+                                            d->d_dst, d->d_len, NULL);
 
         if(ret == 1 && list_empty(&se->target_set))
                 should_remove = 1;
@@ -1476,7 +1538,7 @@ static int del_target_func(struct bst_node *n, void *arg)
                  * lock is already acquired*/
                 srvtable.instances--;
         }
-
+        
         if (should_remove) {
                 /* Removing the node also puts the service entry */
                 bst_node_remove(n);
@@ -1486,14 +1548,16 @@ static int del_target_func(struct bst_node *n, void *arg)
         return ret;
 }
 
-static int service_table_del_target_all(struct service_table *tbl, 
+static int service_table_del_target_all(struct service_table *tbl,
+                                        service_rule_type_t type,
                                         const void *dst, int dstlen) 
 {
         int ret = 0;
         struct {
+                service_rule_type_t type;
                 const void *d_dst;
                 int d_len;
-        } d = { dst, dstlen };
+        } d = { type, dst, dstlen };
         
         write_lock_bh(&tbl->lock);
 
@@ -1505,9 +1569,10 @@ static int service_table_del_target_all(struct service_table *tbl,
         return ret;
 }
 
-int service_del_target_all(const void *dst, int dstlen) 
+int service_del_target_all(service_rule_type_t type, 
+                           const void *dst, int dstlen) 
 {
-        return service_table_del_target_all(&srvtable, dst, dstlen);
+        return service_table_del_target_all(&srvtable, type, dst, dstlen);
 }
 
 void __service_table_destroy(struct service_table *tbl) 

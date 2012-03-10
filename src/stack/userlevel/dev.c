@@ -590,7 +590,7 @@ int netdev_populate_table(int sizeof_priv,
                                           broad, sizeof(broad)));
                 }
 #endif
-                service_add(&default_service, 0, 0, 
+                service_add(&default_service, 0, RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
                             &dev->ipv4.broadcast, 

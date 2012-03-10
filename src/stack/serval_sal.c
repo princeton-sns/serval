@@ -1,8 +1,10 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
  *
- * Implementation of the Service Access layer (SAL).
+ * The Service Access layer (SAL).
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ *          Rob Kiefer <rkiefer@cs.princeton.edu>
  * 
  *
  *	This program is free software; you can redistribute it and/or
@@ -1097,43 +1099,6 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                                sizeof(saddr->sin_addr));
                 }
         }
-#if 0
-        if (has_dst_ip) {
-                nexthop = daddr = usin->sin_addr.s_addr;
-                if (inet->opt && inet->opt->srr) {
-                        if (!daddr)
-                                return -EINVAL;
-                        nexthop = inet->opt->faddr;
-                }
-
-                tmp = ip_route_connect(&rt, nexthop, inet->inet_saddr,
-                                       RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
-                                       IPPROTO_TCP,
-                                       inet->inet_sport, usin->sin_port, sk, 1);
-                if (tmp < 0) {
-                        if (tmp == -ENETUNREACH)
-			IP_INC_STATS_BH(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
-                        return tmp;
-                }
-                
-                if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
-                        ip_rt_put(rt);
-                        return -ENETUNREACH;
-                }
-                
-                if (!inet->opt || !inet->opt->srr)
-                        daddr = rt->rt_dst;
-                
-                if (!inet->inet_saddr)
-                        inet->inet_saddr = rt->rt_src;
-                inet->inet_rcv_saddr = inet->inet_saddr;
-                
-                /* OK, now commit destination to socket.  */
-                //sk->sk_gso_type = SKB_GSO_TCPV4;
-                sk->sk_gso_type = 0;
-                sk_setup_caps(sk, &rt->dst);
-        }
-#endif
         /* Disable segmentation offload */
         sk->sk_gso_type = 0;
 
@@ -2914,7 +2879,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                       struct sock **sk)
 {
         struct service_entry* se = NULL;
-        struct service_resolution_iter iter;
+        struct service_iter iter;
         struct target *target = NULL;
         unsigned int hdr_len = ctx->length;
         unsigned int num_forward = 0;
@@ -2939,27 +2904,28 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 return SAL_RESOLVE_NO_MATCH;
         }
         
-	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
-
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
+                return SAL_RESOLVE_ERROR;
+        
         /*
           Send to all targets listed for this service.
         */
-        target = service_resolution_iter_next(&iter);
+        target = service_iter_next(&iter);
 
         if (!target) {
                 LOG_INF("No target to forward on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, data_len);
-                service_resolution_iter_destroy(&iter);
+                service_iter_inc_stats(&iter, -1, data_len);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
                 return SAL_RESOLVE_NO_MATCH;
         }
 
-        service_resolution_iter_inc_stats(&iter, 1, data_len);
+        service_iter_inc_stats(&iter, 1, data_len);
                 
         while (target) {
                 struct target *next_target;
                 
-                next_target = service_resolution_iter_next(&iter);
+                next_target = service_iter_next(&iter);
                 
                 /* It is kind of unclear how to handle DEMUX vs
                    FORWARD rules here. Does it make sense to have both
@@ -3081,9 +3047,9 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
         }
 
         if (num_forward == 0)
-                service_resolution_iter_inc_stats(&iter, -1, -data_len);
+                service_iter_inc_stats(&iter, -1, -data_len);
 
-        service_resolution_iter_destroy(&iter);
+        service_iter_destroy(&iter);
         service_entry_put(se);
 
         return err;
@@ -3541,7 +3507,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         struct serval_hdr *sh;
         int hdr_len = sizeof(*sh);
 	int err = -1;
-        struct service_resolution_iter iter;
+        struct service_iter iter;
         struct sk_buff *cskb = NULL;
         int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
                                     extra 8 bytes are coming from at
@@ -3651,9 +3617,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 return serval_sal_do_xmit(skb);
         }
 
-        /* TODO - prefix, flags??*/
-        //ssk->srvid_flags;
-        //ssk->srvid_prefix;
 
         LOG_DBG("Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
@@ -3669,18 +3632,19 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	service_resolution_iter_init(&iter, se, SERVICE_ITER_ALL);
+	if (service_iter_init(&iter, se, SERVICE_ITER_ALL) < 0)
+                return -1;
 
         /*
           Send to all destinations resolved for this service.
         */
-	target = service_resolution_iter_next(&iter);
+	target = service_iter_next(&iter);
 	
         if (!target) {
                 LOG_DBG("No device to transmit on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, -dlen);
+                service_iter_inc_stats(&iter, -1, -dlen);
                 kfree_skb(skb);
-                service_resolution_iter_destroy(&iter);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
                 return -EHOSTUNREACH;
         }
@@ -3691,10 +3655,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 int local_err = 0;
 
                 if (cskb == NULL) {
-                        service_resolution_iter_inc_stats(&iter, 1, dlen);
+                        service_iter_inc_stats(&iter, 1, dlen);
                 }
                 
-                next_target = service_resolution_iter_next(&iter);
+                next_target = service_iter_next(&iter);
 		
                 if (next_target == NULL) {
 			cskb = skb;
@@ -3830,7 +3794,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memset(&inet_sk(sk)->inet_daddr, 0, 
                sizeof(inet_sk(sk)->inet_daddr));
                    
-        service_resolution_iter_destroy(&iter);
+        service_iter_destroy(&iter);
 	service_entry_put(se);
 
 	return err;

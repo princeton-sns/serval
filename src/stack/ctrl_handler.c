@@ -93,6 +93,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 #endif
                 err = service_add(&entry->srvid, 
                                   prefix_bits, 
+                                  RULE_FORWARD,
                                   entry->srvid_flags, 
                                   entry->priority, 
                                   entry->weight,
@@ -166,7 +167,9 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 
                 memset(&tstat, 0, sizeof(tstat));
                 
-                err = service_entry_remove_target(se, &entry->address, 
+                err = service_entry_remove_target(se,
+                                                  RULE_FORWARD, 
+                                                  &entry->address, 
                                                   sizeof(entry->address), 
                                                   &tstat);
 
@@ -247,6 +250,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
 
                 err = service_modify(&entry_old->srvid,
                                      prefix_bits,
+                                     RULE_FORWARD,
                                      entry_old->srvid_flags, 
                                      entry_new->priority, 
                                      entry_new->weight, 
@@ -279,7 +283,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmg = (struct ctrlmsg_service *)cm;
         struct service_entry *se;
-        struct service_resolution_iter iter;
+        struct service_iter iter;
         unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         struct target *t;
 
@@ -310,9 +314,9 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                 cres->xid = cmg->xid;
 
                 memset(&iter, 0, sizeof(iter));
-                service_resolution_iter_init(&iter, se, SERVICE_ITER_ALL);
+                service_iter_init(&iter, se, SERVICE_ITER_FORWARD);
 
-                while ((t = service_resolution_iter_next(&iter)) != NULL) {
+                while ((t = service_iter_next(&iter)) != NULL) {
                         struct service_info *entry = &cres->service[i++];
 
                         service_get_id(se, &entry->srvid);
@@ -329,14 +333,12 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                         }
 #endif
                         entry->srvid_prefix_bits = service_get_prefix_bits(se);
-                        entry->srvid_flags = 
-                                service_resolution_iter_get_flags(&iter);
+                        entry->srvid_flags = service_iter_get_flags(&iter);
                         entry->weight = t->weight;
-                        entry->priority = 
-                                service_resolution_iter_get_priority(&iter);
+                        entry->priority = service_iter_get_priority(&iter);
                 }
 
-                service_resolution_iter_destroy(&iter);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
 
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);

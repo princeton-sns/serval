@@ -586,8 +586,12 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 err = sk_stream_wait_connect(sk, &timeo);
 
                 if (err) {
-                        LOG_DBG("sk_stream_wait_connect returned err=%d\n",
-                                err);
+                        if (err == -ERESTARTSYS) {
+                                LOG_DBG("sk_stream_wait_connect interrupted\n");
+                        } else {
+                                LOG_DBG("sk_stream_wait_connect err=%d\n",
+                                        err);
+                        }
                         goto out;
                 }
                 

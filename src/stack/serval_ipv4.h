@@ -20,7 +20,7 @@ static inline void serval_flow_init_output(struct flowi *fl, int oif,
                                            __be16 dport, __be32 sport)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        flowi4_init_output((struct flowi4 *)fl, oif, mark, tos, scope,
+        flowi4_init_output(&fl->u.ip4, oif, mark, tos, scope,
                            proto, flags, daddr, saddr, dport, sport);
 #else
         memset(fl, 0, sizeof(*fl));
@@ -49,7 +49,7 @@ struct rtable *serval_ip_route_output_flow(struct net *net,
         struct rtable *rt = NULL;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        rt = ip_route_output_flow(net, (struct flowi4 *)fl, sk);
+        rt = ip_route_output_flow(net, &fl->u.ip4, sk);
 
         if (IS_ERR(rt))
                 return NULL;
@@ -91,21 +91,13 @@ static inline struct rtable *serval_ip_route_output(struct net *net,
 static inline void serval_security_sk_classify_flow(struct sock *sk,
                                                     struct flowi *fl)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        security_sk_classify_flow(sk, flowi4_to_flowi((struct flowi4 *)fl));
-#else
         security_sk_classify_flow(sk, fl);
-#endif
 }
 
 static inline void serval_security_req_classify_flow(struct request_sock *req,
-                                                    struct flowi *fl)
+                                                     struct flowi *fl)
 {
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39))
-        security_req_classify_flow(req, flowi4_to_flowi((struct flowi4 *)fl));
-#else
         security_req_classify_flow(req, fl);
-#endif
 }
 
 struct dst_entry *serval_ipv4_req_route(struct sock *sk,

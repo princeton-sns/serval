@@ -391,8 +391,8 @@ void serval_sock_hash(struct sock *sk)
                         SERVICE_ID_MAX_PREFIX_BITS : 
                         ssk->srvid_prefix_bits;
 
-                err = service_add(ssk->hash_key, 
-                                  ssk->hash_key_len, ssk->srvid_flags, 
+                err = service_add(ssk->hash_key, ssk->hash_key_len, 
+                                  RULE_DEMUX, ssk->srvid_flags, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
                                   NULL, 0, make_target(sk), GFP_ATOMIC);
@@ -438,7 +438,9 @@ void serval_sock_unhash(struct sock *sk)
                 service_del_target(&ssk->local_srvid,
                                    ssk->srvid_prefix_bits == 0 ?
                                    SERVICE_ID_MAX_PREFIX_BITS :
-                                   ssk->srvid_prefix_bits, NULL, 0, NULL);
+                                   ssk->srvid_prefix_bits, 
+                                   RULE_DEMUX,
+                                   NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
