@@ -121,7 +121,7 @@ int message_channel_base_initialize(message_channel_t *channel)
         return -1;
     }
     
-    err = pipe(base->pipefd);
+    err = signal_init(&base->exit_signal);
 
     if (err == -1)
         return -1;
@@ -194,7 +194,6 @@ int message_channel_base_initialize(message_channel_t *channel)
     
     channel->state = CHANNEL_INITIALIZED;
     base->running = 1;
-
 out:
     return err;
 bind_error:
@@ -235,8 +234,7 @@ void message_channel_base_finalize(message_channel_t *channel)
         base->sock = -1;
     }
 
-    close(base->pipefd[0]);
-    close(base->pipefd[1]);
+    signal_destroy(&base->exit_signal);
 
     channel->state = CHANNEL_CREATED;
 }
@@ -246,19 +244,20 @@ static void *message_channel_base_task(void *channel)
     message_channel_base_t *base = (message_channel_base_t *)channel;
     channel_addr_t peer;
     socklen_t addrlen = sizeof(peer);
+    unsigned char buffer[RECV_BUFFER_SIZE];
     ssize_t ret = -1;
 
     while (base->running) {
 
         if (base->native_socket) {
-            ret = recvfrom(base->sock, base->buffer,
-                           base->buffer_len, 0,
+            ret = recvfrom(base->sock, buffer,
+                           RECV_BUFFER_SIZE, 0,
                            &peer.sa, &addrlen);
         } 
 #if defined(ENABLE_USERMODE)
         else {
-            ret = recvfrom_sv(base->sock, base->buffer,
-                              base->buffer_len, 0,
+            ret = recvfrom_sv(base->sock, buffer,
+                              RECV_BUFFER_SIZE, 0,
                               &peer.sa, &addrlen);
         }
 #endif
@@ -271,7 +270,7 @@ static void *message_channel_base_task(void *channel)
                 pfd[0].events = POLLIN | POLLERR | POLLHUP;
                 pfd[0].revents = 0;
                 
-                pfd[1].fd = base->pipefd[0];
+                pfd[1].fd = signal_get_fd(&base->exit_signal);
                 pfd[1].events = POLLIN | POLLERR | POLLHUP;
                 pfd[1].revents = 0;
                 
@@ -305,8 +304,8 @@ static void *message_channel_base_task(void *channel)
             base->running = 0;
         } else {
             LOG_DBG("%s Received a message len=%zd\n", 
-               base->channel.name, ret);
-            base->channel.ops->recv(&base->channel, base->buffer, (size_t)ret, 
+                    base->channel.name, ret);
+            base->channel.ops->recv(&base->channel, buffer, (size_t)ret, 
                                     &peer.sa, addrlen);
         }
     }
@@ -434,10 +433,13 @@ int message_channel_base_start(message_channel_t *channel)
     if (channel->state == CHANNEL_INITIALIZED) {
         channel->state = CHANNEL_RUNNING;
         
+        base->should_join = 1;
+
         ret = pthread_create(&base->thread, NULL, 
                              message_channel_base_task, channel);
         if (ret != 0) {
             channel->state = CHANNEL_INITIALIZED;
+            base->should_join = 0;
         }
     }
     pthread_mutex_unlock(&channel->lock);
@@ -448,35 +450,35 @@ int message_channel_base_start(message_channel_t *channel)
 void message_channel_base_stop(message_channel_t *channel)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
+    int ret;
 
     assert(channel);
 
     pthread_mutex_lock(&channel->lock);
 
     if (channel->state == CHANNEL_RUNNING) {
-        char c = 1;
-        int ret;
 
         LOG_DBG("Stopping %s channel\n", channel->name);
         base->running = 0;
         pthread_mutex_unlock(&channel->lock);
 
-        ret = write(base->pipefd[1], &c, 1);
+        ret = signal_raise(&base->exit_signal);
 
         if (ret == -1) {
-            LOG_ERR("Could not write to pipe\n");
-        } else {
-
-            ret = pthread_join(base->thread, NULL);
-            
-            if (ret != 0) {
-                LOG_ERR("Could not join with send channel thread\n");
-            } else {
-                LOG_DBG("Channel %s stopped\n", channel->name);
-            }
+            LOG_ERR("Could not raise signal\n");
         }
-        return;
     }
+
+    if (base->should_join) {
+        ret = pthread_join(base->thread, NULL);
+        
+        if (ret != 0) {
+            LOG_ERR("Could not join with send channel thread\n");
+        } else {
+            LOG_DBG("Channel %s stopped\n", channel->name);
+        }
+    }
+
     pthread_mutex_unlock(&channel->lock);
 }
 
@@ -579,18 +581,21 @@ int message_channel_base_init(message_channel_base_t *base,
     return 0;
 }
 
-message_channel_base_t *message_channel_base_create(channel_key_t *key,
-                                                    message_channel_ops_t *ops)
+message_channel_t *message_channel_base_create(channel_key_t *key,
+                                               size_t size,
+                                               message_channel_ops_t *ops)
 {
     message_channel_base_t *base;
-
-    base = malloc(sizeof(message_channel_base_t) + RECV_BUFFER_SIZE);
+    
+    if (size < sizeof(message_channel_base_t))
+        return NULL;
+    
+    base = malloc(size);
     
     if (!base)
         return NULL;
 
-    memset(base, 0, sizeof(message_channel_base_t) + RECV_BUFFER_SIZE);
-    base->buffer_len = RECV_BUFFER_SIZE;
+    memset(base, 0, size);
 
     if (message_channel_base_init(base, key->type,
                                   key->sock_type,
@@ -603,5 +608,5 @@ message_channel_base_t *message_channel_base_create(channel_key_t *key,
 
     base->channel.flags = key->flags;
 
-    return base;
+    return &base->channel;
 }

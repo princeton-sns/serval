@@ -376,25 +376,7 @@ message_channel_ops_t netlink_ops = {
 
 message_channel_t *message_channel_netlink_create(channel_key_t *key)
 {
-    message_channel_netlink_t *mcn;
-
-    mcn = malloc(sizeof(message_channel_netlink_t));
-
-    if (mcn == NULL) {
-        LOG_ERR("Could not allocate netlink message channel memory");
-        return NULL;
-    }
-
-    memset(mcn, 0, sizeof(*mcn));
-
-    message_channel_base_init(&mcn->base,
-                              MSG_CHANNEL_NETLINK,
-                              key->sock_type, key->protocol,
-                              key->local, key->local_len,
-                              key->peer, key->peer_len,
-                              &netlink_ops);
-
-    mcn->reliable = 1;
-
-    return &mcn->base.channel;
+    return message_channel_base_create(key, 
+                                       sizeof(message_channel_netlink_t),
+                                       &netlink_ops);
 }

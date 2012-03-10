@@ -15,6 +15,7 @@
 #define MESSAGE_CHANNEL_BASE_H_
 
 #include <common/platform.h>
+#include <common/signal.h>
 #include <libservalctrl/message_channel.h>
 #include <netinet/in.h>
 #include <sys/un.h>
@@ -49,23 +50,22 @@ typedef struct message_channel_base {
     int sock;
     int sock_type;
     int protocol;
-    int running;
+    short running;
+    short should_join;
     int native_socket;
     channel_addr_t local;
     socklen_t local_len;
     channel_addr_t peer;
     socklen_t peer_len;
-    int pipefd[2];
+    struct signal exit_signal;
     pthread_t thread;
-    /* receive buffer */
-    size_t buffer_len;
-    unsigned char buffer[0];
 } message_channel_base_t;
 
 #define MAX_SEND_RETRIES 10
 
-message_channel_base_t *message_channel_base_create(channel_key_t *key,
-                                                    message_channel_ops_t *ops);
+message_channel_t *message_channel_base_create(channel_key_t *key,
+                                               size_t size,
+                                               message_channel_ops_t *ops);
 int message_channel_base_init(message_channel_base_t *base,
                               message_channel_type_t type, 
                               int sock_type,

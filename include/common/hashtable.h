@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-#ifndef _HASHTABLE_
-#define _HASHTABLE_
+#ifndef _HASHTABLE_H_
+#define _HASHTABLE_H_
 
 #include "hash.h"
 #include "list.h"
@@ -63,4 +63,4 @@ int hashelm_init(struct hashelm *he, hashfn_t hashfn,
 #define hashtable_lookup_entry(tbl, key, hashfn, type, member)          \
     container_of(hashtable_lookup(tbl, key, hashfn), type, member)
 
-#endif /* _HASHTABLE_ */
+#endif /* _HASHTABLE_H_ */

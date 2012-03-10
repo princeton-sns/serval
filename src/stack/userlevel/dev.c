@@ -594,7 +594,7 @@ int netdev_populate_table(int sizeof_priv,
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
                             &dev->ipv4.broadcast, 
-                            sizeof(dev->ipv4.broadcast), dev, 0);
+                            sizeof(dev->ipv4.broadcast), make_target(dev), 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 

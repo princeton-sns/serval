@@ -23,19 +23,14 @@ struct service_id;
     Each set contains destinations with the same priority.
 */
 struct service_entry {
-        /*
-	union {
-		struct dst_entry dst;
-	} u;
-        */
         struct bst_node *node;
-        struct list_head dest_set;
+        struct list_head target_set;
         unsigned int count;
         atomic_t packets_resolved;
         atomic_t bytes_resolved;
         atomic_t bytes_dropped;
         atomic_t packets_dropped;
-        rwlock_t destlock;
+        rwlock_t lock;
         atomic_t refcnt;
 };
 
@@ -46,64 +41,70 @@ struct service_entry {
    a particular priority.
 */
 struct service_resolution_iter {
-    struct service_entry* entry;
-    struct dest_set *destset;
-    struct list_head *dest_pos;
-    struct list_head *last_pos;
+        struct service_entry* entry;
+        struct target_set *set;
+        struct list_head *pos;
+        struct list_head *last_pos;
 };
 
 struct table_stats {
-    uint32_t instances;
-    uint32_t services;
-    uint32_t packets_resolved;
-    uint32_t bytes_resolved;
-    uint32_t packets_dropped;
-    uint32_t bytes_dropped;
+        uint32_t instances;
+        uint32_t services;
+        uint32_t packets_resolved;
+        uint32_t bytes_resolved;
+        uint32_t packets_dropped;
+        uint32_t bytes_dropped;
 };
 
 /**
-
-
-   TODO - should this include the device ifindex?
+   Statistics for each target.
 */
-struct dest_stats {
-    uint32_t duration_sec;
-    uint32_t duration_nsec;
-    uint32_t packets_resolved;
-    uint32_t bytes_resolved;
-    uint32_t packets_dropped;
-    uint32_t bytes_dropped;
+struct target_stats {
+        uint32_t duration_sec;
+        uint32_t duration_nsec;
+        uint32_t packets_resolved;
+        uint32_t bytes_resolved;
+        uint32_t packets_dropped;
+        uint32_t bytes_dropped;
 };
 
 /**
    A set of destinations sharing the same priority.
- */
-struct dest_set {
-        struct list_head ds;
-        struct list_head dest_list;
+*/
+struct target_set {
+        struct list_head lh;
+        struct list_head list;
         uint32_t normalizer;
         uint32_t priority;
         uint16_t flags;
         uint16_t count;
 };
 
-#define is_sock_dest(dest) ((dest)->dstlen == 0)
+#define is_sock_target(target) ((target)->dstlen == 0)
+
+union target_out {
+        void *raw;
+        struct net_device *dev;
+        struct sock *sk;
+};
+
+static inline union target_out make_target(void *t)
+{
+        union target_out out = { t };
+        return out;
+}
 
 /**
    A destination, either a local socket or remote host.
- */
-struct dest {
+*/
+struct target {
         struct list_head lh;
         uint32_t weight;
         atomic_t packets_resolved;
         atomic_t bytes_resolved;
         atomic_t bytes_dropped;
         atomic_t packets_dropped;
-
-        union {
-            struct net_device *dev;
-            struct sock *sk;
-        } dest_out;
+        union target_out out;
         int dstlen;
         unsigned char dst[0]; /* Must be last */
 };
@@ -117,36 +118,38 @@ typedef enum {
 
 void service_inc_stats(int packets, int bytes);
 void service_get_stats(struct table_stats* tstats);
+
 struct net_device *service_entry_get_dev(struct service_entry *se,
                                          const char *ifname);
-int service_entry_remove_dest_by_dev(struct service_entry *se,
-                                     const char *ifname);
+int service_entry_remove_target_by_dev(struct service_entry *se,
+                                       const char *ifname);
 
-int service_entry_remove_dest(struct service_entry *se,
-                              const void *dst, int dstlen, struct dest_stats *dstats);
+int service_entry_remove_target(struct service_entry *se,
+                                const void *dst, int dstlen, 
+                                struct target_stats *stats);
 
-int service_entry_add_dest(struct service_entry *se,
-                           uint16_t flags,
-                           uint32_t priority,
-                           uint32_t weight,
-                           const void *dst,
-                           int dstlen,
-                           const void *dest_out,
-                           gfp_t alloc);
+int service_entry_add_target(struct service_entry *se,
+                             uint16_t flags,
+                             uint32_t priority,
+                             uint32_t weight,
+                             const void *dst,
+                             int dstlen,
+                             const union target_out out,
+                             gfp_t alloc);
 
-int service_entry_modify_dest(struct service_entry *se,
-                              uint16_t flags,
-                              uint32_t priority,
-                              uint32_t weight,
-                              const void *dst,
-                              int dstlen,
-                              const void *new_dst,
-                              int new_dstlen,
-                              const void *dest_out,
-                              gfp_t alloc);
+int service_entry_modify_target(struct service_entry *se,
+                                uint16_t flags,
+                                uint32_t priority,
+                                uint32_t weight,
+                                const void *dst,
+                                int dstlen,
+                                const void *new_dst,
+                                int new_dstlen,
+                                const union target_out out,
+                                gfp_t alloc);
 
-void service_entry_inc_dest_stats(struct service_entry *se, const void *dst, 
-                                  int dstlen, int packets, int bytes);
+void service_entry_inc_target_stats(struct service_entry *se, const void *dst, 
+                                    int dstlen, int packets, int bytes);
 
 typedef enum {
         SERVICE_ITER_ALL, /* Return all entries */
@@ -156,30 +159,35 @@ typedef enum {
 void service_resolution_iter_init(struct service_resolution_iter *iter, 
                                   struct service_entry *se, iter_mode_t mode);
 void service_resolution_iter_destroy(struct service_resolution_iter *iter);
-struct dest *service_resolution_iter_next(struct service_resolution_iter *iter);
+struct target *service_resolution_iter_next(struct service_resolution_iter *iter);
 void service_resolution_iter_inc_stats(struct service_resolution_iter *iter, 
                                        int packets, int bytes);
 int service_resolution_iter_get_priority(struct service_resolution_iter *iter);
 int service_resolution_iter_get_flags(struct service_resolution_iter *iter);
 
-int service_entry_dest_fill(struct service_entry *se, void *dst,
-                            int dstlen);
+int service_entry_target_fill(struct service_entry *se, void *dst,
+                              int dstlen);
+
+int service_get_id(const struct service_entry *se, struct service_id *srvid);
+unsigned char service_get_prefix_bits(const struct service_entry *se);
 
 int service_add(struct service_id *srvid, uint16_t prefix_bits, 
                 uint16_t flags, uint32_t priority, uint32_t weight,
-		const void *dst, int dstlen, const void *dest_out, gfp_t alloc);
+		const void *dst, int dstlen, const union target_out out, 
+                gfp_t alloc);
 
 int service_modify(struct service_id *srvid, uint16_t prefix_bits, 
                    uint16_t flags, uint32_t priority, uint32_t weight,
                    const void *dst, int dstlen, 
                    const void *new_dst, int new_dstlen,
-                   const void *dest_out);
+                   const union target_out out);
 
 void service_del(struct service_id *srvid, uint16_t prefix_bits);
-void service_del_dest(struct service_id *srvid, uint16_t prefix_bits,
-                      const void *dst, int dstlen, struct dest_stats *stats);
+void service_del_target(struct service_id *srvid, uint16_t prefix_bits,
+                        const void *dst, int dstlen, 
+                        struct target_stats *stats);
 
-int service_del_dest_all(const void *dst, int dstlen);
+int service_del_target_all(const void *dst, int dstlen);
 int service_del_dev_all(const char *devname);
 
 struct service_entry *service_find_type(struct service_id *srvid,
@@ -210,29 +218,5 @@ void service_table_read_lock(void);
 void service_table_read_unlock(void);
 int __service_table_print(char *buf, int buflen);
 int service_table_print(char *buf, int buflen);
-
-static inline struct service_entry *skb_service_entry(struct sk_buff *skb)
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
-#define _skb_refdst dst
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
-#define _skb_refdst _skb_dst
-#endif
-        if (skb->_skb_refdst == 0)
-                return NULL;
-        return (struct service_entry *)skb->_skb_refdst;
-}
-
-static inline void skb_set_service_entry(struct sk_buff *skb,
-                                         struct service_entry *se)
-{
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,31)
-        skb->dst = (struct dst_entry *)se;
-#elif LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
-        skb->_skb_dst = (unsigned long)se;
-#else
-        skb->_skb_refdst = (unsigned long)se;
-#endif
-}
 
 #endif /* _SERVICE_H_ */

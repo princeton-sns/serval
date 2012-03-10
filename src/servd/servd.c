@@ -31,6 +31,7 @@
 #include <netinet/serval.h>
 #include <serval/platform.h>
 #include <common/timer.h>
+#include <common/signal.h>
 #include <common/debug.h>
 #include <common/list.h>
 #include <pthread.h>
@@ -44,7 +45,7 @@
 #endif
 
 static int should_exit = 0;
-static int p[2] = { -1, -1 };
+static struct signal exit_signal;
 static struct timer_queue tq;
 static struct service_id default_service;
 
@@ -56,8 +57,7 @@ struct servd_context {
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
-        int reregister_signal_waiting;
-        int reregister_signal[2];
+        struct signal reregister_signal;
         unsigned int num_regs;
         pthread_mutex_t lock; /* Protects the registration list */
 };
@@ -285,107 +285,9 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
-
-enum {
-        SIGNAL_ERROR = -1,
-        SIGNAL_TIMEOUT = 0,
-        SIGNAL_RAISED = 1,
-};
-
-static void signal_raise(int sig[2])
-{
-        struct pollfd fds;
-        const char r = 'r';
-        int ret = 0;
-
-        memset(&fds, 0, sizeof(fds));
-
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-
-        if (poll(&fds, 1, 0) > 0) {
-                LOG_DBG("Signal already raised\n");
-                return;
-        }
-
-        ret = write(sig[1], &r, 1);
-
-        if (ret < 0) {
-                LOG_ERR("Could not signal quit!\n");
-        }
-}
-
-static int signal_lower(int sig[2])
-{
-        struct pollfd fds;
-        char r = 'r';
-        int ret = 0;
-
-        while (1) {
-                memset(&fds, 0, sizeof(fds));
-                
-                fds.fd = sig[0];
-                fds.events = POLLIN;
-                
-                if (poll(&fds, 1, 0) <= 0)
-                        break;
-                
-                ret = read(sig[0], &r, 1);
-        }
-
-        return ret;
-}
-
-static int signal_wait(int sig[2], int timeout)
-{
-        struct pollfd fds;
-        char r = 'r';
-        int ret = 0;
-        
-        memset(&fds, 0, sizeof(fds));
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-        
-        ret = poll(&fds, 1, timeout);
-
-        if (ret <= 0)
-                return ret;
-
-        ret = read(sig[0], &r, 1);
-
-        signal_lower(sig);
-
-        return SIGNAL_RAISED;
-}
-
-#ifdef ENABLE_NOT_USED
-static int signal_is_raised(int sig[2])
-{
-        struct pollfd fds;
-        
-        memset(&fds, 0, sizeof(fds));
-        
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-        
-        if (poll(&fds, 1, 0) > 0)
-                return SIGNAL_SET;
-
-        return SIGNAL_TIMEOUT;
-}
-#endif
-
 static void signal_handler(int sig)
 {
-        ssize_t ret;
-        char q = 'q';
-	should_exit = 1;
-
-        ret = write(p[1], &q, 1);
-
-        if (ret < 0) {
-                LOG_ERR("Could not signal quit!\n");
-        }
+        signal_raise(&exit_signal);
 }
 
 /*
@@ -446,14 +348,11 @@ int servd_interface_up(const char *ifname,
                 /* Synchronize with callback before redoing
                    registrations. We need the default service route to
                    send them out. */
-                ctx->reregister_signal_waiting = 1;
-                
                 printf("Requesting default service route info\n");
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
 
-                signal_wait(ctx->reregister_signal, 5000);
-                ctx->reregister_signal_waiting = 0;
+                signal_wait(&ctx->reregister_signal, 5000);
         }
 
         LOG_DBG("Resending registrations\n");
@@ -638,8 +537,8 @@ static int local_service_get_result(struct hostctrl *hc,
            services now that we have a new default service router
            (which was probably a result of an interface up/down). */
         if (ctx->router_ip_set && !ctx->router && 
-            ctx->reregister_signal_waiting) {
-                signal_raise(ctx->reregister_signal);
+            signal_num_waiting(&ctx->reregister_signal)) {
+                signal_raise(&ctx->reregister_signal);
         }
 
         return ret;
@@ -841,18 +740,18 @@ int main(int argc, char **argv)
                 return -1;
         }
 
-	ret = pipe(p);
+	ret = signal_init(&exit_signal);
 
         if (ret == -1) {
-		LOG_ERR("Could not open pipe\n");
-		goto fail_pipe1;
+		LOG_ERR("Could not init exit signal\n");
+		goto fail_exit_signal;
         }
 
-	ret = pipe(ctx.reregister_signal);
+	ret = signal_init(&ctx.reregister_signal);
 
         if (ret == -1) {
-		LOG_ERR("Could not open reregister signal pipe\n");
-		goto fail_pipe2;
+		LOG_ERR("Could not init reregister signal\n");
+		goto fail_reregister_signal;
         }
 
 	ret = libservalctrl_init();
@@ -902,12 +801,10 @@ int main(int argc, char **argv)
            querying for the current one and modifying it in the
            resulting callback. */
         if (ctx.router_ip_set && !ctx.router) {
-                ctx.reregister_signal_waiting = 1;
                 hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-                if (signal_wait(ctx.reregister_signal, 3000) == 0) {
+                if (signal_wait(&ctx.reregister_signal, 3000) == 0) {
                         LOG_DBG("Timeout when retrieving default entry\n");
                 }
-                ctx.reregister_signal_waiting = 0;
         }
 
 #if defined(OS_LINUX)
@@ -952,8 +849,8 @@ int main(int argc, char **argv)
                 FD_SET(nlh.fd, &readfds);
 		maxfd = MAX(nlh.fd, maxfd);
 #endif
-                FD_SET(p[0], &readfds);               
-                maxfd = MAX(p[0], maxfd);
+                FD_SET(signal_get_fd(&exit_signal), &readfds);
+                maxfd = MAX(signal_get_fd(&exit_signal), maxfd);
 
                 if (timer_next_timeout_timeval(&tq, &timeout))
                         t = &timeout;
@@ -979,7 +876,7 @@ int main(int argc, char **argv)
                                 rtnl_read(&nlh);
                         }
 #endif
-                        if (FD_ISSET(p[0], &readfds)) {
+                        if (FD_ISSET(signal_get_fd(&exit_signal), &readfds)) {
                                 should_exit = 1;
                         }
                 }        
@@ -994,25 +891,23 @@ int main(int argc, char **argv)
 
 #if defined(OS_BSD)
         ifaddrs_fini(&tq);
-fail_ifaddrs:
+ fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
 	rtnl_fini(&nlh);
-fail_netlink:
+ fail_netlink:
 #endif
         hostctrl_free(ctx.rhc);
         ctx.rhc = NULL;
-fail_hostctrl_remote:
+ fail_hostctrl_remote:
         hostctrl_free(ctx.lhc);
-fail_hostctrl_local:
+ fail_hostctrl_local:
         libservalctrl_fini();
-fail_libservalctrl:
-        close(ctx.reregister_signal[0]);
-        close(ctx.reregister_signal[1]);
- fail_pipe2:
-	close(p[0]);
-	close(p[1]);
-fail_pipe1:
+ fail_libservalctrl:
+        signal_destroy(&ctx.reregister_signal);
+ fail_reregister_signal:
+        signal_destroy(&exit_signal);
+ fail_exit_signal:
         timer_queue_fini(&tq);
 
         registration_clear(&ctx);

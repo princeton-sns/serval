@@ -301,14 +301,17 @@ message_channel_t *message_channel_udp_create(channel_key_t *key)
         message_channel_lookup(&base_key, udp_base_ops.hashfn);
     
     if (!mcu->base) {
-        mcu->base = message_channel_base_create(&base_key, &udp_base_ops);
-        mcu->base->channel.name = udp_base_name;
-        
+        mcu->base = (message_channel_base_t *)
+            message_channel_base_create(&base_key, 
+                                        sizeof(*mcu->base),
+                                        &udp_base_ops);
         if (!mcu->base) {
             message_channel_put(&mcu->channel);
             return NULL;
         }
-
+        
+        mcu->base->channel.name = udp_base_name;
+        
         if (mcu->base->channel.ops->initialize(&mcu->base->channel)) {
             LOG_ERR("Channel initialization failed\n");
             goto fail_base_init;

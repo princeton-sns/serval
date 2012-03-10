@@ -61,9 +61,19 @@ struct bst_node {
 	unsigned char prefix[0];
 };
 
-unsigned int bst_node_get_prefix_size(struct bst_node *n)
+const unsigned char *bst_node_get_prefix(const struct bst_node *n)
+{
+        return n->prefix;
+}
+
+unsigned int bst_node_get_prefix_size(const struct bst_node *n)
 {
         return PREFIX_SIZE(n->prefix_bits);
+}
+
+unsigned long bst_node_get_prefix_bits(const struct bst_node *n)
+{
+        return n->prefix_bits;
 }
 
 static int bst_node_flag(struct bst_node *n, enum bst_node_flag flag)
@@ -84,11 +94,6 @@ static void bst_node_reset_flag(struct bst_node *n, enum bst_node_flag flag)
 void *bst_node_get_private(struct bst_node *n)
 {
         return n->private;
-}
-
-unsigned int bst_node_prefix_bits(struct bst_node *n)
-{
-        return n->prefix_bits;
 }
 
 int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)

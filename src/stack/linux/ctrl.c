@@ -75,6 +75,8 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
         
         memcpy(NLMSG_DATA(nlh), msg, msg->len);
 
+        LOG_DBG("Broadcasting netlink msg len=%u\n", msg->len);
+
         return netlink_broadcast(nl_sk, skb, 0, 1, mask);
 }
 

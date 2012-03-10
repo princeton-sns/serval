@@ -2915,7 +2915,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 {
         struct service_entry* se = NULL;
         struct service_resolution_iter iter;
-        struct dest* dest = NULL;
+        struct target *target = NULL;
         unsigned int hdr_len = ctx->length;
         unsigned int num_forward = 0;
         unsigned int data_len = skb->len - hdr_len;
@@ -2938,16 +2938,16 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         service_id_to_str(srvid));
                 return SAL_RESOLVE_NO_MATCH;
         }
-
+        
 	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
 
         /*
-          Send to all destinations listed for this service.
+          Send to all targets listed for this service.
         */
-        dest = service_resolution_iter_next(&iter);
+        target = service_resolution_iter_next(&iter);
 
-        if (!dest) {
-                LOG_INF("No dest to forward on!\n");
+        if (!target) {
+                LOG_INF("No target to forward on!\n");
                 service_resolution_iter_inc_stats(&iter, -1, data_len);
                 service_resolution_iter_destroy(&iter);
                 service_entry_put(se);
@@ -2956,11 +2956,11 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 
         service_resolution_iter_inc_stats(&iter, 1, data_len);
                 
-        while (dest) {
-                struct dest *next_dest;
-
-                next_dest = service_resolution_iter_next(&iter);
-
+        while (target) {
+                struct target *next_target;
+                
+                next_target = service_resolution_iter_next(&iter);
+                
                 /* It is kind of unclear how to handle DEMUX vs
                    FORWARD rules here. Does it make sense to have both
                    a socket and forward rule for one single serviceID?
@@ -2969,9 +2969,9 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                    in the iteration? I guess for now we just forward
                    until we hit a socket, and then break (i.e., DEMUX
                    to socket but stop forwarding). */
-                if (is_sock_dest(dest)) {
+                if (is_sock_target(target)) {
                         /* local resolution */
-                        *sk = dest->dest_out.sk;
+                        *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
                         break;
@@ -2994,7 +2994,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 break;
                         }
                         
-                        if (next_dest == NULL) {
+                        if (next_target == NULL) {
                                 cskb = skb;
                         } else {
                                 if (skb_cloned(skb))
@@ -3015,8 +3015,8 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * out device specified in the dst_entry route
                          * and assumes that skb->dev is the input
                          * interface*/
-                        if (dest->dest_out.dev)
-                                skb_set_dev(cskb, dest->dest_out.dev);
+                        if (target->out.dev)
+                                skb_set_dev(cskb, target->out.dev);
 #endif /* OS_LINUX_KERNEL */
                         
                         /* Set the true overlay source address if the
@@ -3036,7 +3036,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         LOG_DBG("new serval header len=%u\n", hdr_len);
 
                         /* Update destination address */
-                        memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
+                        memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
 
                         /* Must recalculate transport checksum. Pull
                            to reveal transport header */
@@ -3077,7 +3077,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         } else 
                                 num_forward++;
                 }
-                dest = next_dest;
+                target = next_target;
         }
 
         if (num_forward == 0)
@@ -3537,7 +3537,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         struct serval_sock *ssk = serval_sk(sk);
         struct inet_sock *inet = inet_sk(sk);
 	struct service_entry *se;
-	struct dest *dest;
+	struct target *target;
         struct serval_hdr *sh;
         int hdr_len = sizeof(*sh);
 	int err = -1;
@@ -3674,9 +3674,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /*
           Send to all destinations resolved for this service.
         */
-	dest = service_resolution_iter_next(&iter);
+	target = service_resolution_iter_next(&iter);
 	
-        if (!dest) {
+        if (!target) {
                 LOG_DBG("No device to transmit on!\n");
                 service_resolution_iter_inc_stats(&iter, -1, -dlen);
                 kfree_skb(skb);
@@ -3685,8 +3685,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 return -EHOSTUNREACH;
         }
 
-	while (dest) {
-		struct dest *next_dest;
+	while (target) {
+		struct target *next_target;
                 struct net_device *dev = NULL;
                 int local_err = 0;
 
@@ -3694,9 +3694,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         service_resolution_iter_inc_stats(&iter, 1, dlen);
                 }
                 
-                next_dest = service_resolution_iter_next(&iter);
+                next_target = service_resolution_iter_next(&iter);
 		
-                if (next_dest == NULL) {
+                if (next_target == NULL) {
 			cskb = skb;
 		} else {
                         /* Always be atomic here since we are holding
@@ -3717,7 +3717,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		}
                 
                 /* Remember the flow destination */
-		if (is_sock_dest(dest)) {
+		if (is_sock_target(target)) {
                         /* use a localhost address and bounce it off
                          * the IP layer*/
                         memcpy(&inet->inet_daddr,
@@ -3737,11 +3737,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #endif
 		} else {
                         memcpy(&inet->inet_daddr,
-                               dest->dst,
-                               sizeof(inet->inet_daddr) < dest->dstlen ? 
-                               sizeof(inet->inet_daddr) : dest->dstlen);
+                               target->dst,
+                               sizeof(inet->inet_daddr) < target->dstlen ? 
+                               sizeof(inet->inet_daddr) : target->dstlen);
                        
-                        dev = dest->dest_out.dev;
+                        dev = target->out.dev;
                 }
                 
                 skb_set_dev(cskb, dev);
@@ -3752,7 +3752,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                        &inet->inet_saddr)) {
                         LOG_ERR("No source IPv4 address for interface %s\n",
                                 dev->name);
-                        dest = next_dest;
+                        target = next_target;
                         continue;
                 }
 
@@ -3817,7 +3817,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         err = 0;
                 }
                 
-		dest = next_dest;
+		target = next_target;
 	}
         
         /* Reset dst cache since we don't want to potantially cache a

@@ -81,7 +81,8 @@ struct message_channel_ops unix_ops = {
     .recv = message_channel_internal_recv,
 };
 
-message_channel_base_t *message_channel_unix_create(channel_key_t *key)
+message_channel_t *message_channel_unix_create(channel_key_t *key)
 {
-    return message_channel_base_create(key, &unix_ops);
+    return message_channel_base_create(key, sizeof(message_channel_base_t),
+                                       &unix_ops);
 }
