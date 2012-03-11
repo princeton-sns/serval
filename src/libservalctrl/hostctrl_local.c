@@ -205,6 +205,23 @@ static int local_service_migrate(struct hostctrl *hc,
         return message_channel_send(hc->mc, &cm, cm.cmh.len);
 }
 
+static int local_flow_stats_query(struct hostctrl *hc,
+                             struct flow_id *flowid)
+{
+        struct ctrlmsg_stats_query cm;
+        if (!flowid) {
+                LOG_ERR("Undefined flow id\n");
+                return -1;
+        }
+
+        memset(&cm, 0, sizeof(cm));
+        cm.cmh.type = CTRLMSG_TYPE_STATS_QUERY;
+        cm.cmh.len = sizeof(cm);
+        memcpy(&cm.flow, flowid, sizeof(struct flow_id));
+
+        return message_channel_send(hc->mc, &cm, cm.cmh.len);
+}
+
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
                        struct in_addr *from)
 {
@@ -269,6 +286,7 @@ struct hostctrl_ops local_ops = {
         .interface_migrate = local_interface_migrate,
         .flow_migrate = local_flow_migrate,
         .service_migrate = local_service_migrate,
+        .flow_stats_query = local_flow_stats_query,
         .service_register = local_service_register_dummy,
         .service_unregister = local_service_unregister_dummy,
 	.service_add = local_service_add,

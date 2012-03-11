@@ -13,6 +13,7 @@ struct hostctrl_ops {
 	int (*service_migrate)(struct hostctrl *hc, 
                                struct service_id *srvid,
                                const char *to_iface);
+    int (*flow_stats_query)(struct hostctrl *hc, struct flow_id *flowid);
         int (*service_register)(struct hostctrl *hc, 
                                 const struct service_id *srvid, 
                                 unsigned short prefix_bits,

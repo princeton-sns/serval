@@ -33,6 +33,7 @@ enum ctrlmsg_type {
         CTRLMSG_TYPE_SERVICE_STAT,
         CTRLMSG_TYPE_CAPABILITIES,
         CTRLMSG_TYPE_MIGRATE,
+        CTRLMSG_TYPE_STATS_QUERY,
         _CTRLMSG_TYPE_MAX,
 };
 
@@ -230,7 +231,21 @@ struct ctrlmsg_migrate {
 	char to_i[IFNAMSIZ];
 };
 
-#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migratee))
+#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
+
+struct ctrlmsg_stats_query {
+        struct ctrlmsg cmh;
+        struct flow_id flow;
+} CTRLMSG_PACKED;
+
+#define CTRLMSGSTATS_QUERY_SIZE (sizeof(struct ctrlmsg_stats_query))
+
+struct ctrlmsg_stats_response {
+        struct ctrlmsg cmh;
+        uint8_t proto;
+} CTRLMSG_PACKED;
+
+#define CTRLMSG_STATS_RESP_SIZE (sizeof(struct ctrlmsg_stats_response))
 
 enum {
         CTRL_MODE_NET = 0, 

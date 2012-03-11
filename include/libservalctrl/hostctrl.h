@@ -73,6 +73,8 @@ int hostctrl_flow_migrate(struct hostctrl *hc, struct flow_id *flow,
 int hostctrl_service_migrate(struct hostctrl *hc, 
                              struct service_id *srvid,
                              const char *to_iface);
+int hostctrl_flow_stats_query(struct hostctrl *hc, struct flow_id *flowid);
+
 int hostctrl_service_register(struct hostctrl *hc, 
                               const struct service_id *srvid, 
                               unsigned short prefix_bits,

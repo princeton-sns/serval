@@ -399,6 +399,18 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
         return ret;
 }
 
+static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
+{
+        struct ctrlmsg_stats_query *csm = (struct ctrlmsg_stats_query*) cm;
+        struct ctrlmsg_stats_response resp;
+        int ret = 0;
+        LOG_DBG("Got a stats query for flow %s\n", flow_id_to_str(&csm->flow));
+        memset(&resp, 0, CTRLMSG_STATS_RESP_SIZE);
+        
+
+        return ret;
+}
+
 ctrlmsg_handler_t handlers[] = {
         dummy_ctrlmsg_handler,
         dummy_ctrlmsg_handler,
@@ -409,5 +421,6 @@ ctrlmsg_handler_t handlers[] = {
         ctrl_handle_get_service_msg,
         ctrl_handle_service_stats_msg,
         ctrl_handle_capabilities_msg,
-        ctrl_handle_migrate_msg
+        ctrl_handle_migrate_msg,
+        ctrl_handle_stats_query_msg
 };
