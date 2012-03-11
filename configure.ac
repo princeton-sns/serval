@@ -147,51 +147,36 @@ esac],[java_bindings=yes])
 have_jni=no;
 JAVAC=
 
-dnl Check for Java JDK
-AC_JAVA_OPTIONS
-AC_CHECK_JAVA_HOME
-AC_PROG_JAVAC
+if test x"$java_bindings" = xyes; then
+   dnl Check for Java JDK	  
+   AC_JAVA_OPTIONS
+   AC_CHECK_JAVA_HOME
+   AC_PROG_JAVAC
 
-AC_MSG_CHECKING(for jni.h)
+   #AC_MSG_CHECKING(for jni.h)
 
-if test x"$JAVAC" != x;
-then
+   if test x"$JAVAC" != x; 
+   then
 	dnl Check for JNI headers
-	AC_JNI_INCLUDE_DIR
+     	AC_JNI_INCLUDE_DIR
 
-	JAVA_INCLUDE=
+      	JAVA_INCLUDE=
 
-	for jni_inc in $JNI_INCLUDE_DIRS
-	do
-		JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
-	done
-
-	if test "x$JAVA_INCLUDE" = 'x';
-	then
-		have_jni=no
+	if test x"$have_jni" = xyes;
+	then 
+		for jni_inc in $JNI_INCLUDE_DIRS;
+     	     	do
+			JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
+	     	done
 	else
-		have_jni=yes
-	fi
-fi
-
-AC_MSG_RESULT([$have_jni])
-
-AC_SUBST(JAVA_INCLUDE)
-
-dnl Check if we support java bindings
-if test x$java_bindings = xyes; 
-then
-   	if test x$have_jni = xno; 
-	then
-   	   	AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
+		AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
 		java_bindings=no
-	else
-		if test "x$JAVAC" = 'x'; 
-		then
-			AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
-			java_bindings=no
-		fi
 	fi
+   else
+	AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
+	java_bindings=no
+   fi
+   AC_SUBST(JAVA_INCLUDE)
 fi
 
 AM_CONDITIONAL([ENABLE_JAVA_BINDINGS], [test x$java_bindings = xyes])

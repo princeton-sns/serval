@@ -843,13 +843,12 @@ static void serval_sal_rearm_rto(struct sock *sk)
 static inline void serval_sal_ack_update_rtt(struct sock *sk,
                                              const s32 seq_rtt)
 {
-        u32 rto = serval_sk(sk)->rto;
         serval_sal_rtt_estimator(sk, seq_rtt);
 	serval_sal_set_rto(sk);
 	serval_sk(sk)->backoff = 0; 
 
-        LOG_DBG("Updated RTO HZ=%u seq_rtt=%d rto_old=%u rto_new=%u\n",
-                HZ, seq_rtt, rto, serval_sk(sk)->rto);
+        LOG_DBG("Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
+                HZ, seq_rtt, serval_sk(sk)->rto);
 }
 
 /*
