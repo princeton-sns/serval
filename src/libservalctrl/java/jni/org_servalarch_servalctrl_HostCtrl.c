@@ -1,6 +1,10 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 #include <libservalctrl/hostctrl.h>
 #include <libservalctrl/init.h>
+#include <stdio.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/serval.h>
 #include "org_servalarch_servalctrl_HostCtrl.h"
 
 /*
@@ -343,7 +347,7 @@ err_addr:
 static int hostctrl_on_start(struct hostctrl *hc)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
-    (*jvm)->AttachCurrentThread(jvm, (void **)&ctx->env, NULL);
+    (*jvm)->AttachCurrentThread(jvm, &ctx->env, NULL);
     return 0;
 }
 

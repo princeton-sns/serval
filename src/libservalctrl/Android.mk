@@ -39,4 +39,6 @@ LOCAL_LDLIBS :=
 
 LOCAL_MODULE := libservalctrl
 
+#include $(BUILD_STATIC_LIBRARY)
+
 include $(BUILD_SHARED_LIBRARY)

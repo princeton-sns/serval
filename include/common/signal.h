@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-#ifndef _SIGNAL_H_
-#define _SIGNAL_H_
+#ifndef __SIGNAL_H_
+#define __SIGNAL_H_
 
 #include "atomic.h"
 
@@ -21,4 +21,4 @@ int signal_raise_val(struct signal *s, int val);
 int signal_raise(struct signal *s);
 unsigned int signal_num_waiting(struct signal *s);
 
-#endif /* _SIGNAL_H_ */
+#endif /* __SIGNAL_H_ */

@@ -10,11 +10,13 @@ LOCAL_HDR_FILES := \
 	$(LOCAL_PATH)/../../include/common/list.h \
 	$(LOCAL_PATH)/../../include/common/platform.h \
 	$(LOCAL_PATH)/../../include/common/timer.h \
+	$(LOCAL_PATH)/../../include/common/signal.h \
 	platform.h
 
 LOCAL_SRC_FILES := \
 	hashtable.c \
 	heap.c \
+	signal.c \
 	timer.c
 
 LOCAL_C_INCLUDES += \
