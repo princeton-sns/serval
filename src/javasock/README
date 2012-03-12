@@ -3,4 +3,4 @@ Serval Java bindings
 
 Example of how to run a test application (from this directory):
 
-LD_LIBRARY_PATH=$PWD/jni/.libs/ java -classpath $PWD/serval-javasock.jar serval.test.TCPServer
+java -Djava.library.path==$PWD/jni/.libs/ -classpath $PWD/org.servalarch.javasock.jar serval.test.TCPServer

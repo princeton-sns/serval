@@ -247,6 +247,8 @@ static void *message_channel_base_task(void *channel)
     unsigned char buffer[RECV_BUFFER_SIZE];
     ssize_t ret = -1;
 
+    message_channel_internal_on_start(&base->channel);
+
     while (base->running) {
 
         if (base->native_socket) {
@@ -311,6 +313,7 @@ static void *message_channel_base_task(void *channel)
     }
     LOG_DBG("%s task exits\n", base->channel.name);
     base->channel.state = CHANNEL_STOPPED;
+    message_channel_internal_on_stop(&base->channel);
 
     return NULL;
 }

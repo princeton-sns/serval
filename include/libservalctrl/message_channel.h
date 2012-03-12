@@ -19,8 +19,10 @@
 
 typedef struct message_channel_callback {
     void *target;
-    int (*recv) (struct message_channel_callback *cb, 
-                 message_t *msg);
+    int (*start)(struct message_channel_callback *cb);
+    void (*stop)(struct message_channel_callback *cb);
+    int (*recv)(struct message_channel_callback *cb, 
+                message_t *msg);
 } message_channel_callback_t;
 
 struct message_channel_ops;

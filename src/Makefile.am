@@ -1,14 +1,14 @@
 SUBDIRS = \
 	common \
 	stack \
-	libserval \
-	libservalctrl
+	libserval
 
 if ENABLE_JAVA_BINDINGS
 SUBDIRS += javasock
 endif
 
 SUBDIRS += \
+	libservalctrl \
 	test \
 	servd \
 	translator \

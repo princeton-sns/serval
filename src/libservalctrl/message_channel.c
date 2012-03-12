@@ -41,7 +41,9 @@ static char *channel_name[] = {
 #if defined(OS_LINUX)
 extern message_channel_ops_t netlink_ops;
 #endif
+#if defined(OS_UNIX)
 extern message_channel_ops_t unix_ops;
+#endif
 extern message_channel_ops_t udp_ops;
 
 static message_channel_ops_t *channel_ops[] = {

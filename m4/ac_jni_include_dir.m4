@@ -52,8 +52,11 @@ case "$host_os" in
         *)              _JINC="$_JTOPDIR/include";;
 esac
 
+AC_MSG_NOTICE(Looking for JNI headers in: $_JINC)
+
 if test -f "$_JINC/jni.h"; then
         JNI_INCLUDE_DIRS="$JNI_INCLUDE_DIRS $_JINC"
+	have_jni=yes
 else
         _JTOPDIR=`echo "$_JTOPDIR" | sed -e 's:/[[^/]]*$::'`
         if test -f "$_JTOPDIR/include/jni.h"; then

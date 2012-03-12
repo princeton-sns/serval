@@ -133,13 +133,13 @@ EXTRA_DIST = \
 
 if ENABLE_LINUX_MODULE
 all: serval.ko
-endif
 
 serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 install-data-local: serval.ko
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
+endif
 
 clean-local:
 if ENABLE_LINUX_MODULE

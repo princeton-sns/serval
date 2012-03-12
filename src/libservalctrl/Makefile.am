@@ -1,3 +1,7 @@
+SUBDIRS = \
+	. \
+	java
+
 lib_LTLIBRARIES = libservalctrl.la
 
 libservalctrl_la_DEPENDENCIES = \

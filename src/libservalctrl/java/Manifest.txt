@@ -1,0 +1,7 @@
+Name: org/servalarch/servalctrl
+Specification-Title: Java JNI wrapper for libservalctrl
+Specification-Version: 1.0
+Specification-Vendor: sns.cs.princeton.edu
+Implementation-Title: org.servalarch.servalctrl
+Implementation-Version: 1.0
+Implementation-Vendor: Princeton University

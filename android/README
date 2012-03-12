@@ -14,6 +14,7 @@ Prerequisites:
   (r5b is known to work).
 * Root access on your Android device.
 * Android debug bridge - adb (from, e.g., the Android SDK).
+* Ant or Eclipse
 
 Getting the right kernel source
 -------------------------------
@@ -91,17 +92,6 @@ After overriding, re-run the prepare step.
 
 Your kernel source tree is now ready.
 
-Compiling user-level binaries and libraries
--------------------------------------------
-
-In the top-level directory:
-
-$ ln -s android jni
-
-$ <Path to NDK>/ndk-build
-
-The libraries and binaries can now be found under "libs".
-
 Compiling the Kernel module
 ---------------------------
 
@@ -111,17 +101,26 @@ Enter src/stack and issue the following command:
 
 > ARCH=arm CROSS_COMPILE=arm-eabi- make serval.ko KDIR=<Path to kernel source> 
 
-Installation
-------------
+Compiling user-level binaries and libraries
+-------------------------------------------
 
-Run the 'install.sh' script in this directory.
+$ cd android/Serval
+$ <Path to NDK>/ndk-build
 
-This installs binaries and the kernel module under /data/local/serval.
+The libraries and binaries can now be found under "libs".
 
-Loading the kernel module
+Copy the kernel module from the previous step to the
+android/Serval/assets directory.
+
+Build the Serval Android app with Eclipse or with Ant:
+
+$ cd android/Serval
+$ ant debug
+
+Manually Loading the kernel module
 -------------------------
 
 Run this command through "adb":
 
-$ adb shell su -c 'insmod /data/local/serval/serval.ko'
+$ adb shell su -c 'insmod /path/to/kernel/module/on/device/serval.ko'
 

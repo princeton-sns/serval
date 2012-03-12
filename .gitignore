@@ -56,6 +56,8 @@ src/tools/migrate
 src/javasock/classes.list
 src/javasock/sources.list
 src/javasock/bin/
+src/libservalctrl/java/classes.list
+src/libservalctrl/java/sources.list
 android/ServalChat/bin/
 android/ServalChat/gen/
 stamp-h1
@@ -79,4 +81,3 @@ Makefile
 *.stamp
 *.jar
 .DS_Store
-.project

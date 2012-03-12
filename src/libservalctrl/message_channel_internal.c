@@ -118,6 +118,20 @@ int message_channel_internal_get_callback_count(message_channel_t *channel)
     return channel->callback ? 1 : 0;
 }
 
+int message_channel_internal_on_start(message_channel_t *channel)
+{
+    if (channel->callback && channel->callback->start)
+        return channel->callback->start(channel->callback);
+
+    return 0;
+}
+
+void message_channel_internal_on_stop(message_channel_t *channel)
+{
+    if (channel->callback && channel->callback->stop)
+        channel->callback->stop(channel->callback);
+}
+
 int message_channel_internal_recv(message_channel_t *channel, const void *msg,
                                   size_t msglen, struct sockaddr *addr, 
                                   socklen_t addrlen)

@@ -108,5 +108,7 @@ int message_channel_internal_recv(message_channel_t *channel,
                                   const void *message, size_t length, 
                                   struct sockaddr *addr, 
                                   socklen_t addrlen);
+int message_channel_internal_on_start(message_channel_t *channel);
+void message_channel_internal_on_stop(message_channel_t *channel);
 
 #endif /* MESSAGE_CHANNEL_INTERNAL_H_ */

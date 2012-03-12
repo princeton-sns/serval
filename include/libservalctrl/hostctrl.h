@@ -12,6 +12,8 @@ struct hostctrl;
   Host control callbacks.
  */
 struct hostctrl_callback {
+        int (*start)(struct hostctrl *hc); /* Called one time, when thread starts */
+        void (*stop)(struct hostctrl *hc); /* Called when thread stops */
         int (*service_registration)(struct hostctrl *hc,
                                     const struct service_id *srvid,
                                     unsigned short flags,

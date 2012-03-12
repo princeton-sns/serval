@@ -240,6 +240,9 @@ AC_CONFIG_FILES([Makefile
 	src/stack/Makefile
 	src/stack/Kbuild	
 	src/libservalctrl/Makefile
+	src/libservalctrl/java/Makefile
+	src/libservalctrl/java/jni/Makefile
+	src/libservalctrl/java/src/Makefile
 	src/libserval/Makefile
 	src/servd/Makefile
 	src/translator/Makefile
