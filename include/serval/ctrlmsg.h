@@ -34,6 +34,7 @@ enum ctrlmsg_type {
         CTRLMSG_TYPE_CAPABILITIES,
         CTRLMSG_TYPE_MIGRATE,
         CTRLMSG_TYPE_STATS_QUERY,
+        CTRLMSG_TYPE_STATS_RESP,
         _CTRLMSG_TYPE_MAX,
 };
 

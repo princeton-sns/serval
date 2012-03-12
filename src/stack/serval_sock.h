@@ -3,6 +3,7 @@
 #define _SERVAL_SOCK_H
 
 #include <netinet/serval.h>
+#include <serval/ctrlmsg.h>
 #include <serval/list.h>
 #include <serval/lock.h>
 #include <serval/hash.h>
@@ -237,6 +238,8 @@ void serval_sock_migrate_flow(struct flow_id *old_f,
                               struct net_device *new_if);
 void serval_sock_migrate_service(struct service_id *old_s,
                                  struct net_device *new_if);
+void serval_sock_stats_flow(struct flow_id *flow, 
+                            struct ctrlmsg_stats_response *resp);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
 

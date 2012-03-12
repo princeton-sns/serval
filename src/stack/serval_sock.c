@@ -8,6 +8,7 @@
 #include <serval/netdevice.h>
 #include <netinet/serval.h>
 #include <serval_sock.h>
+#include <serval_tcp_sock.h>
 #include <serval_sal.h>
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
@@ -214,6 +215,27 @@ void serval_sock_migrate_service(struct service_id *old_s,
                 lock_sock(sk);
                 serval_sock_set_mig_dev(sk, new_if);
                 serval_sal_migrate(sk);
+                release_sock(sk);
+                sock_put(sk);
+        }
+}
+
+void serval_sock_stats_flow(struct flow_id *flow, 
+                            struct ctrlmsg_stats_response *resp)
+{
+        struct sock *sk = serval_sock_lookup_flow(flow);
+        LOG_DBG("Doing debug on flow %s\n", flow_id_to_str(flow));
+        if (sk) {
+                lock_sock(sk);
+                resp->proto = sk->sk_protocol;
+                // TODO Fix these hardcoded values
+                if (sk->sk_protocol == 6) {
+                //        struct serval_tcp_sock *tcpsk = (struct serval_tcp_sock *) sk;
+                }
+                else if (sk->sk_protocol == 17) {
+                }
+                LOG_DBG("Found sock family: %d\n", sk->sk_protocol);
+                // do stats stuff!
                 release_sock(sk);
                 sock_put(sk);
         }
