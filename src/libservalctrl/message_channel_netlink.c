@@ -288,6 +288,7 @@ static int netlink_recv(message_channel_t *channel, const void *data,
     //message_channel_netlink_t *mcn = (message_channel_netlink_t *)channel;
     struct nlmsghdr *nlm;
     unsigned int num_msgs = 0;
+    long bytes_left = datalen;
 
     assert(channel);
 
@@ -296,8 +297,8 @@ static int netlink_recv(message_channel_t *channel, const void *data,
        datalen); */
 
     for (nlm = (struct nlmsghdr *)data;
-         NLMSG_OK(nlm, (unsigned int)datalen);
-         nlm = NLMSG_NEXT(nlm, datalen)) {
+         NLMSG_OK(nlm, bytes_left);
+         nlm = NLMSG_NEXT(nlm, bytes_left)) {
         struct nlmsgerr *nlmerr = NULL;
         
         num_msgs++;
@@ -335,7 +336,7 @@ static int netlink_recv(message_channel_t *channel, const void *data,
             /* TODO - ack and rpc request cache/resend? */
             if (channel->callback && channel->callback->recv) {
                 message_t *m = message_alloc(NLMSG_DATA(nlm), 
-                                             datalen - NLMSG_LENGTH(0));
+                                             bytes_left - NLMSG_LENGTH(0));
                 
                 if (m) {
                     channel->callback->recv(channel->callback, m);
