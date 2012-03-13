@@ -283,18 +283,19 @@ static int netlink_recv(message_channel_t *channel, const void *data,
     //message_channel_netlink_t *mcn = (message_channel_netlink_t *)channel;
     struct nlmsghdr *nlm;
     unsigned int num_msgs = 0;
+    long bytes_left = datalen;
 
     assert(channel);
 
     /* Channel already locked by receiver task */
-    /* LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
-       datalen); */
+     /*LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
+       datalen);*/
 
     for (nlm = (struct nlmsghdr *)data;
-         NLMSG_OK(nlm, (unsigned int)datalen);
-         nlm = NLMSG_NEXT(nlm, datalen)) {
+         NLMSG_OK(nlm, bytes_left);
+         nlm = NLMSG_NEXT(nlm, bytes_left)) {
         struct nlmsgerr *nlmerr = NULL;
-        
+
         num_msgs++;
         
         /* check for ack'ing */
@@ -310,8 +311,10 @@ static int netlink_recv(message_channel_t *channel, const void *data,
 
         switch (nlm->nlmsg_type) {
         case NLMSG_NOOP:
+            LOG_DBG("NLMSG NOOP\n");
             break;
         case NLMSG_ERROR:
+            LOG_DBG("NLMSG ERROR\n");
             nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
             if (nlmerr->error == 0) {
                 /*
@@ -324,13 +327,13 @@ static int netlink_recv(message_channel_t *channel, const void *data,
             }
             break;
         case NLMSG_DONE:
-            /* LOG_DBG("NLMSG_DONE\n"); */
             break;
         case NLMSG_SERVAL:
+            LOG_DBG("Serval message recv'd...\n");
             /* TODO - ack and rpc request cache/resend? */
             if (channel->callback && channel->callback->recv) {
                 message_t *m = message_alloc(NLMSG_DATA(nlm), 
-                                             datalen - NLMSG_LENGTH(0));
+                                             bytes_left - NLMSG_LENGTH(0));
                 
                 if (m) {
                     LOG_DBG("Calling callback\n");
@@ -347,6 +350,7 @@ static int netlink_recv(message_channel_t *channel, const void *data,
         }
     }
 
+    LOG_DBG("Done handling\n");
     return 0;
 }
 

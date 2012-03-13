@@ -226,7 +226,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                        struct in_addr *from)
 {
         int ret = 0;
-
+        LOG_DBG("Local ctrl recv'd a msg\n");
         if (!hc->cbs)
                 return 0;
 
