@@ -41,7 +41,8 @@ static int hostctrl_recv(struct message_channel_callback *mcb,
 static int on_start_message_channel(struct message_channel_callback *mcb)
 {
         struct hostctrl *hc = (struct hostctrl *)mcb->target;
-        if (hc->cbs)
+
+        if (hc && hc->cbs && hc->cbs->start)
                 return hc->cbs->start(hc);
         return 0;
 }
@@ -49,7 +50,8 @@ static int on_start_message_channel(struct message_channel_callback *mcb)
 static void on_stop_message_channel(struct message_channel_callback *mcb)
 {
         struct hostctrl *hc = (struct hostctrl *)mcb->target;
-        if (hc->cbs)
+        
+        if (hc && hc->cbs && hc->cbs->stop)
                 hc->cbs->stop(hc);       
 }
 

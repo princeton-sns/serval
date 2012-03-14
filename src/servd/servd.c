@@ -550,11 +550,15 @@ static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
         .service_get_result = local_service_get_result,
+        .start = NULL,
+        .stop = NULL,
 };
 
 static struct hostctrl_callback rcb = {
         .service_registration = handle_incoming_registration,
         .service_unregistration = handle_incoming_unregistration,
+        .start = NULL,
+        .stop = NULL,
 };
 
 static int daemonize(void)
