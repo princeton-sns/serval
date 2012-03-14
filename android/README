@@ -4,17 +4,31 @@ Building Serval for Android
 These instructions have been tested for a Nexus One device, but may
 work also for other devices. However, it is likely that small
 modifications are necessary to make this work for other devices, such
-as using a different NDK, compiler, kernel source tree, etc.
+as using a different NDK, compiler, kernel source tree, etc. 
+
+Serval builds into an Android app that bundles a kernel
+module. Running this app requires a rooted Android device (with
+ability to run 'su'), or otherwise the kernel module cannot be
+loaded. The app allows you to easily load the kernel module and can
+also add and remove service table entries. Note that the app will
+probably only run on a specific type of device and version of Android,
+since the kernel module must match the running kernel.
 
 Prerequisites:
 
+* Root access on your Android device.
 * Kernel source code matching your cross-compile environment 
   (see instructions below).
 * Android NDK: http://developer.android.com/sdk/ndk/index.html 
   (r5b is known to work).
-* Root access on your Android device.
 * Android debug bridge - adb (from, e.g., the Android SDK).
-* Ant or Eclipse
+* Ant (or Eclipse)
+
+Configuration:
+
+Run the top-level configure script as follows:
+
+$ ./configure --with-android-sdk=<path/to/sdk>
 
 Getting the right kernel source
 -------------------------------
@@ -95,30 +109,45 @@ Your kernel source tree is now ready.
 Compiling the Kernel module
 ---------------------------
 
-Run (./autogen.sh) ./configure to generate the Makefiles.
+Make sure you run (./autogen.sh) ./configure to generate the Makefiles.
 
-Enter src/stack and issue the following command:
+1. Make sure the Android NDK cross-compiler is in your PATH.
 
-> ARCH=arm CROSS_COMPILE=arm-eabi- make serval.ko KDIR=<Path to kernel source> 
+$ export PATH=</path/to/android/ndk/compiler/bin:$PATH>
 
-Compiling user-level binaries and libraries
--------------------------------------------
+2. Enter src/stack and issue the following command:
+
+$ ARCH=arm CROSS_COMPILE=arm-eabi- make serval.ko KDIR=<Path to kernel source> 
+
+Building the Serval Android app
+-------------------------------
+
+1. Compile the sources from the top-level directory (this will
+generate the Java bindings that the Serval app needs):
+
+$ ./configure --with-android-sdk=<path/to/sdk>
+$ make
+
+2. Compile the kernel module as instructed above.
+
+3. Build native libraries for Android:
 
 $ cd android/Serval
 $ <Path to NDK>/ndk-build
 
 The libraries and binaries can now be found under "libs".
 
-Copy the kernel module from the previous step to the
-android/Serval/assets directory.
+4. Build the Serval Android app with Ant:
 
-Build the Serval Android app with Eclipse or with Ant:
-
-$ cd android/Serval
+$ cd android/Serval (If not already there)
 $ ant debug
 
-Manually Loading the kernel module
--------------------------
+5. Install on a (rooted) Android device:
+
+$ ant install
+
+Manually loading the kernel module
+----------------------------------
 
 Run this command through "adb":
 

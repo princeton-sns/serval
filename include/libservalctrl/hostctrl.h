@@ -12,8 +12,6 @@ struct hostctrl;
   Host control callbacks.
  */
 struct hostctrl_callback {
-        int (*start)(struct hostctrl *hc); /* Called one time, when thread starts */
-        void (*stop)(struct hostctrl *hc); /* Called when thread stops */
         int (*service_registration)(struct hostctrl *hc,
                                     const struct service_id *srvid,
                                     unsigned short flags,
@@ -26,15 +24,32 @@ struct hostctrl_callback {
                                       unsigned short prefix,
                                       const struct in_addr *ip);
         int (*service_stat_update)(struct hostctrl *hc,
-                                   struct service_info_stat *stat,
+                                   unsigned int xid,
+                                   int retval,
+                                   const struct service_stat *stat,
                                    unsigned int num_stat);
-        int (*service_get)(struct hostctrl *hc,
-                           const struct service_id *srvid,
-                           unsigned short flags,
-                           unsigned short prefix,
-                           unsigned int priority,
-                           unsigned int weight,
-                           struct in_addr *ip);
+        int (*service_get_result)(struct hostctrl *hc,
+                                  unsigned int xid,
+                                  int retval,
+                                  const struct service_info *si,
+                                  unsigned int num);
+        int (*service_add_result)(struct hostctrl *hc,
+                                  unsigned int xid,
+                                  int retval,
+                                  const struct service_info *si,
+                                  unsigned int num);
+        int (*service_mod_result)(struct hostctrl *hc,
+                                  unsigned int xid,
+                                  int retval,
+                                  const struct service_info *si,
+                                  unsigned int num);
+        int (*service_remove_result)(struct hostctrl *hc,
+                                     unsigned int xid,
+                                     int retval,                                     
+                                     const struct service_info_stat *sis,
+                                     unsigned int num);
+        int (*start)(struct hostctrl *hc); /* Called one time, when thread starts */
+        void (*stop)(struct hostctrl *hc); /* Called when thread stops */
 };
 
 struct hostctrl_ops;
@@ -42,6 +57,7 @@ struct hostctrl_ops;
 typedef struct hostctrl {
 	struct message_channel *mc;
         void *context;
+        unsigned int xid;
 	const struct hostctrl_ops *ops;
 	const struct hostctrl_callback *cbs;
 	struct message_channel_callback mccb;
@@ -68,6 +84,7 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 void hostctrl_free(struct hostctrl *hc);
 int hostctrl_start(struct hostctrl *hc);
 
+unsigned int hostctrl_get_xid(struct hostctrl *hc);
 int hostctrl_interface_migrate(struct hostctrl *hc, 
                                const char *from, const char *to);
 int hostctrl_flow_migrate(struct hostctrl *hc, struct flow_id *flow,

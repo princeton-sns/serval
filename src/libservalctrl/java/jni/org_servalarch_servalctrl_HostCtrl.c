@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/serval.h>
+#include <common/debug.h>
 #include "org_servalarch_servalctrl_HostCtrl.h"
 
 /*
@@ -22,30 +23,37 @@
 
 static JavaVM *jvm = NULL;
 
+/* Cached classes */
+static jclass hostctrl_cls;
+static jclass hostctrlcallbacks_cls;
+static jclass serviceinfo_cls;
+static jclass serviceinfostat_cls;
+static jclass serviceid_cls;
+static jclass inetaddress_cls;
+
 struct jni_context {
     JNIEnv *env;
     jobject obj;
-    jclass cls;
     jobject callbacks;
-    jclass hostctrl_cls;
-    jclass callbacks_cls;
     struct hostctrl *hc;
 };
 
 static struct jni_context *get_native_context(JNIEnv *env, jobject obj)
 {
-	jclass cls = (*env)->GetObjectClass(env, obj);
-	jfieldID fid = (*env)->GetFieldID(env, cls, "nativeHandle", "J");
+    struct jni_context *ctx;
+	jfieldID fid = (*env)->GetFieldID(env, hostctrl_cls, "nativeHandle", "J");
 
     if (!fid)
         return NULL;
 
-	return (struct jni_context *)jlong_to_ptr((*env)->GetLongField(env, obj, fid));
+	ctx = (struct jni_context *)jlong_to_ptr((*env)->GetLongField(env, obj, fid));
+
+    return ctx;
 }
 
 static int set_native_context(JNIEnv *env, jobject obj, struct jni_context *ctx)
 {
-	jfieldID fid = (*env)->GetFieldID(env, ctx->cls, "nativeHandle", "J");
+	jfieldID fid = (*env)->GetFieldID(env, hostctrl_cls, "nativeHandle", "J");
 
     if (!fid)
         return -1;
@@ -58,12 +66,11 @@ static int set_native_context(JNIEnv *env, jobject obj, struct jni_context *ctx)
 static int fill_in_service_id(JNIEnv *env, jobject obj, struct service_id *sid)
 {
     jboolean isCopy = JNI_FALSE;
-	jclass cls = (*env)->GetObjectClass(env, obj);
 	jfieldID fid;
     jbyteArray array;
     jbyte *buffer;
 
-    fid = (*env)->GetFieldID(env, cls, "identifier", "[B");
+    fid = (*env)->GetFieldID(env, serviceid_cls, "identifier", "[B");
 
     if (!fid)
         return -1;
@@ -81,24 +88,24 @@ static int fill_in_service_id(JNIEnv *env, jobject obj, struct service_id *sid)
     memcpy(sid->s_sid, buffer, (*env)->GetArrayLength(env, array));
 
     (*env)->ReleaseByteArrayElements(env, array, buffer, 0);
-
+    (*env)->DeleteLocalRef(env, array);
+        
     return 0;
 }
 
 static int fill_in_addr(JNIEnv *env, jobject obj, struct in_addr *ipaddr)
 {
     jboolean isCopy = JNI_FALSE;
-	jclass cls;
 	jmethodID mid;
     jbyteArray array;
     jbyte *buffer;
 
-    cls = (*env)->FindClass(env, "java/net/InetAddress");
+    memset(ipaddr, 0, sizeof(*ipaddr));
+
+    if (!obj)
+        return 0;
     
-    if (!cls)
-        return -1;
-    
-    mid = (*env)->GetMethodID(env, cls, "getAddress", "()[B");
+    mid = (*env)->GetMethodID(env, inetaddress_cls, "getAddress", "()[B");
 
     if (!mid)
         return -1;
@@ -116,6 +123,7 @@ static int fill_in_addr(JNIEnv *env, jobject obj, struct in_addr *ipaddr)
     memcpy(&ipaddr->s_addr, buffer, (*env)->GetArrayLength(env, array));
 
     (*env)->ReleaseByteArrayElements(env, array, buffer, 0);
+    (*env)->DeleteLocalRef(env, array);
 
     return 0;
 }
@@ -123,41 +131,43 @@ static int fill_in_addr(JNIEnv *env, jobject obj, struct in_addr *ipaddr)
 static jobject get_callbacks(JNIEnv *env, struct jni_context *ctx)
 {
     jfieldID fid;
+    jobject obj;
 
-    fid = (*env)->GetFieldID(env, ctx->hostctrl_cls, "callbacks", 
+    fid = (*env)->GetFieldID(env, hostctrl_cls, "callbacks", 
                              "Lorg/servalarch/servalctrl/HostCtrlCallbacks;");
 
     if (!fid) {
-        fprintf(stderr, "could not get fid\n");
+        LOG_ERR("could not get fid\n");
         return NULL;
     }
 
-    return (*env)->GetObjectField(env, ctx->obj, fid);
+    obj = (*env)->GetObjectField(env, ctx->obj, fid);
+
+    return obj;
 }
 
 static jobject new_service_id(JNIEnv *env, const struct service_id *srvid)
 {
-    jclass cls = (*env)->FindClass(env, "org/servalarch/net/ServiceID");
     jbyteArray arr;
     jobject service_id;
-    jmethodID cid;
+    jmethodID mid;
 
-    if (!cls)
+    mid = (*env)->GetMethodID(env, serviceid_cls, "<init>", "([B)V");
+
+    if (!mid) {
+        LOG_ERR("%s methodID not found\n", __func__);
         return NULL;
-
-    cid = (*env)->GetMethodID(env, cls, "<init>", "([B)V");
-
-    if (!cid)
-        return NULL;
-
-    arr = (*env)->NewByteArray(env, 20);
+    }
+    arr = (*env)->NewByteArray(env, sizeof(srvid->s_sid));
 
     if (!arr)
         return NULL;
 
-    (*env)->SetByteArrayRegion(env, arr, 0, 20, (jbyte *)srvid->s_sid);
+    (*env)->SetByteArrayRegion(env, arr, 0, 
+                               sizeof(srvid->s_sid), 
+                               (jbyte *)srvid->s_sid);
 
-    service_id = (*env)->NewObject(env, cls, cid, arr);
+    service_id = (*env)->NewObject(env, serviceid_cls, mid, arr);
 
     (*env)->DeleteLocalRef(env, arr);
     
@@ -166,36 +176,39 @@ static jobject new_service_id(JNIEnv *env, const struct service_id *srvid)
 
 static jobject new_inet4addr(JNIEnv *env, const struct in_addr *ipaddr)
 {
-    jclass cls = (*env)->FindClass(env, "java/net/InetAddress");
     jbyteArray arr;
     jobject addr;
     jmethodID mid;
 
-    if (!cls) {
-        fprintf(stderr, "could not find InetAddress class\n");
-        return NULL;
-    }
-
-    mid = (*env)->GetStaticMethodID(env, cls, "getByAddress", "([B)Ljava/net/InetAddress;");
+    mid = (*env)->GetStaticMethodID(env, inetaddress_cls, "getByAddress", "([B)Ljava/net/InetAddress;");
 
     if (!mid) {
-        fprintf(stderr, "could not find getByAddress mid\n");
+        LOG_ERR("could not find getByAddress mid\n");
         return NULL;
     }
 
     arr = (*env)->NewByteArray(env, 4);
 
     if (!arr) {
-        fprintf(stderr, "could not create byteArray\n");
+        LOG_ERR("could not create byteArray\n");
         return NULL;
     }
 
     (*env)->SetByteArrayRegion(env, arr, 0, 4, (jbyte *)ipaddr);
 
-    addr = (*env)->CallStaticObjectMethod(env, cls, mid, arr);
+    addr = (*env)->CallStaticObjectMethod(env, inetaddress_cls, mid, arr);
 
     if (!addr) {
-        fprintf(stderr, "addr is NULL\n");
+        jthrowable exc;
+
+        LOG_ERR("Could not crate IP address\n");
+
+        exc = (*env)->ExceptionOccurred(env);
+        
+        if (exc) {
+            (*env)->ExceptionDescribe(env);
+            (*env)->ExceptionClear(env);
+        }
     }
 
     (*env)->DeleteLocalRef(env, arr);
@@ -203,36 +216,115 @@ static jobject new_inet4addr(JNIEnv *env, const struct in_addr *ipaddr)
     return addr;
 }
 
-static int service_registration(struct hostctrl *hc,
-                                const struct service_id *srvid,
-                                unsigned short flags,
-                                unsigned short prefix,
-                                const struct in_addr *ip,
-                                const struct in_addr *old_ip)
+static jobject new_service_info(JNIEnv *env, const struct service_info *si)
+{
+    jmethodID mid;
+    jobject service_id, obj;
+    jobject addr;
+    
+    mid = (*env)->GetMethodID(env, serviceinfo_cls, "<init>", 
+                              "(Lorg/servalarch/net/ServiceID;IILjava/net/InetAddress;JJJJJ)V");
+
+    if (!mid)
+        return NULL;
+    
+    service_id = new_service_id(env, &si->srvid);
+
+    if (!service_id) {
+        LOG_ERR("could not create service_id\n");
+        return NULL;
+    }
+
+    addr = new_inet4addr(env, &si->address);
+    
+    obj = (*env)->NewObject(env, serviceinfo_cls, mid, 
+                            service_id,
+                            (jint)si->srvid_prefix_bits, 
+                            (jint)si->srvid_flags,
+                            addr,
+                            (jlong)si->if_index, 
+                            (jlong)si->priority,
+                            (jlong)si->weight, 
+                            (jlong)si->idle_timeout, 
+                            (jlong)si->hard_timeout);
+
+    (*env)->DeleteLocalRef(env, service_id);
+    (*env)->DeleteLocalRef(env, addr);
+    
+    return obj;
+}
+
+static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat *sis)
+{
+    const struct service_info *si = &sis->service;
+    jmethodID mid;
+    jobject service_id, addr, obj;
+
+    mid = (*env)->GetMethodID(env, serviceinfostat_cls, "<init>", 
+                                    "(Lorg/servalarch/net/ServiceID;SSLjava/net/InetAddress;JJJJJJJJJJJ)V");
+
+    if (!mid)
+        return NULL;
+
+    service_id = new_service_id(env, &si->srvid);
+    addr = new_inet4addr(env, &si->address);
+
+    obj = (*env)->NewObject(env, serviceinfostat_cls, mid, 
+                            service_id,
+                            (jint)si->srvid_prefix_bits, 
+                            (jint)si->srvid_flags,
+                            addr,
+                            (jlong)si->if_index, 
+                            (jlong)si->priority, 
+                            (jlong)si->weight, 
+                            (jlong)si->idle_timeout, 
+                            (jlong)si->hard_timeout,
+                            (jlong)sis->duration_sec,
+                            (jlong)sis->duration_nsec,
+                            (jlong)sis->packets_resolved,
+                            (jlong)sis->bytes_resolved,
+                            (jlong)sis->packets_dropped,
+                            (jlong)sis->bytes_dropped,
+                            (jlong)sis->tokens_consumed);
+
+    (*env)->DeleteLocalRef(env, service_id);
+    (*env)->DeleteLocalRef(env, addr);
+
+    return obj;
+}
+
+static int on_service_registration(struct hostctrl *hc,
+                                   const struct service_id *srvid,
+                                   unsigned short flags,
+                                   unsigned short prefix,
+                                   const struct in_addr *ip,
+                                   const struct in_addr *old_ip)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jobject service_id, addr, old_addr = NULL;
     jmethodID mid;
+    jthrowable exc;
 
-    mid = (*env)->GetMethodID(env, ctx->callbacks_cls, "serviceRegistration", 
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRegistration", 
                               "(Lorg/servalarch/net/ServiceID;IILjava/net/InetAddress;Ljava/net/InetAddress;)V");
 
     if (!mid) {
-        fprintf(stderr, "could not find mid\n");
+        LOG_ERR("could not find mid\n");
         return -1;
     }
+
     service_id = new_service_id(env, srvid);
     
     if (!service_id) {
-        fprintf(stderr, "could not create serviceID\n");
+        LOG_ERR("could not create serviceID\n");
         return -1;
     }
 
     addr = new_inet4addr(env, ip);
 
     if (!addr) {
-        fprintf(stderr, "could not create addr1\n");
+        LOG_ERR("could not create addr1\n");
         goto err_addr;
     }
 
@@ -240,13 +332,21 @@ static int service_registration(struct hostctrl *hc,
         old_addr = new_inet4addr(env, old_ip);
         
         if (!old_addr) {
-            fprintf(stderr, "could not create addr2\n");
+            LOG_ERR("could not create addr2\n");
             goto err_old_addr;
         }
     }
 
     (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
                            (jint)prefix, addr, old_addr);
+
+    exc = (*env)->ExceptionOccurred(env);
+    
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
 
     (*env)->DeleteLocalRef(env, old_addr);
 err_old_addr:
@@ -257,18 +357,19 @@ err_addr:
     return 0;
 }
 
-static int service_unregistration(struct hostctrl *hc,
-                                  const struct service_id *srvid,
-                                  unsigned short flags,
-                                  unsigned short prefix,
-                                  const struct in_addr *ip)
+static int on_service_unregistration(struct hostctrl *hc,
+                                     const struct service_id *srvid,
+                                     unsigned short flags,
+                                     unsigned short prefix,
+                                     const struct in_addr *ip)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jobject service_id, addr;
     jmethodID mid;
+    jthrowable exc;
 
-    mid = (*env)->GetMethodID(env, ctx->callbacks_cls, "serviceUnregistration", 
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceUnregistration", 
                               "(Lorg/servalarch/net/ServiceID;IILjava/net/InetAddress;)V");
 
     if (!mid)
@@ -286,6 +387,14 @@ static int service_unregistration(struct hostctrl *hc,
    
     (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
                            (jint)prefix, addr);
+    
+    exc = (*env)->ExceptionOccurred(env);
+    
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
 
     (*env)->DeleteLocalRef(env, addr);
 err_addr:
@@ -294,10 +403,13 @@ err_addr:
     return 0;
 }
 
-static int service_stat_update(struct hostctrl *hc,
-                               struct service_info_stat *stat,
-                               unsigned int num_stat)
+static int on_service_stat_update(struct hostctrl *hc,
+                                  unsigned int xid,
+                                  int retval,
+                                  const struct service_stat *stat,
+                                  unsigned int num_stat)
 {
+
     /*
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
@@ -305,65 +417,201 @@ static int service_stat_update(struct hostctrl *hc,
     return 0;
 }
 
-static int service_get(struct hostctrl *hc,
-                       const struct service_id *srvid,
-                       unsigned short flags,
-                       unsigned short prefix,
-                       unsigned int priority,
-                       unsigned int weight,
-                       struct in_addr *ip)
+static int on_service_info_callback(struct hostctrl *hc, 
+                                    unsigned int xid,
+                                    int retval,
+                                    const struct service_info *si, 
+                                    unsigned int num, 
+                                    jmethodID mid)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
-    jobject service_id, addr;
-    jmethodID mid;
-
-    mid = (*env)->GetMethodID(env, ctx->callbacks_cls, "serviceGet", 
-                              "(Lorg/servalarch/net/ServiceID;IIIILjava/net/InetAddress;)V");
-
-    if (!mid)
-        return -1;
+    jobjectArray arr = NULL;
+    jthrowable exc;
     
-    service_id = new_service_id(env, srvid);
+    if (num > 0) {
+        unsigned int i;
+
+        arr = (*env)->NewObjectArray(env, num, serviceinfo_cls, 0);
+        
+        if (!arr) {
+            LOG_ERR("could not create array\n");
+            return -1;
+        }
+
+        for (i = 0; i < num; i++) {
+            jobject service_info = new_service_info(env, si);
+            
+            if (!service_info) {
+                LOG_ERR("could not create service info object\n");
+                (*env)->DeleteLocalRef(env, arr);
+                return -1;
+            }
+            
+            (*env)->SetObjectArrayElement(env, arr, i, service_info);
+            (*env)->DeleteLocalRef(env, service_info);
+        }
+    }
+
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, (jlong)xid, (jint)retval, arr);
+
+    exc = (*env)->ExceptionOccurred(env);
     
-    if (!service_id)
-        return -1;
-
-    addr = new_inet4addr(env, ip);
-
-    if (!addr)
-        goto err_addr;
-
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
-                           (jint)prefix, (jint)priority, (jint)weight, addr);
-
-    (*env)->DeleteLocalRef(env, addr);
-err_addr:
-    (*env)->DeleteLocalRef(env, service_id);
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+    
+    (*env)->DeleteLocalRef(env, arr);
 
     return 0;
 }
 
+static int on_service_get(struct hostctrl *hc,
+                          unsigned int xid,
+                          int retval,
+                          const struct service_info *si,
+                          unsigned int num)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+    
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceGet", 
+                              "(JI[Lorg/servalarch/servalctrl/ServiceInfo;)V");
+    
+    if (!mid)
+        return -1;
+
+    return on_service_info_callback(hc, xid, retval, si, num, mid);
+}
+
+static int on_service_add(struct hostctrl *hc,
+                          unsigned int xid,
+                          int retval,
+                          const struct service_info *si,
+                          unsigned int num)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceAdd", 
+                              "(JI[Lorg/servalarch/servalctrl/ServiceInfo;)V");
+
+    if (!mid) {
+        LOG_ERR("Could not find methodID\n");
+        return -1;
+    }
+
+    return on_service_info_callback(hc, xid, retval, si, num, mid);
+}
+
+static int on_service_mod(struct hostctrl *hc,
+                          unsigned int xid,
+                          int retval,
+                          const struct service_info *si,
+                          unsigned int num)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceMod", 
+                              "(JI[Lorg/servalarch/servalctrl/ServiceInfo;)V");
+
+    if (!mid)
+        return -1;
+
+    return on_service_info_callback(hc, xid, retval, si, num, mid);
+}
+
+static int on_service_remove(struct hostctrl *hc,
+                             unsigned int xid,
+                             int retval,
+                             const struct service_info_stat *si,
+                             unsigned int num)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+    jobjectArray arr = NULL;
+    jthrowable exc;
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRemove", 
+                              "(JI[Lorg/servalarch/servalctrl/ServiceInfoStat;)V");
+    
+    if (!mid)
+        return -1;
+
+    if (num > 0) {
+        unsigned int i;
+
+        arr = (*env)->NewObjectArray(env, num, serviceinfostat_cls, 0);
+    
+        if (!arr)
+            return -1;
+    
+        for (i = 0; i < num; i++) {
+            jobject service_info_stat = new_service_info_stat(env, si);
+            
+            if (!service_info_stat) {
+                (*env)->DeleteLocalRef(env, arr);
+                return -1;
+            }
+            
+            (*env)->SetObjectArrayElement(env, arr, i, service_info_stat);
+            (*env)->DeleteLocalRef(env, service_info_stat);
+        }
+    }
+
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+                           (jlong)xid, (jint)retval, arr);
+
+    exc = (*env)->ExceptionOccurred(env);
+    
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+
+    (*env)->DeleteLocalRef(env, arr);
+
+    return 0;
+}
+
+#include <common/platform.h>
+#if defined(OS_MACOSX)
+#define JNI_ENV_CAST(env) (void **)(env)
+#else
+#define JNI_ENV_CAST(env) (env)
+#endif
+
 static int hostctrl_on_start(struct hostctrl *hc)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
-    (*jvm)->AttachCurrentThread(jvm, &ctx->env, NULL);
+    (*jvm)->AttachCurrentThread(jvm, JNI_ENV_CAST(&ctx->env), NULL);
     return 0;
 }
 
 static void hostctrl_on_stop(struct hostctrl *hc) {
     if ((*jvm)->DetachCurrentThread(jvm) != JNI_OK) {
-        fprintf(stderr, "%s: Could not detach callback thread\n", __func__);
+        LOG_ERR("%s: Could not detach callback thread\n", __func__);
     }
 }
 
 static struct hostctrl_callback cb = {
     .start = hostctrl_on_start,
     .stop = hostctrl_on_stop,
-    .service_registration = service_registration,
-    .service_unregistration = service_unregistration,
-    .service_stat_update = service_stat_update,
-    .service_get = service_get,
+    .service_registration = on_service_registration,
+    .service_unregistration = on_service_unregistration,
+    .service_stat_update = on_service_stat_update,
+    .service_get_result = on_service_get,
+    .service_add_result = on_service_add,
+    .service_mod_result = on_service_mod,
+    .service_remove_result = on_service_remove,
 };
 
 
@@ -375,21 +623,6 @@ enum {
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_nativeInit(JNIEnv *env, jobject obj, jint type)
 {
     struct jni_context *ctx;
-	jclass cls = (*env)->GetObjectClass(env, obj);
-    jclass hostctrl_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/HostCtrl");
-    jclass callbacks_cls;
-
-    if (!hostctrl_cls) {
-        fprintf(stderr, "%s could not find HostCtrl class\n", __func__);
-        return -1;
-    }
-
-    callbacks_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/HostCtrlCallbacks");
-
-    if (!callbacks_cls) {
-        fprintf(stderr, "%s could not find HostCtrlCallbacks class\n", __func__);
-        return -1;
-    }
 
     ctx = malloc(sizeof(*ctx));
 
@@ -398,10 +631,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_nativeInit(JNIEnv *env, job
    
     memset(ctx, 0, sizeof(*ctx));
     ctx->obj = (*env)->NewGlobalRef(env, obj);
-    ctx->cls = (*env)->NewGlobalRef(env, cls);
-    ctx->hostctrl_cls = (*env)->NewGlobalRef(env, hostctrl_cls);
-    ctx->callbacks_cls = (*env)->NewGlobalRef(env, callbacks_cls);
     ctx->callbacks = (*env)->NewGlobalRef(env, get_callbacks(env, ctx));
+
     ctx->env = NULL; /* Initialized on callback thread when it starts */
 
 	if (set_native_context(env, obj, ctx) == -1) {
@@ -433,10 +664,8 @@ void JNICALL Java_org_servalarch_servalctrl_HostCtrl_nativeFree(JNIEnv *env, job
     struct jni_context *ctx = get_native_context(env, obj);
     if (ctx->hc)
         hostctrl_free(ctx->hc);
+
     (*env)->DeleteGlobalRef(env, ctx->obj);
-    (*env)->DeleteGlobalRef(env, ctx->cls);
-    (*env)->DeleteGlobalRef(env, ctx->hostctrl_cls);
-    (*env)->DeleteGlobalRef(env, ctx->callbacks_cls);
     (*env)->DeleteGlobalRef(env, ctx->callbacks);
     free(ctx);
 }
@@ -461,7 +690,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateFlow(JNIEnv *env, jo
     return ret;
 }
 
-jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface(JNIEnv *env, jobject obj, jstring fromIface, jstring toIface)
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface(JNIEnv *env, jobject obj, 
+                                                                      jstring fromIface, jstring toIface)
 {
     const char *from, *to;
     struct jni_context *ctx = get_native_context(env, obj);
@@ -568,6 +798,16 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4(JNIEnv *
     return hostctrl_service_unregister(ctx->hc, &srvid, (unsigned short)prefix_bits);
 }
 
+jlong JNICALL Java_org_servalarch_servalctrl_HostCtrl_getXid(JNIEnv *env, jobject obj)
+{
+    struct jni_context *ctx = get_native_context(env, obj);
+    
+    if (!ctx->hc)
+        return -1;
+
+    return (jlong)ctx->hc->xid;
+}
+
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
     JNIEnv *env;
@@ -576,11 +816,60 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
     jvm = vm;
 
     if ((*jvm)->GetEnv(jvm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
-        fprintf(stderr, "Could not get JNI env in JNI_OnLoad\n");
+        LOG_ERR("Could not get JNI env in JNI_OnLoad\n");
         return -1;
     }
     
     ret = libservalctrl_init();
+
+	hostctrl_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/HostCtrl");
+
+    if (!hostctrl_cls) {
+        LOG_ERR("could not find HostCtrl class\n");
+        return -1;
+    }
+
+    hostctrlcallbacks_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/HostCtrlCallbacks");
+
+    if (!hostctrlcallbacks_cls) {
+        LOG_ERR("could not find HostCtrlCallbacks class\n");
+        return -1;
+    }
+
+	serviceinfo_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/ServiceInfo");
+
+    if (!serviceinfo_cls) {
+        LOG_ERR("could not find ServiceInfo class\n");
+        return -1;
+    }
+
+	serviceinfostat_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/ServiceInfoStat");
+
+    if (!serviceinfostat_cls) {
+        LOG_ERR("could not find ServiceInfoStat class\n");
+        return -1;
+    }
+
+	serviceid_cls = (*env)->FindClass(env, "org/servalarch/net/ServiceID");
+
+    if (!serviceid_cls) {
+        LOG_ERR("could not find ServiceID class\n");
+        return -1;
+    }
+
+    inetaddress_cls = (*env)->FindClass(env, "java/net/InetAddress");
+
+    if (!inetaddress_cls) {
+        LOG_ERR("could not find InetAddress class\n");
+        return -1;
+    }
+
+    hostctrl_cls = (*env)->NewGlobalRef(env, hostctrl_cls);
+    hostctrlcallbacks_cls = (*env)->NewGlobalRef(env, hostctrlcallbacks_cls);
+    serviceinfo_cls  = (*env)->NewGlobalRef(env, serviceinfo_cls);
+    serviceinfostat_cls = (*env)->NewGlobalRef(env, serviceinfostat_cls);
+    serviceid_cls = (*env)->NewGlobalRef(env, serviceid_cls);
+    inetaddress_cls = (*env)->NewGlobalRef(env, inetaddress_cls);
     
 	return ret == 0 ? JNI_VERSION_1_4 : ret;
 }
@@ -591,8 +880,15 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
     
     libservalctrl_fini();
 
+    (*env)->DeleteGlobalRef(env, hostctrl_cls);
+    (*env)->DeleteGlobalRef(env, hostctrlcallbacks_cls);
+    (*env)->DeleteGlobalRef(env, serviceinfo_cls);
+    (*env)->DeleteGlobalRef(env, serviceinfostat_cls);
+    (*env)->DeleteGlobalRef(env, serviceid_cls);
+    (*env)->DeleteGlobalRef(env, inetaddress_cls);
+
     if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
-        fprintf(stderr, "Could not get JNI env in JNI_OnUnload\n");
+        LOG_ERR("Could not get JNI env in JNI_OnUnload\n");
         return;
     }         
 }

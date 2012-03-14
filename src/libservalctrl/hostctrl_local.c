@@ -23,6 +23,7 @@ static int local_service_generic(struct hostctrl *hc, int type,
 
         memset(&req, 0, sizeof(req));
         req.cm.cmh.type = type;
+        req.cm.cmh.xid = ++hc->xid;
         req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(1);
 	req.cm.service[0].srvid_prefix_bits = 
                 (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
@@ -87,6 +88,7 @@ static int local_service_modify(struct hostctrl *hc,
         memset(&req, 0, sizeof(req));
         req.cm.cmh.type = CTRLMSG_TYPE_MOD_SERVICE;
         req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(2);
+        req.cm.cmh.xid = ++hc->xid;
         req.service[0].srvid_prefix_bits = 
                 (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ? 
                 0 : prefix_bits;
@@ -146,6 +148,7 @@ static int local_interface_migrate(struct hostctrl *hc,
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
         cm.cmh.len = sizeof(cm);
+        cm.cmh.xid = ++hc->xid;
         cm.migrate_type = CTRL_MIG_IFACE;
         strncpy(cm.from_i, from_iface, IFNAMSIZ - 1);
         strncpy(cm.to_i, to_iface, IFNAMSIZ - 1);
@@ -172,6 +175,7 @@ static int local_flow_migrate(struct hostctrl *hc,
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
         cm.cmh.len = sizeof(cm);
+        cm.cmh.xid = ++hc->xid;
         cm.migrate_type = CTRL_MIG_FLOW;
         memcpy(&cm.from_f, flow, sizeof(struct flow_id));
         strncpy(cm.to_i, to_iface, IFNAMSIZ - 1);
@@ -198,6 +202,7 @@ static int local_service_migrate(struct hostctrl *hc,
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_MIGRATE;
         cm.cmh.len = sizeof(cm);
+        cm.cmh.xid = ++hc->xid;
         cm.migrate_type = CTRL_MIG_SERVICE;
         memcpy(&cm.from_s, srvid, sizeof(struct service_id));
         strncpy(cm.to_i, to_iface, IFNAMSIZ - 1);
@@ -216,7 +221,8 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         switch (cm->type) {
         case CTRLMSG_TYPE_REGISTER: {
                 struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
-                ret = hc->cbs->service_registration(hc, &cmr->srvid, 
+                ret = hc->cbs->service_registration(hc,
+                                                    &cmr->srvid, 
                                                     cmr->srvid_flags, 
                                                     cmr->srvid_prefix_bits, 
                                                     from, NULL);
@@ -224,7 +230,8 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         }
         case CTRLMSG_TYPE_UNREGISTER: {
                 struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
-                ret = hc->cbs->service_unregistration(hc, &cmr->srvid, 
+                ret = hc->cbs->service_unregistration(hc, 
+                                                      &cmr->srvid, 
                                                       cmr->srvid_flags, 
                                                       cmr->srvid_prefix_bits, 
                                                       from);
@@ -235,28 +242,63 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         case CTRLMSG_TYPE_GET_SERVICE: {
                 struct ctrlmsg_service *cs = 
                         (struct ctrlmsg_service *)cm;
-                unsigned int num = CTRLMSG_SERVICE_NUM(cs);
-                unsigned int i;
-                
-                if (!hc->cbs->service_get)
-                        break;
-                
-                for (i = 0; i < num; i++) {
-                        ret = hc->cbs->service_get(hc, &cs->service[i].srvid,
-                                                   cs->service[i].srvid_flags,
-                                                   cs->service[i].srvid_prefix_bits,
-                                                   cs->service[i].priority,
-                                                   cs->service[i]. weight,
-                                                   &cs->service[i].address);
-                }
+
+                if (hc->cbs->service_get_result)
+                        ret = hc->cbs->service_get_result(hc, 
+                                                          cm->xid,
+                                                          cm->retval,
+                                                          &cs->service[0], 
+                                                          CTRLMSG_SERVICE_NUM(cs));
                 break;
         }
-        case CTRLMSG_TYPE_SERVICE_STAT:
+        case CTRLMSG_TYPE_SERVICE_STAT: {
+                struct ctrlmsg_service_stat *css = 
+                        (struct ctrlmsg_service_stat *)cm;
+                
+                if (hc->cbs->service_stat_update)
+                        ret = hc->cbs->service_stat_update(hc,
+                                                           cm->xid,
+                                                           cm->retval,
+                                                           &css->stats, 
+                                                           CTRLMSG_SERVICE_STAT_NUM(css));
                 break;
-        case CTRLMSG_TYPE_ADD_SERVICE:
+        }
+        case CTRLMSG_TYPE_ADD_SERVICE: {
+                struct ctrlmsg_service *cs = 
+                        (struct ctrlmsg_service *)cm;
+
+                if (hc->cbs->service_add_result)
+                        ret = hc->cbs->service_add_result(hc, 
+                                                          cm->xid,
+                                                          cm->retval,
+                                                          &cs->service[0], 
+                                                          CTRLMSG_SERVICE_NUM(cs));
                 break;
-        case CTRLMSG_TYPE_DEL_SERVICE:
+        }
+        case CTRLMSG_TYPE_MOD_SERVICE: {
+                struct ctrlmsg_service *cs = 
+                        (struct ctrlmsg_service *)cm;
+
+                if (hc->cbs->service_mod_result)
+                        ret = hc->cbs->service_mod_result(hc,
+                                                          cm->xid,
+                                                          cm->retval,
+                                                          &cs->service[0], 
+                                                          CTRLMSG_SERVICE_NUM(cs));
                 break;
+        }
+        case CTRLMSG_TYPE_DEL_SERVICE: {
+                struct ctrlmsg_service_info_stat *csis = 
+                        (struct ctrlmsg_service_info_stat *)cm;
+
+                if (hc->cbs->service_remove_result)
+                        ret = hc->cbs->service_remove_result(hc,
+                                                             cm->xid,
+                                                             cm->retval,
+                                                             &csis->service[0], 
+                                                             CTRLMSG_SERVICE_INFO_STAT_NUM(csis));
+                break;
+        }
 	default:
 		LOG_DBG("Received message type %u\n", cm->type);
 		break;

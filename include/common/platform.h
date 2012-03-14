@@ -13,6 +13,9 @@
 #if defined(__linux__)
 #define OS_LINUX 1
 #define OS_UNIX 1
+#if defined(ANDROID)
+#define OS_ANDROID 1
+#endif
 #if defined(__KERNEL__)
 #define OS_KERNEL 1
 #define OS_LINUX_KERNEL 1
@@ -34,10 +37,12 @@
 #endif
 
 #if defined(OS_LINUX)
+#if !defined(OS_ANDROID)
 #define HAVE_LIBIO 1
 #define HAVE_PPOLL 1
 #define HAVE_PSELECT 1
 #define HAVE_OFFSETOF 1
+#endif
 #include <stddef.h>
 #endif
 

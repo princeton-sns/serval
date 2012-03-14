@@ -3,7 +3,8 @@
  * Handlers for Serval's control channel.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
- * 
+ *          David Shue <dshue@cs.princeton.edu>
+ *          Rob Kiefer <rkiefer@cs.princeton.edu> 
  *
  *	This program is free software; you can redistribute it and/or
  *	modify it under the terms of the GNU General Public License as
@@ -105,7 +106,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 
                 if (err > 0) {
                         if (index < i) {
-                                /*copy it over */
+                                /* copy it over */
                                 memcpy(&cmr->service[index], 
                                        entry, sizeof(*entry));
                         }
@@ -116,7 +117,15 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 }
         }
 
-        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        if (index == 0) {
+                /* Just return the original request with a return value */
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+        } else {
+                /* Return the entries added */
+                cm->retval = CTRLMSG_RETVAL_OK;
+                cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        }
+
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -126,18 +135,24 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
         unsigned int num_res = CTRLMSG_SERVICE_NUM(cmr);
-        unsigned char buffer[sizeof(struct ctrlmsg_service_info_stat) + 
-                             sizeof(struct service_info_stat) * num_res];
-        struct ctrlmsg_service_info_stat *cms = 
-                (struct ctrlmsg_service_info_stat *)buffer;
+        const size_t cmsg_size = sizeof(struct ctrlmsg_service_info_stat) + 
+                sizeof(struct service_info_stat) * num_res;
+        struct ctrlmsg_service_info_stat *cms;
         struct service_id null_service = { .s_sid = { 0 } };
-        unsigned int i = 0;
-        int index = 0;
-        int err = 0;
+        unsigned int i = 0, index = 0;
+        int err = 0;       
 
-#if defined(ENABLE_DEBUG)
         LOG_DBG("deleting %u services\n", num_res);
-#endif
+
+        cms = kmalloc(cmsg_size, GFP_KERNEL);
+
+        if (!cms) {
+                cm->retval = CTRLMSG_RETVAL_ERROR;
+                ctrl_sendmsg(cm, GFP_KERNEL);
+                return -ENOMEM;
+        }
+
+        memset(cms, 0, cmsg_size);
 
         for (i = 0; i < num_res; i++) {
                 struct service_info *entry = &cmr->service[i];
@@ -195,9 +210,19 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 service_entry_put(se);
         }
 
-        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STAT;
-        cms->cmh.len = CTRLMSG_SERVICE_STAT_NUM_LEN(index);
-        ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
+        if (index == 0) {
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+                ctrl_sendmsg(cm, GFP_KERNEL);
+        } else {
+                cms->cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
+                cms->xid = cmr->xid;
+                cms->cmh.xid = cm->xid;
+                cms->cmh.retval = CTRLMSG_RETVAL_OK;
+                cms->cmh.len = CTRLMSG_SERVICE_INFO_STAT_NUM_LEN(index);
+                ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
+        }
+
+        kfree(cms);
 
         return 0;
 }
@@ -261,7 +286,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                                      make_target(dev));
                 if (err > 0) {
                         if (index < i) {
-                                /*copy it over */
+                                /* copy it over */
                                 memcpy(&cmr->service[index], 
                                        entry_new, sizeof(*entry_new));
                         }
@@ -272,8 +297,14 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                                 err);
                 }
         }
-
-        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        
+        if (index == 0) {
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+        } else {
+                cm->retval = CTRLMSG_RETVAL_OK;
+                cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        }
+        
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -305,12 +336,15 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 
                 if (!cres) {
                         service_entry_put(se);
+                        cm->retval = CTRLMSG_RETVAL_ERROR;
+                        ctrl_sendmsg(cm, GFP_KERNEL);
                         return -ENOMEM;
                 }
 
                 memset(cres, 0, size);
                 cres->cmh.type = CTRLMSG_TYPE_GET_SERVICE;
                 cres->cmh.len = size;
+                cres->cmh.xid = cm->xid;
                 cres->xid = cmg->xid;
 
                 memset(&iter, 0, sizeof(iter));
@@ -323,23 +357,32 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                         memcpy(&entry->address, 
                                t->dst, t->dstlen);
                         
-#if defined(ENABLE_DEBUG)
-                        {
-                                char buf[18];
-                                LOG_DBG("Get %s %s\n", 
-                                service_id_to_str(&entry->srvid), 
-                                        inet_ntop(AF_INET, &t->dst, 
-                                          buf, 18));
-                        }
-#endif
                         entry->srvid_prefix_bits = service_get_prefix_bits(se);
                         entry->srvid_flags = service_iter_get_flags(&iter);
                         entry->weight = t->weight;
                         entry->priority = service_iter_get_priority(&iter);
+                        
+#if defined(ENABLE_DEBUG)
+                        {
+                                char buf[18];
+                                LOG_DBG("Get %s %s priority=%u weight=%u\n", 
+                                service_id_to_str(&entry->srvid), 
+                                        inet_ntop(AF_INET, &t->dst, 
+                                                  buf, 18),
+                                        entry->priority,
+                                        entry->weight);
+                        }
+#endif
+                        
                 }
 
                 service_iter_destroy(&iter);
                 service_entry_put(se);
+
+                if (i == 0)
+                        cres->cmh.retval = CTRLMSG_RETVAL_NOENTRY;
+                else
+                        cres->cmh.retval = CTRLMSG_RETVAL_OK;
 
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);
                 kfree(cres);
@@ -348,6 +391,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                         se->count, cres->cmh.len);
         } else {
                 cmg->service[0].srvid_flags = SVSF_INVALID;
+                cmg->cmh.retval = CTRLMSG_RETVAL_NOENTRY;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
                 LOG_DBG("Service %s not found\n",
                         service_id_to_str(&cmg->service[0].srvid));

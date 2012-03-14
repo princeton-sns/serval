@@ -38,7 +38,7 @@ enum ctrlmsg_type {
 };
 
 struct service_info {
-        uint16_t type;
+        uint16_t type; /* Type of service table entry? DMX, FWD, DLY, etc. */
         uint8_t  srvid_prefix_bits;
         uint8_t  srvid_flags;
         uint32_t if_index;
@@ -85,14 +85,22 @@ enum sv_stack_capabilities {
 
 };
 
+enum ctrlmsg_retval {
+        CTRLMSG_RETVAL_OK = 0,
+        CTRLMSG_RETVAL_ERROR,
+        CTRLMSG_RETVAL_NOENTRY,
+        CTRLMSG_RETVAL_MALFORMED,
+};
+ 
 struct ctrlmsg {
         uint8_t type;
-        uint8_t flags;
+        uint8_t retval;
         uint16_t len; /* Length, including header and payload */
+        uint32_t xid; /* Transaction ID */
         unsigned char payload[0];
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg) == 4)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg) == 8)
 
 #define CTRLMSG_SIZE (sizeof(struct ctrlmsg))
 
@@ -106,7 +114,7 @@ struct ctrlmsg_register {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 44)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 48)
 
 enum ctrlmsg_register_flags {
         REG_FLAG_REREGISTER = 1,
@@ -131,7 +139,7 @@ struct ctrlmsg_resolve {
         struct in_addr src_address;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 80)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 84)
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 
@@ -144,7 +152,7 @@ struct ctrlmsg_service {
         struct service_info service[0];
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service) == 8)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service) == 12)
 
 #define CTRLMSG_GET_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
 #define CTRLMSG_ADD_SERVICE_SIZE (sizeof(struct ctrlmsg_service))
@@ -168,7 +176,7 @@ struct ctrlmsg_service_info_stat {
         struct service_info_stat service[0];
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service_info_stat) == 8)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service_info_stat) == 12)
 
 #define CTRLMSG_SERVICE_INFO_STAT_LEN(cmsg)     \
         (cmsg)->cmh.len
@@ -187,7 +195,7 @@ struct ctrlmsg_service_stat {
         struct service_stat stats;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service_stat) == 36)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_service_stat) == 40)
 
 #define CTRLMSG_SERVICE_STAT_SIZE (sizeof(struct ctrlmsg_service_stat))
 
@@ -207,7 +215,7 @@ struct ctrlmsg_capabilities {
         uint32_t capabilities;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_capabilities) == 8)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_capabilities) == 12)
 
 #define CTRLMSG_CAPABILITIES_SIZE (sizeof(struct ctrlmsg_capabilities))
 
@@ -219,7 +227,7 @@ enum {
 
 struct ctrlmsg_migrate {
 	struct ctrlmsg cmh;
-	unsigned char migrate_type;
+	uint8_t migrate_type;
 	union  {
 	        char from_if[IFNAMSIZ];
 	        struct flow_id from_flow;
@@ -229,7 +237,9 @@ struct ctrlmsg_migrate {
 #define from_f from.from_flow
 #define from_s from.from_service
 	char to_i[IFNAMSIZ];
-};
+} CTRLMSG_PACKED;
+
+/* CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == ) */
 
 #define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migratee))
 

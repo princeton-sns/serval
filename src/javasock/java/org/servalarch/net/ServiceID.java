@@ -4,7 +4,7 @@ package org.servalarch.net;
 public class ServiceID {
     private byte[] identifier = null;
     public static final int SERVICE_ID_MAX_BITS = 256;
-    public static final int SERVICE_ID_MAX_LENGTH = 20;
+    public static final int SERVICE_ID_MAX_LENGTH = 32;
     private String idStr = null;
     
     public ServiceID() {
@@ -21,7 +21,7 @@ public class ServiceID {
        based on a short integer (2 bytes).
      */
     public ServiceID(short id) {
-        this.identifier = new byte[32];
+        this.identifier = new byte[SERVICE_ID_MAX_LENGTH];
         this.identifier[0] = 0;
         this.identifier[1] = 0;
         this.identifier[2] = (byte)((id >> 8) & 0xff);
@@ -32,7 +32,7 @@ public class ServiceID {
        based on a integer (4 bytes).
      */
     public ServiceID(int id) {
-        this.identifier = new byte[32];
+        this.identifier = new byte[SERVICE_ID_MAX_LENGTH];
         this.identifier[0] = (byte)((id >> 24) & 0xff);
         this.identifier[1] = (byte)((id >> 16) & 0xff);
         this.identifier[2] = (byte)((id >> 8) & 0xff);
@@ -54,9 +54,12 @@ public class ServiceID {
     
     @Override
     public String toString() {
+    	if (identifier == null) 
+    		return "0";
+    	
     	if (idStr == null) {
     		idStr = "";
-    		for (int i = 0; i < 20; i++) {
+    		for (int i = 0; i < identifier.length; i++) {
     			idStr += String.format("%02x", identifier[i]);
     		}
     	}

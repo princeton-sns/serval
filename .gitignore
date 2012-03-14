@@ -60,6 +60,10 @@ src/libservalctrl/java/classes.list
 src/libservalctrl/java/sources.list
 android/ServalChat/bin/
 android/ServalChat/gen/
+android/ServalChat/local.properties
+android/Serval/libs/
+android/Serval/obj/
+android/Serval/local.properties
 stamp-h1
 #
 Makefile.in

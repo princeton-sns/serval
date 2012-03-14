@@ -49,14 +49,14 @@ read
 
 SERVAL_PREFIX="/data/local/serval"
 
-LIB_HOST_PATH="libs/$ARCH"
+LIB_HOST_PATH="Serval/libs/$ARCH"
 LIB_PATH="system/lib"
-LIB_FILES="libservalctrl.so libservalnet_jni.so"
+LIB_FILES="libservalctrl.so libservalctrl_jni.so libservalnet_jni.so"
 
-BIN_HOST_PATH="libs/$ARCH"
+BIN_HOST_PATH="Serval/libs/$ARCH"
 #BIN_PATH="system/bin"
 BIN_PATH=$SERVAL_PREFIX
-BIN_FILES="servd serv udp_server"
+BIN_FILES="servd serv"
 
 # Binaries executing with root permissions
 BIN_FILES_SU="serval"

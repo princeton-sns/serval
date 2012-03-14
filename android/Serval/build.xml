@@ -45,12 +45,40 @@
             unless="sdk.dir"
     />
 
-
 <!-- extension targets. Uncomment the ones where you want to do custom work
      in between standard targets -->
-<!--
+
     <target name="-pre-build">
+      <copy file="../../src/stack/serval.ko" todir="assets" overwrite="yes" failonerror="no"/>
+      <copy file="../../src/javasock/org.servalarch.javasock.jar" todir="libs" overwrite="yes" failonerror="no"/>
+      <copy file="../../src/libservalctrl/java/org.servalarch.servalctrl.jar" todir="libs" overwrite="yes" failonerror="no"/>
+      
+      <fail message="Kernel module missing in assets directory. Make sure you compile the kernel module for your Android device and leave it under ./src/stack in the source tree.">
+	<condition>
+	  <not>
+	    <available file="assets/serval.ko"/>
+	  </not>
+	</condition>
+      </fail>
+      
+      <fail message="Serval socket Java-bindings not found. Make sure you compile the Serval Java bindings before building this app.">
+	<condition>
+	  <not>
+	    <available file="libs/org.servalarch.javasock.jar"/>
+	  </not>
+	</condition>
+      </fail>
+      
+      <fail message="Serval control Java-bindings not found. Make sure you compile the Serval Java bindings before building this app.">
+	<condition>
+	  <not>
+	    <available file="libs/org.servalarch.servalctrl.jar"/>
+	  </not>
+	</condition>
+      </fail>
     </target>
+    
+<!--
     <target name="-pre-compile">
     </target>
 

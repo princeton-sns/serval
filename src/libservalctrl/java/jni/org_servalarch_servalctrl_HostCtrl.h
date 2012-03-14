@@ -11,6 +11,14 @@ extern "C" {
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_LOCAL 0L
 #undef org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE 1L
+#undef org_servalarch_servalctrl_HostCtrl_RETVAL_OK
+#define org_servalarch_servalctrl_HostCtrl_RETVAL_OK 0LL
+#undef org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR
+#define org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR 1LL
+#undef org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY
+#define org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY 2LL
+#undef org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED
+#define org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED 3LL
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    nativeInit
@@ -82,6 +90,14 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4
   (JNIEnv *, jobject, jobject, jint);
+
+/*
+ * Class:     org_servalarch_servalctrl_HostCtrl
+ * Method:    getXid
+ * Signature: ()J
+ */
+JNIEXPORT jlong JNICALL Java_org_servalarch_servalctrl_HostCtrl_getXid
+  (JNIEnv *, jobject);
 
 #ifdef __cplusplus
 }

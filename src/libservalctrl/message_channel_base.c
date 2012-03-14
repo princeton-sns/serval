@@ -263,6 +263,7 @@ static void *message_channel_base_task(void *channel)
                               &peer.sa, &addrlen);
         }
 #endif
+
         if (ret == -1) {
             if (errno == EAGAIN || 
                 errno == EWOULDBLOCK) {

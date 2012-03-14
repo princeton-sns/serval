@@ -1,6 +1,8 @@
-SUBDIRS = \
-	. \
-	java
+SUBDIRS = .
+
+if ENABLE_JAVA_BINDINGS
+SUBDIRS += java
+endif
 
 lib_LTLIBRARIES = libservalctrl.la
 

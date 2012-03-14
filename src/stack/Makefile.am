@@ -131,11 +131,13 @@ EXTRA_DIST = \
 	$(SERVAL_KERNEL_HDR) \
 	$(SERVAL_KERNEL_SRC)
 
-if ENABLE_LINUX_MODULE
-all: serval.ko
-
+# This target must be left outside the ENABLE_LINUX_MODULE if-endif
+# construct for Android cross-compiling to work on, e.g., Mac OS X.
 serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
+
+if ENABLE_LINUX_MODULE
+all: serval.ko
 
 install-data-local: serval.ko
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install

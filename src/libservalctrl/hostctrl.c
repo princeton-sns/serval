@@ -223,6 +223,11 @@ void hostctrl_free(struct hostctrl *hc)
 	free(hc);
 }
 
+unsigned int hostctrl_get_xid(struct hostctrl *hc)
+{
+        return hc->xid;
+}
+
 int hostctrl_interface_migrate(struct hostctrl *hc, 
                                const char *from, const char *to)
 {

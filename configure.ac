@@ -181,6 +181,65 @@ fi
 
 AM_CONDITIONAL([ENABLE_JAVA_BINDINGS], [test x$java_bindings = xyes])
 
+AC_ARG_WITH([android-sdk],
+            [AS_HELP_STRING([--with-android-sdk=DIR],
+              [Path to Android SDK])],
+            [android_sdk_path=$withval],
+            [android_sdk_path=check])
+
+# Check if we should build Android applications
+have_android_sdk=no
+
+# If we cannot build the the bindings, do not care about apps
+if test x$java_bindings = xyes
+then
+	# Check for Android SDK and NDK
+	AC_PATH_PROG(sdk_path, apkbuilder,, [$android_sdk_path/tools:$PATH'])
+
+	if test x$sdk_path != x'' 
+	then
+	        # Strip app name and tools directory
+		sdk_path=`AS_DIRNAME(["$sdk_path"])`
+		android_sdk_path=`AS_DIRNAME(["$sdk_path"])`
+
+		AC_SUBST(ANDROID_SDK_PATH, [$android_sdk_path]) 
+		AC_MSG_NOTICE(Using Android SDK in $android_sdk_path)	
+
+	        AC_CHECK_PROG(have_ant, ant, yes, no)
+
+        	if test x$have_ant = xno
+ 		then
+			AC_MSG_NOTICE(Install Ant to build Android applications)
+		else
+			have_android_sdk=yes
+        	fi
+	fi
+fi
+
+AM_CONDITIONAL(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes])
+AC_DEFINE(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes], [Android SDK found])
+
+AC_ARG_WITH([android-ndk],
+            [AS_HELP_STRING([--with-android-ndk=DIR],
+              [Path to Android NDK])],
+            [android_ndk_path=$withval],
+            [android_ndk_path=check])
+
+AC_PATH_PROG(ndk_path, ndk-build,, [$android_ndk_path:$PATH])
+
+have_android_ndk=no
+
+if test x$ndk_path != x'' 
+then
+	have_android_ndk=yes
+	android_ndk_path=$ndk_path
+	AC_MSG_NOTICE(Using Android NDK in $android_ndk_path)
+	AC_SUBST(ANDROID_NDK_PATH, [$android_ndk_path]) 
+fi
+
+AM_CONDITIONAL(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes])
+AC_DEFINE(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes], [Android NDK found])
+
 AC_ARG_ENABLE([native_api],
 AS_HELP_STRING([--enable-native-api],[Use native kernel sockets API for clients]),
 [case "${enableval}" in
@@ -251,6 +310,8 @@ AC_CONFIG_FILES([Makefile
 	src/javasock/Makefile
 	src/javasock/java/Makefile	
 	src/javasock/jni/Makefile
+	android/Serval/local.properties
+	android/ServalChat/local.properties
 	])
 
 AC_OUTPUT

@@ -485,69 +485,71 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
   router IP.
  */
 static int local_service_get_result(struct hostctrl *hc,
-                                    const struct service_id *srvid,
-                                    unsigned short flags,
-                                    unsigned short prefix,
-                                    unsigned int priority,
-                                    unsigned int weight,
-                                    struct in_addr *ip)
+                                    unsigned int xid,
+                                    int retval,
+                                    const struct service_info *si,
+                                    unsigned int num)
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
+        unsigned int i = 0;
 
-#if defined(ENABLE_DEBUG)
-        char buf[18], buf2[18];
-        LOG_DBG("GET: %s valid=%s is_router=%s router_ip_set=%s"
-                " prio=%u weight=%u"
-                " requested_ip=%s new_ip=%s\n",
-                service_id_to_str(srvid),
-                flags & SVSF_INVALID ? "false" : "true",
-                ctx->router ? "true" : "false",
-                ctx->router_ip_set ? "true" : "false",
-                priority, weight,
-                inet_ntop(AF_INET, ip, buf, 18),
-                inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
-#endif
-        sleep(1);
-
-        if (flags & SVSF_INVALID) {
-                LOG_DBG("No default service route set\n");
-                /* There was no existing route, the 'get' returned
-                   nothing. Just add our default route */
-                ret = hostctrl_service_add(ctx->lhc, &default_service,
-                                           0, 1, 0, &ctx->router_ip);
-        } else if (!ctx->router && ctx->router_ip_set && 
-                   memcmp(&default_service, srvid, 
-                          sizeof(default_service)) == 0 && 
-                   memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
+        for (i = 0; i < num; i++) {
 #if defined(ENABLE_DEBUG)
                 char buf[18], buf2[18];
-                LOG_DBG("Replacing default route old=%s new=%s\n",
-                        inet_ntop(AF_INET, ip, buf, 18),
+                LOG_DBG("GET: %s valid=%s is_router=%s router_ip_set=%s"
+                        " prio=%u weight=%u"
+                        " requested_ip=%s new_ip=%s\n",
+                        service_id_to_str(&si->srvid),
+                        si->srvid_flags & SVSF_INVALID ? "false" : "true",
+                        ctx->router ? "true" : "false",
+                        ctx->router_ip_set ? "true" : "false",
+                        si->priority, si->weight,
+                        inet_ntop(AF_INET, &si->address, buf, 18),
                         inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
 #endif
-                /* The 'get' for the default service returned
-                   something. Update the existing entry */
-                ret = hostctrl_service_modify(ctx->lhc, srvid, 
-                                              prefix, priority,
-                                              weight, ip, &ctx->router_ip);
+                sleep(1);
+                
+                if (si->srvid_flags & SVSF_INVALID) {
+                        LOG_DBG("No default service route set\n");
+                        /* There was no existing route, the 'get' returned
+                           nothing. Just add our default route */
+                        ret = hostctrl_service_add(ctx->lhc, &default_service,
+                                                   0, 1, 0, &ctx->router_ip);
+                } else if (!ctx->router && ctx->router_ip_set && 
+                           memcmp(&default_service, &si->srvid, 
+                                  sizeof(default_service)) == 0 && 
+                           memcmp(&ctx->router_ip, &si->address, sizeof(si->address)) != 0) {
+#if defined(ENABLE_DEBUG)
+                        char buf[18], buf2[18];
+                        LOG_DBG("Replacing default route old=%s new=%s\n",
+                                inet_ntop(AF_INET, &si->address, buf, 18),
+                                inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+#endif
+                        /* The 'get' for the default service returned
+                           something. Update the existing entry */
+                        ret = hostctrl_service_modify(ctx->lhc, &si->srvid, 
+                                                      si->srvid_prefix_bits, si->priority,
+                                                      si->weight, &si->address, &ctx->router_ip);
+                }
+                
         }
-
+        
         /* Check if we need to perform the deferred reregistration of
            services now that we have a new default service router
-           (which was probably a result of an interface up/down). */
+                   (which was probably a result of an interface up/down). */
         if (ctx->router_ip_set && !ctx->router && 
             signal_num_waiting(&ctx->reregister_signal)) {
                 signal_raise(&ctx->reregister_signal);
         }
-
+        
         return ret;
 }
                                    
 static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
-        .service_get = local_service_get_result,
+        .service_get_result = local_service_get_result,
 };
 
 static struct hostctrl_callback rcb = {

@@ -540,7 +540,7 @@ int service_entry_remove_target_by_dev(struct service_entry *se,
 int __service_entry_remove_target(struct service_entry *se, 
                                   service_rule_type_t type,
                                   const void *dst, int dstlen,
-                                  struct target_stats* stats) 
+                                  struct target_stats *stats) 
 {
         struct target *t;
         struct target_set* set = NULL;
