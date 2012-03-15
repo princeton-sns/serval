@@ -19,6 +19,7 @@ static int remote_service_register(struct hostctrl *hc,
         memset(&req, 0, sizeof(req));
         req.cmh.type = CTRLMSG_TYPE_REGISTER;
         req.cmh.len = htons(sizeof(req));
+        req.cmh.xid = ++hc->xid;
 	req.srvid_prefix_bits = 
                 (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
                 0 : prefix_bits;
@@ -50,6 +51,7 @@ static int remote_service_unregister(struct hostctrl *hc,
         memset(&req, 0, sizeof(req));
         req.cmh.type = CTRLMSG_TYPE_UNREGISTER;
         req.cmh.len = htons(sizeof(req));
+        req.cmh.xid = ++hc->xid;
 	req.srvid_prefix_bits = 
                 (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
                 0 : prefix_bits;

@@ -1,4 +1,17 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * The Serval stack as a user-space daemon. This implements the main
+ * runloop and interactions with clients (i.e., apps that interact
+ * with the stack).
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <stdlib.h>
 #include <sys/types.h>  
 #include <sys/socket.h>
@@ -292,7 +305,7 @@ static int server_run(void)
 				LOG_INF("select interrupted\n");
 				continue;
 			} else if (errno == EINVAL) {
-                                LOG_ERR("Ivalid timeout or negative ndfs\n");
+                                LOG_ERR("Invalid timeout or negative ndfs\n");
                                 LOG_ERR("Timeout is %ld %ld\n", 
                                         to->tv_sec, to->tv_nsec);
                         }
@@ -520,7 +533,6 @@ int main(int argc, char **argv)
 
                 /* Cleanup old stuff from crashed instance */
                 unlink(SERVAL_STACK_CTRL_PATH);
-                unlink(SERVAL_CLIENT_CTRL_PATH);
                 unlink(TCP_SERVER_PATH);
                 unlink(UDP_SERVER_PATH);
         }

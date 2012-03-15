@@ -4,6 +4,13 @@
 
 #include <serval/platform.h>
 
+enum addr_type {
+        IFADDR_LOCAL,
+        IFADDR_ADDRESS,
+        IFADDR_BROADCAST,
+        IFADDR_NETMASK,
+};
+
 #if defined(OS_LINUX_KERNEL)
 #include <linux/netdevice.h>
 
@@ -16,60 +23,39 @@ static inline void skb_set_dev(struct sk_buff *skb, struct net_device *dev)
 
 #include <linux/inetdevice.h>
 
-static inline int dev_get_ipv4_addr(struct net_device *dev, void *addr)
+static inline int dev_get_ipv4_addr(struct net_device *dev, 
+                                    enum addr_type type, void *addr)
 {
-        struct in_device *indev = in_dev_get(dev);
+        struct in_device *in_dev;
         int ret = 0;
+        
+	rcu_read_lock();
 
-        if (!indev)
-                return -1;
+	in_dev = __in_dev_get_rcu(dev);
 
-        for_primary_ifa(indev) {
-                memcpy(addr, &ifa->ifa_address, 4);
-                ret = 1;
-                break;
+        if (in_dev) {
+                for_primary_ifa(in_dev) {
+                        switch (type) {
+                        case IFADDR_LOCAL:
+                                memcpy(addr, &ifa->ifa_local, 4);
+                                break;
+                        case IFADDR_ADDRESS:
+                                memcpy(addr, &ifa->ifa_address, 4);
+                                break;
+                        case IFADDR_BROADCAST:
+                                memcpy(addr, &ifa->ifa_broadcast, 4);
+                                break;
+                        case IFADDR_NETMASK:
+                                memcpy(addr, &ifa->ifa_mask, 4);
+                                break;
+                        }
+                        ret = 1;
+                        break;
+                }
+                endfor_ifa(indev);
         }
-        endfor_ifa(indev);
+	rcu_read_unlock();
 
-        in_dev_put(indev);
-        return ret;
-}
-
-static inline int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
-{
-        struct in_device *indev = in_dev_get(dev);
-        int ret = 0;
-
-        if (!indev)
-                return -1;
-
-        for_primary_ifa(indev) {
-                memcpy(addr, &ifa->ifa_broadcast, 4);
-                ret = 1;
-                break;
-        }
-        endfor_ifa(indev);
-
-        in_dev_put(indev);
-        return ret;
-}
-
-static inline int dev_get_ipv4_netmask(struct net_device *dev, void *addr)
-{
-        struct in_device *indev = in_dev_get(dev);
-        int ret = 0;
-
-        if (!indev)
-                return -1;
-
-        for_primary_ifa(indev) {
-                memcpy(addr, &ifa->ifa_mask, 4);
-                ret = 1;
-                break;
-        }
-        endfor_ifa(indev);
-
-        in_dev_put(indev);
         return ret;
 }
 
@@ -293,8 +279,7 @@ int dev_queue_xmit(struct sk_buff *skb);
 int netdev_init(void);
 void netdev_fini(void);
 
-int dev_get_ipv4_addr(struct net_device *dev, void *addr);
-int dev_get_ipv4_broadcast(struct net_device *dev, void *addr);
+int dev_get_ipv4_addr(struct net_device *dev, enum addr_type type, void *addr);
 
 #endif /* OS_USER */
 

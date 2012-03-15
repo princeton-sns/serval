@@ -1,19 +1,27 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
+ *
+ * Netlink-based backend for message channels.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <assert.h>
 #include <string.h>
 #include <sys/types.h>
 #include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
-
 #include <common/platform.h>
 #include <common/atomic.h>
 #include <common/debug.h>
-
 #include <serval/ctrlmsg.h>
 #include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
-
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -38,7 +46,6 @@ typedef struct message_channel_netlink {
     atomic_t skip_num;
     uint64_t ack_buffer;	/* not sure if this bitmap is enough */
     uint64_t skip_buffer;
-    task_cond_t cond;
 } message_channel_netlink_t;
 
 static inline void skip_seq_num(message_channel_netlink_t *mcn, uint32_t seq_num)
@@ -161,8 +168,6 @@ check_ack_num:
     }
 
 out:
-    if (should_notify)
-        task_cond_notify(&mcn->cond);
 }
 #endif /* 0 */
 
@@ -181,7 +186,7 @@ static int netlink_send_internal(message_channel_netlink_t *mcn,
     if (mcn->reliable) {
         if (ret <= 0) {
             /* ensure that the messaging sequence is properly preserved */
-             skip_seq_num(mcn, msgseq);
+            skip_seq_num(mcn, msgseq);
         } else {
             
             /*
@@ -336,9 +341,7 @@ static int netlink_recv(message_channel_t *channel, const void *data,
                                              bytes_left - NLMSG_LENGTH(0));
                 
                 if (m) {
-                    LOG_DBG("Calling callback\n");
                     channel->callback->recv(channel->callback, m);
-                    
                     message_put(m);
                 }
             }
@@ -377,27 +380,7 @@ message_channel_ops_t netlink_ops = {
 
 message_channel_t *message_channel_netlink_create(channel_key_t *key)
 {
-    message_channel_netlink_t *mcn;
-
-    mcn = malloc(sizeof(message_channel_netlink_t));
-
-    if (mcn == NULL) {
-        LOG_ERR("Could not allocate netlink message channel memory");
-        return NULL;
-    }
-
-    memset(mcn, 0, sizeof(*mcn));
-
-    message_channel_base_init(&mcn->base,
-                              MSG_CHANNEL_NETLINK,
-                              key->sock_type, key->protocol,
-                              key->local, key->local_len,
-                              key->peer, key->peer_len,
-                              &netlink_ops);
-
-    task_cond_init(&mcn->cond);
-    
-    mcn->reliable = 1;
-
-    return &mcn->base.channel;
+    return message_channel_base_create(key, 
+                                       sizeof(message_channel_netlink_t),
+                                       &netlink_ops);
 }

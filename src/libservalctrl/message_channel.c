@@ -2,11 +2,11 @@
 #include <common/list.h>
 #include <common/hash.h>
 #include <common/hashtable.h>
-#include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
 #include <netinet/in.h>
 #include <netinet/serval.h>
 #include <assert.h>
+#include <pthread.h>
+#include <libservalctrl/message_channel.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -41,7 +41,9 @@ static char *channel_name[] = {
 #if defined(OS_LINUX)
 extern message_channel_ops_t netlink_ops;
 #endif
+#if defined(OS_UNIX)
 extern message_channel_ops_t unix_ops;
+#endif
 extern message_channel_ops_t udp_ops;
 
 static message_channel_ops_t *channel_ops[] = {
@@ -75,9 +77,9 @@ static void channel_stop(struct hashelm *elm)
 
 void message_channel_libfini(void)
 {
-    //LOG_DBG("libfini\n");
-    //hashtable_for_each(&channel_table, channel_stop);
-    //hashtable_fini(&channel_table);
+    /* LOG_DBG("libfini\n");
+       hashtable_for_each(&channel_table, channel_stop);
+       hashtable_fini(&channel_table); */
 }
 
 static inline int equal_wrapper(const struct hashelm *elm, const void *key)
@@ -121,13 +123,11 @@ int message_channel_hash(message_channel_t *channel)
 
 static void message_channel_unhash(message_channel_t *channel)
 {
-    LOG_DBG("Unhashing channel %s\n", channel->name);
     hashelm_unhash(&channel_table, &channel->he);
 }
 
 int message_channel_rehash(message_channel_t *channel)
 {
-    LOG_DBG("Rehashing channel %s\n", channel->name);
     message_channel_unhash(channel);
     return message_channel_hash(channel);
 }

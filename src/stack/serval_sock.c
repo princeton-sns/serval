@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Serval socket implementation. Contains all the Serval-specific state. 
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/skbuff.h>
 #include <serval/list.h>
@@ -186,6 +197,34 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         LOG_DBG("Migrated %d flows\n", n);
 }
 
+void serval_sock_freeze_flows(struct net_device *dev)
+{
+        int i;
+
+        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+                struct serval_hslot *slot;
+                struct hlist_node *walk;
+                struct sock *sk;                
+                
+                slot = &established_table.hash[i];
+                
+                spin_lock_bh(&slot->lock);
+                                
+                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
+                        struct serval_sock *ssk = serval_sk(sk);
+                        
+                        lock_sock(sk);
+                
+                        if (ssk->dev && 
+                            ssk->dev->ifindex == dev->ifindex) {
+                                if (ssk->af_ops->freeze_flow)
+                                        ssk->af_ops->freeze_flow(sk);
+                        }
+                        release_sock(sk);
+                }
+                spin_unlock_bh(&slot->lock);
+        }
+}
 
 void serval_sock_migrate_flow(struct flow_id *old_f,
                               struct net_device *new_if)
@@ -381,11 +420,11 @@ void serval_sock_hash(struct sock *sk)
                         SERVICE_ID_MAX_PREFIX_BITS : 
                         ssk->srvid_prefix_bits;
 
-                err = service_add(ssk->hash_key, 
-                                  ssk->hash_key_len, ssk->srvid_flags, 
+                err = service_add(ssk->hash_key, ssk->hash_key_len, 
+                                  RULE_DEMUX, ssk->srvid_flags, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
-                                  NULL, 0, sk, GFP_ATOMIC);
+                                  NULL, 0, make_target(sk), GFP_ATOMIC);
                 if (err < 0) {
 #if defined(OS_LINUX_KERNEL)
                         LOG_ERR("could not add service for listening demux\n");
@@ -425,10 +464,12 @@ void serval_sock_unhash(struct sock *sk)
                                 
                 LOG_DBG("removing socket %p from service table\n", sk);
 
-                service_del_dest(&ssk->local_srvid,
-                            ssk->srvid_prefix_bits == 0 ?
-                            SERVICE_ID_MAX_PREFIX_BITS :
-                            ssk->srvid_prefix_bits, NULL, 0, NULL);
+                service_del_target(&ssk->local_srvid,
+                                   ssk->srvid_prefix_bits == 0 ?
+                                   SERVICE_ID_MAX_PREFIX_BITS :
+                                   ssk->srvid_prefix_bits, 
+                                   RULE_DEMUX,
+                                   NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
@@ -590,9 +631,11 @@ void serval_sock_init(struct sock *sk)
         /* Default to stop-and-wait behavior */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
+        ssk->retransmits = 0;
+        ssk->backoff = 0;
         ssk->srtt = 0;
-        ssk->rto = SERVAL_INITIAL_RTO;
-
+        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_TIMEOUT_INIT;
+        ssk->rto = SAL_TIMEOUT_INIT;
         write_lock_bh(&sock_list_lock);
         list_add_tail(&ssk->sock_node, &sock_list);
         write_unlock_bh(&sock_list_lock);

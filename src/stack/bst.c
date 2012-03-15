@@ -1,4 +1,19 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * This is an implementation of a binary search trie (bst), also
+ * called a bitwise trie. It works well for LPM lookups of arbitrary
+ * length bit strings. Do not confuse with binary search trees.
+ * 
+ * The code is not particularly optimized at this point.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/debug.h>
 #include <serval/list.h>
@@ -21,13 +36,13 @@
 /*
   struct bst_node:
 
-  A node in a prefix-based binary search tree.
+  A node in a bitwise trie.
 
   flags: 
 
   BST_FLAG_ACTIVE: set if the node is an active prefix, i.e., the node
   represents is not just a necessary node because of active prefixes
-  in its sub trees.
+  in its sub tree.
  */
 
 enum bst_node_flag {
@@ -46,9 +61,19 @@ struct bst_node {
 	unsigned char prefix[0];
 };
 
-unsigned int bst_node_get_prefix_size(struct bst_node *n)
+const unsigned char *bst_node_get_prefix(const struct bst_node *n)
+{
+        return n->prefix;
+}
+
+unsigned int bst_node_get_prefix_size(const struct bst_node *n)
 {
         return PREFIX_SIZE(n->prefix_bits);
+}
+
+unsigned long bst_node_get_prefix_bits(const struct bst_node *n)
+{
+        return n->prefix_bits;
 }
 
 static int bst_node_flag(struct bst_node *n, enum bst_node_flag flag)
@@ -69,11 +94,6 @@ static void bst_node_reset_flag(struct bst_node *n, enum bst_node_flag flag)
 void *bst_node_get_private(struct bst_node *n)
 {
         return n->private;
-}
-
-unsigned int bst_node_prefix_bits(struct bst_node *n)
-{
-        return n->prefix_bits;
 }
 
 int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)

@@ -1,0 +1,233 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4D73F91915122DFB00125A7F /* migrate.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D73F91615122DFB00125A7F /* migrate.c */; };
+		4D73F91A15122DFB00125A7F /* serv.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D73F91715122DFB00125A7F /* serv.c */; };
+		4D73F91B15122DFB00125A7F /* service.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D73F91815122DFB00125A7F /* service.c */; };
+		4D73F91D15122E0C00125A7F /* liblibservalctrl.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D73F91C15122E0C00125A7F /* liblibservalctrl.dylib */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		4D73F90515122DC800125A7F /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		4D73F90715122DC800125A7F /* serv */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = serv; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D73F91515122DFB00125A7F /* command.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = command.h; path = ../../src/tools/command.h; sourceTree = "<group>"; };
+		4D73F91615122DFB00125A7F /* migrate.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = migrate.c; path = ../../src/tools/migrate.c; sourceTree = "<group>"; };
+		4D73F91715122DFB00125A7F /* serv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = serv.c; path = ../../src/tools/serv.c; sourceTree = "<group>"; };
+		4D73F91815122DFB00125A7F /* service.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = service.c; path = ../../src/tools/service.c; sourceTree = "<group>"; };
+		4D73F91C15122E0C00125A7F /* liblibservalctrl.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = liblibservalctrl.dylib; path = "../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug/liblibservalctrl.dylib"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4D73F90415122DC800125A7F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D73F91D15122E0C00125A7F /* liblibservalctrl.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4D73F8FC15122DC800125A7F = {
+			isa = PBXGroup;
+			children = (
+				4D73F91C15122E0C00125A7F /* liblibservalctrl.dylib */,
+				4D73F91415122DD400125A7F /* serv */,
+				4D73F90815122DC800125A7F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4D73F90815122DC800125A7F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4D73F90715122DC800125A7F /* serv */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4D73F91415122DD400125A7F /* serv */ = {
+			isa = PBXGroup;
+			children = (
+				4D73F91515122DFB00125A7F /* command.h */,
+				4D73F91615122DFB00125A7F /* migrate.c */,
+				4D73F91715122DFB00125A7F /* serv.c */,
+				4D73F91815122DFB00125A7F /* service.c */,
+			);
+			name = serv;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D73F90615122DC800125A7F /* serv */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D73F91115122DC800125A7F /* Build configuration list for PBXNativeTarget "serv" */;
+			buildPhases = (
+				4D73F90315122DC800125A7F /* Sources */,
+				4D73F90415122DC800125A7F /* Frameworks */,
+				4D73F90515122DC800125A7F /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = serv;
+			productName = serv;
+			productReference = 4D73F90715122DC800125A7F /* serv */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4D73F8FE15122DC800125A7F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0430;
+			};
+			buildConfigurationList = 4D73F90115122DC800125A7F /* Build configuration list for PBXProject "serv" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 4D73F8FC15122DC800125A7F;
+			productRefGroup = 4D73F90815122DC800125A7F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D73F90615122DC800125A7F /* serv */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4D73F90315122DC800125A7F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D73F91915122DFB00125A7F /* migrate.c in Sources */,
+				4D73F91A15122DFB00125A7F /* serv.c in Sources */,
+				4D73F91B15122DFB00125A7F /* service.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D73F90F15122DC800125A7F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4D73F91015122DC800125A7F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4D73F91215122DC800125A7F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+					"ENABLE_DEBUG=1",
+				);
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../../include";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug\"",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		4D73F91315122DC800125A7F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				HEADER_SEARCH_PATHS = "$(PROJECT_DIR)/../../include";
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug\"",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D73F90115122DC800125A7F /* Build configuration list for PBXProject "serv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D73F90F15122DC800125A7F /* Debug */,
+				4D73F91015122DC800125A7F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4D73F91115122DC800125A7F /* Build configuration list for PBXNativeTarget "serv" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D73F91215122DC800125A7F /* Debug */,
+				4D73F91315122DC800125A7F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4D73F8FE15122DC800125A7F /* Project object */;
+}

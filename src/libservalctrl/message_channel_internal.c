@@ -1,9 +1,9 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 #include <libservalctrl/message_channel.h>
-#include <libservalctrl/task.h>
 #include <netinet/in.h>
 #include <netinet/serval.h>
 #include <assert.h>
+#include <pthread.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -116,6 +116,20 @@ int message_channel_internal_unregister_callback(message_channel_t *channel,
 int message_channel_internal_get_callback_count(message_channel_t *channel)
 {
     return channel->callback ? 1 : 0;
+}
+
+int message_channel_internal_on_start(message_channel_t *channel)
+{
+    if (channel->callback && channel->callback->start)
+        return channel->callback->start(channel->callback);
+
+    return 0;
+}
+
+void message_channel_internal_on_stop(message_channel_t *channel)
+{
+    if (channel->callback && channel->callback->stop)
+        channel->callback->stop(channel->callback);
 }
 
 int message_channel_internal_recv(message_channel_t *channel, const void *msg,

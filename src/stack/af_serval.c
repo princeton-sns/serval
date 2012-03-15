@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * The backends for Serval's BSD socket protocol family (PF_SERVAL).
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/errno.h>
@@ -51,78 +62,6 @@ struct netns_serval net_serval;
 
 static struct sock *serval_accept_dequeue(struct sock *parent,
                                           struct socket *newsock);
-
-
-#if 0
-/* Wait for the socket to reach or leave a specific state, depending
- * on the outofstate variable. It this variable is "true" the function
- * will wait until the socket leaves the given state, otherwise it
- * will wait until the given state is reached.
- */
-static int serval_wait_state(struct sock *sk, int state,
-                             long timeo, int outofstate)
-{
-	DECLARE_WAITQUEUE(wait, current);
-	int err = 0;
-
-        if (timeo < 0)
-                timeo = MAX_SCHEDULE_TIMEOUT;
-
-	add_wait_queue(sk_sleep(sk), &wait);
-
-	while (1) {
-                if (outofstate) {
-                        if (sk->sk_state != state) {
-                                /*
-                                LOG_DBG("outofstate: State is new=%s old=%s\n",
-                                        serval_sock_state_str(sk),
-                                        serval_state_str(state));
-                                */
-                                break;
-                        }
-                } else if (sk->sk_state == state) {
-                        /*
-                          LOG_DBG("State is new=%s\n",
-                                serval_sock_state_str(sk));
-                        */
-                        break;
-                }
-		set_current_state(TASK_INTERRUPTIBLE);
-
-		if (!timeo) {
-			err = -EINPROGRESS;
-                        /*
-                          LOG_DBG("timeout 0 - EINPROGRESS\n");
-                        */
-			break;
-		}
-
-		if (signal_pending(current)) {
-			err = sock_intr_errno(timeo);
-                        /*
-                          LOG_DBG("Signal pending\n");
-                        */
-			break;
-		}
-
-		release_sock(sk);
-		timeo = schedule_timeout(timeo);
-		lock_sock(sk);
-
-		err = sock_error(sk);
-
-		if (err) {
-                        LOG_ERR("socket error %d\n", err);
-			break;
-                }
-	}
-	set_current_state(TASK_RUNNING);
-	remove_wait_queue(sk_sleep(sk), &wait);
-        UNDECLARE_WAITQUEUE(&wait);
-
-	return err;
-}
-#endif /* 0 */
 
 /*
   Automatically assigns a random service id.
@@ -647,8 +586,12 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 err = sk_stream_wait_connect(sk, &timeo);
 
                 if (err) {
-                        LOG_DBG("sk_stream_wait_connect returned err=%d\n",
-                                err);
+                        if (err == -ERESTARTSYS) {
+                                LOG_DBG("sk_stream_wait_connect interrupted\n");
+                        } else {
+                                LOG_DBG("sk_stream_wait_connect err=%d\n",
+                                        err);
+                        }
                         goto out;
                 }
                 
@@ -863,8 +806,6 @@ ssize_t serval_sendpage(struct socket *sock, struct page *page, int offset,
                         size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
-
-	sock_rps_record_flow(sk);
 
 	/* We may need to bind the socket. */
         

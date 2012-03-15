@@ -48,7 +48,7 @@ static void migrate_print_usage(void)
 {
         int i;
 
-        printf("migrate:\n");
+        printf("migrate OPTIONS:\n");
 
         for (i = 0; i < __CMD_MIGRATE_MAX; i++) {
                 printf("\t%-30s %s\n",

@@ -1,4 +1,19 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Clients are the Serval's representation of applications that
+ * interact with the stack via IPC. For every application that
+ * connects to the stack, there will be a corresponding client thread
+ * running in the stack that deals with dispatching packets and
+ * communicating with the application.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/debug.h>
 #include <serval/atomic.h>
 #include <serval/timer.h>
@@ -261,6 +276,16 @@ int client_get_sockfd(struct client *c)
 int client_get_signalfd(struct client *c)
 {
         return c->exit_pipe[0];
+}
+
+const struct sockaddr *client_get_sockaddr(struct client *c)
+{
+        return (struct sockaddr *)&c->sa;
+}
+
+socklen_t client_get_addrlen(struct client *c)
+{
+        return sizeof(c->sa);
 }
 
 static int client_close(struct client *c)
@@ -639,7 +664,7 @@ int client_handle_recv_req_msg(struct client *c, struct client_msg *msg)
                 rsp->data[ret] = '\0';
         }
         
-        LOG_DBG("Client %u read data len=%u\n", rsp->data_len);
+        LOG_DBG("Client %u recv len=%u\n", ret);
 
         ret = client_msg_write(c->fd, &rsp->msghdr);
         
@@ -653,7 +678,7 @@ int client_handle_close_req_msg(struct client *c, struct client_msg *msg)
         DEFINE_CLIENT_RESPONSE(rsp, MSG_CLOSE_RSP);
         int ret;
         
-        LOG_DBG("Client %u closing socket %i\n", c->id, c->sock);
+        LOG_DBG("Client %u closing socket %d\n", c->id, c->sock);
         ret = c->sock->ops->release(c->sock);
 
         if (ret < 0) {
@@ -799,14 +824,6 @@ static void *client_thread(void *arg)
                                  */
                                 csig = client_signal_lower(c->exit_pipe[0]);
 
-				/*LOG_DBG("Client %u signal received: %u\n", 
-                                  c->id, sig); 
-                                */
-
-				if (csig < 0) {
-                                        continue;
-				}
-
 				switch (csig) {
                                 case CLIENT_SIG_EXIT:
 				        c->should_exit = 1;
@@ -821,14 +838,6 @@ static void *client_thread(void *arg)
                                  * exit or data ready
                                  */
                                 csig = client_signal_lower(c->data_pipe[0]);
-
-				/*LOG_DBG("Client %u signal received: %u\n", 
-                                  c->id, sig); 
-                                */
-
-				if (csig < 0) {
-                                        continue;
-				}
 
 				switch (csig) {
                                 case CLIENT_SIG_READ:

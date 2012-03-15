@@ -1,4 +1,16 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * A tool for managing the Serval stack, supporting "pluggable"
+ * commands.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -27,15 +39,18 @@ static void print_usage(const char *name, struct command *cmd)
 {
 	int i = 0;
 
-	printf("Usage: %s CMD [ARGS]\n", name);
+	printf("Usage: serv CMD OPTIONS\n");
 	
 	if (cmd) {
+                printf("CMD ");
 		cmd->print_usage();
 	} else {
-		printf("Where CMD is any of:\n");
+		printf("where CMD is any of:\n");
 		
 		while (cmdlist[i]) {
-			printf("\t%s\t\t%s\n", cmdlist[i]->name, cmdlist[i]->desc);
+			printf("\t%s\t\t%s\n", 
+                               cmdlist[i]->name, 
+                               cmdlist[i]->desc);
 			i++;
 		}
 	}
@@ -57,9 +72,8 @@ int main(int argc, char **argv)
 	argc--;
 
 	while (cmdlist[i]) {
-		if (strcmp(cmdlist[i]->name, argv[0]) == 0) {
+		if (strcmp(cmdlist[i]->name, argv[0]) == 0)
 			break;
-		}
 		i++;
         }
 

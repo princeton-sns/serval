@@ -114,7 +114,8 @@ struct serval_sock_af_ops {
                                            struct dst_entry *dst);
 	u16	        net_header_len;
 	u16	        sockaddr_len;
-        void            (*migration_completed)(struct sock *sk);
+        int             (*migration_completed)(struct sock *sk);
+        int             (*freeze_flow)(struct sock *sk);
         int             (*send_shutdown)(struct sock *sk);
         int             (*recv_shutdown)(struct sock *sk);
         int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
@@ -129,13 +130,13 @@ struct serval_sock {
         struct client           *client;
 #endif
         /* SAL state, used for, e.g., migration */
-        unsigned char           sal_state;
-        struct net_device       *dev; /* TX device for connected flows */ 
+        u8                      sal_state;
         u8                      flags;
+        struct net_device       *dev; /* TX device for connected flows */
         void                    *hash_key;
-        unsigned int            hash_key_len;  /* Keylen in bytes */
-        unsigned short          srvid_prefix_bits;
-        unsigned short          srvid_flags;
+        u32                     hash_key_len;  /* Keylen in bytes */
+        u16                     srvid_prefix_bits;
+        u16                     srvid_flags;
         struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
@@ -145,7 +146,7 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        uint32_t                mig_daddr;
+        u32                     mig_daddr;
         struct net_device       *mig_dev;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
@@ -166,15 +167,24 @@ struct serval_sock {
                 u32        wnd;
                 u32        iss;
         } rcv_seq;
-        unsigned short          retransmits;
-        unsigned long           rto;
-        unsigned long           srtt;
+        u8                      retransmits;
+        u8                      backoff;
+        u8                      pending;
+        u32                     rto;
+        u32                     srtt;
+	u32                     mdev;  /* medium deviation */
+	u32                     mdev_max; /* maximal mdev for the last rtt period */
+	u32                     rttvar;	/* smoothed mdev_max */
+	u32                     rtt_seq; /* sequence number to update rttvar */
+        unsigned long           timeout;
         unsigned long           tot_bytes_sent;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
 };
 
-#define SERVAL_INITIAL_RTO (3000)
+#define SAL_RTO_MAX	((unsigned)(120*HZ))
+#define SAL_RTO_MIN	((unsigned)(HZ/5))
+#define SAL_TIMEOUT_INIT ((unsigned)(3*HZ))
 
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 
@@ -240,6 +250,7 @@ void serval_sock_migrate_service(struct service_id *old_s,
                                  struct net_device *new_if);
 void serval_sock_stats_flow(struct flow_id *flow, 
                             struct ctrlmsg_stats_response *resp);
+void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
 
@@ -264,6 +275,28 @@ static inline int serval_sock_flag(struct serval_sock *ssk,
 	return ssk->flags & (0x1 << flag);
 }
 
+static inline void serval_sock_clear_xmit_timer(struct sock *sk)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+        ssk->pending = 0;
+        ssk->retransmits = 0;
+        ssk->backoff = 0;
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+}
+
+static inline void serval_sock_reset_xmit_timer(struct sock *sk, 
+                                                unsigned long when,
+                                                const unsigned long max_when)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+
+	if (when > max_when) {
+		when = max_when;
+	}
+        ssk->pending = 1;
+        ssk->timeout = jiffies + when;
+        sk_reset_timer(sk, &ssk->retransmit_timer, ssk->timeout);
+}
 
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 

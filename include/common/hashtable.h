@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
-#ifndef _HASHTABLE_
-#define _HASHTABLE_
+#ifndef _HASHTABLE_H_
+#define _HASHTABLE_H_
 
 #include "hash.h"
 #include "list.h"
@@ -40,7 +40,7 @@ static inline unsigned int default_hashfn(const void *key)
 
 static inline int default_equalfn(const hashelm_t *e, const void *key)
 {
-    return memcmp(&e->key, key, e->keylen) == 0;
+    return memcmp(e->key, key, e->keylen) == 0;
 }
 
 int hashtable_init(struct hashtable *table, unsigned int size);
@@ -48,9 +48,12 @@ void hashtable_fini(struct hashtable *table);
 hashelm_t *hashtable_lookup(struct hashtable *table, const void *key,
                             hashfn_t hashfn);
 unsigned int hashtable_count(struct hashtable *table);
-int hashtable_for_each(struct hashtable *table, void (*action)(struct hashelm *));
+int hashtable_for_each(struct hashtable *table, 
+                       void (*action)(struct hashelm *, void *), 
+                       void *data);
 int hashelm_hashed(struct hashelm *he);
 int hashelm_hash(struct hashtable *table, struct hashelm *he, const void *key);
+void __hashelm_unhash(struct hashtable *table, struct hashelm *he);
 void hashelm_unhash(struct hashtable *table, struct hashelm *he);
 void hashelm_hold(struct hashelm *he);
 void hashelm_put(struct hashelm *he);
@@ -60,4 +63,4 @@ int hashelm_init(struct hashelm *he, hashfn_t hashfn,
 #define hashtable_lookup_entry(tbl, key, hashfn, type, member)          \
     container_of(hashtable_lookup(tbl, key, hashfn), type, member)
 
-#endif /* _HASHTABLE_ */
+#endif /* _HASHTABLE_H_ */

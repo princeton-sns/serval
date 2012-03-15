@@ -1,5 +1,5 @@
 SUBDIRS = java jni
-JARFILE = serval-javasock.jar
+JARFILE = org.servalarch.javasock.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)
 javasockdir = $(datadir)/java

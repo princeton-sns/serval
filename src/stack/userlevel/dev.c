@@ -138,6 +138,7 @@ struct net_device *resolve_dev_impl(const struct in_addr *addr,
 
                         if (prefix1 == prefix2) {
                                 dev_hold(dev);
+                                read_unlock(&dev_base_lock);
                                 return dev;
                         }
                         if (!best_guess_dev && strcmp(dev->name, "lo") != 0)
@@ -589,11 +590,11 @@ int netdev_populate_table(int sizeof_priv,
                                           broad, sizeof(broad)));
                 }
 #endif
-                service_add(&default_service, 0, 0, 
+                service_add(&default_service, 0, RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
                             &dev->ipv4.broadcast, 
-                            sizeof(dev->ipv4.broadcast), dev, 0);
+                            sizeof(dev->ipv4.broadcast), make_target(dev), 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
@@ -619,14 +620,14 @@ out:
         return ret;
 }
 
-enum signal {
+enum signal_event {
         SIGNAL_EXIT,
         SIGNAL_TXQUEUE,
         SIGNAL_ERROR,
         SIGNAL_UNKNOWN
 };
 
-int dev_signal(struct net_device *dev, enum signal type)
+int dev_signal(struct net_device *dev, enum signal_event type)
 {
         unsigned char s = type & 0xff;
         struct pollfd fds;
@@ -650,19 +651,22 @@ int dev_signal(struct net_device *dev, enum signal type)
         return write(dev->pipefd[1], &s, 1);
 }
 
-int dev_get_ipv4_addr(struct net_device *dev, void *addr)
+int dev_get_ipv4_addr(struct net_device *dev, enum addr_type type, void *addr)
 {
-        memcpy(addr, &dev->ipv4.addr, 4);
+        switch (type) {
+        case IFADDR_LOCAL:
+                memcpy(addr, &dev->ipv4.addr, 4);
+                break;
+        case IFADDR_BROADCAST:
+                memcpy(addr, &dev->ipv4.broadcast, 4);
+                break;
+        default:
+                break;
+        }
         return 1;
 }
 
-int dev_get_ipv4_broadcast(struct net_device *dev, void *addr)
-{
-        memcpy(addr, &dev->ipv4.broadcast, 4);
-        return 1;
-}
-
-enum signal dev_read_signal(struct net_device *dev)
+enum signal_event dev_read_signal(struct net_device *dev)
 {
         unsigned char s;
         struct pollfd fds;
@@ -687,7 +691,7 @@ enum signal dev_read_signal(struct net_device *dev)
         if (s >= SIGNAL_UNKNOWN)
                 return SIGNAL_UNKNOWN;
 
-        return (enum signal)s;
+        return (enum signal_event)s;
 }
 
 static inline void dev_queue_purge(struct net_device *dev)
@@ -754,7 +758,7 @@ void *dev_thread(void *arg)
                         /* No timeout set, should not happen */
                 } else {
                         if (fds[1].revents & POLLIN) {
-                                enum signal s = dev_read_signal(dev);
+                                enum signal_event s = dev_read_signal(dev);
 
                                 switch (s) {
                                 case SIGNAL_EXIT:

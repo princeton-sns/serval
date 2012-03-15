@@ -1,4 +1,17 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * A service daemon for end-hosts that forwards stack events to a
+ * "service router". The deamon can also run on a service router,
+ * taking registrations and unregistrations.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -18,6 +31,7 @@
 #include <netinet/serval.h>
 #include <serval/platform.h>
 #include <common/timer.h>
+#include <common/signal.h>
 #include <common/debug.h>
 #include <common/list.h>
 #include <pthread.h>
@@ -31,7 +45,7 @@
 #endif
 
 static int should_exit = 0;
-static int p[2] = { -1, -1 };
+static struct signal exit_signal;
 static struct timer_queue tq;
 static struct service_id default_service;
 
@@ -43,8 +57,7 @@ struct servd_context {
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
-        int reregister_signal_waiting;
-        int reregister_signal[2];
+        struct signal reregister_signal;
         unsigned int num_regs;
         pthread_mutex_t lock; /* Protects the registration list */
 };
@@ -272,110 +285,9 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         return ret;
 }
 
-
-enum {
-        SIGNAL_ERROR = -1,
-        SIGNAL_TIMEOUT = 0,
-        SIGNAL_RAISED = 1,
-};
-
-static void signal_raise(int sig[2])
-{
-        struct pollfd fds;
-        const char r = 'r';
-        int ret = 0;
-
-        memset(&fds, 0, sizeof(fds));
-
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-
-        if (poll(&fds, 1, 0) > 0) {
-                LOG_DBG("Signal already raised\n");
-                return;
-        }
-
-        ret = write(sig[1], &r, 1);
-
-        if (ret < 0) {
-                LOG_ERR("Could not signal quit!\n");
-        }
-}
-
-static int signal_lower(int sig[2])
-{
-        struct pollfd fds;
-        char r = 'r';
-        int ret = 0;
-
-        while (1) {
-                memset(&fds, 0, sizeof(fds));
-                
-                fds.fd = sig[0];
-                fds.events = POLLIN;
-                
-                if (poll(&fds, 1, 0) <= 0)
-                        break;
-                
-                ret = read(sig[0], &r, 1);
-        }
-
-        return ret;
-}
-
-static int signal_wait(int sig[2], int timeout)
-{
-        struct pollfd fds;
-        char r = 'r';
-        int ret = 0;
-        
-        memset(&fds, 0, sizeof(fds));
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-        
-        ret = poll(&fds, 1, timeout);
-
-        if (ret <= 0) {
-                if (ret == 0) {
-                        printf("Signal timeout\n");
-                }
-                return ret;
-        }
-        ret = read(sig[0], &r, 1);
-
-        signal_lower(sig);
-
-        return SIGNAL_RAISED;
-}
-
-#ifdef ENABLE_NOT_USED
-static int signal_is_raised(int sig[2])
-{
-        struct pollfd fds;
-        
-        memset(&fds, 0, sizeof(fds));
-        
-        fds.fd = sig[0];
-        fds.events = POLLIN;
-        
-        if (poll(&fds, 1, 0) > 0)
-                return SIGNAL_SET;
-
-        return SIGNAL_TIMEOUT;
-}
-#endif
-
 static void signal_handler(int sig)
 {
-        ssize_t ret;
-        char q = 'q';
-	should_exit = 1;
-
-        ret = write(p[1], &q, 1);
-
-        if (ret < 0) {
-                LOG_ERR("Could not signal quit!\n");
-        }
+        signal_raise(&exit_signal);
 }
 
 /*
@@ -436,14 +348,11 @@ int servd_interface_up(const char *ifname,
                 /* Synchronize with callback before redoing
                    registrations. We need the default service route to
                    send them out. */
-                ctx->reregister_signal_waiting = 1;
-                
                 printf("Requesting default service route info\n");
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
 
-                signal_wait(ctx->reregister_signal, 5000);
-                ctx->reregister_signal_waiting = 0;
+                signal_wait(&ctx->reregister_signal, 5000);
         }
 
         LOG_DBG("Resending registrations\n");
@@ -576,72 +485,80 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
   router IP.
  */
 static int local_service_get_result(struct hostctrl *hc,
-                                    const struct service_id *srvid,
-                                    unsigned short flags,
-                                    unsigned short prefix,
-                                    unsigned int priority,
-                                    unsigned int weight,
-                                    struct in_addr *ip)
+                                    unsigned int xid,
+                                    int retval,
+                                    const struct service_info *si,
+                                    unsigned int num)
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
+        unsigned int i = 0;
 
+        for (i = 0; i < num; i++) {
 #if defined(ENABLE_DEBUG)
-        char buf[18], buf2[18];
-        LOG_DBG("GET: %s valid=%s is_router=%s router_ip_set=%s"
-                " prio=%u weight=%u"
-                " requested_ip=%s new_ip=%s\n",
-                service_id_to_str(srvid),
-                flags & SVSF_INVALID ? "false" : "true",
-                ctx->router ? "true" : "false",
-                ctx->router_ip_set ? "true" : "false",
-                priority, weight,
-                inet_ntop(AF_INET, ip, buf, 18),
-                inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
-#endif
-        sleep(1);
-
-        if (flags & SVSF_INVALID) {
-                printf("No default service route set\n");
-                /* There was no existing route, the 'get' returned
-                   nothing. Just add our default route */
-                ret = hostctrl_service_add(ctx->lhc, &default_service,
-                                           0, 1, 0, &ctx->router_ip);
-        } else if (!ctx->router && ctx->router_ip_set && 
-                   memcmp(&default_service, srvid, 
-                          sizeof(default_service)) == 0 && 
-                   memcmp(&ctx->router_ip, ip, sizeof(*ip)) != 0) {
                 char buf[18], buf2[18];
-                printf("Replacing default route old=%s new=%s\n",
-                       inet_ntop(AF_INET, ip, buf, 18),
-                       inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
-                /* The 'get' for the default service returned
-                   something. Update the existing entry */
-                ret = hostctrl_service_modify(ctx->lhc, srvid, 
-                                              prefix, priority,
-                                              weight, ip, &ctx->router_ip);
+                LOG_DBG("GET: %s valid=%s is_router=%s router_ip_set=%s"
+                        " prio=%u weight=%u"
+                        " requested_ip=%s new_ip=%s\n",
+                        service_id_to_str(&si->srvid),
+                        si->srvid_flags & SVSF_INVALID ? "false" : "true",
+                        ctx->router ? "true" : "false",
+                        ctx->router_ip_set ? "true" : "false",
+                        si->priority, si->weight,
+                        inet_ntop(AF_INET, &si->address, buf, 18),
+                        inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+#endif
+                sleep(1);
+                
+                if (si->srvid_flags & SVSF_INVALID) {
+                        LOG_DBG("No default service route set\n");
+                        /* There was no existing route, the 'get' returned
+                           nothing. Just add our default route */
+                        ret = hostctrl_service_add(ctx->lhc, &default_service,
+                                                   0, 1, 0, &ctx->router_ip);
+                } else if (!ctx->router && ctx->router_ip_set && 
+                           memcmp(&default_service, &si->srvid, 
+                                  sizeof(default_service)) == 0 && 
+                           memcmp(&ctx->router_ip, &si->address, sizeof(si->address)) != 0) {
+#if defined(ENABLE_DEBUG)
+                        char buf[18], buf2[18];
+                        LOG_DBG("Replacing default route old=%s new=%s\n",
+                                inet_ntop(AF_INET, &si->address, buf, 18),
+                                inet_ntop(AF_INET, &ctx->router_ip, buf2, 18));
+#endif
+                        /* The 'get' for the default service returned
+                           something. Update the existing entry */
+                        ret = hostctrl_service_modify(ctx->lhc, &si->srvid, 
+                                                      si->srvid_prefix_bits, si->priority,
+                                                      si->weight, &si->address, &ctx->router_ip);
+                }
+                
         }
-
+        
         /* Check if we need to perform the deferred reregistration of
            services now that we have a new default service router
-           (which was probably a result of an interface up/down). */
+                   (which was probably a result of an interface up/down). */
         if (ctx->router_ip_set && !ctx->router && 
-            ctx->reregister_signal_waiting) {
-                signal_raise(ctx->reregister_signal);
+            signal_num_waiting(&ctx->reregister_signal)) {
+                signal_raise(&ctx->reregister_signal);
         }
-
+        
         return ret;
 }
                                    
 static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
-        .service_get = local_service_get_result,
+        .service_get_result = local_service_get_result,
+        .start = NULL,
+        .stop = NULL,
 };
 
 static struct hostctrl_callback rcb = {
         .service_registration = handle_incoming_registration,
         .service_unregistration = handle_incoming_unregistration,
+        .start = NULL,
+        .stop = NULL,
 };
 
 static int daemonize(void)
@@ -704,6 +621,19 @@ static int daemonize(void)
         return 0;
 }
 
+static void print_usage(void)
+{
+        printf("Usage: servd [ OPTIONS ]\n"
+               "where OPTIONS:\n"
+               "\t-d,--daemon\t\t\t - Run in the background as a daemon.\n"
+               "\t-r,--router\t\t\t - Run in router mode, accepting registrations.\n"
+               "\t-rid,--router-id SERVICEID\t - Specify the SERVICEID of a router.\n"
+               "\t-cid,--client-id SERVICEID\t - Specify the SERVICEID of a client.\n"
+               "\t-rip,--router-ip ROUTER_IP\t - Specify the IP of a service router.\n"
+               "\t-h,--help\t\t\t - Print this help message.\n");
+}
+
+
 int main(int argc, char **argv)
 {
 	struct sigaction sigact;
@@ -732,7 +662,11 @@ int main(int argc, char **argv)
 	argv++;
         
 	while (argc) {
-                if (strcmp(argv[0], "-d") == 0 ||
+                if (strcmp(argv[0], "-h") == 0 ||
+                    strcmp(argv[0], "--help") == 0) {
+                        print_usage();
+                        return 0;
+                } else if (strcmp(argv[0], "-d") == 0 ||
                     strcmp(argv[0], "--daemon") == 0) {
                         daemon = 1;
                 } else if (strcmp(argv[0], "-r") == 0 ||
@@ -812,18 +746,18 @@ int main(int argc, char **argv)
                 return -1;
         }
 
-	ret = pipe(p);
+	ret = signal_init(&exit_signal);
 
         if (ret == -1) {
-		LOG_ERR("Could not open pipe\n");
-		goto fail_pipe1;
+		LOG_ERR("Could not init exit signal\n");
+		goto fail_exit_signal;
         }
 
-	ret = pipe(ctx.reregister_signal);
+	ret = signal_init(&ctx.reregister_signal);
 
         if (ret == -1) {
-		LOG_ERR("Could not open reregister signal pipe\n");
-		goto fail_pipe2;
+		LOG_ERR("Could not init reregister signal\n");
+		goto fail_reregister_signal;
         }
 
 	ret = libservalctrl_init();
@@ -867,17 +801,16 @@ int main(int argc, char **argv)
 
         hostctrl_start(ctx.rhc);
         hostctrl_start(ctx.lhc);
+
         /* If we are a client and have a fixed IP for the service
            router, then replace an existing "default" service rule by
            querying for the current one and modifying it in the
            resulting callback. */
         if (ctx.router_ip_set && !ctx.router) {
-                ctx.reregister_signal_waiting = 1;
                 hostctrl_service_get(ctx.lhc, &default_service, 0, NULL);
-                printf("waiting on signal\n");
-                signal_wait(ctx.reregister_signal, 3000);
-                printf("done waiting on signal\n");
-                ctx.reregister_signal_waiting = 0;
+                if (signal_wait(&ctx.reregister_signal, 3000) == 0) {
+                        LOG_DBG("Timeout when retrieving default entry\n");
+                }
         }
 
 #if defined(OS_LINUX)
@@ -922,8 +855,8 @@ int main(int argc, char **argv)
                 FD_SET(nlh.fd, &readfds);
 		maxfd = MAX(nlh.fd, maxfd);
 #endif
-                FD_SET(p[0], &readfds);               
-                maxfd = MAX(p[0], maxfd);
+                FD_SET(signal_get_fd(&exit_signal), &readfds);
+                maxfd = MAX(signal_get_fd(&exit_signal), maxfd);
 
                 if (timer_next_timeout_timeval(&tq, &timeout))
                         t = &timeout;
@@ -949,7 +882,7 @@ int main(int argc, char **argv)
                                 rtnl_read(&nlh);
                         }
 #endif
-                        if (FD_ISSET(p[0], &readfds)) {
+                        if (FD_ISSET(signal_get_fd(&exit_signal), &readfds)) {
                                 should_exit = 1;
                         }
                 }        
@@ -964,25 +897,23 @@ int main(int argc, char **argv)
 
 #if defined(OS_BSD)
         ifaddrs_fini(&tq);
-fail_ifaddrs:
+ fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
 	rtnl_fini(&nlh);
-fail_netlink:
+ fail_netlink:
 #endif
         hostctrl_free(ctx.rhc);
         ctx.rhc = NULL;
-fail_hostctrl_remote:
+ fail_hostctrl_remote:
         hostctrl_free(ctx.lhc);
-fail_hostctrl_local:
+ fail_hostctrl_local:
         libservalctrl_fini();
-fail_libservalctrl:
-        close(ctx.reregister_signal[0]);
-        close(ctx.reregister_signal[1]);
- fail_pipe2:
-	close(p[0]);
-	close(p[1]);
-fail_pipe1:
+ fail_libservalctrl:
+        signal_destroy(&ctx.reregister_signal);
+ fail_reregister_signal:
+        signal_destroy(&exit_signal);
+ fail_exit_signal:
         timer_queue_fini(&tq);
 
         registration_clear(&ctx);

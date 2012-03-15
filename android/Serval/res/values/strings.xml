@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Serval</string>
+    <string name="module_status_label">Module status:</string>
+    <string name="service_input_label">Add or remove serviceID:</string>
+    <string name="add_service_button">Add</string>
+    <string name="remove_service_button">Remove</string>
+    <string name="load_module_toggle">Load/Unload module</string>
+    <string name="ip_label">IP:</string>
+</resources>

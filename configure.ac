@@ -147,54 +147,98 @@ esac],[java_bindings=yes])
 have_jni=no;
 JAVAC=
 
-dnl Check for Java JDK
-AC_JAVA_OPTIONS
-AC_CHECK_JAVA_HOME
-AC_PROG_JAVAC
+if test x"$java_bindings" = xyes; then
+   dnl Check for Java JDK	  
+   AC_JAVA_OPTIONS
+   AC_CHECK_JAVA_HOME
+   AC_PROG_JAVAC
 
-AC_MSG_CHECKING(for jni.h)
+   #AC_MSG_CHECKING(for jni.h)
 
-if test x"$JAVAC" != x;
-then
+   if test x"$JAVAC" != x; 
+   then
 	dnl Check for JNI headers
-	AC_JNI_INCLUDE_DIR
+     	AC_JNI_INCLUDE_DIR
 
-	JAVA_INCLUDE=
+      	JAVA_INCLUDE=
 
-	for jni_inc in $JNI_INCLUDE_DIRS
-	do
-		JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
-	done
-
-	if test "x$JAVA_INCLUDE" = 'x';
-	then
-		have_jni=no
+	if test x"$have_jni" = xyes;
+	then 
+		for jni_inc in $JNI_INCLUDE_DIRS;
+     	     	do
+			JAVA_INCLUDE="$JAVA_INCLUDE -I$jni_inc"
+	     	done
 	else
-		have_jni=yes
-	fi
-fi
-
-AC_MSG_RESULT([$have_jni])
-
-AC_SUBST(JAVA_INCLUDE)
-
-dnl Check if we support java bindings
-if test x$java_bindings = xyes; 
-then
-   	if test x$have_jni = xno; 
-	then
-   	   	AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
+		AC_MSG_NOTICE([Java bindings require jni.h. Please check your JAVA_HOME paths(or set --with-java-home).])
 		java_bindings=no
-	else
-		if test "x$JAVAC" = 'x'; 
-		then
-			AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
-			java_bindings=no
-		fi
 	fi
+   else
+	AC_MSG_NOTICE([Java bindings require java and javac. Check your PATH or or JAVA_HOME.])
+	java_bindings=no
+   fi
+   AC_SUBST(JAVA_INCLUDE)
 fi
 
 AM_CONDITIONAL([ENABLE_JAVA_BINDINGS], [test x$java_bindings = xyes])
+
+AC_ARG_WITH([android-sdk],
+            [AS_HELP_STRING([--with-android-sdk=DIR],
+              [Path to Android SDK])],
+            [android_sdk_path=$withval],
+            [android_sdk_path=check])
+
+# Check if we should build Android applications
+have_android_sdk=no
+
+# If we cannot build the the bindings, do not care about apps
+if test x$java_bindings = xyes
+then
+	# Check for Android SDK and NDK
+	AC_PATH_PROG(sdk_path, apkbuilder,, [$android_sdk_path/tools:$PATH'])
+
+	if test x$sdk_path != x'' 
+	then
+	        # Strip app name and tools directory
+		sdk_path=`AS_DIRNAME(["$sdk_path"])`
+		android_sdk_path=`AS_DIRNAME(["$sdk_path"])`
+
+		AC_SUBST(ANDROID_SDK_PATH, [$android_sdk_path]) 
+		AC_MSG_NOTICE(Using Android SDK in $android_sdk_path)	
+
+	        AC_CHECK_PROG(have_ant, ant, yes, no)
+
+        	if test x$have_ant = xno
+ 		then
+			AC_MSG_NOTICE(Install Ant to build Android applications)
+		else
+			have_android_sdk=yes
+        	fi
+	fi
+fi
+
+AM_CONDITIONAL(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes])
+AC_DEFINE(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes], [Android SDK found])
+
+AC_ARG_WITH([android-ndk],
+            [AS_HELP_STRING([--with-android-ndk=DIR],
+              [Path to Android NDK])],
+            [android_ndk_path=$withval],
+            [android_ndk_path=check])
+
+AC_PATH_PROG(ndk_path, ndk-build,, [$android_ndk_path:$PATH])
+
+have_android_ndk=no
+
+if test x$ndk_path != x'' 
+then
+	have_android_ndk=yes
+	android_ndk_path=$ndk_path
+	AC_MSG_NOTICE(Using Android NDK in $android_ndk_path)
+	AC_SUBST(ANDROID_NDK_PATH, [$android_ndk_path]) 
+fi
+
+AM_CONDITIONAL(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes])
+AC_DEFINE(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes], [Android NDK found])
 
 AC_ARG_ENABLE([native_api],
 AS_HELP_STRING([--enable-native-api],[Use native kernel sockets API for clients]),
@@ -255,6 +299,9 @@ AC_CONFIG_FILES([Makefile
 	src/stack/Makefile
 	src/stack/Kbuild	
 	src/libservalctrl/Makefile
+	src/libservalctrl/java/Makefile
+	src/libservalctrl/java/jni/Makefile
+	src/libservalctrl/java/src/Makefile
 	src/libserval/Makefile
 	src/servd/Makefile
 	src/translator/Makefile
@@ -263,6 +310,8 @@ AC_CONFIG_FILES([Makefile
 	src/javasock/Makefile
 	src/javasock/java/Makefile	
 	src/javasock/jni/Makefile
+	android/Serval/local.properties
+	android/ServalChat/local.properties
 	])
 
 AC_OUTPUT

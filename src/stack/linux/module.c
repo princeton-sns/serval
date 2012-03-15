@@ -92,7 +92,10 @@ static int dev_configuration(struct net_device *dev)
         if (ifname && strcmp(dev->name, ifname) != 0)
                 return 0;
 
-        ret = dev_get_ipv4_broadcast(dev, &dst);
+        if (dev->flags & IFF_POINTOPOINT)
+                ret = dev_get_ipv4_addr(dev, IFADDR_ADDRESS, &dst);
+        else
+                ret = dev_get_ipv4_addr(dev, IFADDR_BROADCAST, &dst);
 
         if (ret == 1) {
 #if defined(ENABLE_DEBUG)
@@ -103,19 +106,11 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(&default_service, 0, 0, 
+                service_add(&default_service, 0, RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
-                            &dst, sizeof(dst), dev, GFP_ATOMIC);
-                /*
-                dev_get_ipv4_netmask(dev, &mask);
-                
-                while (mask & (0x1 << prefix_len))
-                        prefix_len++;
-
-                neighbor_add(&dst, prefix_len, dev, dev->broadcast, 
-                             dev->addr_len, GFP_ATOMIC);
-                */
+                            &dst, sizeof(dst), make_target(dev), 
+                            GFP_ATOMIC);
         } 
         return ret;
 }
@@ -142,11 +137,11 @@ static int serval_netdev_event(struct notifier_block *this,
         {           
                 LOG_DBG("netdev GOING DOWN %s\n", dev->name);
                 service_del_dev_all(dev->name);
-                // neighbor_del_dev(dev->name);
 		break;
         }
 	case NETDEV_DOWN:
-                LOG_DBG("netdev DOWN\n");
+                LOG_DBG("netdev DOWN %s\n",
+                        dev->name);
                 break;
 	default:
 		break;
@@ -178,11 +173,14 @@ static int serval_inetaddr_event(struct notifier_block *this,
         }
 	case NETDEV_GOING_DOWN:
         {
-                //LOG_DBG("inetdev GOING_DOWN %s\n", dev->name);
+                LOG_DBG("inetdev GOING DOWN %s\n",
+                        dev->name);
 		break;
         }
 	case NETDEV_DOWN:
-                LOG_DBG("inetdev DOWN\n");
+                LOG_DBG("inetdev DOWN %s - Freezing all flows\n", 
+                        dev->name);
+                serval_sock_freeze_flows(dev);
                 service_del_dev_all(dev->name);
                 break;
 	default:
@@ -255,22 +253,22 @@ int serval_module_init(void)
                 LOG_CRIT("UDP encapsulation init failed\n");
                 goto fail_udp_encap;
         }
-
-out:
+        
+ out:
 	return err;
-fail_udp_encap:
+ fail_udp_encap:
         serval_sysctl_unregister(&init_net);
-fail_sysctl:
+ fail_sysctl:
         unregister_inetaddr_notifier(&inetaddr_notifier);
-fail_inetaddr_notifier:
+ fail_inetaddr_notifier:
         unregister_netdevice_notifier(&netdev_notifier);
-fail_netdev_notifier:
+ fail_netdev_notifier:
         serval_fini();
-fail_serval:
+ fail_serval:
         ctrl_fini();
-fail_ctrl:
+ fail_ctrl:
         proc_fini();
-fail_proc:
+ fail_proc:
 	goto out;
 }
 

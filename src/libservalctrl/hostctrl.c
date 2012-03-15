@@ -1,11 +1,16 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <libservalctrl/hostctrl.h>
+#include <serval/platform.h>
 #include <serval/ctrlmsg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <netinet/serval.h>
+#if defined(OS_UNIX)
+#include <sys/socket.h>
+#include <sys/un.h>
+#endif
 #include "hostctrl_ops.h"
 
 extern struct hostctrl_ops local_ops;
@@ -27,12 +32,27 @@ static int hostctrl_recv(struct message_channel_callback *mcb,
         struct hostctrl *hc = (struct hostctrl *)mcb->target;
 	struct ctrlmsg *cm = (struct ctrlmsg *)m->data;
 
-        LOG_DBG("Received message on channel\n");
-
         if (!hc->ops)
                 return 0;
 
 	return hc->ops->ctrlmsg_recv(hc, cm, &m->from);
+}
+
+static int on_start_message_channel(struct message_channel_callback *mcb)
+{
+        struct hostctrl *hc = (struct hostctrl *)mcb->target;
+
+        if (hc && hc->cbs && hc->cbs->start)
+                return hc->cbs->start(hc);
+        return 0;
+}
+
+static void on_stop_message_channel(struct message_channel_callback *mcb)
+{
+        struct hostctrl *hc = (struct hostctrl *)mcb->target;
+        
+        if (hc && hc->cbs && hc->cbs->stop)
+                hc->cbs->stop(hc);       
 }
 
 static struct hostctrl *hostctrl_create(struct message_channel *mc, 
@@ -50,6 +70,8 @@ static struct hostctrl *hostctrl_create(struct message_channel *mc,
 	
 	hc->mccb.target = hc;
 	hc->mccb.recv = hostctrl_recv;
+        hc->mccb.start = on_start_message_channel;
+        hc->mccb.stop = on_stop_message_channel;
 	hc->mc = mc;
         hc->context = context;
 	hc->ops = hops[message_channel_get_type(mc)];
@@ -98,11 +120,13 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
                 memset(&peer, 0, sizeof(peer));
                 
                 local.sun_family = PF_UNIX;
-                strcpy(local.sun_path, SERVAL_CLIENT_CTRL_PATH);
+                snprintf(local.sun_path, sizeof(local.sun_path), 
+                         "/tmp/serval-client-%u-ctrl.sock", 
+                         getpid());
                 
                 peer.sun_family = PF_UNIX;
                 strcpy(peer.sun_path, SERVAL_STACK_CTRL_PATH);
-
+                
                 mc = message_channel_get_generic(MSG_CHANNEL_UNIX, SOCK_DGRAM, 
 					 0, (struct sockaddr *)&local, 
                                          sizeof(local), 
@@ -111,7 +135,7 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 
 #endif
                 if (!mc) {
-                        LOG_DBG("Could not create local host control interface\n");
+                        LOG_ERR("Could not create local host control interface\n");
                         return NULL;
                 }
 	}
@@ -120,9 +144,12 @@ struct hostctrl *hostctrl_local_create(const struct hostctrl_callback *cbs,
 
         if (!hc)
                 message_channel_put(mc);
-        else if (flags & HCF_START)
-                hostctrl_start(hc);
-               
+        else if (flags & HCF_START) {
+                if (hostctrl_start(hc) == -1) {
+                        hostctrl_free(hc);
+                        return NULL;
+                }
+        }
 
         return hc;
 }
@@ -150,8 +177,12 @@ hostctrl_remote_create_specific(const struct hostctrl_callback *cbs,
 
         if (!hc)
                 message_channel_put(mc);
-        else if (flags & HCF_START)
-                hostctrl_start(hc);
+        else if (flags & HCF_START) {
+                if (hostctrl_start(hc) == -1) {
+                        hostctrl_free(hc);
+                        return NULL;
+                }
+        }
                 
         return hc;
 }
@@ -192,6 +223,11 @@ void hostctrl_free(struct hostctrl *hc)
 	message_channel_unregister_callback(hc->mc, &hc->mccb);
 	message_channel_put(hc->mc);
 	free(hc);
+}
+
+unsigned int hostctrl_get_xid(struct hostctrl *hc)
+{
+        return hc->xid;
 }
 
 int hostctrl_interface_migrate(struct hostctrl *hc, 

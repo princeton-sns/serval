@@ -2368,6 +2368,48 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 #endif
 }
 
+static int serval_tcp_freeze_flow(struct sock *sk)
+{
+        LOG_DBG("Freezing TCP flow %s\n", 
+                flow_id_to_str(&serval_sk(sk)->local_flowid));
+        serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
+        
+        return 0;
+}
+
+static int serval_tcp_migration_completed(struct sock *sk)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        unsigned long t = jiffies;
+
+        LOG_DBG("Unfreezing TCP flow %s\n", 
+                flow_id_to_str(&serval_sk(sk)->local_flowid));
+
+        /* Restart retransmission timer */
+        if (tp->packets_out) {
+                /* if (tp->timeout > t)
+                        t = tp->timeout - t;
+                else
+                */
+                t = 1;
+
+                LOG_DBG("Resetting rexmit timer to %lu\n", t);
+                
+                serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS, t,
+                                            SERVAL_TCP_RTO_MAX);
+        }
+
+        if (tp->snd_wnd == 0) {
+                LOG_DBG("Zero snd_wnd, sending probe\n");
+                serval_tcp_send_probe0(sk);
+        } else {
+                LOG_DBG("Non-zero snd_wnd, pushing frames\n");
+                serval_tcp_push_pending_frames(sk);
+        }
+
+        return 0;
+}
+
 static struct serval_sock_af_ops serval_tcp_af_ops = {
         .queue_xmit = serval_ipv4_xmit,
         .receive = serval_tcp_rcv,
@@ -2382,7 +2424,8 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .migration_completed = serval_tcp_send_probe0,
+        .freeze_flow = serval_tcp_freeze_flow, 
+        .migration_completed = serval_tcp_migration_completed,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,
@@ -2403,7 +2446,8 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
-        .migration_completed = serval_tcp_send_probe0,
+        .migration_completed = serval_tcp_migration_completed,
+        .freeze_flow = serval_tcp_freeze_flow,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
         .done = __serval_tcp_done,

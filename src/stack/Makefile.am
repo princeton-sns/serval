@@ -93,6 +93,8 @@ serval_include_HEADERS = \
 serval_CPPFLAGS =-I$(SERVAL_INCLUDE_DIR) -I$(STACK_DIR)
 serval_LDFLAGS =-lpthread 
 serval_CFLAGS =
+serval_LDADD = \
+	$(top_srcdir)/src/common/libcommon.la
 
 if OS_LINUX
 serval_LDFLAGS +=-lrt
@@ -129,15 +131,17 @@ EXTRA_DIST = \
 	$(SERVAL_KERNEL_HDR) \
 	$(SERVAL_KERNEL_SRC)
 
-if ENABLE_LINUX_MODULE
-all: serval.ko
-endif
-
+# This target must be left outside the ENABLE_LINUX_MODULE if-endif
+# construct for Android cross-compiling to work on, e.g., Mac OS X.
 serval.ko: $(SERVAL_KERNEL_DEP)
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
+if ENABLE_LINUX_MODULE
+all: serval.ko
+
 install-data-local: serval.ko
 	$(MAKE) -C $(KDIR) M=$(PWD) modules_install
+endif
 
 clean-local:
 if ENABLE_LINUX_MODULE

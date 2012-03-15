@@ -1,0 +1,155 @@
+Building Serval for Android
+===========================
+
+These instructions have been tested for a Nexus One device, but may
+work also for other devices. However, it is likely that small
+modifications are necessary to make this work for other devices, such
+as using a different NDK, compiler, kernel source tree, etc. 
+
+Serval builds into an Android app that bundles a kernel
+module. Running this app requires a rooted Android device (with
+ability to run 'su'), or otherwise the kernel module cannot be
+loaded. The app allows you to easily load the kernel module and can
+also add and remove service table entries. Note that the app will
+probably only run on a specific type of device and version of Android,
+since the kernel module must match the running kernel.
+
+Prerequisites:
+
+* Root access on your Android device.
+* Kernel source code matching your cross-compile environment 
+  (see instructions below).
+* Android NDK: http://developer.android.com/sdk/ndk/index.html 
+  (r5b is known to work).
+* Android debug bridge - adb (from, e.g., the Android SDK).
+* Ant (or Eclipse)
+
+Configuration:
+
+Run the top-level configure script as follows:
+
+$ ./configure --with-android-sdk=<path/to/sdk>
+
+Getting the right kernel source
+-------------------------------
+
+Due to kernel features and versioning, you need to compile the Serval
+kernel module against the exact version of the kernel that runs on
+your Android device. Otherwise the kernel module will not load.
+
+You can download the kernel source code matching your device by
+following the instructions at the end of the following page
+(under "Downloading kernels"):
+
+http://source.android.com/source/downloading.html
+
+For instance, to clone the kernel source for devices with an MSM CPU
+(e.g., Nexus One), do:
+
+$ git clone https://android.googlesource.com/kernel/msm.git
+
+This will leave you with an empty checkout, so you need to checkout a
+valid branch:
+
+$ cd msm
+$ git checkout remotes/origin/android-msm-2.6.35 
+
+On your device, go to "Settings->About phone->Kernel version" to
+figure out the exact kernel it is running. The version string should
+look something like "2.6.35.7-59465-g42bad32".
+
+The first number identifies the version of the kernel, the second
+number is the number of the local commit in the source code repository
+where the kernel was compiled. The end of the string (following the
+'g') denotes the prefix of the SHA1 hash that identifies the exact
+commit.
+
+Now, use the hash string to checkout the exact commit that was used to
+compile the kernel for your device, e.g:
+
+$ git checkout 42bad32
+
+If there is no commit matching the kernel running on your device, you
+can try to use the "HEAD" commit of the repository and then manually
+specify the kernel string (see below).
+
+Now you need to prepare your kernel source tree. First put the cross
+compiler in your path, e.g.:
+
+$ export PATH=$PATH/<path to NDK>/build/prebuilt/darwin-x86/arm-eabi-4.4.0/bin/
+
+Now pull the kernel configuration from your device:
+
+$ adb pull /proc/config.gz
+$ gunzip config.gz
+$ cp config <path to kernel source>/.config
+
+Configure the kernel sources:
+
+$ ARCH=arm CROSS_COMPILE=arm-eabi- make oldconfig
+
+Prepare the kernel source for compilation:
+
+$ ARCH=arm CROSS_COMPILE=arm-eabi- make prepare
+
+Check that the generated kernel version string matches that of your
+device:
+
+$ cat <path to kernel source>/include/config/kernel.release
+
+If the string does not match, manually override the kernel version
+string so that it matches your device's, e.g.:
+
+$ echo "-59465-g42bad32" > <path to kernel source>/.scmversion
+
+After overriding, re-run the prepare step.
+
+Your kernel source tree is now ready.
+
+Compiling the Kernel module
+---------------------------
+
+Make sure you run (./autogen.sh) ./configure to generate the Makefiles.
+
+1. Make sure the Android NDK cross-compiler is in your PATH.
+
+$ export PATH=</path/to/android/ndk/compiler/bin:$PATH>
+
+2. Enter src/stack and issue the following command:
+
+$ ARCH=arm CROSS_COMPILE=arm-eabi- make serval.ko KDIR=<Path to kernel source> 
+
+Building the Serval Android app
+-------------------------------
+
+1. Compile the sources from the top-level directory (this will
+generate the Java bindings that the Serval app needs):
+
+$ ./configure --with-android-sdk=<path/to/sdk>
+$ make
+
+2. Compile the kernel module as instructed above.
+
+3. Build native libraries for Android:
+
+$ cd android/Serval
+$ <Path to NDK>/ndk-build
+
+The libraries and binaries can now be found under "libs".
+
+4. Build the Serval Android app with Ant:
+
+$ cd android/Serval (If not already there)
+$ ant debug
+
+5. Install on a (rooted) Android device:
+
+$ ant install
+
+Manually loading the kernel module
+----------------------------------
+
+Run this command through "adb":
+
+$ adb shell su -c 'insmod /path/to/kernel/module/on/device/serval.ko'
+

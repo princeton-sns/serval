@@ -89,6 +89,7 @@ static int interface_list_add(const char *ifname)
 	return 1;
 }
 
+/*
 static int interface_list_del(const char *ifname)
 {
 	struct interface *iface = interface_list_find(ifname);
@@ -102,6 +103,7 @@ static int interface_list_del(const char *ifname)
 
 	return 1;
 }
+*/
 
 static int interface_list_remove_stale(void)
 {

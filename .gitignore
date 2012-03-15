@@ -13,6 +13,9 @@ install-sh
 libtool
 ltmain.sh
 missing
+xcuserdata
+android/Serval/bin
+android/Serval/gen
 m4/libtool.m4
 m4/ltoptions.m4
 m4/ltsugar.m4
@@ -56,8 +59,15 @@ src/tools/migrate
 src/javasock/classes.list
 src/javasock/sources.list
 src/javasock/bin/
+src/libservalctrl/java/classes.list
+src/libservalctrl/java/sources.list
+src/libservalctrl/java/bin
 android/ServalChat/bin/
 android/ServalChat/gen/
+android/ServalChat/local.properties
+android/Serval/libs/
+android/Serval/obj/
+android/Serval/local.properties
 stamp-h1
 #
 Makefile.in
@@ -79,4 +89,3 @@ Makefile
 *.stamp
 *.jar
 .DS_Store
-.project

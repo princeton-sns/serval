@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * A translator between traditional TCP sockets and Serval TCP sockets.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
@@ -87,13 +98,14 @@ struct client *client_create(int inet_sock, int family,
         struct client *c;
         int ret;
 
-        c = malloc(sizeof(*c));
+        c = malloc(sizeof(struct client));
 
-        if (c) {
-                memset(c, 0, sizeof(*c));
-                c->id = client_num++;
-                c->inet_sock = inet_sock;
-        }        
+        if (!c)
+                return NULL;
+        
+        memset(c, 0, sizeof(struct client));
+        c->id = client_num++;
+        c->inet_sock = inet_sock;
         c->family = family;
 
         ret = pipe(c->pipefd);
@@ -235,8 +247,8 @@ static void signal_handler(int sig)
 
 void print_usage(void)
 {
-        printf("Usage: translator OPTIONS\n");
-        printf("OPTIONS:\n");
+        printf("Usage: translator [ OPTIONS ]\n");
+        printf("where OPTIONS:\n");
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
 }

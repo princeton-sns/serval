@@ -1,4 +1,17 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
+ *
+ * The Service Access layer (SAL).
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ *          Rob Kiefer <rkiefer@cs.princeton.edu>
+ * 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/platform.h>
 #include <serval/platform_tcpip.h>
 #include <serval/skbuff.h>
@@ -75,9 +88,6 @@ struct serval_context {
         struct serval_source_ext *src_ext;
         struct serval_migrate_ext *mig_ext;
 };
-
-/* Backoff multipliers for retransmission, fail when reaching 0. */
-static uint8_t backoff[] = { 1, 2, 4, 8, 16, 32, 64, 0 };
 
 #if defined(OS_LINUX_KERNEL)
 extern int serval_udp_encap_skb(struct sk_buff *skb, 
@@ -352,7 +362,7 @@ static int parse_source_ext(struct serval_ext *ext, struct sk_buff *skb,
                 return -1;
 
         /*
-        dev_get_ipv4_addr(skb->dev, &addr);
+        dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &addr);
 
         for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
                 if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
@@ -691,6 +701,156 @@ static inline void serval_sal_send_check(struct serval_hdr *sh)
         sh->check = serval_sal_csum(sh, ntohs(sh->length));
 }
 
+/* Compute the actual rto_min value */
+static inline u32 serval_sal_rto_min(struct sock *sk)
+{
+	u32 rto_min = SAL_RTO_MIN;
+#if defined(OS_LINUX_KERNEL)
+	struct dst_entry *dst = __sk_dst_get(sk);
+	if (dst && dst_metric_locked(dst, RTAX_RTO_MIN))
+		rto_min = dst_metric_rtt(dst, RTAX_RTO_MIN);
+#endif
+	return rto_min;
+}
+
+/* The RTO estimation for the SAL is taken directly from the Linux
+   kernel TCP code. */
+/* Called to compute a smoothed rtt estimate. The data fed to this
+ * routine either comes from timestamps, or from segments that were
+ * known _not_ to have been retransmitted [see Karn/Partridge
+ * Proceedings SIGCOMM 87]. The algorithm is from the SIGCOMM 88
+ * piece by Van Jacobson.
+ * NOTE: the next three routines used to be one big routine.
+ * To save cycles in the RFC 1323 implementation it was better to break
+ * it up into three procedures. -- erics
+ */
+static void serval_sal_rtt_estimator(struct sock *sk, const __u32 mrtt)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+	long m = mrtt; /* RTT */
+
+	/*	The following amusing code comes from Jacobson's
+	 *	article in SIGCOMM '88.  Note that rtt and mdev
+	 *	are scaled versions of rtt and mean deviation.
+	 *	This is designed to be as fast as possible
+	 *	m stands for "measurement".
+	 *
+	 *	On a 1990 paper the rto value is changed to:
+	 *	RTO = rtt + 4 * mdev
+	 *
+	 * Funny. This algorithm seems to be very broken.
+	 * These formulae increase RTO, when it should be decreased, increase
+	 * too slowly, when it should be increased quickly, decrease too quickly
+	 * etc. I guess in BSD RTO takes ONE value, so that it is absolutely
+	 * does not matter how to _calculate_ it. Seems, it was trap
+	 * that VJ failed to avoid. 8)
+	 */
+	if (m == 0)
+		m = 1;
+	if (ssk->srtt != 0) {
+		m -= (ssk->srtt >> 3);	/* m is now error in rtt est */
+		ssk->srtt += m;		/* rtt = 7/8 rtt + 1/8 new */
+		if (m < 0) {
+			m = -m;		/* m is now abs(error) */
+			m -= (ssk->mdev >> 2);   /* similar update on mdev */
+			/* This is similar to one of Eifel findings.
+			 * Eifel blocks mdev updates when rtt decreases.
+			 * This solution is a bit different: we use finer gain
+			 * for mdev in this case (alpha*beta).
+			 * Like Eifel it also prevents growth of rto,
+			 * but also it limits too fast rto decreases,
+			 * happening in pure Eifel.
+			 */
+			if (m > 0)
+				m >>= 3;
+		} else {
+			m -= (ssk->mdev >> 2);   /* similar update on mdev */
+		}
+		ssk->mdev += m;	    	/* mdev = 3/4 mdev + 1/4 new */
+		if (ssk->mdev > ssk->mdev_max) {
+			ssk->mdev_max = ssk->mdev;
+			if (ssk->mdev_max > ssk->rttvar)
+				ssk->rttvar = ssk->mdev_max;
+		}
+		if (after(ssk->snd_seq.una, ssk->rtt_seq)) {
+			if (ssk->mdev_max < ssk->rttvar)
+				ssk->rttvar -= (ssk->rttvar - ssk->mdev_max) >> 2;
+			ssk->rtt_seq = ssk->snd_seq.nxt;
+			ssk->mdev_max = serval_sal_rto_min(sk);
+		}
+	} else {
+		/* no previous measure. */
+		ssk->srtt = m << 3;	/* take the measured time to be rtt */
+		ssk->mdev = m << 1;	/* make sure rto = 3*rtt */
+		ssk->mdev_max = ssk->rttvar = max(ssk->mdev, 
+                                                  serval_sal_rto_min(sk));
+		ssk->rtt_seq = ssk->snd_seq.nxt;
+	}
+}
+
+static inline void serval_sal_bound_rto(const struct sock *sk)
+{
+	if (serval_sk(sk)->rto > SAL_RTO_MAX)
+		serval_sk(sk)->rto = SAL_RTO_MAX;
+}
+
+static inline u32 __serval_sal_set_rto(const struct serval_sock *ssk)
+{
+	return (ssk->srtt >> 3) + ssk->rttvar;
+}
+
+/* Calculate rto without backoff.  This is the second half of Van Jacobson's
+ * routine referred to above.
+ */
+static inline void serval_sal_set_rto(struct sock *sk)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+	/* Old crap is replaced with new one. 8)
+	 *
+	 * More seriously:
+	 * 1. If rtt variance happened to be less 50msec, it is hallucination.
+	 *    It cannot be less due to utterly erratic ACK generation made
+	 *    at least by solaris and freebsd. "Erratic ACKs" has _nothing_
+	 *    to do with delayed acks, because at cwnd>2 true delack timeout
+	 *    is invisible. Actually, Linux-2.4 also generates erratic
+	 *    ACKs in some circumstances.
+	 */
+	ssk->rto = __serval_sal_set_rto(ssk);
+
+	/* 2. Fixups made earlier cannot be right.
+	 *    If we do not estimate RTO correctly without them,
+	 *    all the algo is pure shit and should be replaced
+	 *    with correct one. It is exactly, which we pretend to do.
+	 */
+
+	/* NOTE: clamping at SAL_RTO_MIN is not required, current algo
+	 * guarantees that rto is higher.
+	 */
+	serval_sal_bound_rto(sk);
+}
+
+static void serval_sal_rearm_rto(struct sock *sk)
+{
+	struct serval_sock *ssk = serval_sk(sk);
+
+	if (!serval_sal_ctrl_queue_head(sk)) {
+		serval_sock_clear_xmit_timer(sk);
+	} else {
+		serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
+	}
+}
+
+static inline void serval_sal_ack_update_rtt(struct sock *sk,
+                                             const s32 seq_rtt)
+{
+        serval_sal_rtt_estimator(sk, seq_rtt);
+	serval_sal_set_rto(sk);
+	serval_sk(sk)->backoff = 0; 
+
+        LOG_DBG("Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
+                HZ, seq_rtt, serval_sk(sk)->rto);
+}
+
 /*
   Given an ACK, clean all packets from the control queue that this ACK
   acknowledges. Or, alternatively, clean all packets if indicated by
@@ -705,19 +865,32 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb, *fskb = serval_sal_ctrl_queue_head(sk);
         unsigned int num = 0;
+        u32 now = sal_time_stamp;
+        s32 seq_rtt = -1;
         int err = 0;
        
         while ((skb = serval_sal_ctrl_queue_head(sk)) && 
                skb != serval_sal_send_head(sk)) {
                 if (ackno > SERVAL_SKB_CB(skb)->seqno || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
-                        LOG_PKT("cleaned rtx queue seqno=%u\n", 
-                                SERVAL_SKB_CB(skb)->seqno);
+
+                        if (SERVAL_SKB_CB(skb)->flags & SVH_RETRANS) {
+                                seq_rtt = -1;
+                        } else if (!all) {
+                                seq_rtt = now - SERVAL_SKB_CB(skb)->when;
+                                serval_sal_ack_update_rtt(sk, seq_rtt);
+                                serval_sal_rearm_rto(sk);
+                        }
+
+                        LOG_PKT("cleaned rtxQ seqno=%u HZ=%u seq_rtt=%d\n", 
+                                SERVAL_SKB_CB(skb)->seqno, 
+                                HZ, seq_rtt);
+
                         kfree_skb(skb);
                         skb = serval_sal_ctrl_queue_head(sk);
                         if (skb)
                                 ssk->snd_seq.una = SERVAL_SKB_CB(skb)->seqno;
-                        num++;
+                        num++;                        
                 } else {
                         break;
                 }
@@ -728,15 +901,14 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         
         /* Did we remove the first packet in the queue? */
         if (serval_sal_ctrl_queue_head(sk) != fskb) {
-                sk_stop_timer(sk, &serval_sk(sk)->retransmit_timer);
-                ssk->retransmits = 0;
+                serval_sock_clear_xmit_timer(sk);
         }
 
         if (serval_sal_ctrl_queue_head(sk)) {
-                LOG_PKT("Setting retrans timer, queue len=%u\n",
-                        serval_sal_ctrl_queue_len(sk));
-                sk_reset_timer(sk, &serval_sk(sk)->retransmit_timer,
-                               jiffies + msecs_to_jiffies(ssk->rto));
+                LOG_PKT("Setting retrans timer, queue len=%u rto=%u (ms)\n",
+                        serval_sal_ctrl_queue_len(sk), 
+                        jiffies_to_msecs(ssk->rto));
+                serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
         }
 
         return err;
@@ -778,12 +950,17 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
         LOG_PKT("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
                 ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
         
+        LOG_DBG("RTO HZ=%u rto=%u rto_msec=%u\n",
+                HZ, ssk->rto, jiffies_to_msecs(ssk->rto));
+
 	while ((skb = serval_sal_send_head(sk)) && 
                (ssk->snd_seq.nxt - ssk->snd_seq.una) <= ssk->snd_seq.wnd) {
                 
                 if (limit && num == limit)
                         break;
 
+                SERVAL_SKB_CB(skb)->when = sal_time_stamp;
+                                
                 err = serval_sal_transmit_skb(sk, skb, 1, gfp);
                 
                 if (err < 0) {
@@ -825,11 +1002,9 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         /* 
            Set retransmission timer.
         */
-        if (skb == serval_sal_ctrl_queue_head(sk)) {
-                sk_reset_timer(sk, &ssk->retransmit_timer,
-                               jiffies + msecs_to_jiffies(ssk->rto));
-        }
-        
+        if (skb == serval_sal_ctrl_queue_head(sk))
+                serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
+
         /* 
            Write packets in queue to network.
         */
@@ -923,43 +1098,6 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                                sizeof(saddr->sin_addr));
                 }
         }
-#if 0
-        if (has_dst_ip) {
-                nexthop = daddr = usin->sin_addr.s_addr;
-                if (inet->opt && inet->opt->srr) {
-                        if (!daddr)
-                                return -EINVAL;
-                        nexthop = inet->opt->faddr;
-                }
-
-                tmp = ip_route_connect(&rt, nexthop, inet->inet_saddr,
-                                       RT_CONN_FLAGS(sk), sk->sk_bound_dev_if,
-                                       IPPROTO_TCP,
-                                       inet->inet_sport, usin->sin_port, sk, 1);
-                if (tmp < 0) {
-                        if (tmp == -ENETUNREACH)
-			IP_INC_STATS_BH(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
-                        return tmp;
-                }
-                
-                if (rt->rt_flags & (RTCF_MULTICAST | RTCF_BROADCAST)) {
-                        ip_rt_put(rt);
-                        return -ENETUNREACH;
-                }
-                
-                if (!inet->opt || !inet->opt->srr)
-                        daddr = rt->rt_dst;
-                
-                if (!inet->inet_saddr)
-                        inet->inet_saddr = rt->rt_src;
-                inet->inet_rcv_saddr = inet->inet_saddr;
-                
-                /* OK, now commit destination to socket.  */
-                //sk->sk_gso_type = SKB_GSO_TCPV4;
-                sk->sk_gso_type = 0;
-                sk_setup_caps(sk, &rt->dst);
-        }
-#endif
         /* Disable segmentation offload */
         sk->sk_gso_type = 0;
 
@@ -1519,7 +1657,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
          * should probably route the reply here somehow in case we
          * want to reply on another interface than the incoming one.
          */
-        if (!dev_get_ipv4_addr(skb->dev, &myaddr)) {
+        if (!dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &myaddr)) {
                 LOG_ERR("No source address for interface %s\n",
                         skb->dev);
                 goto drop;
@@ -1660,6 +1798,8 @@ serval_sal_create_respond_sock(struct sock *sk,
 
         nsk = sk_clone(sk, GFP_ATOMIC);
 
+        /* Cloned sock has lock held */
+
         if (nsk) {
                 struct serval_sock *nssk = serval_sk(nsk);
                 int ret;
@@ -1764,8 +1904,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                                 return NULL;
 
                         /* Move request sock to accept queue */
-                        list_del(&srsk->lh);
-                        list_add_tail(&srsk->lh, &ssk->accept_queue);
+                        list_move_tail(&srsk->lh, &ssk->accept_queue);
                         nsk->sk_ack_backlog = 0;
 
                         newinet = inet_sk(nsk);
@@ -1837,7 +1976,8 @@ static int serval_sal_ack_process(struct sock *sk,
         switch (ssk->sal_state) {
         case SAL_RSYN_RECV:
                 if (!ctx->hdr->rsyn) {
-                        LOG_DBG("Migration complete\n");
+                        LOG_DBG("Migration complete for flow %s\n",
+                                flow_id_to_str(&ssk->local_flowid));
                         serval_sock_set_sal_state(sk, SAL_INITIAL);
                         memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
                         memset(&ssk->mig_daddr, 0, 4);
@@ -1876,10 +2016,12 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
-                LOG_DBG("Migration completed!\n");
+                LOG_DBG("Migration complete for flow %s!\n",
+                        flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
 
-                dev_get_ipv4_addr(ssk->mig_dev, &inet_sk(sk)->inet_saddr);
+                dev_get_ipv4_addr(ssk->mig_dev, IFADDR_LOCAL, 
+                                  &inet_sk(sk)->inet_saddr);
                 serval_sock_set_dev(sk, ssk->mig_dev);
                 serval_sock_set_mig_dev(sk, NULL);
                 sk_dst_reset(sk);
@@ -1930,6 +2072,8 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         switch(ssk->sal_state) {
         case SAL_INITIAL:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+                if (ssk->af_ops->freeze_flow)
+                        ssk->af_ops->freeze_flow(sk);
                 break;
         case SAL_RSYN_SENT:
                 serval_sock_set_sal_state(sk, SAL_RSYN_SENT_RECV);
@@ -1958,6 +2102,8 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         /* FIXME: should the RSYN-ACK be queued for retransmission? I
            guess it is not necessary since the peer that sent the RSYN
            would retransmit. */
+        SERVAL_SKB_CB(skb)->when = sal_time_stamp;
+
         return serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
 }
 
@@ -2140,6 +2286,8 @@ static int serval_sal_child_process(struct sock *parent,
         int ret = 0;
         int state = child->sk_state;
 
+        /* child sock is already locked here */
+
         serval_sk(child)->dev = NULL;        
 
         /* Check lock on child socket, similarly to how we handled the
@@ -2192,6 +2340,8 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         
                         nsk = serval_sal_request_sock_handle(sk, skb, ctx);
                         
+                        /* The new sock is already locked here */
+
                         if (nsk && nsk != sk) {
                                 return serval_sal_child_process(sk, nsk,
                                                                 skb, ctx);
@@ -2728,8 +2878,8 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                       struct sock **sk)
 {
         struct service_entry* se = NULL;
-        struct service_resolution_iter iter;
-        struct dest* dest = NULL;
+        struct service_iter iter;
+        struct target *target = NULL;
         unsigned int hdr_len = ctx->length;
         unsigned int num_forward = 0;
         unsigned int data_len = skb->len - hdr_len;
@@ -2752,29 +2902,30 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         service_id_to_str(srvid));
                 return SAL_RESOLVE_NO_MATCH;
         }
-
-	service_resolution_iter_init(&iter, se, SERVICE_ITER_ANYCAST);
-
+        
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
+                return SAL_RESOLVE_ERROR;
+        
         /*
-          Send to all destinations listed for this service.
+          Send to all targets listed for this service.
         */
-        dest = service_resolution_iter_next(&iter);
+        target = service_iter_next(&iter);
 
-        if (!dest) {
-                LOG_INF("No dest to forward on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, data_len);
-                service_resolution_iter_destroy(&iter);
+        if (!target) {
+                LOG_INF("No target to forward on!\n");
+                service_iter_inc_stats(&iter, -1, data_len);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
                 return SAL_RESOLVE_NO_MATCH;
         }
 
-        service_resolution_iter_inc_stats(&iter, 1, data_len);
+        service_iter_inc_stats(&iter, 1, data_len);
                 
-        while (dest) {
-                struct dest *next_dest;
-
-                next_dest = service_resolution_iter_next(&iter);
-
+        while (target) {
+                struct target *next_target;
+                
+                next_target = service_iter_next(&iter);
+                
                 /* It is kind of unclear how to handle DEMUX vs
                    FORWARD rules here. Does it make sense to have both
                    a socket and forward rule for one single serviceID?
@@ -2783,9 +2934,9 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                    in the iteration? I guess for now we just forward
                    until we hit a socket, and then break (i.e., DEMUX
                    to socket but stop forwarding). */
-                if (is_sock_dest(dest)) {
+                if (is_sock_target(target)) {
                         /* local resolution */
-                        *sk = dest->dest_out.sk;
+                        *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
                         break;
@@ -2808,7 +2959,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 break;
                         }
                         
-                        if (next_dest == NULL) {
+                        if (next_target == NULL) {
                                 cskb = skb;
                         } else {
                                 if (skb_cloned(skb))
@@ -2829,8 +2980,8 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * out device specified in the dst_entry route
                          * and assumes that skb->dev is the input
                          * interface*/
-                        if (dest->dest_out.dev)
-                                skb_set_dev(cskb, dest->dest_out.dev);
+                        if (target->out.dev)
+                                skb_set_dev(cskb, target->out.dev);
 #endif /* OS_LINUX_KERNEL */
                         
                         /* Set the true overlay source address if the
@@ -2850,7 +3001,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         LOG_DBG("new serval header len=%u\n", hdr_len);
 
                         /* Update destination address */
-                        memcpy(&iph->daddr, dest->dst, sizeof(iph->daddr));
+                        memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
 
                         /* Must recalculate transport checksum. Pull
                            to reveal transport header */
@@ -2891,13 +3042,13 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         } else 
                                 num_forward++;
                 }
-                dest = next_dest;
+                target = next_target;
         }
 
         if (num_forward == 0)
-                service_resolution_iter_inc_stats(&iter, -1, -data_len);
+                service_iter_inc_stats(&iter, -1, -data_len);
 
-        service_resolution_iter_destroy(&iter);
+        service_iter_destroy(&iter);
         service_entry_put(se);
 
         return err;
@@ -3122,6 +3273,8 @@ static int serval_sal_rexmit(struct sock *sk)
                 return -1;
         }
 
+        SERVAL_SKB_CB(skb)->flags |= SVH_RETRANS;
+
         /* Always clone retransmitted packets */
         err = serval_sal_transmit_skb(sk, skb, 1, GFP_ATOMIC);
         
@@ -3139,25 +3292,24 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock(sk);
 
-        LOG_DBG("Transmit timeout sock=%p num=%u backoff=%u\n", 
-                sk, ssk->retransmits, backoff[ssk->retransmits]);
+        LOG_DBG("Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
+                sk, jiffies_to_msecs(ssk->rto), ssk->backoff);
         
-        if (backoff[ssk->retransmits + 1] == 0) {
+        if (ssk->retransmits == 10) {
                 /* TODO: check error values here */
                 LOG_DBG("NOT rescheduling timer! Closing socket\n");
                 sk->sk_err = ETIMEDOUT;
                 serval_sal_done(sk);
         } else {
                 LOG_DBG("ReXmit and rescheduling timer\n");
-
                 serval_sal_rexmit(sk);
 
-                sk_reset_timer(sk, &ssk->retransmit_timer,
-                               jiffies + (msecs_to_jiffies(ssk->rto) * 
-                                          backoff[ssk->retransmits]));
+                ssk->backoff++;
+                ssk->retransmits++;
                 
-                if (backoff[ssk->retransmits + 1] != 0)
-                        ssk->retransmits++;
+                serval_sock_reset_xmit_timer(sk, min(ssk->rto << ssk->backoff, 
+                                                     SAL_RTO_MAX),
+                                             SAL_RTO_MAX);
         }
         bh_unlock_sock(sk);
         sock_put(sk);
@@ -3180,11 +3332,13 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         struct sock *sk = skb->sk;
         struct serval_sock *ssk = serval_sk(sk);
       	uint32_t temp_daddr = 0;
+        u8 skb_flags = SERVAL_SKB_CB(skb)->flags;
         int err = 0;
 
-        if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
+        if (skb_flags & SVH_RSYN) {
         	    if (ssk->mig_dev) {
                             dev_get_ipv4_addr(ssk->mig_dev,
+                                              IFADDR_LOCAL,
                                               &inet_sk(sk)->inet_saddr);
 #if defined(ENABLE_DEBUG)
                             {
@@ -3238,10 +3392,11 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         
         err = ssk->af_ops->queue_xmit(skb);
         
-        if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN) {
+        if (skb_flags & SVH_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
                 if (ssk->mig_dev) {
-                        dev_get_ipv4_addr(ssk->dev, 
+                        dev_get_ipv4_addr(ssk->dev,
+                                          IFADDR_LOCAL,
                                           &inet_sk(sk)->inet_saddr);
                 }
 
@@ -3347,11 +3502,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         struct serval_sock *ssk = serval_sk(sk);
         struct inet_sock *inet = inet_sk(sk);
 	struct service_entry *se;
-	struct dest *dest;
+	struct target *target;
         struct serval_hdr *sh;
         int hdr_len = sizeof(*sh);
-	int err = 0;
-        struct service_resolution_iter iter;
+	int err = -1;
+        struct service_iter iter;
         struct sk_buff *cskb = NULL;
         int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
                                     extra 8 bytes are coming from at
@@ -3461,9 +3616,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 return serval_sal_do_xmit(skb);
         }
 
-        /* TODO - prefix, flags??*/
-        //ssk->srvid_flags;
-        //ssk->srvid_prefix;
 
         LOG_DBG("Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
@@ -3479,33 +3631,35 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	service_resolution_iter_init(&iter, se, SERVICE_ITER_ALL);
+	if (service_iter_init(&iter, se, SERVICE_ITER_ALL) < 0)
+                return -1;
 
         /*
           Send to all destinations resolved for this service.
         */
-	dest = service_resolution_iter_next(&iter);
+	target = service_iter_next(&iter);
 	
-        if (!dest) {
+        if (!target) {
                 LOG_DBG("No device to transmit on!\n");
-                service_resolution_iter_inc_stats(&iter, -1, -dlen);
+                service_iter_inc_stats(&iter, -1, -dlen);
                 kfree_skb(skb);
-                service_resolution_iter_destroy(&iter);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
                 return -EHOSTUNREACH;
         }
 
-	while (dest) {
-		struct dest *next_dest;
+	while (target) {
+		struct target *next_target;
                 struct net_device *dev = NULL;
-               
+                int local_err = 0;
+
                 if (cskb == NULL) {
-                        service_resolution_iter_inc_stats(&iter, 1, dlen);
+                        service_iter_inc_stats(&iter, 1, dlen);
                 }
                 
-                next_dest = service_resolution_iter_next(&iter);
+                next_target = service_iter_next(&iter);
 		
-                if (next_dest == NULL) {
+                if (next_target == NULL) {
 			cskb = skb;
 		} else {
                         /* Always be atomic here since we are holding
@@ -3526,7 +3680,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		}
                 
                 /* Remember the flow destination */
-		if (is_sock_dest(dest)) {
+		if (is_sock_target(target)) {
                         /* use a localhost address and bounce it off
                          * the IP layer*/
                         memcpy(&inet->inet_daddr,
@@ -3546,18 +3700,24 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #endif
 		} else {
                         memcpy(&inet->inet_daddr,
-                               dest->dst,
-                               sizeof(inet->inet_daddr) < dest->dstlen ? 
-                               sizeof(inet->inet_daddr) : dest->dstlen);
+                               target->dst,
+                               sizeof(inet->inet_daddr) < target->dstlen ? 
+                               sizeof(inet->inet_daddr) : target->dstlen);
                        
-                        dev = dest->dest_out.dev;
+                        dev = target->out.dev;
                 }
                 
                 skb_set_dev(cskb, dev);
 
                 /* Need also to set the source address for
                    checksum calculation */
-                dev_get_ipv4_addr(dev, &inet->inet_saddr);
+                if (!dev_get_ipv4_addr(dev, IFADDR_LOCAL,
+                                       &inet->inet_saddr)) {
+                        LOG_ERR("No source IPv4 address for interface %s\n",
+                                dev->name);
+                        target = next_target;
+                        continue;
+                }
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -3600,12 +3760,27 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    transport header */
                 skb_reset_transport_header(cskb);
 
-		err = ssk->af_ops->queue_xmit(cskb);
+		local_err = ssk->af_ops->queue_xmit(cskb);
 
-		if (err < 0) {
-			LOG_ERR("xmit failed on queue_xmit err=%d\n", err);
-		}
-		dest = next_dest;
+		if (local_err < 0) {
+			LOG_ERR("xmit failed on queue_xmit err=%d\n", 
+                                local_err);
+                        /* Only set error in case we haven't succeeded
+                           in transmitting any packet. See comment
+                           below. */
+                        if (err != 0)
+                                err = local_err;
+		} else {
+                        /* Since we may send a SYN on multiple
+                           interfaces, we only want to return an error
+                           message in case transmission failed on all
+                           interfaces. Once we succeed on any
+                           interface, we set return value to
+                           success. */
+                        err = 0;
+                }
+                
+		target = next_target;
 	}
         
         /* Reset dst cache since we don't want to potantially cache a
@@ -3618,7 +3793,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         memset(&inet_sk(sk)->inet_daddr, 0, 
                sizeof(inet_sk(sk)->inet_daddr));
                    
-        service_resolution_iter_destroy(&iter);
+        service_iter_destroy(&iter);
 	service_entry_put(se);
 
 	return err;

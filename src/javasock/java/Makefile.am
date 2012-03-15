@@ -1,26 +1,26 @@
 # Do not install compiled class files. We instead generate and install
 # a jar file with the class files in a subdirectory
 noinst_JAVA = \
-	serval/net/ServiceID.java \
-	serval/net/ServalSocketAddress.java \
-	serval/platform/ServalNetworkStack.java \
-	serval/net/ServalDatagramPacket.java \
-	serval/net/ServalDatagramSocket.java \
-	serval/net/ServalDatagramSocketImpl.java \
-	serval/net/ServalDatagramSocketImplFactory.java \
-	serval/net/ServalServerDatagramSocket.java \
-	serval/net/ServalSocketImplFactory.java \
-	serval/net/ServalSocketOutputStream.java \
-	serval/net/ServalSocketImpl.java \
-	serval/net/ServalPlainSocketImpl.java \
-	serval/net/ServalSocketInputStream.java \
-	serval/net/ServalSocket.java \
-	serval/net/ServalServerSocket.java \
-	serval/net/ServalPlainServerSocketImpl.java \
-	serval/test/TCPServer.java \
-	serval/test/TCPClient.java \
-	serval/test/UDPServer.java \
-	serval/test/UDPClient.java
+	org/servalarch/net/ServiceID.java \
+	org/servalarch/net/ServalSocketAddress.java \
+	org/servalarch/platform/ServalNetworkStack.java \
+	org/servalarch/net/ServalDatagramPacket.java \
+	org/servalarch/net/ServalDatagramSocket.java \
+	org/servalarch/net/ServalDatagramSocketImpl.java \
+	org/servalarch/net/ServalDatagramSocketImplFactory.java \
+	org/servalarch/net/ServalServerDatagramSocket.java \
+	org/servalarch/net/ServalSocketImplFactory.java \
+	org/servalarch/net/ServalSocketOutputStream.java \
+	org/servalarch/net/ServalSocketImpl.java \
+	org/servalarch/net/ServalPlainSocketImpl.java \
+	org/servalarch/net/ServalSocketInputStream.java \
+	org/servalarch/net/ServalSocket.java \
+	org/servalarch/net/ServalServerSocket.java \
+	org/servalarch/net/ServalPlainServerSocketImpl.java \
+	org/servalarch/test/TCPServer.java \
+	org/servalarch/test/TCPClient.java \
+	org/servalarch/test/UDPServer.java \
+	org/servalarch/test/UDPClient.java
 
 EXTRA_DIST=
 
@@ -31,9 +31,9 @@ JAVAROOT=$(top_builddir)/src/javasock/java
 AM_JAVACFLAGS=
 
 clean-local:
-	rm -f serval/test/*~
-	rm -f serval/net/*~
-	rm -f serval/platform/*~
+	rm -f org/servalarch/test/*~
+	rm -f org/servalarch/net/*~
+	rm -f org/servalarch/platform/*~
 	rm -f *~
 	rm -f *.class
 	rm -f *.stamp

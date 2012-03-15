@@ -43,7 +43,7 @@ const char *Logger::PREFIX = "/tmp"; // todo: autoconf
 
 FILE *Logger::_logfd = 0;
 bool Logger::_initialized = false;
-Logger::Level Logger::_debug_level = (Level)(_MAX - 1);
+Logger::Level Logger::_debug_level = (Level)(_LOG_MAX - 1);
 
 #define LOG_TO_DEBUGFS 1
 
@@ -53,7 +53,7 @@ Logger::~Logger()
 
 void Logger::set_debug_level(unsigned int level)
 {
-    _debug_level = level > (_MAX - 1) ? (Level)(_MAX - 1) : (Level)level;
+    _debug_level = level > (_LOG_MAX - 1) ? (Level)(_LOG_MAX - 1) : (Level)level;
 }
 
 int
@@ -102,7 +102,7 @@ void Logger::static_uninitialize()
 int
 Logger::xlog(Level level, const char *func, const char *format, ...)
 {
-    if (!_initialized || _debug_level == OFF || (level > _debug_level)) {
+    if (!_initialized || _debug_level == LOG_OFF || (level > _debug_level)) {
         return 0;
     }
 

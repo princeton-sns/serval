@@ -29,7 +29,6 @@ static void skb_release_data(struct sk_buff *skb)
 	}
 }
 
-
 /* Free everything but the sk_buff shell. */
 static void skb_release_all(struct sk_buff *skb)
 {
@@ -175,6 +174,8 @@ struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t gfp_mask)
         
         if (!n)
                 return NULL;
+        
+        memset(n, 0, sizeof(*n));
 
 #if defined(SKB_REFCNT_DEBUG)
         printf("cloning skb %p clone %p\n", skb, n);

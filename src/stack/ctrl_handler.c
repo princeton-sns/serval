@@ -1,4 +1,16 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- 
+ *
+ * Handlers for Serval's control channel.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *          David Shue <dshue@cs.princeton.edu>
+ *          Rob Kiefer <rkiefer@cs.princeton.edu> 
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #include <serval/debug.h>
 #include <serval/platform.h>
 #include <serval/netdevice.h>
@@ -13,6 +25,23 @@
 #include "serval_sal.h"
 #include "serval_ipv4.h"
 
+#if defined(ENABLE_DEBUG)
+static const char *ctrlmsg_str[] = {
+        [CTRLMSG_TYPE_REGISTER] = "CTRLMSG_TYPE_REGISTER",
+        [CTRLMSG_TYPE_UNREGISTER] = " CTRLMSG_TYPE_UNREGISTER",
+        [CTRLMSG_TYPE_RESOLVE] = "CTRLMSG_TYPE_RESOLVE",
+        [CTRLMSG_TYPE_ADD_SERVICE] = "CTRLMSG_TYPE_ADD_SERVICE",
+        [CTRLMSG_TYPE_DEL_SERVICE] = "CTRLMSG_TYPE_DEL_SERVICE",
+        [CTRLMSG_TYPE_MOD_SERVICE] = "CTRLMSG_TYPE_MOD_SERVICE",
+        [CTRLMSG_TYPE_GET_SERVICE] = "CTRLMSG_TYPE_GET_SERVICE",
+        [CTRLMSG_TYPE_SERVICE_STAT] = "CTRLMSG_TYPE_SERVICE_STAT",
+        [CTRLMSG_TYPE_CAPABILITIES] = "CTRLMSG_TYPE_CAPABILITIES",
+        [CTRLMSG_TYPE_MIGRATE] = "CTRLMSG_TYPE_MIGRATE",
+        [CTRLMSG_TYPE_DUMMY] = "CTRLMSG_TYPE_DUMMY",
+        NULL
+};
+#endif
+
 extern struct net_device *resolve_dev_impl(const struct in_addr *addr,
                                            int ifindex);
 
@@ -23,7 +52,7 @@ static inline struct net_device *resolve_dev(struct service_info *entry)
 
 static int dummy_ctrlmsg_handler(struct ctrlmsg *cm)
 {
-	LOG_DBG("control message type %u\n", cm->type);
+	LOG_DBG("control message type %s\n", ctrlmsg_str[cm->type]);
         return 0;
 }
 
@@ -65,18 +94,19 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
 #endif
                 err = service_add(&entry->srvid, 
                                   prefix_bits, 
+                                  RULE_FORWARD,
                                   entry->srvid_flags, 
                                   entry->priority, 
                                   entry->weight,
                                   &entry->address, 
                                   sizeof(entry->address),
-                                  dev, GFP_KERNEL);
+                                  make_target(dev), GFP_KERNEL);
 
                 dev_put(dev);
 
                 if (err > 0) {
                         if (index < i) {
-                                /*copy it over */
+                                /* copy it over */
                                 memcpy(&cmr->service[index], 
                                        entry, sizeof(*entry));
                         }
@@ -87,7 +117,15 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 }
         }
 
-        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        if (index == 0) {
+                /* Just return the original request with a return value */
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+        } else {
+                /* Return the entries added */
+                cm->retval = CTRLMSG_RETVAL_OK;
+                cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        }
+
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -97,33 +135,31 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
         unsigned int num_res = CTRLMSG_SERVICE_NUM(cmr);
-        unsigned char buffer[sizeof(struct ctrlmsg_service_info_stat) + 
-                             sizeof(struct service_info_stat) * num_res];
-        struct ctrlmsg_service_info_stat *cms = 
-                (struct ctrlmsg_service_info_stat *)buffer;
-        struct in_addr null_ip = { 0 };
+        const size_t cmsg_size = sizeof(struct ctrlmsg_service_info_stat) + 
+                sizeof(struct service_info_stat) * num_res;
+        struct ctrlmsg_service_info_stat *cms;
         struct service_id null_service = { .s_sid = { 0 } };
-        unsigned int i = 0;
-        int index = 0;
-        int err = 0;
+        unsigned int i = 0, index = 0;
+        int err = 0;       
 
-#if defined(ENABLE_DEBUG)
-        //char ipstr[20];
         LOG_DBG("deleting %u services\n", num_res);
-#endif
+
+        cms = kmalloc(cmsg_size, GFP_KERNEL);
+
+        if (!cms) {
+                cm->retval = CTRLMSG_RETVAL_ERROR;
+                ctrl_sendmsg(cm, GFP_KERNEL);
+                return -ENOMEM;
+        }
+
+        memset(cms, 0, cmsg_size);
 
         for (i = 0; i < num_res; i++) {
                 struct service_info *entry = &cmr->service[i];
                 struct service_info_stat *stat = &cms->service[index];
-                struct dest_stats dstat;
+                struct target_stats tstat;
                 struct service_entry *se;
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-                struct in_addr *ip = NULL;
-
-                if (memcmp(&entry->address, &null_ip, 
-                           sizeof(null_ip)) != 0) {
-                        ip = &entry->address;
-                }
 
                 /*
                   We might be trying to delete the "default" entry. In
@@ -144,19 +180,21 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                         continue;
                 }
 
-                memset(&dstat, 0, sizeof(dstat));
-
-                err = service_entry_remove_dest(se, ip, ip ? 
-                                                sizeof(entry->address) : 0, 
-                                                &dstat);
+                memset(&tstat, 0, sizeof(tstat));
+                
+                err = service_entry_remove_target(se,
+                                                  RULE_FORWARD, 
+                                                  &entry->address, 
+                                                  sizeof(entry->address), 
+                                                  &tstat);
 
                 if (err > 0) {
-                        stat->duration_sec = dstat.duration_sec;
-                        stat->duration_nsec = dstat.duration_nsec;
-                        stat->packets_resolved = dstat.packets_resolved;
-                        stat->bytes_resolved = dstat.bytes_resolved;
-                        stat->packets_dropped = dstat.packets_dropped;
-                        stat->bytes_dropped = dstat.packets_dropped;
+                        stat->duration_sec = tstat.duration_sec;
+                        stat->duration_nsec = tstat.duration_nsec;
+                        stat->packets_resolved = tstat.packets_resolved;
+                        stat->bytes_resolved = tstat.bytes_resolved;
+                        stat->packets_dropped = tstat.packets_dropped;
+                        stat->bytes_dropped = tstat.packets_dropped;
 
                         if (index < i) {
                                 memcpy(&stat->service, entry, 
@@ -172,9 +210,19 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 service_entry_put(se);
         }
 
-        cms->cmh.type = CTRLMSG_TYPE_SERVICE_STAT;
-        cms->cmh.len = CTRLMSG_SERVICE_STAT_NUM_LEN(index);
-        ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
+        if (index == 0) {
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+                ctrl_sendmsg(cm, GFP_KERNEL);
+        } else {
+                cms->cmh.type = CTRLMSG_TYPE_DEL_SERVICE;
+                cms->xid = cmr->xid;
+                cms->cmh.xid = cm->xid;
+                cms->cmh.retval = CTRLMSG_RETVAL_OK;
+                cms->cmh.len = CTRLMSG_SERVICE_INFO_STAT_NUM_LEN(index);
+                ctrl_sendmsg(&cms->cmh, GFP_KERNEL);
+        }
+
+        kfree(cms);
 
         return 0;
 }
@@ -220,13 +268,14 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                                           buf, 18));
                 }
 #endif
-                dev = resolve_dev(entry_new);
+                dev = resolve_dev(entry_old);
                 
                 if (!dev)
                         continue;
 
                 err = service_modify(&entry_old->srvid,
                                      prefix_bits,
+                                     RULE_FORWARD,
                                      entry_old->srvid_flags, 
                                      entry_new->priority, 
                                      entry_new->weight, 
@@ -234,10 +283,10 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                                      sizeof(entry_old->address),
                                      &entry_new->address,
                                      sizeof(entry_new->address), 
-                                     dev);
+                                     make_target(dev));
                 if (err > 0) {
                         if (index < i) {
-                                /*copy it over */
+                                /* copy it over */
                                 memcpy(&cmr->service[index], 
                                        entry_new, sizeof(*entry_new));
                         }
@@ -248,8 +297,14 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                                 err);
                 }
         }
-
-        cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        
+        if (index == 0) {
+                cm->retval = CTRLMSG_RETVAL_NOENTRY;
+        } else {
+                cm->retval = CTRLMSG_RETVAL_OK;
+                cm->len = CTRLMSG_SERVICE_NUM_LEN(index);
+        }
+        
         ctrl_sendmsg(cm, GFP_KERNEL);
 
         return 0;
@@ -259,16 +314,13 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_service *cmg = (struct ctrlmsg_service *)cm;
         struct service_entry *se;
-        struct service_resolution_iter iter;
+        struct service_iter iter;
         unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-        struct dest *dst;
-        int i = 0;
+        struct target *t;
 
-#if defined(ENABLE_DEBUG)
-        //char ipstr[20];
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
-#endif
+
         if (cmg->service[0].srvid_prefix_bits > 0)
                 prefix_bits = cmg->service[0].srvid_prefix_bits;
 
@@ -278,46 +330,71 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         if (se) {
                 struct ctrlmsg_service *cres;
                 size_t size = CTRLMSG_SERVICE_NUM_LEN(se->count);
+                int i = 0;
+                          
                 cres = kmalloc(size, GFP_KERNEL);
 
                 if (!cres) {
                         service_entry_put(se);
+                        cm->retval = CTRLMSG_RETVAL_ERROR;
+                        ctrl_sendmsg(cm, GFP_KERNEL);
                         return -ENOMEM;
                 }
 
                 memset(cres, 0, size);
                 cres->cmh.type = CTRLMSG_TYPE_GET_SERVICE;
                 cres->cmh.len = size;
+                cres->cmh.xid = cm->xid;
                 cres->xid = cmg->xid;
 
                 memset(&iter, 0, sizeof(iter));
-                service_resolution_iter_init(&iter, se, 1);
+                service_iter_init(&iter, se, SERVICE_ITER_FORWARD);
 
-                while ((dst = service_resolution_iter_next(&iter)) != NULL) {
+                while ((t = service_iter_next(&iter)) != NULL) {
                         struct service_info *entry = &cres->service[i++];
-                        
-                        memcpy(&entry->srvid, 
-                               &cmg->service[0].srvid, 
-                               sizeof(cmg->service[0].srvid));
+
+                        service_get_id(se, &entry->srvid);
                         memcpy(&entry->address, 
-                               dst->dst, dst->dstlen);
-                        entry->srvid_prefix_bits = 
-                                cmg->service[0].srvid_prefix_bits;
-                        entry->srvid_flags = 
-                                service_resolution_iter_get_flags(&iter);
-                        entry->weight = dst->weight;
-                        entry->priority = 
-                                service_resolution_iter_get_priority(&iter);
+                               t->dst, t->dstlen);
+                        
+                        entry->srvid_prefix_bits = service_get_prefix_bits(se);
+                        entry->srvid_flags = service_iter_get_flags(&iter);
+                        entry->weight = t->weight;
+                        entry->priority = service_iter_get_priority(&iter);
+                        
+#if defined(ENABLE_DEBUG)
+                        {
+                                char buf[18];
+                                LOG_DBG("Get %s %s priority=%u weight=%u\n", 
+                                service_id_to_str(&entry->srvid), 
+                                        inet_ntop(AF_INET, &t->dst, 
+                                                  buf, 18),
+                                        entry->priority,
+                                        entry->weight);
+                        }
+#endif
+                        
                 }
 
-                service_resolution_iter_destroy(&iter);
+                service_iter_destroy(&iter);
                 service_entry_put(se);
 
+                if (i == 0)
+                        cres->cmh.retval = CTRLMSG_RETVAL_NOENTRY;
+                else
+                        cres->cmh.retval = CTRLMSG_RETVAL_OK;
+
                 ctrl_sendmsg(&cres->cmh, GFP_KERNEL);
-                FREE(cres);
+                kfree(cres);
+                LOG_DBG("Service %s matched %u entries. msg_len=%u\n",
+                        service_id_to_str(&cmg->service[0].srvid),
+                        se->count, cres->cmh.len);
         } else {
                 cmg->service[0].srvid_flags = SVSF_INVALID;
+                cmg->cmh.retval = CTRLMSG_RETVAL_NOENTRY;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
+                LOG_DBG("Service %s not found\n",
+                        service_id_to_str(&cmg->service[0].srvid));
         }
 
         return 0;
@@ -363,7 +440,7 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
         
         new_dev = dev_get_by_name(&init_net, cmm->to_i);
 
-        // Check that migration destination is valid.
+        /* Check that migration destination is valid. */
         if (!new_dev) {
                 LOG_ERR("No new interface %s\n", cmm->to_i);
                 return -1;
@@ -426,5 +503,7 @@ ctrlmsg_handler_t handlers[] = {
         ctrl_handle_service_stats_msg,
         ctrl_handle_capabilities_msg,
         ctrl_handle_migrate_msg,
-        ctrl_handle_stats_query_msg
+        ctrl_handle_stats_query_msg,
+        dummy_ctrlmsg_handler,
+        dummy_ctrlmsg_handler,
 };

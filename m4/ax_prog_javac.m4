@@ -69,9 +69,9 @@
 AU_ALIAS([AC_PROG_JAVAC], [AX_PROG_JAVAC])
 AC_DEFUN([AX_PROG_JAVAC],[
 if test "x$JAVAPREFIX" = x; then
-        test "x$JAVAC" = x && AC_CHECK_PROGS(JAVAC, "gcj -C" guavac jikes javac)
+        test "x$JAVAC" = x && AC_CHECK_PROGS(JAVAC, javac "gcj -C" guavac jikes)
 else
-        test "x$JAVAC" = x && AC_CHECK_PROGS(JAVAC, "gcj -C" guavac jikes javac, $JAVAPREFIX)
+        test "x$JAVAC" = x && AC_CHECK_PROGS(JAVAC, javac "gcj -C" guavac jikes, $JAVAPREFIX)
 fi
 if test "x$JAVAC" = x; then 
    AC_MSG_NOTICE([no acceptable Java compiler found in \$PATH])

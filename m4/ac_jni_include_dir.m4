@@ -35,10 +35,14 @@ dnl @license AllPermissive
 AC_DEFUN([AC_JNI_INCLUDE_DIR],[
 
 JNI_INCLUDE_DIRS=""
+have_jni=no
 
-test "x$JAVAC" = x && AC_MSG_ERROR(['\$JAVAC' undefined])
+test "x$JAVAC" = x && AC_MSG_NOTICE(['\$JAVAC' undefined])
 AC_PATH_PROG(_ACJNI_JAVAC, $JAVAC, no)
-test "x$_ACJNI_JAVAC" = xno && AC_MSG_ERROR([$JAVAC could not be found in path])
+if test "x$_ACJNI_JAVAC" = xno;
+then
+	AC_MSG_NOTICE([$JAVAC could not be found in path])	
+fi
 
 _ACJNI_FOLLOW_SYMLINKS("$_ACJNI_JAVAC")
 _JTOPDIR=`echo "$_ACJNI_FOLLOWED" | sed -e 's://*:/:g' -e 's:/[[^/]]*$::'`
@@ -47,14 +51,19 @@ case "$host_os" in
                         _JINC="$_JTOPDIR/Headers";;
         *)              _JINC="$_JTOPDIR/include";;
 esac
+
+AC_MSG_NOTICE(Looking for JNI headers in: $_JINC)
+
 if test -f "$_JINC/jni.h"; then
         JNI_INCLUDE_DIRS="$JNI_INCLUDE_DIRS $_JINC"
+	have_jni=yes
 else
         _JTOPDIR=`echo "$_JTOPDIR" | sed -e 's:/[[^/]]*$::'`
         if test -f "$_JTOPDIR/include/jni.h"; then
                 JNI_INCLUDE_DIRS="$JNI_INCLUDE_DIRS $_JTOPDIR/include"
+		have_jni=yes
         else
-                AC_MSG_ERROR([cannot find java include files])
+                AC_MSG_NOTICE([cannot find java include files])
         fi
 fi
 
