@@ -227,6 +227,14 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
 {
         int ret = 0;
         LOG_DBG("Local ctrl recv'd a msg\n");
+        if (cm->type == CTRLMSG_TYPE_STATS_RESP) {
+                struct ctrlmsg_stats_response *csr =
+                        (struct ctrlmsg_stats_response*) cm;
+                LOG_DBG("Proto: %d\n", csr->proto);
+                LOG_DBG("%lu %lu\n", csr->tcp_lost, csr->pkts_sent);
+                LOG_DBG("%lu %lu %lu %lu\n", csr->tcp_retrans, csr->tcp_srtt,
+                        csr->tcp_snd_una, csr->tcp_snd_nxt);
+        }
         if (!hc->cbs)
                 return 0;
 
@@ -274,10 +282,18 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                 break;
         case CTRLMSG_TYPE_DEL_SERVICE:
                 break;
-	default:
-		LOG_DBG("Received message type %u\n", cm->type);
-		break;
-	}
+        case CTRLMSG_TYPE_STATS_RESP: {
+                struct ctrlmsg_stats_response *csr = 
+                        (struct ctrlmsg_stats_response*) cm;
+                LOG_DBG("Proto: %d\n", csr->proto);
+                LOG_DBG("%d %d %d %d\n", csr->tcp_retrans, csr->tcp_srtt, 
+                        csr->tcp_snd_una, csr->tcp_snd_nxt);
+                break;
+        }
+    	default:
+	    	    LOG_DBG("Received message type %u\n", cm->type);
+		        break;
+	    }
         
         return ret;
 }

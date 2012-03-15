@@ -230,9 +230,14 @@ void serval_sock_stats_flow(struct flow_id *flow,
                 resp->proto = sk->sk_protocol;
                 // TODO Fix these hardcoded values
                 if (sk->sk_protocol == 6) {
-                /*        struct serval_tcp_sock *tsk = (struct serval_tcp_sock *)
+                        struct serval_tcp_sock *tsk = (struct serval_tcp_sock *)
                                                       sk;
-                  */      
+                        resp->tcp_retrans = tsk->total_retrans;
+                        resp->tcp_lost = tsk->lost_out;
+                        resp->pkts_sent = tsk->sk.tot_pkts_sent;
+                        resp->tcp_srtt = tsk->srtt;
+                        resp->tcp_snd_una = tsk->snd_una;
+                        resp->tcp_snd_nxt = tsk->snd_nxt;      
                 }
                 else if (sk->sk_protocol == 17) {
                 }

@@ -241,9 +241,27 @@ struct ctrlmsg_stats_query {
 
 #define CTRLMSGSTATS_QUERY_SIZE (sizeof(struct ctrlmsg_stats_query))
 
+struct stats_proto_tcp {
+        uint32_t retrans;
+        uint32_t lost;
+        uint32_t srtt;         
+    
+        uint32_t snd_una;  /* next ACK we want */
+        uint32_t snd_nxt;  /* next # we'll send */
+        
+};
+
 struct ctrlmsg_stats_response {
         struct ctrlmsg cmh;
+        struct flow_id flow;
         uint8_t proto;
+        unsigned long pkts_sent;
+        struct stats_proto_tcp stats;
+#define tcp_retrans stats.retrans
+#define tcp_lost stats.lost
+#define tcp_srtt stats.srtt
+#define tcp_snd_una stats.snd_una
+#define tcp_snd_nxt stats.snd_nxt
 } CTRLMSG_PACKED;
 
 #define CTRLMSG_STATS_RESP_SIZE (sizeof(struct ctrlmsg_stats_response))

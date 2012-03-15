@@ -409,6 +409,7 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
         serval_sock_stats_flow(&csm->flow, &resp);
         resp.cmh.type = CTRLMSG_TYPE_STATS_RESP;
         resp.cmh.len = CTRLMSG_STATS_RESP_SIZE;
+        memcpy(&resp.flow, &csm->flow, sizeof(struct flow_id));
         ctrl_sendmsg(&resp.cmh, GFP_KERNEL);
 
         return ret;
