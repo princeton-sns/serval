@@ -583,10 +583,10 @@ static int on_service_remove(struct hostctrl *hc,
 }
 
 #include <common/platform.h>
-#if defined(OS_MACOSX)
-#define JNI_ENV_CAST(env) (void **)(env)
-#else
+#if defined(OS_ANDROID)
 #define JNI_ENV_CAST(env) (env)
+#else
+#define JNI_ENV_CAST(env) (void **)(env)
 #endif
 
 static int hostctrl_on_start(struct hostctrl *hc)
