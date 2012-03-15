@@ -319,7 +319,6 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout,
         }
 
         if (set) {
-                /* TODO: make these operations atomic. */
                 sigprocmask(SIG_SETMASK, set, &oldset);
                 ret = poll(fds, nfds, to);
                 sigprocmask(SIG_SETMASK, &oldset, NULL);

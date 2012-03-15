@@ -1,0 +1,393 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4D86AE9B1512235A001FFC81 /* hostctrl.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AE971512235A001FFC81 /* hostctrl.h */; };
+		4D86AE9C1512235A001FFC81 /* init.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AE981512235A001FFC81 /* init.h */; };
+		4D86AE9D1512235A001FFC81 /* message.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AE991512235A001FFC81 /* message.h */; };
+		4D86AE9E1512235A001FFC81 /* message_channel.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AE9A1512235A001FFC81 /* message_channel.h */; };
+		4D86AEAD1512238A001FFC81 /* hostctrl_local.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AE9F15122389001FFC81 /* hostctrl_local.c */; };
+		4D86AEAE1512238A001FFC81 /* hostctrl_ops.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEA015122389001FFC81 /* hostctrl_ops.h */; };
+		4D86AEAF1512238A001FFC81 /* hostctrl_remote.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA115122389001FFC81 /* hostctrl_remote.c */; };
+		4D86AEB01512238A001FFC81 /* hostctrl.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA215122389001FFC81 /* hostctrl.c */; };
+		4D86AEB11512238A001FFC81 /* init.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA315122389001FFC81 /* init.c */; };
+		4D86AEB21512238A001FFC81 /* message_channel_base.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA415122389001FFC81 /* message_channel_base.c */; };
+		4D86AEB31512238A001FFC81 /* message_channel_base.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEA515122389001FFC81 /* message_channel_base.h */; };
+		4D86AEB41512238A001FFC81 /* message_channel_internal.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA615122389001FFC81 /* message_channel_internal.c */; };
+		4D86AEB51512238A001FFC81 /* message_channel_internal.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEA715122389001FFC81 /* message_channel_internal.h */; };
+		4D86AEB71512238A001FFC81 /* message_channel_udp.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEA915122389001FFC81 /* message_channel_udp.c */; };
+		4D86AEB81512238A001FFC81 /* message_channel_unix.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEAA15122389001FFC81 /* message_channel_unix.c */; };
+		4D86AEB91512238A001FFC81 /* message_channel.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEAB15122389001FFC81 /* message_channel.c */; };
+		4D86AEBA1512238A001FFC81 /* message.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AEAC15122389001FFC81 /* message.c */; };
+		4D86AEC61512245C001FFC81 /* atomic.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEBD1512245C001FFC81 /* atomic.h */; };
+		4D86AEC71512245C001FFC81 /* debug.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEBE1512245C001FFC81 /* debug.h */; };
+		4D86AEC81512245C001FFC81 /* hash.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEBF1512245C001FFC81 /* hash.h */; };
+		4D86AEC91512245C001FFC81 /* hashtable.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC01512245C001FFC81 /* hashtable.h */; };
+		4D86AECA1512245C001FFC81 /* heap.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC11512245C001FFC81 /* heap.h */; };
+		4D86AECB1512245C001FFC81 /* list.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC21512245C001FFC81 /* list.h */; };
+		4D86AECC1512245C001FFC81 /* platform.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC31512245C001FFC81 /* platform.h */; };
+		4D86AECD1512245C001FFC81 /* signal.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC41512245C001FFC81 /* signal.h */; };
+		4D86AECE1512245C001FFC81 /* timer.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AEC51512245C001FFC81 /* timer.h */; };
+		4D86AED415122531001FFC81 /* hashtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AED015122531001FFC81 /* hashtable.c */; };
+		4D86AED515122531001FFC81 /* heap.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AED115122531001FFC81 /* heap.c */; };
+		4D86AED615122531001FFC81 /* signal.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AED215122531001FFC81 /* signal.c */; };
+		4D86AED715122531001FFC81 /* timer.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AED315122531001FFC81 /* timer.c */; };
+		4D86AF10151227DE001FFC81 /* serval.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF0F151227DE001FFC81 /* serval.h */; };
+		4D86AF9215122D14001FFC81 /* libserval.dylib in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D86AF9115122D14001FFC81 /* libserval.dylib */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		4D86AE8E1512232A001FFC81 /* liblibservalctrl.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = liblibservalctrl.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D86AE971512235A001FFC81 /* hostctrl.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = hostctrl.h; sourceTree = "<group>"; };
+		4D86AE981512235A001FFC81 /* init.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = init.h; sourceTree = "<group>"; };
+		4D86AE991512235A001FFC81 /* message.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = message.h; sourceTree = "<group>"; };
+		4D86AE9A1512235A001FFC81 /* message_channel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = message_channel.h; sourceTree = "<group>"; };
+		4D86AE9F15122389001FFC81 /* hostctrl_local.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hostctrl_local.c; path = ../../src/libservalctrl/hostctrl_local.c; sourceTree = "<group>"; };
+		4D86AEA015122389001FFC81 /* hostctrl_ops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = hostctrl_ops.h; path = ../../src/libservalctrl/hostctrl_ops.h; sourceTree = "<group>"; };
+		4D86AEA115122389001FFC81 /* hostctrl_remote.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hostctrl_remote.c; path = ../../src/libservalctrl/hostctrl_remote.c; sourceTree = "<group>"; };
+		4D86AEA215122389001FFC81 /* hostctrl.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hostctrl.c; path = ../../src/libservalctrl/hostctrl.c; sourceTree = "<group>"; };
+		4D86AEA315122389001FFC81 /* init.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = init.c; path = ../../src/libservalctrl/init.c; sourceTree = "<group>"; };
+		4D86AEA415122389001FFC81 /* message_channel_base.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message_channel_base.c; path = ../../src/libservalctrl/message_channel_base.c; sourceTree = "<group>"; };
+		4D86AEA515122389001FFC81 /* message_channel_base.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = message_channel_base.h; path = ../../src/libservalctrl/message_channel_base.h; sourceTree = "<group>"; };
+		4D86AEA615122389001FFC81 /* message_channel_internal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message_channel_internal.c; path = ../../src/libservalctrl/message_channel_internal.c; sourceTree = "<group>"; };
+		4D86AEA715122389001FFC81 /* message_channel_internal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = message_channel_internal.h; path = ../../src/libservalctrl/message_channel_internal.h; sourceTree = "<group>"; };
+		4D86AEA915122389001FFC81 /* message_channel_udp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message_channel_udp.c; path = ../../src/libservalctrl/message_channel_udp.c; sourceTree = "<group>"; };
+		4D86AEAA15122389001FFC81 /* message_channel_unix.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message_channel_unix.c; path = ../../src/libservalctrl/message_channel_unix.c; sourceTree = "<group>"; };
+		4D86AEAB15122389001FFC81 /* message_channel.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message_channel.c; path = ../../src/libservalctrl/message_channel.c; sourceTree = "<group>"; };
+		4D86AEAC15122389001FFC81 /* message.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = message.c; path = ../../src/libservalctrl/message.c; sourceTree = "<group>"; };
+		4D86AEBD1512245C001FFC81 /* atomic.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = atomic.h; path = ../../include/common/atomic.h; sourceTree = "<group>"; };
+		4D86AEBE1512245C001FFC81 /* debug.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = debug.h; path = ../../include/common/debug.h; sourceTree = "<group>"; };
+		4D86AEBF1512245C001FFC81 /* hash.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = hash.h; path = ../../include/common/hash.h; sourceTree = "<group>"; };
+		4D86AEC01512245C001FFC81 /* hashtable.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = hashtable.h; path = ../../include/common/hashtable.h; sourceTree = "<group>"; };
+		4D86AEC11512245C001FFC81 /* heap.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = heap.h; path = ../../include/common/heap.h; sourceTree = "<group>"; };
+		4D86AEC21512245C001FFC81 /* list.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = list.h; path = ../../include/common/list.h; sourceTree = "<group>"; };
+		4D86AEC31512245C001FFC81 /* platform.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = platform.h; path = ../../include/common/platform.h; sourceTree = "<group>"; };
+		4D86AEC41512245C001FFC81 /* signal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = signal.h; path = ../../include/common/signal.h; sourceTree = "<group>"; };
+		4D86AEC51512245C001FFC81 /* timer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = timer.h; path = ../../include/common/timer.h; sourceTree = "<group>"; };
+		4D86AED015122531001FFC81 /* hashtable.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = hashtable.c; path = ../../src/common/hashtable.c; sourceTree = "<group>"; };
+		4D86AED115122531001FFC81 /* heap.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = heap.c; path = ../../src/common/heap.c; sourceTree = "<group>"; };
+		4D86AED215122531001FFC81 /* signal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = signal.c; path = ../../src/common/signal.c; sourceTree = "<group>"; };
+		4D86AED315122531001FFC81 /* timer.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = timer.c; path = ../../src/common/timer.c; sourceTree = "<group>"; };
+		4D86AF0F151227DE001FFC81 /* serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval.h; sourceTree = "<group>"; };
+		4D86AF9115122D14001FFC81 /* libserval.dylib */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.dylib"; name = libserval.dylib; path = "../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug/libserval.dylib"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4D86AE8B1512232A001FFC81 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D86AF9215122D14001FFC81 /* libserval.dylib in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4D86AE831512232A001FFC81 = {
+			isa = PBXGroup;
+			children = (
+				4D86AF9115122D14001FFC81 /* libserval.dylib */,
+				4D86AEBC15122438001FFC81 /* common */,
+				4D86AEBB1512241B001FFC81 /* libservalctrl */,
+				4D86AE951512233F001FFC81 /* include */,
+				4D86AE8F1512232A001FFC81 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4D86AE8F1512232A001FFC81 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AE8E1512232A001FFC81 /* liblibservalctrl.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4D86AE951512233F001FFC81 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF0E151227DE001FFC81 /* netinet */,
+				4D86AECF15122465001FFC81 /* common */,
+				4D86AE961512235A001FFC81 /* libservalctrl */,
+			);
+			name = include;
+			sourceTree = "<group>";
+		};
+		4D86AE961512235A001FFC81 /* libservalctrl */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AE971512235A001FFC81 /* hostctrl.h */,
+				4D86AE981512235A001FFC81 /* init.h */,
+				4D86AE991512235A001FFC81 /* message.h */,
+				4D86AE9A1512235A001FFC81 /* message_channel.h */,
+			);
+			name = libservalctrl;
+			path = ../../include/libservalctrl;
+			sourceTree = "<group>";
+		};
+		4D86AEBB1512241B001FFC81 /* libservalctrl */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AE9F15122389001FFC81 /* hostctrl_local.c */,
+				4D86AEA015122389001FFC81 /* hostctrl_ops.h */,
+				4D86AEA115122389001FFC81 /* hostctrl_remote.c */,
+				4D86AEA215122389001FFC81 /* hostctrl.c */,
+				4D86AEA315122389001FFC81 /* init.c */,
+				4D86AEA415122389001FFC81 /* message_channel_base.c */,
+				4D86AEA515122389001FFC81 /* message_channel_base.h */,
+				4D86AEA615122389001FFC81 /* message_channel_internal.c */,
+				4D86AEA715122389001FFC81 /* message_channel_internal.h */,
+				4D86AEA915122389001FFC81 /* message_channel_udp.c */,
+				4D86AEAA15122389001FFC81 /* message_channel_unix.c */,
+				4D86AEAB15122389001FFC81 /* message_channel.c */,
+				4D86AEAC15122389001FFC81 /* message.c */,
+			);
+			name = libservalctrl;
+			sourceTree = "<group>";
+		};
+		4D86AEBC15122438001FFC81 /* common */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AED015122531001FFC81 /* hashtable.c */,
+				4D86AED115122531001FFC81 /* heap.c */,
+				4D86AED215122531001FFC81 /* signal.c */,
+				4D86AED315122531001FFC81 /* timer.c */,
+			);
+			name = common;
+			sourceTree = "<group>";
+		};
+		4D86AECF15122465001FFC81 /* common */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AEBD1512245C001FFC81 /* atomic.h */,
+				4D86AEBE1512245C001FFC81 /* debug.h */,
+				4D86AEBF1512245C001FFC81 /* hash.h */,
+				4D86AEC01512245C001FFC81 /* hashtable.h */,
+				4D86AEC11512245C001FFC81 /* heap.h */,
+				4D86AEC21512245C001FFC81 /* list.h */,
+				4D86AEC31512245C001FFC81 /* platform.h */,
+				4D86AEC41512245C001FFC81 /* signal.h */,
+				4D86AEC51512245C001FFC81 /* timer.h */,
+			);
+			name = common;
+			sourceTree = "<group>";
+		};
+		4D86AF0E151227DE001FFC81 /* netinet */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF0F151227DE001FFC81 /* serval.h */,
+			);
+			name = netinet;
+			path = ../../include/netinet;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		4D86AE8C1512232A001FFC81 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D86AE9B1512235A001FFC81 /* hostctrl.h in Headers */,
+				4D86AE9C1512235A001FFC81 /* init.h in Headers */,
+				4D86AE9D1512235A001FFC81 /* message.h in Headers */,
+				4D86AE9E1512235A001FFC81 /* message_channel.h in Headers */,
+				4D86AEAE1512238A001FFC81 /* hostctrl_ops.h in Headers */,
+				4D86AEB31512238A001FFC81 /* message_channel_base.h in Headers */,
+				4D86AEB51512238A001FFC81 /* message_channel_internal.h in Headers */,
+				4D86AEC61512245C001FFC81 /* atomic.h in Headers */,
+				4D86AEC71512245C001FFC81 /* debug.h in Headers */,
+				4D86AEC81512245C001FFC81 /* hash.h in Headers */,
+				4D86AEC91512245C001FFC81 /* hashtable.h in Headers */,
+				4D86AECA1512245C001FFC81 /* heap.h in Headers */,
+				4D86AECB1512245C001FFC81 /* list.h in Headers */,
+				4D86AECC1512245C001FFC81 /* platform.h in Headers */,
+				4D86AECD1512245C001FFC81 /* signal.h in Headers */,
+				4D86AECE1512245C001FFC81 /* timer.h in Headers */,
+				4D86AF10151227DE001FFC81 /* serval.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		4D86AE8D1512232A001FFC81 /* libservalctrl */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D86AE921512232A001FFC81 /* Build configuration list for PBXNativeTarget "libservalctrl" */;
+			buildPhases = (
+				4D86AE8A1512232A001FFC81 /* Sources */,
+				4D86AE8B1512232A001FFC81 /* Frameworks */,
+				4D86AE8C1512232A001FFC81 /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libservalctrl;
+			productName = servalctrl;
+			productReference = 4D86AE8E1512232A001FFC81 /* liblibservalctrl.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4D86AE851512232A001FFC81 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0430;
+			};
+			buildConfigurationList = 4D86AE881512232A001FFC81 /* Build configuration list for PBXProject "libservalctrl" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 4D86AE831512232A001FFC81;
+			productRefGroup = 4D86AE8F1512232A001FFC81 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D86AE8D1512232A001FFC81 /* libservalctrl */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4D86AE8A1512232A001FFC81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D86AEAD1512238A001FFC81 /* hostctrl_local.c in Sources */,
+				4D86AEAF1512238A001FFC81 /* hostctrl_remote.c in Sources */,
+				4D86AEB01512238A001FFC81 /* hostctrl.c in Sources */,
+				4D86AEB11512238A001FFC81 /* init.c in Sources */,
+				4D86AEB21512238A001FFC81 /* message_channel_base.c in Sources */,
+				4D86AEB41512238A001FFC81 /* message_channel_internal.c in Sources */,
+				4D86AEB71512238A001FFC81 /* message_channel_udp.c in Sources */,
+				4D86AEB81512238A001FFC81 /* message_channel_unix.c in Sources */,
+				4D86AEB91512238A001FFC81 /* message_channel.c in Sources */,
+				4D86AEBA1512238A001FFC81 /* message.c in Sources */,
+				4D86AED415122531001FFC81 /* hashtable.c in Sources */,
+				4D86AED515122531001FFC81 /* heap.c in Sources */,
+				4D86AED615122531001FFC81 /* signal.c in Sources */,
+				4D86AED715122531001FFC81 /* timer.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D86AE901512232A001FFC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4D86AE911512232A001FFC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4D86AE931512232A001FFC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"ENABLE_DEBUG=1",
+					"ENABLE_USERMODE=1",
+				);
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libservalctrl",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug\"",
+				);
+				PRODUCT_NAME = libservalctrl;
+			};
+			name = Debug;
+		};
+		4D86AE941512232A001FFC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = lib;
+				GCC_PREPROCESSOR_DEFINITIONS = "ENABLE_USERMODE=1";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libservalctrl",
+				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"\"$(SRCROOT)/../../../../Library/Developer/Xcode/DerivedData/Serval-henosxchjottsyenwdhzwvolhysp/Build/Products/Debug\"",
+				);
+				PRODUCT_NAME = libservalctrl;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D86AE881512232A001FFC81 /* Build configuration list for PBXProject "libservalctrl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D86AE901512232A001FFC81 /* Debug */,
+				4D86AE911512232A001FFC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4D86AE921512232A001FFC81 /* Build configuration list for PBXNativeTarget "libservalctrl" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D86AE931512232A001FFC81 /* Debug */,
+				4D86AE941512232A001FFC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4D86AE851512232A001FFC81 /* Project object */;
+}

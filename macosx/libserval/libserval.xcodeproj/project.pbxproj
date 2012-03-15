@@ -1,0 +1,369 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		4D86AF0A151227B4001FFC81 /* serval.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF09151227B4001FFC81 /* serval.h */; };
+		4D86AF0D151227C9001FFC81 /* serval.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF0C151227C9001FFC81 /* serval.h */; };
+		4D86AF3315122830001FFC81 /* accept.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1415122830001FFC81 /* accept.cc */; };
+		4D86AF3415122830001FFC81 /* accept.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF1515122830001FFC81 /* accept.hh */; };
+		4D86AF3515122830001FFC81 /* api.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1615122830001FFC81 /* api.cc */; };
+		4D86AF3615122830001FFC81 /* bind.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1715122830001FFC81 /* bind.cc */; };
+		4D86AF3715122830001FFC81 /* bind.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF1815122830001FFC81 /* bind.hh */; };
+		4D86AF3815122830001FFC81 /* cli.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1915122830001FFC81 /* cli.cc */; };
+		4D86AF3915122830001FFC81 /* cli.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF1A15122830001FFC81 /* cli.hh */; };
+		4D86AF3A15122830001FFC81 /* close.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1B15122830001FFC81 /* close.cc */; };
+		4D86AF3B15122830001FFC81 /* close.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF1C15122830001FFC81 /* close.hh */; };
+		4D86AF3C15122830001FFC81 /* connect.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1D15122830001FFC81 /* connect.cc */; };
+		4D86AF3D15122830001FFC81 /* connect.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF1E15122830001FFC81 /* connect.hh */; };
+		4D86AF3E15122830001FFC81 /* listen.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF1F15122830001FFC81 /* listen.cc */; };
+		4D86AF3F15122830001FFC81 /* listen.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2015122830001FFC81 /* listen.hh */; };
+		4D86AF4015122830001FFC81 /* lock.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2115122830001FFC81 /* lock.hh */; };
+		4D86AF4115122830001FFC81 /* log.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2215122830001FFC81 /* log.cc */; };
+		4D86AF4215122830001FFC81 /* log.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2315122830001FFC81 /* log.hh */; };
+		4D86AF4315122830001FFC81 /* message.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2415122830001FFC81 /* message.cc */; };
+		4D86AF4415122830001FFC81 /* message.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2515122830001FFC81 /* message.hh */; };
+		4D86AF4515122830001FFC81 /* recv.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2615122830001FFC81 /* recv.cc */; };
+		4D86AF4615122830001FFC81 /* recv.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2715122830001FFC81 /* recv.hh */; };
+		4D86AF4715122830001FFC81 /* select.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2815122830001FFC81 /* select.cc */; };
+		4D86AF4815122830001FFC81 /* select.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2915122830001FFC81 /* select.hh */; };
+		4D86AF4915122830001FFC81 /* send.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2A15122830001FFC81 /* send.cc */; };
+		4D86AF4A15122830001FFC81 /* send.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2B15122830001FFC81 /* send.hh */; };
+		4D86AF4B15122830001FFC81 /* socket.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2C15122830001FFC81 /* socket.cc */; };
+		4D86AF4C15122830001FFC81 /* socket.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2D15122830001FFC81 /* socket.hh */; };
+		4D86AF4D15122830001FFC81 /* sockio.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF2E15122830001FFC81 /* sockio.cc */; };
+		4D86AF4E15122830001FFC81 /* sockio.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF2F15122830001FFC81 /* sockio.hh */; };
+		4D86AF4F15122830001FFC81 /* state.cc in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AF3015122830001FFC81 /* state.cc */; };
+		4D86AF5015122830001FFC81 /* state.hh in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF3115122830001FFC81 /* state.hh */; };
+		4D86AF5115122830001FFC81 /* types.h in Headers */ = {isa = PBXBuildFile; fileRef = 4D86AF3215122830001FFC81 /* types.h */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		4D86AEE3151225E1001FFC81 /* libserval.dylib */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.dylib"; includeInIndex = 0; path = libserval.dylib; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D86AF09151227B4001FFC81 /* serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval.h; sourceTree = "<group>"; };
+		4D86AF0C151227C9001FFC81 /* serval.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = serval.h; sourceTree = "<group>"; };
+		4D86AF1415122830001FFC81 /* accept.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = accept.cc; path = ../../src/libserval/accept.cc; sourceTree = "<group>"; };
+		4D86AF1515122830001FFC81 /* accept.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = accept.hh; path = ../../src/libserval/accept.hh; sourceTree = "<group>"; };
+		4D86AF1615122830001FFC81 /* api.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = api.cc; path = ../../src/libserval/api.cc; sourceTree = "<group>"; };
+		4D86AF1715122830001FFC81 /* bind.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = bind.cc; path = ../../src/libserval/bind.cc; sourceTree = "<group>"; };
+		4D86AF1815122830001FFC81 /* bind.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = bind.hh; path = ../../src/libserval/bind.hh; sourceTree = "<group>"; };
+		4D86AF1915122830001FFC81 /* cli.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = cli.cc; path = ../../src/libserval/cli.cc; sourceTree = "<group>"; };
+		4D86AF1A15122830001FFC81 /* cli.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = cli.hh; path = ../../src/libserval/cli.hh; sourceTree = "<group>"; };
+		4D86AF1B15122830001FFC81 /* close.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = close.cc; path = ../../src/libserval/close.cc; sourceTree = "<group>"; };
+		4D86AF1C15122830001FFC81 /* close.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = close.hh; path = ../../src/libserval/close.hh; sourceTree = "<group>"; };
+		4D86AF1D15122830001FFC81 /* connect.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = connect.cc; path = ../../src/libserval/connect.cc; sourceTree = "<group>"; };
+		4D86AF1E15122830001FFC81 /* connect.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = connect.hh; path = ../../src/libserval/connect.hh; sourceTree = "<group>"; };
+		4D86AF1F15122830001FFC81 /* listen.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = listen.cc; path = ../../src/libserval/listen.cc; sourceTree = "<group>"; };
+		4D86AF2015122830001FFC81 /* listen.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = listen.hh; path = ../../src/libserval/listen.hh; sourceTree = "<group>"; };
+		4D86AF2115122830001FFC81 /* lock.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = lock.hh; path = ../../src/libserval/lock.hh; sourceTree = "<group>"; };
+		4D86AF2215122830001FFC81 /* log.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = log.cc; path = ../../src/libserval/log.cc; sourceTree = "<group>"; };
+		4D86AF2315122830001FFC81 /* log.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = log.hh; path = ../../src/libserval/log.hh; sourceTree = "<group>"; };
+		4D86AF2415122830001FFC81 /* message.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = message.cc; path = ../../src/libserval/message.cc; sourceTree = "<group>"; };
+		4D86AF2515122830001FFC81 /* message.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = message.hh; path = ../../src/libserval/message.hh; sourceTree = "<group>"; };
+		4D86AF2615122830001FFC81 /* recv.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = recv.cc; path = ../../src/libserval/recv.cc; sourceTree = "<group>"; };
+		4D86AF2715122830001FFC81 /* recv.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = recv.hh; path = ../../src/libserval/recv.hh; sourceTree = "<group>"; };
+		4D86AF2815122830001FFC81 /* select.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = select.cc; path = ../../src/libserval/select.cc; sourceTree = "<group>"; };
+		4D86AF2915122830001FFC81 /* select.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = select.hh; path = ../../src/libserval/select.hh; sourceTree = "<group>"; };
+		4D86AF2A15122830001FFC81 /* send.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = send.cc; path = ../../src/libserval/send.cc; sourceTree = "<group>"; };
+		4D86AF2B15122830001FFC81 /* send.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = send.hh; path = ../../src/libserval/send.hh; sourceTree = "<group>"; };
+		4D86AF2C15122830001FFC81 /* socket.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = socket.cc; path = ../../src/libserval/socket.cc; sourceTree = "<group>"; };
+		4D86AF2D15122830001FFC81 /* socket.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = socket.hh; path = ../../src/libserval/socket.hh; sourceTree = "<group>"; };
+		4D86AF2E15122830001FFC81 /* sockio.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = sockio.cc; path = ../../src/libserval/sockio.cc; sourceTree = "<group>"; };
+		4D86AF2F15122830001FFC81 /* sockio.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = sockio.hh; path = ../../src/libserval/sockio.hh; sourceTree = "<group>"; };
+		4D86AF3015122830001FFC81 /* state.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = state.cc; path = ../../src/libserval/state.cc; sourceTree = "<group>"; };
+		4D86AF3115122830001FFC81 /* state.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = state.hh; path = ../../src/libserval/state.hh; sourceTree = "<group>"; };
+		4D86AF3215122830001FFC81 /* types.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = types.h; path = ../../src/libserval/types.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		4D86AEE0151225E1001FFC81 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		4D86AED8151225E1001FFC81 = {
+			isa = PBXGroup;
+			children = (
+				4D86AF1315122807001FFC81 /* libserval */,
+				4D86AF0615122793001FFC81 /* include */,
+				4D86AEE4151225E1001FFC81 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4D86AEE4151225E1001FFC81 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AEE3151225E1001FFC81 /* libserval.dylib */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		4D86AF0615122793001FFC81 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF0B151227C9001FFC81 /* netinet */,
+				4D86AF08151227B4001FFC81 /* libserval */,
+			);
+			name = include;
+			sourceTree = "<group>";
+		};
+		4D86AF08151227B4001FFC81 /* libserval */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF09151227B4001FFC81 /* serval.h */,
+			);
+			name = libserval;
+			path = ../../include/libserval;
+			sourceTree = "<group>";
+		};
+		4D86AF0B151227C9001FFC81 /* netinet */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF0C151227C9001FFC81 /* serval.h */,
+			);
+			name = netinet;
+			path = ../../include/netinet;
+			sourceTree = "<group>";
+		};
+		4D86AF1315122807001FFC81 /* libserval */ = {
+			isa = PBXGroup;
+			children = (
+				4D86AF1415122830001FFC81 /* accept.cc */,
+				4D86AF1515122830001FFC81 /* accept.hh */,
+				4D86AF1615122830001FFC81 /* api.cc */,
+				4D86AF1715122830001FFC81 /* bind.cc */,
+				4D86AF1815122830001FFC81 /* bind.hh */,
+				4D86AF1915122830001FFC81 /* cli.cc */,
+				4D86AF1A15122830001FFC81 /* cli.hh */,
+				4D86AF1B15122830001FFC81 /* close.cc */,
+				4D86AF1C15122830001FFC81 /* close.hh */,
+				4D86AF1D15122830001FFC81 /* connect.cc */,
+				4D86AF1E15122830001FFC81 /* connect.hh */,
+				4D86AF1F15122830001FFC81 /* listen.cc */,
+				4D86AF2015122830001FFC81 /* listen.hh */,
+				4D86AF2115122830001FFC81 /* lock.hh */,
+				4D86AF2215122830001FFC81 /* log.cc */,
+				4D86AF2315122830001FFC81 /* log.hh */,
+				4D86AF2415122830001FFC81 /* message.cc */,
+				4D86AF2515122830001FFC81 /* message.hh */,
+				4D86AF2615122830001FFC81 /* recv.cc */,
+				4D86AF2715122830001FFC81 /* recv.hh */,
+				4D86AF2815122830001FFC81 /* select.cc */,
+				4D86AF2915122830001FFC81 /* select.hh */,
+				4D86AF2A15122830001FFC81 /* send.cc */,
+				4D86AF2B15122830001FFC81 /* send.hh */,
+				4D86AF2C15122830001FFC81 /* socket.cc */,
+				4D86AF2D15122830001FFC81 /* socket.hh */,
+				4D86AF2E15122830001FFC81 /* sockio.cc */,
+				4D86AF2F15122830001FFC81 /* sockio.hh */,
+				4D86AF3015122830001FFC81 /* state.cc */,
+				4D86AF3115122830001FFC81 /* state.hh */,
+				4D86AF3215122830001FFC81 /* types.h */,
+			);
+			name = libserval;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXHeadersBuildPhase section */
+		4D86AEE1151225E1001FFC81 /* Headers */ = {
+			isa = PBXHeadersBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D86AF0A151227B4001FFC81 /* serval.h in Headers */,
+				4D86AF0D151227C9001FFC81 /* serval.h in Headers */,
+				4D86AF3415122830001FFC81 /* accept.hh in Headers */,
+				4D86AF3715122830001FFC81 /* bind.hh in Headers */,
+				4D86AF3915122830001FFC81 /* cli.hh in Headers */,
+				4D86AF3B15122830001FFC81 /* close.hh in Headers */,
+				4D86AF3D15122830001FFC81 /* connect.hh in Headers */,
+				4D86AF3F15122830001FFC81 /* listen.hh in Headers */,
+				4D86AF4015122830001FFC81 /* lock.hh in Headers */,
+				4D86AF4215122830001FFC81 /* log.hh in Headers */,
+				4D86AF4415122830001FFC81 /* message.hh in Headers */,
+				4D86AF4615122830001FFC81 /* recv.hh in Headers */,
+				4D86AF4815122830001FFC81 /* select.hh in Headers */,
+				4D86AF4A15122830001FFC81 /* send.hh in Headers */,
+				4D86AF4C15122830001FFC81 /* socket.hh in Headers */,
+				4D86AF4E15122830001FFC81 /* sockio.hh in Headers */,
+				4D86AF5015122830001FFC81 /* state.hh in Headers */,
+				4D86AF5115122830001FFC81 /* types.h in Headers */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXHeadersBuildPhase section */
+
+/* Begin PBXNativeTarget section */
+		4D86AEE2151225E1001FFC81 /* libserval */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4D86AEE7151225E1001FFC81 /* Build configuration list for PBXNativeTarget "libserval" */;
+			buildPhases = (
+				4D86AEDF151225E1001FFC81 /* Sources */,
+				4D86AEE0151225E1001FFC81 /* Frameworks */,
+				4D86AEE1151225E1001FFC81 /* Headers */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = libserval;
+			productName = libserval;
+			productReference = 4D86AEE3151225E1001FFC81 /* libserval.dylib */;
+			productType = "com.apple.product-type.library.dynamic";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		4D86AEDA151225E1001FFC81 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0430;
+			};
+			buildConfigurationList = 4D86AEDD151225E1001FFC81 /* Build configuration list for PBXProject "libserval" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = 4D86AED8151225E1001FFC81;
+			productRefGroup = 4D86AEE4151225E1001FFC81 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D86AEE2151225E1001FFC81 /* libserval */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		4D86AEDF151225E1001FFC81 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D86AF3315122830001FFC81 /* accept.cc in Sources */,
+				4D86AF3515122830001FFC81 /* api.cc in Sources */,
+				4D86AF3615122830001FFC81 /* bind.cc in Sources */,
+				4D86AF3815122830001FFC81 /* cli.cc in Sources */,
+				4D86AF3A15122830001FFC81 /* close.cc in Sources */,
+				4D86AF3C15122830001FFC81 /* connect.cc in Sources */,
+				4D86AF3E15122830001FFC81 /* listen.cc in Sources */,
+				4D86AF4115122830001FFC81 /* log.cc in Sources */,
+				4D86AF4315122830001FFC81 /* message.cc in Sources */,
+				4D86AF4515122830001FFC81 /* recv.cc in Sources */,
+				4D86AF4715122830001FFC81 /* select.cc in Sources */,
+				4D86AF4915122830001FFC81 /* send.cc in Sources */,
+				4D86AF4B15122830001FFC81 /* socket.cc in Sources */,
+				4D86AF4D15122830001FFC81 /* sockio.cc in Sources */,
+				4D86AF4F15122830001FFC81 /* state.cc in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D86AEE5151225E1001FFC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = NO;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_SYMBOLS_PRIVATE_EXTERN = NO;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		4D86AEE6151225E1001FFC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(ARCHS_STANDARD_64_BIT)";
+				COPY_PHASE_STRIP = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_ENABLE_OBJC_EXCEPTIONS = YES;
+				GCC_VERSION = com.apple.compilers.llvm.clang.1_0;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.7;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		4D86AEE8151225E1001FFC81 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = "";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libserval",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = "";
+			};
+			name = Debug;
+		};
+		4D86AEE9151225E1001FFC81 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				EXECUTABLE_PREFIX = "";
+				HEADER_SEARCH_PATHS = (
+					"$(PROJECT_DIR)/../../include",
+					"$(PROJECT_DIR)/../../src/libserval",
+				);
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				USER_HEADER_SEARCH_PATHS = "";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		4D86AEDD151225E1001FFC81 /* Build configuration list for PBXProject "libserval" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D86AEE5151225E1001FFC81 /* Debug */,
+				4D86AEE6151225E1001FFC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4D86AEE7151225E1001FFC81 /* Build configuration list for PBXNativeTarget "libserval" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D86AEE8151225E1001FFC81 /* Debug */,
+				4D86AEE9151225E1001FFC81 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 4D86AEDA151225E1001FFC81 /* Project object */;
+}

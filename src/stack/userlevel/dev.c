@@ -620,14 +620,14 @@ out:
         return ret;
 }
 
-enum signal {
+enum signal_event {
         SIGNAL_EXIT,
         SIGNAL_TXQUEUE,
         SIGNAL_ERROR,
         SIGNAL_UNKNOWN
 };
 
-int dev_signal(struct net_device *dev, enum signal type)
+int dev_signal(struct net_device *dev, enum signal_event type)
 {
         unsigned char s = type & 0xff;
         struct pollfd fds;
@@ -666,7 +666,7 @@ int dev_get_ipv4_addr(struct net_device *dev, enum addr_type type, void *addr)
         return 1;
 }
 
-enum signal dev_read_signal(struct net_device *dev)
+enum signal_event dev_read_signal(struct net_device *dev)
 {
         unsigned char s;
         struct pollfd fds;
@@ -691,7 +691,7 @@ enum signal dev_read_signal(struct net_device *dev)
         if (s >= SIGNAL_UNKNOWN)
                 return SIGNAL_UNKNOWN;
 
-        return (enum signal)s;
+        return (enum signal_event)s;
 }
 
 static inline void dev_queue_purge(struct net_device *dev)
@@ -758,7 +758,7 @@ void *dev_thread(void *arg)
                         /* No timeout set, should not happen */
                 } else {
                         if (fds[1].revents & POLLIN) {
-                                enum signal s = dev_read_signal(dev);
+                                enum signal_event s = dev_read_signal(dev);
 
                                 switch (s) {
                                 case SIGNAL_EXIT:

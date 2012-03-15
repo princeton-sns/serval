@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:serv/serv.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:servd/servd.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:libservalctrl/libservalctrl.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "group:libserval/libserval.xcodeproj">
+   </FileRef>
+   <FileRef
+      location = "container:serval/serval.xcodeproj">
+   </FileRef>
+</Workspace>

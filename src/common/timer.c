@@ -22,7 +22,7 @@
 
 #define CLOCK CLOCK_THREAD_CPUTIME_ID
 
-int gettime(struct timespec *ts)
+static int gettime(struct timespec *ts)
 {
     int err = 0;
 

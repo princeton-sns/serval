@@ -7,7 +7,14 @@
 
 class Logger {
   public:
-    typedef enum { OFF = 0, FATAL, ERROR, WARN, INFO, DEBUG, _MAX } Level;
+    typedef enum { 
+	    LOG_OFF = 0, 
+	    LOG_FATAL, 
+	    LOG_ERROR, 
+	    LOG_WARN, 
+	    LOG_INFO, 
+	    LOG_DEBUG, 
+	    _LOG_MAX } Level;
     static int xlog(Level l, const char *func, const char *format, ...);
     static int initialize(const char *name);
     static void static_uninitialize();
@@ -32,13 +39,13 @@ class Logger {
 
 
 #ifdef ENABLE_DEBUG
-#define debug(format, ...) Logger::xlog(Logger::DEBUG, __func__, format, ## __VA_ARGS__)
-#define info(format, ...) Logger::xlog(Logger::INFO, __func__, format, ## __VA_ARGS__)
-#define lerr(format, ...) Logger::xlog(Logger::ERROR, __func__, format, ## __VA_ARGS__)
+#define debug(format, ...) Logger::xlog(Logger::LOG_DEBUG, __func__, format, ## __VA_ARGS__)
+#define info(format, ...) Logger::xlog(Logger::LOG_INFO, __func__, format, ## __VA_ARGS__)
+#define lerr(format, ...) Logger::xlog(Logger::LOG_ERROR, __func__, format, ## __VA_ARGS__)
 #else
 #define debug(X, ...)
 #define info(X, ...)
-#define lerr(format, ...) Logger::xlog(Logger::ERROR, __func__, format, ## __VA_ARGS__)
+#define lerr(format, ...) Logger::xlog(Logger::LOG_ERROR, __func__, format, ## __VA_ARGS__)
 #endif
 
 #endif

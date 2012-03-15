@@ -824,14 +824,6 @@ static void *client_thread(void *arg)
                                  */
                                 csig = client_signal_lower(c->exit_pipe[0]);
 
-				/*LOG_DBG("Client %u signal received: %u\n", 
-                                  c->id, sig); 
-                                */
-
-				if (csig < 0) {
-                                        continue;
-				}
-
 				switch (csig) {
                                 case CLIENT_SIG_EXIT:
 				        c->should_exit = 1;
@@ -846,14 +838,6 @@ static void *client_thread(void *arg)
                                  * exit or data ready
                                  */
                                 csig = client_signal_lower(c->data_pipe[0]);
-
-				/*LOG_DBG("Client %u signal received: %u\n", 
-                                  c->id, sig); 
-                                */
-
-				if (csig < 0) {
-                                        continue;
-				}
 
 				switch (csig) {
                                 case CLIENT_SIG_READ:

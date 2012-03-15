@@ -42,7 +42,7 @@ SVSockLib::SVSockLib(int serval_id)
     memset(logname, 0, 30);
     snprintf(logname, 29, "libserval-%u.log", getpid());
     Logger::initialize(logname);
-    Logger::set_debug_level(Logger::DEBUG);
+    Logger::set_debug_level(Logger::LOG_DEBUG);
 
     if (!serval_id) {
         char *serval_id_str = getenv("SERVAL_ID");
