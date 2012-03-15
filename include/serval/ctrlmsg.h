@@ -255,7 +255,8 @@ struct ctrlmsg_stats_query {
 struct stats_proto_tcp {
         uint32_t retrans;
         uint32_t lost;
-        uint32_t srtt;         
+        uint32_t srtt;
+        uint32_t rttvar;  
     
         uint32_t snd_una;  /* next ACK we want */
         uint32_t snd_nxt;  /* next # we'll send */
@@ -271,6 +272,8 @@ struct ctrlmsg_stats_response {
 #define tcp_retrans stats.retrans
 #define tcp_lost stats.lost
 #define tcp_srtt stats.srtt
+#define tcp_rttvar stats.rttvar
+
 #define tcp_snd_una stats.snd_una
 #define tcp_snd_nxt stats.snd_nxt
 } CTRLMSG_PACKED;

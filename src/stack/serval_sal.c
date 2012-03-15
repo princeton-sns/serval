@@ -3410,6 +3410,9 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
         }
+        else {
+            ssk->tot_pkts_sent++;
+        }
 
         return err;
 }
