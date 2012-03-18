@@ -8,7 +8,7 @@ import org.servalarch.net.ServiceID;
  * HostCtrlCallbacks is an abstract class that can be extended or 
  * overridden to implement callback handlers for Serval events.
  * 
- * @author Erik Nordström <enordstr@cs.princeton.edu>
+ * @author Erik Nordstr√∂m <enordstr@cs.princeton.edu>
  *
  */
 public abstract class HostCtrlCallbacks {
