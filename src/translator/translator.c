@@ -478,7 +478,7 @@ fail_sock:
         return ret;
 }
 
-#if defined(OS_ANDROID)
+#if !defined(OS_ANDROID)
 int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
