@@ -33,6 +33,7 @@
 #include <common/debug.h>
 #include <poll.h>
 #include <pthread.h>
+#include <linux/netfilter_ipv4.h>
 #include "log.h"
 
 #if defined(OS_ANDROID)
@@ -42,7 +43,7 @@
 static unsigned int client_num = 0;
 
 struct client {
-        int family;
+        int from_family;
         unsigned int id;
         struct sockaddr_in saddr;
         pthread_t thr;
@@ -53,6 +54,12 @@ struct client {
         unsigned char is_garbage;
         struct list_head lh;
         struct signal exit_signal;
+};
+
+struct translator_init_pkt {
+        uint16_t port;
+        uint16_t pad1;
+        struct in_addr addr;
 };
 
 #define DEFAULT_TRANSLATOR_PORT 8080
@@ -106,7 +113,7 @@ static ssize_t serval_to_legacy(struct client *c)
         return forward_data(c->serval_sock, c->inet_sock, c->splicefd);
 }
 
-struct client *client_create(int inet_sock, int family, 
+struct client *client_create(int sock, int family, 
                              struct sockaddr *sa, socklen_t salen)
 {
         struct client *c;
@@ -119,11 +126,11 @@ struct client *client_create(int inet_sock, int family,
         
         memset(c, 0, sizeof(struct client));
         c->id = client_num++;
-        c->inet_sock = inet_sock;
-        c->family = family;
+        c->from_family = family;
         c->is_garbage = 0;
         INIT_LIST_HEAD(&c->lh);
         signal_init(&c->exit_signal);
+        memcpy(&c->saddr, sa, salen);
         
         ret = pipe(c->splicefd);
 
@@ -133,14 +140,27 @@ struct client *client_create(int inet_sock, int family,
                 goto fail_pipe;
         }
         
-        c->serval_sock = socket(family, SOCK_STREAM, 0);
-        
-	if (c->serval_sock == -1) {
-		LOG_ERR("serval socket: %s\n",
-			strerror(errno));
-                goto fail_sock;
-	}
-        memcpy(&c->saddr, sa, salen);
+        if (family == AF_INET) {
+                /* We're translating from AF_INET to AF_SERVAL */
+                c->inet_sock = sock;
+                c->serval_sock = socket(family, SOCK_STREAM, 0);
+                
+                if (c->serval_sock == -1) {
+                        LOG_ERR("serval socket: %s\n",
+                                strerror(errno));
+                        goto fail_sock;
+                }
+        } else if (family == AF_SERVAL) {
+                /* We're translating from AF_SERVAL to AF_INET */
+                c->serval_sock = sock;
+                c->inet_sock = socket(family, SOCK_STREAM, 0);
+                
+                if (c->inet_sock == -1) {
+                        LOG_ERR("inet socket: %s\n",
+                                strerror(errno));
+                        goto fail_sock;
+                }
+        }
 
         return c;
 fail_sock:        
@@ -168,34 +188,77 @@ static void *client_thread(void *arg)
         } addr;
         socklen_t addrlen;
         int inet_port = 49254;
+        int sock = -1;
         char srcstr[18];
         int running = 1, ret;
 
         memset(&addr, 0, sizeof(addr));
         
-        if (c->family == AF_SERVAL) {
-                addr.sv.sv_family = c->family;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
-                addrlen = sizeof(addr.sv);
-        } else {
-                addr.in.sin_family = c->family;
-                inet_pton(AF_INET, server_ip, &addr.in.sin_addr);
-                addr.in.sin_port = htons(inet_port);
+        if (c->from_family == AF_SERVAL) {
+                struct translator_init_pkt tip;
+                
+                /* Receive destination addr and port from other end */
+                ret = recv(c->serval_sock, &tip, sizeof(tip), MSG_WAITALL);
+
+                if (ret == -1) {
+                        LOG_ERR("client %u: could not read init packet: %s\n",
+                                c->id, strerror(errno));
+                        goto done;
+                } else if (ret != sizeof(tip)) {
+                        LOG_ERR("client %u: bad init packet size %d\n",
+                                c->id, ret);
+                        goto done;
+                }
+                
+                addr.in.sin_family = AF_INET;
+                memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
+                addr.in.sin_port = tip.port;
                 addrlen = sizeof(addr.in);
-        }
-        
-        inet_ntop(AF_INET, &c->saddr.sin_addr, 
-                  srcstr, sizeof(srcstr));
-        
-        if (c->family == AF_SERVAL) {
-                LOG_DBG("client %u from %s connecting to service %s...\n",
-                        c->id, srcstr, service_id_to_str(&addr.sv.sv_srvid));
-        } else {
+                sock = c->inet_sock;
+
+                inet_ntop(AF_INET, &c->saddr.sin_addr, 
+                          srcstr, sizeof(srcstr));
                 LOG_DBG("client %u from %s connecting to %s:%u...\n",
                         c->id, srcstr, server_ip, inet_port);
-        }
+        } else {
+                /* Send destination addr and port to other end */
+                
+                ret = getsockopt(c->inet_sock, SOL_IP, SO_ORIGINAL_DST, 
+                                 &addr, &addrlen);
+                
+                if (ret == -1) {
+                        LOG_DBG("client %u, could not get original port."
+                                "Probably not NAT'ed\n", c->id);
+                } else {
+                        struct translator_init_pkt tip;
+                        
+                        memset(&tip, 0, sizeof(tip));
+                        memcpy(&tip.addr, &addr.in.sin_addr, sizeof(tip.addr));
+                        tip.port = addr.in.sin_port;
+                        
+                        ret = send(c->serval_sock, &tip, sizeof(tip), 0);
+                        
+                        if (ret == 0) {
+                                LOG_DBG("client %u: other proxy closed\n",
+                                        c->id);
+                                goto done;
+                        } else if (ret == -1) {
+                                LOG_ERR("client %u: init packet: %s\n", 
+                                        c->id, strerror(errno));
+                                goto done;
+                        }
+                }
 
-        ret = connect(c->serval_sock, &addr.sa, addrlen);
+                addr.sv.sv_family = AF_SERVAL;
+                addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
+                addrlen = sizeof(addr.sv);
+                sock = c->serval_sock;
+
+                LOG_DBG("client %u from %s connecting to service %s...\n",
+                        c->id, srcstr, service_id_to_str(&addr.sv.sv_srvid));
+        }
+        
+        ret = connect(sock, &addr.sa, addrlen);
 
         if (ret == -1) {
                 LOG_ERR("connect failed: %s\n",
@@ -203,14 +266,14 @@ static void *client_thread(void *arg)
                 client_free(c);
                 return NULL;
         }
-
+        
         LOG_DBG("client %u connected successfully!\n", c->id);
 
         while (running) {
                 ssize_t bytes = 0;
                 struct pollfd fds[3];
 
-                memset(&fds, 0, sizeof(fds));
+                memset(fds, 0, sizeof(fds));
                 fds[0].fd = signal_get_fd(&c->exit_signal);
                 fds[0].events = POLLIN | POLLERR | POLLHUP;
                 fds[1].fd = c->inet_sock;
@@ -258,10 +321,9 @@ static void *client_thread(void *arg)
                         } 
                 }                
         }
-
+ done:
         LOG_DBG("client %u exits\n", c->id);
         c->is_garbage = 1;
-
         close(c->serval_sock);
         close(c->inet_sock);
         close(c->splicefd[0]);
@@ -315,12 +377,141 @@ static void cleanup_clients(void)
         }
 }
 
+static int create_server_sock(int family, unsigned short port)
+{
+        union {
+                struct sockaddr_in in;
+                struct sockaddr_sv sv;
+        } addr;
+        socklen_t addrlen = 0;
+        int sock, ret = 0;               
+
+	sock = socket(family, SOCK_STREAM, 0);
+
+	if (sock == -1) {
+		LOG_ERR("inet socket: %s\n",
+			strerror(errno));
+                return -1;
+	}
+        
+        memset(&addr, 0, sizeof(addr));
+
+        if (family == AF_INET) {
+                ret = 1;
+                ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
+                                 &ret, sizeof(ret));
+                
+                if (ret == -1) {
+                        LOG_ERR("Could not set SO_REUSEADDR - %s\n",
+                                strerror(errno));
+                }
+                addr.in.sin_family = AF_INET;
+                addr.in.sin_addr.s_addr = INADDR_ANY;
+                addr.in.sin_port = htons(port);
+                addrlen = sizeof(addr.in);
+        } else if (family == AF_SERVAL) {
+                addr.sv.sv_family = AF_SERVAL;
+                addr.sv.sv_srvid.s_sid32[0] = htonl(port);
+                addrlen = sizeof(addr.sv);
+        } else {
+                close(sock);
+                return -1;
+        }
+
+        ret = bind(sock, (struct sockaddr *)&addr, addrlen);
+
+        if (ret == -1) {
+		LOG_ERR("inet bind: %s\n",
+			strerror(errno));
+                goto failure;
+	}
+
+        ret = listen(sock, 10);
+
+        if (ret == -1) {
+                LOG_ERR("inet listen: %s\n",
+			strerror(errno));
+                goto failure;
+        }
+
+        return sock;
+ failure:
+        close(sock);
+
+        return -1;
+}
+
+static int accept_client(int family, int sock, int port)
+{
+        union {
+                struct sockaddr_in in;
+                struct sockaddr_sv sv;
+        } addr;
+        socklen_t addrlen;
+        int ret, client_sock;
+        struct client *c;
+
+        client_sock = accept(sock, (struct sockaddr *)&addr,
+                             &addrlen);
+        
+        if (client_sock == -1) {
+                switch (errno) {
+                case EINTR:
+                        /* This means we should exit
+                         * (ctrl-c) */
+                        break;
+                default:
+                        /* Other error, exit anyway */
+                        LOG_ERR("accept: %s\n",
+                                strerror(errno));
+                }
+                return -1;
+        } 
+        
+        c = client_create(client_sock, family, 
+                          (struct sockaddr *)&addr, addrlen);        
+        if (!c) {
+                LOG_ERR("Could not create client\n");
+                goto err;
+        }
+        
+        c->translator_port = port;
+        
+        ret = pthread_create(&c->thr, NULL, client_thread, c);
+        
+        if (ret != 0) {
+                LOG_ERR("pthread_create: %s\n",
+                        strerror(errno));
+                client_free(c);
+                goto err;
+        }
+        
+        list_add_tail(&c->lh, &client_list);
+        
+        /* Make a note in our client log */
+        if (family == AF_INET && log_is_open(&logh)) {
+                struct hostent *h;
+                char buf[18];
+                
+                /* Cast to const char * to quell compiler on Android */
+                h = gethostbyaddr((const char *)&addr.in.sin_addr, 4, AF_INET);
+                
+                log_write_line(&logh, "c %s %s",
+                               inet_ntop(AF_INET, &addr.in.sin_addr, 
+                                         buf, sizeof(buf)),
+                               h ? h->h_name : "unknown hostname");
+        }
+        
+        return ret;       
+ err:
+        close(client_sock);
+        return -1;
+}
+
 int run_translator(unsigned short port)
 {
 	struct sigaction action;
-	int sock, ret = 0, running = 1;
-	struct sockaddr_in saddr;
-	int family = AF_SERVAL;
+	int inet_sock, serval_sock, ret = 0, running = 1;
 
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -333,63 +524,41 @@ int run_translator(unsigned short port)
         
         signal_init(&exit_signal);
 
-	sock = socket(AF_INET, SOCK_STREAM, 0);
+        inet_sock = create_server_sock(AF_INET, port);
 
-	if (sock == -1) {
-		LOG_ERR("inet socket: %s\n",
-			strerror(errno));
-                goto fail_sock;
-	}
-
-        ret = 1;
-        
-        ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &ret, sizeof(ret));
-        
-        if (ret == -1) {
-                LOG_ERR("Could not set SO_REUSEADDR - %s\n",
-                        strerror(errno));
+        if (inet_sock == -1) {
+                LOG_ERR("could not create AF_INET server sock\n");
+                signal_destroy(&exit_signal);
+                return -1;
         }
         
-        memset(&saddr, 0, sizeof(saddr));
-        saddr.sin_family = AF_INET;
-        saddr.sin_addr.s_addr = INADDR_ANY;
-        saddr.sin_port = htons(port);
+        serval_sock = create_server_sock(AF_SERVAL, port);
+
+        if (inet_sock == -1) {
+                LOG_ERR("could not create AF_SERVAL server sock\n");
+                close(inet_sock);
+                signal_destroy(&exit_signal);
+                return -1;
+        }
 
         LOG_DBG("Serval translator running on port %u\n", 
                 port);
 
-        ret = bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
-
-        if (ret == -1) {
-		LOG_ERR("inet bind: %s\n",
-			strerror(errno));
-                goto fail_bind_sock;
-	}
-
-        ret = listen(sock, 10);
-
-        if (ret == -1) {
-                LOG_ERR("inet listen: %s\n",
-			strerror(errno));
-                goto fail_bind_sock;
-        }
-
         while (running) {
-                int client_sock;
-                socklen_t addrlen = sizeof(saddr);
-                struct client *c;
-                struct pollfd fds[2];
-
-                LOG_DBG("Waiting for new clients...\n");
+                struct pollfd fds[3];
 
                 memset(fds, 0, sizeof(fds));
-
                 fds[0].fd = signal_get_fd(&exit_signal);
                 fds[0].events = POLLIN | POLLERR | POLLHUP;
-                fds[1].fd = sock;
+                fds[0].revents = 0;
+                fds[1].fd = inet_sock;
                 fds[1].events = POLLIN | POLLERR | POLLHUP;
-                
-                ret = poll(fds, 2, 10000);
+                fds[1].revents = 0;
+                fds[2].fd = serval_sock;
+                fds[2].events = POLLIN | POLLERR | POLLHUP;
+                fds[2].revents = 0;
+
+                ret = poll(fds, 3, 10000);
                 
                 if (ret == -1) {
                         /* Treat this as fatal error */
@@ -397,9 +566,10 @@ int run_translator(unsigned short port)
                         continue;
                 } else if (ret == 0) {
                         /* Garbage collect */
+                        LOG_DBG("garbage collecting clients\n");
                         garbage_collect_clients();
                         continue;
-                }
+                } 
                 
                 if (fds[0].revents) {
                         running = 0;
@@ -407,72 +577,36 @@ int run_translator(unsigned short port)
                 }
                 
                 if (fds[1].revents & POLLHUP ||
-                    fds[1].revents & POLLERR) {
+                    fds[1].revents & POLLERR || 
+                    fds[2].revents & POLLHUP ||
+                    fds[2].revents & POLLERR) {
                         running = 0;
                         continue;
                 }
                 
                 if (fds[1].revents & POLLIN) {
-                        client_sock = accept(sock, (struct sockaddr *)&saddr,
-                                             &addrlen);
+                        LOG_DBG("accepting AF_INET client\n");
+                        ret = accept_client(AF_INET, inet_sock, port); 
                         
-                        if (client_sock == -1) {
-                                switch (errno) {
-                                case EINTR:
-                                        /* This means we should exit
-                                         * (ctrl-c) */
-                                        break;
-                                default:
-                                        /* Other error, exit anyway */
-                                        LOG_ERR("accept: %s\n",
-                                                strerror(errno));
-                                }
-                                continue;
-                        } 
-                        
-                        c = client_create(client_sock, family, 
-                                          (struct sockaddr *)&saddr, addrlen);
-                        
-                        if (!c) {
-                                LOG_ERR("Could not create client\n");
-                                close(client_sock);
-                                continue;
+                        if (ret == -1) {
+                                LOG_ERR("could not accept new INET client\n");
                         }
-                        
-                        c->translator_port = port;
-                        
-                        ret = pthread_create(&c->thr, NULL, client_thread, c);
-                        
-                        if (ret != 0) {
-                                LOG_ERR("pthread_create: %s\n",
-                                        strerror(errno));
-                                client_free(c);
-                                continue;
-                        }
-                        
-                        list_add_tail(&c->lh, &client_list);
+                }
 
-                        /* Make a note in our client log */
-                        if (log_is_open(&logh)) {
-                                struct hostent *h;
-                                char buf[18];
-                                
-                                /* Cast to const char * to quell compiler on Android */
-                                h = gethostbyaddr((const char *)&saddr.sin_addr, 4, AF_INET);
-                                
-                                log_write_line(&logh, "c %s %s",
-                                               inet_ntop(AF_INET, &saddr.sin_addr, 
-                                                         buf, sizeof(buf)),
-                                               h ? h->h_name : "unknown hostname");
+                if (fds[2].revents & POLLIN) {
+                        LOG_DBG("accepting AF_SERVAL client\n");
+                        ret = accept_client(AF_SERVAL, serval_sock, port);
+
+                        if (ret == -1) {
+                                LOG_ERR("could not accept new SERVAL client\n");
                         }
                 }
         }
         
         LOG_DBG("Translator exits.\n");
         cleanup_clients();
-fail_bind_sock:
-	close(sock);
-fail_sock:
+	close(inet_sock);
+	close(serval_sock);
         signal_destroy(&exit_signal);
 
         return ret;
