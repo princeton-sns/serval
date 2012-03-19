@@ -19,6 +19,8 @@ noinst_HEADERS = \
 
 translator_CPPFLAGS =-I$(top_srcdir)/include
 translator_LDFLAGS =-lpthread
+translator_LDADD = \
+	$(top_srcdir)/src/common/libcommon.la
 
 transproxy_CPPFLAGS =-I$(top_srcdir)/include
 transproxy_LDFLAGS =-lpthread
