@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -54,7 +55,6 @@ struct client {
         sockaddr_generic_t addr;
         socklen_t addrlen;
         pthread_t thr;
-        int should_send_init_pkt;
         int inet_sock;
         int serval_sock;
         int translator_port;
@@ -73,6 +73,24 @@ struct translator_init_pkt {
 static LOG_DEFINE(logh);
 struct signal exit_signal;
 static LIST_HEAD(client_list);
+static int cross_translate = 0;
+
+static const char *family_to_str(int family)
+{
+        static const char *family_inet = "AF_INET";
+        static const char *family_serval = "AF_SERVAL";
+        static const char *unknown = "UNKNOWN";
+        
+        switch (family) {
+        case AF_INET:
+                return family_inet;
+        case AF_SERVAL:
+                return family_serval;
+        default:
+                break;
+        }
+        return unknown;
+}
 
 static ssize_t forward_data(int from, int to, int splicefd[2])
 {
@@ -161,7 +179,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->serval_sock = sock;
                 memcpy(&c->addr, sa, salen);
-                c->should_send_init_pkt = 1;
                 
                 c->inet_sock = socket(AF_INET, SOCK_STREAM, 0);
                 
@@ -252,12 +269,17 @@ static void *client_thread(void *arg)
         int sock = -1;
         char ipstr[18];
         int running = 1, ret;
+        int should_send_init_pkt = 0;
 
         memset(&addr, 0, sizeof(addr));
         
         if (c->from_family == AF_SERVAL) {
                 struct translator_init_pkt tip;
                 
+                if (!cross_translate) {
+                        LOG_ERR("Cannot translate from AF_SERVAL to AF_INET without cross-translation enabled\n");
+                        goto done;
+                }
                 /* Receive destination addr and port from other end */
                 ret = recv(c->serval_sock, &tip, sizeof(tip), MSG_WAITALL);
 
@@ -285,18 +307,23 @@ static void *client_thread(void *arg)
                 
                 LOG_DBG("client %u connecting to %s:%u\n",
                         c->id, ipstr, ntohs(addr.in.sin_port));
-        } else {
+        } else if (c->from_family == AF_INET) {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
                 sock = c->serval_sock;
-                
+                if (cross_translate)
+                        should_send_init_pkt = 1;
                 inet_ntop(AF_INET, &c->addr.in.sin_addr, ipstr, 18);
 
                 LOG_DBG("client %u from %s connecting to service %s...\n",
                         c->id, ipstr, service_id_to_str(&addr.sv.sv_srvid));
-        }
-        
+        } else {
+                LOG_ERR("client %u - bad address family, exiting\n",
+                        c->id);
+                goto done;
+         }
+       
         ret = connect(sock, &addr.sa, addrlen);
 
         if (ret == -1) {
@@ -336,7 +363,7 @@ static void *client_thread(void *arg)
                 if (fds[1].revents & POLLERR) {
                         running = 0;
                 } else if (fds[1].revents) {
-                        if (c->should_send_init_pkt) {
+                        if (should_send_init_pkt == 1) {
                                 ret = client_send_init_packet(c);
 
                                 if (ret <= 0) {
@@ -344,7 +371,7 @@ static void *client_thread(void *arg)
                                         running = 0;
                                         break;
                                 }
-                                c->should_send_init_pkt = 0;
+                                should_send_init_pkt = 0;
                         }
                         
                         bytes = inet_to_serval(c);
@@ -394,15 +421,6 @@ static void signal_handler(int sig)
         signal_raise(&exit_signal);
 }
 
-static void print_usage(void)
-{
-        printf("Usage: translator [ OPTIONS ]\n");
-        printf("where OPTIONS:\n");
-        printf("\t-p, --port PORT\t\t port to listen on.\n");
-        printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
-        printf("\t-s, --serval\t\t run a AF_SERVAL to AF_INET translator.\n");
-}
-
 static void garbage_collect_clients(void)
 {
         struct client *c, *tmp;
@@ -439,10 +457,7 @@ static void cleanup_clients(void)
 
 static int create_server_sock(int family, unsigned short port)
 {
-        union {
-                struct sockaddr_in in;
-                struct sockaddr_sv sv;
-        } addr;
+        sockaddr_generic_t addr;
         socklen_t addrlen = 0;
         int sock, ret = 0;               
 
@@ -478,7 +493,7 @@ static int create_server_sock(int family, unsigned short port)
                 return -1;
         }
 
-        ret = bind(sock, (struct sockaddr *)&addr, addrlen);
+        ret = bind(sock, &addr.sa, addrlen);
 
         if (ret == -1) {
 		LOG_ERR("inet bind: %s\n",
@@ -508,8 +523,7 @@ static int accept_client(int sock, int port)
         int ret, client_sock;
         struct client *c;
 
-        client_sock = accept(sock, (struct sockaddr *)&addr,
-                             &addrlen);
+        client_sock = accept(sock, &addr.sa, &addrlen);
         
         if (client_sock == -1) {
                 switch (errno) {
@@ -523,10 +537,12 @@ static int accept_client(int sock, int port)
                                 strerror(errno));
                 }
                 return -1;
-        } 
-        
-        c = client_create(client_sock, (struct sockaddr *)&addr, 
-                          addrlen);        
+        }
+
+        LOG_DBG("accepted %s client\n", 
+                family_to_str(addr.sa.sa_family));
+
+        c = client_create(client_sock, &addr.sa, addrlen);        
         if (!c) {
                 LOG_ERR("Could not create client, family=%d\n", 
                         addr.sa.sa_family);
@@ -647,10 +663,82 @@ int run_translator(int family, unsigned short port)
 }
 
 #if !defined(OS_ANDROID)
+
+static void print_usage(void)
+{
+        printf("Usage: translator [ OPTIONS ]\n");
+        printf("where OPTIONS:\n");
+        printf("\t-d, --daemon\t\t run in the background as a daemon.\n");
+        printf("\t-p, --port PORT\t\t port to listen on.\n");
+        printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
+        printf("\t-s, --serval\t\t run an AF_SERVAL to AF_INET translator.\n");
+        printf("\t-x, --x-translate\t\t cross translate, i.e., this translator will connect to another translator that reverses the translation.\n");
+}
+
+static int daemonize(void)
+{
+        int i, sid;
+	FILE *f;
+
+        /* check if already a daemon */
+	if (getppid() == 1) 
+                return -1; 
+	
+	i = fork();
+
+	if (i < 0) {
+		fprintf(stderr, "Fork error...\n");
+                return -1;
+	}
+	if (i > 0) {
+		//printf("Parent done... pid=%u\n", getpid());
+                exit(EXIT_SUCCESS);
+	}
+	/* new child (daemon) continues here */
+	
+	/* Change the file mode mask */
+	umask(0);
+		
+	/* Create a new SID for the child process */
+	sid = setsid();
+	
+	if (sid < 0)
+		return -1;
+	
+	/* 
+	 Change the current working directory. This prevents the current
+	 directory from being locked; hence not being able to remove it. 
+	 */
+	if (chdir("/") < 0) {
+		return -1;
+	}
+	
+	/* Redirect standard files to /dev/null */
+	f = freopen("/dev/null", "r", stdin);
+
+        if (!f) {
+                LOG_ERR("stdin redirection failed\n");
+        }
+
+	f = freopen("/dev/null", "w", stdout);
+
+        if (!f) {
+                LOG_ERR("stdout redirection failed\n");
+        }
+
+	f = freopen("/dev/null", "w", stderr);
+
+        if (!f) {
+                LOG_ERR("stderr redirection failed\n");
+        }
+
+        return 0;
+}
+
 int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
-        int ret = 0, family = AF_INET;
+        int ret = 0, family = AF_INET, daemon = 0;
 
         argc--;
 	argv++;
@@ -672,8 +760,14 @@ int main(int argc, char **argv)
                         goto fail;
                 } else if (strcmp(argv[0], "-s") == 0 ||
                            strcmp(argv[0], "--serval") ==  0) {
-                        /* Run a Serval to Inet translator */
+                        /* Run a SERVAL to INET translator */
                         family = AF_SERVAL;
+                } else if (strcmp(argv[0], "-d") == 0 ||
+                           strcmp(argv[0], "--daemon") ==  0) {
+                        daemon = 1;
+                } else if (strcmp(argv[0], "-x") == 0 ||
+                           strcmp(argv[0], "--x-translate") ==  0) {
+                        cross_translate = 1;
                 } else if (strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--log") ==  0) {
                         if (argc == 1 || log_is_open(&logh)) {
@@ -697,6 +791,16 @@ int main(int argc, char **argv)
 		argc--;
 		argv++;
 	}	
+
+        if (daemon) {
+                LOG_DBG("going daemon...\n");
+                ret = daemonize();
+                
+                if (ret < 0) {
+                        LOG_ERR("Could not daemonize\n");
+                        return ret;
+                } 
+        }
 
         ret = run_translator(family, port);
 fail:
