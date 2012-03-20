@@ -12,14 +12,14 @@
  */
 #include <jni.h>
 
-extern int run_translator(int);
+extern int run_translator(int, int);
 extern struct signal exit_signal;
 
 JNIEXPORT 
 jint JNICALL Java_org_servalarch_serval_TranslatorService_runTranslator(JNIEnv *env, 
                                                                         jobject obj, jint port)
 {
-        return run_translator((int)port);
+        return run_translator(AF_INET, (int)port);
 }
 
 JNIEXPORT 

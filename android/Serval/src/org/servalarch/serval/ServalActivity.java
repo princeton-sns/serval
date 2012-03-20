@@ -180,8 +180,12 @@ public class ServalActivity extends Activity
 					boolean isChecked) {
 				if (isChecked) {
 					startService(new Intent(ServalActivity.this, TranslatorService.class));
+					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
+					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
 				} else {
 					stopService(new Intent(ServalActivity.this, TranslatorService.class));
+					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
+					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
 				}
 			}
 		});
