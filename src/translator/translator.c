@@ -109,12 +109,12 @@ static ssize_t forward_data(int from, int to, int splicefd[2])
         return wlen;
 }
 
-static ssize_t legacy_to_serval(struct client *c)
+static ssize_t inet_to_serval(struct client *c)
 {
         return forward_data(c->inet_sock, c->serval_sock, c->splicefd);
 }
 
-static ssize_t serval_to_legacy(struct client *c)
+static ssize_t serval_to_inet(struct client *c)
 {
         return forward_data(c->serval_sock, c->inet_sock, c->splicefd);
 }
@@ -196,7 +196,8 @@ static int client_send_init_packet(struct client *c)
         struct translator_init_pkt tip;
         struct sockaddr_in addr;
         socklen_t addrlen = sizeof(addr);
-        size_t tot_sent = 0;
+        size_t tot_sent = 0, send_len = sizeof(tip);
+        unsigned char *send_ptr = (unsigned char *)&tip;
         int ret;
 
         ret = getsockopt(c->inet_sock, SOL_IP, SO_ORIGINAL_DST, 
@@ -221,7 +222,7 @@ static int client_send_init_packet(struct client *c)
         tip.port = addr.sin_port;
         
         do {
-                ret = send(c->serval_sock, &tip, sizeof(tip), 0);
+                ret = send(c->serval_sock, send_ptr, send_len, 0);
                 
                 if (ret == 0) {
                         LOG_DBG("client %u other proxy closed\n",
@@ -231,8 +232,13 @@ static int client_send_init_packet(struct client *c)
                                 c->id, strerror(errno));
                 } else {
                         tot_sent += ret;
+                        send_len -= ret;
+                        send_ptr += ret;
                 }
-        } while (tot_sent < sizeof(tip) && ret > 0);
+        } while (send_len > 0 && ret > 0);
+
+        LOG_DBG("client %u sent %zu bytes init pkt\n",
+                c->id, tot_sent);
 
         return ret;
 }
@@ -242,6 +248,7 @@ static void *client_thread(void *arg)
         struct client *c = (struct client *)arg;
         sockaddr_generic_t addr;
         socklen_t addrlen;
+        size_t tot_inet_to_serval = 0, tot_serval_to_inet = 0;
         int sock = -1;
         char ipstr[18];
         int running = 1, ret;
@@ -264,6 +271,9 @@ static void *client_thread(void *arg)
                         goto done;
                 }
                 
+                LOG_DBG("client %u received %d bytes init pkt\n",
+                        c->id, ret);
+
                 addr.in.sin_family = AF_INET;
                 memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
                 addr.in.sin_port = tip.port;
@@ -337,31 +347,38 @@ static void *client_thread(void *arg)
                                 c->should_send_init_pkt = 0;
                         }
                         
-                        bytes = legacy_to_serval(c);
+                        bytes = inet_to_serval(c);
                         
                         if (bytes == 0) {
                                 running = 0;
                         } else if (bytes < 0) {
                                 LOG_ERR("forwarding error\n");
                                 running = 0;
-                        } 
+                        } else {
+                                tot_inet_to_serval += bytes;
+                        }
                 }
 
                 if (fds[2].revents & POLLERR) {
                         running = 0;
                 } else if (fds[2].revents) {
-                        bytes = serval_to_legacy(c);
+                        bytes = serval_to_inet(c);
                         
                         if (bytes == 0) {
                                 running = 0;
                         } else if (bytes < 0) {
                                 LOG_ERR("forwarding error\n");
                                 running = 0;
+                        } else {
+                                tot_serval_to_inet += bytes;
                         }
                 }        
         }
  done:
-        LOG_DBG("client %u exits\n", c->id);
+        LOG_DBG("client %u exits, "
+                "tot_inet_to_serval=%zu tot_serval_to_inet=%zu\n", 
+                c->id, tot_inet_to_serval, tot_serval_to_inet);
+
         c->is_garbage = 1;
         close(c->serval_sock);
         close(c->inet_sock);
@@ -595,7 +612,7 @@ int run_translator(int family, unsigned short port)
                         continue;
                 } else if (ret == 0) {
                         /* Garbage collect */
-                        LOG_DBG("garbage collecting clients\n");
+                        /* LOG_DBG("garbage collecting clients\n"); */
                         garbage_collect_clients();
                         continue;
                 } 
