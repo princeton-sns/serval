@@ -54,7 +54,7 @@ struct client {
         sockaddr_generic_t addr;
         socklen_t addrlen;
         pthread_t thr;
-        int init_packet_sent;
+        int should_send_init_pkt;
         int inet_sock;
         int serval_sock;
         int translator_port;
@@ -65,10 +65,9 @@ struct client {
 };
 
 struct translator_init_pkt {
-        uint16_t port;
-        uint16_t pad1;
         struct in_addr addr;
-};
+        uint16_t port;
+} __attribute__((packed));
 
 #define DEFAULT_TRANSLATOR_PORT 8080
 static LOG_DEFINE(logh);
@@ -120,8 +119,8 @@ static ssize_t serval_to_legacy(struct client *c)
         return forward_data(c->serval_sock, c->inet_sock, c->splicefd);
 }
 
-struct client *client_create(int sock, int family, 
-                             struct sockaddr *sa, socklen_t salen)
+struct client *client_create(int sock, struct sockaddr *sa, 
+                             socklen_t salen)
 {
         struct client *c;
         int ret;
@@ -133,7 +132,7 @@ struct client *client_create(int sock, int family,
         
         memset(c, 0, sizeof(struct client));
         c->id = client_num++;
-        c->from_family = family;
+        c->from_family = sa->sa_family;
         c->is_garbage = 0;
         INIT_LIST_HEAD(&c->lh);
         signal_init(&c->exit_signal);
@@ -146,7 +145,7 @@ struct client *client_create(int sock, int family,
                 goto fail_pipe;
         }
         
-        if (family == AF_INET) {
+        if (c->from_family == AF_INET) {
                 /* We're translating from AF_INET to AF_SERVAL */
                 c->inet_sock = sock;
                 memcpy(&c->addr, sa, salen);
@@ -158,10 +157,11 @@ struct client *client_create(int sock, int family,
                                 strerror(errno));
                         goto fail_sock;
                 }
-        } else if (family == AF_SERVAL) {
+        } else if (c->from_family == AF_SERVAL) {
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->serval_sock = sock;
                 memcpy(&c->addr, sa, salen);
+                c->should_send_init_pkt = 1;
                 
                 c->inet_sock = socket(AF_INET, SOCK_STREAM, 0);
                 
@@ -170,6 +170,9 @@ struct client *client_create(int sock, int family,
                                 strerror(errno));
                         goto fail_sock;
                 }
+        } else {
+                LOG_ERR("Unsupported client family\n");
+                goto fail_sock;
         }
 
         return c;
@@ -193,6 +196,7 @@ static int client_send_init_packet(struct client *c)
         struct translator_init_pkt tip;
         struct sockaddr_in addr;
         socklen_t addrlen = sizeof(addr);
+        size_t tot_sent = 0;
         int ret;
 
         ret = getsockopt(c->inet_sock, SOL_IP, SO_ORIGINAL_DST, 
@@ -202,22 +206,33 @@ static int client_send_init_packet(struct client *c)
                 LOG_DBG("client %u, could not get original port."
                         "Probably not NAT'ed\n", c->id);
                 return -1;
-        } 
+        } else {
+                char buf[18];
+                
+                inet_ntop(AF_INET, &addr.sin_addr, buf, sizeof(buf));
+
+                LOG_DBG("Original dst: %s:%u\n",
+                        buf, ntohs(addr.sin_port));
+        }
 
         /* Send destination addr and port to other end */        
         memset(&tip, 0, sizeof(tip));
         memcpy(&tip.addr, &addr.sin_addr, sizeof(tip.addr));
         tip.port = addr.sin_port;
         
-        ret = send(c->serval_sock, &tip, sizeof(tip), 0);
-        
-        if (ret == 0) {
-                LOG_DBG("client %u: other proxy closed\n",
+        do {
+                ret = send(c->serval_sock, &tip, sizeof(tip), 0);
+                
+                if (ret == 0) {
+                        LOG_DBG("client %u other proxy closed\n",
                                 c->id);
-        } else if (ret == -1) {
-                LOG_ERR("client %u: init packet: %s\n", 
-                        c->id, strerror(errno));
-        }
+                } else if (ret == -1) {
+                        LOG_ERR("client %u init packet: %s\n", 
+                                c->id, strerror(errno));
+                } else {
+                        tot_sent += ret;
+                }
+        } while (tot_sent < sizeof(tip) && ret > 0);
 
         return ret;
 }
@@ -228,7 +243,7 @@ static void *client_thread(void *arg)
         sockaddr_generic_t addr;
         socklen_t addrlen;
         int sock = -1;
-        char srcstr[18];
+        char ipstr[18];
         int running = 1, ret;
 
         memset(&addr, 0, sizeof(addr));
@@ -240,11 +255,11 @@ static void *client_thread(void *arg)
                 ret = recv(c->serval_sock, &tip, sizeof(tip), MSG_WAITALL);
 
                 if (ret == -1) {
-                        LOG_ERR("client %u: could not read init packet: %s\n",
+                        LOG_ERR("client %u could not read init packet: %s\n",
                                 c->id, strerror(errno));
                         goto done;
                 } else if (ret != sizeof(tip)) {
-                        LOG_ERR("client %u: bad init packet size %d\n",
+                        LOG_ERR("client %u bad init packet size %d\n",
                                 c->id, ret);
                         goto done;
                 }
@@ -254,16 +269,22 @@ static void *client_thread(void *arg)
                 addr.in.sin_port = tip.port;
                 addrlen = sizeof(addr.in);
                 sock = c->inet_sock;
+
+                inet_ntop(AF_INET, &addr.in.sin_addr, 
+                          ipstr, sizeof(ipstr));
+                
+                LOG_DBG("client %u connecting to %s:%u\n",
+                        c->id, ipstr, ntohs(addr.in.sin_port));
         } else {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
                 sock = c->serval_sock;
                 
-                inet_ntop(AF_INET, &c->addr.in.sin_addr, srcstr, 18);
+                inet_ntop(AF_INET, &c->addr.in.sin_addr, ipstr, 18);
 
                 LOG_DBG("client %u from %s connecting to service %s...\n",
-                        c->id, srcstr, service_id_to_str(&addr.sv.sv_srvid));
+                        c->id, ipstr, service_id_to_str(&addr.sv.sv_srvid));
         }
         
         ret = connect(sock, &addr.sa, addrlen);
@@ -305,15 +326,15 @@ static void *client_thread(void *arg)
                 if (fds[1].revents & POLLERR) {
                         running = 0;
                 } else if (fds[1].revents) {
-                        if (!c->init_packet_sent) {
+                        if (c->should_send_init_pkt) {
                                 ret = client_send_init_packet(c);
 
                                 if (ret <= 0) {
-                                        LOG_ERR("client %u: could not send init packet, ret=%d\n", c->id, ret);
+                                        LOG_ERR("client %u could not send init packet, ret=%d\n", c->id, ret);
                                         running = 0;
                                         break;
                                 }
-                                c->init_packet_sent = 1;
+                                c->should_send_init_pkt = 0;
                         }
                         
                         bytes = legacy_to_serval(c);
@@ -336,8 +357,8 @@ static void *client_thread(void *arg)
                         } else if (bytes < 0) {
                                 LOG_ERR("forwarding error\n");
                                 running = 0;
-                        } 
-                }                
+                        }
+                }        
         }
  done:
         LOG_DBG("client %u exits\n", c->id);
@@ -362,6 +383,7 @@ static void print_usage(void)
         printf("where OPTIONS:\n");
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
+        printf("\t-s, --serval\t\t run a AF_SERVAL to AF_INET translator.\n");
 }
 
 static void garbage_collect_clients(void)
@@ -462,11 +484,10 @@ static int create_server_sock(int family, unsigned short port)
         return -1;
 }
 
-static int accept_client(int family, int sock, int port)
+static int accept_client(int sock, int port)
 {
         sockaddr_generic_t addr;
-        socklen_t addrlen = family == AF_INET ? 
-                sizeof(addr.in) : sizeof(addr.sv);
+        socklen_t addrlen = sizeof(addr);
         int ret, client_sock;
         struct client *c;
 
@@ -487,10 +508,11 @@ static int accept_client(int family, int sock, int port)
                 return -1;
         } 
         
-        c = client_create(client_sock, family, 
-                          (struct sockaddr *)&addr, addrlen);        
+        c = client_create(client_sock, (struct sockaddr *)&addr, 
+                          addrlen);        
         if (!c) {
-                LOG_ERR("Could not create client, family=%d\n", family);
+                LOG_ERR("Could not create client, family=%d\n", 
+                        addr.sa.sa_family);
                 goto err;
         }
 
@@ -508,7 +530,7 @@ static int accept_client(int family, int sock, int port)
         list_add_tail(&c->lh, &client_list);
         
         /* Make a note in our client log */
-        if (family == AF_INET && log_is_open(&logh)) {
+        if (addr.sa.sa_family == AF_INET && log_is_open(&logh)) {
                 struct hostent *h;
                 char buf[18];
                 
@@ -591,7 +613,7 @@ int run_translator(int family, unsigned short port)
                 
                 if (fds[1].revents & POLLIN) {
                         LOG_DBG("accepting client\n");
-                        ret = accept_client(family, sock, port); 
+                        ret = accept_client(sock, port); 
                         
                         if (ret == -1) {
                                 LOG_ERR("could not accept new client\n");
