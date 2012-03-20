@@ -104,7 +104,7 @@ static ssize_t forward_data(int from, int to, int splicefd[2])
                         strerror(errno));
                 return rlen;
         } else if (rlen == 0) {
-                LOG_DBG("Other end closed\n");
+                LOG_DBG("splice1: other end closed\n");
         }
         
         /* printf("splice1 %zd bytes\n", rlen); */
@@ -114,8 +114,12 @@ static ssize_t forward_data(int from, int to, int splicefd[2])
                                    rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
                 
                 if (w == -1) {
-                        LOG_ERR("splice2: %s\n",
-                                strerror(errno));
+                        if (errno == EPIPE) {
+                                LOG_DBG("splice2: other end closed\n");
+                        } else {
+                                LOG_ERR("splice2: %s\n",
+                                        strerror(errno));
+                        }
                         break;
                 }
                 wlen += w;
@@ -418,7 +422,9 @@ static void *client_thread(void *arg)
 static void signal_handler(int sig)
 {
         LOG_DBG("signal %u caught!\n", sig);
-        signal_raise(&exit_signal);
+
+        if (sig == SIGKILL || sig == SIGTERM)
+                signal_raise(&exit_signal);
 }
 
 static void garbage_collect_clients(void)
