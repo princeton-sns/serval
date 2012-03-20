@@ -11,6 +11,7 @@
  *	the License, or (at your option) any later version.
  */
 #include <jni.h>
+#include <netinet/in.h>
 
 extern int run_translator(int, int);
 extern struct signal exit_signal;
