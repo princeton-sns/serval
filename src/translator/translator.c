@@ -612,7 +612,9 @@ int run_translator(int family, unsigned short port)
                 return -1;
         }
 
-        LOG_DBG("Serval translator running on port %u\n", 
+        LOG_DBG("%s to %s translator running on port/serviceID %u\n", 
+                family_to_str(family), 
+                family_to_str(family == AF_INET ? AF_SERVAL : AF_INET),
                 port);
 
         while (running) {
