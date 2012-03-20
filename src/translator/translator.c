@@ -73,7 +73,7 @@ struct translator_init_pkt {
 static LOG_DEFINE(logh);
 struct signal exit_signal;
 static LIST_HEAD(client_list);
-static int cross_translate = 0;
+int cross_translate = 0;
 
 static const char *family_to_str(int family)
 {

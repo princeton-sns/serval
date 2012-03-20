@@ -87,7 +87,7 @@ public class TranslatorService extends Service {
 	 */
 	final Messenger mMessenger = new Messenger(new IncomingHandler());
 
-	native int runTranslator(int port);
+        native int runTranslator(int port, boolean xtranslate);
 	public native int shutdown();
 	private boolean isRunning = false;
 	private int startId = -1;
@@ -97,7 +97,7 @@ public class TranslatorService extends Service {
 		public void run() {
 			Log.i("Serval", "Translator running");
 			isRunning = true;
-			int ret = runTranslator(8080);
+			int ret = runTranslator(8080, true);
 			Log.i("Serval", "Translator exits with value " + ret);
 			isRunning = false;
 			stopSelfResult(startId);
