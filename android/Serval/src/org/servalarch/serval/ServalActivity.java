@@ -206,20 +206,32 @@ public class ServalActivity extends Activity
 		
 		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0' && serviceStr.charAt(1) == 'x') {
 			// Hex string
-			if (!serviceStr.matches("^[a-fA-F0-9]{1,40}$"))
+			if (!serviceStr.matches("^0x[a-fA-F0-9]{1,40}$"))
 				return null;
-	
-			byte[] rawID = new byte[(serviceStr.length() - 2) / 2];
 			
-			for (int i = 2; i < serviceStr.length(); i += 2) {
-				/*
-				byte b;
-				Character.digit(serviceStr.charAt(i), 16);
-				if (serviceStr.length())
-				serviceStr.charAt(i+1)
-				*/
+			String parseStr = serviceStr.substring(2);
+			int len = parseStr.length();
+			
+			byte[] rawID = new byte[ServiceID.SERVICE_ID_MAX_LENGTH];
+			
+			for (int i = 0; i < rawID.length; i++) {
+				char hex[] = { '0', '0' };
+		
+				if (len-- > 0) {
+					hex[0] = parseStr.charAt(i*2);
+				}
+				
+				if (len-- > 0) {
+					hex[1] = parseStr.charAt((i*2) + 1);
+				}
+				
+				rawID[i] = (byte)Integer.parseInt(new String(hex), 16);
+				
+				if (len <= 0)
+					break;
 			}
-			sid = new ServiceID();
+			
+			sid = new ServiceID(rawID);
 		} else {
 			// Decimal string
 			if (!serviceStr.matches("^[0-9]{1,20}$"))
@@ -239,7 +251,7 @@ public class ServalActivity extends Activity
 		return addr;
 	}
 	
-	private void performOp(String serviceStr, String ipStr, int op) {
+	private void performOp(final String serviceStr, final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr;
 		
@@ -273,7 +285,7 @@ public class ServalActivity extends Activity
 			break;
 		}
 	}
-	private boolean extractKernelModule(File module) {
+	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
 
@@ -302,7 +314,7 @@ public class ServalActivity extends Activity
 		return false;
 	}
 
-	private boolean executeSuCommand(String cmd) {
+	private boolean executeSuCommand(final String cmd) {
 		try {
 			Process shell;
 			int err;
@@ -423,7 +435,7 @@ public class ServalActivity extends Activity
 		}
 
 		@Override
-		public void onServiceGet(long xid, int retval, ServiceInfo[] info) {
+		public void onServiceGet(long xid, final int retval, ServiceInfo[] info) {
 			for (int i = 0; i < info.length; i++) {
 				Log.d("Serval", "RETRIEVED: Service " + info[i].getServiceID() + 
 						"address " + info[i].getAddress());
