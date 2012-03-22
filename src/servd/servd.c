@@ -228,13 +228,6 @@ static int registration_update_remote(struct servd_context *ctx,
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
-                char buf[18], buf2[18];
-                printf("checking update %s:%u %s vs %s:%u %s\n",
-                       service_id_to_str(&r->srvid), r->prefix,
-                       inet_ntop(AF_INET, &r->ipaddr, buf, sizeof(buf)),
-                       service_id_to_str(srvid), prefix,
-                       inet_ntop(AF_INET, old_ip, buf2, sizeof(buf2)));
-                
                 if (r->type == SERVICE_REMOTE && 
                     memcmp(&r->srvid, srvid, 
                            sizeof(struct service_id)) == 0 && 
@@ -246,8 +239,6 @@ static int registration_update_remote(struct servd_context *ctx,
                         memcpy(&r->ipaddr, new_ip, 
                                sizeof(*new_ip));
                         ret = 1;
-                        printf("refreshing remote timeout %s\n",
-                               service_id_to_str(&r->srvid));
                         timer_mod(&ctx->tq, &r->timer, 
                                   timer_secs(REMOTE_SERVICE_TIMEOUT));
                 }
@@ -509,8 +500,6 @@ static int handle_incoming_registration(struct hostctrl *hc,
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
-
-        printf("incoming registration old_ip=%s\n", old_ip ? "valid" : "null");
 
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {
