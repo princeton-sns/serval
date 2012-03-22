@@ -112,12 +112,19 @@ void timer_init(struct timer *t)
 	memset(t, 0, sizeof(*t));
 }
 
-int timer_add(struct timer_queue *tq, struct timer *t)
+int timer_mod(struct timer_queue *tq, struct timer *t, 
+              unsigned long expires)
 {
-	if (timer_scheduled(t))
-		return -1;
-        
-    gettime(&t->timeout);        
+    int was_first = 0;
+
+    if (timer_scheduled(t)) {
+        if (t->hi.index == 0)
+            was_first = 1;
+        timer_del(tq, t);
+        t->expires = expires;
+    }
+
+    gettime(&t->timeout);
     timespec_add_nsec(&t->timeout, t->expires * 1000);
 
 	pthread_mutex_lock(&tq->lock);
@@ -127,20 +134,20 @@ int timer_add(struct timer_queue *tq, struct timer *t)
         return -1;
     }
 
-    /* If another thread than the main thread
-     * added a new timer first in the heap, then
-     * raise the signal to make the main thread
-     * reschedule itself to reflect the new
+    /* If another thread than the "main" thread added or removed a
+     * timer at the first position in the heap, then raise the signal
+     * to make the main thread reschedule itself to reflect the new
      * timeout */
     if (!pthread_equal(tq->thr, pthread_self()) &&
-        t->hi.index == 0) {
+        (t->hi.index == 0 || was_first == 1)) {
         timer_queue_signal_raise(tq);
     }
-
+    
 	pthread_mutex_unlock(&tq->lock);
 	
 	return 1;
 }
+
 
 static void _timer_del(struct timer_queue *tq, struct timer *t)
 {
@@ -152,6 +159,14 @@ static void _timer_del(struct timer_queue *tq, struct timer *t)
        queue */
     if (index == 0 && !pthread_equal(tq->thr, pthread_self()))
         timer_queue_signal_raise(tq);
+}
+
+int timer_add(struct timer_queue *tq, struct timer *t)
+{
+	if (timer_scheduled(t))
+		return -1;
+
+    return timer_mod(tq, t, t->expires);
 }
 
 void timer_del(struct timer_queue *tq, struct timer *t)

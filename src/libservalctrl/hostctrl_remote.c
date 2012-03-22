@@ -6,6 +6,12 @@
 #include <string.h>
 #include "hostctrl_ops.h"
 
+/*
+  When sending a service registration message, the IP being registered
+  is actually the IP address in the source field of the IP header. We
+  only need to pass the old IP in the registration message in case we
+  are re-registering.
+ */
 static int remote_service_register(struct hostctrl *hc,
                                    const struct service_id *srvid, 
                                    unsigned short prefix_bits,
@@ -29,7 +35,6 @@ static int remote_service_register(struct hostctrl *hc,
                 req.flags |= REG_FLAG_REREGISTER;
                 memcpy(&req.addr, old_ip, sizeof(*old_ip));
         }
-        //memcpy(&req.address, ipaddr, sizeof(*ipaddr));
         
         LOG_DBG("prefix_bits=%u sizeof(req)=%zu %s\n",
 		req.srvid_prefix_bits, 

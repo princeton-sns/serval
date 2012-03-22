@@ -136,11 +136,14 @@ static int message_channel_udp_get_local(message_channel_t *channel,
                                          socklen_t *addrlen)
 {
     message_channel_udp_t *mcu = (message_channel_udp_t *)channel;
+    int ret;
     pthread_mutex_lock(&channel->lock);
-    memcpy(addr, &mcu->base->peer, mcu->base->local_len);
+    /* memcpy(addr, &mcu->base->local, mcu->base->local_len);
     *addrlen = mcu->base->local_len;
+    */
+    ret = getsockname(mcu->base->sock, addr, addrlen);
     pthread_mutex_unlock(&channel->lock);
-    return 0;
+    return ret;
 }
 
 static int message_channel_udp_get_peer(message_channel_t *channel,

@@ -44,6 +44,7 @@ void timer_init(struct timer *t);
 struct timer *timer_new_callback(void (*callback)(struct timer *t), void *data);
 void timer_free(struct timer *t);
 int timer_add(struct timer_queue *tq, struct timer *t);
+int timer_mod(struct timer_queue *tq, struct timer *t, unsigned long expires);
 void timer_del(struct timer_queue *tq, struct timer *t);
 int timer_next_timeout(struct timer_queue *tq, unsigned long *timeout);
 int timer_next_timeout_timespec(struct timer_queue *tq, 
@@ -58,9 +59,12 @@ void timer_queue_destroy(struct timer_queue *tq);
 int timer_queue_init(struct timer_queue *tq);
 void timer_queue_fini(struct timer_queue *tq);
 
-#define timer_new() timer_new_callback(NULL, NULL)
-#define timer_set_secs(t, s) { (t)->expires = s * 1000000L; }
-#define timer_set_msecs(t, s) { (t)->expires = s * 1000L; }
+#define timer_new() timer_new_callback(NULL, NULL
+#define timer_secs(s) (s * 1000000L)
+#define timer_msecs(s) (s * 1000L)
+#define timer_usecs(s) (s)
+#define timer_set_secs(t, s) { (t)->expires = timer_secs(s); }
+#define timer_set_msecs(t, s) { (t)->expires = timer_msecs(s); }
 #define timer_set_usecs(t, s) { (t)->expires = s; }
 #define timer_schedule_secs(tq, t, s) ({ int ret;   \
             timer_set_secs(t, s);                   \

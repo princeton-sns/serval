@@ -78,7 +78,7 @@ struct registration {
         int ip_set;
 };
 
-#define LOCAL_SERVICE_TIMEOUT (30)
+#define LOCAL_SERVICE_TIMEOUT (20)
 #define REMOTE_SERVICE_TIMEOUT ((LOCAL_SERVICE_TIMEOUT * 2) + 10)
 
 static void registration_timeout_local(struct timer *t)
@@ -87,12 +87,13 @@ static void registration_timeout_local(struct timer *t)
         char ip1[18];
         int ret;
 
-        printf("Refreshing registration of service %s ip=%s\n",
-               service_id_to_str(&r->srvid),
+        printf("Refreshing registration of service %s:%u %s\n",
+               service_id_to_str(&r->srvid), r->prefix,
                inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
         
         ret = hostctrl_service_register(r->ctx->rhc, 
-                                        &r->srvid, 0, 
+                                        &r->srvid,
+                                        r->prefix, 
                                         &r->ipaddr);
         
         if (ret <= 0) {
@@ -108,8 +109,8 @@ static void registration_timeout_remote(struct timer *t)
         struct registration *r = (struct registration *)t->data;
         char ip1[18];
 
-        printf("Registration timeout - service %s ip=%s\n",
-               service_id_to_str(&r->srvid),
+        printf("Registration timeout - service %s:%u %s\n",
+               service_id_to_str(&r->srvid), r->prefix,
                inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
         hostctrl_service_remove(r->ctx->lhc, &r->srvid, 
                                 r->prefix, &r->ipaddr);
@@ -131,6 +132,7 @@ static struct registration *registration_add(struct servd_context *ctx,
         memset(r, 0, sizeof(struct registration));
         INIT_LIST_HEAD(&r->lh);
         memcpy(&r->srvid, srvid, sizeof(struct service_id));
+
         if (ipaddr) {
                 memcpy(&r->ipaddr, ipaddr, sizeof(struct in_addr));
                 r->ip_set = 1;
@@ -226,6 +228,13 @@ static int registration_update_remote(struct servd_context *ctx,
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
+                char buf[18], buf2[18];
+                printf("checking update %s:%u %s vs %s:%u %s\n",
+                       service_id_to_str(&r->srvid), r->prefix,
+                       inet_ntop(AF_INET, &r->ipaddr, buf, sizeof(buf)),
+                       service_id_to_str(srvid), prefix,
+                       inet_ntop(AF_INET, old_ip, buf2, sizeof(buf2)));
+                
                 if (r->type == SERVICE_REMOTE && 
                     memcmp(&r->srvid, srvid, 
                            sizeof(struct service_id)) == 0 && 
@@ -237,6 +246,10 @@ static int registration_update_remote(struct servd_context *ctx,
                         memcpy(&r->ipaddr, new_ip, 
                                sizeof(*new_ip));
                         ret = 1;
+                        printf("refreshing remote timeout %s\n",
+                               service_id_to_str(&r->srvid));
+                        timer_mod(&ctx->tq, &r->timer, 
+                                  timer_secs(REMOTE_SERVICE_TIMEOUT));
                 }
         }
         
@@ -270,7 +283,8 @@ static int registration_redo(struct servd_context *ctx,
                         fprintf(stderr, "Could not reregister service %s\n",
                                 service_id_to_str(&r->srvid));
                 }
-
+                
+                
                 memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
         }
 
@@ -431,19 +445,35 @@ static int register_service_remotely(struct hostctrl *hc,
         struct in_addr old_ip;
         int ret = 0;
 
-	printf("Local service %s @ %s registered\n", 
-               service_id_to_str(srvid),
-               local_ip ? inet_ntoa(*local_ip) : "none");
- 
         if (registration_update_local(ctx, srvid, prefix,
                                       local_ip, &old_ip)) {
-                printf("reregistering\n");
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, &old_ip);
         } else {
-                registration_add(ctx, SERVICE_LOCAL, srvid, prefix, local_ip);
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, NULL);
+                if (ret == -1) {
+                        fprintf(stderr, "remote registration failed\n");
+                } else {
+                        struct {
+                                struct sockaddr_sv sv;
+                                struct sockaddr_in in;
+                        } addr;
+                        socklen_t addrlen = sizeof(addr);
+
+                        ret = hostctrl_get_local_addr(ctx->rhc, 
+                                                      (struct sockaddr *)&addr, &addrlen);
+
+                        if (ret == -1) {
+                                fprintf(stderr, "could not get local channel address\n");
+                        }
+                        registration_add(ctx, SERVICE_LOCAL, srvid, prefix, &addr.in.sin_addr);
+
+
+                        printf("Local service %s @ %s registered\n", 
+                               service_id_to_str(srvid),
+                               inet_ntoa(addr.in.sin_addr));
+                }
         }
 
         return ret;
@@ -479,20 +509,16 @@ static int handle_incoming_registration(struct hostctrl *hc,
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
-        char ip1[18], ip2[18];
-        
-        printf("Registration service %s @ %s %s\n", 
-               service_id_to_str(srvid), 
-               old_ip ? inet_ntop(AF_INET, old_ip, ip1, 18) : "none",
-               inet_ntop(AF_INET, remote_ip, ip2, 18));
-        
+
+        printf("incoming registration old_ip=%s\n", old_ip ? "valid" : "null");
+
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {
-                char buf[18];
-                        
-                printf("Remote service %s @ %s reregistered\n", 
-                       service_id_to_str(srvid), 
-                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                char ip1[18], ip2[18];    
+                printf("Remote service %s:%u @ %s <- %s reregistered\n", 
+                       service_id_to_str(srvid), prefix,
+                       inet_ntop(AF_INET, remote_ip, ip1, sizeof(ip1)),
+                       old_ip ? inet_ntop(AF_INET, old_ip, ip2, sizeof(ip2)) : "none");
                 
                 ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
                                               0, 0, old_ip, remote_ip);
@@ -500,9 +526,9 @@ static int handle_incoming_registration(struct hostctrl *hc,
                 /* Add this service the local service table. */
                 char buf[18];
                 
-                printf("Remote service %s @ %s registered\n", 
-                       service_id_to_str(srvid), 
-                       inet_ntop(AF_INET, remote_ip, buf, 18));
+                printf("Remote service %s:%u @ %s registered\n", 
+                       service_id_to_str(srvid), prefix,
+                       inet_ntop(AF_INET, remote_ip, buf, sizeof(buf)));
                 
                 registration_add(ctx, SERVICE_REMOTE, srvid, 
                                  prefix, remote_ip);
