@@ -503,12 +503,13 @@ static int handle_incoming_registration(struct hostctrl *hc,
 
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {
+                /*
                 char ip1[18], ip2[18];    
                 printf("Remote service %s:%u @ %s <- %s reregistered\n", 
                        service_id_to_str(srvid), prefix,
                        inet_ntop(AF_INET, remote_ip, ip1, sizeof(ip1)),
                        old_ip ? inet_ntop(AF_INET, old_ip, ip2, sizeof(ip2)) : "none");
-                
+                */
                 ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
                                               0, 0, old_ip, remote_ip);
         } else {
