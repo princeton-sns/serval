@@ -12,6 +12,7 @@ typedef struct signal {
 
 int signal_init(struct signal *s);
 void signal_destroy(struct signal *s);
+int signal_clear_val(struct signal *s, int *val);
 int signal_clear(struct signal *s);
 int signal_get_fd(struct signal *s);
 int signal_is_raised(const struct signal *s);

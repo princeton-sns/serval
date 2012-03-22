@@ -55,6 +55,7 @@
 # detection behaviors.  Similarly the _VERSION variables will override
 # the minimum required version numbers.
 #
+#
 # Examples:
 #
 #   To obtain help on usage:

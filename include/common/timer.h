@@ -6,12 +6,13 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include "heap.h"
+#include "signal.h"
 
 struct timer {
     struct heapitem hi;
     struct timespec timeout;
     long expires; /* micro seconds */
-    int (*callback)(struct timer *t);
+    void (*callback)(struct timer *t);
     void (*destruct)(struct timer *t);
     void *data;        
 };
@@ -19,7 +20,7 @@ struct timer {
 struct timer_queue {
     struct heap queue;
     pthread_mutex_t lock;
-    int pipefd[2];
+    struct signal signal;
     pthread_t thr;
 };
 
@@ -40,7 +41,7 @@ enum signal_result {
 };
 
 void timer_init(struct timer *t);
-struct timer *timer_new_callback(int (*callback)(struct timer *t), void *data);
+struct timer *timer_new_callback(void (*callback)(struct timer *t), void *data);
 void timer_free(struct timer *t);
 int timer_add(struct timer_queue *tq, struct timer *t);
 void timer_del(struct timer_queue *tq, struct timer *t);

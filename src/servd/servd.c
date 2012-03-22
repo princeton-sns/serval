@@ -46,10 +46,10 @@
 
 static int should_exit = 0;
 static struct signal exit_signal;
-static struct timer_queue tq;
 static struct service_id default_service;
 
 struct servd_context {
+        struct timer_queue tq;
         int router; /* Whether this service daemon is a stub
                        end-host or a router */
         struct in_addr router_ip;
@@ -69,15 +69,56 @@ enum service_type {
 
 struct registration {
         struct list_head lh;
+        struct servd_context *ctx;
         enum service_type type;
         struct service_id srvid;
+        unsigned short prefix;
         struct in_addr ipaddr;
+        struct timer timer;
         int ip_set;
 };
+
+#define LOCAL_SERVICE_TIMEOUT (30)
+#define REMOTE_SERVICE_TIMEOUT ((LOCAL_SERVICE_TIMEOUT * 2) + 10)
+
+static void registration_timeout_local(struct timer *t)
+{
+        struct registration *r = (struct registration *)t->data;
+        char ip1[18];
+        int ret;
+
+        printf("Refreshing registration of service %s ip=%s\n",
+               service_id_to_str(&r->srvid),
+               inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+        
+        ret = hostctrl_service_register(r->ctx->rhc, 
+                                        &r->srvid, 0, 
+                                        &r->ipaddr);
+        
+        if (ret <= 0) {
+                fprintf(stderr, "Could not reregister service %s\n",
+                        service_id_to_str(&r->srvid));
+        }
+
+        timer_schedule_secs(&r->ctx->tq, &r->timer, LOCAL_SERVICE_TIMEOUT);
+}
+
+static void registration_timeout_remote(struct timer *t)
+{
+        struct registration *r = (struct registration *)t->data;
+        char ip1[18];
+
+        printf("Registration timeout - service %s ip=%s\n",
+               service_id_to_str(&r->srvid),
+               inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+        hostctrl_service_remove(r->ctx->lhc, &r->srvid, 
+                                r->prefix, &r->ipaddr);
+}
 
 static struct registration *registration_add(struct servd_context *ctx,
                                              enum service_type type,
                                              const struct service_id *srvid, 
+                                             unsigned short prefix,
                                              const struct in_addr *ipaddr)
 {
         struct registration *r;
@@ -94,12 +135,23 @@ static struct registration *registration_add(struct servd_context *ctx,
                 memcpy(&r->ipaddr, ipaddr, sizeof(struct in_addr));
                 r->ip_set = 1;
         }
-
+        timer_init(&r->timer);
+        r->timer.data = r;
         r->type = type;
+        r->prefix = prefix;
+        r->ctx = ctx;
         pthread_mutex_lock(&ctx->lock);
         list_add_tail(&r->lh, &ctx->reglist);
         ctx->num_regs++;
         pthread_mutex_unlock(&ctx->lock);
+
+        if (type == SERVICE_LOCAL) {
+                r->timer.callback = registration_timeout_local;
+                timer_schedule_secs(&ctx->tq, &r->timer, LOCAL_SERVICE_TIMEOUT);
+        } else {
+                r->timer.callback = registration_timeout_remote;
+                timer_schedule_secs(&ctx->tq, &r->timer, REMOTE_SERVICE_TIMEOUT);
+        }
 
         return r;        
 }
@@ -116,19 +168,24 @@ static int registration_del(struct servd_context *ctx,
                 if (memcmp(&r->srvid, srvid, 
                            sizeof(struct service_id)) == 0) {
                         list_del(&r->lh);
-                        free(r);
                         ret = 1;
                         break;
                 }
         }
 
         pthread_mutex_unlock(&ctx->lock);
+        
+        if (ret == 1) {
+                timer_del(&ctx->tq, &r->timer);
+                free(r);
+        }
 
         return ret;
 }
 
 static int registration_update_local(struct servd_context *ctx, 
                                      const struct service_id *srvid,
+                                     unsigned short prefix,
                                      const struct in_addr *new_ip,
                                      struct in_addr *old_ip)
 {
@@ -140,7 +197,8 @@ static int registration_update_local(struct servd_context *ctx,
         list_for_each_entry(r, &ctx->reglist, lh) {
                 if (r->type == SERVICE_LOCAL && 
                     memcmp(&r->srvid, srvid, 
-                           sizeof(struct service_id)) == 0) {
+                           sizeof(struct service_id)) == 0 &&
+                        r->prefix == prefix) {
                         if (old_ip)
                                 memcpy(old_ip, &r->ipaddr, 
                                        sizeof(*old_ip));
@@ -158,6 +216,7 @@ static int registration_update_local(struct servd_context *ctx,
 
 static int registration_update_remote(struct servd_context *ctx, 
                                       const struct service_id *srvid,
+                                      unsigned short prefix,
                                       const struct in_addr *new_ip,
                                       const struct in_addr *old_ip)
 {
@@ -171,7 +230,8 @@ static int registration_update_remote(struct servd_context *ctx,
                     memcmp(&r->srvid, srvid, 
                            sizeof(struct service_id)) == 0 && 
                     memcmp(&r->ipaddr, old_ip, 
-                           sizeof(*old_ip)) == 0) {
+                           sizeof(*old_ip)) == 0 && 
+                    r->prefix == prefix) {
                         /* The old IP matched the IP stored,
                            so this is the old record. */
                         memcpy(&r->ipaddr, new_ip, 
@@ -375,13 +435,13 @@ static int register_service_remotely(struct hostctrl *hc,
                service_id_to_str(srvid),
                local_ip ? inet_ntoa(*local_ip) : "none");
  
-        if (registration_update_local(ctx, srvid, 
+        if (registration_update_local(ctx, srvid, prefix,
                                       local_ip, &old_ip)) {
                 printf("reregistering\n");
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, &old_ip);
         } else {
-                registration_add(ctx, SERVICE_LOCAL, srvid, local_ip);
+                registration_add(ctx, SERVICE_LOCAL, srvid, prefix, local_ip);
                 ret = hostctrl_service_register(ctx->rhc, srvid, 
                                                 prefix, NULL);
         }
@@ -426,8 +486,8 @@ static int handle_incoming_registration(struct hostctrl *hc,
                old_ip ? inet_ntop(AF_INET, old_ip, ip1, 18) : "none",
                inet_ntop(AF_INET, remote_ip, ip2, 18));
         
-        if (old_ip && registration_update_remote(ctx, srvid, 
-                                       remote_ip, old_ip)) {
+        if (old_ip && registration_update_remote(ctx, srvid, prefix, 
+                                                 remote_ip, old_ip)) {
                 char buf[18];
                         
                 printf("Remote service %s @ %s reregistered\n", 
@@ -444,7 +504,8 @@ static int handle_incoming_registration(struct hostctrl *hc,
                        service_id_to_str(srvid), 
                        inet_ntop(AF_INET, remote_ip, buf, 18));
                 
-                registration_add(ctx, SERVICE_REMOTE, srvid, remote_ip);
+                registration_add(ctx, SERVICE_REMOTE, srvid, 
+                                 prefix, remote_ip);
 
                 ret = hostctrl_service_add(ctx->lhc, srvid, prefix, 
                                            0, 0, remote_ip);
@@ -739,7 +800,7 @@ int main(int argc, char **argv)
                 } 
         }
 
-        ret = timer_queue_init(&tq);
+        ret = timer_queue_init(&ctx.tq);
 
         if (ret == -1) {
                 LOG_ERR("timer_queue_init failure\n");
@@ -832,7 +893,7 @@ int main(int argc, char **argv)
 #endif
 
 #if defined(OS_BSD)
-        ret = ifaddrs_init(&tq);
+        ret = ifaddrs_init(&ctx.tq);
 
         if (ret < 0) {
                 LOG_ERR("Could not discover interfaces\n");
@@ -848,8 +909,8 @@ int main(int argc, char **argv)
 
                 FD_ZERO(&readfds);
 
-                FD_SET(timer_queue_get_signal(&tq), &readfds);
-                maxfd = MAX(timer_queue_get_signal(&tq), maxfd);
+                FD_SET(timer_queue_get_signal(&ctx.tq), &readfds);
+                maxfd = MAX(timer_queue_get_signal(&ctx.tq), maxfd);
 
 #if defined(OS_LINUX)
                 FD_SET(nlh.fd, &readfds);
@@ -858,13 +919,13 @@ int main(int argc, char **argv)
                 FD_SET(signal_get_fd(&exit_signal), &readfds);
                 maxfd = MAX(signal_get_fd(&exit_signal), maxfd);
 
-                if (timer_next_timeout_timeval(&tq, &timeout))
+                if (timer_next_timeout_timeval(&ctx.tq, &timeout))
                         t = &timeout;
 
                 ret = select(maxfd + 1, &readfds, NULL, NULL, t);
 
                 if (ret == 0) {
-                        ret = timer_handle_timeout(&tq);
+                        ret = timer_handle_timeout(&ctx.tq);
                 } else if (ret == -1) {
 			if (errno == EINTR) {
                                 LOG_DBG("Interruped!\n");
@@ -874,8 +935,9 @@ int main(int argc, char **argv)
                                 should_exit = 1;
 			}
                 } else {
-                        if (FD_ISSET(timer_queue_get_signal(&tq), &readfds)) {
+                        if (FD_ISSET(timer_queue_get_signal(&ctx.tq), &readfds)) {
                                 /* Just reschedule timeout */
+                                timer_queue_signal_lower(&ctx.tq);
                         }
 #if defined(OS_LINUX)
                         if (FD_ISSET(nlh.fd, &readfds)) {
@@ -896,7 +958,7 @@ int main(int argc, char **argv)
         }
 
 #if defined(OS_BSD)
-        ifaddrs_fini(&tq);
+        ifaddrs_fini(&ctx.tq);
  fail_ifaddrs:
 #endif
 #if defined(OS_LINUX)
@@ -914,7 +976,7 @@ int main(int argc, char **argv)
  fail_reregister_signal:
         signal_destroy(&exit_signal);
  fail_exit_signal:
-        timer_queue_fini(&tq);
+        timer_queue_fini(&ctx.tq);
 
         registration_clear(&ctx);
         pthread_mutex_destroy(&ctx.lock);

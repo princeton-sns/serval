@@ -52,7 +52,7 @@ static int heap_cmp(const struct heapitem *h1, const struct heapitem *h2)
     return timespec_lt(&t1->timeout, &t2->timeout);
 }
 
-struct timer *timer_new_callback(int (*callback)(struct timer *), 
+struct timer *timer_new_callback(void (*callback)(struct timer *), 
                                  void *data)
 {
 	struct timer *t = malloc(sizeof(struct timer));
@@ -69,44 +69,19 @@ struct timer *timer_new_callback(int (*callback)(struct timer *),
 
 int timer_queue_get_signal(struct timer_queue *tq)
 {
-    return tq->pipefd[0];
+    return signal_get_fd(&tq->signal);
 }
 
 int timer_queue_signal_raise(struct timer_queue *tq)
 {
-    char s = 'w';
-    struct pollfd fds;
-    int ret = 0;
-        
-    memset(&fds, 0, sizeof(fds));
-    fds.fd = tq->pipefd[0];
-    fds.events = POLLIN;
-    fds.revents = 0;
-
-    ret = poll(&fds, 1, 0);
-
-    if (ret == 1) {
-        /* Signal already raised */
-        return 0;
-    } else if (ret == 0)  {
-        ret = write(tq->pipefd[1], &s, 1);
-    }
-
-    return ret;
+    return signal_raise(&tq->signal);
 }
 
 enum signal_result timer_queue_signal_lower(struct timer_queue *tq)
 {
-    struct pollfd fds;
-    char s = 0;
-    int ret = 0;
-        
-    memset(&fds, 0, sizeof(fds));
-    fds.fd = tq->pipefd[0];
-    fds.events = POLLIN;
-    fds.revents = 0;
-
-    ret = poll(&fds, 1, 0);
+    int val = 0, ret = 0;
+    
+    ret = signal_clear_val(&tq->signal, &val);
 
     switch (ret) {
     case -1:
@@ -116,11 +91,9 @@ enum signal_result timer_queue_signal_lower(struct timer_queue *tq)
         ret = TIMER_SIGNAL_NONE;
         break;
     default:
-        ret = read(tq->pipefd[0], &s, 1);
-
-        if (ret == 0)
+        if (val == 0)
             ret = TIMER_SIGNAL_EXIT;
-        else if (ret == -1)
+        else if (val == -1)
             ret = TIMER_SIGNAL_ERROR;
         else 
             ret = TIMER_SIGNAL_SET;
@@ -259,13 +232,12 @@ int timer_next_timeout_timeval(struct timer_queue *tq,
 int timer_handle_timeout(struct timer_queue *tq)
 {
 	struct timer *t;
-	int ret = 0;
        
 	pthread_mutex_lock(&tq->lock);
 
 	if (heap_empty(&tq->queue)) {
 		pthread_mutex_unlock(&tq->lock);
-		return 0;
+		return -1;
 	}
 	
 	t = heap_remove_first_entry(&tq->queue, struct timer, hi);
@@ -273,9 +245,9 @@ int timer_handle_timeout(struct timer_queue *tq)
 	pthread_mutex_unlock(&tq->lock);
 
 	if (t->callback)
-		ret = t->callback(t);
+        t->callback(t);
 
-	return ret;
+    return 0;
 }
 
 void timer_list_destroy(struct timer_queue *tq)
@@ -302,11 +274,10 @@ int timer_queue_init(struct timer_queue *tq)
 
     memset(tq, 0, sizeof(*tq));
 
-    ret = pipe(tq->pipefd);
+    ret = signal_init(&tq->signal);
 
     if (ret == -1) {
-        LOG_ERR("pipe failed: %s\n",
-                strerror(errno));
+        LOG_ERR("Signal init failed\n");
     }
 
     heap_init(&tq->queue, 0, heap_cmp);
@@ -318,12 +289,7 @@ int timer_queue_init(struct timer_queue *tq)
 
 void timer_queue_fini(struct timer_queue *tq)
 {
-    if (tq->pipefd[0] != -1)
-        close(tq->pipefd[0]);
-        
-    if (tq->pipefd[1] != -1)
-        close(tq->pipefd[1]);
-
+    signal_destroy(&tq->signal);
     timer_list_destroy(tq);
     heap_fini(&tq->queue);
 }
