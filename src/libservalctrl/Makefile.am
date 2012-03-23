@@ -61,6 +61,8 @@ libservalctrl_la_LDFLAGS += \
 	-lserval
 endif
 
+EXTRA_DIST = Android.mk
+
 clean-local:
 	rm -f *~
 

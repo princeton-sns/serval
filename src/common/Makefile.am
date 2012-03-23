@@ -27,3 +27,8 @@ if OS_LINUX
 libcommon_la_LIBADD = \
 	-lrt
 endif
+
+EXTRA_DIST = Android.mk
+
+clean-local:
+	rm -f *~

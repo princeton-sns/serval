@@ -36,5 +36,7 @@ servd_LDADD = \
 noinst_HEADERS = \
 	$(servd_headers)
 
+EXTRA_DIST = Android.mk
+
 clean-local:
 	rm -f *~

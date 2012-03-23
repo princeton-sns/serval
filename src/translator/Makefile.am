@@ -16,5 +16,12 @@ translator_LDADD = \
 
 endif
 
+EXTRA_DIST = \
+	Android.mk \
+	splice.c \
+	splice.h \
+	sys_splice.S \
+	translator_jni.c
+
 clean-local:
 	rm -f *~

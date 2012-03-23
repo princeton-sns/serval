@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS =-I m4
 
-SUBDIRS = src
+SUBDIRS = src android
 
 stags:
 	@cd $(top_srcdir);
@@ -12,5 +12,3 @@ clean-local:
 	rm -f include/serval/*~
 	rm -f include/libservalctrl/*~
 	rm -f include/libserval/*~
-
-EXTRA_DIST = Android.mk

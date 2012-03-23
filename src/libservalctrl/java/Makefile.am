@@ -6,7 +6,7 @@ JARFILE = org.servalarch.servalctrl.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)
 javasockdir = $(datadir)/java
-EXTRA_DIST = $(MANIFEST) README
+EXTRA_DIST = $(MANIFEST)
 CLASSFILES = $(shell find ./bin -name *.class -print)
 
 classes.list: $(SUBDIRS) $(CLASSFILES) 

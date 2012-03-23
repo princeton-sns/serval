@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include "JNIHelp.h"
-#include "serval_platform_ServalNetworkStack.h"
+#include "org_servalarch_platform_ServalNetworkStack.h"
 
 /* These option defines are from Harmony */
 #define JAVASOCKOPT_TCP_NODELAY 1
@@ -38,7 +38,7 @@ static struct {
 } gServiceIDFields;
 
 static int fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr, 
-				jobject srvid, int bits)
+                               jobject srvid, int bits)
 {
 	jboolean isCopy;
 	jbyteArray byteArr = (*env)->CallObjectMethod(env, srvid, 
@@ -82,13 +82,8 @@ static int fill_in_sockaddr_in(JNIEnv *env, struct sockaddr_in *saddr,
         return 0;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    nativeInit
- * Signature: ()V
- */
-void Java_serval_platform_ServalNetworkStack_nativeInit(JNIEnv *env, 
-							jobject obj)
+void Java_org_servalarch_platform_ServalNetworkStack_nativeInit(JNIEnv *env, 
+                                                                jobject obj)
 {
 	jclass clazz;
 #if defined(AUTODETECT_STACK)
@@ -108,7 +103,7 @@ void Java_serval_platform_ServalNetworkStack_nativeInit(JNIEnv *env,
 #endif
 	jniHelpInit(env);
 
-	clazz = (*env)->FindClass(env, "serval/net/ServiceID");
+	clazz = (*env)->FindClass(env, "org/servalarch/net/ServiceID");
 
 	if (clazz == NULL) {
 		LOG_ERR("Could not find ServiceID class\n");
@@ -138,7 +133,7 @@ static int createSocket(JNIEnv *env, int type, int protocol, jobject fd)
 		sock = socket(AF_SERVAL, type, protocol);
 	} else {
 		/*
-		sock = socket_sv(AF_SERVAL, type, protocol);
+                  sock = socket_sv(AF_SERVAL, type, protocol);
 		*/
 	}
 
@@ -150,42 +145,28 @@ static int createSocket(JNIEnv *env, int type, int protocol, jobject fd)
 
 	return sock;
 }
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    createDatagramSocket 
- * Signature: (Ljava/io/FileDescriptor;)I
- */
-jint Java_serval_platform_ServalNetworkStack_createDatagramSocket(JNIEnv *env, 
-								  jobject obj, 
-								  jobject fd,
-								  jint protocol)
+
+jint Java_org_servalarch_platform_ServalNetworkStack_createDatagramSocket(JNIEnv *env, 
+                                                                          jobject obj, 
+                                                                          jobject fd,
+                                                                          jint protocol)
 {
 	return createSocket(env, SOCK_DGRAM, protocol, fd);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    createStreamSocket
- * Signature: (Ljava/io/FileDescriptor;I)I
- */
-jint Java_serval_platform_ServalNetworkStack_createStreamSocket(JNIEnv *env,
-								jobject obj, 
-								jobject fd,
-								jint protocol)
+jint Java_org_servalarch_platform_ServalNetworkStack_createStreamSocket(JNIEnv *env,
+                                                                        jobject obj, 
+                                                                        jobject fd,
+                                                                        jint protocol)
 {
 	return createSocket(env, SOCK_STREAM, protocol, fd);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    bind
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;I)I
- */
-jint Java_serval_platform_ServalNetworkStack_bind(JNIEnv *env, 
-						  jobject obj,
-						  jobject fd, 
-						  jobject service_id,
-						  jint bindbits)
+jint Java_org_servalarch_platform_ServalNetworkStack_bind(JNIEnv *env, 
+                                                          jobject obj,
+                                                          jobject fd, 
+                                                          jobject service_id,
+                                                          jint bindbits)
 {
 	struct sockaddr_sv svaddr;
 	int sock = jniGetFDFromFileDescriptor(env, fd);
@@ -202,15 +183,10 @@ jint Java_serval_platform_ServalNetworkStack_bind(JNIEnv *env,
 	return 0;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    listen
- * Signature: (Ljava/io/FileDescriptor;I)I
- */
-jint Java_serval_platform_ServalNetworkStack_listen(JNIEnv *env, 
-						    jobject obj, 
-						    jobject fd,
-						    jint backlog)
+jint Java_org_servalarch_platform_ServalNetworkStack_listen(JNIEnv *env, 
+                                                            jobject obj, 
+                                                            jobject fd,
+                                                            jint backlog)
 {
 	int sock, ret;
 
@@ -262,13 +238,8 @@ static jobject acceptCommon(JNIEnv *env, jobject obj, jobject fd, int timeout)
 	return jniCreateFileDescriptor(env, ret);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    accept
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServalDatagramSocketImpl;I)Ljava/io/FileDescriptor;
- */
-jobject Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalDatagramSocketImpl_2I
-  (JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
+jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalDatagramSocketImpl_2I
+(JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
 {
 	if (sockImpl == NULL) {
 		jniThrowException(env, "java/lang/NullPointerException", NULL);
@@ -278,13 +249,8 @@ jobject Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_
 	return acceptCommon(env, obj, fd, timeout);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    accept
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServalSocketImpl;I)Ljava/io/FileDescriptor;
- */
-jobject Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalSocketImpl_2I
-  (JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
+jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalSocketImpl_2I
+(JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
 {
 	if (sockImpl == NULL) {
 		jniThrowException(env, "java/lang/NullPointerException", NULL);
@@ -294,17 +260,12 @@ jobject Java_serval_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_
 	return acceptCommon(env, obj, fd, timeout);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    connect
- * Signature: (Ljava/io/FileDescriptor;Lserval/net/ServiceID;Ljava/net/InetAddress;I)I
- */
-jint Java_serval_platform_ServalNetworkStack_connect(JNIEnv *env, 
-						     jobject obj, 
-						     jobject fd, 
-						     jobject service_id, 
-						     jobject ipaddr,
-                                                     jint timeout)
+jint Java_org_servalarch_platform_ServalNetworkStack_connect(JNIEnv *env, 
+                                                             jobject obj, 
+                                                             jobject fd, 
+                                                             jobject service_id, 
+                                                             jobject ipaddr,
+                                                             jint timeout)
 {
 	struct {
 		struct sockaddr_sv svaddr;
@@ -418,30 +379,20 @@ out:
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    disconnect
- * Signature: (Ljava/io/FileDescriptor;)I
- */
-jint Java_serval_platform_ServalNetworkStack_disconnect(JNIEnv *env, 
-							jobject obj, 
-							jobject fd)
+jint Java_org_servalarch_platform_ServalNetworkStack_disconnect(JNIEnv *env, 
+                                                                jobject obj, 
+                                                                jobject fd)
 {
 	/* Not sure what this is supposed to do */
 	return 0;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    send
- * Signature: (Ljava/io/FileDescriptor;[BII)I
- */
-jint Java_serval_platform_ServalNetworkStack_send(JNIEnv *env, 
-						  jobject obj, 
-						  jobject fd,
-						  jbyteArray buf, 
-						  jint offset, 
-						  jint length)
+jint Java_org_servalarch_platform_ServalNetworkStack_send(JNIEnv *env, 
+                                                          jobject obj, 
+                                                          jobject fd,
+                                                          jbyteArray buf, 
+                                                          jint offset, 
+                                                          jint length)
 {	
 	int sock, ret;
 	jbyte* data;
@@ -482,15 +433,10 @@ jint Java_serval_platform_ServalNetworkStack_send(JNIEnv *env,
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    recv
- * Signature: (Ljava/io/FileDescriptor;[BIIIZ)I
- */
-jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj, 
-						  jobject fd, jbyteArray buf, 
-						  jint offset, jint length, 
-						  jint timeout, jboolean peek)
+jint Java_org_servalarch_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj, 
+                                                          jobject fd, jbyteArray buf, 
+                                                          jint offset, jint length, 
+                                                          jint timeout, jboolean peek)
 {
 	int sock, ret;
 	int buflen = (length < 65536) ? length : 65536;
@@ -566,45 +512,30 @@ jint Java_serval_platform_ServalNetworkStack_recv(JNIEnv *env, jobject obj,
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    write
- * Signature: (Ljava/io/FileDescriptor;[BII)I
- */
-jint Java_serval_platform_ServalNetworkStack_write(JNIEnv *env, jobject obj,
-		jobject fd, jbyteArray data, jint offset, jint length)
+jint Java_org_servalarch_platform_ServalNetworkStack_write(JNIEnv *env, jobject obj,
+                                                           jobject fd, jbyteArray data, jint offset, jint length)
 {
         if (offset < 0 || length < 0)
                 jniThrowIllegalArgumentException(env, "Bad offset or length");
 
-	return Java_serval_platform_ServalNetworkStack_send(env, obj, fd, data,
-			offset, length);
+	return Java_org_servalarch_platform_ServalNetworkStack_send(env, obj, fd, data,
+                                                                    offset, length);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    read
- * Signature: (Ljava/io/FileDescriptor;[BIII)I
- */
-jint Java_serval_platform_ServalNetworkStack_read(JNIEnv *env, jobject obj,
-		jobject fd, jbyteArray buf, jint offset, jint length,
-		jint timeout)
+jint Java_org_servalarch_platform_ServalNetworkStack_read(JNIEnv *env, jobject obj,
+                                                          jobject fd, jbyteArray buf, jint offset, jint length,
+                                                          jint timeout)
 {
         if (offset < 0 || length < 0)
                 jniThrowIllegalArgumentException(env, "Bad offset or length");
 
-	return Java_serval_platform_ServalNetworkStack_recv(env, obj, fd, buf,
-			offset, length, timeout, 0);
+	return Java_org_servalarch_platform_ServalNetworkStack_recv(env, obj, fd, buf,
+                                                                    offset, length, timeout, 0);
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    close
- * Signature: (Ljava/io/FileDescriptor;)I
- */
-jint Java_serval_platform_ServalNetworkStack_close(JNIEnv *env, 
-						   jobject obj, 
-						   jobject fd)
+jint Java_org_servalarch_platform_ServalNetworkStack_close(JNIEnv *env, 
+                                                           jobject obj, 
+                                                           jobject fd)
 {
 	int sock, ret;
 
@@ -619,31 +550,21 @@ jint Java_serval_platform_ServalNetworkStack_close(JNIEnv *env,
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    getSocketLocalServiceID
- * Signature: (Ljava/io/FileDescriptor;)Lserval/net/ServiceID;
- */
 jobject 
-Java_serval_platform_ServalNetworkStack_getSocketLocalServiceID(JNIEnv *env, 
-								jobject obj, 
-								jobject fd)
+Java_org_servalarch_platform_ServalNetworkStack_getSocketLocalServiceID(JNIEnv *env, 
+                                                                        jobject obj, 
+                                                                        jobject fd)
 {
 	LOG_WARN("Not implemented!\n");
 	return NULL;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    setOption
- * Signature: (Ljava/io/FileDescriptor;III)I
- */
-jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env, 
-						       jobject obj, 
-						       jobject fd, 
-						       jint opt, 
-						       jint bool_value, 
-						       jint int_value)
+jint Java_org_servalarch_platform_ServalNetworkStack_setOption(JNIEnv *env, 
+                                                               jobject obj, 
+                                                               jobject fd, 
+                                                               jint opt, 
+                                                               jint bool_value, 
+                                                               jint int_value)
 {
 	int sock, ret = 0;
 	int bval = bool_value ? 1 : 0;
@@ -715,15 +636,10 @@ jint Java_serval_platform_ServalNetworkStack_setOption(JNIEnv *env,
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    getOption
- * Signature: (Ljava/io/FileDescriptor;I)I
- */
-jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env, 
-						       jobject obj, 
-						       jobject fd, 
-						       jint opt)
+jint Java_org_servalarch_platform_ServalNetworkStack_getOption(JNIEnv *env, 
+                                                               jobject obj, 
+                                                               jobject fd, 
+                                                               jint opt)
 {
 	int sock, ret;
 	int val = 0;
@@ -786,25 +702,15 @@ jint Java_serval_platform_ServalNetworkStack_getOption(JNIEnv *env,
 	return val;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    getSocketFlags
- * Signature: ()I
- */
-jint Java_serval_platform_ServalNetworkStack_getSocketFlags(JNIEnv *env, 
-							    jobject obj)
+jint Java_org_servalarch_platform_ServalNetworkStack_getSocketFlags(JNIEnv *env, 
+                                                                    jobject obj)
 {
 	/* LOG_WARN("Not implemented!\n"); */
 	return 0;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    availableStream
- * Signature: (Ljava/io/FileDescriptor;)I
- */
-jint Java_serval_platform_ServalNetworkStack_availableStream(JNIEnv *env,
-		jobject obj, jobject fd)
+jint Java_org_servalarch_platform_ServalNetworkStack_availableStream(JNIEnv *env,
+                                                                     jobject obj, jobject fd)
 {
 	int sock, ret = 0;
 	char message[2048];
@@ -846,57 +752,32 @@ jint Java_serval_platform_ServalNetworkStack_availableStream(JNIEnv *env,
 	return ret;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    getServiceByName
- * Signature: (Ljava/lang/String;)Lserval/net/ServiceID;
- */
-jobject Java_serval_platform_ServalNetworkStack_getServiceByName(JNIEnv *env,
-		jobject obj, jstring name)
+jobject Java_org_servalarch_platform_ServalNetworkStack_getServiceByName(JNIEnv *env,
+                                                                         jobject obj, jstring name)
 {
 	return NULL;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    shutdownInput
- * Signature: (Ljava/io/FileDescriptor;)V
- */
-void Java_serval_platform_ServalNetworkStack_shutdownInput(JNIEnv *env,
-		jobject obj, jobject fd)
+void Java_org_servalarch_platform_ServalNetworkStack_shutdownInput(JNIEnv *env,
+                                                                   jobject obj, jobject fd)
 {
 
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    shutdownOutput
- * Signature: (Ljava/io/FileDescriptor;)V
- */
-void Java_serval_platform_ServalNetworkStack_shutdownOutput(JNIEnv *env,
-		jobject obj, jobject fd)
+void Java_org_servalarch_platform_ServalNetworkStack_shutdownOutput(JNIEnv *env,
+                                                                    jobject obj, jobject fd)
 {
 
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    supportsUrgentData
- * Signature: (Ljava/io/FileDescriptor;)Z
- */
-jboolean Java_serval_platform_ServalNetworkStack_supportsUrgentData(JNIEnv *env,
-		jobject obj, jobject fd)
+jboolean Java_org_servalarch_platform_ServalNetworkStack_supportsUrgentData(JNIEnv *env,
+                                                                            jobject obj, jobject fd)
 {
 	return JNI_FALSE;
 }
 
-/*
- * Class:     serval_platform_ServalNetworkStack
- * Method:    sendUrgentData
- * Signature: (Ljava/io/FileDescriptor;B)V
- */
-void Java_serval_platform_ServalNetworkStack_sendUrgentData(JNIEnv *env,
-		jobject obj, jobject fd, jbyte data)
+void Java_org_servalarch_platform_ServalNetworkStack_sendUrgentData(JNIEnv *env,
+                                                                    jobject obj, jobject fd, jbyte data)
 {
 }
 
