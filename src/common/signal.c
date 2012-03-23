@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
  *
- * A timer queue that can integrate with, e.g., select/poll loops.
+ * Pipe-based IPC signals for waking/signaling between threads.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  * 

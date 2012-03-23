@@ -1,4 +1,15 @@
-/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * Platform detection and compatibility 
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #ifndef _COMMON_PLATFORM_H_
 #define _COMMON_PLATFORM_H_
 
@@ -192,32 +203,32 @@ typedef uint16_t be16;
 #endif /* OS_BSD */
 
 
-#define min_t(type, x, y) ({			\
-	type __min1 = (x);			\
-	type __min2 = (y);			\
-	__min1 < __min2 ? __min1: __min2; })
+#define min_t(type, x, y) ({                        \
+            type __min1 = (x);                      \
+            type __min2 = (y);                      \
+            __min1 < __min2 ? __min1: __min2; })
 
-#define max_t(type, x, y) ({			\
-	type __max1 = (x);			\
-	type __max2 = (y);			\
-	__max1 > __max2 ? __max1: __max2; })
+#define max_t(type, x, y) ({                        \
+            type __max1 = (x);                      \
+            type __max2 = (y);                      \
+            __max1 > __max2 ? __max1: __max2; })
 
 /*
  * min()/max()/clamp() macros that also do
  * strict type-checking.. See the
  * "unnecessary" pointer comparison.
  */
-#define min(x, y) ({				\
-	typeof(x) _min1 = (x);			\
-	typeof(y) _min2 = (y);			\
-	(void) (&_min1 == &_min2);		\
-	_min1 < _min2 ? _min1 : _min2; })
+#define min(x, y) ({                            \
+            typeof(x) _min1 = (x);              \
+            typeof(y) _min2 = (y);              \
+            (void) (&_min1 == &_min2);          \
+            _min1 < _min2 ? _min1 : _min2; })
 
-#define max(x, y) ({				\
-	typeof(x) _max1 = (x);			\
-	typeof(y) _max2 = (y);			\
-	(void) (&_max1 == &_max2);		\
-	_max1 > _max2 ? _max1 : _max2; })
+#define max(x, y) ({                            \
+            typeof(x) _max1 = (x);              \
+            typeof(y) _max2 = (y);              \
+            (void) (&_max1 == &_max2);          \
+            _max1 > _max2 ? _max1 : _max2; })
 
 
 #if !HAVE_OFFSETOF
@@ -231,9 +242,9 @@ typedef uint16_t be16;
  * @member:	the name of the member within the struct.
  *
  */
-#define container_of(ptr, type, member) ({			\
-	const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
-	(type *)( (char *)__mptr - offsetof(type,member) );})
+#define container_of(ptr, type, member) ({                          \
+            const typeof( ((type *)0)->member ) *__mptr = (ptr);	\
+            (type *)( (char *)__mptr - offsetof(type,member) );})
 
 #define likely(x)      __builtin_expect(!!(x), 1)
 #define unlikely(x)    __builtin_expect(!!(x), 0)
