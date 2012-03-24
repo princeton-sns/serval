@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
-    android:gravity="right"
+    android:gravity="left|right"
     android:orientation="vertical" >
 
     <RelativeLayout
@@ -25,19 +25,73 @@
             android:id="@+id/textView1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerHorizontal="true"
             android:layout_centerVertical="true"
+            android:layout_toLeftOf="@+id/moduleStatusToggle"
             android:text="@string/module_status_label"
             android:textAppearance="?android:attr/textAppearanceLarge"
             android:textSize="15sp" />
 
     </RelativeLayout>
 
+    <RelativeLayout
+        android:id="@+id/RelativeLayout01"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <ToggleButton
+            android:id="@+id/udpEncapToggle"
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginRight="30dp"
+            android:text="@string/udp_encap_toggle"
+            android:textOff="Disabled"
+            android:textOn="Enabled" />
+
+        <TextView
+            android:id="@+id/TextView01"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toLeftOf="@+id/udpEncapToggle"
+            android:text="@string/udp_encap_label"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:textSize="15sp" />
+
+    </RelativeLayout>
+
+    <RelativeLayout
+        android:id="@+id/RelativeLayout02"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <ToggleButton
+            android:id="@+id/translatorToggle"
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginRight="30dp"
+            android:text="@string/translator_toggle"
+            android:textOff="Disabled"
+            android:textOn="Enabled" />
+
+        <TextView
+            android:id="@+id/TextView02"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toLeftOf="@+id/translatorToggle"
+            android:text="@string/translator_label"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:textSize="15sp" />
+    </RelativeLayout>
+
     <TextView
         android:id="@+id/textView2"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="left"
         android:text="@string/service_input_label"
         android:textAppearance="?android:attr/textAppearanceMedium" />
 

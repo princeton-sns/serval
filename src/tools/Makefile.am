@@ -22,5 +22,7 @@ serv_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 noinst_HEADERS = \
 	command.h
 
+EXTRA_DIST = Android.mk
+
 clean-local:
 	rm -f *~

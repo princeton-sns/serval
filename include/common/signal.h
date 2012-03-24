@@ -1,4 +1,15 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * Pipe-based IPC signals for waking/signaling between threads.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #ifndef __SIGNAL_H_
 #define __SIGNAL_H_
 
@@ -12,6 +23,7 @@ typedef struct signal {
 
 int signal_init(struct signal *s);
 void signal_destroy(struct signal *s);
+int signal_clear_val(struct signal *s, int *val);
 int signal_clear(struct signal *s);
 int signal_get_fd(struct signal *s);
 int signal_is_raised(const struct signal *s);

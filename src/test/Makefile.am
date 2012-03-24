@@ -34,7 +34,6 @@ automigrated_LDFLAGS =-L$(top_srcdir)/src/libservalctrl -lservalctrl
 
 endif
 
-EXTRA_DIST = README
 manysockets_CPPFLAGS =-I$(top_srcdir)/include 
 manysockets_LDFLAGS =
 
@@ -106,6 +105,8 @@ endif
 
 noinst_HEADERS = \
 	common.h
+
+EXTRA_DIST = README Android.mk
 
 clean-local:
 	rm -f *~

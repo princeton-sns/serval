@@ -20,5 +20,7 @@ libservalctrl_jni_la_LDFLAGS = \
 #libservalctrl_jni_la_LIBADD = \
 #	$(top_srcdir)/src/common/libcommon.la
 
+EXTRA_DIST = Android.mk
+
 clean-local:
 	rm -f *~

@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
  *
- * A hash table implementation with reference counted elements.
+ * A hash table implementation with reference-counted elements.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  * 

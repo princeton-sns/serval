@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-
 import org.servalarch.net.ServiceID;
 import org.servalarch.serval.R;
 import org.servalarch.servalctrl.HostCtrl;
@@ -23,10 +22,10 @@ import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.ActivityManager.RunningServiceInfo;
+import android.content.Intent;
 import android.os.Bundle;
-import android.text.InputFilter;
-import android.text.InputType;
-import android.text.Spanned;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -43,6 +42,8 @@ import android.widget.ToggleButton;
 public class ServalActivity extends Activity
 {
 	private ToggleButton moduleStatusButton;
+	private ToggleButton udpEncapButton;
+	private ToggleButton translatorButton;
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
@@ -124,9 +125,12 @@ public class ServalActivity extends Activity
 					t.show();
 				}
 
-				if (!isServalModuleLoaded() && isChecked)
-					moduleStatusButton.setChecked(false);
-				else if (isServalModuleLoaded()) {
+				if (!isServalModuleLoaded()) {
+					if (isChecked)
+						moduleStatusButton.setChecked(false);
+					if (udpEncapButton.isChecked())
+						udpEncapButton.setChecked(false);
+				} else if (isServalModuleLoaded()) {
 					 if (!isChecked)
 						 moduleStatusButton.setChecked(true);
 					 if (hc == null) {
@@ -139,6 +143,62 @@ public class ServalActivity extends Activity
 				}
 			}
 		});
+		
+		this.udpEncapButton = (ToggleButton) findViewById(R.id.udpEncapToggle);
+		this.udpEncapButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				String cmd;
+				
+				if (!isServalModuleLoaded()) {
+					if (isChecked)
+						buttonView.setChecked(false);
+					return;
+				}
+				
+				if (isChecked)
+					 cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
+				else
+					 cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
+
+				if (!executeSuCommand(cmd)) {
+					Toast t = Toast.makeText(getApplicationContext(), cmd + " failed!", 
+							Toast.LENGTH_SHORT);
+					t.show();
+				}
+				if (!isUdpEncapEnabled() && isChecked)
+					udpEncapButton.setChecked(false);
+				else if (isUdpEncapEnabled() && !isChecked)
+					udpEncapButton.setChecked(true);
+			}
+		});
+		this.translatorButton = (ToggleButton) findViewById(R.id.translatorToggle);
+		this.translatorButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				if (isChecked) {
+					startService(new Intent(ServalActivity.this, TranslatorService.class));
+					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
+					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
+				} else {
+					stopService(new Intent(ServalActivity.this, TranslatorService.class));
+					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
+					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
+				}
+			}
+		});
+	}
+	
+	private boolean isTranslatorRunning() {
+	    ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+	    for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+	        if ("org.servalarch.serval.TranslatorService".equals(service.service.getClassName())) {
+	            return true;
+	        }
+	    }
+	    return false;
 	}
 	
 	private ServiceID createServiceID(String serviceStr) {
@@ -146,20 +206,32 @@ public class ServalActivity extends Activity
 		
 		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0' && serviceStr.charAt(1) == 'x') {
 			// Hex string
-			if (!serviceStr.matches("^[a-fA-F0-9]{1,40}$"))
+			if (!serviceStr.matches("^0x[a-fA-F0-9]{1,40}$"))
 				return null;
-	
-			byte[] rawID = new byte[(serviceStr.length() - 2) / 2];
 			
-			for (int i = 2; i < serviceStr.length(); i += 2) {
-				/*
-				byte b;
-				Character.digit(serviceStr.charAt(i), 16);
-				if (serviceStr.length())
-				serviceStr.charAt(i+1)
-				*/
+			String parseStr = serviceStr.substring(2);
+			int len = parseStr.length();
+			
+			byte[] rawID = new byte[ServiceID.SERVICE_ID_MAX_LENGTH];
+			
+			for (int i = 0; i < rawID.length; i++) {
+				char hex[] = { '0', '0' };
+		
+				if (len-- > 0) {
+					hex[0] = parseStr.charAt(i*2);
+				}
+				
+				if (len-- > 0) {
+					hex[1] = parseStr.charAt((i*2) + 1);
+				}
+				
+				rawID[i] = (byte)Integer.parseInt(new String(hex), 16);
+				
+				if (len <= 0)
+					break;
 			}
-			sid = new ServiceID();
+			
+			sid = new ServiceID(rawID);
 		} else {
 			// Decimal string
 			if (!serviceStr.matches("^[0-9]{1,20}$"))
@@ -179,7 +251,7 @@ public class ServalActivity extends Activity
 		return addr;
 	}
 	
-	private void performOp(String serviceStr, String ipStr, int op) {
+	private void performOp(final String serviceStr, final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr;
 		
@@ -213,7 +285,7 @@ public class ServalActivity extends Activity
 			break;
 		}
 	}
-	private boolean extractKernelModule(File module) {
+	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
 
@@ -242,7 +314,7 @@ public class ServalActivity extends Activity
 		return false;
 	}
 
-	private boolean executeSuCommand(String cmd) {
+	private boolean executeSuCommand(final String cmd) {
 		try {
 			Process shell;
 			int err;
@@ -270,7 +342,30 @@ public class ServalActivity extends Activity
 
 		return false;
 	}
+	
+	private boolean isUdpEncapEnabled() {
+		boolean encapIsEnabled = false;
+		File encap = new File("/proc/sys/net/serval/udp_encap");
 
+		if (encap.exists() && encap.canRead()) {
+			try {
+				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(encap)));
+
+				String line = in.readLine();
+
+				if (line.contains("1"))
+					encapIsEnabled = true;
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else {
+			Log.d("Serval", "could not open /proc/sys/net/serval/udp_encap");
+		}
+		return encapIsEnabled;
+	}
+	
 	private boolean isServalModuleLoaded() {
 		boolean moduleIsLoaded = false;
 
@@ -282,9 +377,8 @@ public class ServalActivity extends Activity
 
 				String line = in.readLine();
 
-				if (line.contains("serval")) {
+				if (line.contains("serval"))
 					moduleIsLoaded = true;
-				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -341,7 +435,7 @@ public class ServalActivity extends Activity
 		}
 
 		@Override
-		public void onServiceGet(long xid, int retval, ServiceInfo[] info) {
+		public void onServiceGet(long xid, final int retval, ServiceInfo[] info) {
 			for (int i = 0; i < info.length; i++) {
 				Log.d("Serval", "RETRIEVED: Service " + info[i].getServiceID() + 
 						"address " + info[i].getAddress());
@@ -363,6 +457,16 @@ public class ServalActivity extends Activity
 			moduleStatusButton.setChecked(true);
 		else
 			moduleStatusButton.setChecked(false);
+		
+		if (isUdpEncapEnabled())
+			udpEncapButton.setChecked(true);
+		else
+			udpEncapButton.setChecked(false);
+		
+		if (isTranslatorRunning())
+			translatorButton.setChecked(true);
+		else
+			translatorButton.setChecked(false);
 		
 		try {
 			hc = new LocalHostCtrl(cbs);

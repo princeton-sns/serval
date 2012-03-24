@@ -6,10 +6,10 @@ JARFILE = org.servalarch.servalctrl.jar
 MANIFEST = Manifest.txt
 javasock_DATA = $(JARFILE)
 javasockdir = $(datadir)/java
-EXTRA_DIST = $(MANIFEST) README
+EXTRA_DIST = $(MANIFEST)
 CLASSFILES = $(shell find ./bin -name *.class -print)
 
-classes.list: $(SUBDIRS) $(CLASSFILES)
+classes.list: $(SUBDIRS) $(CLASSFILES) 
 	@echo $(CLASSFILES)
 	(cd bin; find . -name "*.class" -print > ../$@)
 
@@ -23,6 +23,7 @@ $(JARFILE): classes.list sources.list $(MANIFEST)
 	(cd src; jar uf ../$@ @../sources.list)
 
 clean-local:
+	rm -rf bin
 	rm -f *~
 	rm -f $(JARFILE)
 	rm -f classes.list

@@ -1,4 +1,15 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/*
+ * Timer queue implementation that integrates with select/poll loops.
+ *
+ * Authors: Erik Nordström <enordstr@cs.princeton.edu>
+ *
+ *
+ *	This program is free software; you can redistribute it and/or
+ *	modify it under the terms of the GNU General Public License as
+ *	published by the Free Software Foundation; either version 2 of
+ *	the License, or (at your option) any later version.
+ */
 #ifndef _TIMER_H_
 #define _TIMER_H_
 
@@ -6,12 +17,13 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include "heap.h"
+#include "signal.h"
 
 struct timer {
     struct heapitem hi;
     struct timespec timeout;
     long expires; /* micro seconds */
-    int (*callback)(struct timer *t);
+    void (*callback)(struct timer *t);
     void (*destruct)(struct timer *t);
     void *data;        
 };
@@ -19,7 +31,7 @@ struct timer {
 struct timer_queue {
     struct heap queue;
     pthread_mutex_t lock;
-    int pipefd[2];
+    struct signal signal;
     pthread_t thr;
 };
 
@@ -40,9 +52,10 @@ enum signal_result {
 };
 
 void timer_init(struct timer *t);
-struct timer *timer_new_callback(int (*callback)(struct timer *t), void *data);
+struct timer *timer_new_callback(void (*callback)(struct timer *t), void *data);
 void timer_free(struct timer *t);
 int timer_add(struct timer_queue *tq, struct timer *t);
+int timer_mod(struct timer_queue *tq, struct timer *t, unsigned long expires);
 void timer_del(struct timer_queue *tq, struct timer *t);
 int timer_next_timeout(struct timer_queue *tq, unsigned long *timeout);
 int timer_next_timeout_timespec(struct timer_queue *tq, 
@@ -57,9 +70,12 @@ void timer_queue_destroy(struct timer_queue *tq);
 int timer_queue_init(struct timer_queue *tq);
 void timer_queue_fini(struct timer_queue *tq);
 
-#define timer_new() timer_new_callback(NULL, NULL)
-#define timer_set_secs(t, s) { (t)->expires = s * 1000000L; }
-#define timer_set_msecs(t, s) { (t)->expires = s * 1000L; }
+#define timer_new() timer_new_callback(NULL, NULL
+#define timer_secs(s) (s * 1000000L)
+#define timer_msecs(s) (s * 1000L)
+#define timer_usecs(s) (s)
+#define timer_set_secs(t, s) { (t)->expires = timer_secs(s); }
+#define timer_set_msecs(t, s) { (t)->expires = timer_msecs(s); }
 #define timer_set_usecs(t, s) { (t)->expires = s; }
 #define timer_schedule_secs(tq, t, s) ({ int ret;   \
             timer_set_secs(t, s);                   \

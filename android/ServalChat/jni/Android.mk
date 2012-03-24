@@ -8,10 +8,9 @@ subdirs := $(addprefix $(APP_PROJECT_PATH)/../../,$(addsuffix /Android.mk, \
 include $(subdirs)
 
 # Build all java files in the src subdirectory
-LOCAL_SRC_FILES := $(call all-java-files-under,src)
+LOCAL_SRC_FILES := $(call all-java-files-under,../src)
 
-#LOCAL_JAVA_LIBRARIES := serval-javasock
-LOCAL_STATIC_JAVA_LIBRARIES := serval-javasock
+LOCAL_STATIC_JAVA_LIBRARIES := org.servalarch.javasock
 
 # Enabling the following line will bundle all necessary libraries with the 
 # application package

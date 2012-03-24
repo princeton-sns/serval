@@ -166,11 +166,10 @@ static int ifaddrs_find(void)
 	return ret;
 }
 
-static int ifaddrs_timer_timeout(struct timer *t)
+static void ifaddrs_timer_timeout(struct timer *t)
 {
 	ifaddrs_find();
-
-        return timer_schedule_secs(timer_q, iftimer, 5);
+        timer_schedule_secs(timer_q, iftimer, 5);
 }
 
 int ifaddrs_init(struct timer_queue *tq)

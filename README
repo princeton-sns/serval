@@ -1,9 +1,16 @@
 Serval
 ======
 
-To compile:
+For more and up-to-date information, see:
 
-First time you check out, prepare the build system:
+https://github.com/princeton-sns/serval/wiki
+
+
+Compilation
+-----------
+
+The first time you check out the source code, prepare the build
+system:
 
 # ./autogen.sh
 

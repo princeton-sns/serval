@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
  *
- * A timer queue that can integrate with, e.g., select/poll loops.
+ * Pipe-based IPC signals for waking/signaling between threads.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  * 
@@ -49,12 +49,12 @@ void signal_destroy(struct signal *s)
     close(s->fd[1]);
 }
 
-int signal_clear(struct signal *s)
+int signal_clear_val(struct signal *s, int *val)
 {
-    int val = 0, ret = 1;
+    int ret = 1;
     
     while (ret > 0) {        
-        ret = read(s->fd[0], &val, sizeof(val));
+        ret = read(s->fd[0], val, sizeof(*val));
 
         if (ret == -1) {
             if (errno == EWOULDBLOCK)
@@ -62,7 +62,14 @@ int signal_clear(struct signal *s)
         }
     }
 
-    return ret;
+    return ret > 0 ? 1 : ret;
+}
+
+int signal_clear(struct signal *s)
+{
+    int val;
+    
+    return signal_clear_val(s, &val);
 }
 
 int signal_get_fd(struct signal *s)

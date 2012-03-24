@@ -44,5 +44,7 @@ noinst_HEADERS = \
 	log.hh \
 	state.hh
 
+EXTRA_DIST = Android.mk
+
 clean-local:
 	rm -f *~

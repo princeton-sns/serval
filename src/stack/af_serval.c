@@ -188,15 +188,15 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
         struct serval_sock *ssk = serval_sk(sk);
         
         /* 
-           The uaddr_len variable will always be -1, because the
+           The uaddr_len variable is always undefined, because the
            system call passes a sockaddr_storage here instead of the
-           user-level passed memory area. Thus, there is no way to
-           signal what address to return in the system call. We should
-           probably default to returning both serviceID and IP
-           address, but for compatibility with user apps we force
-           return of only IP.
+           user-level passed memory area and does not specifiy the
+           length. Thus, there is no way to signal what address to
+           return in the system call. We therefore default to
+           returning both serviceID and IP address.
          */
-        *uaddr_len = sizeof(struct sockaddr_in);
+        *uaddr_len = sizeof(struct sockaddr_sv) + 
+                sizeof(struct sockaddr_in);
 	
         if (peer) {
 		if ((((1 << sk->sk_state) & (SERVALF_CLOSED | 

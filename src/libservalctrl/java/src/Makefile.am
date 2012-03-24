@@ -9,11 +9,17 @@ noinst_JAVA = \
 
 EXTRA_DIST = $(noinst_JAVA)
 
-JAVAROOT = $(top_builddir)/src/libservalctrl/java/bin
+JAVAROOT=$(top_srcdir)/src/libservalctrl/java/bin
 
-AM_JAVACFLAGS=-classpath $(top_builddir)/src/javasock/java:$(top_builddir)/src/libservalctrl/java/src
+AM_JAVACFLAGS=-classpath $(top_srcdir)/src/javasock/java:$(top_srcdir)/src/libservalctrl/java/bin
+
+BUILT_SOURCES = ../bin
+
+../bin:
+	mkdir $(JAVAROOT)
 
 clean-local:
+	rm -rf $(JAVAROOT)
 	rm -f org/servalarch/servalctrl/*~
 	rm -f *~
 	rm -f *.class

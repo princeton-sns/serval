@@ -310,6 +310,7 @@ AC_CONFIG_FILES([Makefile
 	src/javasock/Makefile
 	src/javasock/java/Makefile	
 	src/javasock/jni/Makefile
+	android/Makefile
 	android/Serval/local.properties
 	android/ServalChat/local.properties
 	])
