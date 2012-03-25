@@ -481,17 +481,23 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
         struct ctrlmsg_stats_query *csm = (struct ctrlmsg_stats_query*) cm;
         int num_flows = CTRLMSG_STATS_NUM_FLOWS(csm);
         int i, ret = 0;
-        for (i = 0; i < num_flows; i++) {
-                struct ctrlmsg_stats_response resp;
-                LOG_DBG("Got a stats query for flow %s\n", 
-                        flow_id_to_str(&csm->flow));
-                memset(&resp, 0, CTRLMSG_STATS_RESP_SIZE);
-                serval_sock_stats_flow(&csm->flows[i], &resp);
-                resp.cmh.type = CTRLMSG_TYPE_STATS_RESP;
-                resp.cmh.len = CTRLMSG_STATS_RESP_SIZE;
-                memcpy(&resp.info.flow, &csm->flows[i], sizeof(struct flow_id));
-                ctrl_sendmsg(&resp.cmh, GFP_KERNEL);
+        int len = sizeof(struct ctrlmsg) + num_flows * sizeof(struct flow_info);
+        struct ctrlmsg_stats_response *resp = kmalloc(len, GFP_KERNEL);
+        if (!resp) {
+                LOG_ERR("Could not allocate message\n");
+                return -1;
         }
+        memset(resp, 0, len);
+        resp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
+        resp->cmh.len = len;
+        for (i = 0; i < num_flows; i++) {
+                LOG_DBG("Got a stats query for flow %s\n", 
+                        flow_id_to_str(&csm->flows[i]));
+                serval_sock_stats_flow(&csm->flows[i], resp, i);
+                memcpy(&resp->info[i].flow, &csm->flows[i], 
+                       sizeof(struct flow_id));
+        }
+        ctrl_sendmsg(&resp->cmh, GFP_KERNEL);
 
         return ret;
 }

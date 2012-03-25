@@ -594,9 +594,12 @@ static int on_flow_stat_update(struct hostctrl *hc,
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onFlowStatUpdate",
                               "(JI)V");//Lorg/servalarch/servalctrl/FlowStat;)V");
 
-    fprintf(stderr, "Callback %s!\n", flow_id_to_str(&csr->info.flow));
+    fprintf(stderr, "Callback for %lu flows!\n", CTRLMSG_STATS_NUM_INFOS(csr));
     if (!mid)
         return -1;
+
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+                           (jlong)xid, (jint)retval);
 
     return 0;
     //return on_service_info_callback(hc, xid, retval, si, num, mid);

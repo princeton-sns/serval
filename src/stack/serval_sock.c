@@ -260,29 +260,28 @@ void serval_sock_migrate_service(struct service_id *old_s,
 }
 
 void serval_sock_stats_flow(struct flow_id *flow, 
-                            struct ctrlmsg_stats_response *resp)
+                            struct ctrlmsg_stats_response *resp,
+                            int idx)
 {
         struct sock *sk = serval_sock_lookup_flow(flow);
         LOG_DBG("Doing debug on flow %s\n", flow_id_to_str(flow));
         if (sk) {
                 lock_sock(sk);
-                resp->info.proto = sk->sk_protocol;
+                resp->info[idx].proto = sk->sk_protocol;
                 // TODO Fix these hardcoded values
                 if (sk->sk_protocol == 6) {
-                        struct serval_tcp_sock *tsk = (struct serval_tcp_sock *)
-                                                      sk;
-                        resp->tcp_retrans = tsk->total_retrans;
-                        resp->tcp_lost = tsk->lost_out;
-                        resp->info.pkts_sent = tsk->sk.tot_pkts_sent;
-                        resp->tcp_srtt = tsk->srtt;
-                        resp->tcp_rttvar = tsk->rttvar;
-                        resp->tcp_snd_una = tsk->snd_una;
-                        resp->tcp_snd_nxt = tsk->snd_nxt;      
+                        struct serval_tcp_sock *tsk = 
+                                (struct serval_tcp_sock *) sk;
+                        resp->info[idx].tcp_retrans = tsk->total_retrans;
+                        resp->info[idx].tcp_lost = tsk->lost_out;
+                        resp->info[idx].pkts_sent = tsk->sk.tot_pkts_sent;
+                        resp->info[idx].tcp_srtt = tsk->srtt;
+                        resp->info[idx].tcp_rttvar = tsk->rttvar;
+                        resp->info[idx].tcp_snd_una = tsk->snd_una;
+                        resp->info[idx].tcp_snd_nxt = tsk->snd_nxt;      
                 }
                 else if (sk->sk_protocol == 17) {
                 }
-                LOG_DBG("Found sock family: %d\n", sk->sk_protocol);
-                // do stats stuff!
                 release_sock(sk);
                 sock_put(sk);
         }

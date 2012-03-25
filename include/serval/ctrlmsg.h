@@ -285,7 +285,7 @@ struct flow_info {
 
 struct ctrlmsg_stats_response {
         struct ctrlmsg cmh;
-        struct flow_info info;
+        struct flow_info info[0];
 } CTRLMSG_PACKED;
 
 #define CTRLMSG_STATS_RESP_SIZE(cmsg) \
