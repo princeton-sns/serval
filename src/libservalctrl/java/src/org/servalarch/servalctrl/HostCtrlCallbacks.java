@@ -111,4 +111,8 @@ public abstract class HostCtrlCallbacks {
 	public void onServiceGet(long xid, int retval, ServiceInfo[] info) {
 		
 	}
+
+    public void onFlowStatUpdate(long xid, int retval) {
+    
+    }
 }

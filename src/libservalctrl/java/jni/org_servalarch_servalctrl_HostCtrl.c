@@ -582,6 +582,26 @@ static int on_service_remove(struct hostctrl *hc,
     return 0;
 }
 
+static int on_flow_stat_update(struct hostctrl *hc,
+                               unsigned int xid,
+                               int retval,
+                               struct ctrlmsg_stats_response *csr)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onFlowStatUpdate",
+                              "(JI)V");//Lorg/servalarch/servalctrl/FlowStat;)V");
+
+    fprintf(stderr, "Callback %s!\n", flow_id_to_str(&csr->info.flow));
+    if (!mid)
+        return -1;
+
+    return 0;
+    //return on_service_info_callback(hc, xid, retval, si, num, mid);
+}
+
 #include <common/platform.h>
 #if defined(OS_ANDROID)
 #define JNI_ENV_CAST(env) (env)
@@ -612,6 +632,7 @@ static struct hostctrl_callback cb = {
     .service_add_result = on_service_add,
     .service_mod_result = on_service_mod,
     .service_remove_result = on_service_remove,
+    .flow_stat_update = on_flow_stat_update,
 };
 
 
@@ -716,6 +737,24 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface(JNIEnv *en
 
     return ret;
 }
+
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_statsFlow(JNIEnv *env, jobject obj, jlongArray flowids, jint flows)
+{
+    struct jni_context *ctx = get_native_context(env, obj);
+    struct flow_id fls[flows];
+    jlong flowids_longs[flows];
+    int ret, i;
+    
+    (*env)->GetLongArrayRegion(env, flowids, 0, flows, flowids_longs);
+    for (i = 0; i < flows; i++) {
+        fls[i].s_id32 = htonl(flowids_longs[i]);
+    }
+
+    ret = hostctrl_flow_stats_query(ctx->hc, fls, flows);
+
+    return ret;
+}
+
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, jobject obj, 
                                                                  jobject service_id, jint prefix_bits, 

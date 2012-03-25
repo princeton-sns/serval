@@ -479,15 +479,19 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
 static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_stats_query *csm = (struct ctrlmsg_stats_query*) cm;
-        struct ctrlmsg_stats_response resp;
-        int ret = 0;
-        LOG_DBG("Got a stats query for flow %s\n", flow_id_to_str(&csm->flow));
-        memset(&resp, 0, CTRLMSG_STATS_RESP_SIZE);
-        serval_sock_stats_flow(&csm->flow, &resp);
-        resp.cmh.type = CTRLMSG_TYPE_STATS_RESP;
-        resp.cmh.len = CTRLMSG_STATS_RESP_SIZE;
-        memcpy(&resp.flow, &csm->flow, sizeof(struct flow_id));
-        ctrl_sendmsg(&resp.cmh, GFP_KERNEL);
+        int num_flows = CTRLMSG_STATS_NUM_FLOWS(csm);
+        int i, ret = 0;
+        for (i = 0; i < num_flows; i++) {
+                struct ctrlmsg_stats_response resp;
+                LOG_DBG("Got a stats query for flow %s\n", 
+                        flow_id_to_str(&csm->flow));
+                memset(&resp, 0, CTRLMSG_STATS_RESP_SIZE);
+                serval_sock_stats_flow(&csm->flows[i], &resp);
+                resp.cmh.type = CTRLMSG_TYPE_STATS_RESP;
+                resp.cmh.len = CTRLMSG_STATS_RESP_SIZE;
+                memcpy(&resp.info.flow, &csm->flows[i], sizeof(struct flow_id));
+                ctrl_sendmsg(&resp.cmh, GFP_KERNEL);
+        }
 
         return ret;
 }

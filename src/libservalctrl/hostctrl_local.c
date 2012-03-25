@@ -211,20 +211,25 @@ static int local_service_migrate(struct hostctrl *hc,
 }
 
 static int local_flow_stats_query(struct hostctrl *hc,
-                             struct flow_id *flowid)
+                                  struct flow_id *flowids, int flows)
 {
-        struct ctrlmsg_stats_query cm;
-        if (!flowid) {
-                LOG_ERR("Undefined flow id\n");
+        int size = sizeof(struct ctrlmsg) + flows * sizeof(struct flow_id);
+        struct ctrlmsg_stats_query *cm = malloc(size);
+        int i = 0;
+
+        if (!cm) {
+                LOG_ERR("Could not allocate message\n");
                 return -1;
         }
 
-        memset(&cm, 0, sizeof(cm));
-        cm.cmh.type = CTRLMSG_TYPE_STATS_QUERY;
-        cm.cmh.len = sizeof(cm);
-        memcpy(&cm.flow, flowid, sizeof(struct flow_id));
+        memset(cm, 0, size);
+        cm->cmh.type = CTRLMSG_TYPE_STATS_QUERY;
+        cm->cmh.len = size;
+        for (i = 0; i < flows; i++) {
+                memcpy(&cm->flows[i], &flowids[i], sizeof(struct flow_id));
+        }
 
-        return message_channel_send(hc->mc, &cm, cm.cmh.len);
+        return message_channel_send(hc->mc, cm, cm->cmh.len);
 }
 
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
@@ -315,6 +320,11 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                                  &csis->service[0], 
                                                  CTRLMSG_SERVICE_INFO_STAT_NUM(csis));
         break;
+    }
+    case CTRLMSG_TYPE_STATS_RESP: {
+        struct ctrlmsg_stats_response *csr = (struct ctrlmsg_stats_response*)cm;
+        if (hc->cbs->flow_stat_update)
+            ret = hc->cbs->flow_stat_update(hc, cm->xid, cm->retval, csr);
     }
 	default:
 		LOG_DBG("Received message type %u\n", cm->type);

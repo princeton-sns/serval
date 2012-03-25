@@ -32,6 +32,7 @@ public abstract class HostCtrl {
 	private native void nativeFree();
 	public native int migrateFlow(long flowID, String toDevice);
 	public native int migrateInterface(String fromDevice, String toDevice);
+    public native int statsFlow(long[] flowIDs, int flows);
 	private native int addService4(ServiceID id, int prefixBits, int prority, int weight, Inet4Address addr);
 	private native int getService4(ServiceID id, int prefixBits, Inet4Address addr);
 	private native int removeService4(ServiceID id, int prefixBits, Inet4Address addr);

@@ -247,10 +247,14 @@ struct ctrlmsg_migrate {
 
 struct ctrlmsg_stats_query {
         struct ctrlmsg cmh;
-        struct flow_id flow;
+        struct flow_id flows[0];
 } CTRLMSG_PACKED;
 
-#define CTRLMSGSTATS_QUERY_SIZE (sizeof(struct ctrlmsg_stats_query))
+#define CTRLMSG_STATS_QUERY_SIZE(cmsg) \
+        (cmsg)->cmh.len
+#define CTRLMSG_STATS_NUM_FLOWS(cmsg) \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
+         sizeof(struct flow_id))
 
 struct stats_proto_tcp {
         uint32_t retrans;
@@ -263,11 +267,11 @@ struct stats_proto_tcp {
         
 };
 
-struct ctrlmsg_stats_response {
-        struct ctrlmsg cmh;
+struct flow_info {
         struct flow_id flow;
         uint8_t proto;
         unsigned long pkts_sent;
+
         struct stats_proto_tcp stats;
 #define tcp_retrans stats.retrans
 #define tcp_lost stats.lost
@@ -276,9 +280,19 @@ struct ctrlmsg_stats_response {
 
 #define tcp_snd_una stats.snd_una
 #define tcp_snd_nxt stats.snd_nxt
+
+};
+
+struct ctrlmsg_stats_response {
+        struct ctrlmsg cmh;
+        struct flow_info info;
 } CTRLMSG_PACKED;
 
-#define CTRLMSG_STATS_RESP_SIZE (sizeof(struct ctrlmsg_stats_response))
+#define CTRLMSG_STATS_RESP_SIZE(cmsg) \
+        (cmsg)->cmh.len
+#define CTRLMSG_STATS_NUM_INFOS(cmsg) \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
+         sizeof(struct flow_info))
 
 enum {
         CTRL_MODE_NET = 0, 
