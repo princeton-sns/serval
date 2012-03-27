@@ -278,6 +278,8 @@ ssize_t message_channel_base_recv(struct message_channel *channel,
     if (ret > 0) {
         m->length = ret;
         *msg = m;
+    } else {
+        message_put(m);
     }
     
     return ret;
