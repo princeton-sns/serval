@@ -211,12 +211,16 @@ static int local_service_migrate(struct hostctrl *hc,
 }
 
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
-                       struct in_addr *from)
+                       struct sockaddr *from)
 {
+    struct in_addr *fromip = NULL;
     int ret = 0;
 
     if (!hc->cbs)
         return 0;
+    
+    if (from && from->sa_family == AF_INET)
+        fromip = &((struct sockaddr_in *)from)->sin_addr;
 
     switch (cm->type) {
     case CTRLMSG_TYPE_REGISTER: {
@@ -225,7 +229,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                             &cmr->srvid, 
                                             cmr->srvid_flags, 
                                             cmr->srvid_prefix_bits, 
-                                            from, NULL);
+                                            fromip, NULL);
         break;
     }
     case CTRLMSG_TYPE_UNREGISTER: {
@@ -234,7 +238,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                               &cmr->srvid, 
                                               cmr->srvid_flags, 
                                               cmr->srvid_prefix_bits, 
-                                              from);
+                                              fromip);
         break;
     }
     case CTRLMSG_TYPE_RESOLVE:                

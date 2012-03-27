@@ -35,7 +35,7 @@ static int hostctrl_recv(struct message_channel_callback *mcb,
     if (!hc->ops)
         return 0;
 
-	return hc->ops->ctrlmsg_recv(hc, cm, &m->from);
+	return hc->ops->ctrlmsg_recv(hc, cm, &m->from.sa);
 }
 
 static int on_start_message_channel(struct message_channel_callback *mcb)

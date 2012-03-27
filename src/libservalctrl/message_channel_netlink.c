@@ -281,22 +281,34 @@ static int netlink_send(message_channel_t *channel, void *message,
     return netlink_send_internal(mcn, iov, 2, datalen);
 }
 
-static int netlink_recv(message_channel_t *channel, const void *data,
-                        size_t datalen, struct sockaddr *addr, 
-                        socklen_t addrlen)
+static ssize_t netlink_recv(message_channel_t *channel, struct message **msg)
 {
-    //message_channel_netlink_t *mcn = (message_channel_netlink_t *)channel;
+    message_channel_netlink_t *mcnl = (message_channel_netlink_t *)channel;
     struct nlmsghdr *nlm;
     unsigned int num_msgs = 0;
-    long bytes_left = datalen;
+    long bytes_left;
+    message_t *m;
+    ssize_t ret;
 
-    assert(channel);
+    m = message_alloc(NULL, RECV_BUFFER_SIZE);
+    
+    if (!m)
+        return -1;
+
+    
+    ret = recvfrom(mcnl->base.sock, m->data,
+                   m->length, 0,
+                   &m->from.sa, &m->from_len);
+
+    bytes_left = ret;
 
     /* Channel already locked by receiver task */
     /* LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
        datalen); */
 
-    for (nlm = (struct nlmsghdr *)data;
+    ret = -1;
+
+    for (nlm = (struct nlmsghdr *)m->data;
          NLMSG_OK(nlm, bytes_left);
          nlm = NLMSG_NEXT(nlm, bytes_left)) {
         struct nlmsgerr *nlmerr = NULL;
@@ -333,17 +345,10 @@ static int netlink_recv(message_channel_t *channel, const void *data,
             /* LOG_DBG("NLMSG_DONE\n"); */
             break;
         case NLMSG_SERVAL:
-            /* TODO - ack and rpc request cache/resend? */
-            if (channel->callback && channel->callback->recv) {
-                message_t *m = message_alloc(NLMSG_DATA(nlm), 
-                                             bytes_left - NLMSG_LENGTH(0));
-                
-                if (m) {
-                    channel->callback->recv(channel->callback, m);
-                    message_put(m);
-                }
-            }
-            
+            /* Strip off netlink headers */
+            memmove(m->data, NLMSG_DATA(nlm), bytes_left - NLMSG_LENGTH(0));
+            m->length = bytes_left - NLMSG_LENGTH(0);
+            ret = bytes_left - NLMSG_LENGTH(0);
             break;
         default:
             LOG_DBG("Unknown netlink message\n");
@@ -351,7 +356,13 @@ static int netlink_recv(message_channel_t *channel, const void *data,
         }
     }
 
-    return 0;
+    if (ret <= 0)
+        message_put(m);
+    else {
+        *msg = m;
+    }
+
+    return ret;
 }
 
 message_channel_ops_t netlink_ops = {
@@ -373,6 +384,8 @@ message_channel_ops_t netlink_ops = {
     .send = netlink_send,
     .send_iov = netlink_send_iov,
     .recv = netlink_recv,
+    .recv_callback = message_channel_internal_recv_callback,
+    .task = message_channel_base_task,
 };
 
 message_channel_t *message_channel_netlink_create(channel_key_t *key)

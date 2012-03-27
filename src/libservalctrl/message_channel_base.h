@@ -25,24 +25,6 @@
 #endif
 #include <netinet/serval.h>
 
-typedef union {
-    struct sockaddr sa;
-    struct sockaddr_sv sv;
-    struct sockaddr_un un;
-#if defined(OS_LINUX)
-    struct sockaddr_nl nl;
-#endif
-    struct sockaddr_in in;
-    struct sockaddr_in6 in6;
-    struct {
-        struct sockaddr_sv sv;
-        union {
-            struct sockaddr_in in;
-            struct sockaddr_in in6;
-        };
-    } sv_in;
-} channel_addr_t;
-
 #define RECV_BUFFER_SIZE 2048
 
 typedef struct message_channel_base {
@@ -93,5 +75,8 @@ int message_channel_base_send_iov(message_channel_t *channel, struct iovec *iov,
                                   size_t veclen, size_t msglen);
 int message_channel_base_send(message_channel_t *channel, 
                               void *msg, size_t msglen);
+ssize_t message_channel_base_recv(struct message_channel *channel, 
+                                  struct message **msg);
+int message_channel_base_task(struct message_channel *channel);
 
 #endif /* MESSAGE_CHANNEL_BASE_H_ */

@@ -14,7 +14,9 @@
 extern message_channel_t *message_channel_netlink_create(channel_key_t *);
 #endif
 extern message_channel_t *message_channel_udp_create(channel_key_t *);
+#if defined(OS_UNIX)
 extern message_channel_t *message_channel_unix_create(channel_key_t *);
+#endif
 
 typedef message_channel_t *(*message_channel_constructor_t)(channel_key_t *);
 

@@ -132,34 +132,20 @@ void message_channel_internal_on_stop(message_channel_t *channel)
         channel->callback->stop(channel->callback);
 }
 
-int message_channel_internal_recv(message_channel_t *channel, const void *msg,
-                                  size_t msglen, struct sockaddr *addr, 
-                                  socklen_t addrlen)
+ssize_t message_channel_internal_recv_callback(message_channel_t *channel, struct message *msg)
 {
-    message_t *m = message_alloc(msg, msglen);
-    int ret = 0;
-    
-    if (!m)
+    ssize_t ret = 0;
+
+    if (!msg)
         return -1;
 
-    /* Maybe figuring out the IP should be handled in the calling
-       function instead? */
-    if (addr->sa_family == AF_INET) {
-        memcpy(&m->from, &((struct sockaddr_in *)addr)->sin_addr,
-               sizeof(struct in_addr));
-    } else if (addr->sa_family == AF_SERVAL && 
-               addrlen > sizeof(struct sockaddr_sv)) {
-        channel_addr_t *ca = (channel_addr_t *)addr;
-        memcpy(&m->from, &ca->sv_in.in.sin_addr, sizeof(struct in_addr));
-    }
-
-    if (channel->callback) {
-        ret = channel->callback->recv(channel->callback, m);
+    if (channel->callback && channel->callback->recv) {
+        ret = channel->callback->recv(channel->callback, msg);
     } else {
         LOG_DBG("%s has no registered callback\n", channel->name);
     }
 
-    message_put(m);
+    message_put(msg);
 
     return ret;
 }
