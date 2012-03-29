@@ -104,7 +104,6 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
             
             if (addr->sv_in.in.sin_family == AF_INET) {
                 fromip = &addr->sv_in.in.sin_addr;
-                LOG_DBG("Setting from ip\n");
             }
         }
     }

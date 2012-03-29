@@ -501,6 +501,11 @@ static int handle_incoming_registration(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
         int ret = 0;
 
+        if (!remote_ip) {
+                LOG_ERR("No remote IP!\n");
+                return -1;
+        }
+
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {
                 /*
