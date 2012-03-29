@@ -72,18 +72,13 @@ int message_channel_base_equalfn(const message_channel_t *channel,
         key->protocol != base->protocol)
         return 0;
     
-    if (key->peer && key->peer_len > 0) {
-        if (key->peer_len != base->peer_len)
-            return 0;
-
-        if (memcmp(key->peer, &base->peer, key->peer_len) != 0)
+    if (key->peer && key->peer_len > 0 && base->peer_len > 0) {
+        if (memcmp(key->peer, &base->peer, base->peer_len) != 0)
             return 0;
     }
-    if (key->local && key->local_len > 0) {
-        if (key->local_len != base->local_len)
-            return 0;
 
-        if (memcmp(key->local, &base->local, key->local_len) != 0)
+    if (key->local && key->local_len > 0 && base->local_len > 0) {
+        if (memcmp(key->local, &base->local, base->local_len) != 0)
             return 0;
     }
     return 1;
@@ -256,11 +251,21 @@ ssize_t message_channel_base_recv(struct message_channel *channel,
     message_channel_base_t *base = (message_channel_base_t *)channel;
     message_t *m;
     ssize_t ret;
-
+   
     m = message_alloc(NULL, RECV_BUFFER_SIZE);
 
     if (!m)
         return -1;
+
+    /* Default to channel's stored peer address in case this is a
+     * connected socket */
+
+    if (base->peer_len > 0) {
+        memcpy(&m->from.sa, &base->peer.sa, base->peer_len);
+        m->from_len = base->peer_len;
+    } else {
+        m->from_len = sizeof(m->from);
+    }
 
     if (base->native_socket) {
         ret = recvfrom(base->sock, m->data,
@@ -610,6 +615,15 @@ int message_channel_base_init(message_channel_base_t *base,
     if (local && local_len > 0) {
         memcpy(&base->local, local, local_len);
         base->local_len = local_len;
+#if defined(ENABLE_DEBUG)
+        if (base->local.sa.sa_family == AF_INET) { 
+            char ip1[18];
+            
+            LOG_DBG("init local=%s\n",
+                    inet_ntop(AF_INET, &base->local.in.sin_addr, ip1, sizeof(ip1)));
+        }
+#endif
+
     }
 
     if (ops)

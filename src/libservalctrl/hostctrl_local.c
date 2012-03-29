@@ -211,7 +211,7 @@ static int local_service_migrate(struct hostctrl *hc,
 }
 
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
-                       struct sockaddr *from)
+                       struct sockaddr *from, socklen_t from_len)
 {
     struct in_addr *fromip = NULL;
     int ret = 0;
@@ -219,9 +219,20 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
     if (!hc->cbs)
         return 0;
     
-    if (from && from->sa_family == AF_INET)
-        fromip = &((struct sockaddr_in *)from)->sin_addr;
 
+    if (from) {
+        if (from->sa_family == AF_INET)
+            fromip = &((struct sockaddr_in *)from)->sin_addr;
+        else if (from->sa_family == AF_SERVAL && 
+                 from_len > sizeof(struct sockaddr_in)) {
+            channel_addr_t *addr = (channel_addr_t *)from;
+            
+            if (addr->sv_in.in.sin_family == AF_INET) {
+                fromip = &addr->sv_in.in.sin_addr;
+            }
+        }
+    }
+    
     switch (cm->type) {
     case CTRLMSG_TYPE_REGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
