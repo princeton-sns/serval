@@ -236,6 +236,10 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
     switch (cm->type) {
     case CTRLMSG_TYPE_REGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+
+        if (!fromip)
+            break;
+
         ret = hc->cbs->service_registration(hc,
                                             &cmr->srvid, 
                                             cmr->srvid_flags, 
@@ -245,6 +249,10 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
     }
     case CTRLMSG_TYPE_UNREGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
+
+        if (!fromip)
+            break;
+
         ret = hc->cbs->service_unregistration(hc, 
                                               &cmr->srvid, 
                                               cmr->srvid_flags, 

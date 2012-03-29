@@ -194,6 +194,9 @@ static int registration_update_local(struct servd_context *ctx,
         struct registration *r;
         int ret = 0;
 
+        if (!new_ip)
+                return -1;
+
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
