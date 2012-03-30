@@ -194,9 +194,6 @@ static int registration_update_local(struct servd_context *ctx,
         struct registration *r;
         int ret = 0;
 
-        if (!new_ip)
-                return -1;
-
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
@@ -207,7 +204,8 @@ static int registration_update_local(struct servd_context *ctx,
                         if (old_ip)
                                 memcpy(old_ip, &r->ipaddr, 
                                        sizeof(*old_ip));
-                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+                        if (new_ip)
+                                memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
                         ret = 1;
                         break;
                 }

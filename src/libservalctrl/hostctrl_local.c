@@ -213,22 +213,25 @@ static int local_service_migrate(struct hostctrl *hc,
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
                        struct sockaddr *from, socklen_t from_len)
 {
-    struct in_addr *fromip = NULL;
+    struct in_addr local_ip;
     int ret = 0;
 
     if (!hc->cbs)
         return 0;
     
-
+    memset(&local_ip, 0, sizeof(local_ip));
+  
     if (from) {
         if (from->sa_family == AF_INET)
-            fromip = &((struct sockaddr_in *)from)->sin_addr;
+            memcpy(&local_ip, &((struct sockaddr_in *)from)->sin_addr, 
+                   sizeof(local_ip));
         else if (from->sa_family == AF_SERVAL && 
                  from_len > sizeof(struct sockaddr_in)) {
             channel_addr_t *addr = (channel_addr_t *)from;
             
             if (addr->sv_in.in.sin_family == AF_INET) {
-                fromip = &addr->sv_in.in.sin_addr;
+                memcpy(&local_ip, &addr->sv_in.in.sin_addr, 
+                       sizeof(local_ip));
             }
         }
     }
@@ -236,28 +239,20 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
     switch (cm->type) {
     case CTRLMSG_TYPE_REGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
-
-        if (!fromip)
-            break;
-
         ret = hc->cbs->service_registration(hc,
                                             &cmr->srvid, 
                                             cmr->srvid_flags, 
                                             cmr->srvid_prefix_bits, 
-                                            fromip, NULL);
+                                            &local_ip, NULL);
         break;
     }
     case CTRLMSG_TYPE_UNREGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
-
-        if (!fromip)
-            break;
-
         ret = hc->cbs->service_unregistration(hc, 
                                               &cmr->srvid, 
                                               cmr->srvid_flags, 
                                               cmr->srvid_prefix_bits, 
-                                              fromip);
+                                              &local_ip);
         break;
     }
     case CTRLMSG_TYPE_RESOLVE:                
