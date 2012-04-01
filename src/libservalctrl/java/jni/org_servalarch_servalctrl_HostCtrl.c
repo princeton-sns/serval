@@ -30,6 +30,8 @@ static jclass serviceinfo_cls;
 static jclass serviceinfostat_cls;
 static jclass serviceid_cls;
 static jclass inetaddress_cls;
+static jclass flowstat_cls;
+static jclass flowtcpstat_cls;
 
 struct jni_context {
     JNIEnv *env;
@@ -590,11 +592,14 @@ static int on_flow_stat_update(struct hostctrl *hc,
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jmethodID mid;
+    unsigned long num_flows = CTRLMSG_STATS_NUM_INFOS(csr);
+
+
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onFlowStatUpdate",
                               "(JI)V");//Lorg/servalarch/servalctrl/FlowStat;)V");
 
-    fprintf(stderr, "Callback for %lu flows!\n", CTRLMSG_STATS_NUM_INFOS(csr));
+    fprintf(stderr, "Callback for %lu flows!\n", num_flows);
     if (!mid)
         return -1;
 
@@ -906,13 +911,27 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
         return -1;
     }
 
+    flowstat_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/FlowStat");
+    if (!flowstat_cls) {
+        LOG_ERR("could not find FlowStat class\n");
+        return -1;
+    }
+    
+    flowtcpstat_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/FlowTCPStat");
+    if (!flowtcpstat_cls) {
+        LOG_ERR("could not find FlowTCPStat class\n");
+        return -1;
+    }
+
     hostctrl_cls = (*env)->NewGlobalRef(env, hostctrl_cls);
     hostctrlcallbacks_cls = (*env)->NewGlobalRef(env, hostctrlcallbacks_cls);
     serviceinfo_cls  = (*env)->NewGlobalRef(env, serviceinfo_cls);
     serviceinfostat_cls = (*env)->NewGlobalRef(env, serviceinfostat_cls);
     serviceid_cls = (*env)->NewGlobalRef(env, serviceid_cls);
     inetaddress_cls = (*env)->NewGlobalRef(env, inetaddress_cls);
-    
+    flowstat_cls = (*env)->NewGlobalRef(env, flowstat_cls);
+    flowtcpstat_cls = (*env)->NewGlobalRef(env, flowtcpstat_cls);    
+
 	return ret == 0 ? JNI_VERSION_1_4 : ret;
 }
 
@@ -928,6 +947,8 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
     (*env)->DeleteGlobalRef(env, serviceinfostat_cls);
     (*env)->DeleteGlobalRef(env, serviceid_cls);
     (*env)->DeleteGlobalRef(env, inetaddress_cls);
+    (*env)->DeleteGlobalRef(env, flowstat_cls);
+    (*env)->DeleteGlobalRef(env, flowtcpstat_cls);
 
     if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
         LOG_ERR("Could not get JNI env in JNI_OnUnload\n");
