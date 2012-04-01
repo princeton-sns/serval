@@ -42,6 +42,7 @@ typedef struct message_channel {
     message_channel_callback_t *callback;
 } message_channel_t;
 
+struct message;
 
 typedef struct message_channel_ops {
     int (*equalfn)(const struct message_channel *channel, const void *key);
@@ -72,12 +73,13 @@ typedef struct message_channel_ops {
                                 message_channel_callback_t *cb);
     int (*get_callback_count) (struct message_channel *channel);
     
-    int (*send) (struct message_channel *channel, void *message,
-                 size_t length);
-    int (*send_iov) (struct message_channel *channel, struct iovec * iov,
-                     size_t veclen, size_t length);
-    int (*recv) (struct message_channel *channel, const void *data,
-                 size_t length, struct sockaddr *addr, socklen_t addrlen);
+    int (*task)(struct message_channel *channel);
+    int (*send)(struct message_channel *channel, void *message,
+                size_t length);
+    int (*send_iov)(struct message_channel *channel, struct iovec *iov,
+                    size_t veclen, size_t length);
+    ssize_t (*recv)(struct message_channel *channel, struct message **msg);
+    ssize_t (*recv_callback)(struct message_channel *channel, struct message *msg);
 } message_channel_ops_t;
 
 typedef unsigned int (*channel_hashfn_t)(const void *key);
@@ -104,10 +106,7 @@ int message_channel_internal_register_callback(message_channel_t *channel,
 int message_channel_internal_unregister_callback(message_channel_t *channel,
                                         message_channel_callback_t *cb);
 int message_channel_internal_get_callback_count(message_channel_t *channel);
-int message_channel_internal_recv(message_channel_t *channel, 
-                                  const void *message, size_t length, 
-                                  struct sockaddr *addr, 
-                                  socklen_t addrlen);
+ssize_t message_channel_internal_recv_callback(message_channel_t *channel, struct message *msg);
 int message_channel_internal_on_start(message_channel_t *channel);
 void message_channel_internal_on_stop(message_channel_t *channel);
 

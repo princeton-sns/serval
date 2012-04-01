@@ -51,10 +51,8 @@ typedef struct message_channel_udp {
 
 #define UDP_BASE_FLAG 0x1
 
-static int message_channel_udp_base_recv(message_channel_t *channel, 
-                                         const void *msg, size_t msglen, 
-                                         struct sockaddr *addr, 
-                                         socklen_t addrlen);
+static ssize_t message_channel_udp_base_recv_callback(message_channel_t *channel, 
+                                                      struct message *msg);
 
 int message_channel_udp_equalfn(const message_channel_t *channel, 
                                 const void *_key)
@@ -65,18 +63,12 @@ int message_channel_udp_equalfn(const message_channel_t *channel,
     if (key->type != channel->type)
         return 0;
     
-    if (key->peer && key->peer_len > 0) {
-        if (key->peer_len != mcu->peer_len)
-            return 0;
-
-        if (memcmp(key->peer, &mcu->peer, key->peer_len) != 0)
+    if (key->peer && key->peer_len > 0 && mcu->peer_len > 0) {
+        if (memcmp(key->peer, &mcu->peer, mcu->peer_len) != 0)
             return 0;
     }
-    if (key->local && key->local_len > 0) {
-        if (key->local_len != mcu->base->local_len)
-            return 0;
-
-        if (memcmp(key->local, &mcu->base->local, key->local_len) != 0)
+    if (key->local && key->local_len > 0 && mcu->base->local_len > 0) {
+        if (memcmp(key->local, &mcu->base->local, mcu->base->local_len) != 0)
             return 0;
     }
     return 1;
@@ -222,7 +214,9 @@ struct message_channel_ops udp_base_ops = {
     .get_callback_count = message_channel_internal_get_callback_count,
     .send = message_channel_base_send,
     .send_iov = message_channel_base_send_iov,
-    .recv = message_channel_udp_base_recv,
+    .recv = message_channel_base_recv,
+    .recv_callback = message_channel_udp_base_recv_callback,
+    .task = message_channel_base_task,
 };
 
 struct message_channel_ops udp_ops = {
@@ -243,19 +237,21 @@ struct message_channel_ops udp_ops = {
     .get_callback_count = message_channel_internal_get_callback_count,
     .send = message_channel_udp_send,
     .send_iov = message_channel_udp_send_iov,
-    .recv = message_channel_internal_recv,
+    .recv_callback = message_channel_internal_recv_callback,
 };
 
-int message_channel_udp_base_recv(message_channel_t *channel, const void *msg,
-                                  size_t msglen, struct sockaddr *addr, 
-                                  socklen_t addrlen)
+ssize_t message_channel_udp_base_recv_callback(message_channel_t *channel,
+                                               struct message *msg)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
     message_channel_udp_t *mcu;
+    /* Use base->local_len in key for msg->from.sa because the address
+     * len in msg may include both AF_SERVAL and AF_INET addreses,
+     * while base is only one AF_SERVAL address. */
     channel_key_t key = { MSG_CHANNEL_UDP, 0, SOCK_DGRAM, 0,
                           &base->local.sa, base->local_len, 
-                          addr, base->local_len };
-    int ret;
+                          &msg->from.sa, base->local_len }; 
+    ssize_t ret;
 
     mcu = (message_channel_udp_t *)message_channel_lookup(&key, udp_ops.hashfn);
 
@@ -264,7 +260,7 @@ int message_channel_udp_base_recv(message_channel_t *channel, const void *msg,
         return -1;
     }
 
-    ret = mcu->channel.ops->recv(&mcu->channel, msg, msglen, addr, addrlen);
+    ret = mcu->channel.ops->recv_callback(&mcu->channel, msg);
 
     message_channel_put(&mcu->channel);
 
@@ -319,14 +315,6 @@ message_channel_t *message_channel_udp_create(channel_key_t *key)
             LOG_ERR("Channel initialization failed\n");
             goto fail_base_init;
         }
-        /*
-        message_channel_hash(&mcu->base->channel);
-
-        if (mcu->base->channel.ops->start(&mcu->base->channel)) {
-            LOG_ERR("Channel startup failed\n");
-            goto fail_base;
-        }
-        */
     }
 
     return &mcu->channel;

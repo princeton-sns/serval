@@ -233,13 +233,31 @@ static int local_flow_stats_query(struct hostctrl *hc,
 }
 
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
-                       struct in_addr *from)
+                       struct sockaddr *from, socklen_t from_len)
 {
+    struct in_addr local_ip;
     int ret = 0;
 
     if (!hc->cbs)
         return 0;
-
+    
+    memset(&local_ip, 0, sizeof(local_ip));
+  
+    if (from) {
+        if (from->sa_family == AF_INET)
+            memcpy(&local_ip, &((struct sockaddr_in *)from)->sin_addr, 
+                   sizeof(local_ip));
+        else if (from->sa_family == AF_SERVAL && 
+                 from_len > sizeof(struct sockaddr_in)) {
+            channel_addr_t *addr = (channel_addr_t *)from;
+            
+            if (addr->sv_in.in.sin_family == AF_INET) {
+                memcpy(&local_ip, &addr->sv_in.in.sin_addr, 
+                       sizeof(local_ip));
+            }
+        }
+    }
+    
     switch (cm->type) {
     case CTRLMSG_TYPE_REGISTER: {
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
@@ -247,7 +265,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                             &cmr->srvid, 
                                             cmr->srvid_flags, 
                                             cmr->srvid_prefix_bits, 
-                                            from, NULL);
+                                            &local_ip, NULL);
         break;
     }
     case CTRLMSG_TYPE_UNREGISTER: {
@@ -256,7 +274,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                               &cmr->srvid, 
                                               cmr->srvid_flags, 
                                               cmr->srvid_prefix_bits, 
-                                              from);
+                                              &local_ip);
         break;
     }
     case CTRLMSG_TYPE_RESOLVE:                

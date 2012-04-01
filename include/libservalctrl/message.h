@@ -17,11 +17,14 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <stdlib.h>
+#include <libservalctrl/message_channel.h>
 
 typedef struct message {
 	atomic_t refcount;
-    struct in_addr from;
+    channel_addr_t from;
+    socklen_t from_len;
 	unsigned int length;
+    unsigned int alloc_len;
 	unsigned char data[0];
 } message_t;
 

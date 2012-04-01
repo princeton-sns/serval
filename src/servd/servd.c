@@ -204,7 +204,8 @@ static int registration_update_local(struct servd_context *ctx,
                         if (old_ip)
                                 memcpy(old_ip, &r->ipaddr, 
                                        sizeof(*old_ip));
-                        memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
+                        if (new_ip)
+                                memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
                         ret = 1;
                         break;
                 }
@@ -500,6 +501,11 @@ static int handle_incoming_registration(struct hostctrl *hc,
 {
         struct servd_context *ctx = hc->context;
         int ret = 0;
+
+        if (!remote_ip) {
+                LOG_ERR("No remote IP!\n");
+                return -1;
+        }
 
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {

@@ -72,18 +72,13 @@ int message_channel_base_equalfn(const message_channel_t *channel,
         key->protocol != base->protocol)
         return 0;
     
-    if (key->peer && key->peer_len > 0) {
-        if (key->peer_len != base->peer_len)
-            return 0;
-
-        if (memcmp(key->peer, &base->peer, key->peer_len) != 0)
+    if (key->peer && key->peer_len > 0 && base->peer_len > 0) {
+        if (memcmp(key->peer, &base->peer, base->peer_len) != 0)
             return 0;
     }
-    if (key->local && key->local_len > 0) {
-        if (key->local_len != base->local_len)
-            return 0;
 
-        if (memcmp(key->local, &base->local, key->local_len) != 0)
+    if (key->local && key->local_len > 0 && base->local_len > 0) {
+        if (memcmp(key->local, &base->local, base->local_len) != 0)
             return 0;
     }
     return 1;
@@ -239,31 +234,73 @@ void message_channel_base_finalize(message_channel_t *channel)
     channel->state = CHANNEL_CREATED;
 }
 
-static void *message_channel_base_task(void *channel)
+static void *thread_start(void *arg)
+{
+    message_channel_t *channel = (message_channel_t *)arg;
+    int ret = -1;
+
+    if (channel->ops->task)
+        ret = channel->ops->task(channel);
+    
+    return NULL;
+}
+
+ssize_t message_channel_base_recv(struct message_channel *channel, 
+                                  struct message **msg)
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
-    channel_addr_t peer;
-    socklen_t addrlen = sizeof(peer);
-    unsigned char buffer[RECV_BUFFER_SIZE];
+    message_t *m;
+    ssize_t ret;
+   
+    m = message_alloc(NULL, RECV_BUFFER_SIZE);
+
+    if (!m)
+        return -1;
+
+    /* Default to channel's stored peer address in case this is a
+     * connected socket */
+
+    if (base->peer_len > 0) {
+        memcpy(&m->from.sa, &base->peer.sa, base->peer_len);
+        m->from_len = base->peer_len;
+    } else {
+        m->from_len = sizeof(m->from);
+    }
+
+    if (base->native_socket) {
+        ret = recvfrom(base->sock, m->data,
+                       m->length, 0,
+                       &m->from.sa, &m->from_len);
+    } 
+#if defined(ENABLE_USERMODE)
+    else {
+        ret = recvfrom_sv(base->sock, m->data,
+                          m->length, 0,
+                          &m->from.sa, &m->from_len);
+    }
+#endif
+    
+    if (ret > 0) {
+        m->length = ret;
+        *msg = m;
+    } else {
+        message_put(m);
+    }
+    
+    return ret;
+} 
+
+int message_channel_base_task(struct message_channel *channel)
+{
+    message_channel_base_t *base = (message_channel_base_t *)channel;
+    struct message *msg;
     ssize_t ret = -1;
 
     message_channel_internal_on_start(&base->channel);
 
     while (base->running) {
-
-        if (base->native_socket) {
-            ret = recvfrom(base->sock, buffer,
-                           RECV_BUFFER_SIZE, 0,
-                           &peer.sa, &addrlen);
-        } 
-#if defined(ENABLE_USERMODE)
-        else {
-            ret = recvfrom_sv(base->sock, buffer,
-                              RECV_BUFFER_SIZE, 0,
-                              &peer.sa, &addrlen);
-        }
-#endif
-
+        ret = base->channel.ops->recv(channel, &msg);
+        
         if (ret == -1) {
             if (errno == EAGAIN || 
                 errno == EWOULDBLOCK) {
@@ -308,15 +345,16 @@ static void *message_channel_base_task(void *channel)
         } else {
             LOG_DBG("%s Received a message len=%zd\n", 
                     base->channel.name, ret);
-            base->channel.ops->recv(&base->channel, buffer, (size_t)ret, 
-                                    &peer.sa, addrlen);
+            
+            if (channel->ops->recv_callback)
+                ret = channel->ops->recv_callback(channel, msg);
         }
     }
     LOG_DBG("%s task exits\n", base->channel.name);
     base->channel.state = CHANNEL_STOPPED;
     message_channel_internal_on_stop(&base->channel);
 
-    return NULL;
+    return ret;
 }
 
 /*
@@ -440,7 +478,7 @@ int message_channel_base_start(message_channel_t *channel)
         base->should_join = 1;
 
         ret = pthread_create(&base->thread, NULL, 
-                             message_channel_base_task, channel);
+                             thread_start, channel);
         if (ret != 0) {
             channel->state = CHANNEL_INITIALIZED;
             base->should_join = 0;
@@ -577,6 +615,15 @@ int message_channel_base_init(message_channel_base_t *base,
     if (local && local_len > 0) {
         memcpy(&base->local, local, local_len);
         base->local_len = local_len;
+#if defined(ENABLE_DEBUG)
+        if (base->local.sa.sa_family == AF_INET) { 
+            char ip1[18];
+            
+            LOG_DBG("init local=%s\n",
+                    inet_ntop(AF_INET, &base->local.in.sin_addr, ip1, sizeof(ip1)));
+        }
+#endif
+
     }
 
     if (ops)

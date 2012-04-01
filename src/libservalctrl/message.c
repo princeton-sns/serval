@@ -14,6 +14,7 @@ message_t *message_alloc(const void *data, size_t len)
 	
 	atomic_set(&m->refcount, 1);
 	m->length = len;
+    m->alloc_len = len;
 
 	if (data) 
 		memcpy(m->data, data, len);

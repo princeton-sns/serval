@@ -54,7 +54,7 @@ struct hostctrl_ops {
                           const struct service_info *si,
                           unsigned int num_si);
     int (*ctrlmsg_recv)(struct hostctrl *hc, struct ctrlmsg *cm,
-                        struct in_addr *from);
+                        struct sockaddr *from, socklen_t from_len);
 };
 
 int handle_service_change(struct hostctrl *hc, 

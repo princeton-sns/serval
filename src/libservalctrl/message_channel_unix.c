@@ -78,7 +78,9 @@ struct message_channel_ops unix_ops = {
     .get_callback_count = message_channel_internal_get_callback_count,
     .send = message_channel_base_send,
     .send_iov = message_channel_base_send_iov,
-    .recv = message_channel_internal_recv,
+    .recv = message_channel_base_recv,
+    .recv_callback = message_channel_internal_recv_callback,
+    .task = message_channel_base_task,
 };
 
 message_channel_t *message_channel_unix_create(channel_key_t *key)

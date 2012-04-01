@@ -27,6 +27,29 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #endif
+
+struct message;
+
+typedef union {
+    struct sockaddr sa;
+    struct sockaddr_sv sv;
+#if defined(OS_UNIX)
+    struct sockaddr_un un;
+#endif
+#if defined(OS_LINUX)
+    struct sockaddr_nl nl;
+#endif
+    struct sockaddr_in in;
+    struct sockaddr_in6 in6;
+    struct {
+        struct sockaddr_sv sv;
+        union {
+            struct sockaddr_in in;
+            struct sockaddr_in in6;
+        };
+    } sv_in;
+} channel_addr_t;
+
 #include "message.h"
 
 typedef struct message_channel_callback {
@@ -34,7 +57,7 @@ typedef struct message_channel_callback {
     int (*start)(struct message_channel_callback *cb);
     void (*stop)(struct message_channel_callback *cb);
     int (*recv)(struct message_channel_callback *cb, 
-                message_t *msg);
+                struct message *msg);
 } message_channel_callback_t;
 
 struct message_channel_ops;

@@ -238,7 +238,7 @@ static jobject acceptCommon(JNIEnv *env, jobject obj, jobject fd, int timeout)
 	return jniCreateFileDescriptor(env, ret);
 }
 
-jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalDatagramSocketImpl_2I
+jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lorg_servalarch_net_ServalDatagramSocketImpl_2I
 (JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
 {
 	if (sockImpl == NULL) {
@@ -249,7 +249,7 @@ jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDes
 	return acceptCommon(env, obj, fd, timeout);
 }
 
-jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lserval_net_ServalSocketImpl_2I
+jobject Java_org_servalarch_platform_ServalNetworkStack_accept__Ljava_io_FileDescriptor_2Lorg_servalarch_net_ServalSocketImpl_2I
 (JNIEnv *env, jobject obj, jobject fd, jobject sockImpl, jint timeout)
 {
 	if (sockImpl == NULL) {
