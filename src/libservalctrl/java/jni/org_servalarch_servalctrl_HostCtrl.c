@@ -295,6 +295,26 @@ static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat
     return obj;
 }
 
+static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
+    jmethodID mid;
+    jobject  obj;
+
+    if (info.proto == 6) {
+        mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
+                                    "(JIJ)V");
+
+        if (!mid)
+            return NULL;
+    
+        obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
+                            (jlong)info.flow.s_id32,
+                            (jint)info.proto,
+                            (jlong)info.pkts_sent);
+    }
+
+    return obj;
+}
+
 static int on_service_registration(struct hostctrl *hc,
                                    const struct service_id *srvid,
                                    unsigned short flags,
@@ -593,21 +613,60 @@ static int on_flow_stat_update(struct hostctrl *hc,
     JNIEnv *env = ctx->env;
     jmethodID mid;
     unsigned long num_flows = CTRLMSG_STATS_NUM_INFOS(csr);
+    jobjectArray arr = NULL;
+    jthrowable exc;
 
+    
 
-
-    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onFlowStatUpdate",
-                              "(JI)V");//Lorg/servalarch/servalctrl/FlowStat;)V");
-
-    fprintf(stderr, "Callback for %lu flows!\n", num_flows);
-    if (!mid)
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls,
+                              "onFlowStatUpdate",
+                              "(JI[Lorg/servalarch/servalctrl/FlowStat;)V");
+    
+    if (!mid) {
+        LOG_ERR("callback method does not exist\n");
         return -1;
+    }
+
+    if (num_flows > 0) {
+        unsigned int i = 0;
+
+        arr = (*env)->NewObjectArray(env, num_flows, flowstat_cls, NULL);
+
+        if (!arr) {
+            LOG_ERR("could not create array\n");
+            return -1;
+        }
+
+        for (i = 0; i < num_flows; i++) {
+            jobject flow_stat = new_flow_stat(env, csr->info[i]);
+
+            if (!flow_stat) {
+                LOG_ERR("could not create flow stat object\n");
+                (*env)->DeleteLocalRef(env, arr);
+                return -1;
+            }
+
+            (*env)->SetObjectArrayElement(env, arr, i, flow_stat);
+            (*env)->DeleteLocalRef(env, flow_stat);
+        }
+
+        fprintf(stderr, "Callback for %lu flows!\n", num_flows);
+    }
 
     (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
-                           (jlong)xid, (jint)retval);
+                           (jlong)xid, (jint)retval, arr);
+
+    exc = (*env)->ExceptionOccurred(env);
+
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+
+    (*env)->DeleteLocalRef(env, arr);
 
     return 0;
-    //return on_service_info_callback(hc, xid, retval, si, num, mid);
 }
 
 #include <common/platform.h>

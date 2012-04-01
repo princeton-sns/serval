@@ -112,7 +112,7 @@ public abstract class HostCtrlCallbacks {
 		
 	}
 
-    public void onFlowStatUpdate(long xid, int retval) {
-    
+    public void onFlowStatUpdate(long xid, int retval, FlowStat[] stats) {
+    	System.out.println("HUH");
     }
 }
