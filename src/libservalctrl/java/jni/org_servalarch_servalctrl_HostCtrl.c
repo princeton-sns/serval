@@ -307,7 +307,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
             return NULL;
     
         obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
-                            (jlong)info.flow.s_id32,
+                            (jlong)ntohl(info.flow.s_id32),
                             (jint)info.proto,
                             (jlong)info.pkts_sent);
     }
