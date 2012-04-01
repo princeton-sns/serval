@@ -301,7 +301,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
 
     if (info.proto == 6) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
-                                    "(JIJ)V");
+                                    "(JIJJJJJJJ)V");
 
         if (!mid)
             return NULL;
@@ -309,7 +309,13 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
         obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
                             (jlong)ntohl(info.flow.s_id32),
                             (jint)info.proto,
-                            (jlong)info.pkts_sent);
+                            (jlong)info.pkts_sent,
+                            (jlong)info.tcp_retrans,
+                            (jlong)info.tcp_lost,
+                            (jlong)info.tcp_srtt,
+                            (jlong)info.tcp_rttvar,
+                            (jlong)info.tcp_snd_una,
+                            (jlong)info.tcp_snd_nxt);
     }
 
     return obj;
