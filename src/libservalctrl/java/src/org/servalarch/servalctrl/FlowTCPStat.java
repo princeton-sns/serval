@@ -22,8 +22,8 @@ public class FlowTCPStat extends FlowStat {
 
 	@Override
 	public String toString() {
-		return String.format("{Retrans: %d, lost: %d, rtt: %d, rttvar: %d, "
-				+ "snd_una: %d, snd_nxt: %d}", retrans, lost, rtt, rttvar,
+		return String.format("{pktsSent: %d, retrans: %d, lost: %d, rtt: %d, rttvar: %d, "
+				+ "snd_una: %d, snd_nxt: %d}", pktsSent, retrans, lost, rtt, rttvar,
 				snd_una, snd_nxt);
 	}
 }

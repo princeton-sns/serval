@@ -256,6 +256,11 @@ struct ctrlmsg_stats_query {
         (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
          sizeof(struct flow_id))
 
+struct stats_proto {
+        unsigned long pkts_sent;
+        unsigned long pkts_recv;
+};
+
 struct stats_proto_tcp {
         uint32_t retrans;
         uint32_t lost;

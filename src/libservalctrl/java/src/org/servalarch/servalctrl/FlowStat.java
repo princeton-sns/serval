@@ -4,7 +4,7 @@ public class FlowStat {
     public long flowId;
     int protocol;
 
-    long pktsSent;
+    public long pktsSent;
 
     public FlowStat(long flowId, int protocol, long pktsSent) {
         this.flowId = flowId;
