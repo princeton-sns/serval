@@ -6,6 +6,10 @@ import java.net.UnknownHostException;
 import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrl;
 
+import org.servalarch.servalctrl.HostCtrlCallbacks;
+import org.servalarch.servalctrl.LocalHostCtrl;
+import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
+
 import android.content.Context;
 import android.util.Log;
 import android.widget.Toast;
@@ -14,13 +18,42 @@ public class AppHostCtrl {
 
 	static final int SERVICE_ADD = 0;
 	static final int SERVICE_REMOVE = 1;
-	
+	static HostCtrlCallbacks cbs = null;
 	static HostCtrl hc = null;
 	
+	static int init(final HostCtrlCallbacks cbs) {
+		
+		if (hc != null) {
+			Log.d("Serval", "HostCtrl already initialized");
+			return 0;
+		}
+		
+		try {
+			AppHostCtrl.hc = new LocalHostCtrl(cbs);
+		} catch (HostCtrlException e) {
+			Log.d("Serval", "Could not initialize HostCtrl");
+			return -1;
+		}
+		AppHostCtrl.cbs = cbs;
+		Log.d("Serval", "HostCtrl initialized");
+		return 0;
+	}
+	
+	static void fini() {
+		if (hc != null) {
+			hc.dispose();
+			hc = null;
+			cbs = null;
+		}
+	}
+
 	static void performOp(Context context, final String serviceStr, final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr;
 		
+		if (hc == null)
+			return;
+
 		sid = AppHostCtrl.createServiceID(serviceStr);
 		
 		if (sid == null) {

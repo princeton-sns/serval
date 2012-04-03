@@ -11,9 +11,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
-import org.servalarch.servalctrl.LocalHostCtrl;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
@@ -124,11 +122,8 @@ public class ServalActivity extends Activity
 						return;
 					cmd = "rmmod serval";
 					
-					if (AppHostCtrl.hc != null) {
-						AppHostCtrl.hc.dispose();
-						AppHostCtrl.hc = null;
-					}
-						
+
+					AppHostCtrl.fini();					
 				}
 
 				if (!executeSuCommand(cmd)) {
@@ -145,13 +140,8 @@ public class ServalActivity extends Activity
 				} else if (isServalModuleLoaded()) {
 					 if (!isChecked)
 						 moduleStatusButton.setChecked(true);
-					 if (AppHostCtrl.hc == null) {
-						 try {
-							 AppHostCtrl.hc = new LocalHostCtrl(cbs);
-							} catch (HostCtrlException e) {
-								e.printStackTrace();
-							}
-					 }
+
+					 AppHostCtrl.init(cbs);
 				}
 			}
 		});
@@ -254,6 +244,7 @@ public class ServalActivity extends Activity
 		for (String rule : rules) {
 			executeSuCommand(rule);
 		}
+
 	}
 	
 	private boolean isTranslatorRunning() {
@@ -457,18 +448,20 @@ public class ServalActivity extends Activity
 		else
 			translatorButton.setChecked(false);
 		
-		try {
-			AppHostCtrl.hc = new LocalHostCtrl(cbs);
-		} catch (HostCtrlException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+
+		AppHostCtrl.init(cbs);
 	}
+	
 	@Override
 	protected void onStop() {
 		super.onStop();
-		if (AppHostCtrl.hc != null)
-			AppHostCtrl.hc.dispose();
+		Log.d("Serval", "Stopping Serval host control");
 	}
-
+	
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+		Log.d("Serval", "Destroying Serval host control");
+		AppHostCtrl.fini();
+	}
 }

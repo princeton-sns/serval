@@ -149,6 +149,7 @@ int message_channel_base_initialize(message_channel_t *channel)
             LOG_ERR("%s %s sock_type=%d protocol=%d\n",
                     channel->name, strerror(errno), 
                     base->sock_type, base->protocol);
+            err = -1;
             goto sock_error;
 #endif /* ENABLE_USERMODE */
             break;
