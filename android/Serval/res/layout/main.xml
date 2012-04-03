@@ -61,7 +61,7 @@
 
     </RelativeLayout>
 
-    <RelativeLayout
+    <!-- <RelativeLayout
         android:id="@+id/RelativeLayout02"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" >
@@ -86,7 +86,7 @@
             android:text="@string/translator_label"
             android:textAppearance="?android:attr/textAppearanceLarge"
             android:textSize="15sp" />
-    </RelativeLayout>
+    </RelativeLayout>-->
 
     <TextView
         android:id="@+id/textView2"
@@ -138,14 +138,14 @@
 
     </LinearLayout>
     
-    <LinearLayout
+    <RelativeLayout
         android:id="@+id/linearLayout1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="right" >
         
        	<TextView
-            android:id="@+id/ip_label"
+            android:id="@+id/label_perma_rule"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Permanent rule: "
@@ -161,7 +161,40 @@
             android:textOff="No"
             android:textOn="Yes" />
         
-    </LinearLayout>
+    </RelativeLayout>
+    
+    <View 
+    	android:layout_width="match_parent"
+    	android:layout_height="2dp"
+    	android:background="#CCCCCC"
+    	android:layout_margin="8dp" />
+    
+    <RelativeLayout
+        android:id="@+id/layout_trans_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" >
+
+        <ToggleButton
+            android:id="@+id/translatorToggle"
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:layout_marginRight="30dp"
+            android:text="@string/translator_toggle"
+            android:textOff="Off"
+            android:textOn="Running" />
+
+        <TextView
+            android:id="@+id/label_trans_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_toLeftOf="@+id/translatorToggle"
+            android:text="@string/translator_label"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            android:textSize="15dp" />
+    </RelativeLayout>
     
     
 
