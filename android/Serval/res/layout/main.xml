@@ -137,5 +137,32 @@
             android:text="@string/remove_service_button" />
 
     </LinearLayout>
+    
+    <LinearLayout
+        android:id="@+id/linearLayout1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="right" >
+        
+       	<TextView
+            android:id="@+id/ip_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Permanent rule: "
+            android:textAppearance="?android:attr/textAppearanceMedium" />
+       	<ToggleButton
+            android:id="@+id/servicePerm"
+            android:layout_width="75dp"
+            android:layout_height="wrap_content"
+            android:layout_alignParentRight="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginRight="30dp"
+            android:text="@string/udp_encap_toggle"
+            android:textOff="No"
+            android:textOn="Yes" />
+        
+    </LinearLayout>
+    
+    
 
 </LinearLayout>
