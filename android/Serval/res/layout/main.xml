@@ -1,67 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="fill_parent"
-    android:layout_height="fill_parent"
-    android:gravity="left|right"
-    android:orientation="vertical" >
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center" >
 
+    <LinearLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="left|right"
+        android:orientation="vertical" >
+
+        <RelativeLayout
+            android:id="@+id/relativeLayout1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+
+            <ToggleButton
+                android:id="@+id/moduleStatusToggle"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentTop="true"
+                android:layout_marginRight="30dp"
+                android:text="@string/load_module_toggle"
+                android:textOff="Unloaded"
+                android:textOn="Loaded" />
+
+            <TextView
+                android:id="@+id/textView1"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/moduleStatusToggle"
+                android:text="@string/module_status_label"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15sp" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:id="@+id/RelativeLayout01"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+
+            <ToggleButton
+                android:id="@+id/udpEncapToggle"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentTop="true"
+                android:layout_marginRight="30dp"
+                android:text="@string/udp_encap_toggle"
+                android:textOff="Disabled"
+                android:textOn="Enabled" />
+
+            <TextView
+                android:id="@+id/TextView01"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/udpEncapToggle"
+                android:text="@string/udp_encap_label"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15sp" />
+        </RelativeLayout>
+
+        <!--
     <RelativeLayout
-        android:id="@+id/relativeLayout1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-
-        <ToggleButton
-            android:id="@+id/moduleStatusToggle"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/load_module_toggle"
-            android:textOff="Unloaded"
-            android:textOn="Loaded" />
-
-        <TextView
-            android:id="@+id/textView1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/moduleStatusToggle"
-            android:text="@string/module_status_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15sp" />
-
-    </RelativeLayout>
-
-    <RelativeLayout
-        android:id="@+id/RelativeLayout01"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-
-        <ToggleButton
-            android:id="@+id/udpEncapToggle"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/udp_encap_toggle"
-            android:textOff="Disabled"
-            android:textOn="Enabled" />
-
-        <TextView
-            android:id="@+id/TextView01"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/udpEncapToggle"
-            android:text="@string/udp_encap_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15sp" />
-
-    </RelativeLayout>
-
-    <!-- <RelativeLayout
         android:id="@+id/RelativeLayout02"
         android:layout_width="match_parent"
         android:layout_height="wrap_content" >
@@ -86,167 +91,169 @@
             android:text="@string/translator_label"
             android:textAppearance="?android:attr/textAppearanceLarge"
             android:textSize="15sp" />
-    </RelativeLayout>-->
-
-    <TextView
-        android:id="@+id/textView2"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/service_input_label"
-        android:textAppearance="?android:attr/textAppearanceMedium" />
-
-    <EditText
-        android:id="@+id/edit_service_field"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:inputType="textNoSuggestions" />
-
-    <LinearLayout
-        android:id="@+id/linearLayout1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="right" >
+    </RelativeLayout>
+        -->
 
         <TextView
-            android:id="@+id/ip_label"
-            android:layout_width="36dp"
+            android:id="@+id/textView2"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/ip_label"
+            android:text="@string/service_input_label"
             android:textAppearance="?android:attr/textAppearanceMedium" />
 
         <EditText
-            android:id="@+id/ip_input_field"
-            android:layout_width="0dip"
+            android:id="@+id/edit_service_field"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="0.75"
-            android:inputType="number"
-            android:digits="0123456789." >
-            <requestFocus />
-        </EditText>
+            android:inputType="textNoSuggestions" />
 
-        <Button
-            android:id="@+id/add_service_button"
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:id="@+id/linearLayout1"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/add_service_button" />
+            android:gravity="right" >
 
-        <Button
-            android:id="@+id/remove_service_button"
-            android:layout_width="wrap_content"
+            <TextView
+                android:id="@+id/ip_label"
+                android:layout_width="36dp"
+                android:layout_height="wrap_content"
+                android:text="@string/ip_label"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+            <EditText
+                android:id="@+id/ip_input_field"
+                android:layout_width="0dip"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.75"
+                android:digits="0123456789."
+                android:inputType="number" >
+
+                <requestFocus />
+            </EditText>
+
+            <Button
+                android:id="@+id/add_service_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/add_service_button" />
+
+            <Button
+                android:id="@+id/remove_service_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/remove_service_button" />
+        </LinearLayout>
+
+        <RelativeLayout
+            android:id="@+id/linearLayout1"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/remove_service_button" />
+            android:gravity="right" >
 
+            <TextView
+                android:id="@+id/label_perma_rule"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Permanent rule: "
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+            <ToggleButton
+                android:id="@+id/servicePerm"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_alignParentTop="true"
+                android:layout_marginRight="30dp"
+                android:text="@string/udp_encap_toggle"
+                android:textOff="No"
+                android:textOn="Yes" />
+        </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:layout_margin="8dp"
+            android:background="#CCCCCC" />
+
+        <RelativeLayout
+            android:id="@+id/layout_trans_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+
+            <ToggleButton
+                android:id="@+id/translatorToggle"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:layout_marginRight="30dp"
+                android:text="@string/translator_toggle"
+                android:textOff="Off"
+                android:textOn="Running" />
+
+            <TextView
+                android:id="@+id/label_trans_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/translatorToggle"
+                android:text="@string/translator_label"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15dp" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:id="@+id/layout_trans_http"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+
+            <ToggleButton
+                android:id="@+id/toggle_trans_http"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:layout_marginRight="30dp"
+                android:checked="true"
+                android:textOff="No"
+                android:textOn="Yes" />
+
+            <TextView
+                android:id="@+id/label_trans_http"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/toggle_trans_http"
+                android:text="@string/http_label"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15dp" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:id="@+id/layout_trans_all"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+
+            <ToggleButton
+                android:id="@+id/toggle_trans_all"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:layout_marginRight="30dp"
+                android:textOff="No"
+                android:textOn="Yes" />
+
+            <TextView
+                android:id="@+id/label_trans_all"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/toggle_trans_all"
+                android:text="@string/trans_all_label"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15dp" />
+        </RelativeLayout>
     </LinearLayout>
-    
-    <RelativeLayout
-        android:id="@+id/linearLayout1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="right" >
-        
-       	<TextView
-            android:id="@+id/label_perma_rule"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Permanent rule: "
-            android:textAppearance="?android:attr/textAppearanceMedium" />
-       	<ToggleButton
-            android:id="@+id/servicePerm"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/udp_encap_toggle"
-            android:textOff="No"
-            android:textOn="Yes" />
-        
-    </RelativeLayout>
-    
-    <View 
-    	android:layout_width="match_parent"
-    	android:layout_height="2dp"
-    	android:background="#CCCCCC"
-    	android:layout_margin="8dp" />
-    
-    <RelativeLayout
-        android:id="@+id/layout_trans_status"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
 
-        <ToggleButton
-            android:id="@+id/translatorToggle"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/translator_toggle"
-            android:textOff="Off"
-            android:textOn="Running" />
-
-        <TextView
-            android:id="@+id/label_trans_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/translatorToggle"
-            android:text="@string/translator_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15dp" />
-    </RelativeLayout>
-    
-    <RelativeLayout
-        android:id="@+id/layout_trans_http"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-
-        <ToggleButton
-            android:id="@+id/toggle_trans_http"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
-            android:layout_marginRight="30dp"
-            android:checked="true"
-            android:textOff="No"
-            android:textOn="Yes" />
-
-        <TextView
-            android:id="@+id/label_trans_http"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/toggle_trans_http"
-            android:text="@string/http_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15dp" />
-    </RelativeLayout>
-    
-    <RelativeLayout
-        android:id="@+id/layout_trans_all"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-
-        <ToggleButton
-            android:id="@+id/toggle_trans_all"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
-            android:layout_marginRight="30dp"
-            android:textOff="No"
-            android:textOn="Yes" />
-
-        <TextView
-            android:id="@+id/label_trans_all"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/toggle_trans_all"
-            android:text="@string/trans_all_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15dp" />
-    </RelativeLayout>    
-
-</LinearLayout>
+</ScrollView>
