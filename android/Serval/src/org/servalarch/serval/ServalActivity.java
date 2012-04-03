@@ -408,7 +408,8 @@ public class ServalActivity extends Activity
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						if (((ToggleButton) findViewById(R.id.servicePerm)).isEnabled()) {
+						if (((ToggleButton) findViewById(R.id.servicePerm)).isChecked()) {
+							Log.d("Serval", "Saving rule...");
 							prefs.edit().putString(editServiceText.getText().toString(), 
 									editIpText.getText().toString()).commit();
 						}
