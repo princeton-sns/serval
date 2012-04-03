@@ -48,9 +48,9 @@ public class ServalActivity extends Activity
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
-	private HostCtrl hc = null;
-	private static final int SERVICE_ADD = 0;
-	private static final int SERVICE_REMOVE = 1;
+	//private HostCtrl hc = null;
+	private static final int SERVICE_ADD = AppHostCtrl.SERVICE_ADD;
+	private static final int SERVICE_REMOVE = AppHostCtrl.SERVICE_REMOVE;
 	
 	private SharedPreferences prefs;
 	
@@ -116,9 +116,9 @@ public class ServalActivity extends Activity
 						return;
 					cmd = "rmmod serval";
 					
-					if (hc != null) {
-						hc.dispose();
-						hc = null;
+					if (AppHostCtrl.hc != null) {
+						AppHostCtrl.hc.dispose();
+						AppHostCtrl.hc = null;
 					}
 						
 				}
@@ -137,9 +137,9 @@ public class ServalActivity extends Activity
 				} else if (isServalModuleLoaded()) {
 					 if (!isChecked)
 						 moduleStatusButton.setChecked(true);
-					 if (hc == null) {
+					 if (AppHostCtrl.hc == null) {
 						 try {
-								hc = new LocalHostCtrl(cbs);
+							 AppHostCtrl.hc = new LocalHostCtrl(cbs);
 							} catch (HostCtrlException e) {
 								e.printStackTrace();
 							}
@@ -205,61 +205,11 @@ public class ServalActivity extends Activity
 	    return false;
 	}
 	
-	private ServiceID createServiceID(String serviceStr) {
-		ServiceID sid = null;
-		
-		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0' && serviceStr.charAt(1) == 'x') {
-			// Hex string
-			if (!serviceStr.matches("^0x[a-fA-F0-9]{1,40}$"))
-				return null;
-			
-			String parseStr = serviceStr.substring(2);
-			int len = parseStr.length();
-			
-			byte[] rawID = new byte[ServiceID.SERVICE_ID_MAX_LENGTH];
-			
-			for (int i = 0; i < rawID.length; i++) {
-				char hex[] = { '0', '0' };
-		
-				if (len-- > 0) {
-					hex[0] = parseStr.charAt(i*2);
-				}
-				
-				if (len-- > 0) {
-					hex[1] = parseStr.charAt((i*2) + 1);
-				}
-				
-				rawID[i] = (byte)Integer.parseInt(new String(hex), 16);
-				
-				if (len <= 0)
-					break;
-			}
-			
-			sid = new ServiceID(rawID);
-		} else {
-			// Decimal string
-			if (!serviceStr.matches("^[0-9]{1,20}$"))
-				return null;
-			sid = new ServiceID(Integer.parseInt(serviceStr));
-		}
-		return sid;
-	}
-	
-	private InetAddress createAddress(String ipStr) {
-		InetAddress addr = null;
-		try {
-			addr = InetAddress.getByName(ipStr);
-		} catch (UnknownHostException e) {
-			
-		}
-		return addr;
-	}
-	
 	private void performOp(final String serviceStr, final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr;
 		
-		sid = createServiceID(serviceStr);
+		sid = AppHostCtrl.createServiceID(serviceStr);
 		
 		if (sid == null) {
 			Toast t = Toast.makeText(getApplicationContext(), "Not a valid serviceID", 
@@ -268,7 +218,7 @@ public class ServalActivity extends Activity
 			return;
 		}
 		
-		addr = createAddress(ipStr);
+		addr = AppHostCtrl.createAddress(ipStr);
 		
 		if (addr == null) {
 			Toast t = Toast.makeText(getApplicationContext(), "Not a valid IP address", 
@@ -280,15 +230,16 @@ public class ServalActivity extends Activity
 		switch (op) {
 		case SERVICE_ADD:
 			Log.d("Serval", "adding service " + sid + " address " + addr);
-			hc.addService(sid, 0, 1, 1, addr);
+			AppHostCtrl.hc.addService(sid, 0, 1, 1, addr);
 			break;
 		case SERVICE_REMOVE:
-			hc.removeService(sid, 0, addr);
+			AppHostCtrl.hc.removeService(sid, 0, addr);
 			break;
 		default:
 			break;
 		}
 	}
+	
 	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
@@ -481,7 +432,7 @@ public class ServalActivity extends Activity
 			translatorButton.setChecked(false);
 		
 		try {
-			hc = new LocalHostCtrl(cbs);
+			AppHostCtrl.hc = new LocalHostCtrl(cbs);
 		} catch (HostCtrlException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -490,8 +441,8 @@ public class ServalActivity extends Activity
 	@Override
 	protected void onStop() {
 		super.onStop();
-		if (hc != null)
-			hc.dispose();
+		if (AppHostCtrl.hc != null)
+			AppHostCtrl.hc.dispose();
 	}
 
 }
