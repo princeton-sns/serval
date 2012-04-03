@@ -367,18 +367,18 @@ public class ServalActivity extends Activity
 	}
 	
 	private boolean isServalModuleLoaded() {
-		boolean moduleIsLoaded = false;
-
 		File procModules = new File("/proc/modules");
 
 		if (procModules.exists() && procModules.canRead()) {
 			try {
 				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(procModules)));
 
-				String line = in.readLine();
-
-				if (line.contains("serval"))
-					moduleIsLoaded = true;
+				String line = null; 
+				while ((line = in.readLine()) != null) {
+					if (line.contains("serval")) {
+						return true;
+					}
+				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -387,7 +387,7 @@ public class ServalActivity extends Activity
 		} else {
 			Log.d("Serval", "could not open /proc/modules");
 		}
-		return moduleIsLoaded;
+		return false;
 	}
 
 	@Override
