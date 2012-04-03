@@ -6,12 +6,51 @@ import java.net.UnknownHostException;
 import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrl;
 
+import android.content.Context;
+import android.util.Log;
+import android.widget.Toast;
+
 public class AppHostCtrl {
 
 	static final int SERVICE_ADD = 0;
 	static final int SERVICE_REMOVE = 1;
 	
 	static HostCtrl hc = null;
+	
+	static void performOp(Context context, final String serviceStr, final String ipStr, int op) {
+		ServiceID sid;
+		InetAddress addr;
+		
+		sid = AppHostCtrl.createServiceID(serviceStr);
+		
+		if (sid == null) {
+			Toast t = Toast.makeText(context, "Not a valid serviceID", 
+					Toast.LENGTH_SHORT);
+			t.show();
+			return;
+		}
+		
+		addr = AppHostCtrl.createAddress(ipStr);
+		
+		if (addr == null) {
+			Toast t = Toast.makeText(context, "Not a valid IP address", 
+					Toast.LENGTH_SHORT);
+			t.show();
+			return;
+		}
+		
+		switch (op) {
+		case AppHostCtrl.SERVICE_ADD:
+			Log.d("Serval", "adding service " + sid + " address " + addr);
+			AppHostCtrl.hc.addService(sid, 0, 1, 1, addr);
+			break;
+		case AppHostCtrl.SERVICE_REMOVE:
+			AppHostCtrl.hc.removeService(sid, 0, addr);
+			break;
+		default:
+			break;
+		}
+	}
 	
 	static InetAddress createAddress(String ipStr) {
 		InetAddress addr = null;

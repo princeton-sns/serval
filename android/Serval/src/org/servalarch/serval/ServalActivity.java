@@ -10,11 +10,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
 
-import org.servalarch.net.ServiceID;
-import org.servalarch.servalctrl.HostCtrl;
 import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.LocalHostCtrl;
@@ -48,9 +44,6 @@ public class ServalActivity extends Activity
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
-	//private HostCtrl hc = null;
-	private static final int SERVICE_ADD = AppHostCtrl.SERVICE_ADD;
-	private static final int SERVICE_REMOVE = AppHostCtrl.SERVICE_REMOVE;
 	
 	private SharedPreferences prefs;
 	
@@ -85,16 +78,16 @@ public class ServalActivity extends Activity
 		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View arg0) {
-				performOp(editServiceText.getText().toString(), 
-						editIpText.getText().toString(), SERVICE_ADD);
+				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
+						editIpText.getText().toString(), AppHostCtrl.SERVICE_ADD);
 			}
 		});
 		removeServiceButton = (Button)findViewById(R.id.remove_service_button);
 		removeServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View arg0) {
-				performOp(editServiceText.getText().toString(), 
-						editIpText.getText().toString(), SERVICE_REMOVE);
+				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
+						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
 			}
 		});
 		
@@ -203,41 +196,6 @@ public class ServalActivity extends Activity
 	        }
 	    }
 	    return false;
-	}
-	
-	private void performOp(final String serviceStr, final String ipStr, int op) {
-		ServiceID sid;
-		InetAddress addr;
-		
-		sid = AppHostCtrl.createServiceID(serviceStr);
-		
-		if (sid == null) {
-			Toast t = Toast.makeText(getApplicationContext(), "Not a valid serviceID", 
-					Toast.LENGTH_SHORT);
-			t.show();
-			return;
-		}
-		
-		addr = AppHostCtrl.createAddress(ipStr);
-		
-		if (addr == null) {
-			Toast t = Toast.makeText(getApplicationContext(), "Not a valid IP address", 
-					Toast.LENGTH_SHORT);
-			t.show();
-			return;
-		}
-		
-		switch (op) {
-		case SERVICE_ADD:
-			Log.d("Serval", "adding service " + sid + " address " + addr);
-			AppHostCtrl.hc.addService(sid, 0, 1, 1, addr);
-			break;
-		case SERVICE_REMOVE:
-			AppHostCtrl.hc.removeService(sid, 0, addr);
-			break;
-		default:
-			break;
-		}
 	}
 	
 	private boolean extractKernelModule(final File module) {
