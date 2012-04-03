@@ -38,6 +38,21 @@ import android.widget.ToggleButton;
 
 public class ServalActivity extends Activity
 {
+	private static final String[] ADD_HTTP_RULES = {
+		"iptables -t nat -A OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	private static final String[] ADD_ALL_RULES = {
+		"iptables -t nat -A OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	private static final String[] DEL_HTTP_RULES = {
+		"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	private static final String[] DEL_ALL_RULES = {
+		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	
 	private ToggleButton moduleStatusButton;
 	private ToggleButton udpEncapButton;
 	private ToggleButton translatorButton, transHttpButton, transAllButton;
@@ -177,16 +192,68 @@ public class ServalActivity extends Activity
 					boolean isChecked) {
 				if (isChecked) {
 					startService(new Intent(ServalActivity.this, TranslatorService.class));
-					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
-					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
+					if (transAllButton.isChecked())
+						executeRules(ADD_ALL_RULES);
+					else if (transHttpButton.isChecked())
+						executeRules(ADD_HTTP_RULES);
 				} else {
 					stopService(new Intent(ServalActivity.this, TranslatorService.class));
-					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
-					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
+					if (transAllButton.isChecked())
+						executeRules(DEL_ALL_RULES);
+					else if (transHttpButton.isChecked())
+						executeRules(DEL_HTTP_RULES);
 				}
 			}
 		});
 		
+		this.transHttpButton = (ToggleButton) findViewById(R.id.toggle_trans_http);
+		this.transHttpButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				if (isChecked) {
+					if (isTranslatorRunning() && !transAllButton.isChecked()) {
+						executeRules(ADD_HTTP_RULES);
+					}
+				}
+				else {
+					if (isTranslatorRunning() && !transAllButton.isChecked()) {
+						executeRules(DEL_HTTP_RULES);
+					}
+				}
+			}
+		});
+		
+		this.transAllButton = (ToggleButton) findViewById(R.id.toggle_trans_all);
+		this.transAllButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				if (isChecked) {
+					if (isTranslatorRunning()) { 
+						if (transHttpButton.isChecked()) {
+							executeRules(DEL_HTTP_RULES);
+						}
+						executeRules(ADD_ALL_RULES);
+					}
+					
+				}
+				else {
+					if (isTranslatorRunning()) {
+						executeRules(DEL_ALL_RULES);
+						if (transHttpButton.isChecked()) {
+							executeRules(ADD_HTTP_RULES);
+						}
+					}
+				}
+			}
+		});
+	}
+	
+	private void executeRules(String[] rules) {
+		for (String rule : rules) {
+			executeSuCommand(rule);
+		}
 	}
 	
 	private boolean isTranslatorRunning() {
