@@ -12,8 +12,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+
 import org.servalarch.net.ServiceID;
-import org.servalarch.serval.R;
 import org.servalarch.servalctrl.HostCtrl;
 import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
@@ -25,6 +25,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -51,11 +52,14 @@ public class ServalActivity extends Activity
 	private static final int SERVICE_ADD = 0;
 	private static final int SERVICE_REMOVE = 1;
 	
+	private SharedPreferences prefs;
+	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
+		prefs = getSharedPreferences("serval", 0);
 		setContentView(R.layout.main);
 		File filesDir = getExternalFilesDir(null);
 		try {
@@ -402,8 +406,13 @@ public class ServalActivity extends Activity
 				@Override
 				public void run() {
 					String msg;
-					if (retval == RETVAL_OK) 
+					if (retval == RETVAL_OK) {
 						msg = "Added service";
+						if (((ToggleButton) findViewById(R.id.servicePerm)).isEnabled()) {
+							prefs.edit().putString(editServiceText.getText().toString(), 
+									editIpText.getText().toString()).commit();
+						}
+					}
 					else
 						msg = "Add service failed retval=" + retval + " " + getRetvalString(retval);
 					
@@ -421,8 +430,10 @@ public class ServalActivity extends Activity
 				@Override
 				public void run() {
 					String msg;
-					if (retval == RETVAL_OK) 
+					if (retval == RETVAL_OK) { 
 						msg = "Removed service";
+						prefs.edit().remove(editServiceText.getText().toString()).commit();
+					}
 					else
 						msg = "Remove service failed retval=" + retval + " " + getRetvalString(retval);
 					
