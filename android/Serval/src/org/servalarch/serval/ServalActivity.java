@@ -10,14 +10,8 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import org.servalarch.net.ServiceID;
-import org.servalarch.serval.R;
-import org.servalarch.servalctrl.HostCtrl;
-import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
+
 import org.servalarch.servalctrl.HostCtrlCallbacks;
-import org.servalarch.servalctrl.LocalHostCtrl;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
@@ -25,6 +19,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -47,15 +42,15 @@ public class ServalActivity extends Activity
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
-	private HostCtrl hc = null;
-	private static final int SERVICE_ADD = 0;
-	private static final int SERVICE_REMOVE = 1;
+	
+	private SharedPreferences prefs;
 	
 	/** Called when the activity is first created. */
 	@Override
 	public void onCreate(Bundle savedInstanceState)
 	{
 		super.onCreate(savedInstanceState);
+		prefs = getSharedPreferences("serval", 0);
 		setContentView(R.layout.main);
 		File filesDir = getExternalFilesDir(null);
 		try {
@@ -81,16 +76,16 @@ public class ServalActivity extends Activity
 		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View arg0) {
-				performOp(editServiceText.getText().toString(), 
-						editIpText.getText().toString(), SERVICE_ADD);
+				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
+						editIpText.getText().toString(), AppHostCtrl.SERVICE_ADD);
 			}
 		});
 		removeServiceButton = (Button)findViewById(R.id.remove_service_button);
 		removeServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View arg0) {
-				performOp(editServiceText.getText().toString(), 
-						editIpText.getText().toString(), SERVICE_REMOVE);
+				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
+						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
 			}
 		});
 		
@@ -112,10 +107,7 @@ public class ServalActivity extends Activity
 						return;
 					cmd = "rmmod serval";
 					
-					if (hc != null) {
-						hc.dispose();
-						hc = null;
-					}
+					AppHostCtrl.fini();
 						
 				}
 
@@ -133,13 +125,7 @@ public class ServalActivity extends Activity
 				} else if (isServalModuleLoaded()) {
 					 if (!isChecked)
 						 moduleStatusButton.setChecked(true);
-					 if (hc == null) {
-						 try {
-								hc = new LocalHostCtrl(cbs);
-							} catch (HostCtrlException e) {
-								e.printStackTrace();
-							}
-					 }
+					 AppHostCtrl.init(cbs);
 				}
 			}
 		});
@@ -201,90 +187,6 @@ public class ServalActivity extends Activity
 	    return false;
 	}
 	
-	private ServiceID createServiceID(String serviceStr) {
-		ServiceID sid = null;
-		
-		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0' && serviceStr.charAt(1) == 'x') {
-			// Hex string
-			if (!serviceStr.matches("^0x[a-fA-F0-9]{1,40}$"))
-				return null;
-			
-			String parseStr = serviceStr.substring(2);
-			int len = parseStr.length();
-			
-			byte[] rawID = new byte[ServiceID.SERVICE_ID_MAX_LENGTH];
-			
-			for (int i = 0; i < rawID.length; i++) {
-				char hex[] = { '0', '0' };
-		
-				if (len-- > 0) {
-					hex[0] = parseStr.charAt(i*2);
-				}
-				
-				if (len-- > 0) {
-					hex[1] = parseStr.charAt((i*2) + 1);
-				}
-				
-				rawID[i] = (byte)Integer.parseInt(new String(hex), 16);
-				
-				if (len <= 0)
-					break;
-			}
-			
-			sid = new ServiceID(rawID);
-		} else {
-			// Decimal string
-			if (!serviceStr.matches("^[0-9]{1,20}$"))
-				return null;
-			sid = new ServiceID(Integer.parseInt(serviceStr));
-		}
-		return sid;
-	}
-	
-	private InetAddress createAddress(String ipStr) {
-		InetAddress addr = null;
-		try {
-			addr = InetAddress.getByName(ipStr);
-		} catch (UnknownHostException e) {
-			
-		}
-		return addr;
-	}
-	
-	private void performOp(final String serviceStr, final String ipStr, int op) {
-		ServiceID sid;
-		InetAddress addr;
-		
-		sid = createServiceID(serviceStr);
-		
-		if (sid == null) {
-			Toast t = Toast.makeText(getApplicationContext(), "Not a valid serviceID", 
-					Toast.LENGTH_SHORT);
-			t.show();
-			return;
-		}
-		
-		addr = createAddress(ipStr);
-		
-		if (addr == null) {
-			Toast t = Toast.makeText(getApplicationContext(), "Not a valid IP address", 
-					Toast.LENGTH_SHORT);
-			t.show();
-			return;
-		}
-		
-		switch (op) {
-		case SERVICE_ADD:
-			Log.d("Serval", "adding service " + sid + " address " + addr);
-			hc.addService(sid, 0, 1, 1, addr);
-			break;
-		case SERVICE_REMOVE:
-			hc.removeService(sid, 0, addr);
-			break;
-		default:
-			break;
-		}
-	}
 	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
@@ -367,18 +269,18 @@ public class ServalActivity extends Activity
 	}
 	
 	private boolean isServalModuleLoaded() {
-		boolean moduleIsLoaded = false;
-
 		File procModules = new File("/proc/modules");
 
 		if (procModules.exists() && procModules.canRead()) {
 			try {
 				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(procModules)));
 
-				String line = in.readLine();
-
-				if (line.contains("serval"))
-					moduleIsLoaded = true;
+				String line = null; 
+				while ((line = in.readLine()) != null) {
+					if (line.contains("serval")) {
+						return true;
+					}
+				}
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -387,7 +289,7 @@ public class ServalActivity extends Activity
 		} else {
 			Log.d("Serval", "could not open /proc/modules");
 		}
-		return moduleIsLoaded;
+		return false;
 	}
 
 	@Override
@@ -402,8 +304,14 @@ public class ServalActivity extends Activity
 				@Override
 				public void run() {
 					String msg;
-					if (retval == RETVAL_OK) 
+					if (retval == RETVAL_OK) {
 						msg = "Added service";
+						if (((ToggleButton) findViewById(R.id.servicePerm)).isChecked()) {
+							Log.d("Serval", "Saving rule...");
+							prefs.edit().putString(editServiceText.getText().toString(), 
+									editIpText.getText().toString()).commit();
+						}
+					}
 					else
 						msg = "Add service failed retval=" + retval + " " + getRetvalString(retval);
 					
@@ -421,8 +329,10 @@ public class ServalActivity extends Activity
 				@Override
 				public void run() {
 					String msg;
-					if (retval == RETVAL_OK) 
+					if (retval == RETVAL_OK) { 
 						msg = "Removed service";
+						prefs.edit().remove(editServiceText.getText().toString()).commit();
+					}
 					else
 						msg = "Remove service failed retval=" + retval + " " + getRetvalString(retval);
 					
@@ -468,18 +378,19 @@ public class ServalActivity extends Activity
 		else
 			translatorButton.setChecked(false);
 		
-		try {
-			hc = new LocalHostCtrl(cbs);
-		} catch (HostCtrlException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+		AppHostCtrl.init(cbs);
 	}
+	
 	@Override
 	protected void onStop() {
 		super.onStop();
-		if (hc != null)
-			hc.dispose();
+		Log.d("Serval", "Stopping Serval host control");
 	}
-
+	
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+		Log.d("Serval", "Destroying Serval host control");
+		AppHostCtrl.fini();
+	}
 }
