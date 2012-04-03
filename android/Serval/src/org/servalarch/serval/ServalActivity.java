@@ -10,6 +10,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.Map;
 
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.ServiceInfo;
@@ -138,10 +139,18 @@ public class ServalActivity extends Activity
 					if (udpEncapButton.isChecked())
 						udpEncapButton.setChecked(false);
 				} else if (isServalModuleLoaded()) {
-					 if (!isChecked)
-						 moduleStatusButton.setChecked(true);
+					if (!isChecked)
+						moduleStatusButton.setChecked(true);
 
-					 AppHostCtrl.init(cbs);
+					AppHostCtrl.init(cbs);
+					/* insert persistent rules */
+					Map<String, ?> idMap = prefs.getAll();
+		        	for (String srvID : idMap.keySet()) {
+		        		if (!(idMap.get(srvID) instanceof String))
+		        			continue;
+		        		String addr = (String) idMap.get(srvID);
+		        		AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
+		        	}
 				}
 			}
 		});
