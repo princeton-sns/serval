@@ -40,7 +40,7 @@ public class ServalActivity extends Activity
 {
 	private ToggleButton moduleStatusButton;
 	private ToggleButton udpEncapButton;
-	private ToggleButton translatorButton;
+	private ToggleButton translatorButton, transHttpButton, transAllButton;
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
@@ -186,6 +186,7 @@ public class ServalActivity extends Activity
 				}
 			}
 		});
+		
 	}
 	
 	private boolean isTranslatorRunning() {
