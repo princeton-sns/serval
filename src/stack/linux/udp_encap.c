@@ -10,7 +10,8 @@
 #include <serval_ipv4.h>
 #include <serval/debug.h>
 
-#define UDP_ENCAP_PORT 54324
+#define UDP_ENCAP_CLIENT_PORT 54324
+#define UDP_ENCAP_SERVER_PORT 54325
 #define UDP_ENCAP_MAGIC	0x61114EDA
 
 struct udp_encap {
@@ -20,7 +21,8 @@ struct udp_encap {
 	void (*old_sk_destruct)(struct sock *);
 };
 
-static struct sock *encap_sk = NULL;
+static struct sock *encap_client_sk = NULL;
+static struct sock *encap_server_sk = NULL;
 
 int serval_udp_encap_skb(struct sk_buff *skb, 
                          __u32 saddr, __u32 daddr, 
@@ -34,14 +36,13 @@ int serval_udp_encap_skb(struct sk_buff *skb,
                 return -1;
 
         skb_reset_transport_header(skb);
-        
-        dport = dport == 0 ? net_serval.sysctl_udp_encap_port : dport;
+        dport = dport == 0 ? net_serval.sysctl_udp_encap_server_port : dport;
 
         LOG_DBG("UDP encapsulating [%u:%u] skb->len=%u\n",
-                net_serval.sysctl_udp_encap_port, dport, skb->len);
+                net_serval.sysctl_udp_encap_client_port, dport, skb->len);
 
         /* Build UDP header */
-        uh->source = htons(net_serval.sysctl_udp_encap_port);
+        uh->source = htons(net_serval.sysctl_udp_encap_client_port);
         uh->dest = htons(dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;
@@ -59,16 +60,19 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
+        struct serval_sock *ssk;
         unsigned short udp_encap_port;
         
         if (!sk)
                 return -1;
         
-        if (serval_sk(sk)->sal_state == SAL_RSYN_RECV ||
-            serval_sk(sk)->sal_state == SAL_RSYN_SENT_RECV)
-                udp_encap_port = serval_sk(sk)->udp_encap_migration_port;
+        ssk = serval_sk(sk);
+
+        if (ssk->sal_state == SAL_RSYN_RECV ||
+            ssk->sal_state == SAL_RSYN_SENT_RECV)
+                udp_encap_port = ssk->udp_encap_migration_port;
         else
-                udp_encap_port = serval_sk(sk)->udp_encap_port;
+                udp_encap_port = ssk->udp_encap_port;
 
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
@@ -78,7 +82,7 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
                 return NET_RX_DROP;
         }
         
-        return serval_sk(sk)->af_ops->encap_queue_xmit(skb);
+        return ssk->af_ops->encap_queue_xmit(skb);
 }
 
 static inline struct udp_encap *sock_to_encap(struct sock *sk)
@@ -178,34 +182,12 @@ static void udp_encap_destruct(struct sock *sk)
         kfree(encap);
 }        
 
-void udp_encap_fini(void)
-{
-        if (!encap_sk)
-                return;
-
-        inet_release(encap_sk->sk_socket);
-        
-        LOG_DBG("UDP encapsulation socket destroyed\n");
-        encap_sk = NULL;
-}
-
-int udp_encap_init_port(unsigned short port)
+static struct udp_encap *udp_encap_create(unsigned short port)
 {
         struct socket *sock = NULL;
-        struct udp_encap *encap;
+        struct udp_encap *encap = NULL;
         struct sock *sk;
         int err;
-        
-        if (encap_sk) {
-                LOG_ERR("UDP encapsulation already initialized\n");
-                return -1;
-        }
-
-        pr_alert("Initializing UDP encapsulation on port %u\n", 
-                 port);
-
-        LOG_DBG("Initializing UDP encapsulation on port %u\n", 
-                 port);
 
         err = udp_sock_create(port, port, &sock);
 
@@ -215,19 +197,20 @@ int udp_encap_init_port(unsigned short port)
         }
 
 	sk = sock->sk;
-        encap_sk = sk;
 
         encap = kzalloc(sizeof(struct udp_encap), gfp_any());
         
         if (!encap) {
-                err = -ENOMEM;
+                inet_release(sock);
+                sock = NULL;
                 goto error;
         }
 
         encap->magic = UDP_ENCAP_MAGIC;
         encap->sk = sk;
         encap->old_sk_destruct = sk->sk_destruct;
-
+        inet_sk(sk)->inet_sport = port;
+        inet_sk(sk)->inet_dport = port;
 	sk->sk_user_data = encap;
         sk->sk_destruct = udp_encap_destruct;
 
@@ -239,13 +222,89 @@ int udp_encap_init_port(unsigned short port)
 	 */
 	if (sock && sock->file)
 		sockfd_put(sock);
+               
+        return encap;
+}
 
-        return err;
+static int udp_encap_init_sock(struct sock **sk, unsigned short port)
+{
+        struct udp_encap *encap;
 
+        encap = udp_encap_create(port);
+        
+        if (!encap)
+                return -ENOMEM;
+        
+        *sk = encap->sk;
+
+        return 0;
+}
+
+int udp_encap_client_init(unsigned short port)
+{
+        if (encap_client_sk != NULL) {
+                LOG_ERR("UDP client sock already initialized\n");
+                return -1;
+        }
+        LOG_DBG("UDP encapsulation client sock on port %u\n", port); 
+        pr_alert("UDP encapsulation client sock on port %u\n", port); 
+        return udp_encap_init_sock(&encap_client_sk, port);
+}
+
+int udp_encap_server_init(unsigned short port)
+{
+        if (encap_server_sk != NULL) {
+                LOG_ERR("UDP server sock already initialized\n");
+                return -1;
+        }
+
+        LOG_DBG("UDP encapsulation server sock on port %u\n", port); 
+        pr_alert("UDP encapsulation server sock on port %u\n", port); 
+        return udp_encap_init_sock(&encap_server_sk, port);
 }
 
 int udp_encap_init(void)
 {
-        net_serval.sysctl_udp_encap_port = UDP_ENCAP_PORT;
-        return udp_encap_init_port(UDP_ENCAP_PORT);
+        int err;
+
+        net_serval.sysctl_udp_encap_client_port = UDP_ENCAP_CLIENT_PORT;
+        net_serval.sysctl_udp_encap_server_port = UDP_ENCAP_SERVER_PORT;
+        
+        err = udp_encap_client_init(UDP_ENCAP_CLIENT_PORT);
+
+        if (err)
+                return err;
+
+        return udp_encap_server_init(UDP_ENCAP_SERVER_PORT);
+}
+
+static void udp_encap_fini_sock(struct sock **sk)
+{
+        if (!(*sk))
+                return;
+
+        LOG_DBG("UDP encapsulation socket on port %u destroyed\n",
+                inet_sk((*sk))->inet_sport);
+        
+        inet_release((*sk)->sk_socket);
+        
+        *sk = NULL;
+}
+
+void udp_encap_client_fini(void)
+{
+        udp_encap_fini_sock(&encap_client_sk);
+        encap_client_sk = NULL;
+}
+
+void udp_encap_server_fini(void)
+{
+        udp_encap_fini_sock(&encap_server_sk);
+        encap_server_sk = NULL;
+}
+
+void udp_encap_fini(void)
+{
+        udp_encap_fini_sock(&encap_client_sk);
+        udp_encap_fini_sock(&encap_server_sk);
 }

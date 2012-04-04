@@ -1098,9 +1098,10 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                                sizeof(saddr->sin_addr));
                 }
         }
+
         /* Disable segmentation offload */
         sk->sk_gso_type = 0;
-
+        
         return serval_sal_send_syn(sk, ssk->snd_seq.iss);
 }
 
