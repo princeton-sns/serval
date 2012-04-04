@@ -64,7 +64,8 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
         if (!sk)
                 return -1;
         
-        if (serval_sk(sk)->sal_state == SAL_RSYN_RECV)
+        if (serval_sk(sk)->sal_state == SAL_RSYN_RECV ||
+            serval_sk(sk)->sal_state == SAL_RSYN_SENT_RECV)
                 udp_encap_port = serval_sk(sk)->udp_encap_migration_port;
         else
                 udp_encap_port = serval_sk(sk)->udp_encap_port;

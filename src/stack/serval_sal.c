@@ -1975,28 +1975,31 @@ static int serval_sal_ack_process(struct sock *sk,
         /* Check for migration handshake ACK */
         switch (ssk->sal_state) {
         case SAL_RSYN_RECV:
-                if (!ctx->hdr->rsyn) {
-                        LOG_DBG("Migration complete for flow %s\n",
-                                flow_id_to_str(&ssk->local_flowid));
+                if (!ctx->hdr->rsyn)
                         serval_sock_set_sal_state(sk, SAL_INITIAL);
-                        memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
-                        memset(&ssk->mig_daddr, 0, 4);
-                        sk_dst_reset(sk);
-                        
-                        /* If we're UDP encapsulating, make sure we
-                           now switch to the port used for sending the
-                           RSYN-ACK.  */
-                        ssk->udp_encap_port = ssk->udp_encap_migration_port;
-                        
-                        if (ssk->af_ops->migration_completed)
-                                ssk->af_ops->migration_completed(sk);
-                }
                 break;
         case SAL_RSYN_SENT_RECV:
-                if (!ctx->hdr->rsyn) {
+                if (!ctx->hdr->rsyn)
                         serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
-                }
                 break;
+        default:
+                return 0;
+        }
+        
+        if (!ctx->hdr->rsyn) {
+                LOG_DBG("Migration complete for flow %s\n",
+                        flow_id_to_str(&ssk->local_flowid));
+                memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
+                memset(&ssk->mig_daddr, 0, 4);
+                sk_dst_reset(sk);
+                
+                /* If we're UDP encapsulating, make sure we
+                   now switch to the port used for sending the
+                   RSYN-ACK.  */
+                ssk->udp_encap_port = ssk->udp_encap_migration_port;
+                
+                if (ssk->af_ops->migration_completed)
+                        ssk->af_ops->migration_completed(sk);
         }
 
         return 0;
@@ -2077,19 +2080,6 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         switch(ssk->sal_state) {
         case SAL_INITIAL:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
-                if (ssk->af_ops->freeze_flow)
-                        ssk->af_ops->freeze_flow(sk);
-                
-#if defined(OS_LINUX_KERNEL)
-                /* Packet is UDP encapsulated, make sure we remember
-                 * the port to send the reply on. */
-                if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
-                        struct iphdr *iph = ip_hdr(skb);
-                        struct udphdr *uh = (struct udphdr *)
-                                ((char *)iph + (iph->ihl << 2));
-                        ssk->udp_encap_migration_port = ntohs(uh->source);
-                }
-#endif /* OS_LINUX_KERNEL */
                 break;
         case SAL_RSYN_SENT:
                 serval_sock_set_sal_state(sk, SAL_RSYN_SENT_RECV);
@@ -2104,6 +2094,20 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                         serval_sock_sal_state_str(sk));
                 return 0;
         }
+        
+        if (ssk->af_ops->freeze_flow)
+                ssk->af_ops->freeze_flow(sk);
+        
+#if defined(OS_LINUX_KERNEL)
+                /* Packet is UDP encapsulated, make sure we remember
+                 * the port to send the reply on. */
+        if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
+                struct iphdr *iph = ip_hdr(skb);
+                struct udphdr *uh = (struct udphdr *)
+                        ((char *)iph + (iph->ihl << 2));
+                ssk->udp_encap_migration_port = ntohs(uh->source);
+        }
+#endif /* OS_LINUX_KERNEL */
 
         ssk->rcv_seq.nxt = ctx->seqno + 1;        
         memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
