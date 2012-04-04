@@ -8,6 +8,7 @@
 #include <serval/netdevice.h>
 #include <linux/inetdevice.h>
 #include <serval/ctrlmsg.h>
+#include <af_serval.h>
 #include <ctrl.h>
 #include <service.h>
 #include <serval_ipv4.h>
@@ -38,7 +39,7 @@ MODULE_PARM_DESC(debug, "Set checksum mode (0=software, 1=hardware)");
 
 static char *ifname = NULL;
 module_param(ifname, charp, S_IRUGO);
-MODULE_PARM_DESC(ifname, "Resolve only on this device.");
+MODULE_PARM_DESC(ifname, "Resolve only on this device");
 
 extern int __init proc_init(void);
 extern void __exit proc_fini(void);

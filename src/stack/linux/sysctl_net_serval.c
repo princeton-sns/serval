@@ -13,6 +13,9 @@
 #include <af_serval.h>
 
 extern struct netns_serval net_serval;
+static int encap_port_max = 65535;
+static int encap_port_min = 1;
+
 
 static ctl_table serval_table[] = {
 	{
@@ -28,6 +31,15 @@ static ctl_table serval_table[] = {
 		.maxlen= sizeof(int),
 		.mode= 0644,
 		.proc_handler= proc_dointvec
+	},
+	{
+		.procname= "udp_encap_port",
+		.data= &net_serval.sysctl_udp_encap_port,
+		.maxlen= sizeof(int),
+		.mode= 0644,
+		.proc_handler= proc_dointvec_minmax,
+		.extra1 = &encap_port_min,
+		.extra2 = &encap_port_max,
 	},
 	{ }
 };
