@@ -1983,6 +1983,11 @@ static int serval_sal_ack_process(struct sock *sk,
                         memset(&ssk->mig_daddr, 0, 4);
                         sk_dst_reset(sk);
                         
+                        /* If we're UDP encapsulating, make sure we
+                           now switch to the port used for sending the
+                           RSYN-ACK.  */
+                        ssk->udp_encap_port = ssk->udp_encap_migration_port;
+                        
                         if (ssk->af_ops->migration_completed)
                                 ssk->af_ops->migration_completed(sk);
                 }
@@ -2074,6 +2079,17 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
                 if (ssk->af_ops->freeze_flow)
                         ssk->af_ops->freeze_flow(sk);
+                
+#if defined(OS_LINUX_KERNEL)
+                /* Packet is UDP encapsulated, make sure we remember
+                 * the port to send the reply on. */
+                if (ip_hdr(skb)->protocol == IPPROTO_UDP) {
+                        struct iphdr *iph = ip_hdr(skb);
+                        struct udphdr *uh = (struct udphdr *)
+                                ((char *)iph + (iph->ihl << 2));
+                        ssk->udp_encap_migration_port = ntohs(uh->source);
+                }
+#endif /* OS_LINUX_KERNEL */
                 break;
         case SAL_RSYN_SENT:
                 serval_sock_set_sal_state(sk, SAL_RSYN_SENT_RECV);

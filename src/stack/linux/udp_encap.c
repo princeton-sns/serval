@@ -59,14 +59,20 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
+        unsigned short udp_encap_port;
 
         if (!sk)
                 return -1;
+        
+        if (serval_sk(sk)->sal_state == SAL_RSYN_RECV)
+                udp_encap_port = serval_sk(sk)->udp_encap_migration_port;
+        else
+                udp_encap_port = serval_sk(sk)->udp_encap_port;
 
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
                                  inet_sk(sk)->inet_daddr,
-                                 serval_sk(sk)->udp_encap_port)) {
+                                 udp_encap_port)) {
                 kfree_skb(skb);
                 return NET_RX_DROP;
         }
