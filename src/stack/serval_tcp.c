@@ -2467,7 +2467,7 @@ static struct sock *serval_tcp_create_openreq_child(struct sock *sk,
         struct serval_tcp_sock *newtp = serval_tcp_sk(newsk);
         struct serval_tcp_sock *oldtp = serval_tcp_sk(sk);
 
-        if (serval_rsk(req)->udp_encap_port)
+        if (serval_rsk(req)->udp_encap_dport)
                 newssk->af_ops = &serval_tcp_encap_af_ops;
         else
                 newssk->af_ops = &serval_tcp_af_ops;

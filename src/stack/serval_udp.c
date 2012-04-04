@@ -276,7 +276,7 @@ int serval_udp_connection_respond_sock(struct sock *sk,
                                        struct sock *child,
                                        struct dst_entry *dst)
 {
-        if (serval_rsk(rsk)->udp_encap_port)
+        if (serval_rsk(rsk)->udp_encap_dport)
                 serval_sk(sk)->af_ops = &serval_udp_encap_af_ops;
         else
                 serval_sk(sk)->af_ops = &serval_udp_af_ops;

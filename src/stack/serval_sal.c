@@ -92,7 +92,7 @@ struct serval_context {
 #if defined(OS_LINUX_KERNEL)
 extern int serval_udp_encap_skb(struct sk_buff *skb, 
                                 __u32 saddr, __u32 daddr, 
-                                u16 dport);
+                                u16 sport, u16 dport);
 #endif
 
 static int serval_sal_state_process(struct sock *sk,
@@ -1587,13 +1587,15 @@ static int serval_sal_send_synack(struct sock *sk,
 
                 /* Remember that we should perform UDP
                    encapsulation */
-                srsk->udp_encap_port = ntohs(uh->source);
-                
+                srsk->udp_encap_sport = ntohs(uh->dest);
+                srsk->udp_encap_dport = ntohs(uh->source);
+
                 LOG_DBG("Sending UDP encapsulated response\n");
                 
                 if (serval_udp_encap_skb(rskb, srsk->reply_saddr,
                                          inet_rsk(rsk)->rmt_addr,
-                                         srsk->udp_encap_port)) {
+                                         srsk->udp_encap_sport,
+                                         srsk->udp_encap_dport)) {
                         LOG_ERR("SYN-ACK encapsulation failed\n");
                         goto drop_and_release;
                 }
@@ -1930,7 +1932,8 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         nssk->snd_seq.nxt = srsk->iss_seq + 1;
                         nssk->rcv_seq.iss = srsk->rcv_seq;
                         nssk->rcv_seq.nxt = srsk->rcv_seq + 1;
-                        nssk->udp_encap_port = srsk->udp_encap_port;
+                        nssk->udp_encap_sport = srsk->udp_encap_sport;
+                        nssk->udp_encap_dport = srsk->udp_encap_dport;
                         rsk->sk = nsk;
                         
                         /* Hash the sock to make it available */
@@ -1994,7 +1997,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 /* If we're UDP encapsulating, make sure we
                    now switch to the port used for sending the
                    RSYN-ACK.  */
-                ssk->udp_encap_port = ssk->udp_encap_migration_port;
+                ssk->udp_encap_dport = ssk->udp_encap_migration_dport;
                 
                 if (ssk->af_ops->migration_completed)
                         ssk->af_ops->migration_completed(sk);
@@ -2103,7 +2106,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                 struct iphdr *iph = ip_hdr(skb);
                 struct udphdr *uh = (struct udphdr *)
                         ((char *)iph + (iph->ihl << 2));
-                ssk->udp_encap_migration_port = ntohs(uh->source);
+                ssk->udp_encap_migration_dport = ntohs(uh->source);
         }
 #endif /* OS_LINUX_KERNEL */
 

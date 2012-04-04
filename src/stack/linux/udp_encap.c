@@ -25,8 +25,8 @@ static struct sock *encap_client_sk = NULL;
 static struct sock *encap_server_sk = NULL;
 
 int serval_udp_encap_skb(struct sk_buff *skb, 
-                         __u32 saddr, __u32 daddr, 
-                         u16 dport)
+                         __u32 saddr, __u32 daddr,
+                         u16 sport, u16 dport)
 {
         struct udphdr *uh;
 
@@ -37,12 +37,13 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 
         skb_reset_transport_header(skb);
         dport = dport == 0 ? ((unsigned short)net_serval.sysctl_udp_encap_server_port) : dport;
+        sport = sport == 0 ? ((unsigned short)net_serval.sysctl_udp_encap_client_port) : sport;
 
-        LOG_DBG("UDP encapsulating [%d:%u] skb->len=%u\n",
-                net_serval.sysctl_udp_encap_client_port, dport, skb->len);
+        LOG_DBG("UDP encapsulating [%u:%u] skb->len=%u\n",
+                sport, dport, skb->len);
 
         /* Build UDP header */
-        uh->source = htons((unsigned short)net_serval.sysctl_udp_encap_client_port);
+        uh->source = htons(sport);
         uh->dest = htons(dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;
@@ -61,7 +62,7 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
         struct serval_sock *ssk;
-        unsigned short udp_encap_port;
+        unsigned short udp_encap_dport;
         
         if (!sk)
                 return -1;
@@ -69,15 +70,16 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
         ssk = serval_sk(sk);
 
         if (ssk->sal_state == SAL_RSYN_RECV ||
-            ssk->sal_state == SAL_RSYN_SENT_RECV)
-                udp_encap_port = ssk->udp_encap_migration_port;
-        else
-                udp_encap_port = ssk->udp_encap_port;
-
+            ssk->sal_state == SAL_RSYN_SENT_RECV) {
+                udp_encap_dport = ssk->udp_encap_migration_dport;
+        } else {
+                udp_encap_dport = ssk->udp_encap_dport;
+        }
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
                                  inet_sk(sk)->inet_daddr,
-                                 udp_encap_port)) {
+                                 ssk->udp_encap_sport,
+                                 udp_encap_dport)) {
                 kfree_skb(skb);
                 return NET_RX_DROP;
         }
