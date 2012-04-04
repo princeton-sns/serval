@@ -148,12 +148,11 @@ static int udp_sock_create(u16 src_port, u16 dst_port, struct socket **sockp)
         udp_addr.sin_family = AF_INET;
         udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         udp_addr.sin_port = htons(src_port);
+        inet_sk(sock->sk)->inet_sport = src_port;
+        inet_sk(sock->sk)->inet_dport = src_port;
 
         err = kernel_bind(sock, (struct sockaddr *) &udp_addr, 
                           sizeof(udp_addr));
-        if (err < 0)
-                goto out;        
-
  out:
         if ((err < 0) && sock) {
                 sock_release(sock);
@@ -209,13 +208,12 @@ static struct udp_encap *udp_encap_create(unsigned short port)
         encap->magic = UDP_ENCAP_MAGIC;
         encap->sk = sk;
         encap->old_sk_destruct = sk->sk_destruct;
-        inet_sk(sk)->inet_sport = port;
-        inet_sk(sk)->inet_dport = port;
 	sk->sk_user_data = encap;
         sk->sk_destruct = udp_encap_destruct;
 
         udp_sk(sk)->encap_type = 4; /* This is an unallocated type */
         udp_sk(sk)->encap_rcv = udp_encap_recv;
+        LOG_DBG("UDP encap initialized\n");
  error:
 	/* If tunnel's socket was created by the kernel, it doesn't
 	 *  have a file.
