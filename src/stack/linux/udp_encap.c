@@ -4,12 +4,13 @@
 #include <net/inet_common.h>
 #include <linux/net.h>
 #include <linux/file.h>
+#include <af_serval.h>
 #include <serval_sock.h>
 #include <serval_sal.h>
 #include <serval_ipv4.h>
 #include <serval/debug.h>
 
-#define UDP_ENCAP_PORT (54324)
+#define UDP_ENCAP_PORT 54324
 #define UDP_ENCAP_MAGIC	0x61114EDA
 
 struct udp_encap {
@@ -34,13 +35,13 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 
         skb_reset_transport_header(skb);
         
-        dport = dport == 0 ? UDP_ENCAP_PORT : dport;
+        dport = dport == 0 ? net_serval.sysctl_udp_encap_port : dport;
 
         LOG_DBG("UDP encapsulating [%u:%u] skb->len=%u\n",
-                UDP_ENCAP_PORT, dport, skb->len);
+                net_serval.sysctl_udp_encap_port, dport, skb->len);
 
         /* Build UDP header */
-        uh->source = htons(UDP_ENCAP_PORT);
+        uh->source = htons(net_serval.sysctl_udp_encap_port);
         uh->dest = htons(dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;
@@ -58,14 +59,21 @@ int serval_udp_encap_skb(struct sk_buff *skb,
 int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
-
+        unsigned short udp_encap_port;
+        
         if (!sk)
                 return -1;
+        
+        if (serval_sk(sk)->sal_state == SAL_RSYN_RECV ||
+            serval_sk(sk)->sal_state == SAL_RSYN_SENT_RECV)
+                udp_encap_port = serval_sk(sk)->udp_encap_migration_port;
+        else
+                udp_encap_port = serval_sk(sk)->udp_encap_port;
 
         if (serval_udp_encap_skb(skb, 
                                  inet_sk(sk)->inet_saddr, 
                                  inet_sk(sk)->inet_daddr,
-                                 serval_sk(sk)->udp_encap_port)) {
+                                 udp_encap_port)) {
                 kfree_skb(skb);
                 return NET_RX_DROP;
         }
@@ -80,13 +88,10 @@ static inline struct udp_encap *sock_to_encap(struct sock *sk)
 	if (sk == NULL)
 		return NULL;
 
-	//sock_hold(sk);
 	encap = (struct udp_encap *)(sk->sk_user_data);
 
-	if (encap == NULL) {
-		//sock_put(sk);
+	if (encap == NULL)
 		goto out;
-	}
 
 	BUG_ON(encap->magic != UDP_ENCAP_MAGIC);
 
@@ -119,8 +124,6 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 
         return serval_sal_rcv(skb);
 
-        //pass_up_put:
-	//sock_put(sk);
 pass_up:
 	return 1;
 }
@@ -141,21 +144,11 @@ static int udp_sock_create(u16 src_port, u16 dst_port, struct socket **sockp)
         udp_addr.sin_family = AF_INET;
         udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
         udp_addr.sin_port = htons(src_port);
+
         err = kernel_bind(sock, (struct sockaddr *) &udp_addr, 
                           sizeof(udp_addr));
         if (err < 0)
-                goto out;
-        /*
-        udp_addr.sin_family = AF_INET;
-        udp_addr.sin_addr = 0;
-        udp_addr.sin_port = htons(dst_port);
-        err = kernel_connect(sock, (struct sockaddr *) &udp_addr, 
-                             sizeof(udp_addr), 0);
-        if (err < 0)
-                goto out;
-        */
-        //sock->sk->sk_no_check = UDP_CSUM_NOXMIT;
-        
+                goto out;        
 
  out:
         if ((err < 0) && sock) {
@@ -196,31 +189,31 @@ void udp_encap_fini(void)
         encap_sk = NULL;
 }
 
-int udp_encap_init(void)
+int udp_encap_init_port(unsigned short port)
 {
         struct socket *sock = NULL;
-        u16 src_port, dst_port;
         struct udp_encap *encap;
         struct sock *sk;
         int err;
-        /*
-        if (sk->sk_state == SERVAL_LISTEN) {
-                src_port = UDP_ENCAP_PORT;
-                dst_port = UDP_ENCAP_PORT;
-        } else {
+        
+        if (encap_sk) {
+                LOG_ERR("UDP encapsulation already initialized\n");
+                return -1;
         }
-        */
-        LOG_DBG("Initializing UDP encapsulation for Serval\n");
 
-        src_port = UDP_ENCAP_PORT;
-        dst_port = UDP_ENCAP_PORT;
+        pr_alert("Initializing UDP encapsulation on port %u\n", 
+                 port);
 
-        err = udp_sock_create(src_port, dst_port, &sock);
+        LOG_DBG("Initializing UDP encapsulation on port %u\n", 
+                 port);
+
+        err = udp_sock_create(port, port, &sock);
 
         if (err < 0) {
                 LOG_ERR("Could not create UDP socket\n");
                 goto error;
         }
+
 	sk = sock->sk;
         encap_sk = sk;
 
@@ -232,7 +225,6 @@ int udp_encap_init(void)
         }
 
         encap->magic = UDP_ENCAP_MAGIC;
-        //encap->sk_parent = sk_parent;
         encap->sk = sk;
         encap->old_sk_destruct = sk->sk_destruct;
 
@@ -249,4 +241,11 @@ int udp_encap_init(void)
 		sockfd_put(sock);
 
         return err;
+
+}
+
+int udp_encap_init(void)
+{
+        net_serval.sysctl_udp_encap_port = UDP_ENCAP_PORT;
+        return udp_encap_init_port(UDP_ENCAP_PORT);
 }

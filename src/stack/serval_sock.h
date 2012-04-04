@@ -156,6 +156,7 @@ struct serval_sock {
         u8                      peer_nonce[SERVAL_NONCE_SIZE];
         u16                     ext_hdr_len;
         u16                     udp_encap_port;
+        u16                     udp_encap_migration_port;
         struct {
                 u32        una;
                 u32        nxt;

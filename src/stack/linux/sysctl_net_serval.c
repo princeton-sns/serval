@@ -13,6 +13,36 @@
 #include <af_serval.h>
 
 extern struct netns_serval net_serval;
+static int encap_port_max = 65535;
+static int encap_port_min = 1;
+
+extern int udp_encap_init_port(unsigned short);
+extern void udp_encap_fini(void);
+
+static int proc_udp_encap_port(struct ctl_table *table, int write,
+			       void *buffer, size_t *lenp, loff_t *ppos)
+{
+	int err;
+	unsigned short old_port = net_serval.sysctl_udp_encap_port;
+
+	err = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
+
+	if (err == 0) {
+		udp_encap_fini();
+		err = udp_encap_init_port(net_serval.sysctl_udp_encap_port);
+		
+		if (err) {
+			net_serval.sysctl_udp_encap_port = old_port;
+			udp_encap_init_port(old_port);
+			/* If we fail to reinitialize UDP
+			 * encapsulation here, there isn't much we can
+			 * do */
+		}
+	} 
+
+	return err;
+}
+	
 
 static ctl_table serval_table[] = {
 	{
@@ -28,6 +58,15 @@ static ctl_table serval_table[] = {
 		.maxlen= sizeof(int),
 		.mode= 0644,
 		.proc_handler= proc_dointvec
+	},
+	{
+		.procname= "udp_encap_port",
+		.data= &net_serval.sysctl_udp_encap_port,
+		.maxlen= sizeof(int),
+		.mode= 0644,
+		.proc_handler= proc_udp_encap_port,
+		.extra1 = &encap_port_min,
+		.extra2 = &encap_port_max,
 	},
 	{ }
 };
