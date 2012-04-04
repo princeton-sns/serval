@@ -60,7 +60,7 @@ int serval_udp_encap_xmit(struct sk_buff *skb)
 { 
         struct sock *sk = skb->sk;
         unsigned short udp_encap_port;
-
+        
         if (!sk)
                 return -1;
         
@@ -189,26 +189,31 @@ void udp_encap_fini(void)
         encap_sk = NULL;
 }
 
-int udp_encap_init(void)
+int udp_encap_init_port(unsigned short port)
 {
         struct socket *sock = NULL;
-        u16 src_port, dst_port;
         struct udp_encap *encap;
         struct sock *sk;
         int err;
         
-        LOG_DBG("Initializing UDP encapsulation for Serval\n");
-       
-        net_serval.sysctl_udp_encap_port = UDP_ENCAP_PORT;
-        src_port = net_serval.sysctl_udp_encap_port;
-        dst_port = net_serval.sysctl_udp_encap_port;
+        if (encap_sk) {
+                LOG_ERR("UDP encapsulation already initialized\n");
+                return -1;
+        }
 
-        err = udp_sock_create(src_port, dst_port, &sock);
+        pr_alert("Initializing UDP encapsulation on port %u\n", 
+                 port);
+
+        LOG_DBG("Initializing UDP encapsulation on port %u\n", 
+                 port);
+
+        err = udp_sock_create(port, port, &sock);
 
         if (err < 0) {
                 LOG_ERR("Could not create UDP socket\n");
                 goto error;
         }
+
 	sk = sock->sk;
         encap_sk = sk;
 
@@ -220,7 +225,6 @@ int udp_encap_init(void)
         }
 
         encap->magic = UDP_ENCAP_MAGIC;
-        //encap->sk_parent = sk_parent;
         encap->sk = sk;
         encap->old_sk_destruct = sk->sk_destruct;
 
@@ -237,4 +241,11 @@ int udp_encap_init(void)
 		sockfd_put(sock);
 
         return err;
+
+}
+
+int udp_encap_init(void)
+{
+        net_serval.sysctl_udp_encap_port = UDP_ENCAP_PORT;
+        return udp_encap_init_port(UDP_ENCAP_PORT);
 }
