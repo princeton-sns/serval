@@ -36,13 +36,13 @@ int serval_udp_encap_skb(struct sk_buff *skb,
                 return -1;
 
         skb_reset_transport_header(skb);
-        dport = dport == 0 ? net_serval.sysctl_udp_encap_server_port : dport;
+        dport = dport == 0 ? ((unsigned short)net_serval.sysctl_udp_encap_server_port) : dport;
 
-        LOG_DBG("UDP encapsulating [%u:%u] skb->len=%u\n",
+        LOG_DBG("UDP encapsulating [%d:%u] skb->len=%u\n",
                 net_serval.sysctl_udp_encap_client_port, dport, skb->len);
 
         /* Build UDP header */
-        uh->source = htons(net_serval.sysctl_udp_encap_client_port);
+        uh->source = htons((unsigned short)net_serval.sysctl_udp_encap_client_port);
         uh->dest = htons(dport);
         uh->len = htons(skb->len);
         skb->ip_summed = CHECKSUM_NONE;

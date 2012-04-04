@@ -25,7 +25,7 @@ static int proc_udp_encap_port(struct ctl_table *table, int write,
 			       void *buffer, size_t *lenp, loff_t *ppos)
 {
 	int err;
-	unsigned short old_port = *((unsigned short *)table->data);
+	unsigned short old_port = (unsigned short)*((int *)table->data);
 	int (*init_func)(unsigned short);
 	void (*fini_func)(void);
 
@@ -39,13 +39,13 @@ static int proc_udp_encap_port(struct ctl_table *table, int write,
 
 	err = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
-	if (err == 0) {
+	if (write && err == 0) {
 		fini_func();
 
-		err = init_func(*((unsigned short *)table->data));
+		err = init_func((unsigned short)*((int *)table->data));
 		
 		if (err) {
-			*((unsigned short *)table->data) = old_port;
+			*((int *)table->data) = old_port;
 			init_func(old_port);
 			/* If we fail to reinitialize UDP
 			 * encapsulation here, there isn't much we can

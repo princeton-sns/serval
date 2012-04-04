@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
  *
- * The Service Access layer (SAL).
+ * The Service Access Layer (SAL).
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  *          David Shue <dshue@cs.princeton.edu>
@@ -1206,9 +1206,6 @@ static int serval_sal_send_fin(struct sock *sk, u32 seqno)
         struct sk_buff *skb;
         int err;
 
-        //if (ssk->sal_state != SAL_CLOSING)
-        //      return 0;
-        
         /* We are under lock, so allocation must be atomic */
         /* Socket is locked, keep trying until memory is available. */
         for (;;) {
