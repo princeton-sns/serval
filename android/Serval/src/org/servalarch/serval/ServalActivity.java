@@ -111,6 +111,7 @@ public class ServalActivity extends Activity
 			public void onCheckedChanged(CompoundButton buttonView,
 					boolean isChecked) {
 				boolean isLoaded = isServalModuleLoaded();
+				boolean addPersistent = !isLoaded;
 				String cmd;
 
 				if (isChecked) {
@@ -118,6 +119,7 @@ public class ServalActivity extends Activity
 						return;
 
 					cmd = "insmod " + module.getAbsolutePath();
+					
 				} else {
 					if (!isLoaded)
 						return;
@@ -144,13 +146,15 @@ public class ServalActivity extends Activity
 
 					AppHostCtrl.init(cbs);
 					/* insert persistent rules */
-					Map<String, ?> idMap = prefs.getAll();
-		        	for (String srvID : idMap.keySet()) {
-		        		if (!(idMap.get(srvID) instanceof String))
-		        			continue;
-		        		String addr = (String) idMap.get(srvID);
-		        		AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
-		        	}
+					if (addPersistent) {
+						Map<String, ?> idMap = prefs.getAll();
+		        		for (String srvID : idMap.keySet()) {
+		        			if (!(idMap.get(srvID) instanceof String))
+		        				continue;
+		        			String addr = (String) idMap.get(srvID);
+		        			AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
+		        		}
+					}
 				}
 			}
 		});

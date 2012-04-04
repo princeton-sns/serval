@@ -65,35 +65,6 @@
                 android:textSize="15sp" />
         </RelativeLayout>
 
-        <!--
-    <RelativeLayout
-        android:id="@+id/RelativeLayout02"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content" >
-
-        <ToggleButton
-            android:id="@+id/translatorToggle"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/translator_toggle"
-            android:textOff="Disabled"
-            android:textOn="Enabled" />
-
-        <TextView
-            android:id="@+id/TextView02"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
-            android:layout_toLeftOf="@+id/translatorToggle"
-            android:text="@string/translator_label"
-            android:textAppearance="?android:attr/textAppearanceLarge"
-            android:textSize="15sp" />
-    </RelativeLayout>
-        -->
-
         <TextView
             android:id="@+id/textView2"
             android:layout_width="wrap_content"
@@ -126,10 +97,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="0.75"
                 android:digits="0123456789."
-                android:inputType="number" >
-
-                <requestFocus />
-            </EditText>
+                android:inputType="number" />
 
             <Button
                 android:id="@+id/add_service_button"
@@ -255,32 +223,5 @@
                 android:textSize="15dp" />
         </RelativeLayout>
     </LinearLayout>
-    
-    <LinearLayout
-        android:id="@+id/linearLayout1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="right" >
-        
-       	<TextView
-            android:id="@+id/ip_label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Permanent rule: "
-            android:textAppearance="?android:attr/textAppearanceMedium" />
-       	<ToggleButton
-            android:id="@+id/servicePerm"
-            android:layout_width="75dp"
-            android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginRight="30dp"
-            android:text="@string/udp_encap_toggle"
-            android:textOff="No"
-            android:textOn="Yes" />
-        
-    </LinearLayout>
-    
-    
 
 </ScrollView>
