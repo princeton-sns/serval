@@ -195,28 +195,30 @@ static int client(const char *filepath,
 
                 memset(&saddr, 0, sizeof(saddr));
                 
-                ret = getsockname(sock, (struct sockaddr *)&saddr.in, &addrlen);
+                ret = getsockname(sock, (struct sockaddr *)&saddr, &addrlen);
 
                 if (ret == -1) {
                         fprintf(stderr, "Could not get sock name : %s\n",
                                 strerror(errno));
                 } else {
-                        printf("sock name is %s family=%d\n",
+                        printf("sock name is %s @ %s\n",
+                               service_id_to_str(&saddr.sv.sv_srvid),
                                inet_ntop(AF_INET, &saddr.in.sin_addr, 
-                                         ipaddr, 18), saddr.in.sin_family);
+                                         ipaddr, 18));
                 }
 
                 memset(&saddr, 0, sizeof(saddr));
                 
-                ret = getpeername(sock, (struct sockaddr *)&saddr.in, &addrlen);
+                ret = getpeername(sock, (struct sockaddr *)&saddr, &addrlen);
 
                 if (ret == -1) {
                         fprintf(stderr, "Could not get peer name : %s\n",
                                 strerror(errno));
                 } else {
-                        printf("peer name is %s family=%d\n",
+                        printf("peer name is %s @ %s\n",
+                               service_id_to_str(&saddr.sv.sv_srvid),
                                inet_ntop(AF_INET, &saddr.in.sin_addr, 
-                                         ipaddr, 18), saddr.in.sin_family);
+                                         ipaddr, 18));
                 }
         } 
 #endif
