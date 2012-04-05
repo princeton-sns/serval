@@ -26,6 +26,7 @@ public class ConnectivityReceiver extends BroadcastReceiver {
         			if (!(idMap.get(srvID) instanceof String))
         				continue;
         			String addr = (String) idMap.get(srvID);
+        			AppHostCtrl.performOp(context.getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_REMOVE);
         			AppHostCtrl.performOp(context.getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
         		}
         	}
