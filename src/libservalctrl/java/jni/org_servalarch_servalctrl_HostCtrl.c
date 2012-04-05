@@ -303,8 +303,10 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
                                     "(JIJJJJJJJ)V");
 
-        if (!mid)
+        if (!mid) {
+            LOG_ERR("Constructor does not exist.\n");
             return NULL;
+        }
     
         obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
                             (jlong)ntohl(info.flow.s_id32),
@@ -316,6 +318,9 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)info.tcp_rttvar,
                             (jlong)info.tcp_snd_una,
                             (jlong)info.tcp_snd_nxt);
+    }
+    else {
+        LOG_ERR("Flow %ld is not TCP (%d)!\n", ntohl(info.flow.s_id32), info.proto);
     }
 
     return obj;
@@ -635,7 +640,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
 
     if (num_flows > 0) {
         unsigned int i = 0;
-
+        LOG_ERR("Callback for %lu flows!\n", num_flows);
         arr = (*env)->NewObjectArray(env, num_flows, flowstat_cls, NULL);
 
         if (!arr) {
@@ -647,7 +652,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
             jobject flow_stat = new_flow_stat(env, csr->info[i]);
 
             if (!flow_stat) {
-                LOG_ERR("could not create flow stat object\n");
+                LOG_ERR("Could not create flow stat object\n");
                 (*env)->DeleteLocalRef(env, arr);
                 return -1;
             }
@@ -656,7 +661,6 @@ static int on_flow_stat_update(struct hostctrl *hc,
             (*env)->DeleteLocalRef(env, flow_stat);
         }
 
-        fprintf(stderr, "Callback for %lu flows!\n", num_flows);
     }
 
     (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,

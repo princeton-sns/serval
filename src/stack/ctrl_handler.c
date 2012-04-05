@@ -480,24 +480,45 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
 {
         struct ctrlmsg_stats_query *csm = (struct ctrlmsg_stats_query*) cm;
         int num_flows = CTRLMSG_STATS_NUM_FLOWS(csm);
-        int i, ret = 0;
+        int num_results = 0;
+        int i, j, ret = 0;
         int len = sizeof(struct ctrlmsg) + num_flows * sizeof(struct flow_info);
-        struct ctrlmsg_stats_response *resp = kmalloc(len, GFP_KERNEL);
-        if (!resp) {
+        struct ctrlmsg_stats_response *temp = kmalloc(len, GFP_KERNEL);
+        struct ctrlmsg_stats_response *resp;
+        if (!temp) {
                 LOG_ERR("Could not allocate message\n");
                 return -1;
         }
-        memset(resp, 0, len);
-        resp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
-        resp->cmh.len = len;
+        memset(temp, 0, len);
+        /* create a temp response trying all flows */
         for (i = 0; i < num_flows; i++) {
                 LOG_DBG("Got a stats query for flow %s\n", 
                         flow_id_to_str(&csm->flows[i]));
-                serval_sock_stats_flow(&csm->flows[i], resp, i);
-                memcpy(&resp->info[i].flow, &csm->flows[i], 
+                serval_sock_stats_flow(&csm->flows[i], temp, i);
+                memcpy(&temp->info[i].flow, &csm->flows[i], 
                        sizeof(struct flow_id));
+                if (temp->info[i].proto != 0) {
+                        num_results++;
+                }
         }
+
+        /* copy only the alive flows to the actual response */
+        len = sizeof(struct ctrlmsg) + num_results * sizeof(struct flow_info);
+        resp = kmalloc(len, GFP_KERNEL);
+        memset(resp, 0, len);
+        resp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
+        resp->cmh.len = len;
+        for (i = 0, j = 0; i < num_flows; i++) {
+                if (temp->info[i].proto != 0) {
+                        memcpy(&resp->info[j], &temp->info[i], 
+                               sizeof(struct flow_info));
+                        j++;
+                }
+        }
+
         ctrl_sendmsg(&resp->cmh, GFP_KERNEL);
+        kfree(resp);
+        kfree(temp);
 
         return ret;
 }

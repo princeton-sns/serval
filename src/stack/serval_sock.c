@@ -264,8 +264,8 @@ void serval_sock_stats_flow(struct flow_id *flow,
                             int idx)
 {
         struct sock *sk = serval_sock_lookup_flow(flow);
-        LOG_DBG("Doing debug on flow %s\n", flow_id_to_str(flow));
         if (sk) {
+                LOG_DBG("Found something for flow.\n");
                 lock_sock(sk);
                 resp->info[idx].proto = sk->sk_protocol;
                 // TODO Fix these hardcoded values
