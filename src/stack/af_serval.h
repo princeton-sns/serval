@@ -13,7 +13,8 @@ struct ctl_table_header;
 struct netns_serval {
 	int sysctl_sal_forward;
 	int sysctl_udp_encap;
-        unsigned short sysctl_udp_encap_port;
+        int sysctl_udp_encap_client_port;
+        int sysctl_udp_encap_server_port;
 	struct ctl_table_header *ctl;
 };
 

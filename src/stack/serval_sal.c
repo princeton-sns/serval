@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*-
  *
- * The Service Access layer (SAL).
+ * The Service Access Layer (SAL).
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  *          David Shue <dshue@cs.princeton.edu>
@@ -92,7 +92,7 @@ struct serval_context {
 #if defined(OS_LINUX_KERNEL)
 extern int serval_udp_encap_skb(struct sk_buff *skb, 
                                 __u32 saddr, __u32 daddr, 
-                                u16 dport);
+                                u16 sport, u16 dport);
 #endif
 
 static int serval_sal_state_process(struct sock *sk,
@@ -1098,9 +1098,10 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                                sizeof(saddr->sin_addr));
                 }
         }
+
         /* Disable segmentation offload */
         sk->sk_gso_type = 0;
-
+        
         return serval_sal_send_syn(sk, ssk->snd_seq.iss);
 }
 
@@ -1179,7 +1180,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 seqno)
         if (sk->sk_state == SERVAL_FINWAIT1 ||
             sk->sk_state == SERVAL_CLOSING ||
             sk->sk_state == SERVAL_LASTACK) {
-                /* TODO: We have sent our FIN, but not received the ACK. We
+                /* We have sent our FIN, but not received the ACK. We
                    need to add the FIN bit. */
                 SERVAL_SKB_CB(skb)->flags |= SVH_FIN;
         }
@@ -1205,9 +1206,6 @@ static int serval_sal_send_fin(struct sock *sk, u32 seqno)
         struct sk_buff *skb;
         int err;
 
-        //if (ssk->sal_state != SAL_CLOSING)
-        //      return 0;
-        
         /* We are under lock, so allocation must be atomic */
         /* Socket is locked, keep trying until memory is available. */
         for (;;) {
@@ -1589,13 +1587,15 @@ static int serval_sal_send_synack(struct sock *sk,
 
                 /* Remember that we should perform UDP
                    encapsulation */
-                srsk->udp_encap_port = ntohs(uh->source);
-                
+                srsk->udp_encap_sport = ntohs(uh->dest);
+                srsk->udp_encap_dport = ntohs(uh->source);
+
                 LOG_DBG("Sending UDP encapsulated response\n");
                 
                 if (serval_udp_encap_skb(rskb, srsk->reply_saddr,
                                          inet_rsk(rsk)->rmt_addr,
-                                         srsk->udp_encap_port)) {
+                                         srsk->udp_encap_sport,
+                                         srsk->udp_encap_dport)) {
                         LOG_ERR("SYN-ACK encapsulation failed\n");
                         goto drop_and_release;
                 }
@@ -1631,19 +1631,6 @@ static int serval_sal_rcv_syn(struct sock *sk,
 
         /* Make compiler be quiet */
         memset(&myaddr, 0, sizeof(myaddr));
-
-        /* Cache this service. FIXME, need to garbage this entry at
-         * some point so that we aren't always redirected to same
-         * instance. */
-        /*
-          err = service_add(&conn_ext->src_srvid, 
-          sizeof(conn_ext->src_srvid) * 8, 
-          skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
-        
-          if (err < 0) {
-          LOG_ERR("could not cache service for incoming packet\n");
-          }
-        */
 
         LOG_DBG("REQUEST seqno=%u\n", ctx->seqno);
 
@@ -1932,7 +1919,8 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         nssk->snd_seq.nxt = srsk->iss_seq + 1;
                         nssk->rcv_seq.iss = srsk->rcv_seq;
                         nssk->rcv_seq.nxt = srsk->rcv_seq + 1;
-                        nssk->udp_encap_port = srsk->udp_encap_port;
+                        nssk->udp_encap_sport = srsk->udp_encap_sport;
+                        nssk->udp_encap_dport = srsk->udp_encap_dport;
                         rsk->sk = nsk;
                         
                         /* Hash the sock to make it available */
@@ -1996,7 +1984,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 /* If we're UDP encapsulating, make sure we
                    now switch to the port used for sending the
                    RSYN-ACK.  */
-                ssk->udp_encap_port = ssk->udp_encap_migration_port;
+                ssk->udp_encap_dport = ssk->udp_encap_migration_dport;
                 
                 if (ssk->af_ops->migration_completed)
                         ssk->af_ops->migration_completed(sk);
@@ -2018,19 +2006,27 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                                   struct serval_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct net_device *mig_dev = dev_get_by_index(sock_net(sk), 
+                                                      ssk->mig_dev_if);
+        int err = 0;
 
         LOG_DBG("Recv RSYN+ACK in %s state\n",
                 serval_sock_sal_state_str(sk));
+
+        if (!mig_dev) {
+                LOG_ERR("No migration device set\n");
+                return -1;
+        }
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
                 LOG_DBG("Migration complete for flow %s!\n",
                         flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
-
-                dev_get_ipv4_addr(ssk->mig_dev, IFADDR_LOCAL, 
+                
+                dev_get_ipv4_addr(mig_dev, IFADDR_LOCAL, 
                                   &inet_sk(sk)->inet_saddr);
-                serval_sock_set_dev(sk, ssk->mig_dev);
+                serval_sock_set_dev(sk, mig_dev);
                 serval_sock_set_mig_dev(sk, NULL);
                 sk_dst_reset(sk);
 
@@ -2043,12 +2039,16 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                 sk_dst_reset(sk);
                 break;
         default:
-                return 0;
+                goto out;
         }
         
         ssk->rcv_seq.nxt = ctx->seqno + 1;
-        
-        return serval_sal_send_ack(sk);
+
+        err = serval_sal_send_ack(sk);
+out:        
+        dev_put(mig_dev);
+
+        return err;
 }
 
 /*
@@ -2105,7 +2105,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                 struct iphdr *iph = ip_hdr(skb);
                 struct udphdr *uh = (struct udphdr *)
                         ((char *)iph + (iph->ihl << 2));
-                ssk->udp_encap_migration_port = ntohs(uh->source);
+                ssk->udp_encap_migration_dport = ntohs(uh->source);
         }
 #endif /* OS_LINUX_KERNEL */
 
@@ -2307,8 +2307,6 @@ static int serval_sal_child_process(struct sock *parent,
         int state = child->sk_state;
 
         /* child sock is already locked here */
-
-        serval_sk(child)->dev = NULL;        
 
         /* Check lock on child socket, similarly to how we handled the
            parent sock for the incoming skb. */
@@ -3353,41 +3351,45 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         struct serval_sock *ssk = serval_sk(sk);
       	uint32_t temp_daddr = 0;
         u8 skb_flags = SERVAL_SKB_CB(skb)->flags;
+        struct net_device *mig_dev = NULL; 
         int err = 0;
 
         if (skb_flags & SVH_RSYN) {
-        	    if (ssk->mig_dev) {
-                            dev_get_ipv4_addr(ssk->mig_dev,
-                                              IFADDR_LOCAL,
-                                              &inet_sk(sk)->inet_saddr);
-#if defined(ENABLE_DEBUG)
-                            {
-                                    char src[18];
-                                    LOG_DBG("Sending on mig_dev %s src=%s\n",
-                                            ssk->mig_dev->name, 
-                                            inet_ntop(AF_INET, 
-                                                      &inet_sk(sk)->inet_saddr, 
-                                                      src, 18));
-                            }
-#endif
-                            skb_set_dev(skb, ssk->mig_dev);
-        	    }
+                mig_dev = dev_get_by_index(sock_net(sk), 
+                                           ssk->mig_dev_if);
 
-        	    if (ssk->sal_state == SAL_RSYN_RECV) {
+                if (mig_dev) {
+                        dev_get_ipv4_addr(mig_dev,
+                                          IFADDR_LOCAL,
+                                          &inet_sk(sk)->inet_saddr);
 #if defined(ENABLE_DEBUG)
-                            char dst[18];
-        	            LOG_DBG("Sending to MIG dest addr %s\n",
-                                    inet_ntop(AF_INET, 
-                                              &ssk->mig_daddr, 
-                                              dst, 18));
+                        {
+                                char src[18];
+                                LOG_DBG("Sending on mig_dev %s src=%s\n",
+                                        mig_dev->name, 
+                                        inet_ntop(AF_INET, 
+                                                  &inet_sk(sk)->inet_saddr, 
+                                                  src, 18));
+                        }
 #endif
-        	            memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
+                        skb_set_dev(skb, mig_dev);
+                }
+                
+                if (ssk->sal_state == SAL_RSYN_RECV) {
+#if defined(ENABLE_DEBUG)
+                        char dst[18];
+                        LOG_DBG("Sending to MIG dest addr %s\n",
+                                inet_ntop(AF_INET, 
+                                              &ssk->mig_daddr, 
+                                          dst, 18));
+#endif
+                        memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
         	            memcpy(&inet_sk(sk)->inet_daddr, 
                                    &ssk->mig_daddr, 4);
-        	    }
-                    
-                    /* Must remove any cached route */
-                    sk_dst_reset(sk);
+                }
+                
+                /* Must remove any cached route */
+                sk_dst_reset(sk);
         }
 
         /*
@@ -3406,20 +3408,23 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
           queue_xmit for userlevel unless the socket has had its
           interface set by a previous send event.
         */
-
-        if (!skb->dev && ssk->dev)
-                skb_set_dev(skb, ssk->dev);
-        
         err = ssk->af_ops->queue_xmit(skb);
         
         if (skb_flags & SVH_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
-                if (ssk->mig_dev) {
-                        dev_get_ipv4_addr(ssk->dev,
-                                          IFADDR_LOCAL,
-                                          &inet_sk(sk)->inet_saddr);
+                if (mig_dev) {
+                        struct net_device *dev = 
+                                dev_get_by_index(sock_net(sk), 
+                                                 sk->sk_bound_dev_if);
+                                
+                        if (dev) {
+                                dev_get_ipv4_addr(dev,
+                                                  IFADDR_LOCAL,
+                                                  &inet_sk(sk)->inet_saddr);
+                                dev_put(dev);
+                        }
                 }
-
+                
                 if (ssk->sal_state == SAL_RSYN_RECV) {
                         memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
                 }
@@ -3433,6 +3438,9 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         else {
             ssk->tot_pkts_sent++;
         }
+
+        if (mig_dev)
+                dev_put(mig_dev);
 
         return err;
 }
@@ -3626,7 +3634,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 /* for user-space, need to specify a device - the
                  * kernel will route */
 #if defined(OS_USER)
-                skb_set_dev(skb, __dev_get_by_index(NULL, 0));
+                skb_set_dev(skb, __dev_get_by_index(sock_net(sk), 0));
 #endif
                 serval_sal_send_check(sh);
                 
@@ -3715,7 +3723,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * appropriate for kernel operation as well
                          */
 #if defined(OS_USER)
-                        dev = __dev_get_by_index(NULL, 0);
+                        dev = __dev_get_by_index(sock_net(sk), 0);
 #else
                         /* FIXME: not sure about getting the device
                            without a refcount here... */

@@ -16,24 +16,37 @@ extern struct netns_serval net_serval;
 static int encap_port_max = 65535;
 static int encap_port_min = 1;
 
-extern int udp_encap_init_port(unsigned short);
-extern void udp_encap_fini(void);
+extern int udp_encap_client_init(unsigned short);
+extern int udp_encap_server_init(unsigned short);
+extern void udp_encap_client_fini(void);
+extern void udp_encap_server_fini(void);
 
 static int proc_udp_encap_port(struct ctl_table *table, int write,
 			       void *buffer, size_t *lenp, loff_t *ppos)
 {
 	int err;
-	unsigned short old_port = net_serval.sysctl_udp_encap_port;
+	unsigned short old_port = (unsigned short)*((int *)table->data);
+	int (*init_func)(unsigned short);
+	void (*fini_func)(void);
+
+	if (table->data == &net_serval.sysctl_udp_encap_client_port) {
+		init_func = udp_encap_client_init;
+		fini_func = udp_encap_client_fini;
+	} else {
+		init_func = udp_encap_server_init;
+		fini_func = udp_encap_server_fini;
+	}
 
 	err = proc_dointvec_minmax(table, write, buffer, lenp, ppos);
 
-	if (err == 0) {
-		udp_encap_fini();
-		err = udp_encap_init_port(net_serval.sysctl_udp_encap_port);
+	if (write && err == 0) {
+		fini_func();
+
+		err = init_func((unsigned short)*((int *)table->data));
 		
 		if (err) {
-			net_serval.sysctl_udp_encap_port = old_port;
-			udp_encap_init_port(old_port);
+			*((int *)table->data) = old_port;
+			init_func(old_port);
 			/* If we fail to reinitialize UDP
 			 * encapsulation here, there isn't much we can
 			 * do */
@@ -42,7 +55,6 @@ static int proc_udp_encap_port(struct ctl_table *table, int write,
 
 	return err;
 }
-	
 
 static ctl_table serval_table[] = {
 	{
@@ -60,8 +72,17 @@ static ctl_table serval_table[] = {
 		.proc_handler= proc_dointvec
 	},
 	{
-		.procname= "udp_encap_port",
-		.data= &net_serval.sysctl_udp_encap_port,
+		.procname= "udp_encap_client_port",
+		.data= &net_serval.sysctl_udp_encap_client_port,
+		.maxlen= sizeof(int),
+		.mode= 0644,
+		.proc_handler= proc_udp_encap_port,
+		.extra1 = &encap_port_min,
+		.extra2 = &encap_port_max,
+	},
+	{
+		.procname= "udp_encap_server_port",
+		.data= &net_serval.sysctl_udp_encap_server_port,
 		.maxlen= sizeof(int),
 		.mode= 0644,
 		.proc_handler= proc_udp_encap_port,

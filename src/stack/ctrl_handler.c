@@ -455,10 +455,10 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm)
                 if (!old_dev) {
                         LOG_ERR("No old interface %s\n", cmm->from_i);
                         ret = -1;
-                        break;  
+                } else {
+                        serval_sock_migrate_iface(old_dev, new_dev);
+                        dev_put(old_dev);
                 }
-                serval_sock_migrate_iface(old_dev, new_dev);
-                dev_put(old_dev);
                 break;
         case CTRL_MIG_FLOW:
                 LOG_DBG("migrate flow %s to iface %s\n", 

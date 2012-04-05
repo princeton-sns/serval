@@ -375,7 +375,6 @@ int serval_ipv4_xmit(struct sk_buff *skb)
         struct rtable *rt;
         struct inet_sock *inet = inet_sk(sk);
 	struct ip_options *opt = NULL; /*inet->inet_opt; */
-        int ifindex;
 
 	/*
 	   The SAL has dirtied the control block that IP expects to be
@@ -400,16 +399,11 @@ int serval_ipv4_xmit(struct sk_buff *skb)
         /* Make sure we can route this packet. */
         rt = (struct rtable *)__sk_dst_check(sk, 0);
 
-        if (skb->dev) {
-                ifindex = skb->dev->ifindex;
-        } else {
-                ifindex = sk->sk_bound_dev_if;
-        }
-
         if (rt == NULL) {
                 struct flowi fl;
 
-                serval_flow_init_output(&fl, ifindex, sk->sk_mark, 
+                serval_flow_init_output(&fl, sk->sk_bound_dev_if, 
+                                        sk->sk_mark, 
                                         RT_CONN_FLAGS(sk), 0,
                                         skb->protocol,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))

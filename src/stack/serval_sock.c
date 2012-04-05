@@ -181,8 +181,8 @@ void serval_sock_migrate_iface(struct net_device *old_if,
 
                 lock_sock(sk);
                 
-                if (serval_sk(sk)->dev && 
-                    serval_sk(sk)->dev->ifindex == old_if->ifindex) {
+                if (sk->sk_bound_dev_if > 0 && 
+                    sk->sk_bound_dev_if == old_if->ifindex) {
                         LOG_DBG("Socket matches old if\n");
                         serval_sock_set_mig_dev(sk, new_if);
                         serval_sal_migrate(sk);
@@ -214,9 +214,9 @@ void serval_sock_freeze_flows(struct net_device *dev)
                         struct serval_sock *ssk = serval_sk(sk);
                         
                         lock_sock(sk);
-                
-                        if (ssk->dev && 
-                            ssk->dev->ifindex == dev->ifindex) {
+                        
+                        if (sk->sk_bound_dev_if > 0 && 
+                            sk->sk_bound_dev_if == dev->ifindex) {
                                 if (ssk->af_ops->freeze_flow)
                                         ssk->af_ops->freeze_flow(sk);
                         }
@@ -592,7 +592,8 @@ void serval_sock_init(struct sock *sk)
 
         sk->sk_state = 0;
         ssk->sal_state = SAL_INITIAL;
-        ssk->udp_encap_port = 0;
+        ssk->udp_encap_sport = 0;
+        ssk->udp_encap_dport = 0;
         INIT_LIST_HEAD(&ssk->sock_node);
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
@@ -634,6 +635,7 @@ void serval_sock_init(struct sock *sk)
         ssk->srtt = 0;
         ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
         ssk->rto = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
+
         write_lock_bh(&sock_list_lock);
         list_add_tail(&ssk->sock_node, &sock_list);
         write_unlock_bh(&sock_list_lock);
@@ -703,17 +705,12 @@ void serval_sock_done(struct sock *sk)
 /* Destructor, called when refcount hits zero */
 void serval_sock_destruct(struct sock *sk)
 {
-        struct serval_sock *ssk = serval_sk(sk);
-
         /* Purge queues */
         __skb_queue_purge(&sk->sk_receive_queue);
         __skb_queue_purge(&sk->sk_error_queue);
 
         /* Clean control queue */
         serval_sal_ctrl_queue_purge(sk);
-
-        if (ssk->dev)
-                dev_put(ssk->dev);
 
 	if (sk->sk_type == SOCK_STREAM && 
             (sk->sk_state != SERVAL_CLOSED && 
@@ -756,26 +753,20 @@ void serval_sock_destruct(struct sock *sk)
 
 void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
 {
-        struct serval_sock *ssk = serval_sk(sk);
-
-        if (dev) {
-                if (ssk->dev)
-                        dev_put(ssk->dev);
-                ssk->dev = dev;
-                dev_hold(dev);
-        }
+        if (dev)
+                sk->sk_bound_dev_if = dev->ifindex;
+        else
+                sk->sk_bound_dev_if = 0;
 }
 
 void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        if (dev) {
-                if (ssk->mig_dev)
-                        dev_put(ssk->mig_dev);
-                ssk->mig_dev = dev;
-                dev_hold(dev);
-        }
+        if (dev)
+                ssk->mig_dev_if = dev->ifindex;
+        else
+                ssk->mig_dev_if = 0;
 }
 
 const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
@@ -1050,7 +1041,9 @@ int __flow_table_print(char *buf, int buflen)
         list_for_each_entry(ssk, &sock_list, sock_node) {
                 char src[18], dst[18];
                 struct sock *sk = (struct sock *)ssk;
-                
+                struct net_device *dev = dev_get_by_index(sock_net(sk), 
+                                                          sk->sk_bound_dev_if);
+
                 len = snprintf(buf + len, buflen - len, 
                                "%-10s %-10s %-17s %-17s %-10s %s\n",
                                flow_id_to_str(&ssk->local_flowid), 
@@ -1060,7 +1053,10 @@ int __flow_table_print(char *buf, int buflen)
                                inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
                                          dst, 18),
                                serval_sock_state_str(sk),
-                               ssk->dev ? ssk->dev->name : "unbound");
+                               dev ? dev->name : "unbound");
+
+                if (dev)
+                        dev_put(dev);
 
                 tot_len += len;
 
