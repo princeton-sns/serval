@@ -1180,7 +1180,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 seqno)
         if (sk->sk_state == SERVAL_FINWAIT1 ||
             sk->sk_state == SERVAL_CLOSING ||
             sk->sk_state == SERVAL_LASTACK) {
-                /* TODO: We have sent our FIN, but not received the ACK. We
+                /* We have sent our FIN, but not received the ACK. We
                    need to add the FIN bit. */
                 SERVAL_SKB_CB(skb)->flags |= SVH_FIN;
         }
@@ -2039,7 +2039,6 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                 sk_dst_reset(sk);
                 break;
         default:
-                dev_put(mig_dev);
                 goto out;
         }
         
@@ -3374,7 +3373,6 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
                         }
 #endif
                         skb_set_dev(skb, mig_dev);
-                        dev_put(mig_dev);
                 }
                 
                 if (ssk->sal_state == SAL_RSYN_RECV) {

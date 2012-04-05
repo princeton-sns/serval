@@ -1028,6 +1028,9 @@ int __flow_table_print(char *buf, int buflen)
                                serval_sock_state_str(sk),
                                dev ? dev->name : "unbound");
 
+                if (dev)
+                        dev_put(dev);
+
                 tot_len += len;
 
                 /* If we are finding out the buffer size, only
