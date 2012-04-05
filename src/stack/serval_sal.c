@@ -1632,19 +1632,6 @@ static int serval_sal_rcv_syn(struct sock *sk,
         /* Make compiler be quiet */
         memset(&myaddr, 0, sizeof(myaddr));
 
-        /* Cache this service. FIXME, need to garbage this entry at
-         * some point so that we aren't always redirected to same
-         * instance. */
-        /*
-          err = service_add(&conn_ext->src_srvid, 
-          sizeof(conn_ext->src_srvid) * 8, 
-          skb->dev, &ip_hdr(skb)->saddr, 4, NULL, GFP_ATOMIC);
-        
-          if (err < 0) {
-          LOG_ERR("could not cache service for incoming packet\n");
-          }
-        */
-
         LOG_DBG("REQUEST seqno=%u\n", ctx->seqno);
 
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
@@ -2019,19 +2006,27 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                                   struct serval_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct net_device *mig_dev = dev_get_by_index(sock_net(sk), 
+                                                      ssk->mig_dev_if);
+        int err = 0;
 
         LOG_DBG("Recv RSYN+ACK in %s state\n",
                 serval_sock_sal_state_str(sk));
+
+        if (!mig_dev) {
+                LOG_ERR("No migration device set\n");
+                return -1;
+        }
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
                 LOG_DBG("Migration complete for flow %s!\n",
                         flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_INITIAL);
-
-                dev_get_ipv4_addr(ssk->mig_dev, IFADDR_LOCAL, 
+                
+                dev_get_ipv4_addr(mig_dev, IFADDR_LOCAL, 
                                   &inet_sk(sk)->inet_saddr);
-                serval_sock_set_dev(sk, ssk->mig_dev);
+                serval_sock_set_dev(sk, mig_dev);
                 serval_sock_set_mig_dev(sk, NULL);
                 sk_dst_reset(sk);
 
@@ -2044,12 +2039,17 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                 sk_dst_reset(sk);
                 break;
         default:
-                return 0;
+                dev_put(mig_dev);
+                goto out;
         }
         
         ssk->rcv_seq.nxt = ctx->seqno + 1;
-        
-        return serval_sal_send_ack(sk);
+
+        err = serval_sal_send_ack(sk);
+out:        
+        dev_put(mig_dev);
+
+        return err;
 }
 
 /*
@@ -2308,8 +2308,6 @@ static int serval_sal_child_process(struct sock *parent,
         int state = child->sk_state;
 
         /* child sock is already locked here */
-
-        serval_sk(child)->dev = NULL;        
 
         /* Check lock on child socket, similarly to how we handled the
            parent sock for the incoming skb. */
@@ -3354,41 +3352,46 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         struct serval_sock *ssk = serval_sk(sk);
       	uint32_t temp_daddr = 0;
         u8 skb_flags = SERVAL_SKB_CB(skb)->flags;
+        struct net_device *mig_dev = NULL; 
         int err = 0;
 
         if (skb_flags & SVH_RSYN) {
-        	    if (ssk->mig_dev) {
-                            dev_get_ipv4_addr(ssk->mig_dev,
-                                              IFADDR_LOCAL,
-                                              &inet_sk(sk)->inet_saddr);
-#if defined(ENABLE_DEBUG)
-                            {
-                                    char src[18];
-                                    LOG_DBG("Sending on mig_dev %s src=%s\n",
-                                            ssk->mig_dev->name, 
-                                            inet_ntop(AF_INET, 
-                                                      &inet_sk(sk)->inet_saddr, 
-                                                      src, 18));
-                            }
-#endif
-                            skb_set_dev(skb, ssk->mig_dev);
-        	    }
+                mig_dev = dev_get_by_index(sock_net(sk), 
+                                           ssk->mig_dev_if);
 
-        	    if (ssk->sal_state == SAL_RSYN_RECV) {
+                if (mig_dev) {
+                        dev_get_ipv4_addr(mig_dev,
+                                          IFADDR_LOCAL,
+                                          &inet_sk(sk)->inet_saddr);
 #if defined(ENABLE_DEBUG)
-                            char dst[18];
-        	            LOG_DBG("Sending to MIG dest addr %s\n",
-                                    inet_ntop(AF_INET, 
-                                              &ssk->mig_daddr, 
-                                              dst, 18));
+                        {
+                                char src[18];
+                                LOG_DBG("Sending on mig_dev %s src=%s\n",
+                                        mig_dev->name, 
+                                        inet_ntop(AF_INET, 
+                                                  &inet_sk(sk)->inet_saddr, 
+                                                  src, 18));
+                        }
 #endif
-        	            memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
+                        skb_set_dev(skb, mig_dev);
+                        dev_put(mig_dev);
+                }
+                
+                if (ssk->sal_state == SAL_RSYN_RECV) {
+#if defined(ENABLE_DEBUG)
+                        char dst[18];
+                        LOG_DBG("Sending to MIG dest addr %s\n",
+                                inet_ntop(AF_INET, 
+                                              &ssk->mig_daddr, 
+                                          dst, 18));
+#endif
+                        memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
         	            memcpy(&inet_sk(sk)->inet_daddr, 
                                    &ssk->mig_daddr, 4);
-        	    }
-                    
-                    /* Must remove any cached route */
-                    sk_dst_reset(sk);
+                }
+                
+                /* Must remove any cached route */
+                sk_dst_reset(sk);
         }
 
         /*
@@ -3407,20 +3410,23 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
           queue_xmit for userlevel unless the socket has had its
           interface set by a previous send event.
         */
-
-        if (!skb->dev && ssk->dev)
-                skb_set_dev(skb, ssk->dev);
-        
         err = ssk->af_ops->queue_xmit(skb);
         
         if (skb_flags & SVH_RSYN) {
                 /* Restore inet_sk(sk)->daddr */
-                if (ssk->mig_dev) {
-                        dev_get_ipv4_addr(ssk->dev,
-                                          IFADDR_LOCAL,
-                                          &inet_sk(sk)->inet_saddr);
+                if (mig_dev) {
+                        struct net_device *dev = 
+                                dev_get_by_index(sock_net(sk), 
+                                                 sk->sk_bound_dev_if);
+                                
+                        if (dev) {
+                                dev_get_ipv4_addr(dev,
+                                                  IFADDR_LOCAL,
+                                                  &inet_sk(sk)->inet_saddr);
+                                dev_put(dev);
+                        }
                 }
-
+                
                 if (ssk->sal_state == SAL_RSYN_RECV) {
                         memcpy(&inet_sk(sk)->inet_daddr, &temp_daddr, 4);
                 }
@@ -3431,6 +3437,9 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
         }
+
+        if (mig_dev)
+                dev_put(mig_dev);
 
         return err;
 }
@@ -3624,7 +3633,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 /* for user-space, need to specify a device - the
                  * kernel will route */
 #if defined(OS_USER)
-                skb_set_dev(skb, __dev_get_by_index(NULL, 0));
+                skb_set_dev(skb, __dev_get_by_index(sock_net(sk), 0));
 #endif
                 serval_sal_send_check(sh);
                 
@@ -3713,7 +3722,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * appropriate for kernel operation as well
                          */
 #if defined(OS_USER)
-                        dev = __dev_get_by_index(NULL, 0);
+                        dev = __dev_get_by_index(sock_net(sk), 0);
 #else
                         /* FIXME: not sure about getting the device
                            without a refcount here... */

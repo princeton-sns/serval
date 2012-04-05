@@ -131,7 +131,8 @@ struct serval_sock {
         /* SAL state, used for, e.g., migration */
         u8                      sal_state;
         u8                      flags;
-        struct net_device       *dev; /* TX device for connected flows */
+        int                     mig_dev_if;
+        u32                     mig_daddr;
         void                    *hash_key;
         u32                     hash_key_len;  /* Keylen in bytes */
         u16                     srvid_prefix_bits;
@@ -145,8 +146,6 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
-        u32                     mig_daddr;
-        struct net_device       *mig_dev;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
