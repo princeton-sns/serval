@@ -111,7 +111,7 @@ static ssize_t forward_data(int from, int to, int splicefd[2])
         
         while (rlen) {
                 ssize_t w = splice(splicefd[0], NULL, to, NULL,
-                                   rlen, SPLICE_F_MOVE | SPLICE_F_MORE);
+                                   rlen, SPLICE_F_MOVE);
                 
                 if (w == -1) {
                         if (errno == EPIPE) {
