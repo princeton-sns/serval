@@ -407,10 +407,6 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 
         if (rt == NULL) {
                 struct flowi fl;
-                char src[18];
-                LOG_DBG("Finding rt for %s (%d)\n", inet_ntop(AF_INET,
-                                                  &inet->inet_saddr,
-                                                  src, 18), sk->sk_bound_dev_if);
 
                 serval_flow_init_output(&fl, ifindex, 
                                         sk->sk_mark, 
