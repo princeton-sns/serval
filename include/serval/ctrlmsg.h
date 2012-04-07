@@ -272,6 +272,8 @@ struct stats_proto_tcp {
         
 };
 
+#define FLOW_INFO_F_MORE 0x01
+
 struct flow_info {
         struct flow_id flow;
         uint8_t proto;
@@ -290,13 +292,14 @@ struct flow_info {
 
 struct ctrlmsg_stats_response {
         struct ctrlmsg cmh;
+        uint8_t flags;
         struct flow_info info[0];
 } CTRLMSG_PACKED;
 
 #define CTRLMSG_STATS_RESP_SIZE(cmsg) \
         (cmsg)->cmh.len
 #define CTRLMSG_STATS_NUM_INFOS(cmsg) \
-        (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg) - 1) /                  \
          sizeof(struct flow_info))
 
 enum {

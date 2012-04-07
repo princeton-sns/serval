@@ -482,7 +482,8 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
         int num_flows = CTRLMSG_STATS_NUM_FLOWS(csm);
         int num_results = 0;
         int i, j, ret = 0;
-        int len = sizeof(struct ctrlmsg) + num_flows * sizeof(struct flow_info);
+        int len = sizeof(struct ctrlmsg) + 1 + 
+                  num_flows * sizeof(struct flow_info);
         struct ctrlmsg_stats_response *temp = kmalloc(len, GFP_KERNEL);
         struct ctrlmsg_stats_response *resp;
         if (!temp) {
@@ -502,22 +503,39 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
                 }
         }
 
-        /* copy only the alive flows to the actual response */
-        len = sizeof(struct ctrlmsg) + num_results * sizeof(struct flow_info);
-        resp = kmalloc(len, GFP_KERNEL);
-        memset(resp, 0, len);
-        resp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
-        resp->cmh.len = len;
-        for (i = 0, j = 0; i < num_flows; i++) {
+        i = 0;
+        while (num_results > 0) {
+            int limit;
+            int flags = 0x0;
+
+            /* maybe don't use the magic 2000? */
+            if (num_results * sizeof(struct flow_info) > 2000) {
+                limit = 2000 / sizeof(struct flow_info);
+                flags |= FLOW_INFO_F_MORE;
+            }
+            else {
+                limit = num_results;
+            }
+
+            /* copy only the alive flows to the actual responses */
+            len = sizeof(struct ctrlmsg) + 1 + limit * sizeof(struct flow_info);
+            resp = kmalloc(len, GFP_KERNEL);
+            memset(resp, 0, len);
+            resp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
+            resp->cmh.len = len;
+            resp->flags = flags;
+            for (j = 0; i < num_flows && j < limit; i++) {
                 if (temp->info[i].proto != 0) {
                         memcpy(&resp->info[j], &temp->info[i], 
                                sizeof(struct flow_info));
                         j++;
+                        num_results--;
                 }
-        }
+            }
 
-        ctrl_sendmsg(&resp->cmh, GFP_KERNEL);
-        kfree(resp);
+            ctrl_sendmsg(&resp->cmh, GFP_KERNEL);
+            kfree(resp);
+        }
         kfree(temp);
 
         return ret;

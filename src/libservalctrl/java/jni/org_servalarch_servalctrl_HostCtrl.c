@@ -626,15 +626,16 @@ static int on_flow_stat_update(struct hostctrl *hc,
     unsigned long num_flows = CTRLMSG_STATS_NUM_INFOS(csr);
     jobjectArray arr = NULL;
     jthrowable exc;
+    jboolean more = (csr->flags & 0x01) ? JNI_TRUE : JNI_FALSE;
 
     
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls,
                               "onFlowStatUpdate",
-                              "(JI[Lorg/servalarch/servalctrl/FlowStat;)V");
+                              "(JI[Lorg/servalarch/servalctrl/FlowStat;Z)V");
     
     if (!mid) {
-        LOG_ERR("callback method does not exist\n");
+        LOG_ERR("Callback method does not exist\n");
         return -1;
     }
 
@@ -664,7 +665,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
     }
 
     (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
-                           (jlong)xid, (jint)retval, arr);
+                           (jlong)xid, (jint)retval, arr, more);
 
     exc = (*env)->ExceptionOccurred(env);
 
