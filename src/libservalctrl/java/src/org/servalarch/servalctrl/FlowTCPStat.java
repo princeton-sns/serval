@@ -9,9 +9,10 @@ public class FlowTCPStat extends FlowStat {
 	public long snd_una;
 	public long snd_nxt;
 
-	public FlowTCPStat(long flowId, int protocol, long pktsSent, long retrans,
-			long lost, long rtt, long rttvar, long snd_una, long snd_nxt) {
-		super(flowId, protocol, pktsSent);
+	public FlowTCPStat(long flowId, int protocol, long pktsSent, long bytesSent, 
+			long pktsRecv, long bytesRecv, long retrans, long lost, long rtt, 
+			long rttvar, long snd_una, long snd_nxt) {
+		super(flowId, protocol, pktsSent, bytesSent, pktsRecv, bytesRecv);
 		this.retrans = retrans;
 		this.lost = lost;
 		this.rtt = rtt;
@@ -22,8 +23,8 @@ public class FlowTCPStat extends FlowStat {
 
 	@Override
 	public String toString() {
-		return String.format("{pktsSent: %d, retrans: %d, lost: %d, rtt: %d, rttvar: %d, "
-				+ "snd_una: %d, snd_nxt: %d}", pktsSent, retrans, lost, rtt, rttvar,
+		return String.format("{pktsSent: %d, bytesSent: %d, pktsRecv: %d, bytesRecv: %d, retrans: %d, lost: %d, rtt: %d, rttvar: %d, "
+				+ "snd_una: %d, snd_nxt: %d}", pktsSent, bytesSent, pktsRecv, bytesRecv, retrans, lost, rtt, rttvar,
 				snd_una, snd_nxt);
 	}
 }

@@ -179,6 +179,7 @@ struct serval_sock {
 	u32                     rtt_seq; /* sequence number to update rttvar */
         unsigned long           timeout;
         unsigned long           tot_bytes_sent;
+        unsigned long           tot_bytes_recv;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
 };

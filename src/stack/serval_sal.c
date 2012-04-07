@@ -2722,6 +2722,8 @@ int serval_sal_state_process(struct sock *sk,
                 else
                         err = serval_sal_rcv_rsyn(sk, skb, ctx);
         }
+        serval_sk(sk)->tot_pkts_recv++;
+        serval_sk(sk)->tot_bytes_recv += skb->len;
 
         switch (sk->sk_state) {
         case SERVAL_INIT:
@@ -3437,6 +3439,8 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         }
         else {
             ssk->tot_pkts_sent++;
+            LOG_DBG("SKB things: %d %d\n", skb->len, skb->data_len);
+            ssk->tot_bytes_sent += skb->len;
         }
 
         if (mig_dev)

@@ -266,7 +266,9 @@ struct stats_proto_tcp {
         uint32_t lost;
         uint32_t srtt;
         uint32_t rttvar;  
-    
+
+        uint32_t snd_cwnd;
+        uint32_t snd_ssthresh;    
         uint32_t snd_una;  /* next ACK we want */
         uint32_t snd_nxt;  /* next # we'll send */
         
@@ -278,6 +280,9 @@ struct flow_info {
         struct flow_id flow;
         uint8_t proto;
         unsigned long pkts_sent;
+        unsigned long pkts_recv;
+        unsigned long bytes_sent;
+        unsigned long bytes_recv;
 
         struct stats_proto_tcp stats;
 #define tcp_retrans stats.retrans

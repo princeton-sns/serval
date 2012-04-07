@@ -301,7 +301,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
 
     if (info.proto == 6) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
-                                    "(JIJJJJJJJ)V");
+                                    "(JIJJJJJJJJJJ)V");
 
         if (!mid) {
             LOG_ERR("Constructor does not exist.\n");
@@ -312,6 +312,9 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)ntohl(info.flow.s_id32),
                             (jint)info.proto,
                             (jlong)info.pkts_sent,
+                            (jlong)info.bytes_sent,
+                            (jlong)info.pkts_recv,
+                            (jlong)info.bytes_recv,
                             (jlong)info.tcp_retrans,
                             (jlong)info.tcp_lost,
                             (jlong)info.tcp_srtt,
