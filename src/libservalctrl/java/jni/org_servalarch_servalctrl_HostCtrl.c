@@ -301,7 +301,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
 
     if (info.proto == 6) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
-                                    "(JIJJJJJJJJJJ)V");
+                                    "(JIJJJJJJJJJJJJJJ)V");
 
         if (!mid) {
             LOG_ERR("Constructor does not exist.\n");
@@ -319,11 +319,15 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)info.tcp_lost,
                             (jlong)info.tcp_srtt,
                             (jlong)info.tcp_rttvar,
+                            (jlong)info.tcp_mss,
+                            (jlong)info.tcp_snd_cwnd,
+                            (jlong)info.tcp_snd_ssthresh,
                             (jlong)info.tcp_snd_una,
-                            (jlong)info.tcp_snd_nxt);
+                            (jlong)info.tcp_snd_nxt,
+                            (jlong)info.tcp_rwnd);
     }
     else {
-        LOG_ERR("Flow %ld is not TCP (%d)!\n", ntohl(info.flow.s_id32), info.proto);
+        LOG_ERR("Flow %d is not TCP (%d)!\n", ntohl(info.flow.s_id32), info.proto);
     }
 
     return obj;

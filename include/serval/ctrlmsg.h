@@ -259,6 +259,9 @@ struct ctrlmsg_stats_query {
 struct stats_proto {
         unsigned long pkts_sent;
         unsigned long pkts_recv;
+
+        unsigned long bytes_sent;
+        unsigned long bytes_recv;
 };
 
 struct stats_proto_tcp {
@@ -266,12 +269,14 @@ struct stats_proto_tcp {
         uint32_t lost;
         uint32_t srtt;
         uint32_t rttvar;  
+        uint32_t mss;
 
         uint32_t snd_cwnd;
         uint32_t snd_ssthresh;    
         uint32_t snd_una;  /* next ACK we want */
         uint32_t snd_nxt;  /* next # we'll send */
-        
+
+        uint32_t rwnd;        
 };
 
 #define FLOW_INFO_F_MORE 0x01
@@ -289,10 +294,13 @@ struct flow_info {
 #define tcp_lost stats.lost
 #define tcp_srtt stats.srtt
 #define tcp_rttvar stats.rttvar
+#define tcp_mss stats.mss
 
 #define tcp_snd_una stats.snd_una
 #define tcp_snd_nxt stats.snd_nxt
-
+#define tcp_snd_cwnd stats.snd_cwnd
+#define tcp_snd_ssthresh stats.snd_ssthresh
+#define tcp_rwnd stats.rwnd
 };
 
 struct ctrlmsg_stats_response {

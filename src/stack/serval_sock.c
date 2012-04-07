@@ -267,20 +267,24 @@ void serval_sock_stats_flow(struct flow_id *flow,
         if (sk) {
                 LOG_DBG("Found something for flow.\n");
                 resp->info[idx].proto = sk->sk_protocol;
+                resp->info[idx].pkts_sent = serval_sk(sk)->tot_pkts_sent;
+                resp->info[idx].pkts_recv = serval_sk(sk)->tot_pkts_recv;
+                resp->info[idx].bytes_sent = serval_sk(sk)->tot_bytes_sent;
+                resp->info[idx].bytes_recv = serval_sk(sk)->tot_bytes_recv;
                 // TODO Fix these hardcoded values
                 if (sk->sk_protocol == 6) {
                         struct serval_tcp_sock *tsk = 
                                 (struct serval_tcp_sock *) sk;
                         resp->info[idx].tcp_retrans = tsk->total_retrans;
                         resp->info[idx].tcp_lost = tsk->lost_out;
-                        resp->info[idx].pkts_sent = tsk->sk.tot_pkts_sent;
-                        resp->info[idx].bytes_sent = tsk->sk.tot_bytes_sent;
-                        resp->info[idx].pkts_recv = tsk->sk.tot_pkts_recv;
-                        resp->info[idx].bytes_recv = tsk->sk.tot_bytes_recv;
                         resp->info[idx].tcp_srtt = tsk->srtt;
                         resp->info[idx].tcp_rttvar = tsk->rttvar;
+                        resp->info[idx].tcp_mss = tsk->mss_cache;
+                        resp->info[idx].tcp_snd_ssthresh = tsk->snd_ssthresh;
+                        resp->info[idx].tcp_snd_cwnd = tsk->snd_cwnd;
                         resp->info[idx].tcp_snd_una = tsk->snd_una;
-                        resp->info[idx].tcp_snd_nxt = tsk->snd_nxt;      
+                        resp->info[idx].tcp_snd_nxt = tsk->snd_nxt;
+                        resp->info[idx].tcp_rwnd = tsk->rcv_wnd;      
                 }
                 else if (sk->sk_protocol == 17) {
                 }
