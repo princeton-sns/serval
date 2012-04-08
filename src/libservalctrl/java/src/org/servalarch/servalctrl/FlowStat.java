@@ -4,22 +4,28 @@ public class FlowStat {
     public long flowId;
     int protocol;
 
-    public long pktsSent;
-    public long bytesSent;
+    public long totPktsSent;
+    public long totBytesSent;
     
-    public long pktsRecv;
-    public long bytesRecv;
+    public long totPktsRecv;
+    public long totBytesRecv;
+    
+    public long dPktsSent;
+    public long dBytesSent;
+    
+    public long dPktsRecv;
+    public long dBytesRecv;
 
     public FlowStat(long flowId, int protocol, long pktsSent, long bytesSent,
     		long pktsRecv, long bytesRecv) {
         this.flowId = flowId;
         this.protocol = protocol;
         
-        this.pktsSent = pktsSent;
-        this.bytesSent = bytesSent;
+        this.totPktsSent = pktsSent;
+        this.totBytesSent = bytesSent;
         
-        this.pktsRecv = pktsRecv;
-        this.bytesRecv = bytesRecv;
+        this.totPktsRecv = pktsRecv;
+        this.totBytesRecv = bytesRecv;
     }
 
     public int getProtocol() {
@@ -27,6 +33,6 @@ public class FlowStat {
     }
 
     public long pktsSent() {
-        return pktsSent;
+        return totPktsSent;
     }
 }

@@ -276,7 +276,8 @@ struct stats_proto_tcp {
         uint32_t snd_una;  /* next ACK we want */
         uint32_t snd_nxt;  /* next # we'll send */
 
-        uint32_t rwnd;        
+        uint32_t rcv_wnd;
+        uint32_t rcv_nxt;        
 };
 
 #define FLOW_INFO_F_MORE 0x01
@@ -300,7 +301,8 @@ struct flow_info {
 #define tcp_snd_nxt stats.snd_nxt
 #define tcp_snd_cwnd stats.snd_cwnd
 #define tcp_snd_ssthresh stats.snd_ssthresh
-#define tcp_rwnd stats.rwnd
+#define tcp_rcv_wnd stats.rcv_wnd
+#define tcp_rcv_nxt stats.rcv_nxt
 };
 
 struct ctrlmsg_stats_response {
