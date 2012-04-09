@@ -271,6 +271,7 @@ struct stats_proto_tcp {
         uint32_t rttvar;  
         uint32_t mss;
 
+        uint32_t snd_wnd;
         uint32_t snd_cwnd;
         uint32_t snd_ssthresh;    
         uint32_t snd_una;  /* next ACK we want */
@@ -299,6 +300,7 @@ struct flow_info {
 
 #define tcp_snd_una stats.snd_una
 #define tcp_snd_nxt stats.snd_nxt
+#define tcp_snd_wnd stats.snd_wnd
 #define tcp_snd_cwnd stats.snd_cwnd
 #define tcp_snd_ssthresh stats.snd_ssthresh
 #define tcp_rcv_wnd stats.rcv_wnd

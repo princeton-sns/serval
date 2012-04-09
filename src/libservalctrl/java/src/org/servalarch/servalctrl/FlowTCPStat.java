@@ -8,6 +8,7 @@ public class FlowTCPStat extends FlowStat {
 	public long rttvar;
 	public long mss;
 
+	public long snd_wnd;
 	public long snd_cwnd;
 	public long snd_ssthresh;
 	public long snd_una;
@@ -18,7 +19,7 @@ public class FlowTCPStat extends FlowStat {
 
 	public FlowTCPStat(long flowId, int protocol, long pktsSent, long bytesSent, 
 			long pktsRecv, long bytesRecv, long retrans, long lost, long rtt, 
-			long rttvar, long mss, long snd_cwnd, long snd_ssthresh, long snd_una, 
+			long rttvar, long mss, long snd_wnd, long snd_cwnd, long snd_ssthresh, long snd_una, 
 			long snd_nxt, long rcv_wnd, long rcv_nxt) {
 		super(flowId, protocol, pktsSent, bytesSent, pktsRecv, bytesRecv);
 		this.retrans = retrans;
@@ -27,6 +28,7 @@ public class FlowTCPStat extends FlowStat {
 		this.rttvar = rttvar;
 		this.mss = mss;
 		
+		this.snd_wnd = snd_wnd;
 		this.snd_cwnd = snd_cwnd;
 		this.snd_ssthresh = snd_ssthresh;
 		this.snd_una = snd_una;
@@ -39,8 +41,8 @@ public class FlowTCPStat extends FlowStat {
 	@Override
 	public String toString() {
 		return String.format("{pktsSent: %d, bytesSent: %d, pktsRecv: %d, bytesRecv: %d, retrans: %d, lost: %d, " +
-				"rtt: %d, rttvar: %d, mss: %d, snd_cwnd: %d, snd_ssthresh: %d, snd_una: %d, snd_nxt: %d, " +
+				"rtt: %d, rttvar: %d, mss: %d, snd_wnd: %d, snd_cwnd: %d, snd_ssthresh: %d, snd_una: %d, snd_nxt: %d, " +
 				"rcv_wnd: %d, rcv_nxt: %d}", totPktsSent, totBytesSent, totPktsRecv, totBytesRecv, retrans, lost, rtt, 
-				rttvar, mss, snd_cwnd, snd_ssthresh, snd_una, snd_nxt, rcv_wnd, rcv_nxt);
+				rttvar, mss, snd_wnd, snd_cwnd, snd_ssthresh, snd_una, snd_nxt, rcv_wnd, rcv_nxt);
 	}
 }

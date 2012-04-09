@@ -282,6 +282,7 @@ void serval_sock_stats_flow(struct flow_id *flow,
                         resp->info[idx].tcp_mss = tsk->mss_cache;
                         resp->info[idx].tcp_snd_ssthresh = tsk->snd_ssthresh;
                         resp->info[idx].tcp_snd_cwnd = tsk->snd_cwnd;
+                        resp->info[idx].tcp_snd_wnd = tsk->snd_wnd;
                         resp->info[idx].tcp_snd_una = tsk->snd_una;
                         resp->info[idx].tcp_snd_nxt = tsk->snd_nxt;
                         resp->info[idx].tcp_rcv_wnd = tsk->rcv_wnd;
