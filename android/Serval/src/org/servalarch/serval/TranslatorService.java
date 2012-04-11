@@ -189,6 +189,7 @@ public class TranslatorService extends Service {
 		// notification panel.
 		notification.setLatestEventInfo(this, getText(R.string.translator_service_label),
 						text, contentIntent);
+		notification.flags |= Notification.FLAG_ONGOING_EVENT;
 		
 		mNM.notify(R.string.translator_service_started, notification);
 	}

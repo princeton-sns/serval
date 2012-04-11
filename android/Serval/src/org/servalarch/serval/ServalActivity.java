@@ -399,7 +399,7 @@ public class ServalActivity extends Activity
 						msg = "Add service failed retval=" + retval + " " + getRetvalString(retval);
 					
 					Toast t = Toast.makeText(getApplicationContext(), msg, 
-							Toast.LENGTH_LONG);
+							Toast.LENGTH_SHORT);
 					t.setGravity(Gravity.CENTER, 0, 0);
 					t.show();
 				}
