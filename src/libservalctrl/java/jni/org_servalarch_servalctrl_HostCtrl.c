@@ -673,9 +673,11 @@ static int on_flow_stat_update(struct hostctrl *hc,
 
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+    jobject cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
                            (jlong)xid, (jint)retval, arr, more);
 
+    
     exc = (*env)->ExceptionOccurred(env);
 
     if (exc) {
@@ -684,6 +686,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, arr);
 
     return 0;
