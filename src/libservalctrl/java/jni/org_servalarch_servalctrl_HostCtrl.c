@@ -650,7 +650,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
 
     if (num_flows > 0) {
         unsigned int i = 0;
-        LOG_ERR("Callback for %lu flows!\n", num_flows);
+        LOG_DBG("Callback for %lu flows!\n", num_flows);
         arr = (*env)->NewObjectArray(env, num_flows, flowstat_cls, NULL);
 
         if (!arr) {

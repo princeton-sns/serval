@@ -38,7 +38,7 @@ import android.widget.ToggleButton;
 public class ServalActivity extends Activity
 {
 	private static final String[] ADD_HTTP_RULES = {
-		"ifconfig dummy0 192.168.25.25",
+		"ifconfig dummy0 192.168.25.25 -arp",
 		"ip rule add to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule add from 192.168.25.0/24 table main priority 20",
 		"ip rule add from all table 1 priority 30",
@@ -49,7 +49,7 @@ public class ServalActivity extends Activity
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-		"iptables -t nat -A POSTROUTING -j MASQUERADE"
+		"iptables -t nat -A POSTROUTING ! -o dummy0 -j MASQUERADE"
 	};
 	private static final String[] ADD_ALL_RULES = {
 		"iptables -t nat -A OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
@@ -66,7 +66,7 @@ public class ServalActivity extends Activity
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-		"iptables -t nat -D POSTROUTING -j MASQUERADE"
+		"iptables -t nat -D POSTROUTING ! -o dummy0 -j MASQUERADE"
 	};
 	private static final String[] DEL_ALL_RULES = {
 		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"

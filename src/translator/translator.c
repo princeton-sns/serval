@@ -598,8 +598,8 @@ int run_translator(int family, unsigned short port)
         
 	/* The server should shut down on these signals. */
         sigaction(SIGTERM, &action, 0);
-	sigaction(SIGHUP, &action, 0);
-	sigaction(SIGINT, &action, 0);
+	    sigaction(SIGHUP, &action, 0);
+	    sigaction(SIGINT, &action, 0);
         sigaction(SIGPIPE, &action, 0);
         
         signal_init(&exit_signal);
