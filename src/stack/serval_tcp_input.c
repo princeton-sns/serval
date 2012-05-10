@@ -1717,6 +1717,10 @@ static void serval_tcp_init_metrics(struct sock *sk)
 		goto reset;
 
 #if defined(OS_LINUX_KERNEL)
+
+        LOG_DBG("preinit: snd_ssthresh=%u snd_cwnd_clamp=%u\n",
+                tp->snd_ssthresh, tp->snd_cwnd_clamp);
+
 	dst_confirm(dst);
 
 	if (dst_metric_locked(dst, RTAX_CWND))
@@ -1724,8 +1728,7 @@ static void serval_tcp_init_metrics(struct sock *sk)
 	if (dst_metric(dst, RTAX_SSTHRESH)) {
 		tp->snd_ssthresh = dst_metric(dst, RTAX_SSTHRESH);
 		if (tp->snd_ssthresh > tp->snd_cwnd_clamp)
-			tp->snd_ssthresh = tp->snd_cwnd_clamp;
-	}
+			tp->snd_ssthresh = tp->snd_cwnd_clamp;	}
         /*
 	if (dst_metric(dst, RTAX_REORDERING) &&
 	    tp->reordering != dst_metric(dst, RTAX_REORDERING)) {
@@ -1762,6 +1765,10 @@ static void serval_tcp_init_metrics(struct sock *sk)
 		tp->mdev = dst_metric_rtt(dst, RTAX_RTTVAR);
 		tp->mdev_max = tp->rttvar = max(tp->mdev, tcp_rto_min(sk));
 	}
+        
+        LOG_DBG("postinit: snd_ssthresh=%u snd_cwnd_clamp=%u\n",
+                tp->snd_ssthresh, tp->snd_cwnd_clamp);
+
 #endif
 	serval_tcp_set_rto(sk);
 
@@ -2120,7 +2127,7 @@ static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	u32 prior_in_flight;
 	u32 prior_fackets;
 	int prior_packets;
-	int frto_cwnd = 0;
+	//int frto_cwnd = 0;
 
 	/* If the ack is older than previous acks
 	 * then we can probably ignore it.
@@ -2204,14 +2211,14 @@ static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 #endif
 	if (serval_tcp_ack_is_dubious(sk, flag)) {
 		/* Advance CWND, if state allows this. */
-		if ((flag & FLAG_DATA_ACKED) && !frto_cwnd &&
+		if ((flag & FLAG_DATA_ACKED) /* && !frto_cwnd */ &&
 		    serval_tcp_may_raise_cwnd(sk, flag))
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
 
 		serval_tcp_fastretrans_alert(sk, prior_packets - 
                                              tp->packets_out, flag);
 	} else {
-		if ((flag & FLAG_DATA_ACKED) && !frto_cwnd)
+		if ((flag & FLAG_DATA_ACKED) /* && !frto_cwnd */)
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
 	}
 
@@ -4215,12 +4222,10 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 			sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 		}
                 */
-#if 0
-                /* This doesn't really make sense for us since we
-                   handle ACKs in SAL */
+
 		if (sk->sk_write_pending ||
-		    icsk->icsk_accept_queue.rskq_defer_accept ||
-		    icsk->icsk_ack.pingpong) {
+		    //icsk->icsk_accept_queue.rskq_defer_accept ||
+		    tp->tp_ack.pingpong) {
 			/* Save one ACK. Data will be ready after
 			 * several ticks, if write_pending is set.
 			 *
@@ -4228,23 +4233,14 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 			 * look so _wonderfully_ clever, that I was not able
 			 * to stand against the temptation 8)     --ANK
 			 */
-			inet_csk_schedule_ack(sk);
-			icsk->icsk_ack.lrcvtime = tcp_time_stamp;
-			icsk->icsk_ack.ato	 = TCP_ATO_MIN;
-			tcp_incr_quickack(sk);
-			tcp_enter_quickack_mode(sk);
-			inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK,
-						  TCP_DELACK_MAX, TCP_RTO_MAX);
-
-discard:
-                        //	__kfree_skb(skb);
-			return 0;
-		} else {
-                        tcp_send_ack(sk);
-		}
-#endif
-
-                //serval_tcp_send_ack(sk);
+			serval_tsk_schedule_ack(sk);
+			tp->tp_ack.lrcvtime = tcp_time_stamp;
+			tp->tp_ack.ato	 = TCP_ATO_MIN;
+			serval_tcp_incr_quickack(sk);
+			serval_tcp_enter_quickack_mode(sk);
+			serval_tsk_reset_xmit_timer(sk, STSK_TIME_DACK,
+                                                    TCP_DELACK_MAX, SERVAL_TCP_RTO_MAX);
+		} 
         } else {
                 LOG_INF("No ACK in TCP message received in SYN-SENT state\n");
                 goto reset_and_undo;
