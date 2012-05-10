@@ -15,4 +15,5 @@
     <string name="translator_service_label">Serval translator</string>
     <string name="http_label">Translate HTTP/HTTPS:</string>
     <string name="trans_all_label">Translate ALL TCP traffic:</string>
+    <string name="iperf_label">Run iperf: </string>
 </resources>

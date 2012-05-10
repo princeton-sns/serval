@@ -29,11 +29,7 @@ public class ConnectivityReceiver extends BroadcastReceiver {
     		
     		/* Connected, add rules back */
         	if (info.getState().equals(NetworkInfo.State.CONNECTED)) {
-
-        		/* Other is still connected, remove rule first. */
-        		if (other.isConnectedOrConnecting()) {
-        			performAction(context, idMap, AppHostCtrl.SERVICE_REMOVE);
-        		}
+        		performAction(context, idMap, AppHostCtrl.SERVICE_REMOVE);
     			performAction(context, idMap, AppHostCtrl.SERVICE_ADD);
         	}
         	/* Disconnected, remove rules */
