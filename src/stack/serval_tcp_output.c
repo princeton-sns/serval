@@ -2118,9 +2118,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
            resolution. This is because we do not know the route and
            src,dst IP at this point, and these are needed for the
            checksum */
-
-	serval_tcp_enter_cwr(sk, 1);
-
+        
         return 0;
 }
 
@@ -2222,7 +2220,6 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	if (likely(tcb->tcp_flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
         */
-	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
 }
@@ -2266,7 +2263,6 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 	if (likely(tcb->tcp_flags & TCPH_ACK))
 		serval_tcp_event_ack_sent(sk, serval_tcp_skb_pcount(skb));
         */
-	serval_tcp_enter_cwr(sk, 1);
 
         return 0;
 }
