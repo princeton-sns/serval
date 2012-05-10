@@ -2688,6 +2688,9 @@ static int serval_tcp_init_sock(struct sock *sk)
 	sk->sk_rcvbuf = sysctl_tcp_rmem[1];
 
         tp->bytes_queued = 0;
+        
+        LOG_DBG("sockinit: snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 #if defined(OS_LINUX_KERNEL)
 	local_bh_disable();
