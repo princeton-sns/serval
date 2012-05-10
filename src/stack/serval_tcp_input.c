@@ -2505,21 +2505,30 @@ static inline void serval_tcp_data_snd_check(struct sock *sk)
 static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        int window = __serval_tcp_select_window(sk);
+
+        LOG_DBG("rcv_nxt=%u rcv_wup=%u rcv_mss=%u window=%d rcv_wnd=%u quickack=%d ofo=%d\n", 
+                tp->rcv_nxt, tp->rcv_wup, tp->tp_ack.rcv_mss, window, 
+                tp->rcv_wnd, serval_tcp_in_quickack_mode(sk), 
+                (ofo_possible && skb_peek(&tp->out_of_order_queue)));
 
         /* More than one full frame received... */
 	if (((tp->rcv_nxt - tp->rcv_wup) > tp->tp_ack.rcv_mss &&
 	     /* ... and right edge of window advances far enough.
 	      * (tcp_recvmsg() will send ACK otherwise). Or...
 	      */
-	     __serval_tcp_select_window(sk) >= tp->rcv_wnd) ||
+	     window >= tp->rcv_wnd) ||
 	    /* We ACK each frame or... */
 	    serval_tcp_in_quickack_mode(sk) ||
 	    /* We have out of order data. */
 	    (ofo_possible && skb_peek(&tp->out_of_order_queue))) {
 		/* Then ack it now */
 		serval_tcp_send_ack(sk);
+
+                LOG_DBG("sending normal ACK\n");
 	} else {
 		/* Else, send delayed ack. */
+                LOG_DBG("sending delayed ACK\n");
 		serval_tcp_send_delayed_ack(sk);
 	}
 }
