@@ -21,6 +21,7 @@ import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.Gravity;
@@ -49,8 +50,10 @@ public class ServalActivity extends Activity
 		"echo 4096 > /proc/sys/net/ipv4/neigh/default/gc_thresh3",
 		"iptables -t nat -A OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -t nat -A OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
+		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
 		"iptables -t nat -A POSTROUTING ! -o dummy0 -j MASQUERADE"
 	};
@@ -66,8 +69,10 @@ public class ServalActivity extends Activity
 		"echo 0 > /proc/sys/net/ipv4/ip_forward",
 		"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -D OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
+		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
 		"iptables -t nat -D POSTROUTING ! -o dummy0 -j MASQUERADE"
 	};
@@ -78,6 +83,7 @@ public class ServalActivity extends Activity
 	private ToggleButton moduleStatusButton;
 	private ToggleButton udpEncapButton;
 	private ToggleButton translatorButton, transHttpButton, transAllButton;
+	private ToggleButton iperfButton;
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
@@ -101,7 +107,7 @@ public class ServalActivity extends Activity
 		
 		editServiceText = (EditText) findViewById(R.id.edit_service_field);
 		editIpText = (EditText) findViewById(R.id.ip_input_field);
-		editServiceText.setOnEditorActionListener(new OnEditorActionListener() {
+		/*editServiceText.setOnEditorActionListener(new OnEditorActionListener() {
 			@Override
 			public boolean onEditorAction(TextView v, int actionId,
 					KeyEvent event) {
@@ -110,7 +116,7 @@ public class ServalActivity extends Activity
 				return false;
 			}
 			
-		});
+		});*/
 		addServiceButton = (Button)findViewById(R.id.add_service_button);
 		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
@@ -271,6 +277,17 @@ public class ServalActivity extends Activity
 							executeRules(ADD_HTTP_RULES);
 						}
 					}
+				}
+			}
+		});
+		
+		this.iperfButton = (ToggleButton) findViewById(R.id.toggle_iperf);
+		this.iperfButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+				if (isChecked) {
+					new IperfTask().execute((Void)null);
 				}
 			}
 		});
@@ -499,5 +516,19 @@ public class ServalActivity extends Activity
 		super.onDestroy();
 		Log.d("Serval", "Destroying Serval host control");
 		AppHostCtrl.fini();
+	}
+	
+	private class IperfTask extends AsyncTask<Void,Void,Void> {
+
+		@Override
+		protected Void doInBackground(Void... arg0) {
+			executeSuCommand("/data/local/iperf -c 128.112.7.45 --reverse");
+			return null;
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			iperfButton.setChecked(false);
+	     }
 	}
 }
