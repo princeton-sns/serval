@@ -63,6 +63,7 @@ static int serval_tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_cwnd_cnt = 0;
 	tp->bytes_acked = 0;
 	tp->window_clamp = 0;
+    tp->snd_mig_last = 0;
 	serval_tcp_set_ca_state(sk, TCP_CA_Open);
 	serval_tcp_clear_retrans(tp);
 	serval_tsk_delack_init(sk);
@@ -2370,42 +2371,44 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 
 static int serval_tcp_freeze_flow(struct sock *sk)
 {
-        LOG_DBG("Freezing TCP flow %s\n", 
+/* Not sure if this is necessary... - rrk 
+ *
+ * LOG_DBG("Freezing TCP flow %s\n", 
                 flow_id_to_str(&serval_sk(sk)->local_flowid));
         serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
-        
+*/        
         return 0;
 }
 
 static int serval_tcp_migration_completed(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        unsigned long t = jiffies;
+//        unsigned long t = jiffies;
 
-        LOG_DBG("Unfreezing TCP flow %s\n", 
-                flow_id_to_str(&serval_sk(sk)->local_flowid));
+//        LOG_DBG("Unfreezing TCP flow %s\n", 
+//                flow_id_to_str(&serval_sk(sk)->local_flowid));
+        tp->snd_mig_last = tp->snd_nxt;
+        LOG_DBG("Last sequence number on old link: %lu\n", 
+                tp->snd_mig_last, tp->snd_nxt);
 
+/* Not sure if this is necessary... - rrk */
         /* Restart retransmission timer */
-        if (tp->packets_out) {
-                /* if (tp->timeout > t)
-                        t = tp->timeout - t;
-                else
-                */
-                t = 1;
+        /*if (tp->packets_out) {
+                t = tp->rto;
 
                 LOG_DBG("Resetting rexmit timer to %lu\n", t);
                 
                 serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS, t,
                                             SERVAL_TCP_RTO_MAX);
-        }
+        }*/
 
-        if (tp->snd_wnd == 0) {
+/*        if (tp->snd_wnd == 0) {
                 LOG_DBG("Zero snd_wnd, sending probe\n");
                 serval_tcp_send_probe0(sk);
         } else {
                 LOG_DBG("Non-zero snd_wnd, pushing frames\n");
                 serval_tcp_push_pending_frames(sk);
-        }
+        }*/
 
         return 0;
 }
@@ -2494,6 +2497,7 @@ static struct sock *serval_tcp_create_openreq_child(struct sock *sk,
         newtp->retrans_out = 0;
         newtp->sacked_out = 0;
         newtp->fackets_out = 0;
+        newtp->snd_mig_last = 0;
         newtp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
         
         /* So many TCP implementations out there (incorrectly) count the
@@ -2664,6 +2668,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 	 */
 	tp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
+    tp->snd_mig_last = 0;
 	tp->mss_cache = SERVAL_TCP_MSS_DEFAULT;
 
 	tp->reordering = sysctl_serval_tcp_reordering;

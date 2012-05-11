@@ -227,6 +227,8 @@ struct serval_tcp_sock {
 		int		  probe_size;
 	} tp_mtup;
 
+    /* Store the first seq # send on new link after migration */
+    u32 snd_mig_last;
 
 	struct serval_tcp_cookie_values  *cookie_values;
 };
