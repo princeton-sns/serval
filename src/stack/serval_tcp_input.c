@@ -1526,7 +1526,7 @@ void serval_tcp_simple_retransmit(struct sock *sk)
  * tcp_xmit_retransmit_queue().
  */
 static void serval_tcp_fastretrans_alert(struct sock *sk, 
-                                         int pkts_acked, int flag)
+                                         int pkts_acked, int flag, u32 ack)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int is_dupack = !(flag & (FLAG_SND_UNA_ADVANCED | FLAG_NOT_DUP));
@@ -1652,6 +1652,14 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 			serval_tcp_simple_retransmit(sk);
 			return;
 		}
+
+        /* If we've migrated, just retransmit, don't necessarily adjust cwnd */
+        LOG_DBG("Fast retx ack=%lu snd_mig_last=%lu\n", ack, tp->snd_mig_last); 
+        if (before(ack, tp->snd_mig_last)) {
+            LOG_DBG("Out-of-order due to migration, potentially.\n", ack);
+            serval_tcp_xmit_retransmit_queue(sk);
+            return;
+        }
 
 		/* Otherwise enter Recovery state */
                 /*
@@ -2232,8 +2240,10 @@ static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 		    serval_tcp_may_raise_cwnd(sk, flag))
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
 
+        LOG_DBG("snd_ssthresh retx before: %lu\n", tp->snd_ssthresh);
 		serval_tcp_fastretrans_alert(sk, prior_packets - 
-                                             tp->packets_out, flag);
+                                             tp->packets_out, flag, ack);
+        LOG_DBG("snd_ssthresh retx after: %lu\n", tp->snd_ssthresh);
 	} else {
 		if ((flag & FLAG_DATA_ACKED) /* && !frto_cwnd */)
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
