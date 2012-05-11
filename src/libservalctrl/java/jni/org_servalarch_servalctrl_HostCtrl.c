@@ -318,7 +318,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)info.tcp_retrans,
                             (jlong)info.tcp_lost,
                             (jlong)info.tcp_srtt >> 3,
-                            (jlong)info.tcp_rttvar >> 3,
+                            (jlong)info.tcp_rttvar,
                             (jlong)info.tcp_mss,
                             (jlong)info.tcp_snd_wnd,
                             (jlong)info.tcp_snd_cwnd,
