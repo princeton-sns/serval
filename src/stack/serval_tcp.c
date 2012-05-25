@@ -2371,44 +2371,41 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 
 static int serval_tcp_freeze_flow(struct sock *sk)
 {
-/* Not sure if this is necessary... - rrk 
- *
- * LOG_DBG("Freezing TCP flow %s\n", 
+        LOG_DBG("Freezing TCP flow %s\n", 
                 flow_id_to_str(&serval_sk(sk)->local_flowid));
         serval_tsk_clear_xmit_timer(sk, STSK_TIME_RETRANS);
-*/        
+        
         return 0;
 }
 
 static int serval_tcp_migration_completed(struct sock *sk)
 {
         struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-//        unsigned long t = jiffies;
+        unsigned long t = jiffies;
 
-//        LOG_DBG("Unfreezing TCP flow %s\n", 
-//                flow_id_to_str(&serval_sk(sk)->local_flowid));
+        LOG_DBG("Unfreezing TCP flow %s\n", 
+                flow_id_to_str(&serval_sk(sk)->local_flowid));
         tp->snd_mig_last = tp->snd_nxt;
         LOG_DBG("Last sequence number on old link: %lu\n", 
                 tp->snd_mig_last, tp->snd_nxt);
 
-/* Not sure if this is necessary... - rrk */
         /* Restart retransmission timer */
-        /*if (tp->packets_out) {
-                t = tp->rto;
+        if (tp->packets_out) {
+                t = 1; //tp->rto;
 
                 LOG_DBG("Resetting rexmit timer to %lu\n", t);
                 
                 serval_tsk_reset_xmit_timer(sk, STSK_TIME_RETRANS, t,
                                             SERVAL_TCP_RTO_MAX);
-        }*/
+        }
 
-/*        if (tp->snd_wnd == 0) {
+        if (tp->snd_wnd == 0) {
                 LOG_DBG("Zero snd_wnd, sending probe\n");
                 serval_tcp_send_probe0(sk);
         } else {
                 LOG_DBG("Non-zero snd_wnd, pushing frames\n");
                 serval_tcp_push_pending_frames(sk);
-        }*/
+        }
 
         return 0;
 }
