@@ -2391,7 +2391,7 @@ static int serval_tcp_migration_completed(struct sock *sk)
 
         /* Restart retransmission timer */
         if (tp->packets_out) {
-                t = tp->rto;
+                t = 1; //tp->rto;
 
                 LOG_DBG("Resetting rexmit timer to %lu\n", t);
                 

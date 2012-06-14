@@ -278,7 +278,7 @@ void serval_sock_stats_flow(struct flow_id *flow,
                         resp->info[idx].tcp_retrans = tsk->total_retrans;
                         resp->info[idx].tcp_lost = tsk->lost_out;
                         resp->info[idx].tcp_srtt = tsk->srtt;
-                        resp->info[idx].tcp_rttvar = tsk->rttvar;
+                        resp->info[idx].tcp_rttvar = tsk->mdev;
                         resp->info[idx].tcp_mss = tsk->mss_cache;
                         resp->info[idx].tcp_snd_ssthresh = tsk->snd_ssthresh;
                         resp->info[idx].tcp_snd_cwnd = tsk->snd_cwnd;
