@@ -37,6 +37,15 @@ public class FlowTCPStat extends FlowStat {
 		this.rcv_wnd = rcv_wnd;
 		this.rcv_nxt = rcv_nxt;
 	}
+	
+	public long unacked() {
+		if (snd_nxt < snd_una) {
+			return snd_nxt + (0x0000FFFF - snd_una);
+		}
+		else {
+			return snd_nxt - snd_una;
+		}
+	}
 
 	@Override
 	public String toString() {
