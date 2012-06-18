@@ -632,7 +632,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jmethodID mid;
-    unsigned long num_flows = CTRLMSG_STATS_NUM_INFOS(csr);
+    unsigned long info_size = csr->cmh.len - sizeof(struct ctrlmsg) - 1;
     jobjectArray arr = NULL;
     jthrowable exc;
     jboolean more = (csr->flags & 0x01) ? JNI_TRUE : JNI_FALSE;
@@ -648,9 +648,11 @@ static int on_flow_stat_update(struct hostctrl *hc,
         return -1;
     }
 
-    if (num_flows > 0) {
+    if (info_size > 0) {
         unsigned int i = 0;
-        LOG_DBG("Callback for %lu flows!\n", num_flows);
+        int offset = 0;
+        unsigned int num_flows = csr->num_infos;
+        LOG_DBG("Callback for %u flows!\n", num_flows);
         arr = (*env)->NewObjectArray(env, num_flows, flowstat_cls, NULL);
 
         if (!arr) {
@@ -658,8 +660,9 @@ static int on_flow_stat_update(struct hostctrl *hc,
             return -1;
         }
 
-        for (i = 0; i < num_flows; i++) {
-            jobject flow_stat = new_flow_stat(env, csr->info[i]);
+        while (i < num_flows) {
+            const struct flow_info *temp = (struct flow_info *)(csr->info + offset);
+            jobject flow_stat = new_flow_stat(env, *temp);
 
             if (!flow_stat) {
                 LOG_ERR("Could not create flow stat object\n");
@@ -669,6 +672,8 @@ static int on_flow_stat_update(struct hostctrl *hc,
 
             (*env)->SetObjectArrayElement(env, arr, i, flow_stat);
             (*env)->DeleteLocalRef(env, flow_stat);
+            i++;
+            offset += temp->len;
         }
 
     }

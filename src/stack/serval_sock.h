@@ -250,7 +250,7 @@ void serval_sock_migrate_flow(struct flow_id *old_f,
                               struct net_device *new_if);
 void serval_sock_migrate_service(struct service_id *old_s,
                                  struct net_device *new_if);
-void serval_sock_stats_flow(struct flow_id *flow, 
+struct flow_info *serval_sock_stats_flow(struct flow_id *flow, 
                             struct ctrlmsg_stats_response *resp, int idx);
 void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);

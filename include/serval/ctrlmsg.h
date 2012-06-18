@@ -256,7 +256,7 @@ struct ctrlmsg_stats_query {
         (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
          sizeof(struct flow_id))
 
-struct stats_proto {
+struct stats_base_proto {
         unsigned long pkts_sent;
         unsigned long pkts_recv;
 
@@ -286,12 +286,15 @@ struct stats_proto_tcp {
 struct flow_info {
         struct flow_id flow;
         uint8_t proto;
-        unsigned long pkts_sent;
-        unsigned long pkts_recv;
-        unsigned long bytes_sent;
-        unsigned long bytes_recv;
+        uint16_t len;
+        struct stats_base_proto stats2;
 
         struct stats_proto_tcp stats;
+#define pkts_sent stats2.pkts_sent
+#define pkts_recv stats2.pkts_recv
+#define bytes_sent stats2.bytes_sent
+#define bytes_recv stats2.bytes_recv
+
 #define tcp_retrans stats.retrans
 #define tcp_lost stats.lost
 #define tcp_srtt stats.srtt
@@ -310,7 +313,8 @@ struct flow_info {
 struct ctrlmsg_stats_response {
         struct ctrlmsg cmh;
         uint8_t flags;
-        struct flow_info info[0];
+        uint8_t num_infos;
+        unsigned char info[0];
 } CTRLMSG_PACKED;
 
 #define CTRLMSG_STATS_RESP_SIZE(cmsg) \
