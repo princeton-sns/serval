@@ -256,6 +256,8 @@ struct ctrlmsg_stats_query {
         (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
          sizeof(struct flow_id))
 
+/* Base stats type included for all protocols. Equivalent to protocol
+ * stats for UDP. */
 struct stats_proto_base {
         unsigned long pkts_sent;
         unsigned long pkts_recv;
@@ -264,6 +266,7 @@ struct stats_proto_base {
         unsigned long bytes_recv;
 };
 
+/* Stats type for the TCP protocol. */
 struct stats_proto_tcp {
         struct stats_proto_base base; // needs to be first
 
@@ -283,19 +286,21 @@ struct stats_proto_tcp {
         uint32_t rcv_nxt;
 };
 
-#define FLOW_INFO_F_MORE 0x01
-
+/* Contains the individual flow statistics */
 struct flow_info {
         struct flow_id flow;
         uint8_t proto;
         uint16_t len;
 
-        struct stats_proto_base stats;
+        struct stats_proto_base stats; // needs to be last
 #define pkts_sent stats.pkts_sent
 #define pkts_recv stats.pkts_recv
 #define bytes_sent stats.bytes_sent
 #define bytes_recv stats.bytes_recv
 };
+
+/* Flags for stats responses */
+#define STATS_RESP_F_MORE 0x01
 
 struct ctrlmsg_stats_response {
         struct ctrlmsg cmh;
@@ -306,9 +311,6 @@ struct ctrlmsg_stats_response {
 
 #define CTRLMSG_STATS_RESP_SIZE(cmsg) \
         (cmsg)->cmh.len
-#define CTRLMSG_STATS_NUM_INFOS(cmsg) \
-        (((cmsg)->cmh.len - sizeof(struct ctrlmsg) - 1) /                  \
-         sizeof(struct flow_info))
 
 enum {
         CTRL_MODE_NET = 0, 

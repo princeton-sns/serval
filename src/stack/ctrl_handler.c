@@ -503,7 +503,7 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
                                 temp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
                                 temp->cmh.len = sizeof(struct ctrlmsg) + 1 + 
                                                 offset;
-                                temp->flags |= FLOW_INFO_F_MORE;
+                                temp->flags |= STATS_RESP_F_MORE;
                                 ctrl_sendmsg(&temp->cmh, GFP_KERNEL);
                                 kfree(temp);
                                 temp = kmalloc(2048, GFP_KERNEL);

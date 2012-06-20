@@ -637,7 +637,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
     unsigned long info_size = csr->cmh.len - sizeof(struct ctrlmsg) - 1;
     jobjectArray arr = NULL;
     jthrowable exc;
-    jboolean more = (csr->flags & 0x01) ? JNI_TRUE : JNI_FALSE;
+    jboolean more = (csr->flags & STATS_RESP_F_MORE) ? JNI_TRUE : JNI_FALSE;
 
     
 
