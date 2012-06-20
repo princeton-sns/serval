@@ -302,11 +302,13 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
     if (info.proto == 6) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
                                     "(JIJJJJJJJJJJJJJJJJ)V");
+        struct stats_proto_tcp *tcp_info;
 
         if (!mid) {
             LOG_ERR("Constructor does not exist.\n");
             return NULL;
         }
+        tcp_info = (struct stats_proto_tcp *) &info.stats;
     
         obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
                             (jlong)ntohl(info.flow.s_id32),
@@ -315,18 +317,18 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)info.bytes_sent,
                             (jlong)info.pkts_recv,
                             (jlong)info.bytes_recv,
-                            (jlong)info.tcp_retrans,
-                            (jlong)info.tcp_lost,
-                            (jlong)info.tcp_srtt >> 3,
-                            (jlong)info.tcp_rttvar,
-                            (jlong)info.tcp_mss,
-                            (jlong)info.tcp_snd_wnd,
-                            (jlong)info.tcp_snd_cwnd,
-                            (jlong)info.tcp_snd_ssthresh,
-                            (jlong)info.tcp_snd_una,
-                            (jlong)info.tcp_snd_nxt,
-                            (jlong)info.tcp_rcv_wnd,
-                            (jlong)info.tcp_rcv_nxt);
+                            (jlong)tcp_info->retrans,
+                            (jlong)tcp_info->lost,
+                            (jlong)tcp_info->srtt >> 3,
+                            (jlong)tcp_info->rttvar,
+                            (jlong)tcp_info->mss,
+                            (jlong)tcp_info->snd_wnd,
+                            (jlong)tcp_info->snd_cwnd,
+                            (jlong)tcp_info->snd_ssthresh,
+                            (jlong)tcp_info->snd_una,
+                            (jlong)tcp_info->snd_nxt,
+                            (jlong)tcp_info->rcv_wnd,
+                            (jlong)tcp_info->rcv_nxt);
     }
     else {
         LOG_ERR("Flow %d is not TCP (%d)!\n", ntohl(info.flow.s_id32), info.proto);

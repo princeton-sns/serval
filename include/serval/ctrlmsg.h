@@ -256,7 +256,7 @@ struct ctrlmsg_stats_query {
         (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
          sizeof(struct flow_id))
 
-struct stats_base_proto {
+struct stats_proto_base {
         unsigned long pkts_sent;
         unsigned long pkts_recv;
 
@@ -265,6 +265,8 @@ struct stats_base_proto {
 };
 
 struct stats_proto_tcp {
+        struct stats_proto_base base; // needs to be first
+
         uint32_t retrans;
         uint32_t lost;
         uint32_t srtt;
@@ -278,7 +280,7 @@ struct stats_proto_tcp {
         uint32_t snd_nxt;  /* next # we'll send */
 
         uint32_t rcv_wnd;
-        uint32_t rcv_nxt;        
+        uint32_t rcv_nxt;
 };
 
 #define FLOW_INFO_F_MORE 0x01
@@ -287,27 +289,12 @@ struct flow_info {
         struct flow_id flow;
         uint8_t proto;
         uint16_t len;
-        struct stats_base_proto stats2;
 
-        struct stats_proto_tcp stats;
-#define pkts_sent stats2.pkts_sent
-#define pkts_recv stats2.pkts_recv
-#define bytes_sent stats2.bytes_sent
-#define bytes_recv stats2.bytes_recv
-
-#define tcp_retrans stats.retrans
-#define tcp_lost stats.lost
-#define tcp_srtt stats.srtt
-#define tcp_rttvar stats.rttvar
-#define tcp_mss stats.mss
-
-#define tcp_snd_una stats.snd_una
-#define tcp_snd_nxt stats.snd_nxt
-#define tcp_snd_wnd stats.snd_wnd
-#define tcp_snd_cwnd stats.snd_cwnd
-#define tcp_snd_ssthresh stats.snd_ssthresh
-#define tcp_rcv_wnd stats.rcv_wnd
-#define tcp_rcv_nxt stats.rcv_nxt
+        struct stats_proto_base stats;
+#define pkts_sent stats.pkts_sent
+#define pkts_recv stats.pkts_recv
+#define bytes_sent stats.bytes_sent
+#define bytes_recv stats.bytes_recv
 };
 
 struct ctrlmsg_stats_response {

@@ -266,30 +266,37 @@ struct flow_info *serval_sock_stats_flow(struct flow_id *flow,
         struct sock *sk = serval_sock_lookup_flow(flow);
         struct flow_info *ret = NULL;
         if (sk) {
+                int info_size = sizeof(struct flow_id) + sizeof(uint8_t) + 
+                                sizeof(uint16_t);
                 LOG_DBG("Found something for flow.\n");            
                 if (sk->sk_protocol == IPPROTO_TCP) {
                         struct serval_tcp_sock *tsk = 
                                 (struct serval_tcp_sock *) sk;
-                        ret = kmalloc(sizeof(struct flow_info), GFP_KERNEL);
-                        memset(ret, 0, sizeof(struct flow_info));
-                        ret->len = sizeof(struct flow_info);
-                        ret->tcp_retrans = tsk->total_retrans;
-                        ret->tcp_lost = tsk->lost_out;
-                        ret->tcp_srtt = tsk->srtt;
-                        ret->tcp_rttvar = tsk->mdev;
-                        ret->tcp_mss = tsk->mss_cache;
-                        ret->tcp_snd_ssthresh = tsk->snd_ssthresh;
-                        ret->tcp_snd_cwnd = tsk->snd_cwnd;
-                        ret->tcp_snd_wnd = tsk->snd_wnd;
-                        ret->tcp_snd_una = tsk->snd_una;
-                        ret->tcp_snd_nxt = tsk->snd_nxt;
-                        ret->tcp_rcv_wnd = tsk->rcv_wnd;
-                        ret->tcp_rcv_nxt = tsk->rcv_nxt;      
+                        struct stats_proto_tcp *st = NULL;
+                        info_size += sizeof(struct stats_proto_tcp);
+                        ret = kmalloc(info_size, GFP_KERNEL);
+                        memset(ret, 0, info_size);
+                        ret->len = info_size;
+
+                        st = (struct stats_proto_tcp *)&ret->stats;
+                        st->retrans = tsk->total_retrans;
+                        st->lost = tsk->lost_out;
+                        st->srtt = tsk->srtt;
+                        st->rttvar = tsk->mdev;
+                        st->mss = tsk->mss_cache;
+                        st->snd_ssthresh = tsk->snd_ssthresh;
+                        st->snd_cwnd = tsk->snd_cwnd;
+                        st->snd_wnd = tsk->snd_wnd;
+                        st->snd_una = tsk->snd_una;
+                        st->snd_nxt = tsk->snd_nxt;
+                        st->rcv_wnd = tsk->rcv_wnd;
+                        st->rcv_nxt = tsk->rcv_nxt;      
                 }
                 else {
-                        ret = kmalloc(sizeof(struct flow_info), GFP_KERNEL);
-                        memset(ret, 0, sizeof(struct flow_info));
-                        ret->len = sizeof(struct flow_info);
+                        info_size += sizeof(struct stats_proto_base);
+                        ret = kmalloc(info_size, GFP_KERNEL);
+                        memset(ret, 0, info_size);
+                        ret->len = info_size;
                 }
                 ret->proto = sk->sk_protocol;
                 memcpy(&ret->flow, flow, sizeof(struct flow_id));

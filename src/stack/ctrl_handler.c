@@ -484,7 +484,6 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
         int offset = 0;
         int i, ret = 0;
         
-        LOG_DBG("There are %d flows\n", num_flows);
         struct ctrlmsg_stats_response *temp = kmalloc(2048, GFP_KERNEL);
         if (!temp) {
                 LOG_ERR("Could not allocate message\n");
