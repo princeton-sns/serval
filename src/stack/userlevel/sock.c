@@ -29,7 +29,7 @@ __u32 sysctl_rmem_default __read_mostly = SK_RMEM_MAX;
 /* Maximal space eaten by iovec or ancilliary data plus some space */
 int sysctl_optmem_max __read_mostly = sizeof(unsigned long)*(2*UIO_MAXIOV+512);
 
-LIST_HEAD(proto_list);
+struct list_head proto_list = { &proto_list, &proto_list };
 DEFINE_RWLOCK(proto_list_lock);
 
 static void sock_def_destruct(struct sock *sk)

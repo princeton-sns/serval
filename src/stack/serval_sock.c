@@ -260,11 +260,12 @@ void serval_sock_migrate_service(struct service_id *old_s,
 }
 
 struct flow_info *serval_sock_stats_flow(struct flow_id *flow, 
-                            struct ctrlmsg_stats_response *resp,
-                            int idx)
+                                         struct ctrlmsg_stats_response *resp,
+                                         int idx)
 {
         struct sock *sk = serval_sock_lookup_flow(flow);
         struct flow_info *ret = NULL;
+
         if (sk) {
                 int info_size = sizeof(struct flow_id) + sizeof(uint8_t) + 
                                 sizeof(uint16_t);
@@ -291,8 +292,7 @@ struct flow_info *serval_sock_stats_flow(struct flow_id *flow,
                         st->snd_nxt = tsk->snd_nxt;
                         st->rcv_wnd = tsk->rcv_wnd;
                         st->rcv_nxt = tsk->rcv_nxt;      
-                }
-                else {
+                } else {
                         info_size += sizeof(struct stats_proto_base);
                         ret = kmalloc(info_size, GFP_KERNEL);
                         memset(ret, 0, info_size);
