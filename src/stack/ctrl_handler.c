@@ -505,12 +505,6 @@ static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm)
                                                 offset;
                                 temp->flags |= STATS_RESP_F_MORE;
                                 ctrl_sendmsg(&temp->cmh, GFP_KERNEL);
-                                kfree(temp);
-                                temp = kmalloc(2048, GFP_KERNEL);
-                                if (!temp) {
-                                        LOG_ERR("Could not allocate message\n");
-                                        return -1;
-                                }
                                 memset(temp, 0, 2048);
                                 offset = 0;
                         }
