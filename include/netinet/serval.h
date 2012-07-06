@@ -164,7 +164,7 @@ static inline const char *service_id_to_str(const struct service_id *srvid)
         static char str[82*2];
         static int i = 0;
         i = (i + 1) % 2;
-        return __hexdump(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);  
+        return __hexdump(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -175,6 +175,11 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         snprintf(&str[i*sizeof(str)/2], 11, 
                  "%u", ntohl(flowid->s_id32));
         return &str[i*sizeof(str)/2];
+}
+
+static inline const char *serval_ntop(const void *src, char *dst, size_t len)
+{
+        return __hexdump(src, sizeof(struct service_id), dst, len);
 }
 
 struct serval_hdr {
