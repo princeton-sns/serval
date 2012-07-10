@@ -163,22 +163,23 @@ static inline int hextobyte(const char c)
  * Convert a hexadecimal string to a byte array. Returns 1 on success,
  * and 0 if the source string is not a valid hexadecimal string.
  */
-static inline int hexton(const char *src,
-                         void *dst,
-                         size_t len)
+static inline int serval_hexton(const char *src,
+                                size_t src_len,
+                                void *dst,
+                                size_t dst_len)
 {
         unsigned char *ptr = (unsigned char *)dst;
 
-        while (*src != '\0' && len--) {
+        while (*src != '\0' && dst_len-- && src_len--) {
                 int value = hextobyte(*src++);
 
                 if (value == -1)
                         return 0;
-
-                if (*src != '\0') {
-                        int ret;
-                        value *= 16;
-                        ret = hextobyte(*src++);
+                
+                value *= 16;
+                        
+                if (*src != '\0' && src_len--) {
+                        int ret = hextobyte(*src++);
 
                         if (ret == -1)
                                 return 0;
@@ -194,22 +195,22 @@ static inline int hexton(const char *src,
 /*
  * Convert a byte array to a hexadecimal string.
  */
-static inline char *ntohex(const void *src,
-                           size_t src_len,
-                           char *dst,
-                           size_t dst_len)
-{    
+static inline char *serval_ntohex(const void *src,
+                                  size_t src_len,
+                                  char *dst,
+                                  size_t dst_len)
+{
         static const char hex[] = "0123456789abcdef";
-        const char *ptr = (char *)src;
+        char *dst_ptr = (char *)dst;
+        const char *src_ptr = (const char *)src;
 
-        while (dst_len && src_len) {        
-                *dst++ = hex[*ptr >> 4];        
-                *dst++ = hex[*ptr & 0xf];
-                ptr++;
+        while (dst_len && src_len) {
+                *dst_ptr++ = hex[*src_ptr >> 4];
+                *dst_ptr++ = hex[*src_ptr++ & 0xf];
                 src_len--;
                 dst_len -= 2;
         }
-        
+
         return dst;
 }
 
@@ -218,7 +219,7 @@ static inline const char *service_id_to_str(const struct service_id *srvid)
         static char str[82*2];
         static int i = 0;
         i = (i + 1) % 2;
-        return ntohex(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);
+        return serval_ntohex(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -237,7 +238,7 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
  */
 static inline const char *serval_ntop(const void *src, char *dst, size_t len)
 {
-        return ntohex(src, sizeof(struct service_id), dst, len);
+        return serval_ntohex(src, sizeof(struct service_id), dst, len);
 }
 
 /**
@@ -246,7 +247,7 @@ static inline const char *serval_ntop(const void *src, char *dst, size_t len)
  */
 static inline const int serval_pton(const char *src, void *dst)
 {
-        return hexton(src, dst, sizeof(struct service_id));
+        return serval_hexton(src, 64, dst, sizeof(struct service_id));
 }
 
 struct serval_hdr {

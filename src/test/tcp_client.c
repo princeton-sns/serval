@@ -259,12 +259,14 @@ static int parse_inet_str(char *inet_str,
                 /* Find out whether there is a port number */
                 p = strtok_r(inet_str, ":", &save);
                 
+                printf("parsing %s p=%c\n", inet_str, *p);
+
                 if (!p)
                         goto out;
 
                 p = strtok_r(NULL, ":", &save);
                 
-                if (p != inet_str)
+                if (p != NULL && p != inet_str)
                         *port = atoi(p);
         }
  out:
