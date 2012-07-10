@@ -114,7 +114,7 @@ static int service_parse_args(int argc, char **argv, void **result)
         if (strcmp(argv[0], "default") == 0) {
                 /* Do nothing, serviceID already set to zero */
         } else if (argv[0][0] == '0' && argv[0][1] == 'x') {
-                int len, i = 0;
+                int len;
                 
                 argv[0] += 2;
                 ptr = argv[0];
@@ -131,26 +131,9 @@ static int service_parse_args(int argc, char **argv, void **result)
 
                 if (len > 64)
                         len = 64;
-
-                while (len > 0) {
-                        char hex32[9];
-                        unsigned long id;
-
-                        memset(hex32, '0', sizeof(hex32));
-                        strncpy(hex32, argv[0] + (i * 8), len < 8 ? len : 8);
-                        hex32[8] = '\0';
-                        
-                        id = strtoul(hex32, &ptr, 16);
-
-                        if (!(*ptr == '\0' && hex32[0] != '\0')) {
-                                fprintf(stderr, "bad service id format '%s'\n",
-                                        argv[0]);
-                                return -1;
-                        }
-
-                        args.srvid.s_sid32[i++] = ntohl(id);
-                        len -= 8;
-                }
+                
+                if (serval_pton(argv[0], &args.srvid) == -1)
+                        return -1;
         } else {
                 unsigned long id = strtoul(argv[0], &ptr, 10);
                 
