@@ -152,7 +152,7 @@ static inline int hextobyte(const char c)
                 value = (c - '0');
         } else {
                 char d = c | 0x20;
-
+                
                 if (d >= 'a' && d <= 'f')
                         value = d - 'a' + 10;
         }
@@ -193,7 +193,8 @@ static inline int serval_hexton(const char *src,
 }
 
 /*
- * Convert a byte array to a hexadecimal string.
+ * Convert a byte array to a hexadecimal string. Will always
+ * null-terminate.
  */
 static inline char *serval_ntohex(const void *src,
                                   size_t src_len,
@@ -202,24 +203,31 @@ static inline char *serval_ntohex(const void *src,
 {
         static const char hex[] = "0123456789abcdef";
         char *dst_ptr = (char *)dst;
-        const char *src_ptr = (const char *)src;
+        const unsigned char *src_ptr = (const unsigned char *)src;
 
-        while (dst_len && src_len) {
+        while (src_len && dst_len > 1) {
                 *dst_ptr++ = hex[*src_ptr >> 4];
-                *dst_ptr++ = hex[*src_ptr++ & 0xf];
+
+                if (--dst_len > 1) {
+                        *dst_ptr++ = hex[*src_ptr++ & 0xf];
+                        dst_len--;
+                }
                 src_len--;
-                dst_len -= 2;
         }
+        
+        if (dst_len)
+                *dst_ptr = '\0';
 
         return dst;
 }
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
-        static char str[82*2];
+        static char str[65*2];
         static int i = 0;
         i = (i + 1) % 2;
-        return serval_ntohex(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);
+        return serval_ntohex(srvid, sizeof(*srvid),
+                             &str[i*sizeof(str)/2], sizeof(str)/2);
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -227,7 +235,7 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         static char str[22];
         static int i = 0;
         i = (i + 1) % 2;
-        snprintf(&str[i*sizeof(str)/2], 11, 
+        snprintf(&str[i*sizeof(str)/2], sizeof(str)/2, 
                  "%u", ntohl(flowid->s_id32));
         return &str[i*sizeof(str)/2];
 }

@@ -2225,19 +2225,12 @@ static int serval_sal_connected_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-        
-        err = serval_sal_ack_process(sk, skb, ctx);
+        int should_drop = 0;
 
-        if (ctx->hdr->fin) {
-                err = serval_sal_rcv_fin(sk, skb, ctx);
-                
-                if (err == 0) {
-                        serval_sal_timewait(sk, SERVAL_CLOSEWAIT);
-                }
-        }
+        err = serval_sal_ack_process(sk, skb, ctx);
         
-        /* Should also pass FIN to user, as it needs to pick it off
-         * its receive queue to notice EOF. */
+        /* Should pass FINs to transport and ultimately the user, as
+         * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || ctx->hdr->fin) {
                 /* Set the received service id.
 
@@ -2251,12 +2244,20 @@ static int serval_sal_connected_state_process(struct sock *sk,
         } else {
                 LOG_PKT("Dropping packet\n");
                 err = 0;
-                goto drop;
+                should_drop = 1;
         }
 
-        return err;
- drop:
-        kfree_skb(skb);
+        if (ctx->hdr->fin) {
+                err = serval_sal_rcv_fin(sk, skb, ctx);
+                
+                if (err == 0) {
+                        serval_sal_timewait(sk, SERVAL_CLOSEWAIT);
+                }
+        }
+
+        if (should_drop)
+                kfree_skb(skb);
+
         return err;
 }
 
