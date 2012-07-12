@@ -1296,8 +1296,6 @@ do_error:
 out_err:
 	err = sk_stream_error(sk, flags, err);
 
-        LOG_ERR("error=%d\n", err);
-
 	release_sock(sk);
 	return err;
 }
