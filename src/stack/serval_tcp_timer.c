@@ -477,8 +477,6 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 {
 	struct sock *sk = (struct sock *) data;
 	//struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        
-        LOG_DBG("timeout\n");
 
 	/* Only process if socket is not in use. */
 	bh_lock_sock(sk);
@@ -488,7 +486,7 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 		goto out;
 	}
 
-	LOG_WARN("Keepalive timer not implemented!\n");
+	LOG_DBG("Keepalive timer not implemented!\n");
 
 out:
 	bh_unlock_sock(sk);
