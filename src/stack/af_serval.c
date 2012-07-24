@@ -883,11 +883,10 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 
         lock_sock(sk);
 
-	switch (cmd) {
-		default:
-			ret = -ENOIOCTLCMD;
-			break;
-	}
+        if (sk->sk_prot->ioctl) 
+                ret = sk->sk_prot->ioctl(sk, cmd, arg);
+        else
+                ret = -ENOIOCTLCMD;
 
         release_sock(sk);
 

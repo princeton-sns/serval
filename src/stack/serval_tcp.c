@@ -15,6 +15,8 @@
 #include <af_serval.h>
 
 #if defined(OS_LINUX_KERNEL)
+#include <asm/ioctls.h>
+#include <linux/sockios.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
 #include <linux/export.h>
 #endif
@@ -2367,6 +2369,66 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 #endif
 }
 
+#if defined(OS_LINUX_KERNEL)
+int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        int answ;
+        
+        switch (cmd) {
+        case SIOCINQ:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                
+                lock_sock(sk);
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else if (sock_flag(sk, SOCK_URGINLINE) ||
+                         !tp->urg_data ||
+                         before(tp->urg_seq, tp->copied_seq) ||
+                         !before(tp->urg_seq, tp->rcv_nxt)) {
+                        struct sk_buff *skb;
+                        
+                        answ = tp->rcv_nxt - tp->copied_seq;
+                        
+                        /* Subtract 1, if FIN is in queue. */
+                        skb = skb_peek_tail(&sk->sk_receive_queue);
+                        if (answ && skb)
+                                answ -= tcp_hdr(skb)->fin;
+                } else
+                        answ = tp->urg_seq - tp->copied_seq;
+                release_sock(sk);
+                break;
+        case SIOCATMARK:
+                answ = tp->urg_data && tp->urg_seq == tp->copied_seq;
+                break;
+        case SIOCOUTQ:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else
+                        answ = tp->write_seq - tp->snd_una;
+                break;
+/*
+        case SIOCOUTQNSD:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else
+                        answ = tp->write_seq - tp->snd_nxt;
+                break;
+*/
+        default:
+                return -ENOIOCTLCMD;
+        }
+        
+        return put_user(answ, (int __user *)arg);
+}
+#endif /* OS_LINUX_KERNEL */
+
 static int serval_tcp_freeze_flow(struct sock *sk)
 {
         LOG_DBG("Freezing TCP flow %s\n", 
@@ -2778,6 +2840,7 @@ struct proto serval_tcp_proto = {
 #if defined(OS_LINUX_KERNEL)
 	.sockets_allocated	= &tcp_sockets_allocated,
 	.orphan_count		= &tcp_orphan_count,
+        .ioctl                  = serval_tcp_ioctl,
 #endif
 	.max_header		= MAX_SERVAL_TCP_HEADER,
 	.obj_size		= sizeof(struct serval_tcp_sock),
