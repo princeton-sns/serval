@@ -3660,7 +3660,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ALL) < 0)
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
                 return -1;
 
         /*

@@ -132,7 +132,7 @@ static enum work_status work_translate(struct socket *from,
         if (readlen == 0)
                 return WORK_NOSPACE;
 
-        //LOG_DBG("reading %zu bytes\n", readlen);
+        /* LOG_DBG("reading %zu bytes\n", readlen); */
 
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
                      readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
@@ -152,7 +152,7 @@ static enum work_status work_translate(struct socket *from,
         readlen = ret;
         from->bytes_read += readlen;
 
-        //LOG_DBG("splice1 %zu bytes\n", readlen);
+        /* LOG_DBG("splice1 %zu bytes\n", readlen); */
 
         while (readlen) {
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
@@ -176,7 +176,7 @@ static enum work_status work_translate(struct socket *from,
                 }
         }
         
-        //LOG_DBG("splice2 %zu bytes\n", nbytes);
+        /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
         
         return status;
 }
