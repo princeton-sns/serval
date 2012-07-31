@@ -1,3 +1,4 @@
+
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 #include <serval/platform.h>
 #include <serval/debug.h>
@@ -604,7 +605,7 @@ unsigned int serval_tcp_poll(struct file *file,
 
 	sock_poll_wait(file, sk_sleep(sk), wait);
         
-        if (sk->sk_state == SERVAL_LISTEN) {
+        if (sk->sk_state == SAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
                         (POLLIN | POLLRDNORM);
@@ -2480,7 +2481,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_build_ack = serval_tcp_connection_build_ack,
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
-        .net_header_len = SERVAL_NET_HEADER_LEN,
+        .net_header_len = SAL_NET_HEADER_LEN,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,
@@ -2502,7 +2503,7 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .conn_build_ack = serval_tcp_connection_build_ack,
         .conn_request = serval_tcp_connection_request,
         .conn_close = serval_tcp_connection_close,
-        .net_header_len = SERVAL_NET_HEADER_LEN + 8 /* sizeof(struct udphdr) */,
+        .net_header_len = SAL_NET_HEADER_LEN + 8 /* sizeof(struct udphdr) */,
         .request_state_process = serval_tcp_syn_sent_state_process,
         .respond_state_process = serval_tcp_syn_recv_state_process,
         .conn_child_sock = serval_tcp_syn_recv_sock,

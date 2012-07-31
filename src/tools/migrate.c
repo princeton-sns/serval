@@ -106,7 +106,7 @@ static int migrate_parse_args(int argc, char **argv, void **result)
                         return -1;
                 }
                 args.cmd = CMD_MIGRATE_SERVICE;
-                args.service.s_sid32[0] = htonl(atoi(argv[1]));
+                serval_pton(argv[1], &args.service);
                 args.to_if = argv[2];
                 
                 printf("Migrating flows of service %s to interface %s\n",

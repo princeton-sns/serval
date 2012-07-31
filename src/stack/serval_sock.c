@@ -43,22 +43,22 @@ static DEFINE_RWLOCK(sock_list_lock);
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        [ SERVAL_INIT ]      = "INIT",
-        [ SERVAL_CONNECTED ] = "CONNECTED",
-        [ SERVAL_REQUEST ]   = "REQUEST",
-        [ SERVAL_RESPOND ]   = "RESPOND",
-        [ SERVAL_FINWAIT1 ]  = "FINWAIT1",
-        [ SERVAL_FINWAIT2 ]  = "FINWAIT2",
-        [ SERVAL_TIMEWAIT ]  = "TIMEWAIT",
-        [ SERVAL_CLOSED ]    = "CLOSED",
-        [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
-        [ SERVAL_LASTACK ]   = "LASTACK",
-        [ SERVAL_LISTEN ]    = "LISTEN",
-        [ SERVAL_CLOSING ]   = "CLOSING"
+        [ SAL_INIT ]      = "INIT",
+        [ SAL_CONNECTED ] = "CONNECTED",
+        [ SAL_REQUEST ]   = "REQUEST",
+        [ SAL_RESPOND ]   = "RESPOND",
+        [ SAL_FINWAIT1 ]  = "FINWAIT1",
+        [ SAL_FINWAIT2 ]  = "FINWAIT2",
+        [ SAL_TIMEWAIT ]  = "TIMEWAIT",
+        [ SAL_CLOSED ]    = "CLOSED",
+        [ SAL_CLOSEWAIT ] = "CLOSEWAIT",
+        [ SAL_LASTACK ]   = "LASTACK",
+        [ SAL_LISTEN ]    = "LISTEN",
+        [ SAL_CLOSING ]   = "CLOSING"
 };
 
 static const char *sock_sal_state_str[] = {
-        [ SAL_INITIAL ]        = "SAL_INITIAL",
+        [ SAL_RSYN_INITIAL ]   = "SAL_RSYN_INITIAL",
         [ SAL_RSYN_SENT ]      = "SAL_RSYN_SENT",
         [ SAL_RSYN_RECV ]      = "SAL_RSYN_RECV",
         [ SAL_RSYN_SENT_RECV ] = "SAL_RSYN_SENT_RECV",
@@ -77,7 +77,7 @@ int __init serval_table_init(struct serval_table *table,
 {
 	unsigned int i;
 
-	table->hash = kmalloc(SERVAL_HTABLE_SIZE_MIN * 
+	table->hash = kmalloc(SAL_HTABLE_SIZE_MIN * 
                               sizeof(struct serval_hslot), GFP_KERNEL);
 
 	if (!table->hash) {
@@ -85,7 +85,7 @@ int __init serval_table_init(struct serval_table *table,
 		return -1;
 	}
 
-	table->mask = SERVAL_HTABLE_SIZE_MIN - 1;
+	table->mask = SAL_HTABLE_SIZE_MIN - 1;
         table->hashfn = hashfn;
         table->hashslot = hashslot;
 
@@ -148,7 +148,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         /* Initialize our private list. */
         INIT_LIST_HEAD(&mlist);
 
-        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+        for (i = 0; i < SAL_HTABLE_SIZE_MIN; i++) {
                 struct serval_hslot *slot;
                 
                 slot = &established_table.hash[i];
@@ -200,7 +200,7 @@ void serval_sock_freeze_flows(struct net_device *dev)
 {
         int i;
 
-        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+        for (i = 0; i < SAL_HTABLE_SIZE_MIN; i++) {
                 struct serval_hslot *slot;
                 struct hlist_node *walk;
                 struct sock *sk;                
@@ -349,8 +349,8 @@ static void __serval_sock_hash(struct sock *sk)
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
                 ssk->hash_key = &ssk->local_flowid;
@@ -370,12 +370,12 @@ void serval_sock_hash(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
         
         /* Do not hash if closed or already hashed */
-        if (sk->sk_state == SERVAL_CLOSED ||
+        if (sk->sk_state == SAL_CLOSED ||
             ssk->hash_key_len > 0)
                 return;
 
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
 		local_bh_disable();
 		__serval_sock_hash(sk);
                 serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
@@ -425,8 +425,8 @@ void serval_sock_unhash(struct sock *sk)
         if (ssk->hash_key_len == 0)
                 return;
                 
-        if (sk->sk_state == SERVAL_LISTEN ||
-            sk->sk_state == SERVAL_INIT) {
+        if (sk->sk_state == SAL_LISTEN ||
+            sk->sk_state == SAL_INIT) {
                 /*
                 lock = &listen_table.hashslot(&listen_table, net, 
                                               &ssk->local_srvid, 
@@ -564,7 +564,7 @@ void serval_sock_init(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         sk->sk_state = 0;
-        ssk->sal_state = SAL_INITIAL;
+        ssk->sal_state = SAL_RSYN_INITIAL;
         ssk->udp_encap_sport = 0;
         ssk->udp_encap_dport = 0;
         INIT_LIST_HEAD(&ssk->sock_node);
@@ -581,13 +581,13 @@ void serval_sock_init(struct sock *sk)
         serval_sal_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(ssk->local_nonce, SAL_NONCE_SIZE);
         get_random_bytes(&ssk->snd_seq.iss, sizeof(ssk->snd_seq.iss));
 #else
         {
                 unsigned int i;
                 unsigned char *seqno = (unsigned char *)&ssk->snd_seq.iss;
-                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                for (i = 0; i < SAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
                 for (i = 0; i < sizeof(ssk->snd_seq.iss); i++) {
@@ -620,7 +620,7 @@ void serval_sock_destroy(struct sock *sk)
 
         LOG_DBG("Destroying Serval sock %p\n", sk);
         
-	WARN_ON(sk->sk_state != SERVAL_CLOSED);
+	WARN_ON(sk->sk_state != SAL_CLOSED);
 
 	/* It cannot be in hash table! */
 	//WARN_ON(!sk_unhashed(sk));
@@ -663,7 +663,7 @@ static void serval_sock_clear_xmit_timers(struct sock *sk)
 
 void serval_sock_done(struct sock *sk)
 {
-	serval_sock_set_state(sk, SERVAL_CLOSED);
+	serval_sock_set_state(sk, SAL_CLOSED);
 	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
@@ -686,7 +686,7 @@ void serval_sock_destruct(struct sock *sk)
         serval_sal_ctrl_queue_purge(sk);
 
 	if (sk->sk_type == SOCK_STREAM && 
-            (sk->sk_state != SERVAL_CLOSED && 
+            (sk->sk_state != SAL_CLOSED && 
              sk->sk_state != 0)) {
                 /*
                   Note: in user mode, a respond sock created as a
@@ -762,7 +762,7 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 
 const char *serval_sock_state_str(struct sock *sk)
 {
-        if (sk->sk_state >= __SERVAL_MAX_STATE) {
+        if (sk->sk_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -771,7 +771,7 @@ const char *serval_sock_state_str(struct sock *sk)
 
 const char *serval_state_str(unsigned int state)
 {
-        if (state >= __SERVAL_MAX_STATE) {
+        if (state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -781,8 +781,8 @@ const char *serval_state_str(unsigned int state)
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 { 
-        if (new_state == __SERVAL_MIN_STATE ||
-            new_state >= __SERVAL_MAX_STATE) {
+        if (new_state == __SAL_MIN_STATE ||
+            new_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
@@ -794,7 +794,7 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
                 flow_id_to_str(&serval_sk(sk)->peer_flowid));
         
         switch (new_state) {
-        case SERVAL_CLOSED:
+        case SAL_CLOSED:
                 sk->sk_prot->unhash(sk);
                 break;
         default:
@@ -808,7 +808,7 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 const char *serval_sock_sal_state_str(struct sock *sk)
 {
-        if (serval_sk(sk)->sal_state >= __SAL_MAX_STATE) {
+        if (serval_sk(sk)->sal_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n",
                         serval_sk(sk)->sal_state);
                 return sock_sal_state_str[0];
@@ -818,7 +818,7 @@ const char *serval_sock_sal_state_str(struct sock *sk)
 
 const char *serval_sal_state_str(unsigned int state)
 {
-        if (state >= __SAL_MAX_STATE) {
+        if (state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", state);
                 return sock_sal_state_str[0];
         }
@@ -827,7 +827,7 @@ const char *serval_sal_state_str(unsigned int state)
 
 int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state >= __SAL_MAX_STATE) {
+        if (new_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", new_state);
                 return -1;
         }

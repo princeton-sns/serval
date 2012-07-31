@@ -50,7 +50,7 @@ struct service_info {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info) == 60)
+CTRLMSG_ASSERT(sizeof(struct service_info) == 284)
 
 struct service_info_stat {
         struct service_info service;
@@ -63,7 +63,7 @@ struct service_info_stat {
         uint32_t tokens_consumed;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 88)
+CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 312)
 
 struct service_stat {
         uint32_t capabilities;
@@ -114,7 +114,7 @@ struct ctrlmsg_register {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 48)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 272)
 
 enum ctrlmsg_register_flags {
         REG_FLAG_REREGISTER = 1,
@@ -139,7 +139,7 @@ struct ctrlmsg_resolve {
         struct in_addr src_address;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 84)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 532)
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 

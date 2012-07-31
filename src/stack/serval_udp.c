@@ -41,7 +41,7 @@
 
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
-#define MAX_SERVAL_UDP_HDR (MAX_SERVAL_HDR + sizeof(struct udphdr)) 
+#define MAX_SERVAL_UDP_HDR (MAX_SAL_HDR + sizeof(struct udphdr)) 
 
 extern int serval_udp_encap_xmit(struct sk_buff *skb);
 
@@ -106,7 +106,7 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .send_check = serval_udp_v4_send_check,
         .queue_xmit = serval_ipv4_xmit,
         .receive = serval_udp_rcv,
-        .net_header_len = SERVAL_NET_HEADER_LEN,
+        .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
         .recv_shutdown = serval_sal_recv_shutdown,
@@ -121,7 +121,7 @@ static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .encap_queue_xmit = serval_ipv4_xmit,
         .queue_xmit = serval_udp_encap_xmit,
         .receive = serval_udp_rcv,
-        .net_header_len = SERVAL_NET_HEADER_LEN,
+        .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
         .recv_shutdown = serval_sal_recv_shutdown,
@@ -330,7 +330,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	 *  Validate the packet.
 	 */
 
-        if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
+        if (SAL_SKB_CB(skb)->flags & SVH_FIN) {
                 serval_sk(sk)->af_ops->recv_shutdown(sk);
         } else {
                 unsigned short datalen = ntohs(uh->len) - sizeof(*uh);
@@ -420,7 +420,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 #endif
                         netaddr = (struct net_addr *)&inaddr->sin_addr;
                 }
-        } else if (sk->sk_state != SERVAL_CONNECTED) {
+        } else if (sk->sk_state != SAL_CONNECTED) {
                 return -EDESTADDRREQ;
         }
 
@@ -429,7 +429,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	timeo = sock_sndtimeo(sk, nonblock);
 
 	/* Wait for a connection to finish. */
-	if ((1 << sk->sk_state) & SERVALF_REQUEST)
+	if ((1 << sk->sk_state) & SALF_REQUEST)
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
                         goto out;
 
@@ -478,8 +478,8 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
         
         lock_sock(sk);
 
-        if (sk->sk_state == SERVAL_CLOSED) {
-                /* SERVAL_CLOSED is a valid state here because recvmsg
+        if (sk->sk_state == SAL_CLOSED) {
+                /* SAL_CLOSED is a valid state here because recvmsg
                  * should return 0 and not an error */
 		retval = -ENOTCONN;
 		goto out;
@@ -511,7 +511,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         break;
                 }
 
-		if (sk->sk_state == SERVAL_CLOSED) {
+		if (sk->sk_state == SAL_CLOSED) {
 			if (!sock_flag(sk, SOCK_DONE)) {
 				retval = -ENOTCONN;
 				break;
@@ -535,7 +535,7 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                 sk_wait_data(sk, &timeo);
 		continue;
 	found_ok_skb:
-                if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
+                if (SAL_SKB_CB(skb)->flags & SVH_FIN) {
                         retval = 0;
                         goto found_fin_ok;
                 }
@@ -556,9 +556,9 @@ static int serval_udp_recvmsg(struct kiocb *iocb, struct sock *sk,
                         svaddr->sv_family = AF_SERVAL;
                         *addr_len = sizeof(*svaddr);
                         
-                        if (SERVAL_SKB_CB(skb)->srvid) {
+                        if (SAL_SKB_CB(skb)->srvid) {
                                 memcpy(&svaddr->sv_srvid, 
-                                       SERVAL_SKB_CB(skb)->srvid,
+                                       SAL_SKB_CB(skb)->srvid,
                                        sizeof(svaddr->sv_srvid));
                         }
                         /* Copy also IP address if possible */
@@ -642,7 +642,7 @@ int serval_udp_read_sock(struct sock *sk, read_descriptor_t *desc,
 	struct sk_buff *skb;
 	int retval = 0;
 
-	if (sk->sk_state == SERVAL_LISTEN)
+	if (sk->sk_state == SAL_LISTEN)
 		return -ENOTCONN;
 
         skb = skb_peek(&sk->sk_receive_queue);
@@ -650,7 +650,7 @@ int serval_udp_read_sock(struct sock *sk, read_descriptor_t *desc,
         if (!skb)
                 return 0;
         
-        if (SERVAL_SKB_CB(skb)->flags & SVH_FIN) {
+        if (SAL_SKB_CB(skb)->flags & SVH_FIN) {
                 retval = 0;
         } else {
                 retval = recv_actor(desc, skb, 0, skb->len);
@@ -736,7 +736,7 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 			}
 			if (sk->sk_shutdown & RCV_SHUTDOWN)
 				break;
-			if (sk->sk_state == SERVAL_CLOSED) {
+			if (sk->sk_state == SAL_CLOSED) {
 				/*
 				 * This occurs when user tries to read
 				 * from never connected socket.
@@ -764,7 +764,7 @@ ssize_t serval_udp_splice_read(struct socket *sock, loff_t *ppos,
 		release_sock(sk);
 		lock_sock(sk);
 
-		if (sk->sk_err || sk->sk_state == SERVAL_CLOSED ||
+		if (sk->sk_err || sk->sk_state == SAL_CLOSED ||
 		    (sk->sk_shutdown & RCV_SHUTDOWN) ||
 		    signal_pending(current))
 			break;
@@ -788,13 +788,13 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
         int nonblock = flags & MSG_DONTWAIT;
 	long timeo = sock_sndtimeo(sk, nonblock);
 
-        if (sk->sk_state == SERVAL_INIT) {
+        if (sk->sk_state == SAL_INIT) {
                 err = -ENOTCONN;
                 goto out_err;
         }
 
 	/* Wait for a connection to finish. */
-	if ((1 << sk->sk_state) & (SERVALF_REQUEST))
+	if ((1 << sk->sk_state) & (SALF_REQUEST))
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
 			goto out_err;
 

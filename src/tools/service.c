@@ -135,18 +135,18 @@ static int service_parse_args(int argc, char **argv, void **result)
                 if (serval_pton(argv[0], &args.srvid) == -1)
                         return -1;
         } else {
-                unsigned long id = strtoul(argv[0], &ptr, 10);
-                
-                if (!((*ptr == '\0' || *ptr == ':') && argv[0] != '\0')) {
-                        fprintf(stderr, "bad service id format '%s',"
-                                " should be short integer string\n",
-                                argv[0]);
-                        return -1;
-                }
-                if (*ptr == ':')
-                        prefix = ++ptr;
+                ptr = argv[0];
 
-                args.srvid.s_sid32[0] = ntohl(id);
+                while (*ptr != '\0') {
+                        if (*ptr == ':') {
+                                *ptr = '\0';
+                                prefix = ++ptr;
+                                break;
+                        }
+                        ptr++;
+                }
+
+                serval_pton(argv[0], &args.srvid);
         }
         
         if (prefix) {

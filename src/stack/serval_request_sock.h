@@ -21,8 +21,8 @@ struct serval_request_sock {
                                * reply */
         u32 rcv_seq;
         u32 iss_seq;
-        u8 local_nonce[SERVAL_NONCE_SIZE];
-        u8 peer_nonce[SERVAL_NONCE_SIZE];
+        u8 local_nonce[SAL_NONCE_SIZE];
+        u8 peer_nonce[SAL_NONCE_SIZE];
         u16 udp_encap_sport;
         u16 udp_encap_dport;
         struct list_head lh;
@@ -53,13 +53,13 @@ serval_reqsk_alloc(const struct request_sock_ops *ops)
         serval_sock_get_flowid(&srsk->local_flowid);
 
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(srsk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(srsk->local_nonce, SAL_NONCE_SIZE);
         get_random_bytes(&srsk->iss_seq, sizeof(srsk->iss_seq));
 #else
         {
                 unsigned int i;
                 unsigned char *seqno = (unsigned char *)&srsk->iss_seq;
-                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                for (i = 0; i < SAL_NONCE_SIZE; i++) {
                         srsk->local_nonce[i] = random() & 0xff;
                 }
                 for (i = 0; i < sizeof(srsk->iss_seq); i++) {
