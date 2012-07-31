@@ -13,7 +13,6 @@
 #include "common.h"
 
 static const char *progname;
-static unsigned short DEFAULT_LISTEN_SID = 16385;
 static struct service_id listen_srvid;
 static int should_exit = 0;
 #define SENDBUF_SIZE (sizeof(long) * 1460)
@@ -368,7 +367,7 @@ main(int argc, char **argv)
         unsigned int seed = 2;
         int family = AF_SERVAL;
 
-        listen_srvid.s_sid32[0] = htonl(DEFAULT_LISTEN_SID);
+        serval_pton("tcp_server.localdomain", &listen_srvid);
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -428,16 +427,7 @@ main(int argc, char **argv)
                 } else if (strcmp("-s", argv[0]) == 0 || 
                            strcmp("--serviceid", argv[0]) == 0) {
                         if (argv[1]) {
-                                char *endptr = NULL;
-                                unsigned long sid;
-
-                                sid = strtoul(argv[1], &endptr, 10);
-                                
-                                if (*endptr != '\0') {
-                                        // conversion failure
-                                } else {
-                                        listen_srvid.s_sid32[0] = htonl(sid);
-                                }
+                                serval_pton(argv[1], &listen_srvid);
                                 argc--;
                                 argv++;
                         } 

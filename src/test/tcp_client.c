@@ -15,7 +15,7 @@
 #include "common.h"
 
 static const char *progname = "foo";
-static unsigned short DEFAULT_SERVER_SID = 16385;
+static unsigned short DEFAULT_SERVER_PORT = 16385;
 static struct service_id server_srvid;
 static int should_exit = 0;
 #define RECVBUF_SIZE (sizeof(long) * 1460)
@@ -146,7 +146,7 @@ static int client(const char *filepath,
                 addrlen = sizeof(cliaddr.inet);
         } else {
                 cliaddr.serval.sv_family = family;
-                cliaddr.serval.sv_srvid.s_sid32[0] = htonl(getpid());
+                serval_pton("tcp_client.localdomain", &cliaddr.serval.sv_srvid);
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
                        &server_srvid, sizeof(server_srvid));
@@ -279,10 +279,10 @@ main(int argc, char **argv)
 	struct sigaction action;
         char *filepath = NULL;
         struct in_addr srv_inetaddr;
-        int port = DEFAULT_SERVER_SID;
+        int port = DEFAULT_SERVER_PORT;
         int family = AF_SERVAL;
 
-        server_srvid.s_sid32[0] = htonl(DEFAULT_SERVER_SID);    
+        serval_pton("tcp_server.localdomain", &server_srvid);
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -319,16 +319,7 @@ main(int argc, char **argv)
                         return EXIT_SUCCESS;
                 } else if (strcmp("-s", argv[0]) == 0 ||
                             strcmp("--serviceid", argv[0]) == 0) {
-                        char *endptr = NULL;
-                        unsigned long sid = strtoul(argv[1], &endptr, 10);
-
-                        if (*endptr != '\0') {
-                                fprintf(stderr, "invalid service id %s", 
-                                        argv[1]);
-                                return EXIT_FAILURE;
-                        } else  {
-                                server_srvid.s_sid32[0] = htonl(sid);
-                        }
+                        serval_pton(argv[1], &server_srvid);
                         argc--;
                         argv++;
                 } else {

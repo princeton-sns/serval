@@ -59,30 +59,15 @@
 /* IP Protocol number */
 #define IPPROTO_SERVAL 144
 
+#define SERVICEID_MAX_LEN 255
+
 struct service_id {
-        union { 
-                struct {
-                        uint8_t un_ss[4];
-                        uint8_t un_local[4];
-                        uint8_t un_group[4];
-                        uint8_t un_selfcert[20];
-                };
-                uint8_t	 un_id8[32];
-                uint16_t un_id16[16];
-                uint32_t un_id32[8];
-        } srv_un;
-#define s_ss srv_un.un_ss;
-#define s_local srv_un.un_local;
-#define s_group srv_un.un_group;
-#define s_sfc srv_un.un_selfcert;
-#define s_sid srv_un.un_id8
-#define s_sid16 srv_un.un_id16
-#define s_sid32 srv_un.un_id32
+        char s_sid[SERVICEID_MAX_LEN+1];
 };
 
-SERVAL_ASSERT(sizeof(struct service_id) == 32)
+SERVAL_ASSERT(sizeof(struct service_id) == 256)
 
-#define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
+#define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)))
 
 enum sv_service_flags {
         /* bottom 2 bits reserved for scope - resolution and
@@ -111,7 +96,7 @@ struct sockaddr_sv {
         struct service_id sv_srvid;
 };
 
-SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 36)
+SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 260)
 
 #define SERVAL_ADDRSTRLEN 80
 
@@ -139,6 +124,43 @@ struct net_addr {
 #define net_ip net_un.un_ip
 #define net_raw net_un.un_raw
 };
+
+static inline char *strrev(char *str, size_t n)
+{
+        size_t i;
+    
+        for (i = 0; i < n/2; i++) {
+                str[i] ^= str[n-1-i];
+                str[n-1-i] ^= str[i];
+                str[i] ^= str[n-1-i];
+        }
+    
+        return str;
+}
+
+static inline char *strrev_delim(char delim, char *str, size_t n)
+{
+        size_t i, j;
+    
+        for (i = 0, j = 0; i <= n; i++) {
+                if (str[i] == delim || i == n) {
+                        strrev(&str[j], i-j);
+                        j = i + 1;
+                }
+        }
+        return str;
+}
+
+/**
+ * Reverse a fully qualified domain name string (we do not require the
+ * FQDN to end with a dot).
+ */
+static inline char *fqdn_reverse(const char *fqdn, char *out)
+{
+        size_t len = strlen(fqdn);
+        strcpy(out, fqdn);
+        return strrev_delim('.', strrev(out, len), len);
+}
 
 /**
  * Convert an ASCII character (char) to a byte integer. Returns -1 on
@@ -223,11 +245,14 @@ static inline char *serval_ntohex(const void *src,
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
+        /*
         static char str[65*2];
         static int i = 0;
         i = (i + 1) % 2;
         return serval_ntohex(srvid, sizeof(*srvid),
                              &str[i*sizeof(str)/2], sizeof(str)/2);
+        */
+        return srvid->s_sid;
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -246,19 +271,21 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
  */
 static inline const char *serval_ntop(const void *src, char *dst, size_t len)
 {
-        return serval_ntohex(src, sizeof(struct service_id), dst, len);
+        /* return serval_ntohex(src, sizeof(struct service_id), dst, len); */
+        return fqdn_reverse((char *)src, dst);
 }
 
 /**
- * Converts a string in presentation format to a binary service
+ * Converts a string in presentation format to a service
  * ID. Equivalent to inet_pton().
  */
 static inline const int serval_pton(const char *src, void *dst)
 {
-        return serval_hexton(src, 64, dst, sizeof(struct service_id));
+        /* return serval_hexton(src, 64, dst, sizeof(struct service_id)); */
+        return fqdn_reverse(src, (char *)dst) != NULL;
 }
 
-struct serval_hdr {
+struct sal_hdr {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	uint8_t	res1:3,
                 rsyn:1,
@@ -284,10 +311,10 @@ struct serval_hdr {
         struct flow_id dst_flowid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_hdr) == 16)
+SERVAL_ASSERT(sizeof(struct sal_hdr) == 16)
 
-/* Generic extension header */
-struct serval_ext {
+/* Generic SAL extension header */
+struct sal_ext {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 	uint8_t	flags:4,
 		type:4;
@@ -297,10 +324,11 @@ struct serval_ext {
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
-        uint8_t length;
+        uint8_t res;
+        uint16_t length;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_ext) == 4)
 
 /*
   These defines can be used for convenient access to the fields in the
@@ -309,86 +337,85 @@ SERVAL_ASSERT(sizeof(struct serval_ext) == 2)
 #define sv_ext_flags exthdr.flags
 #define sv_ext_length exthdr.length
 
-#define SERVAL_EXT_FIRST(sh) \
-        ((struct serval_ext *)((char *)sh + sizeof(struct serval_hdr)))
+#define SAL_EXT_FIRST(sh) \
+        ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
 
-#define SERVAL_EXT_NEXT(ext) \
-        ((struct serval_ext *)((char *)ext + ext->length))
+#define SAL_EXT_NEXT(ext) \
+        ((struct sal_ext *)((char *)ext + ntohs(ext->length)))
 
-enum serval_ext_type {
-        SERVAL_CONNECTION_EXT = 1,
-        SERVAL_CONTROL_EXT,
-        SERVAL_SERVICE_EXT,
-        SERVAL_DESCRIPTION_EXT,
-        SERVAL_SOURCE_EXT,
-        SERVAL_MIGRATE_EXT,
-        __SERVAL_EXT_TYPE_MAX,
+enum sal_ext_type {
+        SAL_CONNECTION_EXT = 1,
+        SAL_CONTROL_EXT,
+        SAL_SERVICE_EXT,
+        SAL_DESCRIPTION_EXT,
+        SAL_SOURCE_EXT,
+        SAL_MIGRATE_EXT,
+        __SAL_EXT_TYPE_MAX,
 };
 
-struct serval_connection_ext {
-        struct serval_ext exthdr;
+struct sal_connection_ext {
+        struct sal_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
         uint8_t  nonce[8];
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_connection_ext) == 50)
+SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 276)
 
-#define SERVAL_NONCE_SIZE 8
+#define SAL_NONCE_SIZE 8
 
-struct serval_control_ext {
-        struct serval_ext exthdr;
+struct sal_control_ext {
+        struct sal_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
         uint8_t  nonce[8];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_control_ext) == 18)
+SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
 
-struct serval_service_ext {
-        struct serval_ext exthdr;
-        struct service_id src_srvid;
-        struct service_id dst_srvid;
+struct sal_service_ext {
+        struct sal_ext exthdr;
+        struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_service_ext) == 66)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 260)
 
-struct serval_description_ext {
-        struct serval_ext exthdr;
+struct sal_description_ext {
+        struct sal_ext exthdr;
         struct net_addr addrs[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_description_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_description_ext) == 4)
 
-struct serval_source_ext {
-        struct serval_ext exthdr;
+struct sal_source_ext {
+        struct sal_ext exthdr;
         uint8_t source[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_source_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_source_ext) == 4)
 
-struct serval_migrate_ext {
-        struct serval_ext exthdr;
+struct sal_migrate_ext {
+        struct sal_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
         uint8_t nonce[8];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_migrate_ext) == 18)
+SERVAL_ASSERT(sizeof(struct sal_migrate_ext) == 20)
 
-#define __SERVAL_SOURCE_EXT_LEN(sz)             \
-        (sz + sizeof(struct serval_source_ext))
+#define __SAL_SOURCE_EXT_LEN(sz)             \
+        (sz + sizeof(struct sal_source_ext))
 
-#define SERVAL_SOURCE_EXT_LEN __SERVAL_SOURCE_EXT_LEN(4)
+#define SAL_SOURCE_EXT_LEN __SAL_SOURCE_EXT_LEN(4)
 
-#define SERVAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
-        (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
+#define SAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
+        (((ext)->sv_ext_length - sizeof(struct sal_source_ext)) / 4) 
 
-#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)      \
+#define SAL_SOURCE_EXT_GET_ADDR(ext, n)      \
         (&(ext)->source[n*4])
 
-#define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
-        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
+#define SAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
+        (&(ext)->source[(SAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
 
 #endif /* _SERVAL_H */
