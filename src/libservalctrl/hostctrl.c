@@ -192,17 +192,25 @@ struct hostctrl *hostctrl_remote_create(const struct hostctrl_callback *cbs,
                                         unsigned short flags)
 {
     struct sockaddr_sv raddr, laddr;
-
+    struct service_id tmp_srvid;
+    
     memset(&raddr, 0, sizeof(raddr));
     memset(&laddr, 0, sizeof(laddr));
         
     raddr.sv_family = AF_SERVAL;
-    raddr.sv_srvid.srv_un.un_id32[0] = 
-        flags & HCF_ROUTER ? htonl(333333) : htonl(444444);
-
     laddr.sv_family = AF_SERVAL;
-    laddr.sv_srvid.srv_un.un_id32[0] =
-        flags & HCF_ROUTER ? htonl(444444) : htonl(333333);
+
+    gethostname(tmp_srvid.s_sid, sizeof(tmp_srvid.s_sid));
+
+    if (flags & HCF_ROUTER)
+        serval_pton("localservicerouter.localdomain", &raddr.sv_srvid);
+    else
+        serval_pton(tmp_srvid.s_sid, &raddr.sv_srvid);
+
+    if (flags & HCF_ROUTER)
+        serval_pton("localservicerouter.localdomain", &laddr.sv_srvid);
+    else
+        serval_pton(tmp_srvid.s_sid, &laddr.sv_srvid);
 	
 	return hostctrl_remote_create_specific(cbs, context,
                                            (struct sockaddr *)&laddr, 

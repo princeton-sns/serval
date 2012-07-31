@@ -373,8 +373,10 @@ static void *client_thread(void *arg)
                 LOG_DBG("client %u connecting to %s:%u\n",
                         c->id, ipstr, ntohs(addr.in.sin_port));
         } else if (c->from_family == AF_INET) {
+                char buf[SERVICEID_MAX_LEN+1];
+                sprintf(buf, "%u.translator.localdomain", c->translator_port);
                 addr.sv.sv_family = AF_SERVAL;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
+                serval_pton(buf, &addr.sv.sv_srvid);
                 addrlen = sizeof(addr.sv);
                 sock = c->sock[ST_SERVAL].fd;
                 if (cross_translate)
@@ -552,8 +554,10 @@ static int create_server_sock(int family, unsigned short port)
                 addr.in.sin_port = htons(port);
                 addrlen = sizeof(addr.in);
         } else if (family == AF_SERVAL) {
+                char buf[SERVICEID_MAX_LEN+1];
+                sprintf(buf, "%u.translator.localdomain", port);
                 addr.sv.sv_family = AF_SERVAL;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(port);
+                serval_pton(buf, &addr.sv.sv_srvid);
                 addrlen = sizeof(addr.sv);
         } else {
                 close(sock);

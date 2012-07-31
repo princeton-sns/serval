@@ -37,45 +37,46 @@
 	TCP_MAX_STATES	
  */
 enum {
-        __SERVAL_MIN_STATE = 0,
-        SERVAL_INIT = __SERVAL_MIN_STATE,
-        SERVAL_CONNECTED,
-        SERVAL_REQUEST,
-        SERVAL_RESPOND,
-        SERVAL_FINWAIT1,
-        SERVAL_FINWAIT2,
-        SERVAL_TIMEWAIT,
-        SERVAL_CLOSED,
-        SERVAL_CLOSEWAIT,
-        SERVAL_LASTACK,
-        SERVAL_LISTEN,
-        SERVAL_CLOSING,
-        __SERVAL_MAX_STATE
+        __SAL_MIN_STATE = 0,
+        SAL_INIT = __SAL_MIN_STATE,
+        SAL_CONNECTED,
+        SAL_REQUEST,
+        SAL_RESPOND,
+        SAL_FINWAIT1,
+        SAL_FINWAIT2,
+        SAL_TIMEWAIT,
+        SAL_CLOSED,
+        SAL_CLOSEWAIT,
+        SAL_LASTACK,
+        SAL_LISTEN,
+        SAL_CLOSING,
+        __SAL_MAX_STATE
 };
 
 enum {
-        SERVALF_CONNECTED = (1 << 1),
-        SERVALF_REQUEST   = (1 << 2),
-        SERVALF_RESPOND   = (1 << 3),
-        SERVALF_FINWAIT1  = (1 << 4),
-        SERVALF_FINWAIT2  = (1 << 5),
-        SERVALF_TIMEWAIT  = (1 << 6),
-        SERVALF_CLOSED    = (1 << 7), 
-        SERVALF_CLOSEWAIT = (1 << 8),
-        SERVALF_LASTACK   = (1 << 9),
-        SERVALF_LISTEN    = (1 << 10),
-        SERVALF_CLOSING   = (1 << 11)
+        SALF_CONNECTED = (1 << 1),
+        SALF_REQUEST   = (1 << 2),
+        SALF_RESPOND   = (1 << 3),
+        SALF_FINWAIT1  = (1 << 4),
+        SALF_FINWAIT2  = (1 << 5),
+        SALF_TIMEWAIT  = (1 << 6),
+        SALF_CLOSED    = (1 << 7), 
+        SALF_CLOSEWAIT = (1 << 8),
+        SALF_LASTACK   = (1 << 9),
+        SALF_LISTEN    = (1 << 10),
+        SALF_CLOSING   = (1 << 11)
 };
 
 /**
-   Service Access Layer (SAL) socket states used for, e.g., migration.
+   Service Access Layer (SAL) RSYN socket states used for, e.g.,
+   migration.
  */
 enum {
-        SAL_INITIAL = 0,
+        SAL_RSYN_INITIAL = 0,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
         SAL_RSYN_SENT_RECV, /* Receive RSYN after having sent RSYN */
-        __SAL_MAX_STATE,
+        __SAL_RSYN_MAX_STATE,
 };
 
 enum serval_sock_flags {
@@ -150,8 +151,8 @@ struct serval_sock {
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
-        u8                      local_nonce[SERVAL_NONCE_SIZE];
-        u8                      peer_nonce[SERVAL_NONCE_SIZE];
+        u8                      local_nonce[SAL_NONCE_SIZE];
+        u8                      peer_nonce[SAL_NONCE_SIZE];
         u16                     ext_hdr_len;
         u16                     udp_encap_sport;
         u16                     udp_encap_dport;
@@ -189,7 +190,7 @@ struct serval_sock {
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 
 /* Should be power of two */
-#define SERVAL_HTABLE_SIZE_MIN 256
+#define SAL_HTABLE_SIZE_MIN 256
 
 struct serval_hslot {
 	struct hlist_head head;

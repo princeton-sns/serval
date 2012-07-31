@@ -200,8 +200,8 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 sizeof(struct sockaddr_in);
 	
         if (peer) {
-		if ((((1 << sk->sk_state) & (SERVALF_CLOSED | 
-                                             SERVALF_REQUEST)) &&
+		if ((((1 << sk->sk_state) & (SALF_CLOSED | 
+                                             SALF_REQUEST)) &&
 		     peer == 1))
 			return -ENOTCONN;
                 
@@ -303,7 +303,7 @@ int serval_setsockopt(struct socket *sock, int level, int optname,
 
 static int serval_listen_start(struct sock *sk, int backlog)
 {
-        serval_sock_set_state(sk, SERVAL_LISTEN);
+        serval_sock_set_state(sk, SAL_LISTEN);
         sk->sk_ack_backlog = 0;
  
         return 0;
@@ -465,7 +465,7 @@ static int serval_wait_for_connect(struct sock *sk, long timeo)
 		if (!list_empty(&ssk->accept_queue))
 			break;
 		err = -EINVAL;
-		if (sk->sk_state != SERVAL_LISTEN)
+		if (sk->sk_state != SAL_LISTEN)
 			break;
 		err = sock_intr_errno(timeo);
 		if (signal_pending(current))
@@ -487,7 +487,7 @@ static int serval_accept(struct socket *sock, struct socket *newsock,
 
 	lock_sock(sk);
 
-	if (sk->sk_state != SERVAL_LISTEN) {
+	if (sk->sk_state != SAL_LISTEN) {
 		err = -EBADFD;
 		goto out;
 	}
@@ -544,7 +544,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 	case SS_UNCONNECTED:
 		err = -EISCONN;
 
-		if (sk->sk_state == SERVAL_LISTEN)
+		if (sk->sk_state == SAL_LISTEN)
 			goto out;
 
                 /*
@@ -555,14 +555,14 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 if (serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND))
                         sk->sk_prot->unhash(sk);
 
-                serval_sock_set_state(sk, SERVAL_REQUEST);
+                serval_sock_set_state(sk, SAL_REQUEST);
 
                 sk->sk_prot->hash(sk);
                 
                 err = sk->sk_prot->connect(sk, addr, alen);
 
 		if (err < 0) {
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                        serval_sock_set_state(sk, SAL_CLOSED);
 			goto out;
                 }
 		sock->state = SS_CONNECTING;
@@ -577,7 +577,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 
         timeo = sock_sndtimeo(sk, nonblock);
 
-        if ((1 << sk->sk_state) & (SERVALF_REQUEST | SERVALF_RESPOND)) {
+        if ((1 << sk->sk_state) & (SALF_REQUEST | SALF_RESPOND)) {
                 /* Error code is set above */
                 LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
 
@@ -602,9 +602,9 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                         goto out;
         }
 
-        /* We must be in SERVAL_REQUEST or later state. All those
+        /* We must be in SAL_REQUEST or later state. All those
            states are valid "connected" states, except for CLOSED. */
-        if (sk->sk_state == SERVAL_CLOSED)
+        if (sk->sk_state == SAL_CLOSED)
                 goto sock_error;
 
         sock->state = SS_CONNECTED;
@@ -704,7 +704,7 @@ static int serval_shutdown(struct socket *sock, int how)
 	}
 
 	switch (sk->sk_state) {
-	case SERVAL_CLOSED:
+	case SAL_CLOSED:
 		err = -ENOTCONN;
 		/* Hack to wake up other listeners, who can poll for
 		   POLLHUP, even on eg. unconnected UDP sockets -- RR */
@@ -718,11 +718,11 @@ static int serval_shutdown(struct socket *sock, int how)
 	 * close() in multithreaded environment. It is _not_ a good idea,
 	 * but we have no choice until close() is repaired at VFS level.
 	 */
-	case SERVAL_LISTEN:
+	case SAL_LISTEN:
 		if (!(how & RCV_SHUTDOWN))
 			break;
 		/* Fall through */
-	case SERVAL_REQUEST:
+	case SAL_REQUEST:
 		err = sk->sk_prot->disconnect(sk, O_NONBLOCK);
 		sock->state = err ? SS_DISCONNECTING : SS_UNCONNECTED;
 		break;
@@ -759,9 +759,9 @@ int serval_release(struct socket *sock)
 
                 sk->sk_shutdown = SHUTDOWN_MASK;
 
-                if (sk->sk_state == SERVAL_LISTEN) {
+                if (sk->sk_state == SAL_LISTEN) {
                         serval_listen_stop(sk);
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                        serval_sock_set_state(sk, SAL_CLOSED);
                 } else {
                         /* the protocol specific function called here
                          * should not lock sock */
@@ -786,13 +786,13 @@ int serval_release(struct socket *sock)
                 bh_lock_sock(sk);
 
                 /* Have we already been destroyed by a softirq or backlog? */
-                if (state != SERVAL_CLOSED &&
-                    sk->sk_state == SERVAL_CLOSED)
+                if (state != SAL_CLOSED &&
+                    sk->sk_state == SAL_CLOSED)
                         goto out;
 
                 /* Other cleanup stuff goes here */
 
-                if (sk->sk_state == SERVAL_CLOSED)
+                if (sk->sk_state == SAL_CLOSED)
                         serval_sock_destroy(sk);
         out:
                 bh_unlock_sock(sk);
@@ -832,7 +832,7 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 #else
         poll_wait(file, sk->sk_sleep, wait);
 #endif
-        if (sk->sk_state == SERVAL_LISTEN) {
+        if (sk->sk_state == SAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
                         (POLLIN | POLLRDNORM);
@@ -844,12 +844,12 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 		mask = POLLERR;
 
 	if (sk->sk_shutdown == SHUTDOWN_MASK ||
-            sk->sk_state == SERVAL_CLOSED)
+            sk->sk_state == SAL_CLOSED)
 		mask |= POLLHUP;
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	if ((1 << sk->sk_state) & ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+	if ((1 << sk->sk_state) & ~(SALF_REQUEST | SALF_RESPOND)) {
                 if (atomic_read(&sk->sk_rmem_alloc) > 0)
 			mask |= POLLIN | POLLRDNORM;
 

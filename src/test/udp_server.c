@@ -24,8 +24,6 @@
 #include <ctype.h>
 #include <unistd.h>
 
-static unsigned short ECHO_SERVICE_ID = 16385;
-
 int set_reuse_ok(int sock);
 
 int server(void)
@@ -41,7 +39,7 @@ int server(void)
   
         memset(&servaddr, 0, sizeof(servaddr));
         servaddr.sv_family = AF_SERVAL;
-        servaddr.sv_srvid.s_sid32[0] = htonl(ECHO_SERVICE_ID);
+        serval_pton("udp_server.localdomain", &servaddr.sv_srvid);
   
         set_reuse_ok(sock);
   
@@ -53,7 +51,8 @@ int server(void)
                 return -1;
         }
         
-        printf("server: bound to service id %d\n", ECHO_SERVICE_ID);
+        printf("server: bound to service id %s\n", 
+               service_id_to_str(&servaddr.sv_srvid));
 
         listen_sv(sock, backlog);
 
@@ -125,6 +124,7 @@ int server(void)
 int set_reuse_ok(int sock)
 {
         int option = 1;
+
         if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
                        &option, sizeof(option)) < 0) {
                 fprintf(stderr, "proxy setsockopt error");

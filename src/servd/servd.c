@@ -858,10 +858,10 @@ int main(int argc, char **argv)
         }
 
         ctx.raddr.sv_family = AF_SERVAL;
-        ctx.raddr.sv_srvid.srv_un.un_id32[0] = htonl(router_id);
+        serval_pton("localservicerouter.localdomain", &ctx.raddr.sv_srvid);
 
         ctx.caddr.sv_family = AF_SERVAL;
-        ctx.caddr.sv_srvid.srv_un.un_id32[0] = htonl(client_id);
+        serval_pton("localservd.localdomain", &ctx.caddr.sv_srvid);
 	
         if (ctx.router) {
                 ctx.rhc = hostctrl_remote_create_specific(&rcb, &ctx,

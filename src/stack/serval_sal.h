@@ -33,14 +33,14 @@ struct service_entry;
    packets; i.e., we should always clone queued packets before we
    transmit.
  */
- struct serval_skb_cb {
-         u8 flags;
-         u32 seqno;
-         u32 when;
-         struct service_id *srvid;
- };
+struct sal_skb_cb {
+        u8 flags;
+        u32 seqno;
+        u32 when;
+        struct service_id *srvid;
+};
 
-enum serval_ctrl_flags {
+enum sal_ctrl_flags {
         SVH_SYN       = 1 << 0,
         SVH_ACK       = 1 << 1,
         SVH_RST       = 1 << 2,
@@ -54,31 +54,14 @@ enum serval_ctrl_flags {
 
 #define sal_time_stamp ((u32)(jiffies))
 
-static inline struct serval_skb_cb *__serval_skb_cb(struct sk_buff *skb)
+static inline struct sal_skb_cb *__sal_skb_cb(struct sk_buff *skb)
 {
-        struct serval_skb_cb * sscb = 
-                (struct serval_skb_cb *)&(skb)->cb[0];
-#if defined(ENABLE_DEBUG)
-        /*
-          if (sizeof(struct serval_skb_cb) > sizeof(skb->cb)) {
-                 LOG_WARN("serval_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
-                          "skb->cb may overflow!\n", 
-                          sizeof(struct serval_skb_cb), 
-                          sizeof(skb->cb));
-         } 
-         */
-         /*
-            else {
-                LOG_WARN("serval_skb_cb (%zu bytes) skb->cb (%zu bytes).\n", 
-                         sizeof(struct serval_skb_cb), 
-                         sizeof(skb->cb));
-                 } 
-          */
-#endif
+        struct sal_skb_cb * sscb = 
+                (struct sal_skb_cb *)&(skb)->cb[0];
 	return sscb;
 }
 
-#define SERVAL_SKB_CB(__skb) __serval_skb_cb(__skb)
+#define SAL_SKB_CB(__skb) __sal_skb_cb(__skb)
 
 #define MAX_CTRL_QUEUE_LEN 20
 
@@ -248,20 +231,20 @@ int serval_sal_recv_shutdown(struct sock *sk);
 void serval_sal_done(struct sock *sk);
 int serval_sal_rcv(struct sk_buff *skb);
 
-static inline struct serval_hdr *serval_hdr(struct sk_buff *skb)
+static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 {
-        return (struct serval_hdr *)skb_transport_header(skb);
+        return (struct sal_hdr *)skb_transport_header(skb);
 }
 
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE sizeof(struct iphdr)
 /* payload + LL + IP + extra */
-#define MAX_SERVAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
-                        sizeof(struct serval_hdr) +                 \
-                        sizeof(struct serval_connection_ext))
+#define MAX_SAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
+                     sizeof(struct sal_hdr) +                    \
+                     sizeof(struct sal_connection_ext))
 
-#define SERVAL_NET_HEADER_LEN (sizeof(struct iphdr) +           \
-                               sizeof(struct serval_hdr))
+#define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +      \
+                            sizeof(struct sal_hdr))
 
 extern int serval_sal_forwarding;
 

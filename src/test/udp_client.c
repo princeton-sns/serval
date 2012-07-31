@@ -25,9 +25,6 @@
 #include <unistd.h>
 #include <signal.h>
 
-static unsigned short CLIENT_SERVICE_ID = 32769;
-static unsigned short ECHO_SERVICE_ID = 16385;
-
 static int sock;
 
 void signal_handler(int sig)
@@ -57,11 +54,11 @@ int client(void) {
 
 	bzero(&cliaddr, sizeof(cliaddr));
 	cliaddr.sv_family = AF_SERVAL;
-	cliaddr.sv_srvid.s_sid32[0] = htonl(CLIENT_SERVICE_ID);
+        serval_pton("udp_client.localdomain", &cliaddr.sv_srvid);
 
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sv_family = AF_SERVAL;
-	srvaddr.sv_srvid.s_sid32[0] = htonl(ECHO_SERVICE_ID);
+        serval_pton("udp_server.localdomain", &srvaddr.sv_srvid);
   
 	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
 

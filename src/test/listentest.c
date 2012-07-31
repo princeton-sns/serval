@@ -24,7 +24,7 @@ int main(int argc, char **argv)
 	}
 
 	addr.sv_family = AF_SERVAL;
-	addr.sv_srvid.s_sid16[0] = htons(7); 
+	serval_pton("listentest.localdomain", &addr.sv_srvid);
 
 	ret = listen_sv(sock, 10);
 
@@ -43,8 +43,6 @@ int main(int argc, char **argv)
 		close_sv(sock);
 		return -1;
 	}
-	
-	addr.sv_srvid.s_sid16[0] = htons(8);
 
 	ret = listen_sv(sock, 10);
 
