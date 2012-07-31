@@ -3000,7 +3000,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * and assumes that skb->dev is the input
                          * interface*/
                         if (target->out.dev)
-                                skb_set_dev(cskb, target->out.dev);
+                                cskb->dev = target->out.dev;
 #endif /* OS_LINUX_KERNEL */
                         
                         /* Set the true overlay source address if the
@@ -3373,7 +3373,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
                                                   src, 18));
                         }
 #endif
-                        skb_set_dev(skb, mig_dev);
+                        skb->dev = mig_dev;
                 }
                 
                 if (ssk->sal_state == SAL_RSYN_RECV) {
@@ -3632,7 +3632,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 /* for user-space, need to specify a device - the
                  * kernel will route */
 #if defined(OS_USER)
-                skb_set_dev(skb, __dev_get_by_index(sock_net(sk), 0));
+                skb->dev = __dev_get_by_index(sock_net(sk), 0);
 #endif
                 serval_sal_send_check(sh);
                 
@@ -3736,7 +3736,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         dev = target->out.dev;
                 }
                 
-                skb_set_dev(cskb, dev);
+                cskb->dev = dev;
 
                 /* Need also to set the source address for
                    checksum calculation */
