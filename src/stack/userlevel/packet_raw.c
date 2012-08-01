@@ -47,6 +47,9 @@ static int packet_raw_init(struct net_device *dev)
 	dev_get_ipv4_addr(dev, IFADDR_LOCAL, &addr.sin_addr);
 	addr.sin_port = 0;
 	       
+        LOG_DBG("binding to %s\n",
+                inet_ntoa(addr.sin_addr));
+
         ret = bind(dev->fd, (struct sockaddr *)&addr, sizeof(addr));
 
         if (ret == -1) {
@@ -160,11 +163,6 @@ static int packet_raw_xmit(struct sk_buff *skb)
         addr.sin_family = AF_INET;
 	memcpy(&addr.sin_addr, &iph->daddr, sizeof(iph->daddr));
 
-	if (!skb->dev) {
-                LOG_ERR("No device set in skb\n");
-		kfree_skb(skb);
-		return -1;
-	}
 #if defined(ENABLE_DEBUG)
         {
                 char buf[18];

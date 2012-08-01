@@ -3631,9 +3631,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 /* for user-space, need to specify a device - the
                  * kernel will route */
-#if defined(OS_USER)
-                skb->dev = __dev_get_by_index(sock_net(sk), 0);
-#endif
                 serval_sal_send_check(sh);
                 
                 /* note that the service resolution stats
@@ -3644,7 +3641,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                  */
                 return serval_sal_do_xmit(skb);
         }
-
 
         LOG_DBG("Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
@@ -3720,13 +3716,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
-#if defined(OS_USER)
-                        dev = __dev_get_by_index(sock_net(sk), 0);
-#else
-                        /* FIXME: not sure about getting the device
-                           without a refcount here... */
                         dev = __dev_get_by_name(sock_net(sk), "lo");
-#endif
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,

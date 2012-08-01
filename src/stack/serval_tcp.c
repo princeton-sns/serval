@@ -2725,7 +2725,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 	 */
 	tp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
-    tp->snd_mig_last = 0;
+        tp->snd_mig_last = 0;
 	tp->mss_cache = SERVAL_TCP_MSS_DEFAULT;
 
 	tp->reordering = sysctl_serval_tcp_reordering;
@@ -2751,7 +2751,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 
         tp->bytes_queued = 0;
         
-        LOG_DBG("sockinit: snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+        LOG_DBG("sockinit: snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 #if defined(OS_LINUX_KERNEL)
