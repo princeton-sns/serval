@@ -136,8 +136,6 @@ struct serval_sock {
         u32                     mig_daddr;
         void                    *hash_key;
         u32                     hash_key_len;  /* Keylen in bytes */
-        u16                     srvid_prefix_bits;
-        u16                     srvid_flags;
         struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;

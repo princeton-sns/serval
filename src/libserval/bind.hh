@@ -25,7 +25,7 @@
 class BindReq : public Message {
   public:
     BindReq();
-    BindReq(const sv_srvid_t& service_id, uint8_t flags, uint8_t prefix);
+    BindReq(const sv_srvid_t& service_id);
 
     int check_type() const;
     int write_serial_payload(unsigned char *buf) const;
@@ -34,12 +34,8 @@ class BindReq : public Message {
 
     void print(const char *label) const;
     const sv_srvid_t& service_id() const { return _service_id; }
-    uint8_t flags() {return _flags;}
-    uint8_t prefix() {return _prefix;}
 
   private:
-    uint8_t _flags;
-	uint8_t _prefix;
 	sv_srvid_t _service_id;
 };
 

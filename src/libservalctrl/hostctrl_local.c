@@ -8,7 +8,6 @@
 
 static int local_service_generic(struct hostctrl *hc, int type,
                                  const struct service_id *srvid, 
-                                 unsigned short prefix_bits,
                                  unsigned int priority,
                                  unsigned int weight,
                                  const struct in_addr *ipaddr)
@@ -25,9 +24,6 @@ static int local_service_generic(struct hostctrl *hc, int type,
     req.cm.cmh.type = type;
     req.cm.cmh.xid = ++hc->xid;
     req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(1);
-	req.cm.service[0].srvid_prefix_bits = 
-        (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
-        0 : prefix_bits;
     req.cm.service[0].priority = priority;
     req.cm.service[0].weight = weight;
     memcpy(&req.cm.service[0].srvid, srvid, sizeof(*srvid));
@@ -39,8 +35,8 @@ static int local_service_generic(struct hostctrl *hc, int type,
 
 	/* strncpy(req.cm.ifname, ifname, IFNAMSIZ - 1); */
         
-    LOG_DBG("op=%d prefix_bits=%u len=%u sizeof(req)=%zu %zu %s\n",      
-            type, req.cm.service[0].srvid_prefix_bits, 
+    LOG_DBG("op=%d len=%u sizeof(req)=%zu %zu %s\n",      
+            type,
             CTRLMSG_SERVICE_LEN(&req.cm), sizeof(req), 
             CTRLMSG_SERVICE_NUM(&req.cm),
             service_id_to_str(&req.cm.service[0].srvid));
@@ -50,28 +46,25 @@ static int local_service_generic(struct hostctrl *hc, int type,
                                  
 static int local_service_add(struct hostctrl *hc,
                              const struct service_id *srvid, 
-                             unsigned short prefix_bits,
                              unsigned int priority,
                              unsigned int weight,
                              const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_ADD_SERVICE,
-                                 srvid, prefix_bits, priority, 
+                                 srvid, priority, 
                                  weight, ipaddr);
 }
 
 static int local_service_remove(struct hostctrl *hc, 
                                 const struct service_id *srvid,
-                                unsigned short prefix_bits,
                                 const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_DEL_SERVICE,
-                                 srvid, prefix_bits, 0, 0, ipaddr);
+                                 srvid, 0, 0, ipaddr);
 }
 
 static int local_service_modify(struct hostctrl *hc, 
                                 const struct service_id *srvid,
-                                unsigned short prefix_bits,
                                 unsigned int priority,
                                 unsigned int weight,
                                 const struct in_addr *old_ip,
@@ -89,9 +82,6 @@ static int local_service_modify(struct hostctrl *hc,
     req.cm.cmh.type = CTRLMSG_TYPE_MOD_SERVICE;
     req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(2);
     req.cm.cmh.xid = ++hc->xid;
-    req.service[0].srvid_prefix_bits = 
-        (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ? 
-        0 : prefix_bits;
     req.service[0].priority = priority;
     req.service[0].weight = weight;
     memcpy(&req.service[0].srvid, srvid, sizeof(*srvid));
@@ -112,24 +102,21 @@ static int local_service_modify(struct hostctrl *hc,
 
 static int local_service_get(struct hostctrl *hc, 
                              const struct service_id *srvid,
-                             unsigned short prefix_bits,
                              const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_GET_SERVICE,
-                                 srvid, prefix_bits, 0, 0, ipaddr);
+                                 srvid, 0, 0, ipaddr);
 }
 
 static int local_service_register_dummy(struct hostctrl *hc, 
                                         const struct service_id *srvid,
-                                        unsigned short prefix_bits,
                                         const struct in_addr *old_ip)
 {
     return 0;
 }
 
 static int local_service_unregister_dummy(struct hostctrl *hc, 
-                                          const struct service_id *srvid,
-                                          unsigned short prefix_bits)
+                                          const struct service_id *srvid)
 {
     return 0;
 }
@@ -241,8 +228,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
         ret = hc->cbs->service_registration(hc,
                                             &cmr->srvid, 
-                                            cmr->srvid_flags, 
-                                            cmr->srvid_prefix_bits, 
+                                            cmr->flags, 
                                             &local_ip, NULL);
         break;
     }
@@ -250,8 +236,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         struct ctrlmsg_register *cmr = (struct ctrlmsg_register *)cm;
         ret = hc->cbs->service_unregistration(hc, 
                                               &cmr->srvid, 
-                                              cmr->srvid_flags, 
-                                              cmr->srvid_prefix_bits, 
+                                              cmr->flags, 
                                               &local_ip);
         break;
     }

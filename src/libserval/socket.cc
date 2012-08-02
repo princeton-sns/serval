@@ -197,8 +197,7 @@ int SVSockLib::check_state_for_bind(const Cli &cli, sv_err_t &err) const
 int SVSockLib::query_serval_bind(const struct sockaddr_sv *sv_addr,
                                  Cli &cli, sv_err_t &err)
 {
-    BindReq breq(sv_addr->sv_srvid, sv_addr->sv_flags, 
-                 sv_addr->sv_prefix_bits);
+    BindReq breq(sv_addr->sv_srvid);
 
     if (breq.write_to_stream_soc(cli.fd(), err) < 0)
         return SERVAL_SOCKET_ERROR;
@@ -312,8 +311,7 @@ int SVSockLib::connect_sv(int soc, const struct sockaddr *addr, socklen_t addr_l
 int SVSockLib::query_serval_connect(const struct sockaddr_sv *sv_addr, 
                                     bool nb, Cli &cli, sv_err_t &err)
 {
-    uint16_t flags = sv_addr->sv_flags;
-    ConnectReq creq(sv_addr->sv_srvid, nb, flags);
+    ConnectReq creq(sv_addr->sv_srvid, nb);
 
     if (creq.write_to_stream_soc(cli.fd(), err) < 0) {
         lerr("write to stream sock failed");

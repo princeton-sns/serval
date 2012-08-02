@@ -15,31 +15,25 @@ struct hostctrl_ops {
                            const char *to_iface);
     int (*service_register)(struct hostctrl *hc, 
                             const struct service_id *srvid, 
-                            unsigned short prefix_bits,
                             const struct in_addr *old_ip);
 	int (*service_unregister)(struct hostctrl *hc,
-                              const struct service_id *srvid, 
-                              unsigned short prefix_bits);
+                              const struct service_id *srvid);
     int (*service_add)(struct hostctrl *hc, 
                        const struct service_id *srvid, 
-                       unsigned short prefix_bits,
                        unsigned int priority,
                        unsigned int weight,
                        const struct in_addr *ipaddr);
     int (*service_remove)(struct hostctrl *hc, 
                           const struct service_id *srvid, 
-                          unsigned short prefix_bits,
                           const struct in_addr *ipaddr);
     int (*service_modify)(struct hostctrl *hc,
                           const struct service_id *srvid, 
-                          unsigned short prefix_bits,
                           unsigned int priority,
                           unsigned int weight,
                           const struct in_addr *old_ip,
                           const struct in_addr *new_ip);
     int (*service_get)(struct hostctrl *hc, 
                        const struct service_id *srvid, 
-                       unsigned short prefix_bits,
                        const struct in_addr *ipaddr);
     int (*services_add)(struct hostctrl *hc,
                         const struct service_info *si,
@@ -60,6 +54,5 @@ int handle_service_change(struct hostctrl *hc,
                           int (*const callback)(struct hostctrl *hc,
                                                 const struct service_id *srvid,
                                                 unsigned short flags,
-                                                unsigned short prefix,
                                                 const struct in_addr *ip));
 #endif /* _HOSTCTRL_OPS_H_ */

@@ -31,13 +31,12 @@ ConnectReq::ConnectReq()
 
     memset(&_service_id, 0xff, sizeof(_service_id));
     _nb = false;
-    _flags = 0;
     set_pld_len_v(serial_pld_len());
 }
 
 
-ConnectReq::ConnectReq(const sv_srvid_t& service_id, bool nb, uint16_t flags)
-        :Message(CONNECT_REQ), _nb(nb), _flags(flags)
+ConnectReq::ConnectReq(const sv_srvid_t& service_id, bool nb)
+        :Message(CONNECT_REQ), _nb(nb)
 {
     memcpy(&_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
@@ -52,7 +51,7 @@ ConnectReq::check_type() const
 uint16_t
 ConnectReq::serial_pld_len() const
 {
-    return sizeof(_service_id) + sizeof(_nb) + sizeof(_flags);
+    return sizeof(_service_id) + sizeof(_nb);
 }
 
 int
@@ -61,7 +60,6 @@ ConnectReq::write_serial_payload(unsigned char *buf) const
     unsigned char *p = buf;
     p += serial_write(_service_id, p);
     p += serial_write(_nb, p);
-    p += serial_write(_flags, p);
     return p - buf;
 }
 
@@ -71,7 +69,6 @@ ConnectReq::read_serial_payload(const unsigned char *buf)
     const unsigned char *p = buf;
     p += serial_read(&_service_id, p);
     p += serial_read(&_nb, p);
-    p += serial_read(&_flags, p);
     return p - buf;
 }
 
@@ -79,8 +76,8 @@ void
 ConnectReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: service_id=%s, nb = %s, flags = %d", 
-         label, service_id_to_str(&_service_id), _nb ? "t" : "f", _flags);
+    info("%s: service_id=%s, nb = %s", 
+         label, service_id_to_str(&_service_id), _nb ? "t" : "f");
 }
 
 //

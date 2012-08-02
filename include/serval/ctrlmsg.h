@@ -39,18 +39,17 @@ enum ctrlmsg_type {
 
 struct service_info {
         uint16_t type; /* Type of service table entry? DMX, FWD, DLY, etc. */
-        uint8_t  srvid_prefix_bits;
-        uint8_t  srvid_flags;
-        uint32_t if_index;
+        uint16_t flags;
         uint32_t priority; /* Priority level of flow entry. */
         uint32_t weight;
+        uint32_t if_index;
         uint32_t idle_timeout; /* Idle time before discarding (seconds). */
         uint32_t hard_timeout; /* Max time before discarding (seconds). */
         struct in_addr address;
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info) == 284)
+CTRLMSG_ASSERT(sizeof(struct service_info) == 154)
 
 struct service_info_stat {
         struct service_info service;
@@ -63,7 +62,7 @@ struct service_info_stat {
         uint32_t tokens_consumed;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 312)
+CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 182)
 
 struct service_stat {
         uint32_t capabilities;
@@ -108,13 +107,11 @@ struct ctrlmsg_register {
         struct ctrlmsg cmh;
         uint8_t flags;
         uint8_t pad;
-        uint8_t srvid_prefix_bits;
-        uint8_t srvid_flags;
         struct in_addr addr; /* When reregistering, this is the old address */
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 272)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 140)
 
 enum ctrlmsg_register_flags {
         REG_FLAG_REREGISTER = 1,
@@ -130,16 +127,12 @@ enum ctrlmsg_register_flags {
 struct ctrlmsg_resolve {
         struct ctrlmsg cmh;
         uint32_t xid;
-        uint8_t src_flags;
-        uint8_t src_prefix_bits;
-        uint8_t dst_flags;
-        uint8_t dst_prefix_bits;
         struct service_id src_srvid;
         struct service_id dst_srvid;
         struct in_addr src_address;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 532)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 268)
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 

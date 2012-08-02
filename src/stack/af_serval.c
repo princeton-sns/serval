@@ -92,8 +92,6 @@ static int serval_autobind(struct sock *sk)
 #endif
         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
         serval_sock_set_flag(ssk, SSK_FLAG_AUTOBOUND);
-        serval_sk(sk)->srvid_prefix_bits = 0;
-        serval_sk(sk)->srvid_flags = 0;
 
         /* Add to protocol hash chains. */
         sk->sk_prot->hash(sk);
@@ -109,24 +107,26 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct serval_sock *ssk = serval_sk(sk);
         struct sockaddr_sv *svaddr = (struct sockaddr_sv *)addr;
         struct ctrlmsg_register cm;
-        struct service_id null_service = { .s_sid = { 0 } };
+        struct service_id null_service = { .s_sid = { '\0' } };
 
-        if ((unsigned int)addr_len < sizeof(*svaddr))
+        if ((unsigned int)addr_len < sizeof(*svaddr)) {
+                LOG_ERR("address length %u too small\n",
+                        addr_len);
                 return -EINVAL;
-        else if (addr_len % sizeof(*svaddr) != 0)
+        } else if (addr_len % sizeof(*svaddr) != 0) {
+                LOG_ERR("address length invalid\n");
                 return -EINVAL;
+        }
 
         /* TODO: Handle binding to a serviceID and an IP address at
            the same time */
 
-        LOG_INF("SERVAL bind on SID(%u:%u) %s\n", 
-                svaddr->sv_flags, 
-                svaddr->sv_prefix_bits, 
+        LOG_INF("bind on %s\n", 
                 service_id_to_str(&svaddr->sv_srvid));
         
         if (memcmp(&svaddr->sv_srvid, &null_service, 
                    sizeof(null_service)) == 0) {
-                LOG_ERR("Cannot bind on null serviceID\n");
+                LOG_ERR("Cannot bind a null serviceID\n");
                 return -EINVAL;
         }
         
@@ -149,8 +149,6 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 
                 memcpy(&serval_sk(sk)->local_srvid, &svaddr->sv_srvid,
                        sizeof(svaddr->sv_srvid));
-                serval_sk(sk)->srvid_prefix_bits = svaddr->sv_prefix_bits;
-                serval_sk(sk)->srvid_flags = svaddr->sv_flags;
                                 
                 release_sock(sk);
         }
@@ -167,8 +165,6 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         memset(&cm, 0, sizeof(cm));
         cm.cmh.type = CTRLMSG_TYPE_REGISTER;
         cm.cmh.len = sizeof(cm);
-        cm.srvid_flags = ssk->srvid_flags;
-        cm.srvid_prefix_bits = ssk->srvid_prefix_bits;
         memcpy(&cm.srvid, &ssk->local_srvid, sizeof(ssk->local_srvid));
 
         if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
@@ -213,9 +209,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         sv->sv_family = AF_SERVAL;
                         memcpy(&sv->sv_srvid, &ssk->peer_srvid, 
                                sizeof(ssk->peer_srvid));
-                        sv->sv_prefix_bits = 0;
-                        sv->sv_flags = 0;
-
                         sin->sin_family = AF_INET;
                         sin->sin_port = 0; /* inet->inet_dport; */
                         sin->sin_addr.s_addr = inet->inet_daddr;
@@ -226,8 +219,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         sv->sv_family = AF_SERVAL;
                         memcpy(&sv->sv_srvid, &ssk->peer_srvid, 
                                sizeof(ssk->peer_srvid));
-                        sv->sv_prefix_bits = 0;
-                        sv->sv_flags = 0;
                         *uaddr_len = sizeof(*sv);
                 } else {
                         struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
@@ -248,8 +239,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         sv->sv_family = AF_SERVAL;
                         memcpy(&sv->sv_srvid, &ssk->local_srvid, 
                                sizeof(ssk->local_srvid));
-                        sv->sv_prefix_bits = ssk->srvid_prefix_bits;
-                        sv->sv_flags = ssk->srvid_flags;
 
                         sin->sin_family = AF_INET;
                         if (!addr)
@@ -263,8 +252,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         sv->sv_family = AF_SERVAL;
                         memcpy(&sv->sv_srvid, &ssk->local_srvid, 
                                sizeof(ssk->local_srvid));
-                        sv->sv_prefix_bits = ssk->srvid_prefix_bits;
-                        sv->sv_flags = ssk->srvid_flags;
                         *uaddr_len = sizeof(*sv);
                 } else {
                         struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
@@ -681,8 +668,6 @@ static int serval_shutdown(struct socket *sock, int how)
                 memset(&cm, 0, sizeof(cm));
                 cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
                 cm.cmh.len = sizeof(cm);
-                cm.srvid_flags = serval_sk(sk)->srvid_flags;
-                cm.srvid_prefix_bits = serval_sk(sk)->srvid_prefix_bits;
                 memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, 
                        sizeof(cm.srvid));
                 

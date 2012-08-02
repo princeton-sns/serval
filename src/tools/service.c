@@ -66,10 +66,9 @@ static const struct opname opnames[] = {
 static void service_print_usage(void)
 {
         printf("service OPTIONS:\n");
-        printf("\tadd|del|mod SERVICEID[:PREFIX_BITS]"
+        printf("\tadd|del|mod SERVICEID"
                " IPADDR [IPADDR] [priority NUM] [weight NUM]\n");
-        printf("\tSERVICEID can be decimal or hexadecimal"
-               " (use 0x prefix).\n");
+        printf("\tSERVICEID is a FQDN (wildcards allowed).\n");
 }
         
 struct arguments {
@@ -78,18 +77,16 @@ struct arguments {
 	struct in_addr ipaddr1, ipaddr2, *ip1, *ip2;
         unsigned int priority;
         unsigned int weight;
-        unsigned short prefix_bits;
 };
 
 static int service_parse_args(int argc, char **argv, void **result)
 {
         static struct arguments args;
-	char *ptr, *prefix = NULL;
+	char *ptr;
         int i, ret;
 
         memset(&args, 0, sizeof(args));
         args.op = __SERVICE_OP_MAX;
-        args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         args.priority = 1;
         args.weight = 0;
 
@@ -113,53 +110,13 @@ static int service_parse_args(int argc, char **argv, void **result)
         /* Check for hexadecimal serviceID. */
         if (strcmp(argv[0], "default") == 0) {
                 /* Do nothing, serviceID already set to zero */
-        } else if (argv[0][0] == '0' && argv[0][1] == 'x') {
-                int len;
-                
-                argv[0] += 2;
-                ptr = argv[0];
-
-                while (*ptr != ':' && *ptr != '\0')
-                        ptr++;
-                
-                if (*ptr == ':') {
-                        prefix = ptr + 1;
-                        *ptr = '\0';
-                }
-               
-                len = strlen(argv[0]);
-
-                if (len > 64)
-                        len = 64;
-                
-                if (serval_pton(argv[0], &args.srvid) == -1)
-                        return -1;
         } else {
                 ptr = argv[0];
 
-                while (*ptr != '\0') {
-                        if (*ptr == ':') {
-                                *ptr = '\0';
-                                prefix = ++ptr;
-                                break;
-                        }
+                while (*ptr != '\0')
                         ptr++;
-                }
 
                 serval_pton(argv[0], &args.srvid);
-        }
-        
-        if (prefix) {
-                args.prefix_bits = strtoul(prefix, &ptr, 10);
-                
-                if (!(*ptr == '\0' && prefix != '\0')) {
-                        fprintf(stderr, "bad prefix string %s\n",
-                                prefix);
-                        return -1;
-                }
-                if (args.prefix_bits > SERVICE_ID_MAX_PREFIX_BITS || 
-                    args.prefix_bits == 0)
-                        args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         }
 
         argc--;
@@ -235,10 +192,9 @@ static int service_parse_args(int argc, char **argv, void **result)
         }
         {
                 char buf[18];
-                printf("%s %s:%u %s priority=%u weight=%u\n",
+                printf("%s %s %s priority=%u weight=%u\n",
                        opnames[args.op].long_name,
                        service_id_to_str(&args.srvid), 
-                       args.prefix_bits, 
                        inet_ntop(AF_INET, &args.ipaddr1, buf, 18),
                        args.priority,
                        args.weight);
@@ -257,17 +213,14 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
         switch (args->op) {
         case SERVICE_OP_ADD:
                 ret = hostctrl_service_add(hctl, &args->srvid, 
-                                           args->prefix_bits, 
                                            args->priority, 
                                            args->weight, args->ip1);
                 break;
         case SERVICE_OP_DEL:
-                ret = hostctrl_service_remove(hctl, &args->srvid, 
-                                              args->prefix_bits, args->ip1);
+                ret = hostctrl_service_remove(hctl, &args->srvid, args->ip1);
                 break;
         case SERVICE_OP_MOD:
                 ret = hostctrl_service_modify(hctl, &args->srvid, 
-                                              args->prefix_bits, 
                                               args->priority, 
                                               args->weight, 
                                               args->ip1, args->ip2);

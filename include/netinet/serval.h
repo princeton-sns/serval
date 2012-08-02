@@ -59,13 +59,15 @@
 /* IP Protocol number */
 #define IPPROTO_SERVAL 144
 
-#define SERVICEID_MAX_LEN 255
+#define SERVICEID_MAX_LEN 125
 
 struct service_id {
         char s_sid[SERVICEID_MAX_LEN+1];
 };
 
-SERVAL_ASSERT(sizeof(struct service_id) == 256)
+#define SERVICE_ID_BITS(s) (strlen((s)->s_sid) << 3)
+
+SERVAL_ASSERT(sizeof(struct service_id) == 126)
 
 #define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)))
 
@@ -91,12 +93,14 @@ struct sockaddr_sv {
         uint8_t sv_len;
 #endif
         sa_family_t sv_family;
+        /*
         uint8_t sv_flags;
         uint8_t sv_prefix_bits;
+        */
         struct service_id sv_srvid;
 };
 
-SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 260)
+SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 128)
 
 #define SERVAL_ADDRSTRLEN 80
 
@@ -124,6 +128,12 @@ struct net_addr {
 #define net_ip net_un.un_ip
 #define net_raw net_un.un_raw
 };
+
+static inline int service_id_cmp(const struct service_id *id1,
+                                 const struct service_id *id2)
+{
+        return strcmp(id1->s_sid, id2->s_sid);
+}
 
 static inline char *strrev(char *str, size_t n)
 {
@@ -361,7 +371,7 @@ struct sal_connection_ext {
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 276)
+SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 146)
 
 #define SAL_NONCE_SIZE 8
 
@@ -379,7 +389,7 @@ struct sal_service_ext {
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_service_ext) == 260)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 130)
 
 struct sal_description_ext {
         struct sal_ext exthdr;

@@ -215,25 +215,21 @@ int service_del_target_all(service_rule_type_t type,
 int service_del_dev_all(const char *devname);
 
 struct service_entry *service_find_type(struct service_id *srvid,
-                                        int prefix,
                                         rule_match_t match);
 
 static 
-inline struct service_entry *service_find(struct service_id *srvid, 
-                                          int prefix)
+inline struct service_entry *service_find(struct service_id *srvid)
 {
-        return service_find_type(srvid, prefix, RULE_MATCH_ANY);
+        return service_find_type(srvid, RULE_MATCH_ANY);
 }
 
 static 
-inline struct service_entry *service_find_exact(struct service_id *srvid, 
-                                                int prefix)
+inline struct service_entry *service_find_exact(struct service_id *srvid)
 {
-        return service_find_type(srvid, prefix, RULE_MATCH_EXACT);
+        return service_find_type(srvid, RULE_MATCH_EXACT);
 }
 
-struct sock *service_find_sock(struct service_id *srvid, 
-                               int prefix, int protocol);
+struct sock *service_find_sock(struct service_id *srvid, int protocol);
 
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);

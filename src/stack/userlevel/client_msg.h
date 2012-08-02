@@ -62,8 +62,6 @@ struct client_msg_rsp {
 /* Bind messages */
 struct client_msg_bind_req {
 	struct client_msg msghdr;
-	uint8_t flags;
-	uint8_t prefix;
 	struct service_id srvid;
 } __attribute__((packed));
 
@@ -82,7 +80,6 @@ struct client_msg_connect_req {
 	struct client_msg msghdr;
 	struct service_id srvid;
         bool_t nonblock;
-        uint16_t flags;
 } __attribute__((packed));
 
 #define CLIENT_MSG_CONNECT_REQ_LEN (sizeof(struct client_msg_connect_req))

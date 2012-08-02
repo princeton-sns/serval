@@ -31,12 +31,12 @@ int bst_remove_prefix(struct bst *tree, void *prefix,
 void bst_node_remove(struct bst_node *n);
 
 struct bst_node *bst_find_longest_prefix(struct bst *tree, 
-                                         void *prefix,
-                                         unsigned int prefix_bits);
+                                         void *blob,
+                                         unsigned int blob_bits);
 
 struct bst_node *bst_find_longest_prefix_match(struct bst *tree, 
-                                               void *prefix,
-                                               unsigned int prefix_bits,
+                                               void *blob,
+                                               unsigned int blob_bits,
                                                int (*match)(struct bst_node *));
 
 int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen);

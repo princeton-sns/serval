@@ -70,32 +70,27 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
         for (i = 0; i < num_res; i++) {
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
-                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
                 dev = resolve_dev(entry);
                 
                 if (!dev)
                         continue;
 
-                if (entry->srvid_prefix_bits > 0)
-                        prefix_bits = entry->srvid_prefix_bits;
-         
 #if defined(ENABLE_DEBUG)
                 {
                         char ipstr[18];
-                        LOG_DBG("Adding service id: %s(%u) "
+                        LOG_DBG("Adding service id: %s "
                                 "@ address %s, priority %u, weight %u\n", 
                                 service_id_to_str(&entry->srvid), 
-                                prefix_bits, 
                                 inet_ntop(AF_INET, &entry->address,
                                           ipstr, sizeof(ipstr)),
                                 entry->priority, entry->weight);
                 }
 #endif
                 err = service_add(&entry->srvid, 
-                                  prefix_bits, 
+                                  SERVICE_ID_BITS(&entry->srvid), 
                                   RULE_FORWARD,
-                                  entry->srvid_flags, 
+                                  entry->flags,
                                   entry->priority, 
                                   entry->weight,
                                   &entry->address, 
@@ -138,7 +133,6 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
         const size_t cmsg_size = sizeof(struct ctrlmsg_service_info_stat) + 
                 sizeof(struct service_info_stat) * num_res;
         struct ctrlmsg_service_info_stat *cms;
-        struct service_id null_service = { .s_sid = { 0 } };
         unsigned int i = 0, index = 0;
         int err = 0;       
 
@@ -159,24 +153,12 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm)
                 struct service_info_stat *stat = &cms->service[index];
                 struct target_stats tstat;
                 struct service_entry *se;
-                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-
-                /*
-                  We might be trying to delete the "default" entry. In
-                  that case
-                */
-                if (memcmp(&entry->srvid, &null_service, 
-                           sizeof(null_service)) == 0 ||
-                    entry->srvid_prefix_bits > 0)
-                        prefix_bits = entry->srvid_prefix_bits;
                 
-                se = service_find_exact(&entry->srvid, 
-                                        prefix_bits);
+                se = service_find_exact(&entry->srvid);
 
                 if (!se) {
-                        LOG_DBG("No match for serviceID %s:(%u)\n",
-                                service_id_to_str(&entry->srvid),
-                                prefix_bits);
+                        LOG_DBG("No match for serviceID %s\n",
+                                service_id_to_str(&entry->srvid));
                         continue;
                 }
 
@@ -252,18 +234,13 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                 struct net_device *dev;
                 struct service_info *entry_old = &cmr->service[i];
                 struct service_info *entry_new = &cmr->service[i+1];
-                unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
-                
-                if (entry_old->srvid_prefix_bits > 0)
-                        prefix_bits = entry_old->srvid_prefix_bits;
 
 #if defined(ENABLE_DEBUG)
                 {
                         char buf[18];
-                        LOG_DBG("Modifying: %s flags(%i) bits(%i) %s\n", 
+                        LOG_DBG("Modifying: %s flags(%i) %s\n", 
                                 service_id_to_str(&entry_old->srvid), 
-                                entry_old->srvid_flags, 
-                                prefix_bits,
+                                entry_old->flags, 
                                 inet_ntop(AF_INET, &entry_old->address, 
                                           buf, 18));
                 }
@@ -274,9 +251,9 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                         continue;
 
                 err = service_modify(&entry_old->srvid,
-                                     prefix_bits,
+                                     SERVICE_ID_BITS(&entry_old->srvid),
                                      RULE_FORWARD,
-                                     entry_old->srvid_flags, 
+                                     entry_old->flags, 
                                      entry_new->priority, 
                                      entry_new->weight, 
                                      &entry_old->address,
@@ -315,17 +292,12 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
         struct ctrlmsg_service *cmg = (struct ctrlmsg_service *)cm;
         struct service_entry *se;
         struct service_iter iter;
-        unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         struct target *t;
 
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
 
-        if (cmg->service[0].srvid_prefix_bits > 0)
-                prefix_bits = cmg->service[0].srvid_prefix_bits;
-
-        se = service_find(&cmg->service[0].srvid, 
-                          prefix_bits);
+        se = service_find(&cmg->service[0].srvid);
 
         if (se) {
                 struct ctrlmsg_service *cres;
@@ -357,8 +329,6 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                         memcpy(&entry->address, 
                                t->dst, t->dstlen);
                         
-                        entry->srvid_prefix_bits = service_get_prefix_bits(se);
-                        entry->srvid_flags = service_iter_get_flags(&iter);
                         entry->weight = t->weight;
                         entry->priority = service_iter_get_priority(&iter);
                         
@@ -390,7 +360,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm)
                         service_id_to_str(&cmg->service[0].srvid),
                         se->count, cres->cmh.len);
         } else {
-                cmg->service[0].srvid_flags = SVSF_INVALID;
+                cmg->service[0].flags = SVSF_INVALID;
                 cmg->cmh.retval = CTRLMSG_RETVAL_NOENTRY;
                 ctrl_sendmsg(&cmg->cmh, GFP_KERNEL);
                 LOG_DBG("Service %s not found\n",

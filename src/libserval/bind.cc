@@ -24,14 +24,14 @@
 //
 
 BindReq::BindReq()
-        : Message(BIND_REQ), _flags(0), _prefix(0)
+    : Message(BIND_REQ)
 {
     memset(&_service_id, 0, sizeof(_service_id));
     set_pld_len_v(serial_pld_len());
 }
 
-BindReq::BindReq(const sv_srvid_t& service_id, uint8_t flags, uint8_t prefix)
-        : Message(BIND_REQ), _flags(flags), _prefix(prefix)
+BindReq::BindReq(const sv_srvid_t& service_id)
+    : Message(BIND_REQ)
 {
     memcpy(&_service_id, &service_id, sizeof(service_id));
     set_pld_len_v(serial_pld_len());
@@ -50,8 +50,6 @@ uint16_t BindReq::serial_pld_len() const
 int BindReq::write_serial_payload(unsigned char *buf) const
 {
     unsigned char *p = buf;
-    p += serial_write(_flags, p);
-    p += serial_write(_prefix, p);
     p += serial_write(_service_id, p);
     return p - buf;
 }
@@ -59,8 +57,6 @@ int BindReq::write_serial_payload(unsigned char *buf) const
 int BindReq::read_serial_payload(const unsigned char *buf)
 {
     const unsigned char *p = buf;
-    p += serial_read(&_flags, p);
-    p += serial_read(&_prefix, p);
 	p += serial_read(&_service_id, p);
     return p - buf;
 }
@@ -68,8 +64,8 @@ int BindReq::read_serial_payload(const unsigned char *buf)
 void BindReq::print(const char *label) const
 {
     Message::print(label);
-    info("%s: flags=%i prefix=%i service_id=%s", 
-         label, _flags, _prefix, service_id_to_str(&_service_id));
+    info("%s: service_id=%s", 
+         label, service_id_to_str(&_service_id));
 }
 
 //
