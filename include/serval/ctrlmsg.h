@@ -111,6 +111,7 @@ struct ctrlmsg_register {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
+
 CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 140)
 
 enum ctrlmsg_register_flags {
