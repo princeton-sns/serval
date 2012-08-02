@@ -8,7 +8,7 @@
 #include <net/sock.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0))
-#defined sk_clone_lock(x,y) sk_clone(x,y)
+#define sk_clone_lock(x,y) sk_clone(x,y)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
