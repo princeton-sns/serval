@@ -2925,7 +2925,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
          * probably be in a separate function call
          * serval_sal_transit_rcv or resolve something
          */
-        se = service_find(srvid, SERVICE_ID_MAX_PREFIX_BITS);
+        se = service_find(srvid);
 
         if (!se) {
                 LOG_INF("No matching service entry for serviceID %s\n",
@@ -3638,8 +3638,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         inet_ntop(AF_INET, &SAL_SKB_CB(skb)->addr, 
                                   ip, 17));
                 */
-                /* for user-space, need to specify a device - the
-                 * kernel will route */
                 serval_sal_send_check(sh);
                 
                 /* note that the service resolution stats
@@ -3654,8 +3652,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         LOG_DBG("Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
 
-        se = service_find(&ssk->peer_srvid, 
-                          sizeof(struct service_id) * 8);
+        se = service_find(&ssk->peer_srvid);
 
 	if (!se) {
 		LOG_DBG("service lookup failed for [%s]\n",

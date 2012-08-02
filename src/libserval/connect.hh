@@ -7,7 +7,7 @@
 class ConnectReq : public Message {
   public:
     ConnectReq();
-    ConnectReq(const sv_srvid_t& service_id, bool nb, uint16_t flags);
+    ConnectReq(const sv_srvid_t& service_id, bool nb);
 
     int check_type() const;
     int serial_size() const;
@@ -18,12 +18,9 @@ class ConnectReq : public Message {
 
     const sv_srvid_t& service_id() const { return _service_id; }
     bool nb() const         { return _nb; }
-    uint16_t flags() const  { return _flags; }
-
   private:
     sv_srvid_t _service_id;
     bool _nb;
-    uint16_t _flags;  // from sockaddr_sv passed in by user
 };
 
 class ConnectRsp : public Message {

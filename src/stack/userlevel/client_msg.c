@@ -147,7 +147,7 @@ int client_msg_read(int sock, struct client_msg **msg)
                         free(*msg);
                         return -1;
                 } else if (len < (*msg)->payload_length) {
-                        LOG_ERR("Message paylaod too short\n");
+                        LOG_ERR("Message payload too short\n");
                         free(*msg);
                         return -1;
                 }

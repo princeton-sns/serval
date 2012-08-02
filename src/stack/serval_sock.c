@@ -298,7 +298,7 @@ struct sock *serval_sock_lookup_flow(struct flow_id *flowid)
 
 struct sock *serval_sock_lookup_service(struct service_id *srvid, int protocol)
 {
-        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS, protocol);
+        return service_find_sock(srvid, protocol);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,
@@ -387,12 +387,10 @@ void serval_sock_hash(struct sock *sk)
                         sk, service_id_to_str(&ssk->local_srvid));
 
                 ssk->hash_key = &ssk->local_srvid;
-                ssk->hash_key_len = ssk->srvid_prefix_bits == 0 ? 
-                        SERVICE_ID_MAX_PREFIX_BITS : 
-                        ssk->srvid_prefix_bits;
+                ssk->hash_key_len = SERVICE_ID_BITS(&ssk->local_srvid);
 
                 err = service_add(ssk->hash_key, ssk->hash_key_len, 
-                                  RULE_DEMUX, ssk->srvid_flags, 
+                                  RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
                                   NULL, 0, make_target(sk), GFP_ATOMIC);
@@ -436,9 +434,7 @@ void serval_sock_unhash(struct sock *sk)
                 LOG_DBG("removing socket %p from service table\n", sk);
 
                 service_del_target(&ssk->local_srvid,
-                                   ssk->srvid_prefix_bits == 0 ?
-                                   SERVICE_ID_MAX_PREFIX_BITS :
-                                   ssk->srvid_prefix_bits, 
+                                   SERVICE_ID_BITS(&ssk->local_srvid),
                                    RULE_DEMUX,
                                    NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)

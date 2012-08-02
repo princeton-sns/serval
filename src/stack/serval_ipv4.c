@@ -506,13 +506,6 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 
 	rcu_read_unlock();
 #else
-        /*
-          FIXME: We should not rely on an outgoing interface here.
-          Instead, we should route the packet like we do in the
-          kernel. But, we currently do not have an IP routing table
-          for userlevel.
-         */
-
         if (!skb->dev)
                 skb->dev = __dev_get_by_index(sock_net(sk),
                                               sk->sk_bound_dev_if);
@@ -522,6 +515,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 err = -ENODEV;
                 goto drop;
         }
+
         err = serval_ipv4_fill_in_hdr(sk, skb, inet_sk(sk)->inet_saddr,
                                       inet_sk(sk)->inet_daddr);
         

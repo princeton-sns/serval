@@ -14,7 +14,6 @@
 */
 static int remote_service_register(struct hostctrl *hc,
                                    const struct service_id *srvid, 
-                                   unsigned short prefix_bits,
                                    const struct in_addr *old_ip)
 {
     struct ctrlmsg_register req;
@@ -26,9 +25,6 @@ static int remote_service_register(struct hostctrl *hc,
     req.cmh.type = CTRLMSG_TYPE_REGISTER;
     req.cmh.len = htons(sizeof(req));
     req.cmh.xid = ++hc->xid;
-	req.srvid_prefix_bits = 
-        (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
-        0 : prefix_bits;
     memcpy(&req.srvid, srvid, sizeof(*srvid));
 
     if (old_ip) {
@@ -36,8 +32,7 @@ static int remote_service_register(struct hostctrl *hc,
         memcpy(&req.addr, old_ip, sizeof(*old_ip));
     }
         
-    LOG_DBG("prefix_bits=%u sizeof(req)=%zu %s\n",
-            req.srvid_prefix_bits, 
+    LOG_DBG("sizeof(req)=%zu %s\n",
             sizeof(req), 
             service_id_to_str(&req.srvid));
                 
@@ -45,8 +40,7 @@ static int remote_service_register(struct hostctrl *hc,
 }
 
 static int remote_service_unregister(struct hostctrl *hc, 
-                                     const struct service_id *srvid,
-                                     unsigned short prefix_bits)
+                                     const struct service_id *srvid)
 {
     struct ctrlmsg_register req;
 
@@ -57,14 +51,10 @@ static int remote_service_unregister(struct hostctrl *hc,
     req.cmh.type = CTRLMSG_TYPE_UNREGISTER;
     req.cmh.len = htons(sizeof(req));
     req.cmh.xid = ++hc->xid;
-	req.srvid_prefix_bits = 
-        (prefix_bits > SERVICE_ID_MAX_PREFIX_BITS) ?
-        0 : prefix_bits;
     memcpy(&req.srvid, srvid, sizeof(*srvid));
     //memcpy(&req.address, ipaddr, sizeof(*ipaddr));
         
-    LOG_DBG("prefix_bits=%u sizeof(req)=%zu %s\n",
-            req.srvid_prefix_bits, 
+    LOG_DBG("sizeof(req)=%zu %s\n",
             sizeof(req), 
             service_id_to_str(&req.srvid));
                 
@@ -73,7 +63,6 @@ static int remote_service_unregister(struct hostctrl *hc,
 
 static int remote_service_add_dummy(struct hostctrl *hc,
                                     const struct service_id *srvid, 
-                                    unsigned short prefix_bits,
                                     unsigned int priority,
                                     unsigned int weight,
                                     const struct in_addr *ipaddr)
@@ -83,7 +72,6 @@ static int remote_service_add_dummy(struct hostctrl *hc,
 
 static int remote_service_remove_dummy(struct hostctrl *hc,
                                        const struct service_id *srvid, 
-                                       unsigned short prefix_bits,
                                        const struct in_addr *ipaddr)
 {
     return 0;
@@ -116,8 +104,7 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
             break;
         
         ret = hc->cbs->service_registration(hc, &cmr->srvid, 
-                                            cmr->srvid_flags, 
-                                            cmr->srvid_prefix_bits, 
+                                            cmr->flags, 
                                             fromip, 
                                             cmr->flags & REG_FLAG_REREGISTER ? 
                                             &cmr->addr : NULL);
@@ -130,8 +117,7 @@ int remote_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
             break;
 
         ret = hc->cbs->service_unregistration(hc, &cmr->srvid, 
-                                              cmr->srvid_flags, 
-                                              cmr->srvid_prefix_bits, 
+                                              cmr->flags, 
                                               fromip);
         break;
     }

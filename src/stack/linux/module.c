@@ -85,10 +85,8 @@ struct net_device *resolve_dev_impl(const struct in_addr *addr,
 static int dev_configuration(struct net_device *dev)
 {
         struct net_addr dst;
-        struct service_id default_service;
+        struct service_id default_service = { .s_sid = { '\0' } };
         int ret;
-
-        memset(&default_service, 0, sizeof(default_service));
 
         if (ifname && strcmp(dev->name, ifname) != 0)
                 return 0;

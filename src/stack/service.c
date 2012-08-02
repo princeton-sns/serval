@@ -905,7 +905,7 @@ static int __service_entry_print(struct bst_node *n, char *buf, int buflen)
                 list_for_each_entry(t, &set->list, lh) {
                         len = snprintf(buf + len, buflen - len, 
                                        "%-64s %-4u %-4s %-5u %-6u %-6u %-8u %-7u ", 
-                                       prefix,
+                                       strlen((char *)bst_node_get_prefix(n)) == 0 ? "default" : (char *)bst_node_get_prefix(n),
                                        bits,
                                        rule_to_str(t->type),
                                        set->flags, 
@@ -1072,7 +1072,6 @@ static int service_entry_any_match(struct bst_node *n)
 
 static struct service_entry *__service_table_find(struct service_table *tbl,
                                                   struct service_id *srvid, 
-                                                  int prefix, 
                                                   rule_match_t match) 
 {
         struct service_entry *se = NULL;
@@ -1095,11 +1094,12 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                 break;
         }
 
-        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, func);
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, 
+                                          SERVICE_ID_BITS(srvid), func);
         
         if (n) {
                 if (match != RULE_MATCH_EXACT ||
-                    bst_node_get_prefix_bits(n) == prefix)
+                    bst_node_get_prefix_bits(n) == SERVICE_ID_BITS(srvid))
                         se = get_service(n);
         }
 
@@ -1108,14 +1108,13 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
 
 static struct service_entry *service_table_find(struct service_table *tbl,
                                                 struct service_id *srvid, 
-                                                int prefix, 
                                                 rule_match_t match)
 {
         struct service_entry *se = NULL;
 
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, match);
+        se = __service_table_find(tbl, srvid, match);
 
         if (se)
                 service_entry_hold(se);
@@ -1127,7 +1126,7 @@ static struct service_entry *service_table_find(struct service_table *tbl,
 
 static struct sock* service_table_find_sock(struct service_table *tbl, 
                                             struct service_id *srvid,
-                                            int prefix, int protocol) 
+                                            int protocol) 
 {
         struct service_entry *se = NULL;
         struct sock *sk = NULL;
@@ -1137,7 +1136,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, RULE_MATCH_LOCAL);
+        se = __service_table_find(tbl, srvid, RULE_MATCH_LOCAL);
         
         if (se) {
                 struct target *t;
@@ -1197,16 +1196,15 @@ void service_get_stats(struct table_stats* tstats)
         return service_table_get_stats(&srvtable, tstats);
 }
 
-struct service_entry *service_find_type(struct service_id *srvid, int prefix,
+struct service_entry *service_find_type(struct service_id *srvid,
                                         rule_match_t match) 
 {
-        return service_table_find(&srvtable, srvid, prefix, match);
+        return service_table_find(&srvtable, srvid, match);
 }
 
-struct sock *service_find_sock(struct service_id *srvid, int prefix, 
-                               int protocol) 
+struct sock *service_find_sock(struct service_id *srvid, int protocol) 
 {
-        return service_table_find_sock(&srvtable, srvid, prefix, protocol);
+        return service_table_find_sock(&srvtable, srvid, protocol);
 }
 
 static int service_table_modify(struct service_table *tbl,
@@ -1233,7 +1231,8 @@ static int service_table_modify(struct service_table *tbl,
 
         read_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+        n = bst_find_longest_prefix(&tbl->tree, srvid, 
+                                    SERVICE_ID_BITS(srvid));
         
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 if (dst || dstlen == 0) {                        
@@ -1311,9 +1310,10 @@ static int service_table_add(struct service_table *tbl,
 
         write_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
-
-        if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
+        n = bst_find_longest_prefix(&tbl->tree, srvid, 
+                                    SERVICE_ID_BITS(srvid));
+        
+        if (n && bst_node_get_prefix_bits(n) >= SERVICE_ID_BITS(srvid)) {
                 if (dst || dstlen == 0) {
                         /* 
                            NOTE: we ignore the alloc argument here and

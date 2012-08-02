@@ -236,7 +236,7 @@ static int server(const char *filepath,
         int sock;
         int backlog = 8;    
         union {
-                 struct sockaddr_sv serval;
+                struct sockaddr_sv serval;
                 struct sockaddr_in inet;
                 struct sockaddr saddr;
         } cliaddr, srvaddr;
@@ -285,7 +285,7 @@ static int server(const char *filepath,
                        srv_inetport);
         } else {
                 printf("server: bound to service id %s\n", 
-                       service_id_to_str(&listen_srvid));
+                       service_id_to_str(&srvaddr.serval.sv_srvid));
         }
         
         ret = listen_sv(sock, backlog);

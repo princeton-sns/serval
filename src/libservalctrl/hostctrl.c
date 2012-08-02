@@ -258,15 +258,13 @@ int hostctrl_service_migrate(struct hostctrl *hc, struct service_id *srvid,
 
 int hostctrl_service_register(struct hostctrl *hc, 
                               const struct service_id *srvid, 
-                              unsigned short prefix_bits,
                               const struct in_addr *old_ip)
 {
-    return hc->ops->service_register(hc, srvid, prefix_bits, old_ip);
+    return hc->ops->service_register(hc, srvid, old_ip);
 }
 
 int hostctrl_service_unregister(struct hostctrl *hc,
-                                const struct service_id *srvid, 
-                                unsigned short prefix_bits)
+                                const struct service_id *srvid)
 {
     struct service_id default_service;
 
@@ -275,60 +273,50 @@ int hostctrl_service_unregister(struct hostctrl *hc,
     if (srvid == NULL)
         srvid = &default_service;
 
-    return hc->ops->service_unregister(hc, srvid, prefix_bits);
+    return hc->ops->service_unregister(hc, srvid);
 }
 
 int hostctrl_service_add(struct hostctrl *hc, 
                          const struct service_id *srvid, 
-                         unsigned short prefix_bits,
                          unsigned int priority,
                          unsigned int weight,
                          const struct in_addr *ipaddr)
 {
-    struct service_id default_service;
-
-    memset(&default_service, 0, sizeof(default_service));
+    struct service_id default_service = { .s_sid = { '\0' } };
 
     if (srvid == NULL)
         srvid = &default_service;
 
-    return hc->ops->service_add(hc, srvid, prefix_bits, 
-                                priority, weight, ipaddr);
+    return hc->ops->service_add(hc, srvid, priority, weight, ipaddr);
 }
 
 int hostctrl_service_remove(struct hostctrl *hc,
                             const struct service_id *srvid, 
-                            unsigned short prefix_bits,
                             const struct in_addr *ipaddr)
 {
-    return hc->ops->service_remove(hc, srvid, prefix_bits, ipaddr);
+    return hc->ops->service_remove(hc, srvid, ipaddr);
 }
 
 int hostctrl_service_get(struct hostctrl *hc, 
                          const struct service_id *srvid, 
-                         unsigned short prefix_bits,
                          const struct in_addr *ipaddr)
 {
-    struct service_id default_service;
-
-    memset(&default_service, 0, sizeof(default_service));
+    struct service_id default_service = { .s_sid = { '\0' } };
 
     if (srvid == NULL)
         srvid = &default_service;
 
-    return hc->ops->service_get(hc, srvid, prefix_bits, ipaddr);
+    return hc->ops->service_get(hc, srvid, ipaddr);
 }
 
 int hostctrl_service_modify(struct hostctrl *hc,
                             const struct service_id *srvid, 
-                            unsigned short prefix_bits,
                             unsigned int priority,
                             unsigned int weight,
                             const struct in_addr *old_ip,
                             const struct in_addr *new_ip)
 {
-    return hc->ops->service_modify(hc, srvid, prefix_bits,
-                                   priority, weight,
+    return hc->ops->service_modify(hc, srvid, priority, weight,
                                    old_ip, new_ip);
 }
 
@@ -349,7 +337,6 @@ int hostctrl_services_remove(struct hostctrl *hc,
 int hostctrl_service_query(struct hostctrl *hc,
                            struct service_id *srvid,
                            unsigned short flags,
-                           unsigned short prefix,
                            struct service_info_stat **si)
 {
     return 0;

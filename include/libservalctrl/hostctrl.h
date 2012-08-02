@@ -27,13 +27,11 @@ struct hostctrl_callback {
     int (*service_registration)(struct hostctrl *hc,
                                 const struct service_id *srvid,
                                 unsigned short flags,
-                                unsigned short prefix,
                                 const struct in_addr *ip,
                                 const struct in_addr *old_ip);
     int (*service_unregistration)(struct hostctrl *hc,
                                   const struct service_id *srvid,
                                   unsigned short flags,
-                                  unsigned short prefix,
                                   const struct in_addr *ip);
     int (*service_stat_update)(struct hostctrl *hc,
                                unsigned int xid,
@@ -106,28 +104,22 @@ int hostctrl_service_migrate(struct hostctrl *hc,
                              const char *to_iface);
 int hostctrl_service_register(struct hostctrl *hc, 
                               const struct service_id *srvid, 
-                              unsigned short prefix_bits,
                               const struct in_addr *old_ip);
 int hostctrl_service_unregister(struct hostctrl *hc, 
-                                const struct service_id *srvid, 
-                                unsigned short prefix_bits);
+                                const struct service_id *srvid);
 int hostctrl_service_add(struct hostctrl *hc, 
                          const struct service_id *srvid, 
-                         unsigned short prefix_bits,
                          unsigned int priority,
                          unsigned int weight,
                          const struct in_addr *ipaddr);
 int hostctrl_service_remove(struct hostctrl *hc,
                             const struct service_id *srvid, 
-                            unsigned short prefix_bits,
                             const struct in_addr *ipaddr);
 int hostctrl_service_get(struct hostctrl *hc,
                          const struct service_id *srvid,
-                         unsigned short prefix_bits,
                          const struct in_addr *ipaddr);
 int hostctrl_service_modify(struct hostctrl *hc,
                             const struct service_id *srvid, 
-                            unsigned short prefix_bits,
                             unsigned int priority,
                             unsigned int weight,
                             const struct in_addr *old_ip,
@@ -142,7 +134,6 @@ int hostctrl_services_remove(struct hostctrl *hc,
 int hostctrl_service_query(struct hostctrl *hc,
                            struct service_id *srvid,
                            unsigned short flags,
-                           unsigned short prefix,
                            struct service_info_stat **si);
 
 int hostctrl_set_capabilities(struct hostctrl *hc,

@@ -396,8 +396,6 @@ int client_handle_bind_req_msg(struct client *c, struct client_msg *msg)
 
         memset(&saddr, 0, sizeof(saddr));
         saddr.sv_family = AF_SERVAL;
-        saddr.sv_flags = req->flags;
-        saddr.sv_prefix_bits = req->prefix;
         memcpy(&saddr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         ret = sock->ops->bind(sock, (struct sockaddr *)&saddr, sizeof(saddr));
@@ -434,7 +432,8 @@ int client_handle_connect_req_msg(struct client *c, struct client_msg *msg)
         memcpy(&addr.sv_srvid, &req->srvid, sizeof(req->srvid));
 
         err = c->sock->ops->connect(c->sock, (struct sockaddr *)&addr, 
-                                    sizeof(addr), req->flags); 
+                                    sizeof(addr), req->nonblock ? 
+                                    O_NONBLOCK : 0); 
 
         client_msg_hdr_init(&rsp.msghdr, MSG_CONNECT_RSP);
         memcpy(&rsp.srvid, &req->srvid, sizeof(req->srvid));
