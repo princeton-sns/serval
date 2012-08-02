@@ -44,7 +44,10 @@ static int packet_raw_init(struct net_device *dev)
         /* Bind the raw IP socket to the device */
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
-	dev_get_ipv4_addr(dev, IFADDR_LOCAL, &addr.sin_addr);
+        /* Binding to the interface IP will stop us from receiving
+           broadcast packets */
+	/* dev_get_ipv4_addr(dev, IFADDR_LOCAL, &addr.sin_addr); */
+        addr.sin_addr.s_addr = INADDR_ANY;
 	addr.sin_port = 0;
 	       
         LOG_DBG("binding to %s\n",
@@ -62,7 +65,7 @@ static int packet_raw_init(struct net_device *dev)
 	ret = setsockopt(dev->fd, IPPROTO_IP, IP_HDRINCL, &val, sizeof(val));
 
 	if (ret == -1) {
-                LOG_ERR("setsockopt failure: %s\n",
+                LOG_ERR("setsockopt IP_HDRINCL failure: %s\n",
                         strerror(errno));
                 close(dev->fd);
 		dev->fd = -1;
@@ -71,11 +74,24 @@ static int packet_raw_init(struct net_device *dev)
 	ret = setsockopt(dev->fd, SOL_SOCKET, SO_BROADCAST, &val, sizeof(val));
 
 	if (ret == -1) {
-                LOG_ERR("setsockopt failure: %s\n",
+                LOG_ERR("setsockopt SO_BROADCAST failure: %s\n",
                         strerror(errno));
                 close(dev->fd);
 		dev->fd = -1;
 	}
+#if defined(OS_LINUX)
+	ret = setsockopt(dev->fd, SOL_SOCKET, SO_BINDTODEVICE, 
+                         dev->name, strlen(dev->name));
+
+	if (ret == -1) {
+                LOG_ERR("setsockopt SO_BINDTODEVICE failure: %s\n",
+                        strerror(errno));
+                close(dev->fd);
+		dev->fd = -1;
+	}
+#elif defined(OS_BSD)
+        /* TODO: add the BSD equivalent of SO_BINDTODEVICE */
+#endif
 
 	return ret;
 }

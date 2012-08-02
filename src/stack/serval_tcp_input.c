@@ -564,7 +564,7 @@ void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh)
 		//TCP_ECN_queue_cwr(tp);
 
 		serval_tcp_set_ca_state(sk, TCP_CA_CWR);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	}
@@ -586,7 +586,7 @@ void serval_tcp_cwnd_application_limited(struct sock *sk)
 		if (win_used < tp->snd_cwnd) {        
 			tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_cwnd = (tp->snd_cwnd + win_used) >> 1;
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);                        
 		}
 		tp->snd_cwnd_used = 0;
@@ -895,7 +895,7 @@ void serval_tcp_enter_loss(struct sock *sk, int how)
 		tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 		tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
 		serval_tcp_ca_event(sk, CA_EVENT_LOSS);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 	}
 	tp->snd_cwnd	   = 1;
@@ -979,7 +979,7 @@ static void serval_tcp_undo_cwr(struct sock *sk, const int undo)
 		if (undo && tp->prior_ssthresh > tp->snd_ssthresh) {
 			tp->snd_ssthresh = tp->prior_ssthresh;
 			//TCP_ECN_withdraw_cwr(tp);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 		}
 	} else {
@@ -1167,7 +1167,7 @@ static void serval_tcp_mtup_probe_success(struct sock *sk)
 	tp->snd_cwnd_stamp = tcp_time_stamp;
 	tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 
-        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	tp->tp_mtup.search_low = tp->tp_mtup.probe_size;
@@ -1504,7 +1504,7 @@ void serval_tcp_simple_retransmit(struct sock *sk)
 	if (tp->ca_state != TCP_CA_Loss) {
 		tp->high_seq = tp->snd_nxt;
 		tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 		tp->prior_ssthresh = 0;
@@ -1679,7 +1679,7 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 			if (!(flag & FLAG_ECE))
 				tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 			//TCP_ECN_queue_cwr(tp);
 		}

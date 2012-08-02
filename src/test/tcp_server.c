@@ -203,6 +203,8 @@ static int send_memory_buffer(int sock, size_t bytes_to_send,
                                         continue;
                                 } else if (errno == EPIPE) {
                                         printf("client closed abruptly\n");
+                                        should_exit = 1;
+                                        ret = EXIT_SUCCESS;
                                         break;
                                 }
                 
