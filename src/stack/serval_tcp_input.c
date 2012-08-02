@@ -114,7 +114,7 @@ static void serval_tcp_fixup_sndbuf(struct sock *sk)
                 MAX_SERVAL_TCP_HEADER + 16 + sizeof(struct sk_buff);
 
 	if (sk->sk_sndbuf < 3 * sndmem)
-		sk->sk_sndbuf = min(3 * sndmem, sysctl_tcp_wmem[2]);
+		sk->sk_sndbuf = min(3 * sndmem, sysctl_serval_tcp_wmem[2]);
 }
 
 /* 2. Tuning advertised window (window_clamp, rcv_ssthresh)
@@ -149,7 +149,7 @@ static int __serval_tcp_grow_window(const struct sock *sk,
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	/* Optimize this! */
 	int truesize = serval_tcp_win_from_space(skb->truesize) >> 1;
-	int window = serval_tcp_win_from_space(sysctl_tcp_rmem[2]) >> 1;
+	int window = serval_tcp_win_from_space(sysctl_serval_tcp_rmem[2]) >> 1;
 
 	while (tp->rcv_ssthresh <= window) {
 		if (truesize <= skb->len)
@@ -168,7 +168,7 @@ static void serval_tcp_grow_window(struct sock *sk, struct sk_buff *skb)
 	/* Check #1 */
 	if (tp->rcv_ssthresh < tp->window_clamp &&
 	    (int)tp->rcv_ssthresh < serval_tcp_space(sk) &&
-	    !tcp_memory_pressure) {
+	    !serval_tcp_memory_pressure) {
 		int incr;
 
 		/* Check #2. Increase window, if skb with such overhead
@@ -204,7 +204,7 @@ static void serval_tcp_fixup_rcvbuf(struct sock *sk)
 	while (serval_tcp_win_from_space(rcvmem) < tp->advmss)
 		rcvmem += 128;
 	if (sk->sk_rcvbuf < 4 * rcvmem)
-		sk->sk_rcvbuf = min(4 * rcvmem, sysctl_tcp_rmem[2]);
+		sk->sk_rcvbuf = min(4 * rcvmem, sysctl_serval_tcp_rmem[2]);
 }
 
 /* 4. Try to fixup all. It is made immediately after connection enters
@@ -251,17 +251,17 @@ static void serval_tcp_clamp_window(struct sock *sk)
 
 	tp->tp_ack.quick = 0;
 
-	if (sk->sk_rcvbuf < sysctl_tcp_rmem[2] &&
+	if (sk->sk_rcvbuf < sysctl_serval_tcp_rmem[2] &&
 	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK) &&
-	    !tcp_memory_pressure &&
+	    !serval_tcp_memory_pressure &&
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	    atomic_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+	    atomic_read(&serval_tcp_memory_allocated) < sysctl_serval_tcp_mem[0]
 #else
-	    atomic_long_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+	    atomic_long_read(&serval_tcp_memory_allocated) < sysctl_serval_tcp_mem[0]
 #endif
 ) {
 		sk->sk_rcvbuf = min(atomic_read(&sk->sk_rmem_alloc),
-				    sysctl_tcp_rmem[2]);
+				    sysctl_serval_tcp_rmem[2]);
 	}
 	if (atomic_read(&sk->sk_rmem_alloc) > sk->sk_rcvbuf)
 		tp->rcv_ssthresh = min(tp->window_clamp, 2U * tp->advmss);
@@ -451,7 +451,7 @@ void serval_tcp_rcv_space_adjust(struct sock *sk)
 			while (serval_tcp_win_from_space(rcvmem) < tp->advmss)
 				rcvmem += 128;
 			space *= rcvmem;
-			space = min(space, sysctl_tcp_rmem[2]);
+			space = min(space, sysctl_serval_tcp_rmem[2]);
 			if (space > sk->sk_rcvbuf) {
 				sk->sk_rcvbuf = space;
 
@@ -2449,15 +2449,15 @@ static int serval_tcp_should_expand_sndbuf(struct sock *sk)
 		return 0;
 
 	/* If we are under global TCP memory pressure, do not expand.  */
-	if (tcp_memory_pressure)
+	if (serval_tcp_memory_pressure)
 		return 0;
 
 	/* If we are under soft global TCP memory pressure, do not expand.  */
 	if (           
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-            atomic_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+            atomic_read(&serval_tcp_memory_allocated) >= sysctl_serval_tcp_mem[0]
 #else
-            atomic_long_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+            atomic_long_read(&serval_tcp_memory_allocated) >= sysctl_serval_tcp_mem[0]
 #endif
             )
 		return 0;
@@ -2486,7 +2486,7 @@ static void serval_tcp_new_space(struct sock *sk)
 				     tp->reordering + 1);
 		sndmem *= 2 * demanded;
 		if (sndmem > sk->sk_sndbuf)
-			sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2]);
+			sk->sk_sndbuf = min(sndmem, sysctl_serval_tcp_wmem[2]);
 		tp->snd_cwnd_stamp = tcp_time_stamp;
 	}
 
@@ -3308,7 +3308,7 @@ static int serval_tcp_prune_queue(struct sock *sk)
 
 	if (atomic_read(&sk->sk_rmem_alloc) >= sk->sk_rcvbuf)
 		serval_tcp_clamp_window(sk);
-	else if (tcp_memory_pressure)
+	else if (serval_tcp_memory_pressure)
 		tp->rcv_ssthresh = min(tp->rcv_ssthresh, 4U * tp->advmss);
 
 	serval_tcp_collapse_ofo_queue(sk);

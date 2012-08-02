@@ -15,7 +15,7 @@ typedef struct host_addr sv_host_t;
 #define s_srvid s_sid16
 
 typedef struct {
-	uint8_t v;
+	int v;
 } sv_proto_t;
 
 #define SERVAL_OK            0

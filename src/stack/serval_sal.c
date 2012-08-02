@@ -1783,9 +1783,7 @@ serval_sal_create_respond_sock(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct sock *nsk;
 
-        nsk = sk_clone(sk, GFP_ATOMIC);
-
-        /* Cloned sock has lock held */
+        nsk = sk_clone_lock(sk, GFP_ATOMIC);
 
         if (nsk) {
                 struct serval_sock *nssk = serval_sk(nsk);

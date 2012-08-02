@@ -182,7 +182,6 @@
 #define TCPOLEN_MD5SIG_ALIGNED		20
 #define TCPOLEN_MSS_ALIGNED		4
 
-
 /* TCP thin-stream limits */
 #define TCP_THIN_LINEAR_RETRIES 6       /* After 6 linear retries, do exp. backoff */
 
@@ -198,8 +197,6 @@
 #define TCPH_CWR 0x80
 
 __u32 serval_tcp_random_sequence_number(void);
-
-
 
 /* sysctl variables for tcp */
 extern int sysctl_serval_tcp_timestamps;
@@ -243,6 +240,13 @@ extern int sysctl_serval_tcp_max_ssthresh;
 extern int sysctl_serval_tcp_cookie_size;
 extern int sysctl_serval_tcp_thin_linear_timeouts;
 extern int sysctl_serval_tcp_thin_dupack;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
+extern int sysctl_serval_tcp_mem[3];
+#else
+extern long sysctl_serval_tcp_mem[3];
+#endif
+extern int sysctl_serval_tcp_wmem[3];
+extern int sysctl_serval_tcp_rmem[3];
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 extern atomic_t serval_tcp_memory_allocated;
@@ -250,14 +254,8 @@ extern atomic_t serval_tcp_memory_allocated;
 extern atomic_long_t serval_tcp_memory_allocated;
 #endif
 
-extern int tcp_memory_pressure;
-
-#if defined(OS_USER)
-extern void tcp_enter_memory_pressure(struct sock *sk);
-extern int sysctl_tcp_mem[3];
-extern int sysctl_tcp_wmem[3];
-extern int sysctl_tcp_rmem[3];
-#endif
+extern int serval_tcp_memory_pressure;
+extern void serval_tcp_enter_memory_pressure(struct sock *sk);
 
 static inline int serval_keepalive_intvl_when(const struct serval_tcp_sock *tp)
 {
@@ -332,9 +330,9 @@ static inline int serval_tcp_too_many_orphans(struct sock *sk, int shift)
 
 	if (sk->sk_wmem_queued > SOCK_MIN_SNDBUF &&
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	    atomic_read(&serval_tcp_memory_allocated) > sysctl_tcp_mem[2]
+	    atomic_read(&serval_tcp_memory_allocated) > sysctl_serval_tcp_mem[2]
 #else
-	    atomic_long_read(&serval_tcp_memory_allocated) > sysctl_tcp_mem[2]
+	    atomic_long_read(&serval_tcp_memory_allocated) > sysctl_serval_tcp_mem[2]
 #endif
             )
 		return 1;

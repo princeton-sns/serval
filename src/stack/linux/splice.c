@@ -228,34 +228,51 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
  * Check if we need to grow the arrays holding pages and partial page
  * descriptions.
  */
-int splice_grow_spd(struct pipe_inode_info *pipe, struct splice_pipe_desc *spd)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
+#define CONST
+#else
+#define CONST const
+#endif
+                
+int splice_grow_spd(CONST struct pipe_inode_info *pipe, struct splice_pipe_desc *spd)
 {
 	if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
 		return 0;
-
+        
 	spd->pages = kmalloc(NUM_PIPE_BUFFERS(pipe) * sizeof(struct page *), GFP_KERNEL);
 	spd->partial = kmalloc(NUM_PIPE_BUFFERS(pipe) * sizeof(struct partial_page), GFP_KERNEL);
-
+        
 	if (spd->pages && spd->partial)
 		return 0;
-
+        
 	kfree(spd->pages);
 	kfree(spd->partial);
 	return -ENOMEM;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
 void splice_shrink_spd(struct pipe_inode_info *pipe,
-		       struct splice_pipe_desc *spd)
+                       struct splice_pipe_desc *spd)
 {
-	if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
+        if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
 		return;
-
+        
 	kfree(spd->pages);
 	kfree(spd->partial);
 }
-
+#else
+void splice_shrink_spd(struct splice_pipe_desc *spd)
+{
+        if (spd->nr_pages_max <= PIPE_DEF_BUFFERS)
+                return;
+        
+	kfree(spd->pages);
+	kfree(spd->partial);
+}
+#endif
+ 
 static void sock_pipe_buf_release(struct pipe_inode_info *pipe,
-				  struct pipe_buffer *buf)
+                                  struct pipe_buffer *buf)
 {
 	put_page(buf->page);
 }
@@ -500,8 +517,11 @@ done:
 		ret = splice_to_pipe(pipe, &spd);
 		lock_sock(sk);
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
 	splice_shrink_spd(pipe, &spd);
+#else
+	splice_shrink_spd(&spd);
+#endif
 	return ret;
 }
 

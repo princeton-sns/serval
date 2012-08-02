@@ -30,7 +30,6 @@
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
-extern void serval_tcp_init(void);
 #endif /* OS_LINUX_KERNEL */
 
 /* Common includes */
@@ -59,6 +58,8 @@ extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
 
 struct netns_serval net_serval;
+
+extern void serval_tcp_init(void);
 
 static struct sock *serval_accept_dequeue(struct sock *parent,
                                           struct socket *newsock);
@@ -1050,9 +1051,6 @@ int __init serval_init(void)
 {
         int err = 0;
 
-#if defined(OS_USER)
-        serval_tcp_init();
-#endif
         err = service_init();
 
         if (err < 0) {
@@ -1095,6 +1093,7 @@ int __init serval_init(void)
                 goto fail_sock_register;
         }
 
+        serval_tcp_init();
 out:
         return err;
 fail_sock_register:

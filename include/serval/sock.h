@@ -7,6 +7,10 @@
 #if defined(OS_LINUX_KERNEL)
 #include <net/sock.h>
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0))
+#defined sk_clone_lock(x,y) sk_clone(x,y)
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35)
 static inline wait_queue_head_t *sk_sleep(struct sock *sk)
 {
@@ -228,7 +232,11 @@ struct proto {
 	 * is strict, actions are advisory and have some latency.
 	 */
 	int			*memory_pressure;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 	int			*sysctl_mem;
+#else
+        long			*sysctl_mem;
+#endif
 	int			*sysctl_wmem;
 	int			*sysctl_rmem;
 	struct list_head	node;
@@ -467,6 +475,8 @@ static inline void sk_wake_async(struct sock *sk, int how, int band)
 }
 
 void sock_init_data(struct socket *sock, struct sock *sk);
+
+#define sk_clone_lock(x,y) sk_clone(x,y)
 struct sock *sk_clone(const struct sock *sk, const gfp_t priority);
 struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
 		      struct proto *prot);
