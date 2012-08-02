@@ -256,7 +256,7 @@ static void serval_tcp_delack_timer(unsigned long data)
 		//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_DELAYEDACKS);
 	}
 out:
-	if (tcp_memory_pressure)
+	if (serval_tcp_memory_pressure)
 		sk_mem_reclaim(sk);
 out_unlock:
 	bh_unlock_sock(sk);
@@ -477,8 +477,6 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 {
 	struct sock *sk = (struct sock *) data;
 	//struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        
-        LOG_DBG("timeout\n");
 
 	/* Only process if socket is not in use. */
 	bh_lock_sock(sk);
@@ -488,7 +486,7 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 		goto out;
 	}
 
-	LOG_WARN("Keepalive timer not implemented!\n");
+	LOG_DBG("Keepalive timer not implemented!\n");
 
 out:
 	bh_unlock_sock(sk);

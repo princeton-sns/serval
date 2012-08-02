@@ -399,6 +399,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
         }
         /* Make sure we can route this packet. */
         rt = (struct rtable *)__sk_dst_check(sk, 0);
+
         if (skb->dev) {
                 ifindex = skb->dev->ifindex;
         } else {
@@ -505,8 +506,6 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 
 	rcu_read_unlock();
 #else
-        //struct net_addr saddr;
-
         /*
           FIXME: We should not rely on an outgoing interface here.
           Instead, we should route the packet like we do in the
@@ -514,21 +513,15 @@ int serval_ipv4_xmit(struct sk_buff *skb)
           for userlevel.
          */
 
-        /*
+        if (!skb->dev)
+                skb->dev = __dev_get_by_index(sock_net(sk),
+                                              sk->sk_bound_dev_if);
+
         if (!skb->dev) {
-                LOG_ERR("no device set in skb!\n");
+                LOG_ERR("no output device set in skb!\n");
                 err = -ENODEV;
                 goto drop;
         }
-
-        if (!dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &saddr)) {
-            LOG_ERR("No device IP set for device %s\n",
-                    skb->dev->name);
-            err = -ENODEV;
-            goto drop;
-        }
-        */
-
         err = serval_ipv4_fill_in_hdr(sk, skb, inet_sk(sk)->inet_saddr,
                                       inet_sk(sk)->inet_daddr);
         
@@ -539,7 +532,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 
         /* Transmit */
         err = serval_ip_local_out(skb);
-#endif        
+#endif /* OS_LINUX_KERNEL */    
  out:
         if (err < 0) {
                 LOG_ERR("xmit failed: %d\n", err);

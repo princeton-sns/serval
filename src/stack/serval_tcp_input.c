@@ -114,7 +114,7 @@ static void serval_tcp_fixup_sndbuf(struct sock *sk)
                 MAX_SERVAL_TCP_HEADER + 16 + sizeof(struct sk_buff);
 
 	if (sk->sk_sndbuf < 3 * sndmem)
-		sk->sk_sndbuf = min(3 * sndmem, sysctl_tcp_wmem[2]);
+		sk->sk_sndbuf = min(3 * sndmem, sysctl_serval_tcp_wmem[2]);
 }
 
 /* 2. Tuning advertised window (window_clamp, rcv_ssthresh)
@@ -149,7 +149,7 @@ static int __serval_tcp_grow_window(const struct sock *sk,
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	/* Optimize this! */
 	int truesize = serval_tcp_win_from_space(skb->truesize) >> 1;
-	int window = serval_tcp_win_from_space(sysctl_tcp_rmem[2]) >> 1;
+	int window = serval_tcp_win_from_space(sysctl_serval_tcp_rmem[2]) >> 1;
 
 	while (tp->rcv_ssthresh <= window) {
 		if (truesize <= skb->len)
@@ -168,7 +168,7 @@ static void serval_tcp_grow_window(struct sock *sk, struct sk_buff *skb)
 	/* Check #1 */
 	if (tp->rcv_ssthresh < tp->window_clamp &&
 	    (int)tp->rcv_ssthresh < serval_tcp_space(sk) &&
-	    !tcp_memory_pressure) {
+	    !serval_tcp_memory_pressure) {
 		int incr;
 
 		/* Check #2. Increase window, if skb with such overhead
@@ -204,7 +204,7 @@ static void serval_tcp_fixup_rcvbuf(struct sock *sk)
 	while (serval_tcp_win_from_space(rcvmem) < tp->advmss)
 		rcvmem += 128;
 	if (sk->sk_rcvbuf < 4 * rcvmem)
-		sk->sk_rcvbuf = min(4 * rcvmem, sysctl_tcp_rmem[2]);
+		sk->sk_rcvbuf = min(4 * rcvmem, sysctl_serval_tcp_rmem[2]);
 }
 
 /* 4. Try to fixup all. It is made immediately after connection enters
@@ -251,17 +251,17 @@ static void serval_tcp_clamp_window(struct sock *sk)
 
 	tp->tp_ack.quick = 0;
 
-	if (sk->sk_rcvbuf < sysctl_tcp_rmem[2] &&
+	if (sk->sk_rcvbuf < sysctl_serval_tcp_rmem[2] &&
 	    !(sk->sk_userlocks & SOCK_RCVBUF_LOCK) &&
-	    !tcp_memory_pressure &&
+	    !serval_tcp_memory_pressure &&
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-	    atomic_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+	    atomic_read(&serval_tcp_memory_allocated) < sysctl_serval_tcp_mem[0]
 #else
-	    atomic_long_read(&serval_tcp_memory_allocated) < sysctl_tcp_mem[0]
+	    atomic_long_read(&serval_tcp_memory_allocated) < sysctl_serval_tcp_mem[0]
 #endif
 ) {
 		sk->sk_rcvbuf = min(atomic_read(&sk->sk_rmem_alloc),
-				    sysctl_tcp_rmem[2]);
+				    sysctl_serval_tcp_rmem[2]);
 	}
 	if (atomic_read(&sk->sk_rmem_alloc) > sk->sk_rcvbuf)
 		tp->rcv_ssthresh = min(tp->window_clamp, 2U * tp->advmss);
@@ -451,7 +451,7 @@ void serval_tcp_rcv_space_adjust(struct sock *sk)
 			while (serval_tcp_win_from_space(rcvmem) < tp->advmss)
 				rcvmem += 128;
 			space *= rcvmem;
-			space = min(space, sysctl_tcp_rmem[2]);
+			space = min(space, sysctl_serval_tcp_rmem[2]);
 			if (space > sk->sk_rcvbuf) {
 				sk->sk_rcvbuf = space;
 
@@ -564,7 +564,7 @@ void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh)
 		//TCP_ECN_queue_cwr(tp);
 
 		serval_tcp_set_ca_state(sk, TCP_CA_CWR);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	}
@@ -586,7 +586,7 @@ void serval_tcp_cwnd_application_limited(struct sock *sk)
 		if (win_used < tp->snd_cwnd) {        
 			tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_cwnd = (tp->snd_cwnd + win_used) >> 1;
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);                        
 		}
 		tp->snd_cwnd_used = 0;
@@ -895,7 +895,7 @@ void serval_tcp_enter_loss(struct sock *sk, int how)
 		tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 		tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
 		serval_tcp_ca_event(sk, CA_EVENT_LOSS);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 	}
 	tp->snd_cwnd	   = 1;
@@ -979,7 +979,7 @@ static void serval_tcp_undo_cwr(struct sock *sk, const int undo)
 		if (undo && tp->prior_ssthresh > tp->snd_ssthresh) {
 			tp->snd_ssthresh = tp->prior_ssthresh;
 			//TCP_ECN_withdraw_cwr(tp);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 		}
 	} else {
@@ -1167,7 +1167,7 @@ static void serval_tcp_mtup_probe_success(struct sock *sk)
 	tp->snd_cwnd_stamp = tcp_time_stamp;
 	tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 
-        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	tp->tp_mtup.search_low = tp->tp_mtup.probe_size;
@@ -1504,7 +1504,7 @@ void serval_tcp_simple_retransmit(struct sock *sk)
 	if (tp->ca_state != TCP_CA_Loss) {
 		tp->high_seq = tp->snd_nxt;
 		tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 		tp->prior_ssthresh = 0;
@@ -1679,7 +1679,7 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 			if (!(flag & FLAG_ECE))
 				tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 			//TCP_ECN_queue_cwr(tp);
 		}
@@ -2449,15 +2449,15 @@ static int serval_tcp_should_expand_sndbuf(struct sock *sk)
 		return 0;
 
 	/* If we are under global TCP memory pressure, do not expand.  */
-	if (tcp_memory_pressure)
+	if (serval_tcp_memory_pressure)
 		return 0;
 
 	/* If we are under soft global TCP memory pressure, do not expand.  */
 	if (           
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-            atomic_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+            atomic_read(&serval_tcp_memory_allocated) >= sysctl_serval_tcp_mem[0]
 #else
-            atomic_long_read(&serval_tcp_memory_allocated) >= sysctl_tcp_mem[0]
+            atomic_long_read(&serval_tcp_memory_allocated) >= sysctl_serval_tcp_mem[0]
 #endif
             )
 		return 0;
@@ -2486,7 +2486,7 @@ static void serval_tcp_new_space(struct sock *sk)
 				     tp->reordering + 1);
 		sndmem *= 2 * demanded;
 		if (sndmem > sk->sk_sndbuf)
-			sk->sk_sndbuf = min(sndmem, sysctl_tcp_wmem[2]);
+			sk->sk_sndbuf = min(sndmem, sysctl_serval_tcp_wmem[2]);
 		tp->snd_cwnd_stamp = tcp_time_stamp;
 	}
 
@@ -2515,21 +2515,30 @@ static inline void serval_tcp_data_snd_check(struct sock *sk)
 static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        int window = __serval_tcp_select_window(sk);
+
+        LOG_DBG("rcv_nxt=%u rcv_wup=%u rcv_mss=%u window=%d rcv_wnd=%u quickack=%d ofo=%d\n", 
+                tp->rcv_nxt, tp->rcv_wup, tp->tp_ack.rcv_mss, window, 
+                tp->rcv_wnd, serval_tcp_in_quickack_mode(sk), 
+                (ofo_possible && skb_peek(&tp->out_of_order_queue)));
 
         /* More than one full frame received... */
 	if (((tp->rcv_nxt - tp->rcv_wup) > tp->tp_ack.rcv_mss &&
 	     /* ... and right edge of window advances far enough.
 	      * (tcp_recvmsg() will send ACK otherwise). Or...
 	      */
-	     __serval_tcp_select_window(sk) >= tp->rcv_wnd) ||
+	     window >= tp->rcv_wnd) ||
 	    /* We ACK each frame or... */
 	    serval_tcp_in_quickack_mode(sk) ||
 	    /* We have out of order data. */
 	    (ofo_possible && skb_peek(&tp->out_of_order_queue))) {
 		/* Then ack it now */
 		serval_tcp_send_ack(sk);
+
+                LOG_DBG("sending normal ACK\n");
 	} else {
 		/* Else, send delayed ack. */
+                LOG_DBG("sending delayed ACK\n");
 		serval_tcp_send_delayed_ack(sk);
 	}
 }
@@ -3299,7 +3308,7 @@ static int serval_tcp_prune_queue(struct sock *sk)
 
 	if (atomic_read(&sk->sk_rmem_alloc) >= sk->sk_rcvbuf)
 		serval_tcp_clamp_window(sk);
-	else if (tcp_memory_pressure)
+	else if (serval_tcp_memory_pressure)
 		tp->rcv_ssthresh = min(tp->rcv_ssthresh, 4U * tp->advmss);
 
 	serval_tcp_collapse_ofo_queue(sk);

@@ -208,17 +208,20 @@ struct net_device *alloc_netdev(int sizeof_priv, const char *name,
 
         setup(dev);
 
+	return dev;
+}
+
+static int init_netdev(struct net_device *dev)
+{
         /* Call the packet handlers init function if it exists */
         if (dev->pack_ops && dev->pack_ops->init) {
                 if (dev->pack_ops->init(dev) == -1) {
                         LOG_ERR("packet ops init failed for device %s\n",
-                                name);
-                        free_netdev(dev);
-                        dev = NULL;
+                                dev->name);
+                        return -1;
                 }
         }
-
-	return dev;
+        return 0;
 }
 
 void __free_netdev(struct net_device *dev)
@@ -562,8 +565,9 @@ int netdev_populate_table(int sizeof_priv,
 #if defined(ENABLE_DEBUG)
                 {
                         char ip[18], broad[18], netmask[18];
-                        LOG_DBG("%s %s/%s/%s\n",
+                        LOG_DBG("%s [%d] %s/%s/%s\n",
                                 dev->name,
+                                dev->ifindex,
                                 inet_ntop(AF_INET, &dev->ipv4.addr, ip, 18),
                                 inet_ntop(AF_INET, &dev->ipv4.broadcast, 
                                           broad, 18),
@@ -571,6 +575,13 @@ int netdev_populate_table(int sizeof_priv,
                                           netmask, sizeof(netmask)));
                 }
 #endif       
+
+                ret = init_netdev(dev);
+                
+                if (ret < 0) {
+                        free_netdev(dev);
+                        continue;
+                }
 
                 ret = register_netdev(dev);
 

@@ -15,6 +15,9 @@
 #include <af_serval.h>
 
 #if defined(OS_LINUX_KERNEL)
+#include <asm/ioctls.h>
+#include <linux/sockios.h>
+#include <linux/swap.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
 #include <linux/export.h>
 #endif
@@ -25,14 +28,23 @@
 extern int serval_udp_encap_xmit(struct sk_buff *skb);
 
 int sysctl_serval_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
-
 int sysctl_serval_tcp_low_latency __read_mostly = 0;
-
-/*
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 int sysctl_serval_tcp_mem[3];
+#else
+long sysctl_serval_tcp_mem[3];
+#endif
 int sysctl_serval_tcp_wmem[3];
 int sysctl_serval_tcp_rmem[3];
-*/
+
+int serval_tcp_memory_pressure __read_mostly;
+
+void serval_tcp_enter_memory_pressure(struct sock *sk)
+{
+        if (!serval_tcp_memory_pressure) {
+                serval_tcp_memory_pressure = 1;
+        }
+}
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
 atomic_t serval_tcp_memory_allocated __read_mostly;
@@ -365,6 +377,36 @@ void serval_tcp_done(struct sock *sk)
 {
         LOG_DBG("calling serval_sal_done\n");
 	//serval_sal_done(sk);
+}
+
+void __init serval_tcp_init(void)
+{
+        unsigned long limit;
+        int max_rshare, max_wshare;
+        
+#if defined(OS_LINUX_KERNEL)
+        limit = nr_free_buffer_pages() / 8;
+        limit = max(limit, 128UL);
+#else
+        limit = 128UL;
+#endif
+        sysctl_serval_tcp_mem[0] = limit / 4 * 3;
+        sysctl_serval_tcp_mem[1] = limit;
+        sysctl_serval_tcp_mem[2] = sysctl_serval_tcp_mem[0] * 2;
+
+        /* Set per-socket limits to no more than 1/128 the pressure
+           threshold */
+        limit = ((unsigned long)sysctl_serval_tcp_mem[1]) << (PAGE_SHIFT - 7);
+        max_wshare = min(4UL*1024*1024, limit);
+        max_rshare = min(6UL*1024*1024, limit);
+
+        sysctl_serval_tcp_wmem[0] = SK_MEM_QUANTUM;
+        sysctl_serval_tcp_wmem[1] = 16*1024;
+        sysctl_serval_tcp_wmem[2] = max(64*1024, max_wshare);
+
+        sysctl_serval_tcp_rmem[0] = SK_MEM_QUANTUM;
+        sysctl_serval_tcp_rmem[1] = 87380;
+        sysctl_serval_tcp_rmem[2] = max(87380, max_rshare);
 }
 
 static int serval_tcp_connection_close(struct sock *sk)
@@ -1295,8 +1337,6 @@ do_error:
 		goto out;
 out_err:
 	err = sk_stream_error(sk, flags, err);
-
-        LOG_ERR("error=%d\n", err);
 
 	release_sock(sk);
 	return err;
@@ -2369,6 +2409,66 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
 #endif
 }
 
+#if defined(OS_LINUX_KERNEL)
+int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
+{
+        struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+        int answ;
+        
+        switch (cmd) {
+        case SIOCINQ:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                
+                lock_sock(sk);
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else if (sock_flag(sk, SOCK_URGINLINE) ||
+                         !tp->urg_data ||
+                         before(tp->urg_seq, tp->copied_seq) ||
+                         !before(tp->urg_seq, tp->rcv_nxt)) {
+                        struct sk_buff *skb;
+                        
+                        answ = tp->rcv_nxt - tp->copied_seq;
+                        
+                        /* Subtract 1, if FIN is in queue. */
+                        skb = skb_peek_tail(&sk->sk_receive_queue);
+                        if (answ && skb)
+                                answ -= tcp_hdr(skb)->fin;
+                } else
+                        answ = tp->urg_seq - tp->copied_seq;
+                release_sock(sk);
+                break;
+        case SIOCATMARK:
+                answ = tp->urg_data && tp->urg_seq == tp->copied_seq;
+                break;
+        case SIOCOUTQ:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else
+                        answ = tp->write_seq - tp->snd_una;
+                break;
+/*
+        case SIOCOUTQNSD:
+                if (sk->sk_state == TCP_LISTEN)
+                        return -EINVAL;
+                
+                if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))
+                        answ = 0;
+                else
+                        answ = tp->write_seq - tp->snd_nxt;
+                break;
+*/
+        default:
+                return -ENOIOCTLCMD;
+        }
+        
+        return put_user(answ, (int __user *)arg);
+}
+#endif /* OS_LINUX_KERNEL */
+
 static int serval_tcp_freeze_flow(struct sock *sk)
 {
         LOG_DBG("Freezing TCP flow %s\n", 
@@ -2665,7 +2765,7 @@ static int serval_tcp_init_sock(struct sock *sk)
 	 */
 	tp->snd_ssthresh = SERVAL_TCP_INFINITE_SSTHRESH;
 	tp->snd_cwnd_clamp = ~0;
-    tp->snd_mig_last = 0;
+        tp->snd_mig_last = 0;
 	tp->mss_cache = SERVAL_TCP_MSS_DEFAULT;
 
 	tp->reordering = sysctl_serval_tcp_reordering;
@@ -2686,12 +2786,12 @@ static int serval_tcp_init_sock(struct sock *sk)
         else
                 ssk->af_ops = &serval_tcp_af_ops;
 
-	sk->sk_sndbuf = sysctl_tcp_wmem[1];
-	sk->sk_rcvbuf = sysctl_tcp_rmem[1];
+	sk->sk_sndbuf = sysctl_serval_tcp_wmem[1];
+	sk->sk_rcvbuf = sysctl_serval_tcp_rmem[1];
 
         tp->bytes_queued = 0;
         
-        LOG_DBG("sockinit: snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%s\n",
+        LOG_DBG("sockinit: snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 #if defined(OS_LINUX_KERNEL)
@@ -2771,15 +2871,16 @@ struct proto serval_tcp_proto = {
 	.backlog_rcv		= serval_sal_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
-	.enter_memory_pressure	= tcp_enter_memory_pressure,
-	.memory_pressure	= &tcp_memory_pressure,
+	.enter_memory_pressure	= serval_tcp_enter_memory_pressure,
+	.memory_pressure	= &serval_tcp_memory_pressure,
 	.memory_allocated	= &serval_tcp_memory_allocated,
-	.sysctl_mem		= sysctl_tcp_mem,
-	.sysctl_wmem		= sysctl_tcp_wmem,
-	.sysctl_rmem		= sysctl_tcp_rmem,
+	.sysctl_mem		= sysctl_serval_tcp_mem,
+	.sysctl_wmem		= sysctl_serval_tcp_wmem,
+	.sysctl_rmem		= sysctl_serval_tcp_rmem,
 #if defined(OS_LINUX_KERNEL)
 	.sockets_allocated	= &tcp_sockets_allocated,
 	.orphan_count		= &tcp_orphan_count,
+        .ioctl                  = serval_tcp_ioctl,
 #endif
 	.max_header		= MAX_SERVAL_TCP_HEADER,
 	.obj_size		= sizeof(struct serval_tcp_sock),

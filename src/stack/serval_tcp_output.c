@@ -411,11 +411,12 @@ void serval_tcp_select_initial_window(int __space, __u32 mss,
 	if (wscale_ok) {
 
                 LOG_DBG("space=%u sysctl_rcp_rmem[2]=%u window_clamp=%u\n",
-                        space, sysctl_tcp_rmem[2], *window_clamp);
+                        space, sysctl_serval_tcp_rmem[2], *window_clamp);
 		/* Set window scaling on max possible window
 		 * See RFC1323 for an explanation of the limit to 14
 		 */
-		space = max_t(u32, sysctl_tcp_rmem[2], sysctl_serval_rmem_max);
+		space = max_t(u32, sysctl_serval_tcp_rmem[2], 
+                              sysctl_serval_rmem_max);
 		space = min_t(u32, space, *window_clamp);
 
 		while (space > 65535 && (*rcv_wscale) < 14) {
@@ -1804,7 +1805,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	if (free_space < (full_space >> 1)) {
 		tp->tp_ack.quick = 0;
 
-		if (tcp_memory_pressure)
+		if (serval_tcp_memory_pressure)
 			tp->rcv_ssthresh = min(tp->rcv_ssthresh,
 					       4U * tp->advmss);
 

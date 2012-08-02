@@ -1783,9 +1783,7 @@ serval_sal_create_respond_sock(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct sock *nsk;
 
-        nsk = sk_clone(sk, GFP_ATOMIC);
-
-        /* Cloned sock has lock held */
+        nsk = sk_clone_lock(sk, GFP_ATOMIC);
 
         if (nsk) {
                 struct serval_sock *nssk = serval_sk(nsk);
@@ -2225,19 +2223,12 @@ static int serval_sal_connected_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-        
-        err = serval_sal_ack_process(sk, skb, ctx);
+        int should_drop = 0;
 
-        if (ctx->hdr->fin) {
-                err = serval_sal_rcv_fin(sk, skb, ctx);
-                
-                if (err == 0) {
-                        serval_sal_timewait(sk, SERVAL_CLOSEWAIT);
-                }
-        }
+        err = serval_sal_ack_process(sk, skb, ctx);
         
-        /* Should also pass FIN to user, as it needs to pick it off
-         * its receive queue to notice EOF. */
+        /* Should pass FINs to transport and ultimately the user, as
+         * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || ctx->hdr->fin) {
                 /* Set the received service id.
 
@@ -2251,12 +2242,20 @@ static int serval_sal_connected_state_process(struct sock *sk,
         } else {
                 LOG_PKT("Dropping packet\n");
                 err = 0;
-                goto drop;
+                should_drop = 1;
         }
 
-        return err;
- drop:
-        kfree_skb(skb);
+        if (ctx->hdr->fin) {
+                err = serval_sal_rcv_fin(sk, skb, ctx);
+                
+                if (err == 0) {
+                        serval_sal_timewait(sk, SERVAL_CLOSEWAIT);
+                }
+        }
+
+        if (should_drop)
+                kfree_skb(skb);
+
         return err;
 }
 
@@ -3001,7 +3000,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                          * and assumes that skb->dev is the input
                          * interface*/
                         if (target->out.dev)
-                                skb_set_dev(cskb, target->out.dev);
+                                cskb->dev = target->out.dev;
 #endif /* OS_LINUX_KERNEL */
                         
                         /* Set the true overlay source address if the
@@ -3374,7 +3373,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
                                                   src, 18));
                         }
 #endif
-                        skb_set_dev(skb, mig_dev);
+                        skb->dev = mig_dev;
                 }
                 
                 if (ssk->sal_state == SAL_RSYN_RECV) {
@@ -3637,9 +3636,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 /* for user-space, need to specify a device - the
                  * kernel will route */
-#if defined(OS_USER)
-                skb_set_dev(skb, __dev_get_by_index(sock_net(sk), 0));
-#endif
                 serval_sal_send_check(sh);
                 
                 /* note that the service resolution stats
@@ -3650,7 +3646,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                  */
                 return serval_sal_do_xmit(skb);
         }
-
 
         LOG_DBG("Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
@@ -3666,7 +3661,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ALL) < 0)
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
                 return -1;
 
         /*
@@ -3726,13 +3721,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
-#if defined(OS_USER)
-                        dev = __dev_get_by_index(sock_net(sk), 0);
-#else
-                        /* FIXME: not sure about getting the device
-                           without a refcount here... */
                         dev = __dev_get_by_name(sock_net(sk), "lo");
-#endif
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,
@@ -3742,7 +3731,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         dev = target->out.dev;
                 }
                 
-                skb_set_dev(cskb, dev);
+                cskb->dev = dev;
 
                 /* Need also to set the source address for
                    checksum calculation */

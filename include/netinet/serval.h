@@ -140,31 +140,94 @@ struct net_addr {
 #define net_raw net_un.un_raw
 };
 
-static inline const char *__hexdump(const void *data, int datalen, 
-                                    char *buf, int buflen)
+/**
+ * Convert an ASCII character (char) to a byte integer. Returns -1 on
+ * error.
+ */
+static inline int hextobyte(const char c)
 {
-        const unsigned char *h = (const unsigned char *)data;
-        int len = 0;
-
-        while (datalen > 0 && len < buflen) {
-                len += snprintf(buf + len, buflen - len, 
-                                "%02x",
-                                *h++);
-
-                if (datalen && datalen % 2 && datalen != 1)
-                        len += snprintf(buf + len, buflen - len, " ");
-                datalen--;
+        int value = -1;
+        
+        if (c >= '0' && c <= '9') {
+                value = (c - '0');
+        } else {
+                char d = c | 0x20;
+                
+                if (d >= 'a' && d <= 'f')
+                        value = d - 'a' + 10;
         }
+        return value;
+}
 
-        return buf;
+/**
+ * Convert a hexadecimal string to a byte array. Returns 1 on success,
+ * and 0 if the source string is not a valid hexadecimal string.
+ */
+static inline int serval_hexton(const char *src,
+                                size_t src_len,
+                                void *dst,
+                                size_t dst_len)
+{
+        unsigned char *ptr = (unsigned char *)dst;
+
+        while (*src != '\0' && dst_len-- && src_len--) {
+                int value = hextobyte(*src++);
+
+                if (value == -1)
+                        return 0;
+                
+                value *= 16;
+                        
+                if (*src != '\0' && src_len--) {
+                        int ret = hextobyte(*src++);
+
+                        if (ret == -1)
+                                return 0;
+                        
+                        value += ret;
+                }
+                *ptr++ = value;
+        }
+        
+        return 1;
+}
+
+/*
+ * Convert a byte array to a hexadecimal string. Will always
+ * null-terminate.
+ */
+static inline char *serval_ntohex(const void *src,
+                                  size_t src_len,
+                                  char *dst,
+                                  size_t dst_len)
+{
+        static const char hex[] = "0123456789abcdef";
+        char *dst_ptr = (char *)dst;
+        const unsigned char *src_ptr = (const unsigned char *)src;
+
+        while (src_len && dst_len > 1) {
+                *dst_ptr++ = hex[*src_ptr >> 4];
+
+                if (--dst_len > 1) {
+                        *dst_ptr++ = hex[*src_ptr++ & 0xf];
+                        dst_len--;
+                }
+                src_len--;
+        }
+        
+        if (dst_len)
+                *dst_ptr = '\0';
+
+        return dst;
 }
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
-        static char str[82*2];
+        static char str[65*2];
         static int i = 0;
         i = (i + 1) % 2;
-        return __hexdump(srvid, sizeof(*srvid), &str[i*sizeof(str)/2], 82);  
+        return serval_ntohex(srvid, sizeof(*srvid),
+                             &str[i*sizeof(str)/2], sizeof(str)/2);
 }
 
 static inline const char *flow_id_to_str(const struct flow_id *flowid)
@@ -172,9 +235,27 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
         static char str[22];
         static int i = 0;
         i = (i + 1) % 2;
-        snprintf(&str[i*sizeof(str)/2], 11, 
+        snprintf(&str[i*sizeof(str)/2], sizeof(str)/2, 
                  "%u", ntohl(flowid->s_id32));
         return &str[i*sizeof(str)/2];
+}
+
+/**
+ * Converts a binary service ID to string presentation
+ * format. Equivalent to inet_ntop().
+ */
+static inline const char *serval_ntop(const void *src, char *dst, size_t len)
+{
+        return serval_ntohex(src, sizeof(struct service_id), dst, len);
+}
+
+/**
+ * Converts a string in presentation format to a binary service
+ * ID. Equivalent to inet_pton().
+ */
+static inline const int serval_pton(const char *src, void *dst)
+{
+        return serval_hexton(src, 64, dst, sizeof(struct service_id));
 }
 
 struct serval_hdr {

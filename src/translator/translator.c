@@ -28,6 +28,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <netdb.h>
+#include <sys/ioctl.h>
 #include <common/signal.h>
 #include <common/list.h>
 #define ENABLE_DEBUG 1
@@ -49,14 +50,25 @@ typedef union sockaddr_generic {
         struct sockaddr_in in;
 } sockaddr_generic_t;
 
+struct socket {
+        int fd;
+        unsigned char should_close:1;
+        size_t bytes_written, bytes_read;
+        socklen_t sndbuf;
+};
+
+enum sockettype {
+        ST_INET,
+        ST_SERVAL,
+};
+
 struct client {
         int from_family;
         unsigned int id;
         sockaddr_generic_t addr;
         socklen_t addrlen;
         pthread_t thr;
-        int inet_sock;
-        int serval_sock;
+        struct socket sock[2];
         int translator_port;
         int splicefd[2];
         unsigned char is_garbage;
@@ -92,60 +104,98 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
-static ssize_t forward_data(int from, int to, int splicefd[2])
-{
-        ssize_t rlen, wlen = 0;
+enum work_status {
+        WORK_OK,
+        WORK_CLOSED,
+        WORK_NOSPACE,
+        WORK_ERROR,
+};
 
-         rlen = splice(from, NULL, splicefd[1], NULL, 
-                       INT_MAX, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+static enum work_status work_translate(struct socket *from, 
+                                       struct socket *to,
+                                       int splicefd[2])
+{
+        ssize_t ret;
+        size_t readlen, nbytes;
+        enum work_status status = WORK_OK;
+        int bytes_queued = 0;
         
-        if (rlen == -1) {
+        ret = ioctl(to->fd, TIOCOUTQ, &bytes_queued);
+
+        if (ret == -1) {
+                LOG_ERR("ioctl error - %s\n", strerror(errno));
+                return WORK_ERROR;
+        }
+
+        readlen = from->sndbuf - bytes_queued;
+        
+        if (readlen == 0)
+                return WORK_NOSPACE;
+
+        /* LOG_DBG("reading %zu bytes\n", readlen); */
+
+        ret = splice(from->fd, NULL, splicefd[1], NULL, 
+                     readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+        
+        if (ret == -1) {
                 LOG_ERR("splice1: %s\n",
                         strerror(errno));
-                return rlen;
-        } else if (rlen == 0) {
+                if (errno == EWOULDBLOCK)
+                        return WORK_OK;
+                return WORK_ERROR;
+        } else if (ret == 0) {
                 LOG_DBG("splice1: other end closed\n");
-        }
+                from->should_close = 1;
+                return WORK_OK;
+        }       
         
-        /* printf("splice1 %zd bytes\n", rlen); */
-        
-        while (rlen) {
-                ssize_t w = splice(splicefd[0], NULL, to, NULL,
-                                   rlen, SPLICE_F_MOVE);
+        readlen = ret;
+        from->bytes_read += readlen;
+
+        /* LOG_DBG("splice1 %zu bytes\n", readlen); */
+
+        while (readlen) {
+                ret = splice(splicefd[0], NULL, to->fd, NULL,
+                             readlen, SPLICE_F_MOVE);
                 
-                if (w == -1) {
+                if (ret == -1) {
                         if (errno == EPIPE) {
-                                LOG_DBG("splice2: other end closed\n");
+                                LOG_DBG("splice2: EPIPE\n");
+                                status = WORK_ERROR;
+                        } else if (errno == EWOULDBLOCK) {
                         } else {
                                 LOG_ERR("splice2: %s\n",
                                         strerror(errno));
+                                status = WORK_ERROR;
                         }
                         break;
+                } else if (ret > 0) {
+                        to->bytes_written += ret;
+                        nbytes += ret;
+                        readlen -= ret;
                 }
-                wlen += w;
-                rlen -= w;
         }
         
-        /* printf("splice2 %zd bytes\n", wlen); */
+        /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
         
-        return wlen;
+        return status;
 }
 
-static ssize_t inet_to_serval(struct client *c)
+static enum work_status work_inet_to_serval(struct client *c)
 {
-        return forward_data(c->inet_sock, c->serval_sock, c->splicefd);
+        return work_translate(&c->sock[ST_INET], &c->sock[ST_SERVAL], c->splicefd);
 }
 
-static ssize_t serval_to_inet(struct client *c)
+static enum work_status work_serval_to_inet(struct client *c)
 {
-        return forward_data(c->serval_sock, c->inet_sock, c->splicefd);
+        return work_translate(&c->sock[ST_SERVAL], &c->sock[ST_INET], c->splicefd);
 }
 
 struct client *client_create(int sock, struct sockaddr *sa, 
                              socklen_t salen)
 {
         struct client *c;
-        int ret;
+        int ret, i;
 
         c = malloc(sizeof(struct client));
 
@@ -169,24 +219,24 @@ struct client *client_create(int sock, struct sockaddr *sa,
         
         if (c->from_family == AF_INET) {
                 /* We're translating from AF_INET to AF_SERVAL */
-                c->inet_sock = sock;
+                c->sock[ST_INET].fd = sock;
                 memcpy(&c->addr, sa, salen);
 
-                c->serval_sock = socket(AF_SERVAL, SOCK_STREAM, 0);
+                c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
-                if (c->serval_sock == -1) {
+                if (c->sock[ST_SERVAL].fd == -1) {
                         LOG_ERR("serval socket: %s\n",
                                 strerror(errno));
                         goto fail_sock;
                 }
         } else if (c->from_family == AF_SERVAL) {
                 /* We're translating from AF_SERVAL to AF_INET */
-                c->serval_sock = sock;
+                c->sock[ST_SERVAL].fd = sock;
                 memcpy(&c->addr, sa, salen);
                 
-                c->inet_sock = socket(AF_INET, SOCK_STREAM, 0);
+                c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
                 
-                if (c->inet_sock == -1) {
+                if (c->sock[ST_INET].fd == -1) {
                         LOG_ERR("inet socket: %s\n",
                                 strerror(errno));
                         goto fail_sock;
@@ -194,6 +244,18 @@ struct client *client_create(int sock, struct sockaddr *sa,
         } else {
                 LOG_ERR("Unsupported client family\n");
                 goto fail_sock;
+        }
+
+        for (i = 0; i < 2; i++) {
+                socklen_t len = sizeof(c->sock[i].sndbuf);
+
+                ret = getsockopt(c->sock[i].fd, SOL_SOCKET, 
+                                 SO_SNDBUF, &c->sock[i].sndbuf, 
+                                 &len);
+                
+                if (ret == -1) {
+                        LOG_ERR("getsockopt(sndbuf) - %s\n", strerror(errno));
+                }
         }
 
         return c;
@@ -221,7 +283,7 @@ static int client_send_init_packet(struct client *c)
         unsigned char *send_ptr = (unsigned char *)&tip;
         int ret;
 
-        ret = getsockopt(c->inet_sock, SOL_IP, SO_ORIGINAL_DST, 
+        ret = getsockopt(c->sock[ST_INET].fd, SOL_IP, SO_ORIGINAL_DST, 
                          &addr, &addrlen);
         
         if (ret == -1) {
@@ -243,7 +305,7 @@ static int client_send_init_packet(struct client *c)
         tip.port = addr.sin_port;
         
         do {
-                ret = send(c->serval_sock, send_ptr, send_len, 0);
+                ret = send(c->sock[ST_SERVAL].fd, send_ptr, send_len, 0);
                 
                 if (ret == 0) {
                         LOG_DBG("client %u other proxy closed\n",
@@ -269,7 +331,6 @@ static void *client_thread(void *arg)
         struct client *c = (struct client *)arg;
         sockaddr_generic_t addr;
         socklen_t addrlen;
-        size_t tot_inet_to_serval = 0, tot_serval_to_inet = 0;
         int sock = -1;
         char ipstr[18];
         int running = 1, ret;
@@ -281,11 +342,11 @@ static void *client_thread(void *arg)
                 struct translator_init_pkt tip;
                 
                 if (!cross_translate) {
-                        LOG_ERR("Cannot translate from AF_SERVAL to AF_INET without cross-translation enabled\n");
+                        LOG_ERR("AF_SERVAL to AF_INET without cross-translation enabled\n");
                         goto done;
                 }
                 /* Receive destination addr and port from other end */
-                ret = recv(c->serval_sock, &tip, sizeof(tip), MSG_WAITALL);
+                ret = recv(c->sock[ST_SERVAL].fd, &tip, sizeof(tip), MSG_WAITALL);
 
                 if (ret == -1) {
                         LOG_ERR("client %u could not read init packet: %s\n",
@@ -304,7 +365,7 @@ static void *client_thread(void *arg)
                 memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
                 addr.in.sin_port = tip.port;
                 addrlen = sizeof(addr.in);
-                sock = c->inet_sock;
+                sock = c->sock[ST_INET].fd;
 
                 inet_ntop(AF_INET, &addr.in.sin_addr, 
                           ipstr, sizeof(ipstr));
@@ -315,7 +376,7 @@ static void *client_thread(void *arg)
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
-                sock = c->serval_sock;
+                sock = c->sock[ST_SERVAL].fd;
                 if (cross_translate)
                         should_send_init_pkt = 1;
                 inet_ntop(AF_INET, &c->addr.in.sin_addr, ipstr, 18);
@@ -339,15 +400,15 @@ static void *client_thread(void *arg)
         LOG_DBG("client %u connected successfully!\n", c->id);
 
         while (running) {
-                ssize_t bytes = 0;
                 struct pollfd fds[3];
+                enum work_status status;
 
                 memset(fds, 0, sizeof(fds));
                 fds[0].fd = signal_get_fd(&c->exit_signal);
                 fds[0].events = POLLIN | POLLERR | POLLHUP;
-                fds[1].fd = c->inet_sock;
+                fds[1].fd = c->sock[ST_INET].fd;
                 fds[1].events = POLLIN | POLLERR;
-                fds[2].fd = c->serval_sock;
+                fds[2].fd = c->sock[ST_SERVAL].fd;
                 fds[2].events = POLLIN | POLLERR;
                 
                 ret = poll(fds, 3, -1);
@@ -378,41 +439,41 @@ static void *client_thread(void *arg)
                                 should_send_init_pkt = 0;
                         }
                         
-                        bytes = inet_to_serval(c);
+                        status = work_inet_to_serval(c);
                         
-                        if (bytes == 0) {
-                                running = 0;
-                        } else if (bytes < 0) {
+                        if (status == WORK_ERROR) {
                                 LOG_ERR("forwarding error\n");
                                 running = 0;
-                        } else {
-                                tot_inet_to_serval += bytes;
-                        }
+                        } 
                 }
 
                 if (fds[2].revents & POLLERR) {
                         running = 0;
                 } else if (fds[2].revents) {
-                        bytes = serval_to_inet(c);
+                        status = work_serval_to_inet(c);
                         
-                        if (bytes == 0) {
-                                running = 0;
-                        } else if (bytes < 0) {
+                        if (status == WORK_ERROR) {
                                 LOG_ERR("forwarding error\n");
                                 running = 0;
-                        } else {
-                                tot_serval_to_inet += bytes;
                         }
-                }        
+                }
+
+                if (c->sock[0].should_close ||
+                    c->sock[1].should_close) 
+                        running = 0;
         }
  done:
         LOG_DBG("client %u exits, "
-                "tot_inet_to_serval=%zu tot_serval_to_inet=%zu\n", 
-                c->id, tot_inet_to_serval, tot_serval_to_inet);
+                "serval=%zu/%zu inet=%zu/%zu\n", 
+                c->id, 
+                c->sock[ST_SERVAL].bytes_read, 
+                c->sock[ST_SERVAL].bytes_written,
+                c->sock[ST_INET].bytes_read, 
+                c->sock[ST_INET].bytes_written);
 
         c->is_garbage = 1;
-        close(c->serval_sock);
-        close(c->inet_sock);
+        close(c->sock[ST_SERVAL].fd);
+        close(c->sock[ST_INET].fd);
         close(c->splicefd[0]);
         close(c->splicefd[1]);
 

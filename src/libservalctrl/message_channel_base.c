@@ -238,10 +238,9 @@ void message_channel_base_finalize(message_channel_t *channel)
 static void *thread_start(void *arg)
 {
     message_channel_t *channel = (message_channel_t *)arg;
-    int ret = -1;
 
     if (channel->ops->task)
-        ret = channel->ops->task(channel);
+        channel->ops->task(channel);
     
     return NULL;
 }
