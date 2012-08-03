@@ -425,7 +425,7 @@ struct sock *serval_accept_dequeue(struct sock *parent,
                         sock_graft(sk, newsock);
                         newsock->state = SS_CONNECTED;
                 }
-
+                LOG_ERR("list_del(&srsk->lh)\n");
                 list_del(&srsk->lh);
                 reqsk_free(&srsk->rsk.req);
                 parent->sk_ack_backlog--;

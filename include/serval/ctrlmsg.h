@@ -49,7 +49,7 @@ struct service_info {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info) == 154)
+CTRLMSG_ASSERT(sizeof(struct service_info) == 134)
 
 struct service_info_stat {
         struct service_info service;
@@ -62,7 +62,7 @@ struct service_info_stat {
         uint32_t tokens_consumed;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 182)
+CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 162)
 
 struct service_stat {
         uint32_t capabilities;
@@ -111,7 +111,7 @@ struct ctrlmsg_register {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 140)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_register) == 120)
 
 enum ctrlmsg_register_flags {
         REG_FLAG_REREGISTER = 1,
@@ -132,7 +132,7 @@ struct ctrlmsg_resolve {
         struct in_addr src_address;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 268)
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_resolve) == 228)
 
 #define CTRLMSG_RESOLVE_SIZE (sizeof(struct ctrlmsg_resolve))
 
@@ -234,7 +234,7 @@ struct ctrlmsg_migrate {
 
 /* CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == ) */
 
-#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migratee))
+#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
 
 enum {
         CTRL_MODE_NET = 0, 

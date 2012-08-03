@@ -53,13 +53,22 @@
 #define SERVAL_PROTO_TCP 6
 #define SERVAL_PROTO_UDP 17
 
-/* Ethernet protocol number */
-#define ETH_P_SERVAL 0x0809
-
 /* IP Protocol number */
 #define IPPROTO_SERVAL 144
 
-#define SERVICEID_MAX_LEN 125
+/* The serviceID is in the format of a reversed FQDN that allows for
+   easy longest-prefix matching, for example: "com.mydomain.service".
+
+   Although a domain name may be up to 255 characters long, we cannot
+   support full length names due to the limited size of a sockaddr
+   structure. We cannot exceed sizeof(struct sockaddr_storage), which
+   is 128 bytes in the Linux kernel. In addition, we want to be able
+   to optionally pass two sockaddrs in a socket call; a serviceID
+   (sockaddr_sv) followed by an IP address (sockaddr_in) for service
+   resolver hints. Thus these two must not exceed 128 bytes when
+   concatenated, or socket calls will return an error.
+ */
+#define SERVICEID_MAX_LEN (105)
 
 struct service_id {
         char s_sid[SERVICEID_MAX_LEN+1];
@@ -67,7 +76,7 @@ struct service_id {
 
 #define SERVICE_ID_BITS(s) (strlen((s)->s_sid) << 3)
 
-SERVAL_ASSERT(sizeof(struct service_id) == 126)
+SERVAL_ASSERT(sizeof(struct service_id) == 106)
 
 #define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)))
 
@@ -93,14 +102,10 @@ struct sockaddr_sv {
         uint8_t sv_len;
 #endif
         sa_family_t sv_family;
-        /*
-        uint8_t sv_flags;
-        uint8_t sv_prefix_bits;
-        */
         struct service_id sv_srvid;
 };
 
-SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 128)
+SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 108)
 
 #define SERVAL_ADDRSTRLEN 80
 
@@ -255,13 +260,6 @@ static inline char *serval_ntohex(const void *src,
 
 static inline const char *service_id_to_str(const struct service_id *srvid)
 {
-        /*
-        static char str[65*2];
-        static int i = 0;
-        i = (i + 1) % 2;
-        return serval_ntohex(srvid, sizeof(*srvid),
-                             &str[i*sizeof(str)/2], sizeof(str)/2);
-        */
         return srvid->s_sid;
 }
 
@@ -281,7 +279,6 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
  */
 static inline const char *serval_ntop(const void *src, char *dst, size_t len)
 {
-        /* return serval_ntohex(src, sizeof(struct service_id), dst, len); */
         return fqdn_reverse((char *)src, dst);
 }
 
@@ -291,7 +288,9 @@ static inline const char *serval_ntop(const void *src, char *dst, size_t len)
  */
 static inline const int serval_pton(const char *src, void *dst)
 {
-        /* return serval_hexton(src, 64, dst, sizeof(struct service_id)); */
+        if (strlen(src) > SERVICEID_MAX_LEN)
+                return -1;
+
         return fqdn_reverse(src, (char *)dst) != NULL;
 }
 
@@ -371,7 +370,7 @@ struct sal_connection_ext {
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 146)
+SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 126)
 
 #define SAL_NONCE_SIZE 8
 
@@ -389,7 +388,7 @@ struct sal_service_ext {
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_service_ext) == 130)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 110)
 
 struct sal_description_ext {
         struct sal_ext exthdr;
