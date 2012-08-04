@@ -59,7 +59,7 @@
 /* The serviceID is in the format of a reversed FQDN that allows for
    easy longest-prefix matching, for example: "com.mydomain.service".
 
-   Although a domain name may be up to 255 characters long, we cannot
+   Although a domain name may be up to 253 characters long, we cannot
    support full length names due to the limited size of a sockaddr
    structure. We cannot exceed sizeof(struct sockaddr_storage), which
    is 128 bytes in the Linux kernel. In addition, we want to be able
@@ -68,17 +68,16 @@
    resolver hints. Thus these two must not exceed 128 bytes when
    concatenated, or socket calls will return an error.
  */
-#define SERVICEID_MAX_LEN (105)
+#define SERVICE_ID_MIN_LEN (2)
+#define SERVICE_ID_MAX_LEN (105)
 
 struct service_id {
-        char s_sid[SERVICEID_MAX_LEN+1];
+        char s_sid[SERVICE_ID_MAX_LEN+1];
 };
 
 #define SERVICE_ID_BITS(s) (strlen((s)->s_sid) << 3)
 
 SERVAL_ASSERT(sizeof(struct service_id) == 106)
-
-#define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)))
 
 enum sv_service_flags {
         /* bottom 2 bits reserved for scope - resolution and
@@ -107,7 +106,7 @@ struct sockaddr_sv {
 
 SERVAL_ASSERT(sizeof(struct sockaddr_sv) == 108)
 
-#define SERVAL_ADDRSTRLEN 80
+#define SERVAL_ADDRSTRLEN SERVICE_ID_MAX_LEN
 
 struct flow_id {
         union {
@@ -140,6 +139,19 @@ static inline int service_id_cmp(const struct service_id *id1,
         return strcmp(id1->s_sid, id2->s_sid);
 }
 
+static inline struct service_id *service_id_copy(struct service_id *s1,
+                                                 struct service_id *s2)
+{
+        size_t i;
+        
+        for (i = 0; i < SERVICE_ID_MAX_LEN && s2->s_sid[i] != '\0'; i++)
+                s1->s_sid[i] = s2->s_sid[i];
+        
+        s1->s_sid[i] = '\0';
+        
+        return s1;
+}
+
 static inline char *strrev(char *str, size_t n)
 {
         size_t i;
@@ -166,15 +178,58 @@ static inline char *strrev_delim(char delim, char *str, size_t n)
         return str;
 }
 
+static inline int fqdn_valid_char(char c)
+{
+        if ((c >= '0' && c <= '9') || 
+            (c >= 'A' && c <= 'Z') || 
+            (c >= 'a' && c <= 'z') ||
+            c == '.' || 
+            c == '-')
+                return 1;
+        return 0;
+}
+
+static inline int fqdn_copy(char *dst, const char *fqdn, size_t n)
+{
+        int i;
+        
+        for (i = 0; (size_t)i < n && fqdn[i] != '\0'; i++) {
+                if (!fqdn_valid_char(fqdn[i]))
+                        return 0;
+                dst[i] = fqdn[i];
+        }
+        
+        if ((size_t)i < n)
+                dst[i] = '\0';
+
+        return i;
+}
+
+static inline int fqdn_verify(const char *fqdn)
+{
+        while (*fqdn != '\0') {
+                if (!fqdn_valid_char(*fqdn))
+                        return 0;
+                fqdn++;
+        }
+        return 1;
+}
+
 /**
  * Reverse a fully qualified domain name string (we do not require the
  * FQDN to end with a dot).
  */
-static inline char *fqdn_reverse(const char *fqdn, char *out)
+static inline int fqdn_reverse(const char *fqdn, char *out)
 {
-        size_t len = strlen(fqdn);
-        strcpy(out, fqdn);
-        return strrev_delim('.', strrev(out, len), len);
+        int len = fqdn_copy(out, fqdn, SERVICE_ID_MAX_LEN);
+        
+        if (len <= 0)
+                return len;
+        
+        if (strrev_delim('.', strrev(out, len), len))
+                return 1;
+        
+        return -1;
 }
 
 /**
@@ -279,7 +334,9 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
  */
 static inline const char *serval_ntop(const void *src, char *dst, size_t len)
 {
-        return fqdn_reverse((char *)src, dst);
+        if (fqdn_reverse((char *)src, dst) == 1)
+                return dst;
+        return NULL;
 }
 
 /**
@@ -288,10 +345,10 @@ static inline const char *serval_ntop(const void *src, char *dst, size_t len)
  */
 static inline const int serval_pton(const char *src, void *dst)
 {
-        if (strlen(src) > SERVICEID_MAX_LEN)
+        if (strlen(src) > SERVICE_ID_MAX_LEN)
                 return -1;
-
-        return fqdn_reverse(src, (char *)dst) != NULL;
+        
+        return fqdn_reverse(src, (char *)dst);
 }
 
 struct sal_hdr {
@@ -342,9 +399,9 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 4)
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
-#define sv_ext_type exthdr.type
-#define sv_ext_flags exthdr.flags
-#define sv_ext_length exthdr.length
+#define ext_type exthdr.type
+#define ext_flags exthdr.flags
+#define ext_length exthdr.length
 
 #define SAL_EXT_FIRST(sh) \
         ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
@@ -362,26 +419,38 @@ enum sal_ext_type {
         __SAL_EXT_TYPE_MAX,
 };
 
-struct sal_connection_ext {
-        struct sal_ext exthdr;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t  nonce[8];
-        struct service_id srvid;
-} __attribute__((packed));
-
-SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 126)
-
 #define SAL_NONCE_SIZE 8
 
 struct sal_control_ext {
         struct sal_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
-        uint8_t  nonce[8];
+        uint8_t  nonce[SAL_NONCE_SIZE];
 } __attribute__((packed));
 
 SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
+
+struct sal_connection_ext {
+        struct sal_ext exthdr;
+        uint32_t seqno;
+        uint32_t ackno;
+        uint8_t  nonce[SAL_NONCE_SIZE];
+        struct service_id srvid;
+} __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 126)
+
+#define SAL_CONNECTION_EXT_LEN(sid)          \
+        (sizeof(struct sal_connection_ext) - \
+         sizeof(struct service_id) +         \
+         strlen((sid)->s_sid) + 1)
+
+#define SAL_CONNECTION_EXT_MIN_LEN           \
+        (sizeof(struct sal_connection_ext) - \
+         sizeof(struct service_id) + 3)
+
+#define SAL_CONNECTION_EXT_MAX_LEN              \
+        sizeof(struct sal_connection_ext)
 
 struct sal_service_ext {
         struct sal_ext exthdr;
@@ -390,6 +459,18 @@ struct sal_service_ext {
 
 SERVAL_ASSERT(sizeof(struct sal_service_ext) == 110)
 
+#define SAL_SERVICE_EXT_LEN(sid)             \
+        (sizeof(struct sal_service_ext) -    \
+         sizeof(struct service_id) +         \
+         strlen((sid)->s_sid) + 1)
+
+#define SAL_SERVICE_EXT_MIN_LEN             \
+        (sizeof(struct sal_service_ext) -   \
+         sizeof(struct service_id) + 3)
+
+#define SAL_SERVICE_EXT_MAX_LEN             \
+        sizeof(struct sal_service_ext)
+        
 struct sal_description_ext {
         struct sal_ext exthdr;
         struct net_addr addrs[0];
@@ -404,11 +485,17 @@ struct sal_source_ext {
 
 SERVAL_ASSERT(sizeof(struct sal_source_ext) == 4)
 
+#define SAL_SOURCE_EXT_MIN_LEN                  \
+        (sizeof(struct sal_source_ext) + 4)
+
+#define SAL_SOURCE_EXT_MAX_LEN                          \
+        (sizeof(struct sal_source_ext) + (20 * 4))
+
 struct sal_migrate_ext {
         struct sal_ext exthdr;
         uint32_t seqno;
         uint32_t ackno;
-        uint8_t nonce[8];
+        uint8_t nonce[SAL_NONCE_SIZE];
 } __attribute__((packed));
 
 SERVAL_ASSERT(sizeof(struct sal_migrate_ext) == 20)
@@ -419,7 +506,7 @@ SERVAL_ASSERT(sizeof(struct sal_migrate_ext) == 20)
 #define SAL_SOURCE_EXT_LEN __SAL_SOURCE_EXT_LEN(4)
 
 #define SAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
-        (((ext)->sv_ext_length - sizeof(struct sal_source_ext)) / 4) 
+        (((ext)->ext_length - sizeof(struct sal_source_ext)) / 4) 
 
 #define SAL_SOURCE_EXT_GET_ADDR(ext, n)      \
         (&(ext)->source[n*4])

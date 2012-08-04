@@ -34,7 +34,7 @@ int main(int argc, char **argv)
 
         memset(&addr, 0, sizeof(addr));
 	addr.sv.sv_family = AF_SERVAL;
-	serval_pton("send_udp_packet.localdomain", &addr.sv.sv_srvid);
+	serval_pton("send-udp-packet.localdomain", &addr.sv.sv_srvid);
 	addr.in.sin_family = AF_INET;
 	
         if (inet_pton(AF_INET, ipdst, &addr.in.sin_addr) != 1) {
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
                 goto out;
         }
 
-	serval_pton("recv_udp_packet.localdomain", &addr.sv.sv_srvid);
+	serval_pton("recv-udp-packet.localdomain", &addr.sv.sv_srvid);
         
         printf("Sending to \'%s\' %s\n",
                service_id_to_str(&addr.sv.sv_srvid),

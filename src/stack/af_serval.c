@@ -70,6 +70,8 @@ static struct sock *serval_accept_dequeue(struct sock *parent,
 static int serval_autobind(struct sock *sk)
 {
         struct serval_sock *ssk;
+        const char *bytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-";
+        size_t bytes_len = strlen(bytes);
          /*
           Assign a random service id until the socket is assigned one
           with bind (if ever).
@@ -78,18 +80,22 @@ static int serval_autobind(struct sock *sk)
         */
         lock_sock(sk);
         ssk = serval_sk(sk);
-#if defined(OS_LINUX_KERNEL)
-        get_random_bytes(&ssk->local_srvid, sizeof(struct service_id));
-#else
         {
                 unsigned int i;
-                unsigned char *byte = (unsigned char *)&ssk->local_srvid;
+                char *b = ssk->local_srvid.s_sid;
 
-                for (i = 0; i  < sizeof(struct service_id); i++) {
-                        byte[i] = random() & 0xff;
-                }
-        }
+                for (i = 0; i  < 50; i++) {
+                        unsigned char rand;
+#if defined(OS_LINUX_KERNEL)
+                        get_random_bytes(&rand, sizeof(rand));
+#else
+                        rand = random();
 #endif
+                        b[i] = bytes[rand % bytes_len];
+                }
+                strcpy(&b[i], ".localdomain");
+        }
+        
         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
         serval_sock_set_flag(ssk, SSK_FLAG_AUTOBOUND);
 
@@ -113,8 +119,14 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
                 LOG_ERR("address length %u too small\n",
                         addr_len);
                 return -EINVAL;
-        } else if (addr_len % sizeof(*svaddr) != 0) {
+        } 
+        if (addr_len % sizeof(*svaddr) != 0) {
                 LOG_ERR("address length invalid\n");
+                return -EINVAL;
+        } 
+        if (!fqdn_verify(svaddr->sv_srvid.s_sid)) {
+                LOG_ERR("address %s is not a valid FQDN\n",
+                        service_id_to_str(&svaddr->sv_srvid));
                 return -EINVAL;
         }
 
@@ -425,7 +437,6 @@ struct sock *serval_accept_dequeue(struct sock *parent,
                         sock_graft(sk, newsock);
                         newsock->state = SS_CONNECTED;
                 }
-                LOG_ERR("list_del(&srsk->lh)\n");
                 list_del(&srsk->lh);
                 reqsk_free(&srsk->rsk.req);
                 parent->sk_ack_backlog--;
@@ -514,6 +525,11 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
         if (addr->sa_family != AF_SERVAL) {
                 LOG_ERR("Bad address family %d!\n", addr->sa_family);
                 return -EAFNOSUPPORT;
+        } 
+
+        if (!fqdn_verify(((struct sockaddr_sv *)addr)->sv_srvid.s_sid)) {
+                LOG_ERR("address is not a valid FQDN\n");
+                return -EINVAL;
         }
 
         lock_sock(sk);

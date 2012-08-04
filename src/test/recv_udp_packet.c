@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 
         memset(&addr, 0, sizeof(addr));
 	addr.sv.sv_family = AF_SERVAL;
-	serval_pton("recv_udp_packet.localdomain", &addr.sv.sv_srvid);
+	serval_pton("recv-udp-packet.localdomain", &addr.sv.sv_srvid);
 	addr.in.sin_family = AF_INET;
 
 	ret = bind_sv(sock, (struct sockaddr *)&addr, sizeof(addr.sv));

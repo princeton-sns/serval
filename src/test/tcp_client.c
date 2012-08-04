@@ -146,7 +146,7 @@ static int client(const char *filepath,
                 addrlen = sizeof(cliaddr.inet);
         } else {
                 cliaddr.serval.sv_family = family;
-                serval_pton("tcp_client.localdomain", &cliaddr.serval.sv_srvid);
+                serval_pton("tcp-client.localdomain", &cliaddr.serval.sv_srvid);
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
                        &server_srvid, sizeof(server_srvid));
@@ -282,7 +282,7 @@ main(int argc, char **argv)
         int port = DEFAULT_SERVER_PORT;
         int family = AF_SERVAL;
 
-        serval_pton("tcp_server.localdomain", &server_srvid);
+        serval_pton("tcp-server.localdomain", &server_srvid);
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;

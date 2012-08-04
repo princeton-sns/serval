@@ -369,7 +369,7 @@ main(int argc, char **argv)
         unsigned int seed = 2;
         int family = AF_SERVAL;
 
-        serval_pton("tcp_server.localdomain", &listen_srvid);
+        serval_pton("tcp-server.localdomain", &listen_srvid);
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;

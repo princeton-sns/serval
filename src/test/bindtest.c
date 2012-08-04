@@ -25,7 +25,7 @@ int main(int argc, char **argv)
 	}
 
 	addr.sv_family = AF_SERVAL;
-	serval_pton("bindtest_src.localdomain", &addr.sv_srvid);
+	serval_pton("bindtest-src.localdomain", &addr.sv_srvid);
 	
 	ret = bind_sv(sock, (struct sockaddr *)&addr, sizeof(addr));
 
@@ -35,7 +35,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
 	
-	serval_pton("bindtest_dst.localdomain", &addr.sv_srvid);
+	serval_pton("bindtest-dst.localdomain", &addr.sv_srvid);
 
 	ret = sendto_sv(sock, &data, sizeof(data), 0, 
                         (struct sockaddr *)&addr, sizeof(addr));

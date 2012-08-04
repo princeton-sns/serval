@@ -259,7 +259,7 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn)
 
 	th = tcp_hdr(skb);
 
-	if (th->doff < sizeof(struct tcphdr) / 4) {
+	if (th->doff < (sizeof(struct tcphdr) / 4)) {
                 LOG_DBG("TCP packet has bad data offset=%u!\n",
                         th->doff << 2);
 		goto bad_packet;
