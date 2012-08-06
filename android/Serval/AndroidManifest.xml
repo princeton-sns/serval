@@ -11,6 +11,7 @@
         <activity 
             android:name="ServalActivity"
             android:screenOrientation="portrait"
+            android:windowSoftInputMode="stateUnchanged"
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

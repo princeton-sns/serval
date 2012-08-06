@@ -4,6 +4,29 @@
     android:layout_width="fill_parent"
     android:layout_height="fill_parent"
 	android:orientation="vertical" >
+	<LinearLayout
+	    android:id="@+id/header"
+	    android:layout_width="fill_parent"
+	    android:layout_height="wrap_content"
+	    android:padding="6dp"
+	    android:orientation="horizontal"
+	    android:weightSum="1"
+	    android:gravity="center">
+	    <Button 
+	        android:id="@+id/moduleStatusToggle"
+	        android:layout_width="0dp"
+	        android:layout_height="wrap_content"
+	        android:layout_weight=".5"
+	        android:singleLine="true"
+	        android:text="Module: UNLOADED"/>
+	    <Button 
+	        android:id="@+id/udpEncapToggle"
+	        android:layout_width="0dp"
+	        android:layout_height="wrap_content"
+	        android:layout_weight=".5"
+	        android:singleLine="true"
+	        android:text="UDP Encap: OFF"/>
+	</LinearLayout>
 	<android.support.v4.view.ViewPager
 	    android:id="@+id/pager"
 	    android:layout_width="fill_parent"

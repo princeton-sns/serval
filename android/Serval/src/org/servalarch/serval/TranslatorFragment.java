@@ -1,12 +1,8 @@
 package org.servalarch.serval;
 
-import java.io.File;
-import java.io.IOException;
-
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
@@ -70,12 +66,6 @@ public class TranslatorFragment extends Fragment {
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		super.onCreateView(inflater, container, savedInstanceState);
 		view = inflater.inflate(R.layout.frag_translator, container, false);
-		File filesDir = getActivity().getExternalFilesDir(null);
-		try {
-			filesDir.createNewFile();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
 
 		this.translatorButton = (ToggleButton) view.findViewById(R.id.translatorToggle);
 		this.translatorButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
@@ -140,6 +130,11 @@ public class TranslatorFragment extends Fragment {
 				}
 			}
 		});
+		
+		if (isTranslatorRunning())
+			translatorButton.setChecked(true);
+		else
+			translatorButton.setChecked(false);
 		
 		return view;
 	}

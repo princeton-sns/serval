@@ -56,16 +56,7 @@ public class ServalFragment extends Fragment {
 		
 		editServiceText = (EditText) view.findViewById(R.id.edit_service_field);
 		editIpText = (EditText) view.findViewById(R.id.ip_input_field);
-		/*editServiceText.setOnEditorActionListener(new OnEditorActionListener() {
-			@Override
-			public boolean onEditorAction(TextView v, int actionId,
-					KeyEvent event) {
-				
-				System.out.println("TextView text is " + v.getText());
-				return false;
-			}
-			
-		});*/
+
 		addServiceButton = (Button) view.findViewById(R.id.add_service_button);
 		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
