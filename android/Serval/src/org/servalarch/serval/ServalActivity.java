@@ -10,33 +10,31 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.util.Map;
+import java.util.List;
+import java.util.Vector;
 
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
-import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentPagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.KeyEvent;
-import android.view.View;
-import android.view.View.OnClickListener;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.TextView.OnEditorActionListener;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
-public class ServalActivity extends Activity
+public class ServalActivity extends FragmentActivity
 {
 	private static final String[] ADD_HTTP_RULES = {
 		"ifconfig dummy0 192.168.25.25 -arp",
@@ -89,6 +87,7 @@ public class ServalActivity extends Activity
 	private File module = null;
 	
 	private SharedPreferences prefs;
+	private PagerAdapter pagerAdapter;
 	
 	/** Called when the activity is first created. */
 	@Override
@@ -97,7 +96,14 @@ public class ServalActivity extends Activity
 		super.onCreate(savedInstanceState);
 		prefs = getSharedPreferences("serval", 0);
 		setContentView(R.layout.main);
-		File filesDir = getExternalFilesDir(null);
+		List<Fragment> fragments = new Vector<Fragment>();
+		fragments.add(Fragment.instantiate(this, ServalFragment.class.getName()));
+		fragments.add(Fragment.instantiate(this, TranslatorFragment.class.getName()));
+		this.pagerAdapter = new PagerAdapter(super.getSupportFragmentManager(), fragments);
+		ViewPager pager = (ViewPager) super.findViewById(R.id.pager);
+		pager.setAdapter(this.pagerAdapter);
+
+		/*File filesDir = getExternalFilesDir(null);
 		try {
 			filesDir.createNewFile();
 		} catch (IOException e) {
@@ -107,16 +113,7 @@ public class ServalActivity extends Activity
 		
 		editServiceText = (EditText) findViewById(R.id.edit_service_field);
 		editIpText = (EditText) findViewById(R.id.ip_input_field);
-		/*editServiceText.setOnEditorActionListener(new OnEditorActionListener() {
-			@Override
-			public boolean onEditorAction(TextView v, int actionId,
-					KeyEvent event) {
-				
-				System.out.println("TextView text is " + v.getText());
-				return false;
-			}
-			
-		});*/
+
 		addServiceButton = (Button)findViewById(R.id.add_service_button);
 		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
@@ -132,10 +129,10 @@ public class ServalActivity extends Activity
 				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
 						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
 			}
-		});
+		});*/
 		
-		this.moduleStatusButton = (ToggleButton) findViewById(R.id.moduleStatusToggle);
-		this.moduleStatusButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+		//this.moduleStatusButton = (ToggleButton) findViewById(R.id.moduleStatusToggle);
+		/*this.moduleStatusButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 			@Override
 			public void onCheckedChanged(CompoundButton buttonView,
 					boolean isChecked) {
@@ -174,8 +171,8 @@ public class ServalActivity extends Activity
 						moduleStatusButton.setChecked(true);
 
 					AppHostCtrl.init(cbs);
-					/* insert persistent rules */
-					if (addPersistent) {
+			*/		/* insert persistent rules */
+			/*		if (addPersistent) {
 						Map<String, ?> idMap = prefs.getAll();
 		        		for (String srvID : idMap.keySet()) {
 		        			if (!(idMap.get(srvID) instanceof String))
@@ -290,7 +287,7 @@ public class ServalActivity extends Activity
 					new IperfTask().execute((Void)null);
 				}
 			}
-		});
+		});*/
 	}
 	
 	private void executeRules(String[] rules) {
@@ -339,7 +336,7 @@ public class ServalActivity extends Activity
 		return false;
 	}
 
-	private boolean executeSuCommand(final String cmd) {
+	boolean executeSuCommand(final String cmd) {
 		try {
 			Process shell;
 			int err;
@@ -480,7 +477,7 @@ public class ServalActivity extends Activity
 	protected void onStart() {
 		super.onStart();
 
-		Log.d("Serval", "module path is " + module.getAbsolutePath());
+		/*Log.d("Serval", "module path is " + module.getAbsolutePath());
 
 		if (!extractKernelModule(module)) {
 			Log.d("Serval", "Could not extract kernel module");
@@ -500,7 +497,7 @@ public class ServalActivity extends Activity
 			translatorButton.setChecked(true);
 		else
 			translatorButton.setChecked(false);
-		
+		*/
 
 		AppHostCtrl.init(cbs);
 	}
@@ -530,5 +527,32 @@ public class ServalActivity extends Activity
 		protected void onPostExecute(Void result) {
 			iperfButton.setChecked(false);
 	     }
+	}
+	
+	private class PagerAdapter extends FragmentPagerAdapter {
+
+		private List<Fragment> fragments;
+		private String[] titles;
+
+		public PagerAdapter(FragmentManager fm, List<Fragment> fragments) {
+			super(fm);
+			this.fragments = fragments;
+			this.titles = ServalActivity.this.getResources().getStringArray(R.array.pager_titles);
+		}
+
+		@Override
+		public Fragment getItem(int position) {
+			return this.fragments.get(position);
+		}
+		
+		@Override
+		public CharSequence getPageTitle(int position) {
+			return titles[position];
+		}
+		
+		@Override
+		public int getCount() {
+			return this.fragments.size();
+		}
 	}
 }

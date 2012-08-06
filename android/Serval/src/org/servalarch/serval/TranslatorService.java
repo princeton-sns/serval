@@ -1,18 +1,19 @@
 package org.servalarch.serval;
 
-import android.app.Service;
-import android.app.NotificationManager;
+import java.util.ArrayList;
+
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
-import android.os.Handler;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
-import java.util.ArrayList;
 
 public class TranslatorService extends Service {
 	static {

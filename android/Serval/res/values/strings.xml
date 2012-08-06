@@ -16,4 +16,8 @@
     <string name="http_label">Translate HTTP/HTTPS:</string>
     <string name="trans_all_label">Translate ALL TCP traffic:</string>
     <string name="iperf_label">Run iperf: </string>
+    <string-array name="pager_titles">
+        <item >Settings</item>
+        <item >Translator</item>
+    </string-array>
 </resources>
