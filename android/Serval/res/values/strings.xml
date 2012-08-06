@@ -9,8 +9,11 @@
     <string name="ip_label">IP:</string>
     <string name="udp_encap_toggle">UDP encapsulation</string>
     <string name="udp_encap_label">UDP encapsulation:</string>
-    <string name="translator_label">Translator:</string>
+    <string name="translator_label">Translator status:</string>
     <string name="translator_toggle">Translator on/off</string>
     <string name="translator_service_started">Serval translator started</string>
     <string name="translator_service_label">Serval translator</string>
+    <string name="http_label">Translate HTTP/HTTPS:</string>
+    <string name="trans_all_label">Translate ALL TCP traffic:</string>
+    <string name="iperf_label">Run iperf: </string>
 </resources>
