@@ -43,13 +43,12 @@ public abstract class HostCtrlCallbacks {
 	 * 
 	 * @param id           	the ServiceID being registered
 	 * @param flags        	flags detailing how this registration should be handled
-	 * @param prefixBits   	the number of bits of the ServiceID to register. 0 means the entire serviceID.
 	 * @param addr         	the address to associate with the ServiceID
 	 * @param oldAddr      	the previous address used associated with this registration, 
 	 * 						in case this is a re-registration. May be null.
 	 */
-	public void onServiceRegistration(ServiceID id, int flags, int prefixBits,
-			InetAddress addr, InetAddress oldAddr) {
+	public void onServiceRegistration(ServiceID id, int flags,
+					  InetAddress addr, InetAddress oldAddr) {
 	}
 	
 	/**
@@ -57,11 +56,10 @@ public abstract class HostCtrlCallbacks {
 	 *  
 	 * @param id			the ServiceID being unregistered
 	 * @param flags       	flags detailing how this unregistration should be handled
-	 * @param prefixBits	the number of bits of the ServiceID to unregister. 0 means the entire serviceID.
 	 * @param addr			the address associated with the ServiceID
 	 */
-	public void onServiceUnregistration(ServiceID id, int flags, int prefixBits,
-			InetAddress addr) {	
+        public void onServiceUnregistration(ServiceID id, int flags,
+					    InetAddress addr) {	
 	}
 	
 	/**

@@ -51,7 +51,6 @@ static int fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr,
 
 	memset(svaddr, 0, sizeof(*svaddr));
 	svaddr->sv_family = AF_SERVAL;
-	svaddr->sv_prefix_bits = bits;
 	memcpy(&svaddr->sv_srvid, arr, sizeof(svaddr->sv_srvid));
 	
 	(*env)->ReleaseByteArrayElements(env, byteArr, arr, 0);

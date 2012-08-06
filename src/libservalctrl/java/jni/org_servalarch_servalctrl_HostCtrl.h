@@ -11,14 +11,6 @@ extern "C" {
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_LOCAL 0L
 #undef org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE 1L
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_OK
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_OK 0LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR 1LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY 2LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED 3LL
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    nativeInit
@@ -54,42 +46,42 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    addService4
- * Signature: (Lorg/servalarch/net/ServiceID;IIILjava/net/Inet4Address;)I
+ * Signature: (Lorg/servalarch/net/ServiceID;IILjava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4
-  (JNIEnv *, jobject, jobject, jint, jint, jint, jobject);
+  (JNIEnv *, jobject, jobject, jint, jint, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    getService4
- * Signature: (Lorg/servalarch/net/ServiceID;ILjava/net/Inet4Address;)I
+ * Signature: (Lorg/servalarch/net/ServiceID;Ljava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4
-  (JNIEnv *, jobject, jobject, jint, jobject);
+  (JNIEnv *, jobject, jobject, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    removeService4
- * Signature: (Lorg/servalarch/net/ServiceID;ILjava/net/Inet4Address;)I
+ * Signature: (Lorg/servalarch/net/ServiceID;Ljava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4
-  (JNIEnv *, jobject, jobject, jint, jobject);
+  (JNIEnv *, jobject, jobject, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    registerService4
- * Signature: (Lorg/servalarch/net/ServiceID;ILjava/net/Inet4Address;)I
+ * Signature: (Lorg/servalarch/net/ServiceID;Ljava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4
-  (JNIEnv *, jobject, jobject, jint, jobject);
+  (JNIEnv *, jobject, jobject, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    unregisterService4
- * Signature: (Lorg/servalarch/net/ServiceID;I)I
+ * Signature: (Lorg/servalarch/net/ServiceID;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4
-  (JNIEnv *, jobject, jobject, jint);
+  (JNIEnv *, jobject, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl

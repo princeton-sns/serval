@@ -5,8 +5,7 @@ import org.servalarch.net.ServiceID;
 
 public class ServiceInfo {
 	ServiceID service;
-	int prefixBits;
-	int flags;
+	short flags;
 	InetAddress addr;
 	long ifindex;
 	long priority;
@@ -14,12 +13,11 @@ public class ServiceInfo {
 	long idleTimeout;
 	long hardTimeout;
 	
-	public ServiceInfo(ServiceID id, int prefixBits, int flags, 
-			InetAddress addr, long ifindex, long priority, long weight, 
-			long idleTimeout, long hardTimeout) {
-		this.service = id;
-		this.prefixBits = prefixBits;
-		this.flags = flags;
+        public ServiceInfo(ServiceID id, short flags, InetAddress addr, 
+			   long ifindex, long priority, long weight, 
+			   long idleTimeout, long hardTimeout) {
+	        this.service = id;
+		this.flags = 0;
 		this.addr = addr;
 		this.ifindex = ifindex;
 		this.priority = priority;
@@ -28,24 +26,19 @@ public class ServiceInfo {
 		this.hardTimeout = hardTimeout;
 	}
 	
-	public ServiceInfo(ServiceID id, short prefixBits, 
-			InetAddress addr, long priority, long weight) {
-		this(id, prefixBits, 0, addr, 0, priority, weight, 0, 0);
+	public ServiceInfo(ServiceID id, InetAddress addr, long priority, long weight) {
+	       this(id, (short)0, addr, 0, priority, weight, 0, 0);
 	}
 	
 	public ServiceInfo(ServiceID id, InetAddress addr) {
-		this(id, 0, 0, addr, 0, 0, 0, 0, 0);
+	       this(id, (short)0, addr, 0, 0, 0, 0, 0);
 	}
 	
 	public ServiceID getServiceID() {
 		return service;
 	}
 
-	public int getPrefixBits() {
-		return prefixBits;
-	}
-
-	public int getFlags() {
+	public short getFlags() {
 		return flags;
 	}
 

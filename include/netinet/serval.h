@@ -343,7 +343,7 @@ static inline const char *serval_ntop(const void *src, char *dst, size_t len)
  * Converts a string in presentation format to a service
  * ID. Equivalent to inet_pton().
  */
-static inline const int serval_pton(const char *src, void *dst)
+static inline int serval_pton(const char *src, void *dst)
 {
         if (strlen(src) > SERVICE_ID_MAX_LEN)
                 return -1;

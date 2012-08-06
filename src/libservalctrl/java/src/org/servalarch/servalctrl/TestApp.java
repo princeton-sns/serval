@@ -17,13 +17,13 @@ public class TestApp {
 
 				@Override
 				public void onServiceRegistration(ServiceID id, int flags,
-						int prefixBits, InetAddress addr, InetAddress oldAddr) {
+								  InetAddress addr, InetAddress oldAddr) {
 					System.out.println("REGISTER: serviceID " + id.toString() + " addr " + addr.toString());
 				}
 
 				@Override
 				public void onServiceUnregistration(ServiceID id, int flags,
-						int prefixBits, InetAddress addr) {
+								    InetAddress addr) {
 					System.out.println("UNREGISTER: serviceID " + id.toString() + " addr " + addr.toString());
 				}
 
@@ -75,7 +75,7 @@ public class TestApp {
 			
 			Thread.sleep(1000);
 			
-			hc.getService(new ServiceID(0), 0, null);
+			hc.getService(new ServiceID(0), null);
 			
 			System.out.println("Waiting 3 seconds for events...");
 			

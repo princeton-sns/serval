@@ -32,56 +32,40 @@ public abstract class HostCtrl {
 	private native void nativeFree();
 	public native int migrateFlow(long flowID, String toDevice);
 	public native int migrateInterface(String fromDevice, String toDevice);
-	private native int addService4(ServiceID id, int prefixBits, int prority, int weight, Inet4Address addr);
-	private native int getService4(ServiceID id, int prefixBits, Inet4Address addr);
-	private native int removeService4(ServiceID id, int prefixBits, Inet4Address addr);
-	private native int registerService4(ServiceID id, int prefixBits, Inet4Address oldAddr);
-	private native int unregisterService4(ServiceID id, int prefixBits);
+	private native int addService4(ServiceID id, int prority, int weight, Inet4Address addr);
+	private native int getService4(ServiceID id, Inet4Address addr);
+	private native int removeService4(ServiceID id, Inet4Address addr);
+	private native int registerService4(ServiceID id, Inet4Address oldAddr);
+	private native int unregisterService4(ServiceID id);
 	
 	/**
 	 * Returns the transaction ID of the last sent request.
 	 */
 	private native long getXid();
 	
-	public int addService(ServiceID id, int prefixBits, int priority, int weight, InetAddress addr) {
+	public int addService(ServiceID id, int priority, int weight, InetAddress addr) {
 		if (!(addr instanceof Inet4Address)) {
 			return -1;
 		}
-		if (prefixBits < 0 || prefixBits > 256)
-			prefixBits = 0;
-		return addService4(id, prefixBits, priority, weight, (Inet4Address)addr);
+		return addService4(id, priority, weight, (Inet4Address)addr);
 	}
 	
 	public int addService(ServiceID id, InetAddress addr) {
-		return addService(id, 0, 1, 1, addr);
+		return addService(id, 1, 1, addr);
 	}
 	
-	public int getService(ServiceID id, int prefixBits, InetAddress addr)
-	{
+	public int getService(ServiceID id, InetAddress addr) {
 		if (addr != null && !(addr instanceof Inet4Address)) {
 			return -1;
 		}
-		if (prefixBits < 0 || prefixBits > 256)
-			prefixBits = 0;
-		return getService4(id, prefixBits, (Inet4Address)addr);
-	}
-	
-	public int getService(ServiceID id, InetAddress addr)
-	{
-			return getService(id, addr);
-	}
-	
-	public int removeService(ServiceID id, int prefixBits, InetAddress addr) {
-		if (!(addr instanceof Inet4Address)) {
-			return -1;
-		}
-		if (prefixBits < 0 || prefixBits > 256)
-			prefixBits = 0;
-		return removeService4(id, prefixBits, (Inet4Address)addr);
+		return getService4(id, (Inet4Address)addr);
 	}
 	
 	public int removeService(ServiceID id, InetAddress addr) {
-		return removeService(id, 0, addr);
+		if (!(addr instanceof Inet4Address)) {
+			return -1;
+		}
+		return removeService4(id, (Inet4Address)addr);
 	}
 	
 	public synchronized void dispose()

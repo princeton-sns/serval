@@ -239,8 +239,6 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
     
     obj = (*env)->NewObject(env, serviceinfo_cls, mid, 
                             service_id,
-                            (jint)si->srvid_prefix_bits, 
-                            (jint)si->srvid_flags,
                             addr,
                             (jlong)si->if_index, 
                             (jlong)si->priority,
@@ -271,8 +269,6 @@ static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat
 
     obj = (*env)->NewObject(env, serviceinfostat_cls, mid, 
                             service_id,
-                            (jint)si->srvid_prefix_bits, 
-                            (jint)si->srvid_flags,
                             addr,
                             (jlong)si->if_index, 
                             (jlong)si->priority, 
@@ -296,7 +292,6 @@ static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat
 static int on_service_registration(struct hostctrl *hc,
                                    const struct service_id *srvid,
                                    unsigned short flags,
-                                   unsigned short prefix,
                                    const struct in_addr *ip,
                                    const struct in_addr *old_ip)
 {
@@ -307,7 +302,7 @@ static int on_service_registration(struct hostctrl *hc,
     jthrowable exc;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRegistration", 
-                              "(Lorg/servalarch/net/ServiceID;IILjava/net/InetAddress;Ljava/net/InetAddress;)V");
+                              "(Lorg/servalarch/net/ServiceID;ILjava/net/InetAddress;Ljava/net/InetAddress;)V");
 
     if (!mid) {
         LOG_ERR("could not find mid\n");
@@ -337,8 +332,8 @@ static int on_service_registration(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
-                           (jint)prefix, addr, old_addr);
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, 
+                           (jint)flags, addr, old_addr);
 
     exc = (*env)->ExceptionOccurred(env);
     
@@ -360,7 +355,6 @@ err_addr:
 static int on_service_unregistration(struct hostctrl *hc,
                                      const struct service_id *srvid,
                                      unsigned short flags,
-                                     unsigned short prefix,
                                      const struct in_addr *ip)
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
@@ -370,7 +364,7 @@ static int on_service_unregistration(struct hostctrl *hc,
     jthrowable exc;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceUnregistration", 
-                              "(Lorg/servalarch/net/ServiceID;IILjava/net/InetAddress;)V");
+                              "(Lorg/servalarch/net/ServiceID;ILjava/net/InetAddress;)V");
 
     if (!mid)
         return -1;
@@ -385,8 +379,8 @@ static int on_service_unregistration(struct hostctrl *hc,
     if (!addr)
         goto err_addr;
    
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
-                           (jint)prefix, addr);
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, 
+                           service_id, (jint)flags, addr);
     
     exc = (*env)->ExceptionOccurred(env);
     
@@ -718,25 +712,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface(JNIEnv *en
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, jobject obj, 
-                                                                 jobject service_id, jint prefix_bits, 
-                                                                 jint priority, jint weight, jobject addr)
-{
-    struct jni_context *ctx = get_native_context(env, obj);
-    struct service_id srvid;
-    struct in_addr ipaddr;
-
-    if (fill_in_service_id(env, service_id, &srvid) == -1)
-        return -1;
-    
-    if (fill_in_addr(env, addr, &ipaddr) == -1)
-        return -1;
-
-    return hostctrl_service_add(ctx->hc, &srvid, (unsigned short)prefix_bits, 
-                                (unsigned int)priority, (unsigned int)weight, &ipaddr);
-}
-
-jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jobject obj, 
-                                                                 jobject service_id, jint prefix_bits, 
+                                                                 jobject service_id,
+                                                                 jint priority, jint weight, 
                                                                  jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -749,11 +726,30 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jo
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
 
-    return hostctrl_service_get(ctx->hc, &srvid, (unsigned short)prefix_bits, &ipaddr);
+    return hostctrl_service_add(ctx->hc, &srvid,
+                                (unsigned int)priority, 
+                                (unsigned int)weight, &ipaddr);
+}
+
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jobject obj, 
+                                                                 jobject service_id, 
+                                                                 jobject addr)
+{
+    struct jni_context *ctx = get_native_context(env, obj);
+    struct service_id srvid;
+    struct in_addr ipaddr;
+
+    if (fill_in_service_id(env, service_id, &srvid) == -1)
+        return -1;
+    
+    if (fill_in_addr(env, addr, &ipaddr) == -1)
+        return -1;
+
+    return hostctrl_service_get(ctx->hc, &srvid, &ipaddr);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4(JNIEnv *env, jobject obj, 
-                                                                    jobject service_id, jint prefix_bits, 
+                                                                    jobject service_id,
                                                                     jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -766,11 +762,11 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4(JNIEnv *env,
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
 
-    return hostctrl_service_remove(ctx->hc, &srvid, (unsigned short)prefix_bits, &ipaddr);
+    return hostctrl_service_remove(ctx->hc, &srvid, &ipaddr);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4(JNIEnv *env, jobject obj, 
-                                                                      jobject service_id, jint prefix_bits, 
+                                                                      jobject service_id,
                                                                       jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -783,11 +779,11 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4(JNIEnv *en
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
 
-    return hostctrl_service_register(ctx->hc, &srvid, (unsigned short)prefix_bits, &ipaddr);
+    return hostctrl_service_register(ctx->hc, &srvid, &ipaddr);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4(JNIEnv *env, jobject obj, 
-                                                                        jobject service_id, jint prefix_bits)
+                                                                        jobject service_id)                      
 {
     struct jni_context *ctx = get_native_context(env, obj);
     struct service_id srvid;
@@ -795,7 +791,7 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4(JNIEnv *
     if (fill_in_service_id(env, service_id, &srvid) == -1)
         return -1;
     
-    return hostctrl_service_unregister(ctx->hc, &srvid, (unsigned short)prefix_bits);
+    return hostctrl_service_unregister(ctx->hc, &srvid);
 }
 
 jlong JNICALL Java_org_servalarch_servalctrl_HostCtrl_getXid(JNIEnv *env, jobject obj)

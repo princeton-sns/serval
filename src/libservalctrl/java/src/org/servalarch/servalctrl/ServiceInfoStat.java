@@ -11,13 +11,14 @@ public class ServiceInfoStat extends ServiceInfo {
 	long bytesResolved;
 	long bytesDropped;
 	long tokensConsumed;
-	
-	public ServiceInfoStat(ServiceID id, short prefixBits, short flags,
-			InetAddress addr, long ifindex, long priority, long weight,
-			long idleTimeout, long hardTimeout, long durationSec, long durationNsec, 
-			long packetsResolved, long bytesResolved, long bytesDropped, long tokensConsumed) {
-		super(id, prefixBits, flags, addr, ifindex, priority, weight, idleTimeout,
-				hardTimeout);
+        short flags;
+
+	public ServiceInfoStat(ServiceID id, short flags,
+			       InetAddress addr, long ifindex, long priority, long weight,
+			       long idleTimeout, long hardTimeout, long durationSec, long durationNsec, 
+			       long packetsResolved, long bytesResolved, long bytesDropped, long tokensConsumed) {
+	        super(id, flags, addr, ifindex, priority, weight, idleTimeout,
+		      hardTimeout);
 		this.durationSec = durationSec;
 		this.durationNsec = durationNsec;
 		this.packetsResolved = packetsResolved;
