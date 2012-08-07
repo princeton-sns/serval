@@ -8,6 +8,8 @@
 	    android:id="@+id/header"
 	    android:layout_width="fill_parent"
 	    android:layout_height="wrap_content"
+	    android:layout_marginTop="6dp"
+	    android:layout_marginBottom="6dp"
 	    android:padding="6dp"
 	    android:orientation="horizontal"
 	    android:weightSum="1"
@@ -18,7 +20,7 @@
 	        android:layout_height="wrap_content"
 	        android:layout_weight=".5"
 	        android:singleLine="true"
-	        android:text="Module: UNLOADED"/>
+	        android:text="@string/module_unloaded"/>
 	    <Button 
 	        android:id="@+id/udpEncapToggle"
 	        android:layout_width="0dp"

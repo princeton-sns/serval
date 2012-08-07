@@ -24,7 +24,6 @@
                 android:layout_alignParentRight="true"
                 android:layout_centerVertical="true"
                 android:layout_marginRight="30dp"
-                android:text="@string/translator_toggle"
                 android:textOff="Off"
                 android:textOn="Running" />
 

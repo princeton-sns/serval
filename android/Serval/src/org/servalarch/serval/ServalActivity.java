@@ -75,15 +75,20 @@ public class ServalActivity extends FragmentActivity {
 				boolean addPersistent = !isLoaded;
 				String cmd;
 
-				if (moduleStatusButton.isSelected()) {
-					if (isLoaded)
+				if (!moduleStatusButton.isSelected()) {
+					if (isLoaded) {
+						setModuleLoaded(isLoaded);
 						return;
+					}
 
 					cmd = "insmod " + module.getAbsolutePath();
 					
-				} else {
-					if (!isLoaded)
+				} 
+				else {
+					if (!isLoaded) {
+						setModuleLoaded(isLoaded);
 						return;
+					}
 					cmd = "rmmod serval";
 					
 
@@ -97,12 +102,12 @@ public class ServalActivity extends FragmentActivity {
 				}
 
 				if (!isServalModuleLoaded()) {
-					moduleStatusButton.setSelected(false);
-					udpEncapButton.setSelected(false);
+					setModuleLoaded(false);
+					setUdpEncap(false);
 				} 
 				else {
-					moduleStatusButton.setPressed(true);
-
+					setModuleLoaded(true);
+					
 					AppHostCtrl.init(cbs);
 					/* insert persistent rules */
 					if (addPersistent) {
@@ -126,12 +131,11 @@ public class ServalActivity extends FragmentActivity {
 				String cmd;
 				
 				if (!isServalModuleLoaded()) {
-					if (udpEncapButton.isSelected())
-						udpEncapButton.setSelected(false);
+					setUdpEncap(false);
 					return;
 				}
 				
-				if (udpEncapButton.isSelected())
+				if (!udpEncapButton.isSelected())
 					 cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
 				else
 					 cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
@@ -141,7 +145,7 @@ public class ServalActivity extends FragmentActivity {
 							Toast.LENGTH_SHORT);
 					t.show();
 				}
-				udpEncapButton.setSelected(isUdpEncapEnabled());
+				setUdpEncap(isUdpEncapEnabled());
 			}
 		});
 	}
@@ -250,6 +254,19 @@ public class ServalActivity extends FragmentActivity {
 		}
 		return false;
 	}
+	
+	public void setModuleLoaded(boolean loaded) {
+		String text = getString(loaded ? R.string.module_loaded : 
+										 R.string.module_unloaded);
+		moduleStatusButton.setSelected(loaded);
+		moduleStatusButton.setText(text);
+	}
+	
+	public void setUdpEncap(boolean on) {
+		String text = getString(on ? R.string.udp_on : R.string.udp_off);
+		udpEncapButton.setSelected(on);
+		udpEncapButton.setText(text);
+	}
 
 	@Override
 	public void onBackPressed() {
@@ -322,8 +339,8 @@ public class ServalActivity extends FragmentActivity {
 			Log.d("Serval", "Could not extract kernel module");
 		}
 
-		moduleStatusButton.setSelected(isServalModuleLoaded());
-		udpEncapButton.setSelected(isUdpEncapEnabled());
+		setModuleLoaded(isServalModuleLoaded());
+		setUdpEncap(isUdpEncapEnabled());
 
 		AppHostCtrl.init(cbs);
 	}

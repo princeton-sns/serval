@@ -33,8 +33,7 @@ import android.widget.Toast;
 import android.widget.ToggleButton;
 
 public class ServalFragment extends Fragment {
-	private ToggleButton moduleStatusButton;
-	private ToggleButton udpEncapButton;
+
 	private Button addServiceButton, removeServiceButton;
 	private EditText editServiceText, editIpText;
 	private File module = null;
@@ -72,91 +71,7 @@ public class ServalFragment extends Fragment {
 				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
 						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
 			}
-		});
-		
-		this.moduleStatusButton = (ToggleButton) view.findViewById(R.id.moduleStatusToggle);
-		this.moduleStatusButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
-				boolean isLoaded = isServalModuleLoaded();
-				boolean addPersistent = !isLoaded;
-				String cmd;
-
-				if (isChecked) {
-					if (isLoaded)
-						return;
-
-					cmd = "insmod " + module.getAbsolutePath();
-					
-				} else {
-					if (!isLoaded)
-						return;
-					cmd = "rmmod serval";
-					
-
-					AppHostCtrl.fini();					
-				}
-
-				if (!executeSuCommand(cmd)) {
-					Toast t = Toast.makeText(getApplicationContext(), cmd + " failed!", 
-							Toast.LENGTH_SHORT);
-					t.show();
-				}
-
-				if (!isServalModuleLoaded()) {
-					if (isChecked)
-						moduleStatusButton.setChecked(false);
-					if (udpEncapButton.isChecked())
-						udpEncapButton.setChecked(false);
-				} else if (isServalModuleLoaded()) {
-					if (!isChecked)
-						moduleStatusButton.setChecked(true);
-
-					AppHostCtrl.init(cbs);
-					/* insert persistent rules */
-					if (addPersistent) {
-						Map<String, ?> idMap = prefs.getAll();
-		        		for (String srvID : idMap.keySet()) {
-		        			if (!(idMap.get(srvID) instanceof String))
-		        				continue;
-		        			String addr = (String) idMap.get(srvID);
-		        			AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
-		        		}
-					}
-				}
-			}
-		});
-		
-		this.udpEncapButton = (ToggleButton) view.findViewById(R.id.udpEncapToggle);
-		this.udpEncapButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
-				String cmd;
-				
-				if (!isServalModuleLoaded()) {
-					if (isChecked)
-						buttonView.setChecked(false);
-					return;
-				}
-				
-				if (isChecked)
-					 cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
-				else
-					 cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
-
-				if (!executeSuCommand(cmd)) {
-					Toast t = Toast.makeText(getApplicationContext(), cmd + " failed!", 
-							Toast.LENGTH_SHORT);
-					t.show();
-				}
-				if (!isUdpEncapEnabled() && isChecked)
-					udpEncapButton.setChecked(false);
-				else if (isUdpEncapEnabled() && !isChecked)
-					udpEncapButton.setChecked(true);
-			}
-		});
+		});		
 		
 		return view;
 	}
