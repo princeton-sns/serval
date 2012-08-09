@@ -180,11 +180,8 @@ public class TranslatorService extends Service {
 		
 		// The PendingIntent to launch the Serval activity if the
 		// user selects this notification
-		//Intent status = new Intent(this, ServalActivity.class);
-		//PendingIntent contentIntent = PendingIntent.getActivity(this, 0, status, 0);
-		
-		// Do not show anything when notification is clicked
-		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, null, 0);
+		Intent status = new Intent(this, ServalActivity.class);
+		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, status, 0);
 		
 		// Set the info for the views that show in the
 		// notification panel.
