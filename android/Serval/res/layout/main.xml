@@ -19,6 +19,9 @@
 	        android:layout_width="0dp"
 	        android:layout_height="wrap_content"
 	        android:layout_weight=".5"
+	        android:layout_marginLeft="8dp"
+	        android:layout_marginRight="8dp"
+	        android:background="@drawable/button"
 	        android:singleLine="true"
 	        android:text="@string/module_unloaded"/>
 	    <Button 
@@ -26,8 +29,11 @@
 	        android:layout_width="0dp"
 	        android:layout_height="wrap_content"
 	        android:layout_weight=".5"
+	        android:layout_marginLeft="8dp"
+	        android:layout_marginRight="8dp"
+	        android:background="@drawable/button"
 	        android:singleLine="true"
-	        android:text="UDP Encap: OFF"/>
+	        android:text="@string/udp_off" />
 	</LinearLayout>
 	<android.support.v4.view.ViewPager
 	    android:id="@+id/pager"

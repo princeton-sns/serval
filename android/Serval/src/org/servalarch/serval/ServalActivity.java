@@ -30,19 +30,21 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
 public class ServalActivity extends FragmentActivity {
 
+	private static final int DEFAULT_IDX = 2;
+
 	private Button moduleStatusButton;
 	private Button udpEncapButton;
-	private EditText editServiceText, editIpText;
 	private File module = null;
 	
 	private SharedPreferences prefs;
 	private PagerAdapter pagerAdapter;
+
+	private ServalFragment servalFrag;
 	
 	/** Called when the activity is first created. */
 	@Override
@@ -52,11 +54,15 @@ public class ServalActivity extends FragmentActivity {
 		prefs = getSharedPreferences("serval", 0);
 		setContentView(R.layout.main);
 		List<Fragment> fragments = new Vector<Fragment>();
-		fragments.add(Fragment.instantiate(this, ServalFragment.class.getName()));
+		fragments.add(Fragment.instantiate(this, FlowTableFragment.class.getName()));
+		fragments.add(Fragment.instantiate(this, ServiceTableFragment.class.getName()));
+		servalFrag = (ServalFragment) Fragment.instantiate(this, ServalFragment.class.getName());
+		fragments.add(servalFrag);
 		fragments.add(Fragment.instantiate(this, TranslatorFragment.class.getName()));
 		this.pagerAdapter = new PagerAdapter(super.getSupportFragmentManager(), fragments);
 		ViewPager pager = (ViewPager) super.findViewById(R.id.pager);
 		pager.setAdapter(this.pagerAdapter);
+		pager.setCurrentItem(DEFAULT_IDX);
 
 		File filesDir = getExternalFilesDir(null);
 		try {
@@ -284,8 +290,8 @@ public class ServalActivity extends FragmentActivity {
 						msg = "Added service";
 						if (((ToggleButton) findViewById(R.id.servicePerm)).isChecked()) {
 							Log.d("Serval", "Saving rule...");
-							prefs.edit().putString(editServiceText.getText().toString(), 
-									editIpText.getText().toString()).commit();
+							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 
+									servalFrag.editIpText.getText().toString()).commit();
 						}
 					}
 					else
@@ -307,7 +313,7 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) { 
 						msg = "Removed service";
-						prefs.edit().remove(editServiceText.getText().toString()).commit();
+						prefs.edit().remove(servalFrag.editServiceText.getText().toString()).commit();
 					}
 					else
 						msg = "Remove service failed retval=" + retval + " " + getRetvalString(retval);

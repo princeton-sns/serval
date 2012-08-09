@@ -12,8 +12,10 @@
     <string name="trans_all_label">Translate ALL TCP traffic:</string>
     <string name="iperf_label">Run iperf: </string>
     <string-array name="pager_titles">
-        <item >General</item>
+        <item>Flow Table</item><item>Service Table</item><item >General</item>
         <item >Translator</item>
+        
+        
     </string-array>
     <string name="module_loaded">Module: LOADED</string>
     <string name="module_unloaded">Module: UNLOADED</string>
@@ -21,4 +23,6 @@
     <string name="udp_off">UDP Encap: OFF</string>
     <string name="label_service_id">ServiceID: </string>
     <string name="label_persists">Persists: </string>
+    <string name="no_service_table">No service table found.</string>
+    <string name="no_flow_table">No flow table found.</string>
 </resources>
