@@ -5,10 +5,9 @@ import java.net.UnknownHostException;
 
 import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrl;
-
+import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.LocalHostCtrl;
-import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 
 import android.content.Context;
 import android.util.Log;

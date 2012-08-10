@@ -253,7 +253,7 @@ static inline const char *serval_ntop(const void *src, char *dst, size_t len)
  * Converts a string in presentation format to a binary service
  * ID. Equivalent to inet_pton().
  */
-static inline const int serval_pton(const char *src, void *dst)
+static inline int serval_pton(const char *src, void *dst)
 {
         return serval_hexton(src, 64, dst, sizeof(struct service_id));
 }
