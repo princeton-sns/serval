@@ -2,7 +2,7 @@
 #include <sys/linux-syscalls.h>
 
 #define __NR_splice (__NR_SYSCALL_BASE + 340)
-	
+
 	.text
 	.type sys_splice, #function
 	.globl sys_splice
@@ -19,5 +19,5 @@ sys_splice:
 	ldmfd   sp!, {r4, r5, r6, r7}
 	movs    r0, r0
 	bxpl    lr
-	b       __set_syscall_errno
+	b       __translator_set_syscall_errno
 	.fnend

@@ -44,6 +44,13 @@
             message="sdk.dir is missing. Make sure to generate local.properties using 'android update project' or to inject it through an env var"
             unless="sdk.dir"
     />
+      <fail message="The Android support library is not installed. Please install it using the Android SDK manager. It is found under the 'Extras' section.">
+	<condition>
+	  <not>
+	    <available file="${sdk.dir}/extras/android/support/v4/android-support-v4.jar"/>
+	  </not>
+	</condition>
+      </fail>
 
 <!-- extension targets. Uncomment the ones where you want to do custom work
      in between standard targets -->
@@ -52,6 +59,7 @@
       <copy file="../../src/stack/serval.ko" todir="assets" overwrite="yes" failonerror="no"/>
       <copy file="../../src/javasock/org.servalarch.javasock.jar" todir="libs" overwrite="yes" failonerror="no"/>
       <copy file="../../src/libservalctrl/java/org.servalarch.servalctrl.jar" todir="libs" overwrite="yes" failonerror="no"/>
+      <copy file="${sdk.dir}/extras/android/support/v4/android-support-v4.jar" todir="libs" overwrite="yes" failonerror="no"/>
       
       <fail message="Kernel module missing in assets directory. Make sure you compile the kernel module for your Android device and leave it under ./src/stack in the source tree.">
 	<condition>
@@ -73,6 +81,14 @@
 	<condition>
 	  <not>
 	    <available file="libs/org.servalarch.servalctrl.jar"/>
+	  </not>
+	</condition>
+      </fail>
+
+      <fail message="Could not find the Android support library (android-support-v4.jar). Please make sure it is available under 'libs/'.">
+	<condition>
+	  <not>
+	    <available file="libs/android-support-v4.jar"/>
 	  </not>
 	</condition>
       </fail>
