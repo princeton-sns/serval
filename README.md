@@ -59,7 +59,7 @@ Directory structure
 >test programs for the stack.
 
 **src/translator**
->daemon that translates between PF_INET and PF_SERVAL TCP socket.
+>daemon that translates between PF\_INET and PF\_SERVAL TCP socket.
 
 **src/tools**
 >tools for controlling the Serval stack.
