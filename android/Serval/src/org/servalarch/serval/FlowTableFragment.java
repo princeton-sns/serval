@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -44,7 +45,12 @@ public class FlowTableFragment extends Fragment {
 		@Override
 		public void run() {
 			while(running) {
-				getActivity().runOnUiThread(new Runnable() {
+				Activity a = getActivity();
+				if (a == null) {
+					running = false;
+					break;
+				}
+				a.runOnUiThread(new Runnable() {
 					public void run() {
 						flowTable.setText(getTable());
 					}
@@ -70,6 +76,7 @@ public class FlowTableFragment extends Fragment {
 					while ((line = in.readLine()) != null) {
 						builder.append(line + "\n");
 					}
+					in.close();
 				} catch (Exception e) {
 					return getString(R.string.no_flow_table);
 				}

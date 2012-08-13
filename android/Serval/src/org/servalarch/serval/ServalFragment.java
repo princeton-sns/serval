@@ -9,11 +9,13 @@ import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ToggleButton;
 
 public class ServalFragment extends Fragment {
 
 	private Button addServiceButton, removeServiceButton;
 	EditText editServiceText, editIpText;
+	ToggleButton servicePerm;
 	private View view;
 	
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
@@ -40,6 +42,7 @@ public class ServalFragment extends Fragment {
 						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
 			}
 		});		
+		servicePerm = (ToggleButton) view.findViewById(R.id.servicePerm);
 		
 		return view;
 	}
