@@ -33,38 +33,51 @@ make
 
 Directory structure
 -------------------
-include/		headers that are shared between components under src/.
+**include/**			
+>headers that are shared between components under src/.
 
-src/			source code.
+**src/**			
+>source code.
 
-src/common/ 		library with 'common' functionality.
+**src/common/** 		
+>library with 'common' functionality.
 
-src/stack/		stack code.
+**src/stack/**		
+>stack code.
 
-src/stack/linux/	stack code specific for the linux kernel.
+**src/stack/linux/**		
+>stack code specific for the linux kernel.
 
-src/stack/userlevel/	stack code specific for user level.
+**src/stack/userlevel/**	
+>stack code specific for user level.
 
+**src/servd/**		
+>user space control daemon for the stack that takes local service
+>registrations and passes them to a controller in the network. 
 
-src/servd/		user space control daemon for the stack that takes local service
-			registrations and passes them to a controller in the network. 
+**src/test/**	
+>test programs for the stack.
 
-src/test/		test programs for the stack.
+**src/translator**
+>daemon that translates between PF_INET and PF_SERVAL TCP socket.
 
-src/translator          daemon that translates between PF_INET and PF_SERVAL TCP socket.
+**src/tools**
+>tools for controlling the Serval stack.
 
-src/tools               tools for controlling the Serval stack.
+**src/libservalctrl/**
+>library for communicating with and controlling Serval stacks, 
+>either locally or remotely.
 
-src/libservalctrl/      library for communicating with and controlling Serval stacks, 
-			either locally or remotely.
+**src/libserval/**
+>socket API abstraction for client applications interacting 
+>with the user-level version of the stack.
 
-src/libserval/		socket API abstraction for client applications interacting 
-			with the user-level version of the stack.
+**src/javasock/**
+>Java bindings that make it possible to write Serval 
+>applications in Java.
 
-src/javasock/		Java bindings that make it possible to write Serval 
-			applications in Java.
-
-android/		Android-specific files and applications.
+**android/**
+>Android-specific files and applications.
 	
 Cross-compile Linux kernel module
 ---------------------------------
