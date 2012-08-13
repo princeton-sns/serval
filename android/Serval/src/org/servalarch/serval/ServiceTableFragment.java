@@ -3,10 +3,9 @@ package org.servalarch.serval;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.io.InputStreamReader;
 
+import android.app.Activity;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
 import android.view.LayoutInflater;
@@ -44,7 +43,12 @@ public class ServiceTableFragment extends Fragment {
 		@Override
 		public void run() {
 			while(running) {
-				getActivity().runOnUiThread(new Runnable() {
+				Activity a = getActivity();
+				if (a == null) {
+					running = false;
+					break;
+				}
+				a.runOnUiThread(new Runnable() {
 					public void run() {
 						serviceTable.setText(getTable());
 					}

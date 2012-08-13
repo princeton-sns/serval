@@ -33,6 +33,7 @@ import android.widget.Button;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
+
 public class ServalActivity extends FragmentActivity {
 
 	private static final int DEFAULT_IDX = 2;
@@ -154,8 +155,9 @@ public class ServalActivity extends FragmentActivity {
 				setUdpEncap(isUdpEncapEnabled());
 			}
 		});
+		
 	}
-	
+		
 	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
@@ -288,7 +290,7 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						if (((ToggleButton) findViewById(R.id.servicePerm)).isChecked()) {
+						if (servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
 							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 
 									servalFrag.editIpText.getText().toString()).commit();
