@@ -1,6 +1,7 @@
 ACLOCAL_AMFLAGS =-I m4
 
 SUBDIRS = src android
+dist_doc_DATA = README.md
 
 stags:
 	@cd $(top_srcdir);
