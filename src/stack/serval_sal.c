@@ -3051,11 +3051,17 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         /* Push back to IP header */
                         skb_push(cskb, iph_len);
 
-                        if (serval_ipv4_forward_out(cskb)) {
+                        err = serval_ipv4_forward_out(cskb);
+
+                        if (err) {
                                 /* serval_ipv4_forward_out has taken
                                    custody of packet, no need to
                                    free. */
-                                LOG_ERR("Forwarding failed\n");
+                                LOG_ERR("Forwarding failed err=%d\n", err);
+                                
+                                /* Ignore failure as we'd like to try
+                                 * the next resolved dest. */
+                                err = 0;
                         } else 
                                 num_forward++;
                 }
