@@ -1,18 +1,19 @@
 package org.servalarch.serval;
 
-import android.app.Service;
-import android.app.NotificationManager;
+import java.util.ArrayList;
+
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
 import android.os.Message;
-import android.os.Handler;
 import android.os.Messenger;
 import android.os.RemoteException;
 import android.util.Log;
-import java.util.ArrayList;
 
 public class TranslatorService extends Service {
 	static {
@@ -179,16 +180,14 @@ public class TranslatorService extends Service {
 		
 		// The PendingIntent to launch the Serval activity if the
 		// user selects this notification
-		//Intent status = new Intent(this, ServalActivity.class);
-		//PendingIntent contentIntent = PendingIntent.getActivity(this, 0, status, 0);
-		
-		// Do not show anything when notification is clicked
-		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, null, 0);
+		Intent status = new Intent(this, ServalActivity.class);
+		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, status, 0);
 		
 		// Set the info for the views that show in the
 		// notification panel.
 		notification.setLatestEventInfo(this, getText(R.string.translator_service_label),
 						text, contentIntent);
+		notification.flags |= Notification.FLAG_ONGOING_EVENT;
 		
 		mNM.notify(R.string.translator_service_started, notification);
 	}

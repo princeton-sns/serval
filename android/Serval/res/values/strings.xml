@@ -1,16 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Serval</string>
-    <string name="module_status_label">Module status:</string>
-    <string name="service_input_label">Add or remove serviceID:</string>
+    <string name="service_input_label">Add or Remove ServiceID</string>
     <string name="add_service_button">Add</string>
     <string name="remove_service_button">Remove</string>
-    <string name="load_module_toggle">Load/Unload module</string>
-    <string name="ip_label">IP:</string>
-    <string name="udp_encap_toggle">UDP encapsulation</string>
-    <string name="udp_encap_label">UDP encapsulation:</string>
-    <string name="translator_label">Translator:</string>
-    <string name="translator_toggle">Translator on/off</string>
+    <string name="label_ip">IP: </string>
+    <string name="translator_label">Translator status:</string>
     <string name="translator_service_started">Serval translator started</string>
     <string name="translator_service_label">Serval translator</string>
+    <string name="http_label">Translate HTTP/HTTPS:</string>
+    <string name="trans_all_label">Translate ALL TCP traffic:</string>
+    <string name="iperf_label">Run iperf: </string>
+    <string-array name="pager_titles">
+        <item>Flow Table</item><item>Service Table</item><item >General</item>
+        <item >Translator</item>
+        
+        
+    </string-array>
+    <string name="module_loaded">Module: LOADED</string>
+    <string name="module_unloaded">Module: UNLOADED</string>
+    <string name="udp_on">UDP Encap: ON</string>
+    <string name="udp_off">UDP Encap: OFF</string>
+    <string name="label_service_id">ServiceID: </string>
+    <string name="label_persists">Persists: </string>
+    <string name="no_service_table">No service table found.</string>
+    <string name="no_flow_table">No flow table found.</string>
 </resources>

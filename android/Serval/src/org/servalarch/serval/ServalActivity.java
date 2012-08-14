@@ -10,40 +10,42 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
 
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
-import android.app.Activity;
-import android.app.ActivityManager;
-import android.app.ActivityManager.RunningServiceInfo;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.support.v4.app.Fragment;
+import android.support.v4.app.FragmentActivity;
+import android.support.v4.app.FragmentManager;
+import android.support.v4.app.FragmentPagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.util.Log;
 import android.view.Gravity;
-import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
-import android.widget.CompoundButton;
-import android.widget.EditText;
-import android.widget.TextView;
-import android.widget.TextView.OnEditorActionListener;
 import android.widget.Toast;
 import android.widget.ToggleButton;
 
-public class ServalActivity extends Activity
-{
-	private ToggleButton moduleStatusButton;
-	private ToggleButton udpEncapButton;
-	private ToggleButton translatorButton;
-	private Button addServiceButton, removeServiceButton;
-	private EditText editServiceText, editIpText;
+
+public class ServalActivity extends FragmentActivity {
+
+	private static final int DEFAULT_IDX = 2;
+
+	private Button moduleStatusButton;
+	private Button udpEncapButton;
 	private File module = null;
 	
 	private SharedPreferences prefs;
+	private PagerAdapter pagerAdapter;
+
+	private ServalFragment servalFrag;
 	
 	/** Called when the activity is first created. */
 	@Override
@@ -52,6 +54,17 @@ public class ServalActivity extends Activity
 		super.onCreate(savedInstanceState);
 		prefs = getSharedPreferences("serval", 0);
 		setContentView(R.layout.main);
+		List<Fragment> fragments = new Vector<Fragment>();
+		fragments.add(Fragment.instantiate(this, FlowTableFragment.class.getName()));
+		fragments.add(Fragment.instantiate(this, ServiceTableFragment.class.getName()));
+		servalFrag = (ServalFragment) Fragment.instantiate(this, ServalFragment.class.getName());
+		fragments.add(servalFrag);
+		fragments.add(Fragment.instantiate(this, TranslatorFragment.class.getName()));
+		this.pagerAdapter = new PagerAdapter(super.getSupportFragmentManager(), fragments);
+		ViewPager pager = (ViewPager) super.findViewById(R.id.pager);
+		pager.setAdapter(this.pagerAdapter);
+		pager.setCurrentItem(DEFAULT_IDX);
+
 		File filesDir = getExternalFilesDir(null);
 		try {
 			filesDir.createNewFile();
@@ -60,55 +73,33 @@ public class ServalActivity extends Activity
 		}
 		module = new File(filesDir, "serval.ko");
 		
-		editServiceText = (EditText) findViewById(R.id.edit_service_field);
-		editIpText = (EditText) findViewById(R.id.ip_input_field);
-		editServiceText.setOnEditorActionListener(new OnEditorActionListener() {
-			@Override
-			public boolean onEditorAction(TextView v, int actionId,
-					KeyEvent event) {
-				
-				System.out.println("TextView text is " + v.getText());
-				return false;
-			}
+		this.moduleStatusButton = (Button) findViewById(R.id.moduleStatusToggle);
+		this.moduleStatusButton.setOnClickListener(new OnClickListener() {
 			
-		});
-		addServiceButton = (Button)findViewById(R.id.add_service_button);
-		addServiceButton.setOnClickListener(new OnClickListener() {
 			@Override
-			public void onClick(View arg0) {
-				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
-						editIpText.getText().toString(), AppHostCtrl.SERVICE_ADD);
-			}
-		});
-		removeServiceButton = (Button)findViewById(R.id.remove_service_button);
-		removeServiceButton.setOnClickListener(new OnClickListener() {
-			@Override
-			public void onClick(View arg0) {
-				AppHostCtrl.performOp(getApplicationContext(), editServiceText.getText().toString(), 
-						editIpText.getText().toString(), AppHostCtrl.SERVICE_REMOVE);
-			}
-		});
-		
-		this.moduleStatusButton = (ToggleButton) findViewById(R.id.moduleStatusToggle);
-		this.moduleStatusButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
+			public void onClick(View v) {
 				boolean isLoaded = isServalModuleLoaded();
+				boolean addPersistent = !isLoaded;
 				String cmd;
 
-				if (isChecked) {
-					if (isLoaded)
+				if (!moduleStatusButton.isSelected()) {
+					if (isLoaded) {
+						setModuleLoaded(isLoaded);
 						return;
+					}
 
 					cmd = "insmod " + module.getAbsolutePath();
-				} else {
-					if (!isLoaded)
+					
+				} 
+				else {
+					if (!isLoaded) {
+						setModuleLoaded(isLoaded);
 						return;
+					}
 					cmd = "rmmod serval";
 					
-					AppHostCtrl.fini();
-						
+
+					AppHostCtrl.fini();					
 				}
 
 				if (!executeSuCommand(cmd)) {
@@ -118,32 +109,40 @@ public class ServalActivity extends Activity
 				}
 
 				if (!isServalModuleLoaded()) {
-					if (isChecked)
-						moduleStatusButton.setChecked(false);
-					if (udpEncapButton.isChecked())
-						udpEncapButton.setChecked(false);
-				} else if (isServalModuleLoaded()) {
-					 if (!isChecked)
-						 moduleStatusButton.setChecked(true);
-					 AppHostCtrl.init(cbs);
+					setModuleLoaded(false);
+					setUdpEncap(false);
+				} 
+				else {
+					setModuleLoaded(true);
+					
+					AppHostCtrl.init(cbs);
+					/* insert persistent rules */
+					if (addPersistent) {
+						Map<String, ?> idMap = prefs.getAll();
+		        		for (String srvID : idMap.keySet()) {
+		        			if (!(idMap.get(srvID) instanceof String))
+		        				continue;
+		        			String addr = (String) idMap.get(srvID);
+		        			AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
+		        		}
+					}
 				}
 			}
+
 		});
 		
-		this.udpEncapButton = (ToggleButton) findViewById(R.id.udpEncapToggle);
-		this.udpEncapButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+		this.udpEncapButton = (Button) findViewById(R.id.udpEncapToggle);
+		this.udpEncapButton.setOnClickListener(new OnClickListener() {
 			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
+			public void onClick(View v) {
 				String cmd;
 				
 				if (!isServalModuleLoaded()) {
-					if (isChecked)
-						buttonView.setChecked(false);
+					setUdpEncap(false);
 					return;
 				}
 				
-				if (isChecked)
+				if (!udpEncapButton.isSelected())
 					 cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
 				else
 					 cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
@@ -153,40 +152,12 @@ public class ServalActivity extends Activity
 							Toast.LENGTH_SHORT);
 					t.show();
 				}
-				if (!isUdpEncapEnabled() && isChecked)
-					udpEncapButton.setChecked(false);
-				else if (isUdpEncapEnabled() && !isChecked)
-					udpEncapButton.setChecked(true);
+				setUdpEncap(isUdpEncapEnabled());
 			}
 		});
-		this.translatorButton = (ToggleButton) findViewById(R.id.translatorToggle);
-		this.translatorButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
-				if (isChecked) {
-					startService(new Intent(ServalActivity.this, TranslatorService.class));
-					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
-					executeSuCommand("iptables -t nat -A OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
-				} else {
-					stopService(new Intent(ServalActivity.this, TranslatorService.class));
-					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080");
-					executeSuCommand("iptables -t nat -D OUTPUT -p tcp --destination 0.0.0.0/0.0.0.0 --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080");
-				}
-			}
-		});
+		
 	}
-	
-	private boolean isTranslatorRunning() {
-	    ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-	    for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-	        if ("org.servalarch.serval.TranslatorService".equals(service.service.getClassName())) {
-	            return true;
-	        }
-	    }
-	    return false;
-	}
-	
+		
 	private boolean extractKernelModule(final File module) {
 		if (module.exists())
 			return true;
@@ -216,7 +187,7 @@ public class ServalActivity extends Activity
 		return false;
 	}
 
-	private boolean executeSuCommand(final String cmd) {
+	boolean executeSuCommand(final String cmd) {
 		try {
 			Process shell;
 			int err;
@@ -291,6 +262,19 @@ public class ServalActivity extends Activity
 		}
 		return false;
 	}
+	
+	public void setModuleLoaded(boolean loaded) {
+		String text = getString(loaded ? R.string.module_loaded : 
+										 R.string.module_unloaded);
+		moduleStatusButton.setSelected(loaded);
+		moduleStatusButton.setText(text);
+	}
+	
+	public void setUdpEncap(boolean on) {
+		String text = getString(on ? R.string.udp_on : R.string.udp_off);
+		udpEncapButton.setSelected(on);
+		udpEncapButton.setText(text);
+	}
 
 	@Override
 	public void onBackPressed() {
@@ -306,17 +290,17 @@ public class ServalActivity extends Activity
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						if (((ToggleButton) findViewById(R.id.servicePerm)).isChecked()) {
+						if (servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
-							prefs.edit().putString(editServiceText.getText().toString(), 
-									editIpText.getText().toString()).commit();
+							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 
+									servalFrag.editIpText.getText().toString()).commit();
 						}
 					}
 					else
 						msg = "Add service failed retval=" + retval + " " + getRetvalString(retval);
 					
 					Toast t = Toast.makeText(getApplicationContext(), msg, 
-							Toast.LENGTH_LONG);
+							Toast.LENGTH_SHORT);
 					t.setGravity(Gravity.CENTER, 0, 0);
 					t.show();
 				}
@@ -331,7 +315,7 @@ public class ServalActivity extends Activity
 					String msg;
 					if (retval == RETVAL_OK) { 
 						msg = "Removed service";
-						prefs.edit().remove(editServiceText.getText().toString()).commit();
+						prefs.edit().remove(servalFrag.editServiceText.getText().toString()).commit();
 					}
 					else
 						msg = "Remove service failed retval=" + retval + " " + getRetvalString(retval);
@@ -363,21 +347,9 @@ public class ServalActivity extends Activity
 			Log.d("Serval", "Could not extract kernel module");
 		}
 
-		if (isServalModuleLoaded())
-			moduleStatusButton.setChecked(true);
-		else
-			moduleStatusButton.setChecked(false);
-		
-		if (isUdpEncapEnabled())
-			udpEncapButton.setChecked(true);
-		else
-			udpEncapButton.setChecked(false);
-		
-		if (isTranslatorRunning())
-			translatorButton.setChecked(true);
-		else
-			translatorButton.setChecked(false);
-		
+		setModuleLoaded(isServalModuleLoaded());
+		setUdpEncap(isUdpEncapEnabled());
+
 		AppHostCtrl.init(cbs);
 	}
 	
@@ -392,5 +364,32 @@ public class ServalActivity extends Activity
 		super.onDestroy();
 		Log.d("Serval", "Destroying Serval host control");
 		AppHostCtrl.fini();
+	}
+	
+	private class PagerAdapter extends FragmentPagerAdapter {
+
+		private List<Fragment> fragments;
+		private String[] titles;
+
+		public PagerAdapter(FragmentManager fm, List<Fragment> fragments) {
+			super(fm);
+			this.fragments = fragments;
+			this.titles = ServalActivity.this.getResources().getStringArray(R.array.pager_titles);
+		}
+
+		@Override
+		public Fragment getItem(int position) {
+			return this.fragments.get(position);
+		}
+		
+		@Override
+		public CharSequence getPageTitle(int position) {
+			return titles[position];
+		}
+		
+		@Override
+		public int getCount() {
+			return this.fragments.size();
+		}
 	}
 }

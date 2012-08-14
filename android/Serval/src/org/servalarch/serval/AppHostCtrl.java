@@ -5,15 +5,16 @@ import java.net.UnknownHostException;
 
 import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrl;
+import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.LocalHostCtrl;
-import org.servalarch.servalctrl.HostCtrl.HostCtrlException;
 
 import android.content.Context;
 import android.util.Log;
 import android.widget.Toast;
 
 public class AppHostCtrl {
+
 	static final int SERVICE_ADD = 0;
 	static final int SERVICE_REMOVE = 1;
 	static HostCtrlCallbacks cbs = null;
@@ -44,14 +45,14 @@ public class AppHostCtrl {
 			cbs = null;
 		}
 	}
-	
+
 	static void performOp(Context context, final String serviceStr, final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr;
 		
 		if (hc == null)
 			return;
-		
+
 		sid = AppHostCtrl.createServiceID(serviceStr);
 		
 		if (sid == null) {

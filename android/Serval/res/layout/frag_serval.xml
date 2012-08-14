@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_gravity="center" >
+
+    <LinearLayout
+        xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:gravity="left|right"
+        android:padding="8dp"
+        android:orientation="vertical" >
+
+        <TextView
+            android:id="@+id/textView2"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/service_input_label"
+            android:textAppearance="?android:attr/textAppearanceMedium"
+            android:textStyle="bold" />
+
+        <RelativeLayout
+            android:id="@+id/add_remove_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+            <TextView
+                android:id="@+id/label_service_id"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@+id/edit_service_field"
+            	android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="@string/label_service_id" />
+        	<EditText
+            	android:id="@+id/edit_service_field"
+            	android:layout_width="match_parent"
+            	android:layout_height="wrap_content"
+            	android:layout_toRightOf="@id/label_service_id"
+            	android:layout_marginLeft="6dp"
+            	android:inputType="textNoSuggestions" />
+
+            <TextView
+                android:id="@+id/label_ip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignBaseline="@+id/ip_input_field"
+            	android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="@string/label_ip" />
+
+            <EditText
+                android:id="@+id/ip_input_field"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/edit_service_field"
+                android:layout_alignLeft="@id/edit_service_field"
+                android:digits="0123456789."
+                android:inputType="number" />
+            
+            <TextView
+                android:id="@+id/label_perma_rule"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignTop="@+id/servicePerm"
+                android:layout_alignBottom="@+id/servicePerm"
+                android:gravity="center_vertical"
+            	android:textAppearance="?android:attr/textAppearanceMedium"
+                android:text="@string/label_persists" />
+
+            <ToggleButton
+                android:id="@+id/servicePerm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignLeft="@id/edit_service_field"
+                android:layout_below="@+id/ip_input_field"
+                android:textOff="No"
+                android:textOn="Yes" />
+            
+            <LinearLayout
+                android:id="@+id/buttons_layout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/servicePerm"
+                android:layout_marginLeft="20dp"
+                android:layout_marginRight="20dp"
+                android:layout_marginTop="10dp"
+        		android:orientation="horizontal"
+	    		android:gravity="center">
+            	<Button
+                	android:id="@+id/add_service_button"
+                	android:layout_width="0dp"
+                	android:layout_height="wrap_content"
+                	android:layout_weight=".5"
+                	android:layout_marginRight="6dp"
+                	android:text="@string/add_service_button" />
+            	<Button
+                	android:id="@+id/remove_service_button"
+                	android:layout_width="0dp"
+                	android:layout_height="wrap_content"
+                	android:layout_weight=".5"
+                	android:layout_marginLeft="6dp"
+                	android:text="@string/remove_service_button" />
+            </LinearLayout>
+        </RelativeLayout>
+	</LinearLayout>
+</ScrollView>
