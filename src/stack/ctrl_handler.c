@@ -88,7 +88,6 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 }
 #endif
                 err = service_add(&entry->srvid, 
-                                  SERVICE_ID_BITS(&entry->srvid), 
                                   RULE_FORWARD,
                                   entry->flags,
                                   entry->priority, 
@@ -251,7 +250,6 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                         continue;
 
                 err = service_modify(&entry_old->srvid,
-                                     SERVICE_ID_BITS(&entry_old->srvid),
                                      RULE_FORWARD,
                                      entry_old->flags, 
                                      entry_new->priority, 

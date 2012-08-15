@@ -3,7 +3,7 @@ bin_PROGRAMS = serval
 serval_common_SRC = \
 	debug.c \
 	platform.c \
-	bst.c \
+	radixtree.c \
 	service.c \
 	ctrl_handler.c \
 	af_serval.c \
@@ -45,7 +45,7 @@ STACK_DIR=$(top_builddir)/src/stack
 SERVAL_HDR = \
 	af_serval.h \
 	ctrl.h \
-	bst.h \
+	radixtree.h \
 	input.h \
 	service.h \
 	serval_sock.h \

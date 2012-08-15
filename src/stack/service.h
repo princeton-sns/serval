@@ -8,7 +8,7 @@
 #include <serval/skbuff.h>
 #include <serval/dst.h>
 #include <serval/sock.h>
-#include "bst.h"
+#include "radixtree.h"
 
 #define LOCAL_SERVICE_DEFAULT_PRIORITY 32000
 #define LOCAL_SERVICE_DEFAULT_WEIGHT 1024
@@ -17,13 +17,15 @@
 #define BROADCAST_SERVICE_DEFAULT_WEIGHT 1
 
 struct service_id;
+struct service_table;
 
 /** 
     The service entry contains a list of sets of destinations.
     Each set contains destinations with the same priority.
 */
 struct service_entry {
-        struct bst_node *node;
+        struct service_table *tbl;
+        struct radix_node *node;
         struct list_head target_set;
         unsigned int count;
         atomic_t packets_resolved;
@@ -140,8 +142,6 @@ void service_get_stats(struct table_stats* tstats);
 
 struct net_device *service_entry_get_dev(struct service_entry *se,
                                          const char *ifname);
-int service_entry_remove_target_by_dev(struct service_entry *se,
-                                       const char *ifname);
 
 int service_entry_remove_target(struct service_entry *se,
                                 service_rule_type_t type,
@@ -188,27 +188,26 @@ int service_entry_target_fill(struct service_entry *se, void *dst,
                               int dstlen);
 
 int service_get_id(const struct service_entry *se, struct service_id *srvid);
-unsigned char service_get_prefix_bits(const struct service_entry *se);
 
-int service_add(struct service_id *srvid, uint16_t prefix_bits,
+int service_add(struct service_id *srvid,
                 service_rule_type_t type,
                 uint16_t flags, uint32_t priority, uint32_t weight,
 		const void *dst, int dstlen, const union target_out out, 
                 gfp_t alloc);
 
-int service_modify(struct service_id *srvid, uint16_t prefix_bits,
+int service_modify(struct service_id *srvid,
                    service_rule_type_t type, uint16_t flags, 
                    uint32_t priority, uint32_t weight,
                    const void *dst, int dstlen, 
                    const void *new_dst, int new_dstlen,
                    const union target_out out);
 
-void service_del(struct service_id *srvid, uint16_t prefix_bits);
+void service_del(struct service_id *srvid, gfp_t alloc);
 void service_del_target(struct service_id *srvid, 
-                        uint16_t prefix_bits,
                         service_rule_type_t type,
                         const void *dst, int dstlen, 
-                        struct target_stats *stats);
+                        struct target_stats *stats,
+                        gfp_t alloc);
 
 int service_del_target_all(service_rule_type_t type, 
                            const void *dst, int dstlen);

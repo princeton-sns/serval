@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /*
  * NET		Generic infrastructure for Network protocols.
  *
@@ -72,7 +73,7 @@ struct request_sock {
 
 static inline struct request_sock *reqsk_alloc(const struct request_sock_ops *ops)
 {
-	struct request_sock *req = ZALLOC(ops->obj_size, GFP_ATOMIC);
+	struct request_sock *req = kzalloc(ops->obj_size, GFP_ATOMIC);
 
 	if (req != NULL)
 		req->rsk_ops = ops;
@@ -82,7 +83,7 @@ static inline struct request_sock *reqsk_alloc(const struct request_sock_ops *op
 
 static inline void __reqsk_free(struct request_sock *req)
 {
-	FREE(req);
+        kfree(req);
 }
 
 static inline void reqsk_free(struct request_sock *req)

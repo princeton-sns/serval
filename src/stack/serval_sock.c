@@ -118,7 +118,7 @@ void __exit serval_table_fini(struct serval_table *table)
                 spin_unlock_bh(&table->hash[i].lock);           
 	}
 
-        FREE(table->hash);
+        kfree(table->hash);
 }
 
 /*
@@ -387,9 +387,9 @@ void serval_sock_hash(struct sock *sk)
                         sk, service_id_to_str(&ssk->local_srvid));
 
                 ssk->hash_key = &ssk->local_srvid;
-                ssk->hash_key_len = SERVICE_ID_BITS(&ssk->local_srvid);
+                ssk->hash_key_len = sizeof(ssk->local_srvid);
 
-                err = service_add(ssk->hash_key, ssk->hash_key_len, 
+                err = service_add(&ssk->local_srvid,
                                   RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
@@ -434,9 +434,9 @@ void serval_sock_unhash(struct sock *sk)
                 LOG_DBG("removing socket %p from service table\n", sk);
 
                 service_del_target(&ssk->local_srvid,
-                                   SERVICE_ID_BITS(&ssk->local_srvid),
                                    RULE_DEMUX,
-                                   NULL, 0, NULL);
+                                   NULL, 0, NULL,
+                                   GFP_ATOMIC);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);

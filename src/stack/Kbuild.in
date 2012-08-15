@@ -19,7 +19,7 @@ serval-y := \
 	   debug.o \
 	   platform.o \
 	   af_serval.o \
-	   bst.o \
+	   radixtree.o \
 	   service.o \
 	   ctrl_handler.o \
 	   serval_sock.o \

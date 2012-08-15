@@ -437,13 +437,14 @@ static int get_macaddr(const char *ifname, unsigned char mac[ETH_ALEN])
 int netdev_populate_table(int sizeof_priv, 
                           void (*setup)(struct net_device *))
 {
-        struct service_id default_service;
+        struct service_id default_service = { "*" };
         int fd, len = 0, ret = 0;
         struct ifconf ifc;
 	struct ifreq *ifr = NULL;
         char buff[8192];
 
-        memset(&default_service, 0, sizeof(default_service));
+        default_service.s_sid[0] = '*';
+        default_service.s_sid[1] = '\0';
 
         if (ret == -1) {
                 LOG_ERR("could not get interface list\n");
@@ -601,11 +602,12 @@ int netdev_populate_table(int sizeof_priv,
                                           broad, sizeof(broad)));
                 }
 #endif
-                service_add(&default_service, 0, RULE_FORWARD, 0, 
+                service_add(&default_service, RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
                             &dev->ipv4.broadcast, 
-                            sizeof(dev->ipv4.broadcast), make_target(dev), 0);
+                            sizeof(dev->ipv4.broadcast), make_target(dev), 
+                            GFP_KERNEL);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
