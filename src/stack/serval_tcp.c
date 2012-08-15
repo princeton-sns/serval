@@ -1513,6 +1513,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 	timeo = sock_rcvtimeo(sk, nonblock);
 
+        LOG_DBG("nonblock=%d timeo=%ld\n", nonblock, timeo);
+
 	/* Urgent data needs to be handled specially. */
 	if (flags & MSG_OOB)
 		goto recv_urg;
@@ -1540,7 +1542,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 		    dma_find_channel(DMA_MEMCPY)) {
 			preempt_enable_no_resched();
 			tp->ucopy.pinned_list =
-					dma_pin_iovec_pages(msg->msg_iov, len);
+                                dma_pin_iovec_pages(msg->msg_iov, len);
 		} else {
 			preempt_enable_no_resched();
 		}
@@ -1883,12 +1885,22 @@ skip_copy:
 	serval_tcp_cleanup_rbuf(sk, copied);
 
 	release_sock(sk);
-        LOG_DBG("copied=%d\n", copied);
+#if defined(ENABLE_DEBUG)
+        if (copied == -EAGAIN)
+                LOG_DBG("returning EAGAIN\n");
+        else
+                LOG_DBG("returning copied=%d\n", copied);
+#endif
 	return copied;
 
 out:
 	release_sock(sk);
-        LOG_DBG("err=%d\n", err);
+#if defined(ENABLE_DEBUG)
+        if (err == -EAGAIN)
+                LOG_DBG("error: returning EAGAIN\n");
+        else
+                LOG_DBG("err=%d\n", err);
+#endif
 	return err;
 
 recv_urg:

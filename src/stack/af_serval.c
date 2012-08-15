@@ -828,11 +828,14 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 	struct sock *sk = sock->sk;
 	unsigned int mask = 0;
 
+        LOG_DBG("Poll wait\n");
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,31))
 	sock_poll_wait(file, sk_sleep(sk), wait);
 #else
         poll_wait(file, sk->sk_sleep, wait);
 #endif
+
         if (sk->sk_state == SAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
@@ -873,6 +876,8 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 			}
 		}
 	}
+
+        LOG_DBG("poll returned %d\n", mask);
 
 	return mask;
 }
