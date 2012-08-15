@@ -228,10 +228,14 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
  * Check if we need to grow the arrays holding pages and partial page
  * descriptions.
  */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
-#define CONST
-#else
+
+/* Hotfix for detecting Ubuntu 12.04 kernel, which seems to have
+ * patches applied from later kernels */
+#if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
 #define CONST const
+#else
+#define CONST 
 #endif
                 
 int splice_grow_spd(CONST struct pipe_inode_info *pipe, struct splice_pipe_desc *spd)
@@ -250,21 +254,22 @@ int splice_grow_spd(CONST struct pipe_inode_info *pipe, struct splice_pipe_desc 
 	return -ENOMEM;
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
-void splice_shrink_spd(struct pipe_inode_info *pipe,
-                       struct splice_pipe_desc *spd)
+#if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
+void splice_shrink_spd(struct splice_pipe_desc *spd)
 {
-        if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
-		return;
+        if (spd->nr_pages_max <= PIPE_DEF_BUFFERS)
+                return;
         
 	kfree(spd->pages);
 	kfree(spd->partial);
 }
 #else
-void splice_shrink_spd(struct splice_pipe_desc *spd)
+void splice_shrink_spd(struct pipe_inode_info *pipe,
+                       struct splice_pipe_desc *spd)
 {
-        if (spd->nr_pages_max <= PIPE_DEF_BUFFERS)
-                return;
+        if (NUM_PIPE_BUFFERS(pipe) <= PIPE_DEF_BUFFERS)
+		return;
         
 	kfree(spd->pages);
 	kfree(spd->partial);
@@ -517,10 +522,12 @@ done:
 		ret = splice_to_pipe(pipe, &spd);
 		lock_sock(sk);
 	}
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,5))
-	splice_shrink_spd(pipe, &spd);
+
+#if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
+        splice_shrink_spd(&spd);
 #else
-	splice_shrink_spd(&spd);
+	splice_shrink_spd(pipe, &spd);
 #endif
 	return ret;
 }
