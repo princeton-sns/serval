@@ -1416,9 +1416,9 @@ enum source_ext_res serval_sal_source_ext_check(struct sk_buff *skb,
    Add source extension to SAL header. If one already exists, append
    the source IP address of the packet to the existing header.
 
-   @param in_skb the skb to add the extension to.  
+   @in_skb the skb to add the extension to.  
 
-   @param ctx the serval header context for the incoming packet (note that
+   @ctx the serval header context for the incoming packet (note that
    this context may not point to the headers in in_skb as in_skb may
    be a clone or copy.
 */

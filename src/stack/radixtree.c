@@ -181,18 +181,18 @@ static size_t str_match(const char *s1, const char *s2, size_t *len)
    the node), but we return it anyway since, for insertions, we may
    want to split the node into two substrings.
 
-   @param n          The node to start at (typically the root)
-   @param str        The string to match
-   @param str_index  Keeps track of the index into the string 
-                     we are matching
-   @param str_len    Keeps track of the string length of the 
-                     current node
-   @param match_len  Keeps track of the number of characters matched 
-                     in the current node
-   @param match      An optional function used to match only certain
-                     kinds of nodes.
-   @param wildcard   An optional node pointer that will keep track of
-                     the best matching wildcard rule.
+   @n          The node to start at (typically the root)
+   @str        The string to match
+   @str_index  Keeps track of the index into the string 
+               we are matching
+   @str_len    Keeps track of the string length of the 
+               current node
+   @match_len  Keeps track of the number of characters matched 
+               in the current node
+   @match      An optional function used to match only certain
+               kinds of nodes.
+   @wildcard   An optional node pointer that will keep track of
+               the best matching wildcard rule.
 
    The follwing example illustrates the functionality.
    
@@ -329,13 +329,22 @@ int radix_tree_add(struct radix_tree *tree,
                 struct radix_node *p = n->parent;
                 
                 if (match_len) {
+                        void *priv = NULL;
                         /* We need to split this node */
-                        /* printf("split %s at %s match_len=%zu\n", 
-                           n->str, &n->str[match_len], match_len);
-                        */
-                        p = radix_node_new(n->str, 
-                                           match_len, 
-                                           n->parent, NULL, alloc);
+                        
+                        /*printf("split %s at %s match_len=%zu\n", 
+                          n->str, &n->str[match_len], match_len); */
+                        
+                        if (str[str_index] == '\0') {
+                                /* We fully matched the string, so the
+                                   parent node resulting from the
+                                   split will store the private data
+                                   for the node. */
+                                priv = private;
+                        }
+                        
+                        p = radix_node_new(n->str, match_len, 
+                                           n->parent, priv, alloc);
                         
                         if (!p) 
                                 return -ENOMEM;
@@ -346,17 +355,20 @@ int radix_tree_add(struct radix_tree *tree,
                                 radix_node_free(p);
                                 return -ENOMEM;
                         }
-                        n->parent = p;
+
                         list_del_init(&n->lh);
                         list_add(&n->lh, &p->children);
                         list_add(&p->lh, &n->parent->children);
-                        
+                        n->parent = p;
+
                         if (node)
                                 *node = p;
                 }
                 n = p;
         }
         
+        /* The string wasn't fully matched, so we add the rest of the
+           string as a new node */
         if (str[str_index] != '\0') {
                 //printf("adding %s\n", &str[str_index]);
                 /* Still need to add the rest of the string */

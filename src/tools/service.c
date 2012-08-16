@@ -32,7 +32,8 @@ int name_to_inet_addr(const char *name, struct in_addr *ip)
 
         while (ai) {
                 if (ai->ai_family == AF_INET) {
-                        struct sockaddr_in *in = (struct sockaddr_in *)ai->ai_addr;
+                        struct sockaddr_in *in = 
+                                (struct sockaddr_in *)ai->ai_addr;
                         memcpy(ip, &in->sin_addr, sizeof(*ip));
                         ret = 1;
                         break;
@@ -110,14 +111,18 @@ static int service_parse_args(int argc, char **argv, void **result)
 
         /* Check for hexadecimal serviceID. */
         if (strcmp(argv[0], "default") == 0) {
-                /* Do nothing, serviceID already set to zero */
+                args.srvid.s_sid[0] = '*';
+                args.srvid.s_sid[1] = '\0';
         } else {
                 ptr = argv[0];
 
                 while (*ptr != '\0')
                         ptr++;
 
-                serval_pton(argv[0], &args.srvid);
+                if (serval_pton(argv[0], &args.srvid) != 1) {
+                        fprintf(stderr, "ERROR: Invalid service format\n");
+                        return -1;
+                }
         }
 
         argc--;

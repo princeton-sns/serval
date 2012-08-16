@@ -71,6 +71,12 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm)
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
 
+                if (service_id_verify_wildcard(&entry->srvid) != 1) {
+                        LOG_ERR("Invalid service %s: err=%d\n", 
+                                service_id_to_str(&entry->srvid), err);
+                        continue;
+                }
+                
                 dev = resolve_dev(entry);
                 
                 if (!dev)
@@ -234,6 +240,11 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm)
                 struct service_info *entry_old = &cmr->service[i];
                 struct service_info *entry_new = &cmr->service[i+1];
 
+                if (service_id_verify_wildcard(&entry_new->srvid) != 1) {
+                        LOG_ERR("Invalid service %s: err=%d\n", 
+                                service_id_to_str(&entry_new->srvid), err);
+                        continue;
+                }
 #if defined(ENABLE_DEBUG)
                 {
                         char buf[18];

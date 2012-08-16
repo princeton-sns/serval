@@ -116,16 +116,19 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         struct service_id null_service = { .s_sid = { '\0' } };
 
         if ((unsigned int)addr_len < sizeof(*svaddr)) {
-                LOG_ERR("address length %u too small\n",
+                LOG_ERR("serviceID length %u too small\n",
                         addr_len);
                 return -EINVAL;
         } 
         if (addr_len % sizeof(*svaddr) != 0) {
-                LOG_ERR("address length invalid\n");
+                LOG_ERR("serviceID length invalid\n");
                 return -EINVAL;
-        } 
-        if (!fqdn_verify(svaddr->sv_srvid.s_sid)) {
-                LOG_ERR("address %s is not a valid FQDN\n",
+        }
+        /*
+          We allow applications to listen on wildcard serviceIDs.
+         */
+        if (service_id_verify_wildcard(&svaddr->sv_srvid) != 1) {
+                LOG_ERR("Invalid serviceID format\n",
                         service_id_to_str(&svaddr->sv_srvid));
                 return -EINVAL;
         }
@@ -527,8 +530,10 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 return -EAFNOSUPPORT;
         } 
 
-        if (!fqdn_verify(((struct sockaddr_sv *)addr)->sv_srvid.s_sid)) {
-                LOG_ERR("address is not a valid FQDN\n");
+        /* Verify the format of the serviceID. We do not allow a
+           connect() to a wildcard serviceID. */
+        if (service_id_verify(&((struct sockaddr_sv *)addr)->sv_srvid) != 1) {
+                LOG_ERR("Invalid serviceID format\n");
                 return -EINVAL;
         }
 

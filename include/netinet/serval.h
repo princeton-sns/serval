@@ -189,12 +189,42 @@ static inline int fqdn_valid_char(char c)
         return 0;
 }
 
-static inline int fqdn_copy(char *dst, const char *fqdn, size_t n)
+enum wildcard_pos {
+        WP_NONE,
+        WP_BEGINNING,
+        WP_END,
+};
+
+/**
+ * Copy a FQDN and verify its format at the same time. Optionally
+ * allow a wildcard char ('*') at the beginning (1) or end of the string
+ * (2), as indicated by the wildcard_pos argument.
+ *
+ * @dst the destination buffer.
+ * @fqdn the source buffer.
+ * @n the size of the destination buffer.
+ * @wildcard_pos the position of the wildcard, where:
+ * WP_NONE = do not accept a wildcard.
+ * WP_BEGINNING = accept wildcard at beginning.
+ * WP_END = accept wildcard at the end.
+ *
+ * @Returns: 0 if string has bad format, or number of characters
+ * copied.
+ */
+static inline int fqdn_copy(char *dst, const char *fqdn, 
+                            size_t n, enum wildcard_pos wp)
 {
         int i;
         
         for (i = 0; (size_t)i < n && fqdn[i] != '\0'; i++) {
-                if (!fqdn_valid_char(fqdn[i]))
+                /* Check for valid char, but also accept wildcard */
+                
+                if (fqdn[i] == '*') {
+                        if (wp == WP_NONE || 
+                            (wp == WP_BEGINNING && i != 0) ||
+                            (wp == WP_END && fqdn[i+1] != '\0'))
+                                return 0;
+                } else if (!fqdn_valid_char(fqdn[i]))
                         return 0;
                 dst[i] = fqdn[i];
         }
@@ -205,23 +235,75 @@ static inline int fqdn_copy(char *dst, const char *fqdn, size_t n)
         return i;
 }
 
+/**
+ * Verify that a string contains only valid FQDN characters.
+ * @Returns: The index of the first invalid character (this would be
+ * the index of the string termination character, '\0', in case the
+ * whole string is valid).
+ *
+ * @len is and optional argument that may return the length of the
+ * string (including invalid characters).
+ */
+static inline size_t fqdn_verify_length(const char *fqdn, size_t *len)
+{
+        long i = -1;
+        size_t l = 0;
+                
+        while (fqdn[l] != '\0') {
+                if (!fqdn_valid_char(fqdn[l]) && i == -1)
+                        i = l;
+                l++;
+        }
+
+        if (i == -1)
+                i = l;
+        
+        if (len)
+                *len = l;
+
+        return i;
+}
+
+/**
+ * Verify that a string contains only valid FQDN characters.
+ */
 static inline int fqdn_verify(const char *fqdn)
 {
-        while (*fqdn != '\0') {
-                if (!fqdn_valid_char(*fqdn))
-                        return 0;
+        size_t len = 0;
+        return (fqdn_verify_length(fqdn, &len) == len);
+}
+
+/**
+ * Verify that a string contains only valid FQDN characters, but also
+ * accept a wildcard char (*) at the beginning, e.g., as such:
+ * "*.example.com"
+ */
+static inline int fqdn_verify_wildcard(const char *fqdn)
+{
+        size_t len = 0, i = 0;
+        
+        if (!fqdn)
+                return -1;
+
+        if (fqdn[0] == '*')
                 fqdn++;
-        }
-        return 1;
+        
+        i = fqdn_verify_length(fqdn, &len);
+        
+        if (i == len)
+                return 1;
+
+        return 0;
 }
 
 /**
  * Reverse a fully qualified domain name string (we do not require the
  * FQDN to end with a dot).
  */
-static inline int fqdn_reverse(const char *fqdn, char *out)
+ static inline int fqdn_reverse(const char *fqdn, char *out, 
+                                enum wildcard_pos wp)
 {
-        int len = fqdn_copy(out, fqdn, SERVICE_ID_MAX_LEN);
+        int len = fqdn_copy(out, fqdn, SERVICE_ID_MAX_LEN, wp);
         
         if (len <= 0)
                 return len;
@@ -230,6 +312,43 @@ static inline int fqdn_reverse(const char *fqdn, char *out)
                 return 1;
         
         return -1;
+}
+
+/**
+ * Verify that a serviceID has valid format.
+ */
+static inline int service_id_verify(const struct service_id *srvid)
+{
+        size_t len = 0, i;
+
+        if (!srvid)
+                return -1;
+
+        i = fqdn_verify_length(srvid->s_sid, &len);
+        
+        return (i == len && len > 0 && len <= SERVICE_ID_MAX_LEN);
+}
+
+/**
+ * Verify that a serviceID has valid format, but also accept a
+ * wildcard (*) at the end, e.g., as such: "com.example.*".
+ */
+static inline int service_id_verify_wildcard(const struct service_id *srvid)
+{
+        size_t len = 0, i;
+        
+        if (!srvid)
+                return -1;
+        
+        /* A serviceID is a reverse FQDN, so there may be a wildcard
+           at the end of the string. */
+        i = fqdn_verify_length(srvid->s_sid, &len);
+
+        /* Accept wildcard at the end */
+        if ((i + 1) == len && srvid->s_sid[i] == '*')
+                i++;
+
+        return (i == len && len > 0 && len <= SERVICE_ID_MAX_LEN);
 }
 
 /**
@@ -329,26 +448,26 @@ static inline const char *flow_id_to_str(const struct flow_id *flowid)
 }
 
 /**
- * Converts a binary service ID to string presentation
- * format. Equivalent to inet_ntop().
+ * Converts a serviceID to string presentation format. Equivalent to
+ * inet_ntop().
  */
 static inline const char *serval_ntop(const void *src, char *dst, size_t len)
 {
-        if (fqdn_reverse((char *)src, dst) == 1)
+        if (fqdn_reverse((char *)src, dst, WP_END) == 1)
                 return dst;
         return NULL;
 }
 
 /**
- * Converts a string in presentation format to a service
- * ID. Equivalent to inet_pton().
+ * Converts a string in presentation format to a serviceID. Equivalent
+ * to inet_pton().
  */
 static inline int serval_pton(const char *src, void *dst)
 {
         if (strlen(src) > SERVICE_ID_MAX_LEN)
                 return -1;
         
-        return fqdn_reverse(src, (char *)dst);
+        return fqdn_reverse(src, (char *)dst, WP_BEGINNING);
 }
 
 struct sal_hdr {
