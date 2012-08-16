@@ -985,27 +985,27 @@ void flow_table_read_unlock(void)
 }
 
 /*
-  If this function is called with buflen < 0, the buffer size required
-  for fitting the entire table will be returned. In that case, any
-  output in buf should be ignored.
+  If this function is called with buflen == 0, the buffer size
+  required for fitting the entire table will be returned. In that
+  case, any output in buf should be ignored.
  */
-int __flow_table_print(char *buf, int buflen) 
+int __flow_table_print(char *buf, size_t buflen) 
 {
-        int tot_len, len, find_size = 0;
-        char tmp_buf[100];
+        int tot_len = 0, len;
         struct serval_sock *ssk;
-
-        if (buflen < 0) {
-                find_size = 1;
-                buf = tmp_buf;
-                buflen = 100;
-        }
         
         len = snprintf(buf, buflen, 
                        "%-10s %-10s %-17s %-17s %-10s %s\n",
                        "srcFlowID", "dstFlowID", 
                        "srcIP", "dstIP", "state", "dev");
-        tot_len = len;
+
+        if (len > 0) {
+                if (buflen >= len) 
+                        buflen -= len;
+                else
+                        buflen = 0;
+                tot_len += len;
+        }
 
         list_for_each_entry(ssk, &sock_list, sock_node) {
                 char src[18], dst[18];
@@ -1013,7 +1013,7 @@ int __flow_table_print(char *buf, int buflen)
                 struct net_device *dev = dev_get_by_index(sock_net(sk), 
                                                           sk->sk_bound_dev_if);
 
-                len = snprintf(buf + len, buflen - len, 
+                len = snprintf(buf + tot_len, buflen, 
                                "%-10s %-10s %-17s %-17s %-10s %s\n",
                                flow_id_to_str(&ssk->local_flowid), 
                                flow_id_to_str(&ssk->peer_flowid),
@@ -1027,20 +1027,19 @@ int __flow_table_print(char *buf, int buflen)
                 if (dev)
                         dev_put(dev);
 
-                tot_len += len;
-
-                /* If we are finding out the buffer size, only
-                   increment tot_len, not len. */
-                if (find_size)
-                        len = 0;
-                else
-                        len = tot_len;
+                if (len > 0) {
+                        if (buflen >= len) 
+                                buflen -= len;
+                        else
+                                buflen = 0;
+                        tot_len += len;
+                }
         }
 
         return tot_len;
 }
 
-int flow_table_print(char *buf, int buflen) 
+int flow_table_print(char *buf, size_t buflen) 
 {
         int ret;
         

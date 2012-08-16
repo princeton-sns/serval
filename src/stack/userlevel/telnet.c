@@ -25,12 +25,13 @@ static struct list_head telnet_client_list;
 
 struct command {
 	const char *cmd_long, *cmd_short, *help_msg;
-	void (*cmd_handler)(struct telnet_client *, char *, int);
+	void (*cmd_handler)(struct telnet_client *, char *, size_t);
 };
 
 static void telnet_client_destroy(struct telnet_client *tc);
 
-static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
+static void cmd_services_print(struct telnet_client *tc, 
+                               char *buf, size_t buflen)
 {
 	int ret, n;
 
@@ -41,11 +42,12 @@ static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
 	if (ret < 0)
 		return;
 
-	send(tc->sock, buf, ret + n, 0);	
+	send(tc->sock, buf, strlen(buf), 0);	
 }
 
 
-static void cmd_flows_print(struct telnet_client *tc, char *buf, int buflen)
+static void cmd_flows_print(struct telnet_client *tc, 
+                            char *buf, size_t buflen)
 {
 	int ret;
 	
@@ -55,16 +57,16 @@ static void cmd_flows_print(struct telnet_client *tc, char *buf, int buflen)
 	
 	if (ret < 0)
 		return;
-
-	send(tc->sock, buf, ret, 0);	
+        
+	send(tc->sock, buf, ret, 0);
 }
 
-static void cmd_quit(struct telnet_client *tc, char *buf, int buflen)
+static void cmd_quit(struct telnet_client *tc, char *buf, size_t buflen)
 {
 	telnet_client_destroy(tc);
 }
 
-static void cmd_help(struct telnet_client *tc, char *buf, int buflen);
+static void cmd_help(struct telnet_client *tc, char *buf, size_t buflen);
 
 static struct command command_list[] = {
 	{ "help", "h", "print help (this info)", cmd_help },
@@ -75,7 +77,7 @@ static struct command command_list[] = {
 	{ NULL, NULL, NULL, NULL }
 };
 
-void cmd_help(struct telnet_client *tc, char *buf, int buflen)
+void cmd_help(struct telnet_client *tc, char *buf, size_t buflen)
 {
 	int i = 0;
 		

@@ -62,7 +62,7 @@ int radix_node_is_wildcard(struct radix_node *n);
 int radix_node_is_active(struct radix_node *n);
 
 void *radix_node_get_priv(struct radix_node *n);
-const char *radix_node_print(struct radix_node *n, char *buf, size_t buflen);
+int radix_node_print(struct radix_node *n, char *buf, size_t buflen);
 int radix_tree_add(struct radix_tree *tree, const char *str, 
                    void *private, struct radix_node **node, gfp_t alloc);
 struct radix_node *radix_tree_find(struct radix_tree *tree, const char *str,

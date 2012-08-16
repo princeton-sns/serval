@@ -472,23 +472,20 @@ int service_entry_remove_target(struct service_entry *se,
                                 struct target_stats *stats) 
 {
         int ret;
+        
+        write_lock_bh(&se->lock);
 
-        local_bh_disable();
-
-        write_lock(&se->lock);
         ret = __service_entry_remove_target(se, type, dst, dstlen, stats);
-
-        write_unlock(&se->lock);
-
-        write_lock(&srvtable.lock);
-
+        
         if (list_empty(&se->target_set)) {
-                /* Removing the node also puts the service entry */
+                write_lock_bh(&srvtable.lock);
                 radix_node_remove(se->node, GFP_ATOMIC);
+                write_unlock_bh(&srvtable.lock);
+                write_unlock_bh(&se->lock);
+                service_entry_put(se);
+        } else {
+                write_unlock_bh(&se->lock);
         }
-
-        write_unlock(&srvtable.lock);
-        local_bh_enable();
 
         return ret;
 }
@@ -757,108 +754,87 @@ static const char *protocol_to_str(int protocol)
         return buf;
 }
 
+struct print_buf {
+        char *buf;
+        size_t buflen;
+        size_t totlen;
+};
+
+static inline void update_print_buf(struct print_buf *b,
+                                    int len)
+{
+        if (len > 0 && b->buflen >= len) {
+                b->buflen -= len;
+                b->totlen += len;
+        }
+}
+
 static int __service_entry_print(struct radix_node *n, void *arg) 
 {
         struct service_entry *se = get_service(n);
-        struct print_args {
-                char *buf;
-                int buflen;
-                int totlen;
-        } *args = (struct print_args *)arg;
         struct target_set *set;
         struct target *t;
-        char *buf = args->buf + args->totlen;
+        struct print_buf *pb = (struct print_buf *)arg;
         char dststr[18]; /* Currently sufficient for IPv4 */
-        int len = 0, tot_len = 0, find_size = 0;
         char node_buf[sizeof(struct service_id)];
-        const char *node_str;
-        char tmpbuf[200];
+        size_t old_totlen = pb->totlen;
+        int len = 0;
         
         if (!radix_node_is_active(n))
                 return 0;
         
-        if (args->buflen < 0) {
-                buf = tmpbuf;
-                args->buflen = sizeof(tmpbuf);
-                find_size = 1;
-        }
-
         read_lock_bh(&se->lock);
         
-        node_str = radix_node_print(n, node_buf, sizeof(node_buf));
-
+        radix_node_print(n, node_buf, sizeof(node_buf));
+        
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
-                        len = snprintf(buf + len, args->buflen - len, 
+                        len = snprintf(pb->buf + pb->totlen, pb->buflen, 
                                        "%-64s %-4s %-5u %-6u %-6u %-8u %-7u ", 
-                                       node_str,
+                                       node_buf,
                                        rule_to_str(t->type),
                                        set->flags, 
                                        set->priority, 
                                        t->weight,
                                        atomic_read(&t->packets_resolved),
                                        atomic_read(&t->packets_dropped));
-
-                        tot_len += len;
                         
-                        if (find_size)
-                                len = 0;
-                        else
-                                len = tot_len;
-
+                        update_print_buf(pb, len);
+                        
                         if (t->type == RULE_DEMUX && t->out.sk) {
-                                len = snprintf(buf + len, 
-                                               args->buflen - len, 
+                                len = snprintf(pb->buf + pb->totlen, 
+                                               pb->buflen, 
                                                "%-5s %s\n", 
                                                t->out.sk ? 
                                                "sock" : "NULL",
                                                protocol_to_str(t->out.sk->sk_protocol));
-                                
-                                tot_len += len;
-
-                                if (find_size)
-                                        len = 0;
-                                else
-                                        len = tot_len;
+                                update_print_buf(pb, len);
                         } else if (t->type == RULE_FORWARD && t->out.dev) {
-                                len = snprintf(buf + len, 
-                                               args->buflen - len, 
+                                len = snprintf(pb->buf + pb->totlen, 
+                                               pb->buflen, 
                                                "%-5s %s\n",
                                                t->out.dev ? 
                                                t->out.dev->name : "any",
                                                inet_ntop(AF_INET,
                                                          t->dst, 
                                                          dststr, 18));
-
-                                tot_len += len;
-
-                                if (find_size)
-                                        len = 0;
-                                else
-                                        len = tot_len;
+                                update_print_buf(pb, len);
                         }
                 }
         }
         
         read_unlock_bh(&se->lock);
 
-        args->buflen -= tot_len;
-        args->totlen += tot_len;
-
-        return tot_len;
+        return (int)(pb->totlen - old_totlen);
 }
 
-int service_entry_print(struct service_entry *se, char *buf, int buflen) 
+int service_entry_print(struct service_entry *se, char *buf, size_t buflen) 
 {
-        struct {
-                char *buf;
-                int buflen;
-                int totlen;
-        } args = { buf, buflen, 0 };
+        struct print_buf pb = { buf, buflen, 0 };
         
-        __service_entry_print(se->node, &args);
+        __service_entry_print(se->node, &pb);
 
-        return args.totlen;
+        return (int)pb.totlen;
 }
 
 void service_table_read_lock(void)
@@ -871,25 +847,15 @@ void service_table_read_unlock(void)
         read_unlock_bh(&srvtable.lock);
 }
 
-int __service_table_print(char *buf, int buflen)
+int __service_table_print(char *buf, size_t buflen)
 {
-        int len = 0, find_size = 0;
-        char tmp_buf[200];
-        struct print_args {
-                char *buf;
-                int buflen;
-                int totlen;
-        } args = { buf, buflen, 0 };
-
-        if (buflen < 0) {
-                find_size = 1;
-                args.buf = tmp_buf;
-                args.buflen = 200;
-        }
+        struct print_buf pb = { buf, buflen, 0 };
+        int len = 0;
 
 #if defined(OS_USER)
         /* Adding this stuff prints garbage in the kernel */
-        len = snprintf(args.buf, args.buflen, "bytes resolved: "
+        len = snprintf(pb.buf + pb.totlen, pb.buflen, 
+                       "bytes resolved: "
                        "%u packets resolved: %u bytes dropped: "
                        "%u packets dropped %u\n",
                        atomic_read(&srvtable.bytes_resolved),
@@ -897,29 +863,21 @@ int __service_table_print(char *buf, int buflen)
                        atomic_read(&srvtable.bytes_dropped),
                        atomic_read(&srvtable.packets_dropped));
         
-        args.totlen += len;
-        
-        /* If we are finding out the buffer size, only
-           increment totlen, not len. */
-
-        if (find_size)
-                len = 0;
-        else
-                len = args.totlen;
+        update_print_buf(&pb, len);
 #endif
-        len = snprintf(args.buf + len, args.buflen - len, 
+        len = snprintf(pb.buf + pb.totlen, pb.buflen, 
                        "%-64s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
                        "prefix", "type", "flags", "prio", "weight", 
                        "resolved", "dropped", "target(s)");
         
-        args.totlen += len;
+        update_print_buf(&pb, len);        
         
-        radix_tree_foreach(&srvtable.tree, __service_entry_print, &args);
+        radix_tree_foreach(&srvtable.tree, __service_entry_print, &pb);
 
-        return args.totlen;
+        return (int)pb.totlen;
 }
 
-int service_table_print(char *buf, int buflen)
+int service_table_print(char *buf, size_t buflen)
 {
         int ret;
         read_lock_bh(&srvtable.lock);
@@ -1103,6 +1061,7 @@ static int service_table_modify(struct service_table *tbl,
                                 const union target_out out) 
 {
         struct radix_node *n;
+        struct service_entry *se;
         int ret = 0;
 
         if (!srvid)
@@ -1113,21 +1072,23 @@ static int service_table_modify(struct service_table *tbl,
         n = radix_tree_find(&tbl->tree, srvid->s_sid, NULL);
         
         if (n) {
-                if (dst || dstlen == 0) {                        
-                        ret = service_entry_modify_target(get_service(n), type, 
+                se = get_service(n);
+                service_entry_hold(se);
+                read_unlock_bh(&tbl->lock);
+
+                if (dst || dstlen == 0) {
+                        ret = service_entry_modify_target(se, type, 
                                                           flags, priority, 
                                                           weight, dst, dstlen,
                                                           new_dst, new_dstlen,
                                                           out, GFP_ATOMIC);
                 }
-                goto out;
+                service_entry_put(se);
+        } else {
+                read_unlock_bh(&tbl->lock);
+                ret = -EINVAL;
         }
-        
-        ret = -EINVAL;
 
- out: 
-        read_unlock_bh(&tbl->lock);
-        
         return ret;
 }
 
@@ -1357,7 +1318,7 @@ static void service_table_del_target(struct service_table *tbl,
         n = radix_tree_find(&tbl->tree, srvid->s_sid, NULL);
 
         if (!n) {
-                write_unlock_bh(&tbl->lock);
+                read_unlock_bh(&tbl->lock);
                 return;
         }
 
@@ -1371,14 +1332,15 @@ static void service_table_del_target(struct service_table *tbl,
                                       dst, dstlen, stats);
         
         if (list_empty(&se->target_set)) {
-                /* This remove must be GFP_ATOMIC since we are holding
-                 * a lock */
-                write_lock(&tbl->lock);
+                write_lock_bh(&tbl->lock);
                 radix_node_remove(n, GFP_ATOMIC);
-                write_unlock(&tbl->lock);
+                write_unlock_bh(&tbl->lock);
+                write_unlock_bh(&se->lock);
+                service_entry_put(se);
+        } else {
+                write_unlock_bh(&se->lock);
         }
-
-        write_unlock_bh(&se->lock);
+        
         service_entry_put(se);
 }
 
@@ -1392,6 +1354,9 @@ void service_del_target(struct service_id *srvid,
                                         dst, dstlen, stats, alloc);
 }
 
+/*
+  This function can only with service table lock held.
+ */
 static int del_dev_func(struct radix_node *n, void *arg) 
 {
         struct service_entry *se = get_service(n);
@@ -1401,20 +1366,16 @@ static int del_dev_func(struct radix_node *n, void *arg)
         if (!radix_node_is_active(n))
                 return 0;
 
-        /* We assume that this function is called with table locked
-         * and bottom halves already disabled. Therefore, do not
-         * disable/enable bottohalves here. */
-        write_lock(&se->lock);
+        write_lock_bh(&se->lock);
         
         ret = __service_entry_remove_target_by_dev(se, devname);
         
-        if (ret == 1 && list_empty(&se->target_set)) {
-                /* This remove must be atomic since we are holding locks */
+        if (ret > 0 && list_empty(&se->target_set)) {
                 radix_node_remove(n, GFP_ATOMIC);
-                write_unlock(&se->lock);
-                service_entry_free(se);
+                write_unlock_bh(&se->lock);
+                service_entry_put(se);
         } else {
-                write_unlock(&se->lock);
+                write_unlock_bh(&se->lock);
         }
 
         return ret;
@@ -1425,7 +1386,7 @@ static int service_table_del_dev_all(struct service_table *tbl,
 {
         int ret = 0;
 
-        write_lock(&tbl->lock);
+        write_lock_bh(&tbl->lock);
         
         ret = radix_tree_foreach(&tbl->tree, del_dev_func, 
                                  (void *) devname);
@@ -1440,6 +1401,9 @@ int service_del_dev_all(const char *devname)
         return service_table_del_dev_all(&srvtable, devname);
 }
 
+/*
+ * This function can only be called with service table lock held.  
+ */
 static int del_target_func(struct radix_node *n, void *arg) 
 {
         struct service_entry *se = get_service(n);
@@ -1453,20 +1417,17 @@ static int del_target_func(struct radix_node *n, void *arg)
         if (!radix_node_is_active(n))
                 return 0;
 
-        /* We assume that this function is called with table locked
-         * and bottom halves already disabled. Therefore, do not
-         * disable/enable bottohalves here. */
-        write_lock(&se->lock);
+        write_lock_bh(&se->lock);
 
         ret = __service_entry_remove_target(se, d->type, 
                                             d->d_dst, d->d_len, NULL);
 
-        if (ret == 1 && list_empty(&se->target_set)) {
+        if (ret > 0 && list_empty(&se->target_set)) {
                 radix_node_remove(n, GFP_ATOMIC);
-                write_unlock(&se->lock);
-                service_entry_free(se);
+                write_unlock_bh(&se->lock);
+                service_entry_put(se);
         } else {
-                write_unlock(&se->lock);
+                write_unlock_bh(&se->lock);
         }
 
         return ret;

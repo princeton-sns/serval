@@ -453,9 +453,11 @@ int radix_node_remove(struct radix_node *n, gfp_t alloc)
                  * if the parent now has a single child. */
                 if (p) {
                         if (list_empty(&p->children)) {
-                                /* The parent has no children. If the node is
-                                 * inactive, we can simply remove it. */
-                                if (!p->private) {
+                                /* The parent has no children. If the
+                                 * node is inactive, we can simply
+                                 * remove it (unless it is the
+                                 * root). */
+                                if (!p->private && p->parent) {
                                         /* Just remove this inactive node */
                                         list_del(&p->lh);
                                         radix_node_free(p);
@@ -586,30 +588,33 @@ void radix_tree_destroy(struct radix_tree *tree,
         radix_tree_foreach_bfs(tree, radix_node_destroy, free_func);
 }
 
-const char *radix_node_print(struct radix_node *n, char *buf, size_t buflen)
+int radix_node_print(struct radix_node *n, char *buf, size_t buflen)
 {
-        if (buflen == 0)
-                return buf;
+        struct radix_node *tmp = n;
+        char *w, *end = buf + buflen;
+        size_t strlen = 0;
         
-        buf[0] = '\0';
-        buf[--buflen] = '\0';
+        memset(buf, '\0', buflen);
 
-        while (n->parent && buflen) {
-                size_t len = n->strlen;
-                        
-                if (buflen >= len) {
-                        buflen -= len;
+        while (tmp->parent) {
+                strlen += tmp->strlen;
+                tmp = tmp->parent;
+        }
 
-                        strncpy(buf + buflen, n->str, len);
-                } else {
-                        len -= buflen;
-                        strncpy(buf, n->str + len, buflen);
-                        buflen = 0;
-                }
+        if (strlen > buflen)
+                w = buf;
+        else
+                w = buf + strlen - n->strlen;
+
+        while (n->parent && w >= buf) {
+                size_t len = n->strlen > (end - w) ? 
+                        (end - w) : n->strlen;
+                strncpy(w, n->str, len);
+                w -= len;
                 n = n->parent;
         }
-                
-        return buf + buflen;
+        
+        return (int)strlen;
 }
 
 static int radix_node_print_active(struct radix_node *n, void *arg)
@@ -617,22 +622,21 @@ static int radix_node_print_active(struct radix_node *n, void *arg)
         struct args {
                 char *buf;
                 size_t buflen;
-                int totlen;
+                size_t totlen;
         } *args = (struct args *)arg;
         int len = 0;
 
         if (n->private) {
-                char node[128];
-
-                len = snprintf(args->buf + args->totlen, args->buflen, "%s\n", 
-                               radix_node_print(n, node, sizeof(node) - 1));
-                
-                if (args->buflen >= len)
-                        args->buflen -= len;
-                else
-                        args->buflen = 0;
-
-                args->totlen += len;
+                len = radix_node_print(n, args->buf + args->totlen, 
+                                       args->buflen);                
+                if (len > 0) {
+                        if (args->buflen >= len)
+                                args->buflen -= len;
+                        else
+                                args->buflen = 0;
+                        
+                        args->totlen += len;
+                }
         }
 
         return len;
@@ -643,12 +647,12 @@ int radix_tree_print_bfs(struct radix_tree *tree, char *buf, size_t buflen)
         struct args {
                 char *buf;
                 size_t buflen;
-                int totlen;
+                size_t totlen;
         } args = { buf, buflen, 0 };
 
         radix_tree_foreach_bfs(tree, radix_node_print_active, &args);
 
-        return args.totlen;
+        return (args.buf + args.totlen - buf);
 }
 
 #if defined(ENABLE_MAIN)
@@ -717,7 +721,8 @@ int main(int argc, char **argv)
                 n = radix_tree_find(&rt, str);
         
                 if (n) {
-                        printf("\tfound '%s'\n", radix_node_print(n, buf, sizeof(buf)));
+                        radix_node_print(n, buf, sizeof(buf));
+                        printf("\tfound '%s'\n", buf);
                 } else {
                         printf("\t%s not found\n", str);
                 }
