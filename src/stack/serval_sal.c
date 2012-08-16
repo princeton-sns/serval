@@ -1386,6 +1386,32 @@ static int serval_sal_send_ack(struct sock *sk)
         return err;
 }
 
+enum source_ext_res {
+        SOURCE_EXT_IP_EXISTS,
+        SOURCE_EXT_IP_NONE,
+        SOURCE_EXT_NONE,
+};
+
+static 
+enum source_ext_res serval_sal_source_ext_check(struct sk_buff *skb,
+                                                struct sal_context *ctx,
+                                                __u32 ipaddr)
+{
+        int i;
+        
+        if (!ctx->src_ext)
+                return SOURCE_EXT_NONE;
+        
+        for (i = 0; i < SAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
+                if (memcmp(SAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
+                           &ipaddr, 
+                           sizeof(ipaddr)) == 0) {
+                        return SOURCE_EXT_IP_EXISTS;
+                }
+        }
+        return SOURCE_EXT_IP_NONE;
+}
+
 /**
    Add source extension to SAL header. If one already exists, append
    the source IP address of the packet to the existing header.
@@ -1403,7 +1429,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         struct iphdr *iph;
         struct sal_hdr *sh;
         struct sal_source_ext *sxt = ctx ? ctx->src_ext : NULL;
-        unsigned int size, extra_len, serval_len, ext_len;
+        unsigned int size, extra_len = 0, serval_len = 0, ext_len = 0;
         unsigned char *ptr;
 
         iph = ip_hdr(skb);
@@ -1414,29 +1440,22 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 return -EINVAL;
         }
 
-        if (ctx->src_ext) {
-                int i;
-
-                /* First check that we are not adding an address
-                 * twice */
-                for (i = 0; i < SAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
-                        if (memcmp(SAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
-                                   &iph->daddr, 
-                                   sizeof(iph->daddr)) == 0) {
-                                LOG_DBG("IP dst address already in "
-                                        "SOURCE ext. Possible loop!\n");
-                                return -1;
-                        }
-                }
-
+        switch (serval_sal_source_ext_check(skb, ctx, iph->daddr)) {
+        case SOURCE_EXT_IP_NONE:
                 /* We just add another IP address. */
                 LOG_DBG("Appending address to SOURCE extension\n");
                 extra_len = 4;
-                ext_len = ntohs(ctx->src_ext->ext_length) + extra_len;
-        } else {
+                ext_len = ctx->src_ext->ext_length + extra_len;
+                break;
+        case SOURCE_EXT_NONE:
                 LOG_DBG("Adding new SOURCE extension\n");
                 extra_len = SAL_SOURCE_EXT_LEN + 4;
                 ext_len = extra_len;
+                break;
+        case SOURCE_EXT_IP_EXISTS:
+                LOG_ERR("IP dst address already in "
+                        "SOURCE ext. Possible loop!\n");
+                return -1;
         }
         
         serval_len = ctx->length + extra_len;
@@ -1453,8 +1472,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                                       skb_tailroom(skb),
                                       GFP_ATOMIC);
 
-                if (!skb)
+                if (!skb) {
+                        LOG_ERR("Could not expand skb!\n");
                         return -ENOMEM;
+                }
 
                 kfree_skb(*in_skb);
                 *in_skb = skb;
@@ -1477,8 +1498,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
 
         /* Check if we need to linearize */
         if (skb_is_nonlinear(skb)) {
-                if (skb_linearize(skb))
+                if (skb_linearize(skb)) {
+                        LOG_ERR("Could not linearize skb\n");
                         return -ENOMEM;
+                }
         }
 
         /* Move back everything from the point of insertion, making
@@ -3005,6 +3028,11 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 
         while (target) {
                 struct target *next_target;
+                struct sk_buff *cskb = NULL;
+                struct iphdr *iph;
+                unsigned int iph_len;
+                unsigned int protocol = sal_hdr(skb)->protocol;
+                int ret = 0;
                 
                 next_target = service_iter_next(&iter);
                 
@@ -3022,69 +3050,68 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
                         break;
+                } 
+
+                err = SAL_RESOLVE_FORWARD;
+
+                if (skb->pkt_type != PACKET_HOST &&
+                    skb->pkt_type != PACKET_OTHERHOST) {
+                        /* Do not forward, e.g., broadcast
+                           packets as they may cause
+                           resolution loops. */
+                        LOG_DBG("Broadcast packet. Not forwarding\n");
+                        err = SAL_RESOLVE_DROP;
+                        break;
+                }
+                
+                if (next_target == NULL) {
+                        cskb = skb;
                 } else {
-                        struct sk_buff *cskb;
-                        struct iphdr *iph;
-                        unsigned int iph_len;
-                        unsigned int protocol = sal_hdr(skb)->protocol;
-                        int len = 0;
-
-                        err = SAL_RESOLVE_FORWARD;
-    
-                        if (skb->pkt_type != PACKET_HOST &&
-                            skb->pkt_type != PACKET_OTHERHOST) {
-                                /* Do not forward, e.g., broadcast
-                                   packets as they may cause
-                                   resolution loops. */
-                                LOG_DBG("Broadcast packet. Not forwarding\n");
-                                kfree_skb(skb);
+                        cskb = skb_copy(skb, GFP_ATOMIC);
+                        
+                        if (!cskb) {
+                                LOG_ERR("Skb allocation failed\n");
+                                err = SAL_RESOLVE_DROP;
                                 break;
                         }
-                        
-                        if (next_target == NULL) {
-                                cskb = skb;
-                        } else {
-                                if (skb_cloned(skb))
-                                        cskb = pskb_copy(skb, GFP_ATOMIC);
-                                else
-                                        cskb = skb_clone(skb, GFP_ATOMIC);
-                                
-                                if (!cskb) {
-                                        LOG_ERR("Skb allocation failed\n");
-                                        break;
-                                }
-                        }
-
-                        iph = ip_hdr(cskb);
-                        iph_len = iph->ihl << 2;
+                }
+                
+                iph = ip_hdr(cskb);
+                iph_len = iph->ihl << 2;
 #if defined(OS_USER)
-                        /* Set the output device - ip_forward uses the
-                         * out device specified in the dst_entry route
-                         * and assumes that skb->dev is the input
-                         * interface*/
-                        if (target->out.dev)
-                                cskb->dev = target->out.dev;
+                /* Set the output device - ip_forward uses the
+                 * out device specified in the dst_entry route
+                 * and assumes that skb->dev is the input
+                 * interface*/
+                if (target->out.dev)
+                        cskb->dev = target->out.dev;
 #endif /* OS_LINUX_KERNEL */
+                
+                /* Set the true overlay source address if the
+                 * packet may be ingress-filtered user-level
+                 * raw socket forwarding may drop the packet
+                 * if the source address is invalid */
+                ret = serval_sal_add_source_ext(&cskb, ctx);
+                
+                if (ret < 0) {
+                        LOG_ERR("Failed to add source extension, err=%d\n", 
+                                ret);
                         
-                        /* Set the true overlay source address if the
-                         * packet may be ingress-filtered user-level
-                         * raw socket forwarding may drop the packet
-                         * if the source address is invalid */
-                        len = serval_sal_add_source_ext(&cskb, ctx);
-                        
-                        if (len < 0) {
-                                LOG_ERR("Failed to add source extension\n");
+                        /* Need to free the skb if it's a copy */
+                        if (cskb != skb) {
+                                LOG_ERR("Freeing skb copy\n");
                                 kfree_skb(cskb);
-                                break;
                         }
+                        /* Try next target */
+                } else {
                         iph = ip_hdr(cskb);
-                        hdr_len += len;
-
+                        hdr_len += ret;
+                        
                         LOG_DBG("new serval header len=%u\n", hdr_len);
-
+                        
                         /* Update destination address */
                         memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
-
+                        
                         /* Must recalculate transport checksum. Pull
                            to reveal transport header */
                         pskb_pull(cskb, hdr_len);
@@ -3096,10 +3123,9 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         /* Push back to Serval header */
                         skb_push(cskb, hdr_len);
                         skb_reset_transport_header(cskb);
-
+                        
                         /* Recalculate SAL checksum */
                         serval_sal_send_check(sal_hdr(cskb));
-
 #if defined(OS_LINUX_KERNEL)
                         /* Packet is UDP encapsulated, push back UDP
                          * encapsulation header */
@@ -3115,21 +3141,23 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 #endif
                         /* Push back to IP header */
                         skb_push(cskb, iph_len);
-
-                        if (serval_ipv4_forward_out(cskb)) {
+                                                
+                        ret = serval_ipv4_forward_out(cskb);
+                        
+                        if (ret) {
                                 /* serval_ipv4_forward_out has taken
                                    custody of packet, no need to
                                    free. */
-                                LOG_ERR("Forwarding failed\n");
+                                LOG_ERR("Forwarding failed err=%d\n", ret);
                         } else 
                                 num_forward++;
                 }
                 target = next_target;
         }
-
+        
         if (num_forward == 0)
                 service_iter_inc_stats(&iter, -1, -data_len);
-
+        
         service_iter_destroy(&iter);
         service_entry_put(se);
 
