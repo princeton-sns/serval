@@ -32,16 +32,16 @@ static void telnet_client_destroy(struct telnet_client *tc);
 
 static void cmd_services_print(struct telnet_client *tc, char *buf, int buflen)
 {
-	int ret;
+	int ret, n;
 
-	ret = sprintf(buf, "# Service table:\n");
+        n = sprintf(buf, "# Service table:\n");
 
-	ret += service_table_print(buf + ret, buflen - ret);
+	ret = service_table_print(buf + n, buflen - n);
 		
 	if (ret < 0)
 		return;
 
-	send(tc->sock, buf, ret, 0);	
+	send(tc->sock, buf, ret + n, 0);	
 }
 
 

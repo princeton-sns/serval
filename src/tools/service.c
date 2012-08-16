@@ -66,9 +66,10 @@ static const struct opname opnames[] = {
 static void service_print_usage(void)
 {
         printf("service OPTIONS:\n");
-        printf("\tadd|del|mod SERVICEID"
+        printf("\tadd|del|mod SERVICE"
                " IPADDR [IPADDR] [priority NUM] [weight NUM]\n");
-        printf("\tSERVICEID is a FQDN (wildcards allowed).\n");
+        printf("\tSERVICE is a FQDN, e.g., my.example.com"
+               " (wildcards are allowed).\n");
 }
         
 struct arguments {

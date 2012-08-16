@@ -443,9 +443,6 @@ int netdev_populate_table(int sizeof_priv,
 	struct ifreq *ifr = NULL;
         char buff[8192];
 
-        default_service.s_sid[0] = '*';
-        default_service.s_sid[1] = '\0';
-
         if (ret == -1) {
                 LOG_ERR("could not get interface list\n");
                 return ret;

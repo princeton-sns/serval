@@ -85,7 +85,7 @@ struct net_device *resolve_dev_impl(const struct in_addr *addr,
 static int dev_configuration(struct net_device *dev)
 {
         struct net_addr dst;
-        struct service_id default_service = { .s_sid = { '\0' } };
+        struct service_id default_service = { "*" };
         int ret;
 
         if (ifname && strcmp(dev->name, ifname) != 0)
@@ -105,7 +105,7 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(&default_service, 0, RULE_FORWARD, 0, 
+                service_add(&default_service, RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
                             &dst, sizeof(dst), make_target(dev), 

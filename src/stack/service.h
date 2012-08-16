@@ -8,7 +8,6 @@
 #include <serval/skbuff.h>
 #include <serval/dst.h>
 #include <serval/sock.h>
-#include "radixtree.h"
 
 #define LOCAL_SERVICE_DEFAULT_PRIORITY 32000
 #define LOCAL_SERVICE_DEFAULT_WEIGHT 1024
@@ -18,6 +17,7 @@
 
 struct service_id;
 struct service_table;
+struct radix_node;
 
 /** 
     The service entry contains a list of sets of destinations.

@@ -22,24 +22,20 @@
 #define ENOMEM 1
 #define OS_USER
 #endif
-
+#include <serval/platform.h>
 #if defined(OS_USER)
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #endif
 #if defined(OS_LINUX_KERNEL)
-#include <linux/kernel.h>
 #include <linux/string.h>
-#include <linux/slab.h>
 #endif
 #include "radixtree.h"
 
-
-int radix_tree_init(struct radix_tree *tree)
+int radix_tree_initialize(struct radix_tree *tree)
 {
         memset(tree, 0, sizeof(*tree));         
-        tree->root.state = NODE_INACTIVE;
         tree->root.parent = NULL;
         INIT_LIST_HEAD(&tree->root.lh);
         INIT_LIST_HEAD(&tree->root.children);
@@ -47,13 +43,12 @@ int radix_tree_init(struct radix_tree *tree)
         return 0;
 }
 
-int radix_node_init(struct radix_node *n,
-                    struct radix_node *parent,
-                    void *private)
+int radix_node_initialize(struct radix_node *n,
+                          struct radix_node *parent,
+                          void *private)
 {
         memset(n, 0, sizeof(*n));
         n->parent = parent;
-        n->state = NODE_INACTIVE;
         n->private = private;
         INIT_LIST_HEAD(&n->lh);
         INIT_LIST_HEAD(&n->plh);
@@ -103,7 +98,7 @@ int radix_node_is_wildcard(struct radix_node *n)
 
 int radix_node_is_active(struct radix_node *n)
 {
-        return n->state == NODE_ACTIVE;
+        return n->private != NULL;
 }
 
 int radix_node_set_key(struct radix_node *n, 
@@ -137,7 +132,7 @@ static struct radix_node *radix_node_new(const char *str,
         n = kmalloc(sizeof(*n), alloc);
 
         if (n) {
-                radix_node_init(n, parent, private);
+                radix_node_initialize(n, parent, private);
                 
                 if (radix_node_set_key(n, str, strlen, alloc) < 0) {
                         kfree(n);
@@ -179,29 +174,88 @@ static size_t str_match(const char *s1, const char *s2, size_t *len)
         return i;
 }
 
+/**
+   This function matches a string as far down the radix tree as
+   possible and returns the node at that location. This node may not
+   be a perfect match (e.g., we only matched half of the substring in
+   the node), but we return it anyway since, for insertions, we may
+   want to split the node into two substrings.
+
+   @param n          The node to start at (typically the root)
+   @param str        The string to match
+   @param str_index  Keeps track of the index into the string 
+                     we are matching
+   @param str_len    Keeps track of the string length of the 
+                     current node
+   @param match_len  Keeps track of the number of characters matched 
+                     in the current node
+   @param match      An optional function used to match only certain
+                     kinds of nodes.
+   @param wildcard   An optional node pointer that will keep track of
+                     the best matching wildcard rule.
+
+   The follwing example illustrates the functionality.
+   
+   Input string (str): "foob"
+   
+   Radix tree:
+
+        "\0"
+       /    \
+     "foo"  "*"
+     /   \
+   "*"    "bar"
+
+   This example matches the "bar" node, but only up to its first char
+   'b', returning:
+
+   match_len = 1   - matching up until 'b' in "bar".
+   str_len = 3     - strlen("bar").
+   str_index = 4   - matching the entire string "foob".
+   wildcard = "*"  - points to the "*" node which is a child of "foo".
+ */
 static struct radix_node *radix_node_find_lpm(struct radix_node *n, 
                                               const char *str,
-                                              size_t *str_index, /* Current index into str where we are matching */
-                                              size_t *str_len, /* Keeps track of current node's strlen */
-                                              size_t *match_len, /* How much of current node that matches */
+                                              size_t *str_index,
+                                              size_t *str_len,
+                                              size_t *match_len,
+                                              int (*match)(struct radix_node *),
                                               struct radix_node **wildcard) 
 {
+        struct radix_node *prev = n;
+        
         if (!n)
                 return NULL;
 
         while (1) {
                 struct radix_node *c, *tmp = NULL;
-                size_t n_str_index = 0;
                 
+                /* Avoid matching root node (parent == NULL) */
                 if (n->parent) {
-                        *match_len = str_match(n->str, &str[*str_index], str_len);                        
+                        *match_len = str_match(n->str, 
+                                               &str[*str_index], 
+                                               str_len);
+
+                        /* Increase the index into the string we are
+                           matching */
                         *str_index += *match_len;
 
-                        if (*str_len != *match_len)
+                        if (*str_len != *match_len /* || 
+                                                      str[*str_index] == '\0' 
+                                                   */) {
+                                /* We didn't match the entire node, or
+                                   we ran out of characters in the
+                                   string, which means we cannot
+                                   descend any further */
                                 break;
-                        n_str_index = *match_len - 1;
+                        }
                 }
 
+                /* Keep track of the previously best matching node */
+                if (match && match(n))
+                        prev = n;
+
+                /* We matched the full node, and there */
                 list_for_each_entry(c, &n->children, lh) {
                         if (c->str[0] == str[*str_index])
                                 tmp = c;
@@ -213,20 +267,30 @@ static struct radix_node *radix_node_find_lpm(struct radix_node *n,
                         }
                 }
                         
-                if (!tmp)
+                if (!tmp) {
+                        /* There was no matching child, return the current
+                           node as best match */
                         break;
+                }
                 n = tmp;
         }
+
+        if (match && !match(n))
+                n = prev;
         
         return n;
 }
 
-struct radix_node *radix_tree_find(struct radix_tree *tree, const char *str)
+struct radix_node *radix_tree_find(struct radix_tree *tree, 
+                                   const char *str,
+                                   int (*match)(struct radix_node *))
 {
        size_t str_index = 0, str_len = 0, match_len = 0;
        struct radix_node *n, *wildcard = NULL;
        
-       n = radix_node_find_lpm(&tree->root, str, &str_index, &str_len, &match_len, &wildcard);
+       n = radix_node_find_lpm(&tree->root, str, &str_index, 
+                               &str_len, &match_len, match, 
+                               &wildcard);
 
        if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
                  || n->str[match_len] == '*'))
@@ -238,22 +302,24 @@ struct radix_node *radix_tree_find(struct radix_tree *tree, const char *str)
        return NULL;      
 }
 
-int radix_tree_insert(struct radix_tree *tree, 
-                      const char *str, 
-                      void *private,
-                      struct radix_node **node,
-                      gfp_t alloc)
+int radix_tree_add(struct radix_tree *tree, 
+                   const char *str, 
+                   void *private,
+                   struct radix_node **node,
+                   gfp_t alloc)
 {
         struct radix_node *n, *c;
         size_t str_index = 0, str_len = 0, match_len = 0;
                 
-        n = radix_node_find_lpm(&tree->root, str, &str_index, &str_len, &match_len, NULL);
+        n = radix_node_find_lpm(&tree->root, str, &str_index, 
+                                &str_len, &match_len, NULL, NULL);
         
         if (!n) 
                 return -1;
         
-        /* printf("insert '%s' found '%s' str_index=%zu\n", str, n->str, str_index); */
-
+        /* printf("insert '%s' found '%s' str_index=%zu\n", 
+           str, n->str, str_index); */
+                 
         if (str[str_index] == '\0' && n->str[match_len] == '\0') {
                 /* Full match, string already in tree */
                 if (node)
@@ -264,8 +330,9 @@ int radix_tree_insert(struct radix_tree *tree,
                 
                 if (match_len) {
                         /* We need to split this node */
-                        printf("split %s at %s match_len=%zu\n", n->str, &n->str[match_len], match_len);
-                        
+                        /* printf("split %s at %s match_len=%zu\n", 
+                           n->str, &n->str[match_len], match_len);
+                        */
                         p = radix_node_new(n->str, 
                                            match_len, 
                                            n->parent, NULL, alloc);
@@ -274,9 +341,10 @@ int radix_tree_insert(struct radix_tree *tree,
                                 return -ENOMEM;
                         
                         if (radix_node_set_key(n, &n->str[match_len], 
-                                               n->strlen - match_len, alloc) < 0) {
-                        radix_node_free(p);
-                        return -ENOMEM;
+                                               n->strlen - match_len, 
+                                               alloc) < 0) {
+                                radix_node_free(p);
+                                return -ENOMEM;
                         }
                         n->parent = p;
                         list_del_init(&n->lh);
@@ -290,7 +358,7 @@ int radix_tree_insert(struct radix_tree *tree,
         }
         
         if (str[str_index] != '\0') {
-                printf("adding %s\n", &str[str_index]);
+                //printf("adding %s\n", &str[str_index]);
                 /* Still need to add the rest of the string */
                 c = radix_node_new(&str[str_index], 
                                    strlen(&str[str_index]), 
@@ -299,7 +367,6 @@ int radix_tree_insert(struct radix_tree *tree,
                 if (!c)
                         return -1;
                 
-                c->state = NODE_ACTIVE;
                 list_add(&c->lh, &n->children);
 
                 if (node)
@@ -376,7 +443,7 @@ int radix_node_remove(struct radix_node *n, gfp_t alloc)
                         if (list_empty(&p->children)) {
                                 /* The parent has no children. If the node is
                                  * inactive, we can simply remove it. */
-                                if (p->state == NODE_INACTIVE) {
+                                if (!p->private) {
                                         /* Just remove this inactive node */
                                         list_del(&p->lh);
                                         radix_node_free(p);
@@ -386,7 +453,7 @@ int radix_node_remove(struct radix_node *n, gfp_t alloc)
                                  * can merge with the parent if it is
                                  * inactive */
                                 //printf("merging child of %p:%s\n", p, p->str);
-                                if (p->state == NODE_INACTIVE)
+                                if (!p->private)
                                         radix_node_merge_child(p, alloc);
                         }
                 }
@@ -401,7 +468,7 @@ int radix_node_remove(struct radix_node *n, gfp_t alloc)
                          * inactive instead of removing. This means it
                          * will be removed as soon as all children are
                          * gone. */
-                        n->state = NODE_INACTIVE;
+                        n->private = NULL;
                 }
         }        
         return 1;
@@ -412,7 +479,8 @@ int radix_tree_remove(struct radix_tree *tree, const char *str, gfp_t alloc)
         struct radix_node *n;
         size_t str_index = 0, str_len = 0, match_len = 0;
                 
-        n = radix_node_find_lpm(&tree->root, str, &str_index, &str_len, &match_len, NULL);
+        n = radix_node_find_lpm(&tree->root, str, &str_index, 
+                                &str_len, &match_len, NULL, NULL);
         
         if (!n) 
                 return -1;
@@ -447,20 +515,9 @@ static struct radix_node *queue_first(struct list_head *q)
         return list_remove_first(q);
 }
 
-/*
-static void stack_push(struct list_head *stack, struct radix_node *n)
-{
-        list_add(&n->plh, stack);
-}
-
-static struct radix_node *stack_pop(struct list_head *stack)
-{
-        return list_remove_first(stack);
-}
-*/
-
 static int radix_tree_foreach_bfs(struct radix_tree *tree, 
-                                  int (*node_func)(struct radix_node *, void *arg),
+                                  int (*func)(struct radix_node *, 
+                                              void *arg),
                                   void *arg)
 {
         struct list_head queue;
@@ -482,7 +539,7 @@ static int radix_tree_foreach_bfs(struct radix_tree *tree,
                 }
 
                 if (n != &tree->root) {
-                        ret = node_func(n, arg);
+                        ret = func(n, arg);
                         
                         if (ret == -1)
                                 break;
@@ -494,21 +551,27 @@ static int radix_tree_foreach_bfs(struct radix_tree *tree,
 }
 
 int radix_tree_foreach(struct radix_tree *tree, 
-                       int (*node_func)(struct radix_node *, void *arg),
+                       int (*func)(struct radix_node *, void *arg),
                        void *arg)
 {
-        return radix_tree_foreach_bfs(tree, node_func, arg);
+        return radix_tree_foreach_bfs(tree, func, arg);
 }
 
 static int radix_node_destroy(struct radix_node *n, void *arg)
 {
+        void (*free_func)(struct radix_node *) = 
+                (void (*)(struct radix_node *))arg;
+
+        if (free_func)
+                free_func(n);
         radix_node_free(n);
         return 1;
 }
 
-void radix_tree_destroy(struct radix_tree *tree)
+void radix_tree_destroy(struct radix_tree *tree,
+                        void (*free_func)(struct radix_node *))
 {
-        radix_tree_foreach_bfs(tree, radix_node_destroy, NULL);
+        radix_tree_foreach_bfs(tree, radix_node_destroy, free_func);
 }
 
 const char *radix_node_print(struct radix_node *n, char *buf, size_t buflen)
@@ -522,9 +585,9 @@ const char *radix_node_print(struct radix_node *n, char *buf, size_t buflen)
         while (n->parent && buflen) {
                 size_t len = n->strlen;
                         
-                //printf("%s-", n->str);
                 if (buflen >= len) {
                         buflen -= len;
+
                         strncpy(buf + buflen, n->str, len);
                 } else {
                         len -= buflen;
@@ -533,8 +596,6 @@ const char *radix_node_print(struct radix_node *n, char *buf, size_t buflen)
                 }
                 n = n->parent;
         }
-
-        //printf("\n");
                 
         return buf + buflen;
 }
@@ -548,7 +609,7 @@ static int radix_node_print_active(struct radix_node *n, void *arg)
         } *args = (struct args *)arg;
         int len = 0;
 
-        if (n->state == NODE_ACTIVE) {
+        if (n->private) {
                 char node[128];
 
                 len = snprintf(args->buf + args->totlen, args->buflen, "%s\n", 
@@ -578,6 +639,7 @@ int radix_tree_print_bfs(struct radix_tree *tree, char *buf, size_t buflen)
         return args.totlen;
 }
 
+#if defined(ENABLE_MAIN)
 const char *test_strings[] = {
         "*",
         "foobar",
@@ -598,7 +660,6 @@ static radix_node_ops default_node_ops = {
 };
 */
 
-#if defined(ENABLE_MAIN)
 static RADIX_TREE_DEFINE(rt);
 
 int main(int argc, char **argv)
@@ -609,7 +670,7 @@ int main(int argc, char **argv)
         
         for (i = 0; test_strings[i]; i++) {
                 printf("insert %s\n", test_strings[i]);
-                radix_tree_insert(&rt, test_strings[i], NULL, &n, 0);
+                radix_tree_add(&rt, test_strings[i], NULL, &n, 0);
         }
         
         printf("\nprint bfs:\n");
@@ -650,7 +711,7 @@ int main(int argc, char **argv)
                 }
         }
 
-        radix_tree_destroy(&rt);
+        radix_tree_destroy(&rt, NULL);
 
         return 0;
 }
