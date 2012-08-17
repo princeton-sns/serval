@@ -146,18 +146,19 @@ static int client(const char *filepath,
                 addrlen = sizeof(cliaddr.inet);
         } else {
                 cliaddr.serval.sv_family = family;
-                serval_pton("tcp.client.localdomain", &cliaddr.serval.sv_srvid);
+                serval_pton("tcp.client.localdomain", 
+                            &cliaddr.serval.sv_srvid);
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
                        &server_srvid, sizeof(server_srvid));
                 addrlen = sizeof(cliaddr.serval);
-                /* srvaddr.sv_flags = SV_WANT_FAILOVER; */
         }
         
         sock = socket_sv(family, SOCK_STREAM, 0);
         
         set_reuse_ok(sock);
-        
+
+        /*
         if (family == AF_SERVAL) {
                 ret = bind_sv(sock, &cliaddr.saddr, addrlen);
                 
@@ -167,7 +168,7 @@ static int client(const char *filepath,
                         goto out;
                 }
         }
-        
+        */
         if (family == AF_INET) {
                 char buf[18];
                 printf("Connecting to service %s:%u\n",
@@ -190,7 +191,7 @@ static int client(const char *filepath,
                         struct sockaddr_sv sv;
                         struct sockaddr_in in;
                 } saddr;
-                socklen_t addrlen = sizeof(saddr.in);
+                socklen_t addrlen = sizeof(saddr);
                 char ipaddr[18];
 
                 memset(&saddr, 0, sizeof(saddr));

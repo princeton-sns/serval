@@ -78,6 +78,9 @@ static int serval_autobind(struct sock *sk)
 
           TODO: check for conflicts.
         */
+
+        LOG_DBG("Generating serviceID\n");
+
         lock_sock(sk);
         ssk = serval_sk(sk);
         {
@@ -190,7 +193,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 }
 
 /*
- *	This does both peername and sockname.
+ *	This function does both peername and sockname.
  */
 int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                    int *uaddr_len, int peer)
