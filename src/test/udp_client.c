@@ -54,11 +54,11 @@ int client(void) {
 
 	bzero(&cliaddr, sizeof(cliaddr));
 	cliaddr.sv_family = AF_SERVAL;
-        serval_pton("udp-client.localdomain", &cliaddr.sv_srvid);
+        serval_pton("udp.client.localdomain", &cliaddr.sv_srvid);
 
 	bzero(&srvaddr, sizeof(srvaddr));
 	srvaddr.sv_family = AF_SERVAL;
-        serval_pton("udp-server.localdomain", &srvaddr.sv_srvid);
+        serval_pton("udp.server.localdomain", &srvaddr.sv_srvid);
   
 	sock = socket_sv(AF_SERVAL, SOCK_DGRAM, SERVAL_PROTO_UDP);
 

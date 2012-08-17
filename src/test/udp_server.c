@@ -39,7 +39,7 @@ int server(void)
   
         memset(&servaddr, 0, sizeof(servaddr));
         servaddr.sv_family = AF_SERVAL;
-        serval_pton("udp-server.localdomain", &servaddr.sv_srvid);
+        serval_pton("udp.server.localdomain", &servaddr.sv_srvid);
   
         set_reuse_ok(sock);
   

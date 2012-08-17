@@ -232,8 +232,7 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 } else if (*uaddr_len >= sizeof(struct sockaddr_sv)) {
                         struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
                         sv->sv_family = AF_SERVAL;
-                        memcpy(&sv->sv_srvid, &ssk->peer_srvid, 
-                               sizeof(ssk->peer_srvid));
+                        service_id_copy(&sv->sv_srvid, &ssk->peer_srvid);
                         *uaddr_len = sizeof(*sv);
                 } else {
                         struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
@@ -252,9 +251,7 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                         __be32 addr = inet->inet_rcv_saddr;
 
                         sv->sv_family = AF_SERVAL;
-                        memcpy(&sv->sv_srvid, &ssk->local_srvid, 
-                               sizeof(ssk->local_srvid));
-
+                        service_id_copy(&sv->sv_srvid, &ssk->local_srvid);
                         sin->sin_family = AF_INET;
                         if (!addr)
                                 addr = inet->inet_saddr;
@@ -265,8 +262,7 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 } else if (*uaddr_len >= sizeof(struct sockaddr_sv)) {
                         struct sockaddr_sv *sv = (struct sockaddr_sv *)uaddr;
                         sv->sv_family = AF_SERVAL;
-                        memcpy(&sv->sv_srvid, &ssk->local_srvid, 
-                               sizeof(ssk->local_srvid));
+                        service_id_copy(&sv->sv_srvid, &ssk->local_srvid);
                         *uaddr_len = sizeof(*sv);
                 } else {
                         struct sockaddr_in *sin = (struct sockaddr_in *)uaddr;
