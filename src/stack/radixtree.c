@@ -10,18 +10,6 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
-#if defined(ENABLE_MAIN)
-#define LOG_DBG(format, ...) printf("%s: "format, __func__, ## __VA_ARGS__)
-#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR "format,        \
-                                     __func__, ## __VA_ARGS__)
-                                     
-#define kmalloc(x,y) malloc(x)
-#define krealloc(x,y,z) realloc(x,y)
-#define kfree(x) free(x)
-
-#define ENOMEM 1
-#define OS_USER
-#endif
 #include <serval/platform.h>
 #if defined(OS_USER)
 #include <stdlib.h>
@@ -252,7 +240,7 @@ static struct radix_node *radix_node_find_lpm(struct radix_node *n,
                 }
 
                 /* Keep track of the previously best matching node */
-                if (match && match(n))
+                if (n->private && match && match(n))
                         prev = n;
 
                 /* We matched the full node, and there */
@@ -275,7 +263,7 @@ static struct radix_node *radix_node_find_lpm(struct radix_node *n,
                 n = tmp;
         }
 
-        if (match && !match(n))
+        if (n->private && match && !match(n))
                 n = prev;
         
         return n;
@@ -285,21 +273,21 @@ struct radix_node *radix_tree_find(struct radix_tree *tree,
                                    const char *str,
                                    int (*match)(struct radix_node *))
 {
-       size_t str_index = 0, str_len = 0, match_len = 0;
-       struct radix_node *n, *wildcard = NULL;
-       
-       n = radix_node_find_lpm(&tree->root, str, &str_index, 
-                               &str_len, &match_len, match, 
-                               &wildcard);
-
-       if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
+        size_t str_index = 0, str_len = 0, match_len = 0;
+        struct radix_node *n, *wildcard = NULL;
+        
+        n = radix_node_find_lpm(&tree->root, str, &str_index, 
+                                &str_len, &match_len, match, 
+                                &wildcard);
+        
+        if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
                  || n->str[match_len] == '*'))
-               return n;
-
-       if (wildcard)
+                return n;
+        
+        if (wildcard)
                return wildcard;
-
-       return NULL;      
+        
+        return NULL;      
 }
 
 int radix_tree_add(struct radix_tree *tree, 
@@ -387,24 +375,6 @@ int radix_tree_add(struct radix_tree *tree,
 
         return 1;
 }
-
-/*
-static size_t str_splice(char *dst, const char *s1, const char *s2)
-{
-        size_t i = 0;
-        
-        while (*s1 != '\0') {
-                *dst++ = *s1++;
-                i++;
-        }
-        
-        while (*s2 != '\0') {
-                *dst++ = *s2++;
-                i++;
-        }
-        return i;
-}
-*/
 
 static int radix_node_merge_child(struct radix_node *n, gfp_t alloc)
 {
@@ -669,12 +639,6 @@ const char *test_strings[] = {
         "bad",
         NULL,
 };
-
-/*
-static radix_node_ops default_node_ops = {
-        .print = radix_node_print,
-};
-*/
 
 static RADIX_TREE_DEFINE(rt);
 

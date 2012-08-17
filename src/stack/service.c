@@ -201,16 +201,16 @@ struct net_device *service_entry_get_dev(struct service_entry *se,
         return t ? t->out.dev : NULL;
 }
 
-static void target_set_add_target(struct target_set *set, 
-                                  struct target *t) 
+static void __target_set_add_target(struct target_set *set, 
+                                    struct target *t) 
 {
         list_add_tail(&t->lh, &set->list);
         set->normalizer += t->weight;
         set->count++;
 }
 
-static void service_entry_insert_target_set(struct service_entry *se, 
-                                            struct target_set *set) 
+static void __service_entry_insert_target_set(struct service_entry *se, 
+                                              struct target_set *set) 
 {
 
         struct target_set *pos = NULL;
@@ -307,7 +307,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                         if (!nset)
                                 return -ENOMEM;
 
-                        service_entry_insert_target_set(se, nset);
+                        __service_entry_insert_target_set(se, nset);
                 }
 
                 target_set_remove_target(set, t);
@@ -318,7 +318,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                 }
 
                 t->weight = weight;
-                target_set_add_target(nset, t);
+                __target_set_add_target(nset, t);
         } else {
                 /*adjust the normalizer*/
                 set->normalizer -= t->weight;
@@ -926,7 +926,6 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                                                   struct service_id *srvid, 
                                                   rule_match_t match) 
 {
-        struct service_entry *se = NULL;
         struct radix_node *n;
         int (*func)(struct radix_node *) = NULL;
 
@@ -951,10 +950,10 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         if (n) {
                 if (match != RULE_MATCH_EXACT ||
                     !radix_node_is_wildcard(n))
-                        se = get_service(n);
+                        return get_service(n);
         }
 
-        return se;
+        return NULL;
 }
 
 static struct service_entry *service_table_find(struct service_table *tbl,
@@ -1178,7 +1177,7 @@ static int service_table_add(struct service_table *tbl,
                 /* Unlock table and lock service entry instead */
                 write_unlock_bh(&tbl->lock);
                 
-                read_lock_bh(&se->lock);
+                write_lock_bh(&se->lock);
 
                 t = __service_entry_get_target(se, type, dst, dstlen,
                                                out, &set,
@@ -1187,28 +1186,27 @@ static int service_table_add(struct service_table *tbl,
                                                MATCH_NO_PROTOCOL);
 
                 set = __service_entry_get_target_set(se, priority);
-                                
-                read_unlock_bh(&se->lock);
 
                 if (t) {
+                        ret = 0;
                         /* Found existing target, we are trying to
                          * insert a duplicate. */
-                        service_entry_put(se);
-
                         if (is_sock_target(t)) {
                                 /* A socket target should return
                                  * EADDRINUSE since this is typically
                                  * a result of a bind() */
-                                return -EADDRINUSE;
+                                ret = -EADDRINUSE;
                         }
-                        LOG_INF("Identical service entry already exists\n");
-                        return 0;
+                        write_unlock_bh(&se->lock);
+                        service_entry_put(se);
+                        return ret;
                 }
         } else {
                 /* Hold this entry since it is now in the table */
                 service_entry_hold(se);
                 /* We should add target to new service entry */
                 write_unlock_bh(&tbl->lock);
+                write_lock_bh(&se->lock);
         }
 
         t = target_create(type, dst, dstlen, out, weight, alloc);
@@ -1224,14 +1222,11 @@ static int service_table_add(struct service_table *tbl,
                         target_free(t);
                         goto fail_target;
                 }
-                write_lock_bh(&se->lock);
                 /* Insert the new set */
-                service_entry_insert_target_set(se, set);
-        } else {
-                write_lock_bh(&se->lock);
-        }
+                __service_entry_insert_target_set(se, set);
+        } 
 
-        target_set_add_target(set, t);
+        __target_set_add_target(set, t);
 
         se->count++;
 
@@ -1242,6 +1237,8 @@ static int service_table_add(struct service_table *tbl,
         return ret;
 
 fail_target:
+        write_unlock_bh(&se->lock);
+
         if (n) {
                 /* If n is non-NULL, we created the entry
                  * above. Since we failed to create the target,
