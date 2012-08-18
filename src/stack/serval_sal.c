@@ -100,7 +100,7 @@ static int serval_sal_state_process(struct sock *sk,
                                     struct serval_context *ctx);
 
 static int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
-                                   int clone_it, gfp_t gfp_mask);
+                                   int use_copy, gfp_t gfp_mask);
 
 static size_t min_ext_length[] = {
         [0] = sizeof(struct serval_hdr),
@@ -1687,7 +1687,6 @@ static int serval_sal_rcv_syn(struct sock *sk,
                sizeof(ctx->conn_ext->srvid));
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->seqno;
-
 
         /* Save our local address that we grabbed from the incoming
          * interface. This address should in most cases be the same
@@ -3553,7 +3552,7 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
 }
 
 int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
-                            int clone_it, gfp_t gfp_mask)
+                            int use_copy, gfp_t gfp_mask)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct inet_sock *inet = inet_sk(sk);
@@ -3568,14 +3567,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                     extra 8 bytes are coming from at
                                     this point */
     
-	if (likely(clone_it)) {
-		if (unlikely(skb_cloned(skb)))
-			skb = pskb_copy(skb, gfp_mask);
-		else
-			skb = skb_clone(skb, gfp_mask);
+	if (likely(use_copy)) {
+                /* pskb_copy will make a copy of header and
+                   non-fragmented data. Making a copy is necessary
+                   since we are changing the TCP header checksum for
+                   every copy we send (retransmission or copies for
+                   packets matching multiple rules). */
+                skb = pskb_copy(skb, gfp_mask);
+
 		if (unlikely(!skb)) {
                         /* Shouldn't free the passed skb here, since
-                         * we were asked to clone it. That probably
+                         * we were asked to use a copy. That probably
                          * means the original skb sits in a queue
                          * somewhere, and freeing it would be bad. */
                         return -ENOBUFS;
@@ -3716,18 +3718,15 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
-                        if (unlikely(skb_cloned(skb)))
-                                cskb = pskb_copy(skb, GFP_ATOMIC);
-                        else
-                                cskb = skb_clone(skb, GFP_ATOMIC);
-			
+                        cskb = pskb_copy(skb, GFP_ATOMIC);
+                        
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
                                 kfree_skb(skb);
                                 err = -ENOBUFS;
 				break;
 			}
-                        /* Cloned skb will have no socket set. */
+                        /* skb copy will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
 		}
                 
@@ -3795,8 +3794,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check &&
-                    packet_has_transport_hdr(cskb, sh))
+                    packet_has_transport_hdr(cskb, sh)) {
+                        LOG_DBG("Calculating transport checksum\n");
                         ssk->af_ops->send_check(sk, cskb);
+                }
 
                 /* Compute SAL header checksum */
                 serval_sal_send_check((struct serval_hdr *)cskb->data);
