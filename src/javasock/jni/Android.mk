@@ -3,7 +3,8 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
 	JNIHelp.c \
-	org_servalarch_platform_ServalNetworkStack.c
+	org_servalarch_platform_ServalNetworkStack.c \
+	org_servalarch_net_ServiceID.c
 
 LOCAL_C_INCLUDES += \
 	$(JNI_H_INCLUDE) \

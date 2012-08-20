@@ -40,20 +40,21 @@ static struct {
 static int fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr, 
                                jobject srvid, int bits)
 {
-	jboolean isCopy;
-	jbyteArray byteArr = (*env)->CallObjectMethod(env, srvid, 
-						      gServiceIDFields.getID);
-	jbyte *arr = (*env)->GetByteArrayElements(env, byteArr, &isCopy);
-	
-	if (bits < 0 || (unsigned int)bits > 
-            ((sizeof(svaddr->sv_srvid) * 8) - 1))
-		bits = 0;
+        const char *service_str;
+	jstring service = (*env)->CallObjectMethod(env, srvid, 
+                                                   gServiceIDFields.getID);
 
+        service_str = (*env)->GetStringUTFChars(env, service, NULL);
+
+        if (!service_str)
+                return -1;
+        
 	memset(svaddr, 0, sizeof(*svaddr));
 	svaddr->sv_family = AF_SERVAL;
-	memcpy(&svaddr->sv_srvid, arr, sizeof(svaddr->sv_srvid));
-	
-	(*env)->ReleaseByteArrayElements(env, byteArr, arr, 0);
+	strncpy(svaddr->sv_srvid.s_sid, service_str, 
+                SERVICE_ID_MAX_LEN+1);
+        
+        (*env)->ReleaseStringUTFChars(env, service, service_str);
 
         return 0;
 }
@@ -110,14 +111,14 @@ void Java_org_servalarch_platform_ServalNetworkStack_nativeInit(JNIEnv *env,
 
 	gServiceIDFields.clazz = (*env)->NewGlobalRef(env, clazz);
 	gServiceIDFields.getID = (*env)->GetMethodID(env, clazz, 
-						     "getID", "()[B");
+						     "getID", "()Ljava/lang/String;");
 	
 	if (gServiceIDFields.getID == NULL) {
 		LOG_ERR("Could not find ServiceID.getID() function\n");
 	}
 
 	gServiceIDFields.constructor = (*env)->GetMethodID(env, clazz, 
-							   "<init>", "([B)V");
+							   "<init>", "(Ljava/lang/String;)V");
 	
 	if (gServiceIDFields.constructor == NULL) {
 		LOG_ERR("Could not find ServiceID() function\n");

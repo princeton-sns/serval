@@ -17,6 +17,8 @@ public class TCPClient {
     private ServalSocket sock;
     private BufferedReader in;
     private BufferedWriter out;
+    private static final String serverName = "java.tcp.server.localdomain";
+    private static final String clientName = "java.tcp.client.localdomain";
 
     public TCPClient() {
 
@@ -66,10 +68,9 @@ public class TCPClient {
     }
     private void run() {
         try {
-        	//ServiceID localServiceID = new ServiceID((short) 32769)
-            sock = new ServalSocket(new ServiceID(16385));
+            sock = new ServalSocket(new ServiceID(serverName));
             //sock.setSoTimeout(5000);
-            //sock.connect(new ServiceID((short) 16385), 4000);
+            //sock.connect(new ServiceID(serverName), 4000);
         } catch (Exception e) {
             System.err.println("connect failure: " + e.getMessage());
             

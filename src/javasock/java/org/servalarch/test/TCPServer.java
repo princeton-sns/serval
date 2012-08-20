@@ -94,7 +94,7 @@ public class TCPServer {
     public void run() {
 	    try {
 		    serverSock = 
-                new ServalServerSocket(new ServiceID(16385));
+                new ServalServerSocket(new ServiceID("java.tcp.server.localdomain"));
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
             return;

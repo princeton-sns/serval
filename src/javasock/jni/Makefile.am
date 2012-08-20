@@ -2,14 +2,16 @@ lib_LTLIBRARIES = libservalnet_jni.la
 
 libservalnet_jni_la_SOURCES = \
 	JNIHelp.c \
-	org_servalarch_platform_ServalNetworkStack.c
+	org_servalarch_platform_ServalNetworkStack.c \
+	org_servalarch_net_ServiceID.c
 
 #libserval_javasock_jni_includedir=$(top_srcdir)/include
 #libserval_javasock_jni_include_HEADERS =
 
 noinst_HEADERS = \
 	JNIHelp.h \
-	org_servalarch_platform_ServalNetworkStack.h	
+	org_servalarch_platform_ServalNetworkStack.h \
+	org_servalarch_net_ServiceID.h
 
 libservalnet_jni_la_CPPFLAGS =-I$(top_srcdir)/include $(JAVA_INCLUDE)
 libservalnet_jni_la_LDFLAGS =
