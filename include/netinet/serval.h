@@ -196,9 +196,9 @@ enum wildcard_pos {
 };
 
 /**
- * Copy a FQDN and verify its format at the same time. Optionally
- * allow a wildcard char ('*') at the beginning (1) or end of the string
- * (2), as indicated by the wildcard_pos argument.
+ * Copy an FQDN and verify its format at the same time. Optionally
+ * allow a wildcard char ('*') at the beginning (1) or end of the
+ * string (2), as indicated by the wildcard_pos argument.
  *
  * @dst the destination buffer.
  * @fqdn the source buffer.
@@ -221,7 +221,7 @@ static inline int fqdn_copy(char *dst, const char *fqdn,
                 
                 if (fqdn[i] == '*') {
                         if (wp == WP_NONE || 
-                            (wp == WP_BEGINNING && i != 0) ||
+                            (wp == WP_BEGINNING && i != 0 && fqdn[1] != '.') ||
                             (wp == WP_END && fqdn[i+1] != '\0'))
                                 return 0;
                 } else if (!fqdn_valid_char(fqdn[i]))
@@ -285,7 +285,7 @@ static inline int fqdn_verify_wildcard(const char *fqdn)
         if (!fqdn)
                 return -1;
 
-        if (fqdn[0] == '*')
+        if (fqdn[0] == '*' && fqdn[1] == '.')
                 fqdn++;
         
         i = fqdn_verify_length(fqdn, &len);

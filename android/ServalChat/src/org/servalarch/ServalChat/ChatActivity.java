@@ -157,7 +157,7 @@ public class ChatActivity extends Activity {
 				Log.d("ServalChat", "Connected 1");
 				sock.setSoTimeout(3000);
 				statusText.post(new StatusUpdater("Connecting..."));
-				sock.connect(new ServiceID((short) 16385), 10000);
+				sock.connect(new ServiceID("servalchat.localdomain"), 10000);
 				Log.d("ServalChat", "connected 2");
 				statusText.post(new StatusUpdater("Connected"));
 				in = new BufferedReader(new InputStreamReader(sock.getInputStream()));
