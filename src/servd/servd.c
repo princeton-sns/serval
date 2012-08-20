@@ -612,8 +612,11 @@ static int local_service_get_result(struct hostctrl *hc,
                         /* The 'get' for the default service returned
                            something. Update the existing entry */
                         ret = hostctrl_service_modify(ctx->lhc, &si->srvid, 
-                                                      si->srvid_prefix_bits, si->priority,
-                                                      si->weight, &si->address, &ctx->router_ip);
+                                                      si->srvid_prefix_bits, 
+                                                      si->priority,
+                                                      si->weight, 
+                                                      &si->address, 
+                                                      &ctx->router_ip);
                 }
                 
         }
@@ -628,11 +631,22 @@ static int local_service_get_result(struct hostctrl *hc,
         
         return ret;
 }
-                                   
+
+static int delay_notification(struct hostctrl *hc,
+                              unsigned int xid,
+                              unsigned int pkt_id,
+                              struct service_id *service)
+{
+        LOG_DBG("service resolution for %s DELAYED\n");
+        
+        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
+}
+
 static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
         .service_get_result = local_service_get_result,
+        .service_delay_notification = delay_notification,
         .start = NULL,
         .stop = NULL,
 };

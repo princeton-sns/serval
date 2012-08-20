@@ -210,6 +210,22 @@ static int local_service_migrate(struct hostctrl *hc,
     return message_channel_send(hc->mc, &cm, cm.cmh.len);
 }
 
+static int local_service_delay_verdict(struct hostctrl *hc,
+                                       unsigned int pkt_id,
+                                       enum delay_verdict verdict)
+{
+    struct ctrlmsg_delay cmd;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.cmh.type = CTRLMSG_TYPE_DELAY_VERDICT;
+    cmd.cmh.len = sizeof(cmd);
+    cmd.cmh.xid = ++hc->xid;
+    cmd.pkt_id = pkt_id;
+    cmd.verdict = verdict;
+    
+    return message_channel_send(hc->mc, &cmd.cmh, cmd.cmh.len);
+}
+
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
                        struct sockaddr *from, socklen_t from_len)
 {
@@ -317,6 +333,16 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                                  CTRLMSG_SERVICE_INFO_STAT_NUM(csis));
         break;
     }
+    case CTRLMSG_TYPE_DELAY_NOTIFY: {
+        struct ctrlmsg_delay *cmd = 
+            (struct ctrlmsg_delay *)cm;
+        if (hc->cbs->service_delay_notification)
+            ret = hc->cbs->service_delay_notification(hc,
+                                                      cm->xid,
+                                                      cmd->pkt_id,
+                                                      &cmd->service);
+        break;
+    }
 	default:
 		LOG_DBG("Received message type %u\n", cm->type);
 		break;
@@ -335,5 +361,6 @@ struct hostctrl_ops local_ops = {
 	.service_remove = local_service_remove,
 	.service_modify = local_service_modify,
     .service_get = local_service_get,
+    .service_delay_verdict = local_service_delay_verdict,
     .ctrlmsg_recv = local_ctrlmsg_recv,
 };

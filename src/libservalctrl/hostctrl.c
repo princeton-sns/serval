@@ -366,3 +366,12 @@ int hostctrl_get_peer_addr(struct hostctrl *hc,
 {
     return message_channel_get_peer(hc->mc, addr, addrlen);
 }
+
+int hostctrl_set_delay_verdict(struct hostctrl *hc,
+                               unsigned int pkt_id,
+                               enum delay_verdict verdict)
+{
+    if (hc && hc->ops->service_delay_verdict)
+        return hc->ops->service_delay_verdict(hc, pkt_id, verdict);
+    return -1;
+}

@@ -38,6 +38,7 @@
 #endif
 #include <serval_request_sock.h>
 #include <service.h>
+#include <delay_queue.h>
 #include <af_serval.h>
 
 extern atomic_t serval_nr_socks;
@@ -573,7 +574,7 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
                                            struct serval_hdr *sh)
 {
         /* We might have pulled the serval header already. */
-        if ((unsigned char *)sh == skb_transport_header(skb)) {
+        if (sh && ((unsigned char *)sh == skb_transport_header(skb))) {
                 LOG_DBG("skb->len=%u sh->length=%u\n", 
                         skb->len, ntohs(sh->length));
                 return skb->len > ntohs(sh->length);
@@ -1056,6 +1057,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 seqno)
                 }
         }
 
+        SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
         SERVAL_SKB_CB(skb)->flags = SVH_SYN;
         SERVAL_SKB_CB(skb)->seqno = seqno;
         ssk->snd_seq.nxt = seqno + 1;
@@ -3010,6 +3012,15 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         }
                 }
                 
+                if (target->type == RULE_DELAY) {
+                        delay_queue_skb(cskb, srvid);
+                        target = next_target;
+                        continue;
+                } else if (target->type == RULE_DROP) {
+                        kfree_skb(cskb);
+                        continue;
+                }
+                
                 iph = ip_hdr(cskb);
                 iph_len = iph->ihl << 2;
 #if defined(OS_USER)
@@ -3142,9 +3153,9 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         return sk;
 }
 
-static int serval_sal_resolve(struct sk_buff *skb, 
-                              struct serval_context *ctx,
-                              struct sock **sk)
+int serval_sal_resolve(struct sk_buff *skb, 
+                       struct serval_context *ctx,
+                       struct sock **sk)
 {
         int ret = SAL_RESOLVE_ERROR;
         struct service_id *srvid = NULL;
@@ -3171,6 +3182,110 @@ static int serval_sal_resolve(struct sk_buff *skb,
         }
         
         return ret;
+}
+
+static int serval_sal_rcv_finish(struct sock *sk, 
+                                 struct sk_buff *skb, 
+                                 struct serval_context *ctx)
+{
+        int err = 0;
+
+        bh_lock_sock_nested(sk);
+
+        /* We only reach this point if a valid local socket destination
+         * has been found */
+        /* Drop check if control queue is full here - this should
+         * increment the per-service drop stats as well*/
+        if (!is_pure_data(ctx) &&
+            serval_sal_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN) {
+                goto drop_no_stats;
+        }
+        
+        if (!sock_owned_by_user(sk)) {
+                err = serval_sal_do_rcv(sk, skb);
+        } else {
+                /*
+                  Add to backlog and process in user context when
+                  the user process releases its lock ownership.
+                  
+                  Note, for kernels >= 2.6.33 the sk_add_backlog()
+                  function adds the total allocated memory for the
+                  backlog to that of the receive buffer and rejects
+                  queuing in case the new total overreaches the
+                  socket's configured receive buffer size.
+
+                  This may not be the wanted behavior in case we are
+                  processing control packets in the backlog (i.e.,
+                  control packets can be dropped because the data
+                  receive buffer is full. This might not be a big deal
+                  though, as control packets are retransmitted.
+                */
+
+                LOG_PKT("Adding packet to backlog\n");
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
+        }
+
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
+        /*
+          IP will resubmit packet if return value is less than
+          zero. Therefore, make sure we always return 0, even if we drop the
+          packet.
+        */
+
+	return err;
+drop:
+        service_inc_stats(-1, -(skb->len - ctx->length));
+drop_no_stats:
+        LOG_DBG("Dropping packet\n");
+        bh_unlock_sock(sk);
+        sock_put(sk);
+        kfree_skb(skb);
+        return err;
+}
+
+int serval_sal_reresolve(struct sk_buff *skb)
+{
+        struct serval_context ctx;
+        struct sock *sk;
+        int err = 0;
+
+        if (serval_sal_parse_hdr(skb, &ctx, SERVAL_PARSE_ALL)) {
+                LOG_DBG("Bad Serval header %s\n",
+                        ctx.hdr ? serval_hdr_to_str(ctx.hdr) : "NULL");
+                return -1;
+        }
+
+        err = serval_sal_resolve(skb, &ctx, &sk);
+
+        switch (err) {
+        case SAL_RESOLVE_DEMUX:
+                return serval_sal_rcv_finish(sk, skb, &ctx);
+        case SAL_RESOLVE_FORWARD:                
+                return 0;
+        case SAL_RESOLVE_NO_MATCH:
+                /* TODO: fix error codes for this function */
+                err = -EHOSTUNREACH;
+        case SAL_RESOLVE_DROP:
+        case SAL_RESOLVE_DELAY:
+        case SAL_RESOLVE_ERROR:
+        default:
+                if (sk)
+                        sock_put(sk);
+                err = 0;
+        }
+
+        kfree_skb(skb);
+        
+        return err;
 }
 
 int serval_sal_rcv(struct sk_buff *skb)
@@ -3243,64 +3358,11 @@ int serval_sal_rcv(struct sk_buff *skb)
                         goto drop;
                 }
         }
-        
-        bh_lock_sock_nested(sk);
 
-        /* We only reach this point if a valid local socket destination
-         * has been found */
-        /* Drop check if control queue is full here - this should
-         * increment the per-service drop stats as well*/
-        if (!is_pure_data(&ctx) &&
-            serval_sal_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN) {
-                bh_unlock_sock(sk);
-                sock_put(sk);
-                goto drop_no_stats;
-        }
-
-        if (!sock_owned_by_user(sk)) {
-                err = serval_sal_do_rcv(sk, skb);
-        } else {
-                /*
-                  Add to backlog and process in user context when
-                  the user process releases its lock ownership.
-                  
-                  Note, for kernels >= 2.6.33 the sk_add_backlog()
-                  function adds the total allocated memory for the
-                  backlog to that of the receive buffer and rejects
-                  queuing in case the new total overreaches the
-                  socket's configured receive buffer size.
-
-                  This may not be the wanted behavior in case we are
-                  processing control packets in the backlog (i.e.,
-                  control packets can be dropped because the data
-                  receive buffer is full. This might not be a big deal
-                  though, as control packets are retransmitted.
-                */
-                LOG_PKT("Adding packet to backlog\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb)) {
-                        bh_unlock_sock(sk);
-                        sock_put(sk);
-                        goto drop;
-                }
-#else
-                sk_add_backlog(sk, skb);
-#endif
-        }
-
-        bh_unlock_sock(sk);
-        sock_put(sk);
-
-        /*
-          IP will resubmit packet if return value is less than
-          zero. Therefore, make sure we always return 0, even if we drop the
-          packet.
-        */
-
-	return 0;
+        err = serval_sal_rcv_finish(sk, skb, &ctx);
+        return 0;
 drop:
         service_inc_stats(-1, -(skb->len - ctx.length));
-drop_no_stats:
         LOG_DBG("Dropping packet\n");
         kfree_skb(skb);
         return 0;
@@ -3551,6 +3613,50 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         return sizeof(*mig_ext);
 }
 
+static struct serval_hdr *serval_sal_build_header(struct sock *sk, 
+                                                  struct sk_buff *skb)
+{
+        struct serval_hdr *sh;
+        struct serval_sock *ssk = serval_sk(sk);
+        unsigned short hdr_len = sizeof(*sh);
+
+        /* Add appropriate flags and headers */
+        if (SERVAL_SKB_CB(skb)->flags & SVH_SYN || 
+            SERVAL_SKB_CB(skb)->flags & SVH_CONN_ACK)
+                hdr_len += serval_sal_add_conn_ext(sk, skb, 0);
+        else if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN)
+                hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
+        else if (SERVAL_SKB_CB(skb)->flags & SVH_FIN ||
+                 SERVAL_SKB_CB(skb)->flags & SVH_RST ||
+                 SERVAL_SKB_CB(skb)->flags & SVH_ACK)
+                hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
+        else {
+                /* Unconnected datagram, add service extension */
+                if (sk->sk_state == SERVAL_INIT && 
+                    sk->sk_type == SOCK_DGRAM) {
+                        hdr_len += serval_sal_add_service_ext(sk, skb, 0);
+                }
+        }
+
+        /* Add Serval header */
+        sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
+        sh->syn = SERVAL_SKB_CB(skb)->flags & SVH_SYN ? 1 : 0;
+        sh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK ? 1 : 0;
+        sh->fin = SERVAL_SKB_CB(skb)->flags & SVH_FIN ? 1 : 0;
+        sh->rst = SERVAL_SKB_CB(skb)->flags & SVH_RST ? 1 : 0;
+        sh->rsyn = SERVAL_SKB_CB(skb)->flags & SVH_RSYN ? 1 : 0;
+        sh->protocol = sk->sk_protocol;
+        sh->length = htons(hdr_len);
+        memcpy(&sh->src_flowid, &ssk->local_flowid, 
+               sizeof(ssk->local_flowid));
+        memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
+               sizeof(ssk->peer_flowid));
+
+        skb->protocol = IPPROTO_SERVAL;
+
+        return sh;
+}
+
 int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
                             int use_copy, gfp_t gfp_mask)
 {
@@ -3559,7 +3665,6 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	struct service_entry *se;
 	struct target *target;
         struct serval_hdr *sh;
-        int hdr_len = sizeof(*sh);
 	int err = -1;
         struct service_iter iter;
         struct sk_buff *cskb = NULL;
@@ -3599,48 +3704,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
          * instead, which is released in the skb's destructor.
          */
 
-        /* Add appropriate flags and headers */
-        if (SERVAL_SKB_CB(skb)->flags & SVH_SYN || 
-            SERVAL_SKB_CB(skb)->flags & SVH_CONN_ACK)
-                hdr_len += serval_sal_add_conn_ext(sk, skb, 0);
-        else if (SERVAL_SKB_CB(skb)->flags & SVH_RSYN)
-                hdr_len += serval_sal_add_migrate_ext(sk, skb, 0);
-        else if (SERVAL_SKB_CB(skb)->flags & SVH_FIN ||
-                 SERVAL_SKB_CB(skb)->flags & SVH_RST ||
-                 SERVAL_SKB_CB(skb)->flags & SVH_ACK)
-                hdr_len += serval_sal_add_ctrl_ext(sk, skb, 0);
-        else {
-                /* Unconnected datagram, add service extension */
-                if (sk->sk_state == SERVAL_INIT && 
-                    sk->sk_type == SOCK_DGRAM) {
-                        hdr_len += serval_sal_add_service_ext(sk, skb, 0);
-                }
-        }
-
-        /* Add Serval header */
-        sh = (struct serval_hdr *)skb_push(skb, sizeof(*sh));
-        sh->syn = SERVAL_SKB_CB(skb)->flags & SVH_SYN ? 1 : 0;
-        sh->ack = SERVAL_SKB_CB(skb)->flags & SVH_ACK ? 1 : 0;
-        sh->fin = SERVAL_SKB_CB(skb)->flags & SVH_FIN ? 1 : 0;
-        sh->rst = SERVAL_SKB_CB(skb)->flags & SVH_RST ? 1 : 0;
-        sh->rsyn = SERVAL_SKB_CB(skb)->flags & SVH_RSYN ? 1 : 0;
-        sh->protocol = sk->sk_protocol;
-        sh->length = htons(hdr_len);
-        memcpy(&sh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
-        memcpy(&sh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
-
-        skb->protocol = IPPROTO_SERVAL;
-        
-        LOG_PKT("Serval XMIT %s skb->len=%u\n",
-                serval_hdr_to_str(sh), skb->len);
-
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 
                                    SERVALF_FINWAIT1 | 
                                    SERVALF_FINWAIT2 | 
                                    SERVALF_CLOSING | 
                                    SERVALF_CLOSEWAIT)) {
+                sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
+
+                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                        serval_hdr_to_str(sh), skb->len);
 
                 return serval_sal_do_xmit(skb);
         }
@@ -3660,7 +3734,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 /* for user-space, need to specify a device - the
                  * kernel will route */
+                sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
+
+                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                        serval_hdr_to_str(sh), skb->len);
                 
                 /* note that the service resolution stats
                  * (packets/bytes) will not be incremented here In the
@@ -3685,8 +3763,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0) {
+                kfree_skb(skb);
                 return -1;
+        }
 
         /*
           Send to all destinations resolved for this service.
@@ -3729,7 +3809,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         /* skb copy will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
 		}
-                
+
+                if (target->type == RULE_DELAY) {
+                        delay_queue_skb(cskb, 
+                                        &serval_sk(sk)->peer_srvid);
+                        target = next_target;
+                        continue;
+                } else if (target->type == RULE_DROP) {
+                        kfree_skb(cskb);
+                        continue;
+                }
+
                 /* Remember the flow destination */
 		if (is_sock_target(target)) {
                         /* use a localhost address and bounce it off
@@ -3794,17 +3884,19 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check &&
-                    packet_has_transport_hdr(cskb, sh)) {
+                    packet_has_transport_hdr(cskb, NULL)) {
                         LOG_DBG("Calculating transport checksum\n");
                         ssk->af_ops->send_check(sk, cskb);
                 }
 
+                sh = serval_sal_build_header(sk, cskb);
+
                 /* Compute SAL header checksum */
-                serval_sal_send_check((struct serval_hdr *)cskb->data);
+                serval_sal_send_check(sh);
 
                 /* Cannot reset transport header until after checksum
-                   calculation since send_check requires access to
-                   transport header */
+                   calculation since transport send_check requires
+                   access to transport header */
                 skb_reset_transport_header(cskb);
 
 		local_err = ssk->af_ops->queue_xmit(cskb);

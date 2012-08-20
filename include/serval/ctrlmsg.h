@@ -33,6 +33,8 @@ enum ctrlmsg_type {
         CTRLMSG_TYPE_SERVICE_STAT,
         CTRLMSG_TYPE_CAPABILITIES,
         CTRLMSG_TYPE_MIGRATE,
+        CTRLMSG_TYPE_DELAY_NOTIFY,
+        CTRLMSG_TYPE_DELAY_VERDICT,
         CTRLMSG_TYPE_DUMMY,
         _CTRLMSG_TYPE_MAX,
 };
@@ -239,9 +241,25 @@ struct ctrlmsg_migrate {
 	char to_i[IFNAMSIZ];
 } CTRLMSG_PACKED;
 
-/* CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == ) */
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == 57) 
 
-#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migratee))
+#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
+
+enum delay_verdict {
+        DELAY_RELEASE,
+        DELAY_DROP,
+};
+
+struct ctrlmsg_delay {
+        struct ctrlmsg cmh;
+        uint32_t pkt_id;
+        enum delay_verdict verdict;
+        struct service_id service;
+} CTRLMSG_PACKED;
+
+#define CTRLMSG_DELAY_SIZE (sizeof(struct ctrlmsg_delay))
+
+CTRLMSG_ASSERT(sizeof(struct ctrlmsg_delay) == 48)
 
 enum {
         CTRL_MODE_NET = 0, 

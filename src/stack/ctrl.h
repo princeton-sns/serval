@@ -4,11 +4,11 @@
 
 #include <serval/ctrlmsg.h>
 
-typedef int (*ctrlmsg_handler_t)(struct ctrlmsg *);
+typedef int (*ctrlmsg_handler_t)(struct ctrlmsg *, int);
 
 int ctrl_init(void);
 void ctrl_fini(void);
-int ctrl_sendmsg(struct ctrlmsg *, int);
+int ctrl_sendmsg(struct ctrlmsg *, int, int);
 
 #if defined(OS_USER)
 int ctrl_recvmsg(void);

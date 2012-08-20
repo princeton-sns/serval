@@ -17,6 +17,7 @@ serval-y := \
 	   linux/udp_encap.o \
 	   linux/sysctl_net_serval.o \
 	   debug.o \
+	   delay_queue.o \
 	   platform.o \
 	   af_serval.o \
 	   bst.o \

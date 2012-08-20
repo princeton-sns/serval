@@ -247,6 +247,7 @@ int serval_sal_send_shutdown(struct sock *sk);
 int serval_sal_recv_shutdown(struct sock *sk);
 void serval_sal_done(struct sock *sk);
 int serval_sal_rcv(struct sk_buff *skb);
+int serval_sal_reresolve(struct sk_buff *skb);
 
 static inline struct serval_hdr *serval_hdr(struct sk_buff *skb)
 {

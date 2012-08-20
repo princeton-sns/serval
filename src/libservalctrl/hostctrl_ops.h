@@ -50,6 +50,9 @@ struct hostctrl_ops {
     int (*services_query)(struct hostctrl *hc,
                           const struct service_info *si,
                           unsigned int num_si);
+    int (*service_delay_verdict)(struct hostctrl *hc,
+                                 unsigned int pkt_id,
+                                 enum delay_verdict verdict);
     int (*ctrlmsg_recv)(struct hostctrl *hc, struct ctrlmsg *cm,
                         struct sockaddr *from, socklen_t from_len);
 };

@@ -787,7 +787,7 @@ struct target *service_iter_next(struct service_iter *iter)
 }
 
 void service_iter_inc_stats(struct service_iter *iter, 
-                                       int packets, int bytes) 
+                            int packets, int bytes) 
 {
         struct target *dst = NULL;
 
@@ -1299,11 +1299,9 @@ static int service_table_add(struct service_table *tbl,
                 if (dstlen > 0)
                         return -EINVAL;
                 break;
-        case RULE_DROP:
         case RULE_DELAY:
-                LOG_ERR("Rule %s not supported yet!\n",
-                        rule_to_str(type));
-                return -EINVAL;
+        case RULE_DROP:
+                break;
         }
 
         if (memcmp(srvid, &default_service, sizeof(default_service)) == 0)
