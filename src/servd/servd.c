@@ -641,16 +641,10 @@ static int delay_notification(struct hostctrl *hc,
                               unsigned int pkt_id,
                               struct service_id *service)
 {
-        struct in_addr ipaddr;
         LOG_DBG("resolution for pkt_id=%u on service %s DELAYED\n",
                 pkt_id, service_id_to_str(service));
         
-        inet_pton(AF_INET, "192.168.56.102", &ipaddr);
-
-        hostctrl_service_add(hc, SERVICE_RULE_FORWARD, 
-                             service, 0, 1, 0, &ipaddr);
-
-        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_RELEASE);
+        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
 }
 
 static struct hostctrl_callback lcb = {
