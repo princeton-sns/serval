@@ -88,7 +88,7 @@ static int local_service_modify(struct hostctrl *hc,
 		struct service_info service[2];
 	} req;
 
-    if (!srvid || !old_ip)
+    if (!srvid)
         return -1;
 
     memset(&req, 0, sizeof(req));
@@ -101,14 +101,16 @@ static int local_service_modify(struct hostctrl *hc,
     req.service[0].priority = priority;
     req.service[0].weight = weight;
     memcpy(&req.service[0].srvid, srvid, sizeof(*srvid));
-    memcpy(&req.service[0].address, old_ip, sizeof(*old_ip));
+
+    if (old_ip)
+        memcpy(&req.service[0].address, old_ip, sizeof(*old_ip));
 
     req.service[0].if_index = -1;
     req.service[1].if_index = -1;
 
-    if (!new_ip)
+    if (!new_ip && old_ip)
         memcpy(&req.service[1].address, old_ip, sizeof(*old_ip));
-    else
+    else if (new_ip)
         memcpy(&req.service[1].address, new_ip, sizeof(*new_ip));
 
 	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */

@@ -163,11 +163,11 @@ static int is_target(struct target *t,
 
         switch (type) {
         case SERVICE_RULE_DEMUX:
-                if (dst && t->out.raw == dst)
+                if (!dst || t->out.raw == dst)
                         return 1;
                 break;
         case SERVICE_RULE_FORWARD:
-                if (dst && memcmp(t->dst, dst, dstlen) == 0)
+                if (!dst || memcmp(t->dst, dst, dstlen) == 0)
                         return 1;
                 break;
         default:
@@ -363,7 +363,7 @@ static int __service_entry_modify_target(struct service_entry *se,
         struct target_set *set = NULL;
         struct target *t;
 
-        if (dstlen == 0) {
+        if (type == SERVICE_RULE_DEMUX || dstlen == 0) {
                 LOG_ERR("Cannot modify socket entry\n");
                 return -1;
         }
@@ -373,7 +373,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                                        MATCH_NO_PROTOCOL);
         
         if (!t) {
-                LOG_DBG("Could not get target entry\n");
+                LOG_DBG("Could not find matching target entry\n");
                 return 0;
         }
         
@@ -404,6 +404,9 @@ static int __service_entry_modify_target(struct service_entry *se,
         if (set->priority != priority) {
                 struct target_set *nset;
 
+                /* We are changing the priority of a target, which
+                   means we need to move it to the set corresponding
+                   to that priority */
                 nset = __service_entry_get_target_set(se, priority);
                 
                 if (!nset) {
@@ -424,13 +427,14 @@ static int __service_entry_modify_target(struct service_entry *se,
 
                 t->weight = weight;
                 target_set_add_target(nset, t);
+                nset->flags = flags;
         } else {
                 /*adjust the normalizer*/
                 set->normalizer -= t->weight;
                 t->weight = weight;
                 set->normalizer += t->weight;
+                set->flags = flags;
         }
-        set->flags = flags;
 
         return 1;
 }
@@ -1046,7 +1050,8 @@ static int service_entry_local_match(struct bst_node *n)
         struct service_entry *se = get_service(n);
         struct target *t;
 
-        t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, NULL, 0, 
+        t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, 
+                                       NULL, 0, 
                                        make_target(NULL), NULL, 
                                        MATCH_ANY_PROTOCOL);
         
@@ -1061,7 +1066,8 @@ static int service_entry_global_match(struct bst_node *n)
         struct service_entry *se = get_service(n);        
         struct target *t;
 
-        t = __service_entry_get_target(se, SERVICE_RULE_FORWARD, NULL, 0, 
+        t = __service_entry_get_target(se, SERVICE_RULE_FORWARD, 
+                                       NULL, 0, 
                                        make_target(NULL), NULL, 
                                        MATCH_NO_PROTOCOL);
         
@@ -1089,6 +1095,9 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         if (!srvid)
                 return NULL;
         
+        LOG_DBG("service find %s:%d\n",
+                service_id_to_str(srvid), prefix);
+
         switch (match) {
         case RULE_MATCH_LOCAL:
                 func = service_entry_local_match;
@@ -1243,19 +1252,15 @@ static int service_table_modify(struct service_table *tbl,
         n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
         
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
-                if (dst || dstlen == 0) {                        
-                        ret = service_entry_modify_target(get_service(n), type, 
-                                                          flags, priority, 
-                                                          weight, dst, dstlen,
-                                                          new_dst, new_dstlen,
-                                                          out, GFP_ATOMIC);
-                }
-                goto out;
+                ret = service_entry_modify_target(get_service(n), type, 
+                                                  flags, priority, 
+                                                  weight, dst, dstlen,
+                                                  new_dst, new_dstlen,
+                                                  out, GFP_ATOMIC);
+        } else {
+                ret = -EINVAL;
         }
-        
-        ret = -EINVAL;
 
- out: 
         read_unlock_bh(&tbl->lock);
         
         return ret;

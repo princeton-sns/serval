@@ -300,6 +300,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm, int peer)
                                 service_id_to_str(&entry_old->srvid), 
                                 err);
                 }
+                dev_put(dev);
         }
         
         if (index == 0) {
