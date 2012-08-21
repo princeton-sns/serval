@@ -3191,12 +3191,6 @@ static int serval_sal_rcv_finish(struct sock *sk,
 
         /* We only reach this point if a valid local socket destination
          * has been found */
-        /* Drop check if control queue is full here - this should
-         * increment the per-service drop stats as well*/
-        if (!is_pure_data(ctx) &&
-            serval_sal_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN) {
-                goto drop_no_stats;
-        }
         
         if (!sock_owned_by_user(sk)) {
                 err = serval_sal_do_rcv(sk, skb);
@@ -3232,7 +3226,6 @@ static int serval_sal_rcv_finish(struct sock *sk,
 	return err;
 drop:
         service_inc_stats(-1, -(skb->len - ctx->length));
-drop_no_stats:
         LOG_DBG("Dropping packet\n");
         bh_unlock_sock(sk);
         sock_put(sk);
@@ -3263,7 +3256,11 @@ int serval_sal_reresolve(struct sk_buff *skb)
                 return err;
         case SAL_RESOLVE_NO_MATCH:
         case SAL_RESOLVE_DROP:
+                LOG_DBG("RESOLVE NO_MATCH or DROP\n");
+                err = -EHOSTUNREACH;
+                break;
         case SAL_RESOLVE_ERROR:
+                LOG_ERR("RESOLVE ERROR\n");
                 err = -EHOSTUNREACH;
         default:
                 if (sk)
@@ -3330,11 +3327,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 
                 switch (err) {
                 case SAL_RESOLVE_DEMUX:
-                        err = serval_sal_rcv_finish(sk, skb, &ctx);
-
-                        if (err < 0)
-                                return NET_RX_DROP;
-                        return NET_RX_SUCCESS;
+                        break;
                 case SAL_RESOLVE_FORWARD:
                         /* Packet forwarded on out device */
                 case SAL_RESOLVE_DELAY:
@@ -3344,10 +3337,18 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
+                        goto drop;
                         break;
                 }
         }
-drop:
+
+        err = serval_sal_rcv_finish(sk, skb, &ctx);
+        
+        if (err < 0)
+                return NET_RX_DROP;
+      
+        return NET_RX_SUCCESS;
+ drop:
         if (sk)
                 sock_put(sk);
         service_inc_stats(-1, -(skb->len - ctx.length));
