@@ -130,7 +130,7 @@ public class ServalServerSocket {
         if (aServiceID == null)
         	throw new IllegalArgumentException("Bad serviceID");
         
-        checkListen(aServiceID, ServiceID.SERVICE_ID_MAX_BITS);
+        checkListen(aServiceID);
         impl = factory != null ? factory.createSocketImpl()
                 : new ServalPlainServerSocketImpl();
 
@@ -187,11 +187,7 @@ public class ServalServerSocket {
      * @param listenBits
      * 			  the size of the prefix to listen on (in number of bits).
      */
-    void checkListen(ServiceID aServiceID, int listenBits) {
-        if (listenBits < 0 || listenBits > ServiceID.SERVICE_ID_MAX_BITS) {
-            throw new IllegalArgumentException("Bad prefix to listen to: " + 
-            		listenBits);
-        }
+    void checkListen(ServiceID aServiceID) {
         /*
         SecurityManager security = System.getSecurityManager();
         if (security != null) {

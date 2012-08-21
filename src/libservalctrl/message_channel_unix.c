@@ -37,20 +37,24 @@ static void message_channel_unix_finalize(message_channel_t *channel)
 
 static int message_channel_unix_initialize(message_channel_t *channel)
 {
+    int peer = getpid();
     struct ctrlmsg cm;
+    struct iovec iov = { &cm, sizeof(cm) };
     message_channel_base_t *base = (message_channel_base_t *)channel;
+    struct msghdr msg = { &base->peer.sa, base->peer_len, 
+                          &iov, 1, &peer, sizeof(peer), 0 };
     ssize_t ret;
 
     message_channel_base_initialize(channel);
 
     /* Send a dummy message to make the stack aware of this channel
        client */
+    
     memset(&cm, 0, sizeof(cm));
     cm.type = CTRLMSG_TYPE_DUMMY;
     cm.len = sizeof(cm);
 
-    ret = sendto(base->sock, &cm, cm.len, 0, 
-                 &base->peer.sa, base->peer_len);
+    ret = sendmsg(base->sock, &msg, 0);
     
     if (ret == -1) {
         LOG_ERR("%s could not send hello message on channel: %s\n",

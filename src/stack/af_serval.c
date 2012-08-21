@@ -46,6 +46,7 @@
 #include <serval_request_sock.h>
 #include <serval_udp_sock.h>
 #include <serval_tcp_sock.h>
+#include <delay_queue.h>
 #include <ctrl.h>
 #include <af_serval.h>
 
@@ -53,6 +54,8 @@ extern int __init packet_init(void);
 extern void __exit packet_fini(void);
 extern int __init service_init(void);
 extern void __exit service_fini(void);
+extern int __init delay_queue_init(void);
+extern void __exit delay_queue_fini(void);
 
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
@@ -185,7 +188,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         cm.cmh.len = sizeof(cm);
         memcpy(&cm.srvid, &ssk->local_srvid, sizeof(ssk->local_srvid));
 
-        if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
+        if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
                 LOG_INF("No service daemon running?\n");
         }
 
@@ -691,8 +694,8 @@ static int serval_shutdown(struct socket *sock, int how)
                 memcpy(&cm.srvid, &serval_sk(sk)->local_srvid, 
                        sizeof(cm.srvid));
                 
-                if (ctrl_sendmsg(&cm.cmh, GFP_KERNEL) < 0) {
-                                LOG_INF("No service daemon running?\n");
+                if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
+                        LOG_INF("No service daemon running?\n");
                 }
         }
 
@@ -781,8 +784,12 @@ int serval_release(struct socket *sock)
                 /* Orphaning will mark the sock with flag DEAD,
                  * allowing the sock to be destroyed. */
                 sock_orphan(sk);
-
+                
                 release_sock(sk);
+
+                /* Purge any packets in the delay queue for this
+                   socket */
+                delay_queue_purge_sock(sk);
 
                 /* Now socket is owned by kernel and we acquire BH lock
                    to finish close. No need to check for user refs.
@@ -1104,6 +1111,8 @@ int __init serval_init(void)
         }
 
         serval_tcp_init();
+        
+        delay_queue_init();
 out:
         return err;
 fail_sock_register:
@@ -1132,4 +1141,5 @@ void __exit serval_fini(void)
         packet_fini();
         serval_sock_tables_fini();
         service_fini();
+        delay_queue_fini();
 }

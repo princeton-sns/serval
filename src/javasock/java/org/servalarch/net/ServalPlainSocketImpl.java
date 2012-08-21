@@ -172,9 +172,8 @@ public class ServalPlainSocketImpl extends ServalSocketImpl {
     }
 
     @Override
-    protected void bind(ServiceID localServiceID, InetAddress localAddr, 
-    		int bindBits) throws IOException {
-        netImpl.bind(fd, localServiceID, bindBits);
+    protected void bind(ServiceID localServiceID, InetAddress localAddr) throws IOException {
+        netImpl.bind(fd, localServiceID);
         // PlainSocketImpl2.socketBindImpl2(fd, aPort, anAddr);
         this.localServiceID = localServiceID;
         //this.localAddress = localAddr;

@@ -34,10 +34,10 @@ JNIEXPORT jint JNICALL Java_org_servalarch_platform_ServalNetworkStack_createStr
 /*
  * Class:     org_servalarch_platform_ServalNetworkStack
  * Method:    bind
- * Signature: (Ljava/io/FileDescriptor;Lorg/servalarch/net/ServiceID;I)I
+ * Signature: (Ljava/io/FileDescriptor;Lorg/servalarch/net/ServiceID;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_platform_ServalNetworkStack_bind
-  (JNIEnv *, jobject, jobject, jobject, jint);
+  (JNIEnv *, jobject, jobject, jobject);
 
 /*
  * Class:     org_servalarch_platform_ServalNetworkStack

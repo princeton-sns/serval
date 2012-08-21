@@ -91,10 +91,10 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         fd = new FileDescriptor();
     }
 
-    public void bind(ServiceID serviceID, InetAddress addr, int bindBits) 
+    public void bind(ServiceID serviceID, InetAddress addr) 
         throws SocketException {
         //prop != null && prop.toLowerCase().equals("true"); //$NON-NLS-1$
-        netImpl.bind(fd, serviceID, bindBits);
+        netImpl.bind(fd, serviceID);
         if (serviceID != null) {
             localServiceID = serviceID;
         } else {
@@ -108,25 +108,9 @@ public class ServalDatagramSocketImpl implements SocketOptions {
         }
     }
 
-    public void bind(ServiceID serviceID, int bindBits) 
-        throws SocketException {
-
-        // FIXME: Should implement IP address binding
-        bind(serviceID, null, bindBits);
-    }
-
     public void bind(ServiceID serviceID) 
         throws SocketException {
-
-        // FIXME: Should implement IP address binding
-        bind(serviceID, null, 0);
-    }
-
-    public void bind(ServiceID serviceID, InetAddress addr) 
-        throws SocketException {
-
-        // FIXME: Should implement IP address binding
-        bind(serviceID, null, 0);
+        bind(serviceID, null);
     }
 
     protected void listen(int backlog) throws IOException

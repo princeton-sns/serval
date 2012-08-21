@@ -108,41 +108,9 @@ public abstract class ServalSocketImpl implements SocketOptions {
 	 */
 	protected void bind(ServiceID localServiceID, InetAddress localAddr)
 			throws IOException {
-		bind(localServiceID, localAddr, ServiceID.SERVICE_ID_MAX_BITS);
+		bind(localServiceID, localAddr);
 	}
-
-	/**
-	 * Binds this socket to the specified local serviceID.
-	 * 
-	 * @param localServiceID
-	 *            the local serviceID to bind this socket to.
-	 * @param localAddr
-	 *            the local address to bind this socket to.
-	 * @param bindBits
-	 *            the prefix length to bind to.
-	 * @throws IOException
-	 *             if an error occurs while binding this socket.
-	 */
-    protected void bind(ServiceID localServiceID, 
-    		InetAddress localAddr, int bindBits)
-            throws IOException {
-    	bind(localServiceID, localAddr, bindBits);
-    }
    
-    /**
-     * Binds this socket to the specified local serviceID.
-     *
-     * @param localServiceID
-     *            the local serviceID to bind this socket to.
-     * @param bindBits
-     * 			  the prefix length to bind to.
-     * @throws IOException
-     *             if an error occurs while binding this socket.
-     */
-    protected void bind(ServiceID localServiceID, int bindBits)
-            throws IOException {
-    	bind(localServiceID, null, bindBits);
-    }
     /**
      * Binds this socket to the specified local serviceID.
      *
@@ -153,7 +121,7 @@ public abstract class ServalSocketImpl implements SocketOptions {
      */
     protected void bind(ServiceID localServiceID)
             throws IOException {
-    	bind(localServiceID, null, ServiceID.SERVICE_ID_MAX_BITS);
+    	bind(localServiceID, null);
     }
 
     /**

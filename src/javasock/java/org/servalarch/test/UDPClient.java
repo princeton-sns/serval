@@ -13,7 +13,9 @@ import org.servalarch.net.ServiceID;
 
 public class UDPClient {
     private ServalDatagramSocket sock;
-    
+    private static final String serverName = "java.udp.server.localdomain";
+    private static final String clientName = "java.udp.client.localdomain";
+  
     public UDPClient() {
 
     }
@@ -66,9 +68,9 @@ public class UDPClient {
     }
     private void run() {
         try {
-            sock = new ServalDatagramSocket(new ServiceID(32769));
+            sock = new ServalDatagramSocket(new ServiceID(clientName));
             sock.setSoTimeout(5000);
-            sock.connect(new ServiceID(16385), 4000);
+            sock.connect(new ServiceID(serverName), 4000);
         } catch (Exception e) {
             System.out.println("failure: " + e.getMessage());
             

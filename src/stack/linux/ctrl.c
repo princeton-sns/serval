@@ -42,9 +42,9 @@ static void ctrl_recv_skb(struct sk_buff *skb)
                 ret = -1;
         } else {
                 if (handlers[cm->type]) {
-                        ret = handlers[cm->type](cm);
+                        ret = handlers[cm->type](cm, peer_pid);
                         
-                        if (ret == -1) {
+                        if (ret < 0) {
                                 LOG_ERR("handler failure for msg type %u\n",
                                         cm->type);
                         }
@@ -54,11 +54,11 @@ static void ctrl_recv_skb(struct sk_buff *skb)
                 }
         }
 
-	if (flags & NLM_F_ACK)
-                netlink_ack(skb, nlh, 0);
+	if (flags & NLM_F_ACK || ret < 0)
+                netlink_ack(skb, nlh, ret);
 }
 
-int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
+int ctrl_sendmsg(struct ctrlmsg *msg, int peer, int mask)
 {
         struct sk_buff *skb;
         struct nlmsghdr *nlh;
@@ -75,9 +75,15 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
         
         memcpy(NLMSG_DATA(nlh), msg, msg->len);
 
-        LOG_DBG("Broadcasting netlink msg len=%u\n", msg->len);
+        if (peer <= 0) {
+                LOG_DBG("Broadcasting netlink msg len=%u\n", msg->len);
+                return netlink_broadcast(nl_sk, skb, 0, 1, mask);
+        }
+        
+        LOG_DBG("Unicasting netlink msg len=%u peer=%d\n", 
+                msg->len, peer);
 
-        return netlink_broadcast(nl_sk, skb, 0, 1, mask);
+        return netlink_unicast(nl_sk, skb, peer, MSG_DONTWAIT);
 }
 
 int __init ctrl_init(void)
@@ -88,7 +94,9 @@ int __init ctrl_init(void)
 	if (!nl_sk)
 		return -ENOMEM;
 
-        /* Allow non-root daemons to receive notifications */
+        /* Allow non-root daemons to receive notifications. This is
+           something that probably shouldn't be allowed in a
+           production system. */
 	netlink_set_nonroot(NETLINK_SERVAL, NL_NONROOT_RECV);
 
 	return 0;

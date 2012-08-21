@@ -55,9 +55,13 @@ struct hostctrl_callback {
                               unsigned int num);
     int (*service_remove_result)(struct hostctrl *hc,
                                  unsigned int xid,
-                                 int retval,                                     
+                                 int retval,
                                  const struct service_info_stat *sis,
                                  unsigned int num);
+    int (*service_delay_notification)(struct hostctrl *hc,
+                                      unsigned int xid,
+                                      unsigned int pkt_id,
+                                      struct service_id *service);
     int (*start)(struct hostctrl *hc); /* Called one time, when thread starts */
     void (*stop)(struct hostctrl *hc); /* Called when thread stops */
 };
@@ -108,6 +112,7 @@ int hostctrl_service_register(struct hostctrl *hc,
 int hostctrl_service_unregister(struct hostctrl *hc, 
                                 const struct service_id *srvid);
 int hostctrl_service_add(struct hostctrl *hc, 
+                         enum service_rule_type type,
                          const struct service_id *srvid, 
                          unsigned int priority,
                          unsigned int weight,
@@ -145,4 +150,7 @@ int hostctrl_get_local_addr(struct hostctrl *hc, struct sockaddr *addr,
 int hostctrl_get_peer_addr(struct hostctrl *hc, struct sockaddr *addr, 
                            socklen_t *addrlen);
 
+int hostctrl_set_delay_verdict(struct hostctrl *hc,
+                               unsigned int pkt_id,
+                               enum delay_verdict verdict);
 #endif /* _HOSTCTRL_H_ */

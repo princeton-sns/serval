@@ -8,6 +8,7 @@
 #include <serval/skbuff.h>
 #include <serval/dst.h>
 #include <serval/sock.h>
+#include <serval/ctrlmsg.h>
 
 #define LOCAL_SERVICE_DEFAULT_PRIORITY 32000
 #define LOCAL_SERVICE_DEFAULT_WEIGHT 1024
@@ -91,7 +92,9 @@ struct target_set {
         uint16_t count;
 };
 
-#define is_sock_target(target) ((target)->dstlen == 0)
+#define is_sock_target(target)                          \
+        ((target)->type == SERVICE_RULE_DEMUX &&        \
+         (target)->dst && (target)->dstlen == 0)
 
 union target_out {
         void *raw;
@@ -108,12 +111,6 @@ static inline union target_out make_target(void *t)
         return out;
 }
 
-typedef enum service_rule_type {
-        RULE_FORWARD,
-        RULE_DEMUX,
-        RULE_DELAY,
-        RULE_DROP,     
-} service_rule_type_t;
 /**
    A target, either a local socket or remote host.
 */

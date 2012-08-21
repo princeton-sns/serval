@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.servalctrl;
 
 import java.net.InetAddress;
@@ -5,49 +6,52 @@ import java.net.InetAddress;
 import org.servalarch.net.ServiceID;
 
 public class ServiceInfoStat extends ServiceInfo {
-	long durationSec;
-	long durationNsec;
-	long packetsResolved;
-	long bytesResolved;
-	long bytesDropped;
-	long tokensConsumed;
-        short flags;
+    long durationSec;
+    long durationNsec;
+    long packetsResolved;
+    long bytesResolved;
+    long bytesDropped;
+    long tokensConsumed;
+    short flags;
 
-	public ServiceInfoStat(ServiceID id, short flags,
-			       InetAddress addr, long ifindex, long priority, long weight,
-			       long idleTimeout, long hardTimeout, long durationSec, long durationNsec, 
-			       long packetsResolved, long bytesResolved, long bytesDropped, long tokensConsumed) {
-	        super(id, flags, addr, ifindex, priority, weight, idleTimeout,
-		      hardTimeout);
-		this.durationSec = durationSec;
-		this.durationNsec = durationNsec;
-		this.packetsResolved = packetsResolved;
-		this.bytesResolved = bytesResolved;
-		this.bytesDropped = bytesDropped;
-		this.tokensConsumed = tokensConsumed;
-	}
+    public ServiceInfoStat(ServiceID id, long type, short flags,
+			   InetAddress addr, long ifindex, 
+			   long priority, long weight,
+			   long idleTimeout, long hardTimeout, 
+			   long durationSec, long durationNsec, 
+			   long packetsResolved, long bytesResolved, 
+			   long bytesDropped, long tokensConsumed) {
+	super(id, type, flags, addr, ifindex, priority, 
+	      weight, idleTimeout, hardTimeout);
+	this.durationSec = durationSec;
+	this.durationNsec = durationNsec;
+	this.packetsResolved = packetsResolved;
+	this.bytesResolved = bytesResolved;
+	this.bytesDropped = bytesDropped;
+	this.tokensConsumed = tokensConsumed;
+    }
 
-	public long getDurationSec() {
-		return durationSec;
-	}
+    public long getDurationSec() {
+	return durationSec;
+    }
 
-	public long getDurationNsec() {
-		return durationNsec;
-	}
+    public long getDurationNsec() {
+	return durationNsec;
+    }
 
-	public long getPacketsResolved() {
-		return packetsResolved;
-	}
+    public long getPacketsResolved() {
+	return packetsResolved;
+    }
 
-	public long getBytesResolved() {
-		return bytesResolved;
-	}
+    public long getBytesResolved() {
+	return bytesResolved;
+    }
 
-	public long getBytesDropped() {
-		return bytesDropped;
-	}
+    public long getBytesDropped() {
+	return bytesDropped;
+    }
 
-	public long getTokensConsumed() {
-		return tokensConsumed;
-	}
+    public long getTokensConsumed() {
+	return tokensConsumed;
+    }
 }

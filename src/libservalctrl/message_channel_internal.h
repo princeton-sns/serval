@@ -36,6 +36,7 @@ typedef struct message_channel {
     unsigned char flags;
     unsigned short state;
     pthread_mutex_t lock;
+    int peer_pid;
     const char *name;
     struct hashelm he;
     struct message_channel_ops *ops;

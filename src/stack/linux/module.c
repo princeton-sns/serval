@@ -105,7 +105,8 @@ static int dev_configuration(struct net_device *dev)
                                 inet_ntop(AF_INET, &dst, buf, 16));
                 }
 #endif
-                service_add(&default_service, RULE_FORWARD, 0, 
+                service_add(&default_service, 
+                            SERVICE_RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
                             &dst, sizeof(dst), make_target(dev), 

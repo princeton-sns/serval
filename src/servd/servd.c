@@ -509,7 +509,9 @@ static int handle_incoming_registration(struct hostctrl *hc,
                 
                 registration_add(ctx, SERVICE_REMOTE, srvid, remote_ip);
 
-                ret = hostctrl_service_add(ctx->lhc, srvid, 0, 0, remote_ip);
+                ret = hostctrl_service_add(ctx->lhc,
+                                           SERVICE_RULE_FORWARD,
+                                           srvid, 0, 0, remote_ip);
         }
 
         return ret;
@@ -574,7 +576,9 @@ static int local_service_get_result(struct hostctrl *hc,
                         LOG_DBG("No default service route set\n");
                         /* There was no existing route, the 'get' returned
                            nothing. Just add our default route */
-                        ret = hostctrl_service_add(ctx->lhc, &default_service, 
+                        ret = hostctrl_service_add(ctx->lhc, 
+                                                   SERVICE_RULE_FORWARD,
+                                                   &default_service,
                                                    1, 0, &ctx->router_ip);
                 } else if (!ctx->router && ctx->router_ip_set && 
                            memcmp(&default_service, &si->srvid, 
@@ -591,9 +595,10 @@ static int local_service_get_result(struct hostctrl *hc,
                            something. Update the existing entry */
                         ret = hostctrl_service_modify(ctx->lhc, &si->srvid, 
                                                       si->priority,
-                                                      si->weight, &si->address, &ctx->router_ip);
+                                                      si->weight, 
+                                                      &si->address, 
+                                                      &ctx->router_ip);
                 }
-                
         }
         
         /* Check if we need to perform the deferred reregistration of
@@ -606,11 +611,23 @@ static int local_service_get_result(struct hostctrl *hc,
         
         return ret;
 }
-                                   
+
+static int delay_notification(struct hostctrl *hc,
+                              unsigned int xid,
+                              unsigned int pkt_id,
+                              struct service_id *service)
+{
+        LOG_DBG("resolution for pkt_id=%u on service %s DELAYED\n",
+                pkt_id, service_id_to_str(service));
+        
+        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
+}
+
 static struct hostctrl_callback lcb = {
         .service_registration = register_service_remotely,
         .service_unregistration = unregister_service_remotely,
         .service_get_result = local_service_get_result,
+        .service_delay_notification = delay_notification,
         .start = NULL,
         .stop = NULL,
 };

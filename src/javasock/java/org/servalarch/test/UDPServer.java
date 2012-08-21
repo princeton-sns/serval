@@ -15,6 +15,7 @@ import org.servalarch.net.ServiceID;
 public class UDPServer {
 	private ServalServerDatagramSocket serverSock;
 	private int num = 0;
+    private static final String serverName = "java.udp.server.localdomain";
 
 	public UDPServer() {
 		
@@ -73,7 +74,7 @@ public class UDPServer {
     public void run() {
 	    try {
 		    serverSock = 
-                new ServalServerDatagramSocket(new ServiceID(16385));
+                new ServalServerDatagramSocket(new ServiceID(serverName));
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
             return;

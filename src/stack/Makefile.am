@@ -5,6 +5,7 @@ serval_common_SRC = \
 	platform.c \
 	radixtree.c \
 	service.c \
+	delay_queue.c \
 	ctrl_handler.c \
 	af_serval.c \
 	serval_sock.c \
@@ -48,6 +49,7 @@ SERVAL_HDR = \
 	radixtree.h \
 	input.h \
 	service.h \
+	delay_queue.h \
 	serval_sock.h \
 	serval_request_sock.h \
 	serval_tcp_request_sock.h \

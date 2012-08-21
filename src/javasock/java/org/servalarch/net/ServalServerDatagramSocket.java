@@ -42,24 +42,6 @@ public class ServalServerDatagramSocket {
     }
 
     /**
-     * Creates a new server socket listening at specified name.
-     * On the Android platform, the name is created in the Linux
-     * abstract namespace (instead of on the filesystem).
-     * 
-     * @param serviceID to listen on
-     * @param bindBits the number of bits of the serviceID to bind on
-     * @throws IOException
-     */
-    public ServalServerDatagramSocket(ServiceID serviceID, int bindBits) 
-        throws IOException {
-        impl = new ServalDatagramSocketImpl();
-        impl.create();
-        localAddress = new ServalSocketAddress(serviceID, bindBits);
-        impl.bind(serviceID, localAddress.getPrefixBits());
-        impl.listen(LISTEN_BACKLOG);
-    }
-
-    /**
      * Create a ServalServerDatagramSocket from a file descriptor
      * that's already been created and bound. listen() will be called
      * immediately on it.  Used for cases where file descriptors are

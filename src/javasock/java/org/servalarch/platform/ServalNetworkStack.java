@@ -22,7 +22,7 @@ public class ServalNetworkStack {
 	public native int createStreamSocket(FileDescriptor fd, int protocol)
 			throws SocketException;
 
-	public native int bind(FileDescriptor fd, ServiceID serviceID, int bindBits)
+	public native int bind(FileDescriptor fd, ServiceID serviceID)
 			throws SocketException;
 
 	public native int listen(FileDescriptor fd, int backlog);

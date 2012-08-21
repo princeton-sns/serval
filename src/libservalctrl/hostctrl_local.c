@@ -6,7 +6,9 @@
 #include <string.h>
 #include "hostctrl_ops.h"
 
-static int local_service_generic(struct hostctrl *hc, int type,
+static int local_service_generic(struct hostctrl *hc,
+                                 unsigned short msgtype,
+                                 enum service_rule_type ruletype,
                                  const struct service_id *srvid, 
                                  unsigned int priority,
                                  unsigned int weight,
@@ -21,11 +23,13 @@ static int local_service_generic(struct hostctrl *hc, int type,
         return -1;
 
     memset(&req, 0, sizeof(req));
-    req.cm.cmh.type = type;
+    req.cm.cmh.type = msgtype;
     req.cm.cmh.xid = ++hc->xid;
     req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(1);
+    req.cm.service[0].type = ruletype;
     req.cm.service[0].priority = priority;
     req.cm.service[0].weight = weight;
+
     memcpy(&req.cm.service[0].srvid, srvid, sizeof(*srvid));
 
     if (ipaddr)
@@ -35,8 +39,9 @@ static int local_service_generic(struct hostctrl *hc, int type,
 
 	/* strncpy(req.cm.ifname, ifname, IFNAMSIZ - 1); */
         
+
     LOG_DBG("op=%d len=%u sizeof(req)=%zu %zu %s\n",      
-            type,
+            msgtype,
             CTRLMSG_SERVICE_LEN(&req.cm), sizeof(req), 
             CTRLMSG_SERVICE_NUM(&req.cm),
             service_id_to_str(&req.cm.service[0].srvid));
@@ -45,13 +50,14 @@ static int local_service_generic(struct hostctrl *hc, int type,
 }
                                  
 static int local_service_add(struct hostctrl *hc,
+                             enum service_rule_type type,
                              const struct service_id *srvid, 
                              unsigned int priority,
                              unsigned int weight,
                              const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_ADD_SERVICE,
-                                 srvid, priority, 
+                                 type, srvid, priority, 
                                  weight, ipaddr);
 }
 
@@ -60,6 +66,7 @@ static int local_service_remove(struct hostctrl *hc,
                                 const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_DEL_SERVICE,
+                                 SERVICE_RULE_UNDEFINED, 
                                  srvid, 0, 0, ipaddr);
 }
 
@@ -75,7 +82,7 @@ static int local_service_modify(struct hostctrl *hc,
 		struct service_info service[2];
 	} req;
 
-    if (!srvid || !old_ip)
+    if (!srvid)
         return -1;
 
     memset(&req, 0, sizeof(req));
@@ -85,14 +92,16 @@ static int local_service_modify(struct hostctrl *hc,
     req.service[0].priority = priority;
     req.service[0].weight = weight;
     memcpy(&req.service[0].srvid, srvid, sizeof(*srvid));
-    memcpy(&req.service[0].address, old_ip, sizeof(*old_ip));
+
+    if (old_ip)
+        memcpy(&req.service[0].address, old_ip, sizeof(*old_ip));
 
     req.service[0].if_index = -1;
     req.service[1].if_index = -1;
 
-    if (!new_ip)
+    if (!new_ip && old_ip)
         memcpy(&req.service[1].address, old_ip, sizeof(*old_ip));
-    else
+    else if (new_ip)
         memcpy(&req.service[1].address, new_ip, sizeof(*new_ip));
 
 	/* strncpy(cm.ifname, ifname, IFNAMSIZ - 1); */
@@ -105,6 +114,7 @@ static int local_service_get(struct hostctrl *hc,
                              const struct in_addr *ipaddr)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_GET_SERVICE,
+                                 SERVICE_RULE_UNDEFINED,
                                  srvid, 0, 0, ipaddr);
 }
 
@@ -195,6 +205,22 @@ static int local_service_migrate(struct hostctrl *hc,
     strncpy(cm.to_i, to_iface, IFNAMSIZ - 1);
 
     return message_channel_send(hc->mc, &cm, cm.cmh.len);
+}
+
+static int local_service_delay_verdict(struct hostctrl *hc,
+                                       unsigned int pkt_id,
+                                       enum delay_verdict verdict)
+{
+    struct ctrlmsg_delay cmd;
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.cmh.type = CTRLMSG_TYPE_DELAY_VERDICT;
+    cmd.cmh.len = sizeof(cmd);
+    cmd.cmh.xid = ++hc->xid;
+    cmd.pkt_id = pkt_id;
+    cmd.verdict = verdict;
+    
+    return message_channel_send(hc->mc, &cmd.cmh, cmd.cmh.len);
 }
 
 int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm, 
@@ -302,6 +328,16 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
                                                  CTRLMSG_SERVICE_INFO_STAT_NUM(csis));
         break;
     }
+    case CTRLMSG_TYPE_DELAY_NOTIFY: {
+        struct ctrlmsg_delay *cmd = 
+            (struct ctrlmsg_delay *)cm;
+        if (hc->cbs->service_delay_notification)
+            ret = hc->cbs->service_delay_notification(hc,
+                                                      cm->xid,
+                                                      cmd->pkt_id,
+                                                      &cmd->service);
+        break;
+    }
 	default:
 		LOG_DBG("Received message type %u\n", cm->type);
 		break;
@@ -320,5 +356,6 @@ struct hostctrl_ops local_ops = {
 	.service_remove = local_service_remove,
 	.service_modify = local_service_modify,
     .service_get = local_service_get,
+    .service_delay_verdict = local_service_delay_verdict,
     .ctrlmsg_recv = local_ctrlmsg_recv,
 };

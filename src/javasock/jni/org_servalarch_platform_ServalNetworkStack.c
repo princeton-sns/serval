@@ -38,7 +38,7 @@ static struct {
 } gServiceIDFields;
 
 static int fill_in_sockaddr_sv(JNIEnv *env, struct sockaddr_sv *svaddr, 
-                               jobject srvid, int bits)
+                               jobject srvid)
 {
         const char *service_str;
 	jstring service = (*env)->CallObjectMethod(env, srvid, 
@@ -165,14 +165,13 @@ jint Java_org_servalarch_platform_ServalNetworkStack_createStreamSocket(JNIEnv *
 jint Java_org_servalarch_platform_ServalNetworkStack_bind(JNIEnv *env, 
                                                           jobject obj,
                                                           jobject fd, 
-                                                          jobject service_id,
-                                                          jint bindbits)
+                                                          jobject service_id)
 {
 	struct sockaddr_sv svaddr;
 	int sock = jniGetFDFromFileDescriptor(env, fd);
 	int ret = 0;
 
-	fill_in_sockaddr_sv(env, &svaddr, service_id, bindbits);
+	fill_in_sockaddr_sv(env, &svaddr, service_id);
 
 	ret = bind(sock, (struct sockaddr *)&svaddr, sizeof(svaddr));	
 	
@@ -282,7 +281,7 @@ jint Java_org_servalarch_platform_ServalNetworkStack_connect(JNIEnv *env,
 	}
 
 	memset(&sa, 0, sizeof(sa));
-	fill_in_sockaddr_sv(env, &sa.svaddr, service_id, 0);
+	fill_in_sockaddr_sv(env, &sa.svaddr, service_id);
 	
 	if (ipaddr == NULL) {
 		addrlen = sizeof(sa.svaddr);

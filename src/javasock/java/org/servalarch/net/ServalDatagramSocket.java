@@ -53,7 +53,7 @@ public class ServalDatagramSocket {
      *             if an error occurs while creating or binding the socket.
      */
     public ServalDatagramSocket() throws SocketException {
-        this(new ServiceID(0));
+        this(new ServiceID(""));
     }
 
     /**
@@ -113,9 +113,6 @@ public class ServalDatagramSocket {
      *            the serviceID on the localhost that is to be bound.
      */
     void checkListen(ServiceID serviceID) {
-        if (!serviceID.valid()) {
-            throw new IllegalArgumentException();
-        }
         /*
         SecurityManager security = System.getSecurityManager();
         if (security != null) {
@@ -148,7 +145,7 @@ public class ServalDatagramSocket {
      */
     public void connect(ServiceID aServiceID, InetAddress anAddress,
                         int timeout) throws SocketException {
-        if (aServiceID == null || !aServiceID.valid()) {
+        if (aServiceID == null) {
             throw new IllegalArgumentException();
         }
 
@@ -185,9 +182,9 @@ public class ServalDatagramSocket {
 
     /**
      * Connects this datagram socket to the remote serviceID specified
-     * by {@code remoteAddr}. The serviceID is validated, thereafter
-     * the only validation on {@code send()} and {@code receive()} is
-     * that the packet serviceID matches the connected target.
+     * by {@code remoteAddr}. The only validation on {@code send()}
+     * and {@code receive()} is that the packet serviceID matches the
+     * connected target.
      *
      * @param remoteAddr
      *            the serviceID of the target host.
@@ -215,9 +212,9 @@ public class ServalDatagramSocket {
 
     /**
      * Connects this datagram socket to the remote serviceID specified
-     * by {@code remoteAddr}. The serviceID is validated, thereafter
-     * the only validation on {@code send()} and {@code receive()} is
-     * that the packet serviceID matches the connected target.
+     * by {@code remoteAddr}. The only validation on {@code send()}
+     * and {@code receive()} is that the packet serviceID matches the
+     * connected target.
      *
      * @param remoteAddr
      *            the serviceID of the target host.
@@ -257,7 +254,7 @@ public class ServalDatagramSocket {
             : new ServalDatagramSocketImpl();
         impl.create();
         try {
-            impl.bind(serviceID, addr, bindBits);
+            impl.bind(serviceID, addr);
             isBound = true;
         } catch (SocketException e) {
             close();
@@ -557,9 +554,6 @@ public class ServalDatagramSocket {
                 throw new NullPointerException("No destination serviceID");
             }
 
-            if (!packServiceID.valid()) {
-                throw new IllegalArgumentException("Invalid serviceID");
-            }
             /*
             SecurityManager security = System.getSecurityManager();
             if (security != null) {

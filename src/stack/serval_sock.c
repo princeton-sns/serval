@@ -390,7 +390,7 @@ void serval_sock_hash(struct sock *sk)
                 ssk->hash_key_len = sizeof(ssk->local_srvid);
 
                 err = service_add(&ssk->local_srvid,
-                                  RULE_DEMUX, 0, 
+                                  SERVICE_RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
                                   NULL, 0, make_target(sk), GFP_ATOMIC);
@@ -434,7 +434,7 @@ void serval_sock_unhash(struct sock *sk)
                 LOG_DBG("removing socket %p from service table\n", sk);
 
                 service_del_target(&ssk->local_srvid,
-                                   RULE_DEMUX,
+                                   SERVICE_RULE_DEMUX,
                                    NULL, 0, NULL,
                                    GFP_ATOMIC);
 #if defined(OS_LINUX_KERNEL)
@@ -998,7 +998,7 @@ int __flow_table_print(char *buf, size_t buflen)
                        "%-10s %-10s %-17s %-17s %-10s %s\n",
                        "srcFlowID", "dstFlowID", 
                        "srcIP", "dstIP", "state", "dev");
-
+        
         if (len > 0) {
                 if (buflen >= len) 
                         buflen -= len;
