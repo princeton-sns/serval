@@ -8,6 +8,7 @@
 #include <serval/skbuff.h>
 #include <serval/dst.h>
 #include <serval/sock.h>
+#include <serval/ctrlmsg.h>
 #include "bst.h"
 
 #define LOCAL_SERVICE_DEFAULT_PRIORITY 32000
@@ -89,7 +90,9 @@ struct target_set {
         uint16_t count;
 };
 
-#define is_sock_target(target) ((target)->dstlen == 0)
+#define is_sock_target(target)                          \
+        ((target)->type == SERVICE_RULE_DEMUX &&        \
+         (target)->dst && (target)->dstlen == 0)
 
 union target_out {
         void *raw;
@@ -106,12 +109,6 @@ static inline union target_out make_target(void *t)
         return out;
 }
 
-typedef enum service_rule_type {
-        RULE_FORWARD,
-        RULE_DEMUX,
-        RULE_DELAY,
-        RULE_DROP,     
-} service_rule_type_t;
 /**
    A target, either a local socket or remote host.
 */
@@ -237,11 +234,11 @@ struct sock *service_find_sock(struct service_id *srvid,
 
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
-int service_entry_print(struct service_entry *se, char *buf, int buflen);
+int service_entry_print(struct service_entry *se, char *buf, size_t buflen);
 
 void service_table_read_lock(void);
 void service_table_read_unlock(void);
-int __service_table_print(char *buf, int buflen);
-int service_table_print(char *buf, int buflen);
+int __service_table_print(char *buf, size_t buflen);
+int service_table_print(char *buf, size_t buflen);
 
 #endif /* _SERVICE_H_ */

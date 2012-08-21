@@ -20,7 +20,8 @@ struct hostctrl_ops {
 	int (*service_unregister)(struct hostctrl *hc,
                               const struct service_id *srvid, 
                               unsigned short prefix_bits);
-    int (*service_add)(struct hostctrl *hc, 
+    int (*service_add)(struct hostctrl *hc,
+                       enum service_rule_type type,
                        const struct service_id *srvid, 
                        unsigned short prefix_bits,
                        unsigned int priority,

@@ -70,8 +70,8 @@ int ctrl_recvmsg(void)
         int peer = 0;
         struct sockaddr_un un;
         struct iovec iov = { rbuf, RCV_BUFSIZE };
-	struct msghdr mh = { &un, sizeof(un), &iov, 1, NULL, 
-                             &peer, sizeof(peer) };
+	struct msghdr mh = { &un, sizeof(un), &iov, 1,
+                             &peer, sizeof(peer), 0 };
 	struct ctrlmsg *cm;
 	ssize_t nbytes;
         int ret = 0;

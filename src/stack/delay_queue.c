@@ -75,7 +75,7 @@ static inline void __delay_queue_purge_sock(struct sock *sk)
         struct delay_entry *entry, *tmp;
         
         list_for_each_entry_safe(entry, tmp, &delay_queue, lh) {                
-                if (!sk || (sk == entry->sk)) {
+                if (sk == NULL || (sk == entry->sk)) {
                         list_del(&entry->lh);
                         queue_total--;
                         kfree_skb(entry->skb);
@@ -89,7 +89,7 @@ void delay_queue_purge_sock(struct sock *sk)
 {
         spin_lock_bh(&queue_lock);
         __delay_queue_purge_sock(sk);
-        spin_lock_bh(&queue_lock);
+        spin_unlock_bh(&queue_lock);
 }
 
 static void __delay_queue_reset(void)
@@ -133,7 +133,6 @@ int delay_queue_skb(struct sk_buff *skb, struct service_id *srvid)
 #endif
 		goto err_out_drop;
 	}        
-        __delay_queue_add(de);
 
         memset(&cmd, 0, sizeof(cmd));
         cmd.cmh.type = CTRLMSG_TYPE_DELAY_NOTIFY;
@@ -143,12 +142,16 @@ int delay_queue_skb(struct sk_buff *skb, struct service_id *srvid)
         
         ret = ctrl_sendmsg(&cmd.cmh, peer_pid, GFP_ATOMIC);
                            
-        if (ret != 0)
+        if (ret != 0) {
+                LOG_DBG("No NETLINK_SERVAL listener, dropping packet\n");
+                ret = -EHOSTUNREACH;
                 goto err_out_drop;
+        }
+        __delay_queue_add(de);
 
         spin_unlock_bh(&queue_lock);
         
-        return ret;
+        return 0;
 
  err_out_drop:
         spin_unlock_bh(&queue_lock);
@@ -169,6 +172,7 @@ int delay_queue_set_verdict(unsigned int pkt_id,
         
         if (peer_pid) {
                 if (peer_pid != pid) {
+                        LOG_ERR("Verdict from wrong peer!\n");
 			spin_unlock_bh(&queue_lock);
 			return -EBUSY;
 		}
@@ -188,10 +192,12 @@ int delay_queue_set_verdict(unsigned int pkt_id,
 
         switch (verdict) {
         case DELAY_DROP:
+                LOG_DBG("Verdict for pkt %u is DROP\n");
                 kfree_skb(entry->skb);
                 queue_dropped++;
                 break;
         case DELAY_RELEASE:
+                LOG_DBG("Verdict for pkt %u is RELEASE\n");
                 /* FIXME: 
                    Here we need to be careful that the RELEASE does
                    not cause the skb to be DELAYED again, which could
@@ -207,6 +213,8 @@ int delay_queue_set_verdict(unsigned int pkt_id,
                         if (sock_flag(entry->sk, SOCK_DEAD)) {
                                 kfree_skb(entry->skb);
                                 queue_dropped++;
+                                LOG_DBG("Socket is DEAD, dropping pkt %u\n",
+                                        pkt_id);
                         } else {
                                 serval_sal_xmit_skb(entry->skb);
                                 ret = 1;

@@ -23,11 +23,11 @@
 
 static struct proc_dir_entry *serval_dir = NULL;
 
-static int proc_generic_read(char **static_buf, int *static_buflen,
+static int proc_generic_read(char **static_buf, size_t *static_buflen,
                              char *page, char **start, 
                              off_t off, int count, 
                              int *eof, void *data,
-                             int (*print_func)(char *buf, int buflen),
+                             int (*print_func)(char *buf, size_t buflen),
                              void (*lock_func)(void),
                              void (*unlock_func)(void))
 {
@@ -48,7 +48,7 @@ static int proc_generic_read(char **static_buf, int *static_buflen,
                 lock_func();
 
                 /* Find the size needed for printing */
-                len = print_func(page, -1);
+                len = print_func(page, 0);
                 
                 /* Check if everything will fit in a single page */
                 if (len < count) {
@@ -116,7 +116,7 @@ static int proc_service_table_read(char *page, char **start,
                                    int *eof, void *data)
 {
         static char *buf = NULL;
-        static int buflen = 0;
+        static size_t buflen = 0;
 
         return proc_generic_read(&buf, &buflen, page, start, off, 
                                  count, eof, data,
@@ -130,8 +130,8 @@ static int proc_flow_table_read(char *page, char **start,
                                 int *eof, void *data)
 {
         static char *buf = NULL;
-        static int buflen = 0;
-
+        static size_t buflen = 0;
+        
         return proc_generic_read(&buf, &buflen, page, start, off, 
                                  count, eof, data,
                                  __flow_table_print,

@@ -2972,23 +2972,26 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 
                 next_target = service_iter_next(&iter);
                 
-                /* It is kind of unclear how to handle DEMUX vs
-                   FORWARD rules here. Does it make sense to have both
-                   a socket and forward rule for one single serviceID?
-                   It seems that if we have a socket, we shouldn't
-                   forward at all. But what if the socket is not first
-                   in the iteration? I guess for now we just forward
-                   until we hit a socket, and then break (i.e., DEMUX
-                   to socket but stop forwarding). */
-                if (is_sock_target(target)) {
-                        /* local resolution */
+                switch (target->type) {
+                case SERVICE_RULE_DEMUX:
+                         /* local resolution */
                         *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
+                        num_forward++;
                         break;
-                } 
-
-                err = SAL_RESOLVE_FORWARD;
+                case SERVICE_RULE_DELAY:
+                        delay_queue_skb(cskb, srvid);
+                        err = SAL_RESOLVE_DELAY;
+                        num_forward++;
+                        break;
+                case SERVICE_RULE_DROP:
+                        err = SAL_RESOLVE_DROP;
+                        num_forward++;
+                        break;
+                default:
+                        break;
+                }
 
                 if (skb->pkt_type != PACKET_HOST &&
                     skb->pkt_type != PACKET_OTHERHOST) {
@@ -3012,15 +3015,9 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         }
                 }
                 
-                if (target->type == RULE_DELAY) {
-                        delay_queue_skb(cskb, srvid);
-                        target = next_target;
-                        continue;
-                } else if (target->type == RULE_DROP) {
-                        kfree_skb(cskb);
-                        continue;
-                }
-                
+
+                err = SAL_RESOLVE_FORWARD;
+
                 iph = ip_hdr(cskb);
                 iph_len = iph->ihl << 2;
 #if defined(OS_USER)
@@ -3220,9 +3217,6 @@ static int serval_sal_rcv_finish(struct sock *sk,
                   receive buffer is full. This might not be a big deal
                   though, as control packets are retransmitted.
                 */
-
-                LOG_PKT("Adding packet to backlog\n");
-
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
                 if (sk_add_backlog(sk, skb)) {
                         goto drop;
@@ -3234,12 +3228,6 @@ static int serval_sal_rcv_finish(struct sock *sk,
 
         bh_unlock_sock(sk);
         sock_put(sk);
-
-        /*
-          IP will resubmit packet if return value is less than
-          zero. Therefore, make sure we always return 0, even if we drop the
-          packet.
-        */
 
 	return err;
 drop:
@@ -3271,16 +3259,15 @@ int serval_sal_reresolve(struct sk_buff *skb)
                 return serval_sal_rcv_finish(sk, skb, &ctx);
         case SAL_RESOLVE_FORWARD:                
                 return 0;
-        case SAL_RESOLVE_NO_MATCH:
-                /* TODO: fix error codes for this function */
-                err = -EHOSTUNREACH;
-        case SAL_RESOLVE_DROP:
         case SAL_RESOLVE_DELAY:
+                return err;
+        case SAL_RESOLVE_NO_MATCH:
+        case SAL_RESOLVE_DROP:
         case SAL_RESOLVE_ERROR:
+                err = -EHOSTUNREACH;
         default:
                 if (sk)
                         sock_put(sk);
-                err = 0;
         }
 
         kfree_skb(skb);
@@ -3343,29 +3330,34 @@ int serval_sal_rcv(struct sk_buff *skb)
                 
                 switch (err) {
                 case SAL_RESOLVE_DEMUX:
-                        break;
-                case SAL_RESOLVE_FORWARD:                        
-                        return 0;
-                case SAL_RESOLVE_NO_MATCH:
-                        /* TODO: fix error codes for this function */
-                        err = -EHOSTUNREACH;
-                case SAL_RESOLVE_DROP:
+                        err = serval_sal_rcv_finish(sk, skb, &ctx);
+
+                        if (err < 0)
+                                return NET_RX_DROP;
+                        return NET_RX_SUCCESS;
+                case SAL_RESOLVE_FORWARD:
+                        /* Packet forwarded on out device */
                 case SAL_RESOLVE_DELAY:
+                        /* Packet in delay queue */
+                        return NET_RX_SUCCESS;
+                case SAL_RESOLVE_NO_MATCH:
+                case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
-                        if (sk)
-                                sock_put(sk);
-                        goto drop;
+                        break;
                 }
         }
-
-        err = serval_sal_rcv_finish(sk, skb, &ctx);
-        return 0;
 drop:
+        if (sk)
+                sock_put(sk);
         service_inc_stats(-1, -(skb->len - ctx.length));
         LOG_DBG("Dropping packet\n");
         kfree_skb(skb);
-        return 0;
+
+        /* We always return zero here, since function processes an
+           inbound packet and the IP layer that passed us this packet
+           expects a zero return value. */
+        return NET_RX_DROP;
 }
 
 static int serval_sal_rexmit(struct sock *sk)
@@ -3810,13 +3802,14 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         skb_serval_set_owner_w(cskb, sk);
 		}
 
-                if (target->type == RULE_DELAY) {
-                        delay_queue_skb(cskb, 
-                                        &serval_sk(sk)->peer_srvid);
+                if (target->type == SERVICE_RULE_DELAY) {
+                        err = delay_queue_skb(cskb, 
+                                              &serval_sk(sk)->peer_srvid);
                         target = next_target;
                         continue;
-                } else if (target->type == RULE_DROP) {
+                } else if (target->type == SERVICE_RULE_DROP) {
                         kfree_skb(cskb);
+                        err = -EHOSTUNREACH;
                         continue;
                 }
 
@@ -3889,6 +3882,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         ssk->af_ops->send_check(sk, cskb);
                 }
 
+                /* Add SAL header */
                 sh = serval_sal_build_header(sk, cskb);
 
                 /* Compute SAL header checksum */

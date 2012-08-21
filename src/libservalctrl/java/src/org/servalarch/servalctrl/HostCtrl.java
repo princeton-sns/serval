@@ -11,8 +11,14 @@ public abstract class HostCtrl {
 	private boolean isDisposed = false;
 	protected static final int HOSTCTRL_LOCAL = 0; 
 	protected static final int HOSTCTRL_REMOTE = 1; 
+        
+        public static final int SERVICE_RULE_UNDEFINED = 0;
+        public static final int SERVICE_RULE_FORWARD = 1;
+        public static final int SERVICE_RULE_DEMUX = 2;
+	public static final int SERVICE_RULE_DELAY = 3;
+        public static final int SERVICE_RULE_DROP = 4;
 
-	public HostCtrl(int type, final HostCtrlCallbacks cb) throws HostCtrlException {
+        public HostCtrl(int type, final HostCtrlCallbacks cb) throws HostCtrlException {
 		switch (type) {
 		case HOSTCTRL_LOCAL:
 		case HOSTCTRL_REMOTE:
@@ -32,7 +38,7 @@ public abstract class HostCtrl {
 	private native void nativeFree();
 	public native int migrateFlow(long flowID, String toDevice);
 	public native int migrateInterface(String fromDevice, String toDevice);
-	private native int addService4(ServiceID id, int prefixBits, int prority, int weight, Inet4Address addr);
+        private native int addService4(int type, ServiceID id, int prefixBits, int prority, int weight, Inet4Address addr);
 	private native int getService4(ServiceID id, int prefixBits, Inet4Address addr);
 	private native int removeService4(ServiceID id, int prefixBits, Inet4Address addr);
 	private native int registerService4(ServiceID id, int prefixBits, Inet4Address oldAddr);
@@ -49,7 +55,8 @@ public abstract class HostCtrl {
 		}
 		if (prefixBits < 0 || prefixBits > 256)
 			prefixBits = 0;
-		return addService4(id, prefixBits, priority, weight, (Inet4Address)addr);
+		return addService4(SERVICE_RULE_FORWARD, id, prefixBits, 
+				   priority, weight, (Inet4Address)addr);
 	}
 	
 	public int addService(ServiceID id, InetAddress addr) {

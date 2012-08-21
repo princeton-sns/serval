@@ -42,7 +42,7 @@ static int message_channel_unix_initialize(message_channel_t *channel)
     struct iovec iov = { &cm, sizeof(cm) };
     message_channel_base_t *base = (message_channel_base_t *)channel;
     struct msghdr msg = { &base->peer.sa, base->peer_len, 
-                          &iov, 1, &peer, sizeof(peer) };
+                          &iov, 1, &peer, sizeof(peer), 0 };
     ssize_t ret;
 
     message_channel_base_initialize(channel);

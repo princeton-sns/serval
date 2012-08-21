@@ -39,6 +39,14 @@ enum ctrlmsg_type {
         _CTRLMSG_TYPE_MAX,
 };
 
+typedef enum service_rule_type {
+        SERVICE_RULE_UNDEFINED = 0,
+        SERVICE_RULE_FORWARD,
+        SERVICE_RULE_DEMUX,
+        SERVICE_RULE_DELAY,
+        SERVICE_RULE_DROP, 
+} service_rule_type_t;
+
 struct service_info {
         uint16_t type; /* Type of service table entry? DMX, FWD, DLY, etc. */
         uint8_t  srvid_prefix_bits;

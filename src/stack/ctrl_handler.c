@@ -98,7 +98,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
 #endif
                 err = service_add(&entry->srvid, 
                                   prefix_bits, 
-                                  RULE_FORWARD,
+                                  entry->type,
                                   entry->srvid_flags, 
                                   entry->priority, 
                                   entry->weight,
@@ -187,7 +187,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                 memset(&tstat, 0, sizeof(tstat));
                 
                 err = service_entry_remove_target(se,
-                                                  RULE_FORWARD, 
+                                                  SERVICE_RULE_FORWARD, 
                                                   &entry->address, 
                                                   sizeof(entry->address), 
                                                   &tstat);
@@ -279,7 +279,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm, int peer)
 
                 err = service_modify(&entry_old->srvid,
                                      prefix_bits,
-                                     RULE_FORWARD,
+                                     SERVICE_RULE_FORWARD,
                                      entry_old->srvid_flags, 
                                      entry_new->priority, 
                                      entry_new->weight, 

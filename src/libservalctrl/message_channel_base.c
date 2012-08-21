@@ -371,7 +371,7 @@ int message_channel_base_send(message_channel_t *channel,
                            base->peer_len,
                            &iov, 1,
                            &channel->peer_pid,
-                           sizeof(channel->peer_pid) };
+                           sizeof(channel->peer_pid), 0 };
     
     assert(channel);
 

@@ -529,7 +529,9 @@ static int handle_incoming_registration(struct hostctrl *hc,
                 registration_add(ctx, SERVICE_REMOTE, srvid, 
                                  prefix, remote_ip);
 
-                ret = hostctrl_service_add(ctx->lhc, srvid, prefix, 
+                ret = hostctrl_service_add(ctx->lhc,
+                                           SERVICE_RULE_FORWARD,
+                                           srvid, prefix,
                                            0, 0, remote_ip);
         }
 
@@ -597,7 +599,9 @@ static int local_service_get_result(struct hostctrl *hc,
                         LOG_DBG("No default service route set\n");
                         /* There was no existing route, the 'get' returned
                            nothing. Just add our default route */
-                        ret = hostctrl_service_add(ctx->lhc, &default_service,
+                        ret = hostctrl_service_add(ctx->lhc, 
+                                                   SERVICE_RULE_FORWARD,
+                                                   &default_service,
                                                    0, 1, 0, &ctx->router_ip);
                 } else if (!ctx->router && ctx->router_ip_set && 
                            memcmp(&default_service, &si->srvid, 
@@ -637,7 +641,8 @@ static int delay_notification(struct hostctrl *hc,
                               unsigned int pkt_id,
                               struct service_id *service)
 {
-        LOG_DBG("service resolution for %s DELAYED\n");
+        LOG_DBG("resolution for pkt_id=%u on service %s DELAYED\n",
+                pkt_id, service_id_to_str(service));
         
         return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
 }

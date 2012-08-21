@@ -270,7 +270,8 @@ int hostctrl_service_unregister(struct hostctrl *hc,
     return hc->ops->service_unregister(hc, srvid, prefix_bits);
 }
 
-int hostctrl_service_add(struct hostctrl *hc, 
+int hostctrl_service_add(struct hostctrl *hc,
+                         enum service_rule_type type,
                          const struct service_id *srvid, 
                          unsigned short prefix_bits,
                          unsigned int priority,
@@ -284,7 +285,7 @@ int hostctrl_service_add(struct hostctrl *hc,
     if (srvid == NULL)
         srvid = &default_service;
 
-    return hc->ops->service_add(hc, srvid, prefix_bits, 
+    return hc->ops->service_add(hc, type, srvid, prefix_bits, 
                                 priority, weight, ipaddr);
 }
 

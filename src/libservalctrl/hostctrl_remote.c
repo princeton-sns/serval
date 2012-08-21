@@ -72,7 +72,8 @@ static int remote_service_unregister(struct hostctrl *hc,
 }
 
 static int remote_service_add_dummy(struct hostctrl *hc,
-                                    const struct service_id *srvid, 
+                                    enum service_rule_type type,
+                                    const struct service_id *srvid,
                                     unsigned short prefix_bits,
                                     unsigned int priority,
                                     unsigned int weight,

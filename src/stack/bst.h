@@ -14,7 +14,7 @@ struct bst {
 struct bst_node_ops {
         int (*init)(struct bst_node *);
         void (*destroy)(struct bst_node *);
-        int (*print)(struct bst_node *, char *buf, int buflen);
+        int (*print)(struct bst_node *, char *buf, size_t buflen);
 };
 
 extern struct bst_node_ops default_bst_node_ops;
@@ -39,8 +39,8 @@ struct bst_node *bst_find_longest_prefix_match(struct bst *tree,
                                                unsigned int prefix_bits,
                                                int (*match)(struct bst_node *));
 
-int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen);
-int bst_print(struct bst *tree, char *buf, int buflen);
+int bst_node_print_prefix(struct bst_node *n, char *buf, size_t buflen);
+int bst_print(struct bst *tree, char *buf, size_t buflen);
 void *bst_node_get_private(struct bst_node *n);
 const unsigned char *bst_node_get_prefix(const struct bst_node *n);
 unsigned int bst_node_get_prefix_size(const struct bst_node *n);
