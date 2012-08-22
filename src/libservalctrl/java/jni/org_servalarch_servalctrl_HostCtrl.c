@@ -65,30 +65,29 @@ static int set_native_context(JNIEnv *env, jobject obj, struct jni_context *ctx)
 
 static int fill_in_service_id(JNIEnv *env, jobject obj, struct service_id *sid)
 {
-    jboolean isCopy = JNI_FALSE;
 	jfieldID fid;
-    jbyteArray array;
-    jbyte *buffer;
+    jstring id;
+    const char *id_str;
 
-    fid = (*env)->GetFieldID(env, serviceid_cls, "identifier", "[B");
+    fid = (*env)->GetFieldID(env, serviceid_cls, 
+                             "identifier", "Ljava/lang/String;");
 
     if (!fid)
         return -1;
 
-    array = (*env)->GetObjectField(env, obj, fid);
+    id = (*env)->GetObjectField(env, obj, fid);
 
-    if (!array)
+    if (!id)
         return -1;
 
-    buffer = (*env)->GetByteArrayElements(env, array, &isCopy);
-
-    if (!buffer)
+    id_str = (*env)->GetStringUTFChars(env, id, 0);
+    
+    if (!id_str)
         return -1;
     
-    memcpy(sid->s_sid, buffer, (*env)->GetArrayLength(env, array));
-
-    (*env)->ReleaseByteArrayElements(env, array, buffer, 0);
-    (*env)->DeleteLocalRef(env, array);
+    strcpy(sid->s_sid, id_str);
+    
+    (*env)->ReleaseStringUTFChars(env, id, id_str);
         
     return 0;
 }
@@ -152,21 +151,24 @@ static jobject new_service_id(JNIEnv *env, const struct service_id *srvid)
     jobject service_id;
     jmethodID mid;
 
-    mid = (*env)->GetMethodID(env, serviceid_cls, "<init>", "([B)V");
+    mid = (*env)->GetMethodID(env, 
+                              serviceid_cls, 
+                              "<init>", "([B)V");
 
     if (!mid) {
         LOG_ERR("%s methodID not found\n", __func__);
         return NULL;
     }
-    arr = (*env)->NewByteArray(env, sizeof(srvid->s_sid));
 
+    arr = (*env)->NewByteArray(env, strlen(srvid->s_sid));
+      
     if (!arr)
         return NULL;
-
+    
     (*env)->SetByteArrayRegion(env, arr, 0, 
-                               sizeof(srvid->s_sid), 
+                               strlen(srvid->s_sid), 
                                (jbyte *)srvid->s_sid);
-
+    
     service_id = (*env)->NewObject(env, serviceid_cls, mid, arr);
 
     (*env)->DeleteLocalRef(env, arr);
@@ -180,7 +182,9 @@ static jobject new_inet4addr(JNIEnv *env, const struct in_addr *ipaddr)
     jobject addr;
     jmethodID mid;
 
-    mid = (*env)->GetStaticMethodID(env, inetaddress_cls, "getByAddress", "([B)Ljava/net/InetAddress;");
+    mid = (*env)->GetStaticMethodID(env, inetaddress_cls, 
+                                    "getByAddress", 
+                                    "([B)Ljava/net/InetAddress;");
 
     if (!mid) {
         LOG_ERR("could not find getByAddress mid\n");
@@ -201,7 +205,7 @@ static jobject new_inet4addr(JNIEnv *env, const struct in_addr *ipaddr)
     if (!addr) {
         jthrowable exc;
 
-        LOG_ERR("Could not crate IP address\n");
+        LOG_ERR("Could not create IP address\n");
 
         exc = (*env)->ExceptionOccurred(env);
         
@@ -254,24 +258,38 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
     return obj;
 }
 
-static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat *sis)
+static jobject new_service_info_stat(JNIEnv *env, 
+                                     const struct service_info_stat *sis)
 {
     const struct service_info *si = &sis->service;
     jmethodID mid;
     jobject service_id, addr, obj;
 
     mid = (*env)->GetMethodID(env, serviceinfostat_cls, "<init>", 
-                                    "(Lorg/servalarch/net/ServiceID;JSLjava/net/InetAddress;JJJJJJJJJJJ)V");
+                              "(Lorg/servalarch/net/ServiceID;JSLjava/net/InetAddress;JJJJJJJJJJJ)V");
 
     if (!mid)
         return NULL;
 
     service_id = new_service_id(env, &si->srvid);
+
+    if (!service_id) {
+        LOG_ERR("Could not create serviceID\n");
+        return NULL;
+    }
+        
     addr = new_inet4addr(env, &si->address);
+
+    if (!addr) {
+        (*env)->DeleteLocalRef(env, service_id);
+        LOG_ERR("Could not create new IP address\n");
+        return NULL;
+    }
 
     obj = (*env)->NewObject(env, serviceinfostat_cls, mid, 
                             service_id,
                             (jlong)si->type,
+                            (jshort)si->flags,
                             addr,
                             (jlong)si->if_index, 
                             (jlong)si->priority, 
@@ -367,7 +385,8 @@ static int on_service_unregistration(struct hostctrl *hc,
     jmethodID mid;
     jthrowable exc;
 
-    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceUnregistration", 
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, 
+                              "onServiceUnregistration", 
                               "(Lorg/servalarch/net/ServiceID;ILjava/net/InetAddress;)V");
 
     if (!mid)
@@ -544,14 +563,14 @@ static int on_service_remove(struct hostctrl *hc,
     if (!mid)
         return -1;
 
+    arr = (*env)->NewObjectArray(env, num, serviceinfostat_cls, 0);
+    
+    if (!arr)
+        return -1;
+
     if (num > 0) {
         unsigned int i;
-
-        arr = (*env)->NewObjectArray(env, num, serviceinfostat_cls, 0);
-    
-        if (!arr)
-            return -1;
-    
+        
         for (i = 0; i < num; i++) {
             jobject service_info_stat = new_service_info_stat(env, si);
             
@@ -776,7 +795,6 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env,
     
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
-
 
     return hostctrl_service_add(ctx->hc,
                                 (enum service_rule_type)type,

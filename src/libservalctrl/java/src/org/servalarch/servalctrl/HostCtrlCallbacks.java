@@ -1,8 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.servalctrl;
 
 import java.net.InetAddress;
-
 import org.servalarch.net.ServiceID;
 
 /**
@@ -21,8 +20,8 @@ public abstract class HostCtrlCallbacks {
     /**
      * Translate an callback return value into a descriptive string.
      * 
-     * @param  retval the return value to translate.
-     * @return the String describing the return value. 
+     * @param  retval      The return value to translate.
+     * @return The String describing the return value. 
      */
     public static String getRetvalString(int retval) {
 	switch (retval) {
@@ -42,10 +41,10 @@ public abstract class HostCtrlCallbacks {
     /**
      * This callback is called on a registration event.
      * 
-     * @param id        the ServiceID being registered
-     * @param flags     flags detailing how this registration should be handled
-     * @param addr      the address to associate with the ServiceID
-     * @param oldAddr   the previous address used associated with this 
+     * @param id        The ServiceID being registered
+     * @param flags     Flags detailing how this registration should be handled
+     * @param addr      The address to associate with the ServiceID
+     * @param oldAddr   The previous address used associated with this 
      *                  registration, in case this is a re-registration. 
      *                  May be null.
      */
@@ -56,10 +55,10 @@ public abstract class HostCtrlCallbacks {
     /**
      *  This callback is called on an unregistration event.
      *  
-     * @param id	the ServiceID being unregistered
-     * @param flags     flags detailing how this unregistration 
+     * @param id	    The ServiceID being unregistered
+     * @param flags     Flags detailing how this unregistration 
      *                  should be handled
-     * @param addr	the address associated with the ServiceID
+     * @param addr	    The address associated with the ServiceID
      */
     public void onServiceUnregistration(ServiceID id, int flags,
 					InetAddress addr) {	
@@ -68,10 +67,10 @@ public abstract class HostCtrlCallbacks {
     /**
      * Called as a result of a previous service addition request. 
      * 
-     * @param xid	The transaction ID of this event refers to.
+     * @param xid	    The transaction ID of this event refers to.
      * @param retval	Return value indicating the result of the call 
-     * 			that generated this event.
-     * @param info	The service information this events concerns.
+     * 			        that generated this event.
+     * @param info	    The service information this events concerns.
      */
     public void onServiceAdd(long xid, int retval, ServiceInfo[] info) {
 				
@@ -80,10 +79,10 @@ public abstract class HostCtrlCallbacks {
     /**
      * Called as a result of a previous service removal request. 
      * 
-     * @param xid	The transaction ID of this event refers to.
+     * @param xid	    The transaction ID of this event refers to.
      * @param retval	Return value indicating the result of the call 
-     * 			that generated this event.
-     * @param info	The service information this events concerns.
+     * 			        that generated this event.
+     * @param info	    The service information this events concerns.
      */
     public void onServiceRemove(long xid, int retval, ServiceInfoStat[] info) {
 		
@@ -92,9 +91,9 @@ public abstract class HostCtrlCallbacks {
     /**
      * Called as a result of a previous service modification request. 
      * 
-     * @param xid	The transaction ID of this event refers to.
+     * @param xid	    The transaction ID of this event refers to.
      * @param retval	Return value indicating the result of the call 
-     * 			that generated this event.
+     * 			        that generated this event.
      * @param info	The service information statistics this events concerns.
      */
     public void onServiceModify(long xid, int retval, ServiceInfoStat[] info) {

@@ -186,11 +186,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                         stat->bytes_resolved = tstat.bytes_resolved;
                         stat->packets_dropped = tstat.packets_dropped;
                         stat->bytes_dropped = tstat.packets_dropped;
-
-                        if (index < i) {
-                                memcpy(&stat->service, entry, 
-                                       sizeof(*entry));
-                        }
+                        memcpy(&stat->service, entry, sizeof(*entry));
                         index++;
                 } else {
                         LOG_ERR("Could not remove service %s: %d\n", 
@@ -311,7 +307,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm, int peer)
         LOG_DBG("getting service: %s\n",
                 service_id_to_str(&cmg->service[0].srvid));
 
-        se = service_find(&cmg->service[0].srvid);
+        se = service_find_exact(&cmg->service[0].srvid);
 
         if (se) {
                 struct ctrlmsg_service *cres;
@@ -338,11 +334,10 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm, int peer)
 
                 while ((t = service_iter_next(&iter)) != NULL) {
                         struct service_info *entry = &cres->service[i++];
-
+                        
                         service_get_id(se, &entry->srvid);
                         memcpy(&entry->address, 
-                               t->dst, t->dstlen);
-                        
+                               t->dst, t->dstlen);                        
                         entry->weight = t->weight;
                         entry->priority = service_iter_get_priority(&iter);
                         
@@ -350,7 +345,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm, int peer)
                         {
                                 char buf[18];
                                 LOG_DBG("Get %s %s priority=%u weight=%u\n", 
-                                service_id_to_str(&entry->srvid), 
+                                        service_id_to_str(&entry->srvid), 
                                         inet_ntop(AF_INET, &t->dst, 
                                                   buf, 18),
                                         entry->priority,

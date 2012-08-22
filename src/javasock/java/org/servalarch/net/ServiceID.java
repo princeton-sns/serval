@@ -23,6 +23,10 @@ public class ServiceID {
         }
     } 
 
+    public ServiceID(byte[] id) {
+        this(new String(id));
+    } 
+
     public ServiceID(char[] id) {
         this(new String(id));
     } 

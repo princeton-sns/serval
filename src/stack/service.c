@@ -1066,12 +1066,11 @@ static void service_table_get_stats(struct service_table *tbl,
 
 int service_get_id(const struct service_entry *se, struct service_id *srvid)
 {
-        if (!se)
+        if (!se || !se->node || !srvid)
                 return -1;
 
-        memset(srvid, 0, sizeof(*srvid));
-        strcpy(srvid->s_sid, radix_node_get_key(se->node));
-        return (int)radix_node_get_keylen(se->node);
+        memset(srvid, '\0', sizeof(*srvid));
+        return radix_node_get_key(se->node, srvid, sizeof(*srvid)); 
 }
 
 void service_get_stats(struct table_stats* tstats) 
@@ -1268,6 +1267,7 @@ static int service_table_add(struct service_table *tbl,
         } else {
                 /* Hold this entry since it is now in the table */
                 service_entry_hold(se);
+                se->node = n;
                 /* We should add target to new service entry */
                 write_unlock_bh(&tbl->lock);
                 write_lock_bh(&se->lock);

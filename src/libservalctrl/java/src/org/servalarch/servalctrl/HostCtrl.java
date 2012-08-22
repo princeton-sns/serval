@@ -1,4 +1,4 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.servalctrl;
 
 import java.net.Inet4Address;
@@ -58,52 +58,51 @@ public abstract class HostCtrl {
     private native long getXid();
 	
     public int addService(ServiceID id, int priority, 
-			  int weight, InetAddress addr) {
-	if (!(addr instanceof Inet4Address)) {
-	    return -1;
-	}
-	return addService4(id, SERVICE_RULE_FORWARD,
-			   priority, weight, (Inet4Address)addr);
+                          int weight, InetAddress addr) {
+        if (!(addr instanceof Inet4Address)) {
+            return -1;
+        }
+        return addService4(id, SERVICE_RULE_FORWARD,
+                           priority, weight, (Inet4Address)addr);
     }
 	
     public int addService(ServiceID id, InetAddress addr) {
-	return addService(id, 1, 1, addr);
+        return addService(id, 1, 1, addr);
     }
 	
     public int getService(ServiceID id, InetAddress addr) {
-	if (addr != null && !(addr instanceof Inet4Address)) {
-	    return -1;
-	}
-	return getService4(id, (Inet4Address)addr);
+        if (addr != null && !(addr instanceof Inet4Address)) {
+            return -1;
+        }
+        return getService4(id, (Inet4Address)addr);
     }
 	
     public int removeService(ServiceID id, InetAddress addr) {
-	if (!(addr instanceof Inet4Address)) {
-	    return -1;
-	}
-	return removeService4(id, (Inet4Address)addr);
+        if (!(addr instanceof Inet4Address)) {
+            return -1;
+        }
+        return removeService4(id, (Inet4Address)addr);
     }
 	
     public synchronized void dispose()
     {
-	if (!isDisposed) {
-	    isDisposed = true;
-	    nativeFree();
-	}
+        if (!isDisposed) {
+            isDisposed = true;
+            nativeFree();
+        }
     }
-    protected void finalize() throws Throwable
-    {
-	dispose();
-	super.finalize();
+    protected void finalize() throws Throwable {
+        dispose();
+        super.finalize();
     }
     static {
-	System.loadLibrary("servalctrl");
-	System.loadLibrary("servalctrl_jni");
+        System.loadLibrary("servalctrl");
+        System.loadLibrary("servalctrl_jni");
     }
     public class HostCtrlException extends Exception {
-	private static final long serialVersionUID = 1037378741410447851L;
-	HostCtrlException(String msg) {
-	    super(msg);
-	}
+        private static final long serialVersionUID = 1037378741410447851L;
+        HostCtrlException(String msg) {
+            super(msg);
+        }
     }
 }

@@ -67,14 +67,9 @@ static struct radix_node *radix_node_expand(struct radix_node *n,
         return n;
 }
 
-const char *radix_node_get_key(struct radix_node *n)
+int radix_node_get_key(struct radix_node *n, void *buf, size_t buflen)
 {
-        return n->str;
-}
-
-size_t radix_node_get_keylen(struct radix_node *n)
-{
-        return n->strlen;
+        return radix_node_print(n, (char *)buf, buflen);
 }
 
 int radix_node_is_wildcard(struct radix_node *n)
@@ -281,7 +276,7 @@ struct radix_node *radix_tree_find(struct radix_tree *tree,
                                 &wildcard);
         
         if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
-                 || n->str[match_len] == '*'))
+                 || n->str[match_len] == '*') && n != &tree->root)
                 return n;
         
         if (wildcard)

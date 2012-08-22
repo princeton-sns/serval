@@ -1,8 +1,7 @@
-/* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.servalctrl;
 
 import java.net.InetAddress;
-
 import org.servalarch.net.ServiceID;
 
 public class ServiceInfoStat extends ServiceInfo {
@@ -15,43 +14,43 @@ public class ServiceInfoStat extends ServiceInfo {
     short flags;
 
     public ServiceInfoStat(ServiceID id, long type, short flags,
-			   InetAddress addr, long ifindex, 
-			   long priority, long weight,
-			   long idleTimeout, long hardTimeout, 
-			   long durationSec, long durationNsec, 
-			   long packetsResolved, long bytesResolved, 
-			   long bytesDropped, long tokensConsumed) {
-	super(id, type, flags, addr, ifindex, priority, 
-	      weight, idleTimeout, hardTimeout);
-	this.durationSec = durationSec;
-	this.durationNsec = durationNsec;
-	this.packetsResolved = packetsResolved;
-	this.bytesResolved = bytesResolved;
-	this.bytesDropped = bytesDropped;
-	this.tokensConsumed = tokensConsumed;
+                           InetAddress addr, long ifindex, 
+                           long priority, long weight,
+                           long idleTimeout, long hardTimeout, 
+                           long durationSec, long durationNsec, 
+                           long packetsResolved, long bytesResolved, 
+                           long bytesDropped, long tokensConsumed) {
+        super(id, type, flags, addr, ifindex, priority, 
+              weight, idleTimeout, hardTimeout);
+        this.durationSec = durationSec;
+        this.durationNsec = durationNsec;
+        this.packetsResolved = packetsResolved;
+        this.bytesResolved = bytesResolved;
+        this.bytesDropped = bytesDropped;
+        this.tokensConsumed = tokensConsumed;
     }
 
     public long getDurationSec() {
-	return durationSec;
+        return durationSec;
     }
 
     public long getDurationNsec() {
-	return durationNsec;
+        return durationNsec;
     }
 
     public long getPacketsResolved() {
-	return packetsResolved;
+        return packetsResolved;
     }
 
     public long getBytesResolved() {
-	return bytesResolved;
+        return bytesResolved;
     }
 
     public long getBytesDropped() {
-	return bytesDropped;
+        return bytesDropped;
     }
 
     public long getTokensConsumed() {
-	return tokensConsumed;
+        return tokensConsumed;
     }
 }

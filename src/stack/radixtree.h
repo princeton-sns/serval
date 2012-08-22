@@ -56,8 +56,7 @@ int radix_node_set_key(struct radix_node *n,
                        const char *str, 
                        size_t strlen, 
                        gfp_t alloc);
-const char *radix_node_get_key(struct radix_node *n);
-size_t radix_node_get_keylen(struct radix_node *n);
+int radix_node_get_key(struct radix_node *n, void *buf, size_t buflen);
 int radix_node_is_wildcard(struct radix_node *n);
 int radix_node_is_active(struct radix_node *n);
 
