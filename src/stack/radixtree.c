@@ -276,7 +276,7 @@ struct radix_node *radix_tree_find(struct radix_tree *tree,
                                 &wildcard);
         
         if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
-                 || n->str[match_len] == '*') && n != &tree->root)
+                  || n->str[match_len] == '*') && n != &tree->root)
                 return n;
         
         if (wildcard)

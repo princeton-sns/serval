@@ -991,9 +991,14 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         n = radix_tree_find(&tbl->tree, srvid->s_sid, func);
         
         if (n) {
-                if (match != RULE_MATCH_EXACT ||
-                    !radix_node_is_wildcard(n))
-                        return get_service(n);
+                if (match == RULE_MATCH_EXACT) {
+                        struct service_id id;                        
+                        radix_node_get_key(n, &id, sizeof(id));
+                        
+                        if (service_id_cmp(&id, srvid) != 0)
+                                return NULL;
+                } 
+                return get_service(n);
         }
 
         return NULL;

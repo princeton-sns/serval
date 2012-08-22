@@ -617,10 +617,47 @@ static int delay_notification(struct hostctrl *hc,
                               unsigned int pkt_id,
                               struct service_id *service)
 {
+        struct addrinfo *ai, *it, hints; 
+        char servicestr[sizeof(*service)];
+        int ret;
+        
         LOG_DBG("resolution for pkt_id=%u on service %s DELAYED\n",
                 pkt_id, service_id_to_str(service));
         
-        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_DGRAM;
+        hints.ai_flags = 0;
+        hints.ai_protocol = 0;          /* Any protocol */
+        hints.ai_canonname = NULL;
+        hints.ai_addr = NULL;
+        hints.ai_next = NULL;
+
+        serval_ntop(service, servicestr, sizeof(servicestr));
+        ret = getaddrinfo(servicestr, NULL, &hints, &ai);
+
+        if (ret != 0) {
+                LOG_DBG("getaddrinfo: %s\n",
+                        gai_strerror(ret));
+                return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_DROP);
+        }
+
+        for (it = ai; it != NULL; it = it->ai_next) {
+                if (it->ai_family == AF_INET) {
+                        struct sockaddr_in *inaddr = 
+                                (struct sockaddr_in *)it->ai_addr;
+                        
+                        hostctrl_service_add(hc, 
+                                             SERVICE_RULE_FORWARD,
+                                             service,
+                                             1, 0,
+                                             &inaddr->sin_addr);
+                }  
+        }
+
+        freeaddrinfo(ai);
+        
+        return hostctrl_set_delay_verdict(hc, pkt_id, DELAY_RELEASE);
 }
 
 static struct hostctrl_callback lcb = {
