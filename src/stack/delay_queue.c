@@ -31,7 +31,7 @@ static unsigned int queue_total = 0;
 static unsigned int queue_dropped = 0;
 static unsigned int queue_maxlen = DELAY_QUEUE_MAX_DEFAULT;
 static DEFINE_SPINLOCK(queue_lock);
-static LIST_HEAD(delay_queue);
+static struct list_head delay_queue = { &delay_queue, &delay_queue };
 
 struct delay_entry {
         struct list_head lh;
