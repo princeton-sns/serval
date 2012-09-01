@@ -295,11 +295,11 @@ static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat
     return obj;
 }
 
-static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
+static jobject new_flow_stat(JNIEnv *env, struct flow_info *info) {
     jmethodID mid;
     jobject  obj;
 
-    if (info.proto == 6) {
+    if (info->proto == 6) {
         mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
                                     "(JIJJJJJJJJJJJJJJJJ)V");
         struct stats_proto_tcp *tcp_info;
@@ -308,15 +308,15 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
             LOG_ERR("Constructor does not exist.\n");
             return NULL;
         }
-        tcp_info = (struct stats_proto_tcp *) &info.stats;
+        tcp_info = (struct stats_proto_tcp *) &info->stats;
     
         obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
-                            (jlong)ntohl(info.flow.s_id32),
-                            (jint)info.proto,
-                            (jlong)info.pkts_sent,
-                            (jlong)info.bytes_sent,
-                            (jlong)info.pkts_recv,
-                            (jlong)info.bytes_recv,
+                            (jlong)ntohl(info->flow.s_id32),
+                            (jint)info->proto,
+                            (jlong)info->pkts_sent,
+                            (jlong)info->bytes_sent,
+                            (jlong)info->pkts_recv,
+                            (jlong)info->bytes_recv,
                             (jlong)tcp_info->retrans,
                             (jlong)tcp_info->lost,
                             (jlong)tcp_info->srtt >> 3,
@@ -331,7 +331,7 @@ static jobject new_flow_stat(JNIEnv *env, const struct flow_info info) {
                             (jlong)tcp_info->rcv_nxt);
     }
     else {
-        LOG_ERR("Flow %d is not TCP (%d)!\n", ntohl(info.flow.s_id32), info.proto);
+        LOG_ERR("Flow %d is not TCP (%d)!\n", ntohl(info->flow.s_id32), info->proto);
     }
 
     return obj;
@@ -663,8 +663,8 @@ static int on_flow_stat_update(struct hostctrl *hc,
         }
 
         while (i < num_flows) {
-            const struct flow_info *temp = (struct flow_info *)(csr->info + offset);
-            jobject flow_stat = new_flow_stat(env, *temp);
+            struct flow_info *temp = (struct flow_info *)(csr->info + offset);
+            jobject flow_stat = new_flow_stat(env, temp);
 
             if (!flow_stat) {
                 LOG_ERR("Could not create flow stat object\n");
@@ -688,7 +688,7 @@ static int on_flow_stat_update(struct hostctrl *hc,
     exc = (*env)->ExceptionOccurred(env);
 
     if (exc) {
-        LOG_DBG("Callback threw exception\n");
+        LOG_ERR("Callback threw exception\n");
         (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
     }
