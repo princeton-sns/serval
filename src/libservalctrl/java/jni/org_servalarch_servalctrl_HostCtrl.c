@@ -788,8 +788,10 @@ void JNICALL Java_org_servalarch_servalctrl_HostCtrl_nativeFree(JNIEnv *env, job
     free(ctx);
 }
 
-jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateFlow(JNIEnv *env, jobject obj, 
-                                                                 jlong flowid, jstring ifname)
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateFlow(JNIEnv *env, 
+                                                                 jobject obj, 
+                                                                 jlong flowid, 
+                                                                 jstring ifname)
 {
 	const char *name;
     struct jni_context *ctx = get_native_context(env, obj);
@@ -853,8 +855,11 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_statsFlow(JNIEnv *env, jobj
 }
 
 
-jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, jobject obj, 
-                                                                 jobject service_id, jint prefix_bits, 
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, 
+                                                                 jobject obj, 
+                                                                 jint type,
+                                                                 jobject service_id, 
+                                                                 jint prefix_bits, 
                                                                  jint priority, jint weight, jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -867,8 +872,11 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, jo
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
 
-    return hostctrl_service_add(ctx->hc, &srvid, (unsigned short)prefix_bits, 
-                                (unsigned int)priority, (unsigned int)weight, &ipaddr);
+    return hostctrl_service_add(ctx->hc, (enum service_rule_type)type, 
+                                &srvid, 
+                                (unsigned short)prefix_bits, 
+                                (unsigned int)priority, 
+                                (unsigned int)weight, &ipaddr);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jobject obj, 

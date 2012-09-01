@@ -444,7 +444,7 @@ void serval_sock_hash(struct sock *sk)
                         ssk->srvid_prefix_bits;
 
                 err = service_add(ssk->hash_key, ssk->hash_key_len, 
-                                  RULE_DEMUX, ssk->srvid_flags, 
+                                  SERVICE_RULE_DEMUX, ssk->srvid_flags, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
                                   NULL, 0, make_target(sk), GFP_ATOMIC);
@@ -491,7 +491,7 @@ void serval_sock_unhash(struct sock *sk)
                                    ssk->srvid_prefix_bits == 0 ?
                                    SERVICE_ID_MAX_PREFIX_BITS :
                                    ssk->srvid_prefix_bits, 
-                                   RULE_DEMUX,
+                                   SERVICE_RULE_DEMUX,
                                    NULL, 0, NULL);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -1045,23 +1045,21 @@ void flow_table_read_unlock(void)
   for fitting the entire table will be returned. In that case, any
   output in buf should be ignored.
  */
-int __flow_table_print(char *buf, int buflen) 
+int __flow_table_print(char *buf, size_t buflen) 
 {
-        int tot_len, len, find_size = 0;
-        char tmp_buf[100];
+        int tot_len, len;
         struct serval_sock *ssk;
 
-        if (buflen < 0) {
-                find_size = 1;
-                buf = tmp_buf;
-                buflen = 100;
-        }
-        
         len = snprintf(buf, buflen, 
                        "%-10s %-10s %-17s %-17s %-10s %s\n",
                        "srcFlowID", "dstFlowID", 
                        "srcIP", "dstIP", "state", "dev");
         tot_len = len;
+
+        if (len > buflen)
+                buflen = 0;
+        else
+                buflen -= len;
 
         list_for_each_entry(ssk, &sock_list, sock_node) {
                 char src[18], dst[18];
@@ -1069,7 +1067,7 @@ int __flow_table_print(char *buf, int buflen)
                 struct net_device *dev = dev_get_by_index(sock_net(sk), 
                                                           sk->sk_bound_dev_if);
 
-                len = snprintf(buf + len, buflen - len, 
+                len = snprintf(buf + tot_len, buflen, 
                                "%-10s %-10s %-17s %-17s %-10s %s\n",
                                flow_id_to_str(&ssk->local_flowid), 
                                flow_id_to_str(&ssk->peer_flowid),
@@ -1085,18 +1083,16 @@ int __flow_table_print(char *buf, int buflen)
 
                 tot_len += len;
 
-                /* If we are finding out the buffer size, only
-                   increment tot_len, not len. */
-                if (find_size)
-                        len = 0;
+                if (len > buflen)
+                        buflen = 0;
                 else
-                        len = tot_len;
+                        buflen -= len;
         }
 
         return tot_len;
 }
 
-int flow_table_print(char *buf, int buflen) 
+int flow_table_print(char *buf, size_t buflen) 
 {
         int ret;
         

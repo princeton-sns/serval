@@ -194,7 +194,7 @@ have_android_sdk=no
 if test x$java_bindings = xyes
 then
 	# Check for Android SDK and NDK
-	AC_PATH_PROG(sdk_path, apkbuilder,, [$android_sdk_path/tools:$PATH'])
+	AC_PATH_PROG(sdk_path, apkbuilder,, [$android_sdk_path/tools:$PATH])
 
 	if test x$sdk_path != x'' 
 	then
@@ -219,26 +219,26 @@ fi
 AM_CONDITIONAL(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes])
 AC_DEFINE(HAVE_ANDROID_SDK, [test x$have_android_sdk = xyes], [Android SDK found])
 
-AC_ARG_WITH([android-ndk],
-            [AS_HELP_STRING([--with-android-ndk=DIR],
-              [Path to Android NDK])],
-            [android_ndk_path=$withval],
-            [android_ndk_path=check])
+#AC_ARG_WITH([android-ndk],
+#            [AS_HELP_STRING([--with-android-ndk=DIR],
+#              [Path to Android NDK])],
+#            [android_ndk_path=$withval],
+#            [android_ndk_path=check])
 
-AC_PATH_PROG(ndk_path, ndk-build,, [$android_ndk_path:$PATH])
+#AC_PATH_PROG(ndk_path, ndk-build,, [$android_ndk_path/:$PATH])
 
-have_android_ndk=no
+#have_android_ndk=no
 
-if test x$ndk_path != x'' 
-then
-	have_android_ndk=yes
-	android_ndk_path=$ndk_path
-	AC_MSG_NOTICE(Using Android NDK in $android_ndk_path)
-	AC_SUBST(ANDROID_NDK_PATH, [$android_ndk_path]) 
-fi
+#if test x$ndk_path != x'' 
+#then
+#	have_android_ndk=yes
+#	android_ndk_path=$ndk_path
+#	AC_MSG_NOTICE(Using Android NDK in $android_ndk_path)
+#	AC_SUBST(ANDROID_NDK_PATH, [$android_ndk_path]) 
+#fi
 
-AM_CONDITIONAL(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes])
-AC_DEFINE(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes], [Android NDK found])
+#AM_CONDITIONAL(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes])
+#AC_DEFINE(HAVE_ANDROID_NDK, [test x$have_android_ndk = xyes], [Android NDK found])
 
 AC_ARG_ENABLE([native_api],
 AS_HELP_STRING([--enable-native-api],[Use native kernel sockets API for clients]),

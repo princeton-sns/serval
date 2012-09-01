@@ -31,7 +31,6 @@ import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.Toast;
-import android.widget.ToggleButton;
 
 
 public class ServalActivity extends FragmentActivity {
@@ -290,8 +289,6 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						Log.d("Serval", "Serval fragment: " + servalFrag);
-						Log.d("Serval", "Serval perm: " + servalFrag.servicePerm);
 						if (servalFrag != null && servalFrag.servicePerm != null && servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
 							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 

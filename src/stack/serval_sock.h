@@ -351,7 +351,7 @@ int serval_sock_rebuild_header(struct sock *sk);
 
 void flow_table_read_lock(void);
 void flow_table_read_unlock(void);
-int __flow_table_print(char *buf, int buflen);
-int flow_table_print(char *buf, int buflen);
+int __flow_table_print(char *buf, size_t buflen);
+int flow_table_print(char *buf, size_t buflen);
 
 #endif /* _SERVAL_SOCK_H */

@@ -38,6 +38,7 @@
 #endif
 #include <serval_request_sock.h>
 #include <service.h>
+#include <delay_queue.h>
 #include <af_serval.h>
 
 extern atomic_t serval_nr_socks;
@@ -100,7 +101,7 @@ static int serval_sal_state_process(struct sock *sk,
                                     struct serval_context *ctx);
 
 static int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
-                                   int clone_it, gfp_t gfp_mask);
+                                   int use_copy, gfp_t gfp_mask);
 
 static size_t min_ext_length[] = {
         [0] = sizeof(struct serval_hdr),
@@ -573,7 +574,7 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
                                            struct serval_hdr *sh)
 {
         /* We might have pulled the serval header already. */
-        if ((unsigned char *)sh == skb_transport_header(skb)) {
+        if (sh && ((unsigned char *)sh == skb_transport_header(skb))) {
                 LOG_DBG("skb->len=%u sh->length=%u\n", 
                         skb->len, ntohs(sh->length));
                 return skb->len > ntohs(sh->length);
@@ -1056,6 +1057,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 seqno)
                 }
         }
 
+        SERVAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
         SERVAL_SKB_CB(skb)->flags = SVH_SYN;
         SERVAL_SKB_CB(skb)->seqno = seqno;
         ssk->snd_seq.nxt = seqno + 1;
@@ -1322,6 +1324,32 @@ static int serval_sal_send_ack(struct sock *sk)
         return err;
 }
 
+enum source_ext_res {
+        SOURCE_EXT_IP_EXISTS,
+        SOURCE_EXT_IP_NONE,
+        SOURCE_EXT_NONE,
+};
+
+static 
+enum source_ext_res serval_sal_source_ext_check(struct sk_buff *skb,
+                                                struct serval_context *ctx,
+                                                __u32 ipaddr)
+{
+        int i;
+        
+        if (!ctx->src_ext)
+                return SOURCE_EXT_NONE;
+        
+        for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
+                if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
+                           &ipaddr, 
+                           sizeof(ipaddr)) == 0) {
+                        return SOURCE_EXT_IP_EXISTS;
+                }
+        }
+        return SOURCE_EXT_IP_NONE;
+}
+
 /**
    Add source extension to SAL header. If one already exists, append
    the source IP address of the packet to the existing header.
@@ -1339,7 +1367,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         struct iphdr *iph;
         struct serval_hdr *sh;
         struct serval_source_ext *sxt = ctx ? ctx->src_ext : NULL;
-        unsigned int size, extra_len, serval_len, ext_len;
+        unsigned int size, extra_len = 0, serval_len = 0, ext_len = 0;
         unsigned char *ptr;
 
         iph = ip_hdr(skb);
@@ -1349,30 +1377,23 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                 LOG_ERR("No header context\n");
                 return -EINVAL;
         }
-
-        if (ctx->src_ext) {
-                int i;
-
-                /* First check that we are not adding an address
-                 * twice */
-                for (i = 0; i < SERVAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext); i++) {
-                        if (memcmp(SERVAL_SOURCE_EXT_GET_ADDR(ctx->src_ext, i),
-                                   &iph->daddr, 
-                                   sizeof(iph->daddr)) == 0) {
-                                LOG_DBG("IP dst address already in "
-                                        "SOURCE ext. Possible loop!\n");
-                                return -1;
-                        }
-                }
-
+        
+        switch (serval_sal_source_ext_check(skb, ctx, iph->daddr)) {
+        case SOURCE_EXT_IP_NONE:
                 /* We just add another IP address. */
                 LOG_DBG("Appending address to SOURCE extension\n");
                 extra_len = 4;
                 ext_len = ctx->src_ext->sv_ext_length + extra_len;
-        } else {
+                break;
+        case SOURCE_EXT_NONE:
                 LOG_DBG("Adding new SOURCE extension\n");
                 extra_len = SERVAL_SOURCE_EXT_LEN + 4;
                 ext_len = extra_len;
+                break;
+        case SOURCE_EXT_IP_EXISTS:
+                LOG_ERR("IP dst address already in "
+                        "SOURCE ext. Possible loop!\n");
+                return -1;
         }
         
         serval_len = ctx->length + extra_len;
@@ -1389,8 +1410,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
                                       skb_tailroom(skb),
                                       GFP_ATOMIC);
 
-                if (!skb)
+                if (!skb) {
+                        LOG_ERR("Could not expand skb!\n");
                         return -ENOMEM;
+                }
 
                 kfree_skb(*in_skb);
                 *in_skb = skb;
@@ -1413,8 +1436,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
 
         /* Check if we need to linearize */
         if (skb_is_nonlinear(skb)) {
-                if (skb_linearize(skb))
+                if (skb_linearize(skb)) {
+                        LOG_ERR("Could not linearize skb\n");
                         return -ENOMEM;
+                }
         }
 
         /* Move back everything from the point of insertion, making
@@ -1664,7 +1689,6 @@ static int serval_sal_rcv_syn(struct sock *sk,
                sizeof(ctx->conn_ext->srvid));
         memcpy(srsk->peer_nonce, conn_ext->nonce, SERVAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->seqno;
-
 
         /* Save our local address that we grabbed from the incoming
          * interface. This address should in most cases be the same
@@ -2942,86 +2966,96 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 
         while (target) {
                 struct target *next_target;
+                struct sk_buff *cskb = NULL;
+                struct iphdr *iph;
+                unsigned int iph_len;
+                unsigned int protocol = serval_hdr(skb)->protocol;
+                int ret = 0;
                 
                 next_target = service_iter_next(&iter);
                 
-                /* It is kind of unclear how to handle DEMUX vs
-                   FORWARD rules here. Does it make sense to have both
-                   a socket and forward rule for one single serviceID?
-                   It seems that if we have a socket, we shouldn't
-                   forward at all. But what if the socket is not first
-                   in the iteration? I guess for now we just forward
-                   until we hit a socket, and then break (i.e., DEMUX
-                   to socket but stop forwarding). */
-                if (is_sock_target(target)) {
-                        /* local resolution */
+                switch (target->type) {
+                case SERVICE_RULE_DEMUX:
+                         /* local resolution */
                         *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
+                        num_forward++;
                         break;
+                case SERVICE_RULE_DELAY:
+                        delay_queue_skb(cskb, srvid);
+                        err = SAL_RESOLVE_DELAY;
+                        num_forward++;
+                        break;
+                case SERVICE_RULE_DROP:
+                        err = SAL_RESOLVE_DROP;
+                        num_forward++;
+                        break;
+                default:
+                        break;
+                }
+
+                if (skb->pkt_type != PACKET_HOST &&
+                    skb->pkt_type != PACKET_OTHERHOST) {
+                        /* Do not forward, e.g., broadcast
+                           packets as they may cause
+                           resolution loops. */
+                        LOG_DBG("Broadcast packet. Not forwarding\n");
+                        err = SAL_RESOLVE_DROP;
+                        break;
+                }
+                
+                if (next_target == NULL) {
+                        cskb = skb;
                 } else {
-                        struct sk_buff *cskb;
-                        struct iphdr *iph;
-                        unsigned int iph_len;
-                        unsigned int protocol = serval_hdr(skb)->protocol;
-                        int len = 0;
-
-                        err = SAL_RESOLVE_FORWARD;
-    
-                        if (skb->pkt_type != PACKET_HOST &&
-                            skb->pkt_type != PACKET_OTHERHOST) {
-                                /* Do not forward, e.g., broadcast
-                                   packets as they may cause
-                                   resolution loops. */
-                                LOG_DBG("Broadcast packet. Not forwarding\n");
-                                kfree_skb(skb);
+                        cskb = skb_copy(skb, GFP_ATOMIC);
+                        
+                        if (!cskb) {
+                                LOG_ERR("Skb allocation failed\n");
+                                err = SAL_RESOLVE_DROP;
                                 break;
                         }
-                        
-                        if (next_target == NULL) {
-                                cskb = skb;
-                        } else {
-                                if (skb_cloned(skb))
-                                        cskb = pskb_copy(skb, GFP_ATOMIC);
-                                else
-                                        cskb = skb_clone(skb, GFP_ATOMIC);
-                                
-                                if (!cskb) {
-                                        LOG_ERR("Skb allocation failed\n");
-                                        break;
-                                }
-                        }
+                }
+                
 
-                        iph = ip_hdr(cskb);
-                        iph_len = iph->ihl << 2;
+                err = SAL_RESOLVE_FORWARD;
+
+                iph = ip_hdr(cskb);
+                iph_len = iph->ihl << 2;
 #if defined(OS_USER)
-                        /* Set the output device - ip_forward uses the
-                         * out device specified in the dst_entry route
-                         * and assumes that skb->dev is the input
-                         * interface*/
-                        if (target->out.dev)
-                                cskb->dev = target->out.dev;
+                /* Set the output device - ip_forward uses the
+                 * out device specified in the dst_entry route
+                 * and assumes that skb->dev is the input
+                 * interface*/
+                if (target->out.dev)
+                        cskb->dev = target->out.dev;
 #endif /* OS_LINUX_KERNEL */
+                
+                /* Set the true overlay source address if the
+                 * packet may be ingress-filtered user-level
+                 * raw socket forwarding may drop the packet
+                 * if the source address is invalid */
+                ret = serval_sal_add_source_ext(&cskb, ctx);
+                
+                if (ret < 0) {
+                        LOG_ERR("Failed to add source extension, err=%d\n", 
+                                ret);
                         
-                        /* Set the true overlay source address if the
-                         * packet may be ingress-filtered user-level
-                         * raw socket forwarding may drop the packet
-                         * if the source address is invalid */
-                        len = serval_sal_add_source_ext(&cskb, ctx);
-                        
-                        if (len < 0) {
-                                LOG_ERR("Failed to add source extension\n");
+                        /* Need to free the skb if it's a copy */
+                        if (cskb != skb) {
+                                LOG_ERR("Freeing skb copy\n");
                                 kfree_skb(cskb);
-                                break;
                         }
+                        /* Try next target */
+                } else {
                         iph = ip_hdr(cskb);
-                        hdr_len += len;
-
+                        hdr_len += ret;
+                        
                         LOG_DBG("new serval header len=%u\n", hdr_len);
-
+                        
                         /* Update destination address */
                         memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
-
+                        
                         /* Must recalculate transport checksum. Pull
                            to reveal transport header */
                         pskb_pull(cskb, hdr_len);
@@ -3033,10 +3067,10 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         /* Push back to Serval header */
                         skb_push(cskb, hdr_len);
                         skb_reset_transport_header(cskb);
-
+                        
                         /* Recalculate SAL checksum */
                         serval_sal_send_check(serval_hdr(cskb));
-
+                        
 #if defined(OS_LINUX_KERNEL)
                         /* Packet is UDP encapsulated, push back UDP
                          * encapsulation header */
@@ -3052,21 +3086,23 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
 #endif
                         /* Push back to IP header */
                         skb_push(cskb, iph_len);
-
-                        if (serval_ipv4_forward_out(cskb)) {
+                                                
+                        ret = serval_ipv4_forward_out(cskb);
+                        
+                        if (ret) {
                                 /* serval_ipv4_forward_out has taken
                                    custody of packet, no need to
                                    free. */
-                                LOG_ERR("Forwarding failed\n");
+                                LOG_ERR("Forwarding failed err=%d\n", ret);
                         } else 
                                 num_forward++;
                 }
                 target = next_target;
         }
-
+        
         if (num_forward == 0)
                 service_iter_inc_stats(&iter, -1, -data_len);
-
+        
         service_iter_destroy(&iter);
         service_entry_put(se);
 
@@ -3116,9 +3152,9 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         return sk;
 }
 
-static int serval_sal_resolve(struct sk_buff *skb, 
-                              struct serval_context *ctx,
-                              struct sock **sk)
+int serval_sal_resolve(struct sk_buff *skb, 
+                       struct serval_context *ctx,
+                       struct sock **sk)
 {
         int ret = SAL_RESOLVE_ERROR;
         struct service_id *srvid = NULL;
@@ -3145,6 +3181,97 @@ static int serval_sal_resolve(struct sk_buff *skb,
         }
         
         return ret;
+}
+
+static int serval_sal_rcv_finish(struct sock *sk, 
+                                 struct sk_buff *skb, 
+                                 struct serval_context *ctx)
+{
+        int err = 0;
+
+        bh_lock_sock_nested(sk);
+
+        /* We only reach this point if a valid local socket destination
+         * has been found */
+        
+        if (!sock_owned_by_user(sk)) {
+                err = serval_sal_do_rcv(sk, skb);
+        } else {
+                /*
+                  Add to backlog and process in user context when
+                  the user process releases its lock ownership.
+                  
+                  Note, for kernels >= 2.6.33 the sk_add_backlog()
+                  function adds the total allocated memory for the
+                  backlog to that of the receive buffer and rejects
+                  queuing in case the new total overreaches the
+                  socket's configured receive buffer size.
+
+                  This may not be the wanted behavior in case we are
+                  processing control packets in the backlog (i.e.,
+                  control packets can be dropped because the data
+                  receive buffer is full. This might not be a big deal
+                  though, as control packets are retransmitted.
+                */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
+        }
+
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
+	return err;
+drop:
+        service_inc_stats(-1, -(skb->len - ctx->length));
+        LOG_DBG("Dropping packet\n");
+        bh_unlock_sock(sk);
+        sock_put(sk);
+        kfree_skb(skb);
+        return err;
+}
+
+int serval_sal_reresolve(struct sk_buff *skb)
+{
+        struct serval_context ctx;
+        struct sock *sk;
+        int err = 0;
+
+        if (serval_sal_parse_hdr(skb, &ctx, SERVAL_PARSE_ALL)) {
+                LOG_DBG("Bad Serval header %s\n",
+                        ctx.hdr ? serval_hdr_to_str(ctx.hdr) : "NULL");
+                return -1;
+        }
+
+        err = serval_sal_resolve(skb, &ctx, &sk);
+
+        switch (err) {
+        case SAL_RESOLVE_DEMUX:
+                return serval_sal_rcv_finish(sk, skb, &ctx);
+        case SAL_RESOLVE_FORWARD:                
+                return 0;
+        case SAL_RESOLVE_DELAY:
+                return err;
+        case SAL_RESOLVE_NO_MATCH:
+        case SAL_RESOLVE_DROP:
+                LOG_DBG("RESOLVE NO_MATCH or DROP\n");
+                err = -EHOSTUNREACH;
+                break;
+        case SAL_RESOLVE_ERROR:
+                LOG_ERR("RESOLVE ERROR\n");
+                err = -EHOSTUNREACH;
+        default:
+                if (sk)
+                        sock_put(sk);
+        }
+
+        kfree_skb(skb);
+        
+        return err;
 }
 
 int serval_sal_rcv(struct sk_buff *skb)
@@ -3203,81 +3330,37 @@ int serval_sal_rcv(struct sk_buff *skb)
                 switch (err) {
                 case SAL_RESOLVE_DEMUX:
                         break;
-                case SAL_RESOLVE_FORWARD:                        
-                        return 0;
-                case SAL_RESOLVE_NO_MATCH:
-                        /* TODO: fix error codes for this function */
-                        err = -EHOSTUNREACH;
-                case SAL_RESOLVE_DROP:
+                case SAL_RESOLVE_FORWARD:
+                        /* Packet forwarded on out device */
                 case SAL_RESOLVE_DELAY:
+                        /* Packet in delay queue */
+                        return NET_RX_SUCCESS;
+                case SAL_RESOLVE_NO_MATCH:
+                case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
-                        if (sk)
-                                sock_put(sk);
                         goto drop;
+                        break;
                 }
         }
+
+        err = serval_sal_rcv_finish(sk, skb, &ctx);
         
-        bh_lock_sock_nested(sk);
-
-        /* We only reach this point if a valid local socket destination
-         * has been found */
-        /* Drop check if control queue is full here - this should
-         * increment the per-service drop stats as well*/
-        if (!is_pure_data(&ctx) &&
-            serval_sal_ctrl_queue_len(sk) >= MAX_CTRL_QUEUE_LEN) {
-                bh_unlock_sock(sk);
+        if (err < 0)
+                return NET_RX_DROP;
+      
+        return NET_RX_SUCCESS;
+ drop:
+        if (sk)
                 sock_put(sk);
-                goto drop_no_stats;
-        }
-
-        if (!sock_owned_by_user(sk)) {
-                err = serval_sal_do_rcv(sk, skb);
-        } else {
-                /*
-                  Add to backlog and process in user context when
-                  the user process releases its lock ownership.
-                  
-                  Note, for kernels >= 2.6.33 the sk_add_backlog()
-                  function adds the total allocated memory for the
-                  backlog to that of the receive buffer and rejects
-                  queuing in case the new total overreaches the
-                  socket's configured receive buffer size.
-
-                  This may not be the wanted behavior in case we are
-                  processing control packets in the backlog (i.e.,
-                  control packets can be dropped because the data
-                  receive buffer is full. This might not be a big deal
-                  though, as control packets are retransmitted.
-                */
-                LOG_PKT("Adding packet to backlog\n");
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb)) {
-                        bh_unlock_sock(sk);
-                        sock_put(sk);
-                        goto drop;
-                }
-#else
-                sk_add_backlog(sk, skb);
-#endif
-        }
-
-        bh_unlock_sock(sk);
-        sock_put(sk);
-
-        /*
-          IP will resubmit packet if return value is less than
-          zero. Therefore, make sure we always return 0, even if we drop the
-          packet.
-        */
-
-	return 0;
-drop:
         service_inc_stats(-1, -(skb->len - ctx.length));
-drop_no_stats:
         LOG_DBG("Dropping packet\n");
         kfree_skb(skb);
-        return 0;
+
+        /* We always return zero here, since function processes an
+           inbound packet and the IP layer that passed us this packet
+           expects a zero return value. */
+        return NET_RX_DROP;
 }
 
 static int serval_sal_rexmit(struct sock *sk)
@@ -3530,50 +3613,12 @@ static inline int serval_sal_add_migrate_ext(struct sock *sk,
         return sizeof(*mig_ext);
 }
 
-int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
-                            int clone_it, gfp_t gfp_mask)
+static struct serval_hdr *serval_sal_build_header(struct sock *sk, 
+                                                  struct sk_buff *skb)
 {
-        struct serval_sock *ssk = serval_sk(sk);
-        struct inet_sock *inet = inet_sk(sk);
-	struct service_entry *se;
-	struct target *target;
         struct serval_hdr *sh;
-        int hdr_len = sizeof(*sh);
-	int err = -1;
-        struct service_iter iter;
-        struct sk_buff *cskb = NULL;
-        int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
-                                    extra 8 bytes are coming from at
-                                    this point */
-    
-	if (likely(clone_it)) {
-		if (unlikely(skb_cloned(skb)))
-			skb = pskb_copy(skb, gfp_mask);
-		else
-			skb = skb_clone(skb, gfp_mask);
-		if (unlikely(!skb)) {
-                        /* Shouldn't free the passed skb here, since
-                         * we were asked to clone it. That probably
-                         * means the original skb sits in a queue
-                         * somewhere, and freeing it would be bad. */
-                        return -ENOBUFS;
-                }
-
-                skb_serval_set_owner_w(skb, sk);
-	}
-
-        /* NOTE:
-         *
-         * Do not use skb_set_owner_w(skb, sk) here as that will
-         * reserve write space for the socket on the transport
-
-         * packets as they might then fill up the write queue/buffer
-         * for the socket. However, skb_set_owner_w(skb, sk) also
-         * guarantees that the socket is not released until skb is
-         * free'd, which is good. I guess we could implement our own
-         * version of skb_set_owner_w() and grab a socket refcount
-         * instead, which is released in the skb's destructor.
-         */
+        struct serval_sock *ssk = serval_sk(sk);
+        unsigned short hdr_len = sizeof(*sh);
 
         /* Add appropriate flags and headers */
         if (SERVAL_SKB_CB(skb)->flags & SVH_SYN || 
@@ -3602,13 +3647,62 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         sh->rsyn = SERVAL_SKB_CB(skb)->flags & SVH_RSYN ? 1 : 0;
         sh->protocol = sk->sk_protocol;
         sh->length = htons(hdr_len);
-        memcpy(&sh->src_flowid, &ssk->local_flowid, sizeof(ssk->local_flowid));
-        memcpy(&sh->dst_flowid, &ssk->peer_flowid, sizeof(ssk->peer_flowid));
+        memcpy(&sh->src_flowid, &ssk->local_flowid, 
+               sizeof(ssk->local_flowid));
+        memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
+               sizeof(ssk->peer_flowid));
 
         skb->protocol = IPPROTO_SERVAL;
-        
-        LOG_PKT("Serval XMIT %s skb->len=%u\n",
-                serval_hdr_to_str(sh), skb->len);
+
+        return sh;
+}
+
+int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb, 
+                            int use_copy, gfp_t gfp_mask)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct inet_sock *inet = inet_sk(sk);
+	struct service_entry *se;
+	struct target *target;
+        struct serval_hdr *sh;
+	int err = -1;
+        struct service_iter iter;
+        struct sk_buff *cskb = NULL;
+        int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
+                                    extra 8 bytes are coming from at
+                                    this point */
+    
+	if (likely(use_copy)) {
+                /* pskb_copy will make a copy of header and
+                   non-fragmented data. Making a copy is necessary
+                   since we are changing the TCP header checksum for
+                   every copy we send (retransmission or copies for
+                   packets matching multiple rules). */
+                skb = pskb_copy(skb, gfp_mask);
+
+		if (unlikely(!skb)) {
+                        /* Shouldn't free the passed skb here, since
+                         * we were asked to use a copy. That probably
+                         * means the original skb sits in a queue
+                         * somewhere, and freeing it would be bad. */
+                        return -ENOBUFS;
+                }
+
+                skb_serval_set_owner_w(skb, sk);
+	}
+
+        /* NOTE:
+         *
+         * Do not use skb_set_owner_w(skb, sk) here as that will
+         * reserve write space for the socket on the transport
+
+         * packets as they might then fill up the write queue/buffer
+         * for the socket. However, skb_set_owner_w(skb, sk) also
+         * guarantees that the socket is not released until skb is
+         * free'd, which is good. I guess we could implement our own
+         * version of skb_set_owner_w() and grab a socket refcount
+         * instead, which is released in the skb's destructor.
+         */
 
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SERVALF_CONNECTED | 
@@ -3616,7 +3710,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SERVALF_FINWAIT2 | 
                                    SERVALF_CLOSING | 
                                    SERVALF_CLOSEWAIT)) {
+                sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
+
+                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                        serval_hdr_to_str(sh), skb->len);
 
                 return serval_sal_do_xmit(skb);
         }
@@ -3636,7 +3734,11 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 /* for user-space, need to specify a device - the
                  * kernel will route */
+                sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
+
+                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                        serval_hdr_to_str(sh), skb->len);
                 
                 /* note that the service resolution stats
                  * (packets/bytes) will not be incremented here In the
@@ -3661,8 +3763,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
+	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0) {
+                kfree_skb(skb);
                 return -1;
+        }
 
         /*
           Send to all destinations resolved for this service.
@@ -3694,21 +3798,29 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
-                        if (unlikely(skb_cloned(skb)))
-                                cskb = pskb_copy(skb, GFP_ATOMIC);
-                        else
-                                cskb = skb_clone(skb, GFP_ATOMIC);
-			
+                        cskb = pskb_copy(skb, GFP_ATOMIC);
+                        
 			if (!cskb) {
 				LOG_ERR("Allocation failed\n");
                                 kfree_skb(skb);
                                 err = -ENOBUFS;
 				break;
 			}
-                        /* Cloned skb will have no socket set. */
+                        /* skb copy will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
 		}
-                
+
+                if (target->type == SERVICE_RULE_DELAY) {
+                        err = delay_queue_skb(cskb, 
+                                              &serval_sk(sk)->peer_srvid);
+                        target = next_target;
+                        continue;
+                } else if (target->type == SERVICE_RULE_DROP) {
+                        kfree_skb(cskb);
+                        err = -EHOSTUNREACH;
+                        continue;
+                }
+
                 /* Remember the flow destination */
 		if (is_sock_target(target)) {
                         /* use a localhost address and bounce it off
@@ -3773,15 +3885,20 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                   transport protocol before being passed to SAL.
                 */
                 if (ssk->af_ops->send_check &&
-                    packet_has_transport_hdr(cskb, sh))
+                    packet_has_transport_hdr(cskb, NULL)) {
+                        LOG_DBG("Calculating transport checksum\n");
                         ssk->af_ops->send_check(sk, cskb);
+                }
+
+                /* Add SAL header */
+                sh = serval_sal_build_header(sk, cskb);
 
                 /* Compute SAL header checksum */
-                serval_sal_send_check((struct serval_hdr *)cskb->data);
+                serval_sal_send_check(sh);
 
                 /* Cannot reset transport header until after checksum
-                   calculation since send_check requires access to
-                   transport header */
+                   calculation since transport send_check requires
+                   access to transport header */
                 skb_reset_transport_header(cskb);
 
 		local_err = ssk->af_ops->queue_xmit(cskb);

@@ -67,9 +67,11 @@ static struct ctrl_client *ctrl_client_new(struct sockaddr_un *un)
 
 int ctrl_recvmsg(void)
 {
+        int peer = 0;
         struct sockaddr_un un;
         struct iovec iov = { rbuf, RCV_BUFSIZE };
-	struct msghdr mh = { &un, sizeof(un), &iov, 1, NULL, 0, 0 };
+	struct msghdr mh = { &un, sizeof(un), &iov, 1,
+                             &peer, sizeof(peer), 0 };
 	struct ctrlmsg *cm;
 	ssize_t nbytes;
         int ret = 0;
@@ -118,7 +120,7 @@ int ctrl_recvmsg(void)
                         hashelm_put(elm);
                 }
                 
-                ret = handlers[cm->type](cm);
+                ret = handlers[cm->type](cm, peer);
 
                 if (ret == -1) {
                         LOG_ERR("handler failure for message type %u\n",
@@ -144,7 +146,7 @@ static void ctrl_send_to_all(struct hashelm *elm, void *data)
 	}
 }
 
-int ctrl_sendmsg(struct ctrlmsg *msg, int mask)
+int ctrl_sendmsg(struct ctrlmsg *msg, int peer, int mask)
 {        
         hashtable_for_each(&ctrl_clients, ctrl_send_to_all, msg);
         return 0;

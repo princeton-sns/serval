@@ -63,10 +63,10 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_statsFlow
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    addService4
- * Signature: (Lorg/servalarch/net/ServiceID;IIILjava/net/Inet4Address;)I
+ * Signature: (ILorg/servalarch/net/ServiceID;IIILjava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4
-  (JNIEnv *, jobject, jobject, jint, jint, jint, jobject);
+(JNIEnv *, jobject, jint, jobject, jint, jint, jint, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl

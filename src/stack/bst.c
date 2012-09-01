@@ -96,20 +96,27 @@ void *bst_node_get_private(struct bst_node *n)
         return n->private;
 }
 
-int bst_node_print_prefix(struct bst_node *n, char *buf, int buflen)
+int bst_node_print_prefix(struct bst_node *n, char *buf, size_t buflen)
 {
         unsigned int i;
-        int len = 0;
+        int len = 0, totlen = 0;
         
         if (n == NULL || buflen <= 0)
                 return 0;
 
         if (n->prefix_bits == 0) {
                 len = snprintf(buf, buflen, "0");
+                totlen += len;
         } else {
                 for (i = 0; i < PREFIX_SIZE(n->prefix_bits); i++) {
-                        len += snprintf(&buf[i*2], buflen - len, "%02x", 
-                                        n->prefix[i] & 0xff);
+                        len = snprintf(&buf[i*2], buflen, "%02x",
+                                       n->prefix[i] & 0xff);
+                        
+                        if (len > buflen)
+                                buflen = 0;
+                        else
+                                buflen -= len;
+                        totlen += len;
                 }
         }
         return len;
@@ -133,17 +140,10 @@ static struct bst_node *stack_pop(struct list_head *stack)
         return n;
 }
 
-int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
+int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
 {
         struct list_head stack;
-        char tmpbuf[100];
-        int len = 0, tot_len = 0, find_size = 0;
-
-        if (buflen < 0) {
-                buf = tmpbuf;
-                buflen = 100;
-                find_size = 1;
-        }
+        int len = 0, tot_len = 0;
 
         INIT_LIST_HEAD(&stack);
         
@@ -154,16 +154,15 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
                 if (n) {
                         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                                 if (n->ops && n->ops->print) {
-                                        len = n->ops->print(n, buf + len, 
-                                                            find_size ? -1 : 
-                                                            buflen - len);
+                                        len = n->ops->print(n, buf + tot_len, 
+                                                            buflen);
 
                                         tot_len += len;
 
-                                        if (find_size)
-                                                len = 0;
+                                        if (len > buflen)
+                                                buflen = 0;
                                         else
-                                                len = tot_len;
+                                                buflen -= len;
                                 }
                         }
                         if (n->right)
@@ -181,54 +180,44 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, int buflen)
   stack space. Must instead use the non-recursive version above that
   implements its own stack.
  */
-int bst_node_print_recursive(struct bst_node *n, char *buf, int buflen)
+int bst_node_print_recursive(struct bst_node *n, char *buf, size_t buflen)
 {
-        int len = 0, tot_len = 0, find_size = 0;
-        char tmpbuf[100];
-        
-        if (buflen < 0) {
-                buf = tmpbuf;
-                buflen = 100;
-                find_size = 1;
-        }
+        int len = 0, tot_len = 0;
 
 	if (n) {
 		if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                         if (n->ops && n->ops->print) {
-                                len = n->ops->print(n, buf + len, 
-                                                    find_size ? -1 : 
-                                                    buflen - len);
+                                len = n->ops->print(n, buf + tot_len, 
+                                                    buflen);
 
                                 tot_len += len;
 
-                                if (find_size)
-                                        len = 0;
+                                if (len > buflen)
+                                        buflen = 0;
                                 else
-                                        len = tot_len;
+                                        buflen -= len;
                         }
                 }
 
-		len = bst_node_print_recursive(n->left, buf + len, 
-                                               find_size ? -1 : 
-                                               buflen - len);
+		len = bst_node_print_recursive(n->left, buf + tot_len, 
+                                               buflen);
                 
                 tot_len += len;
                 
-                if (find_size)
-                        len = 0;
+                if (len > buflen)
+                        buflen = 0;
                 else
-                        len = tot_len;
+                        buflen -= len;
 
-		len = bst_node_print_recursive(n->right, buf + len, 
-                                               find_size ? -1 : 
-                                               buflen - len);
+		len = bst_node_print_recursive(n->right, buf + tot_len, 
+                                               buflen);
                 
                 tot_len += len;
                 
-                if (find_size)
-                        len = 0;
+                if (len > buflen)
+                        buflen = 0;
                 else
-                        len = tot_len;
+                        buflen -= len;
 	}
 
         return tot_len;
@@ -707,7 +696,7 @@ int bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
         return 0;
 }
 
-int bst_print(struct bst *tree, char *buf, int buflen)
+int bst_print(struct bst *tree, char *buf, size_t buflen)
 {
         if (!tree || tree->entries == 0)
                 return 0;
@@ -738,7 +727,7 @@ struct bst_node_ops default_bst_node_ops = {
 #define BUFLEN 2000
 
 
-static int print_ip_entry(struct bst_node *n, char *buf, int buflen)
+static int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
 {
 	struct in_addr addr;
         

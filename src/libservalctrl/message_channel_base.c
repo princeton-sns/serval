@@ -366,7 +366,13 @@ int message_channel_base_send(message_channel_t *channel,
 {
     message_channel_base_t *base = (message_channel_base_t *)channel;
     int ret = -1, retries = 0;
-
+    struct iovec iov = { msg, msglen };
+    struct msghdr msgh = { &base->peer, 
+                           base->peer_len,
+                           &iov, 1,
+                           &channel->peer_pid,
+                           sizeof(channel->peer_pid), 0 };
+    
     assert(channel);
 
     if (!msg)
@@ -382,9 +388,7 @@ int message_channel_base_send(message_channel_t *channel,
 
     while (retries++ <= MAX_SEND_RETRIES && ret == -1) {
         if (base->native_socket) {
-            ret = sendto(base->sock, msg, msglen, 0,
-                         (struct sockaddr *) &base->peer, 
-                         base->peer_len);
+            ret = sendmsg(base->sock, &msgh, 0);
         } 
 #if defined(ENABLE_USERMODE)
         else {

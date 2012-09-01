@@ -6,6 +6,8 @@
 #include <netinet/serval.h>
 #include <assert.h>
 #include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <libservalctrl/message_channel.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
@@ -289,6 +291,7 @@ int message_channel_send_iov(message_channel_t *channel, struct iovec * iov,
 int message_channel_send(message_channel_t *channel, 
                          void *msg, size_t msglen)
 {
+    channel->peer_pid = getpid();
     return channel->ops->send(channel, msg, msglen);
 }
 
