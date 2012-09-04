@@ -158,12 +158,12 @@ public class ServalActivity extends FragmentActivity {
 		
 	}
 		
-	private boolean extractKernelModule(final File module) {
+	boolean extractKernelModule(final File module, String name) {
 		if (module.exists())
 			return true;
 
 		try {
-			BufferedInputStream in = new BufferedInputStream(getAssets().open("serval.ko"));
+			BufferedInputStream in = new BufferedInputStream(getAssets().open(name));
 
 			byte[] buffer = new byte[1024];
 			int n, tot = 0;
@@ -186,8 +186,12 @@ public class ServalActivity extends FragmentActivity {
 
 		return false;
 	}
-
+	
 	boolean executeSuCommand(final String cmd) {
+		return executeSuCommand(cmd, false);
+	}
+
+	boolean executeSuCommand(final String cmd, boolean showToast) {
 		try {
 			Process shell;
 			int err;
@@ -212,7 +216,8 @@ public class ServalActivity extends FragmentActivity {
 		}
 
 		Log.d("Serval", cmd + " failed!");
-		Toast.makeText(getApplicationContext(), "'" + cmd +"' failed!", Toast.LENGTH_SHORT).show();
+		if (showToast)
+			Toast.makeText(getApplicationContext(), "'" + cmd +"' failed!", Toast.LENGTH_SHORT).show();
 
 		return false;
 	}
@@ -344,7 +349,7 @@ public class ServalActivity extends FragmentActivity {
 
 		Log.d("Serval", "module path is " + module.getAbsolutePath());
 
-		if (!extractKernelModule(module)) {
+		if (!extractKernelModule(module, "serval.ko")) {
 			Log.d("Serval", "Could not extract kernel module");
 		}
 

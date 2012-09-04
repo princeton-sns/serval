@@ -1,5 +1,8 @@
 package org.servalarch.serval;
 
+import java.io.File;
+import java.io.IOException;
+
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
@@ -49,7 +52,6 @@ public class TranslatorFragment extends Fragment {
 		"ip rule del to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule del from 192.168.25.0/24 table main priority 20",
 		"ip rule del from all table 1 priority 30",
-		"ip route del default via 192.168.25.25 dev dummy0 table 1",
 		"echo 0 > /proc/sys/net/ipv4/ip_forward",
 		"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
@@ -143,11 +145,25 @@ public class TranslatorFragment extends Fragment {
 		setTranslatorButton(isTranslatorRunning());
 		
 		if (!testDummyIface()) {
-			((TextView) view.findViewById(R.id.error_msg)).setText(getString(R.string.no_dummy));
-			translatorButton.setClickable(false);
-			AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
-			anim.setFillAfter(true);
-			translatorButton.startAnimation(anim);
+			ServalActivity act = (ServalActivity) getActivity();
+			File filesDir = act.getExternalFilesDir(null);
+			try {
+				filesDir.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			File module = new File(filesDir, "dummy.ko");
+			boolean success = act.extractKernelModule(module, "dummy.ko");
+			if (success)
+				executeSuCommand("insmod " + module.getAbsolutePath());
+			
+			if (!success || !testDummyIface()) {
+				((TextView) view.findViewById(R.id.error_msg)).setText(getString(R.string.no_dummy));
+				translatorButton.setClickable(false);
+				AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
+				anim.setFillAfter(true);
+				translatorButton.startAnimation(anim);
+			}
 		}
 		else {
 			((TextView) view.findViewById(R.id.error_msg)).setText("");
@@ -171,7 +187,7 @@ public class TranslatorFragment extends Fragment {
 	private boolean executeRules(String[] rules) {
 		boolean success = true;
 		for (String rule : rules) {
-			success = success &&executeSuCommand(rule);
+			success = success &&executeSuCommand(rule, true);
 			if (!success)
 				return false;
 		}
@@ -179,7 +195,11 @@ public class TranslatorFragment extends Fragment {
 	}
 	
 	private boolean executeSuCommand(String cmd) {
-		return ((ServalActivity) getActivity()).executeSuCommand(cmd);
+		return executeSuCommand(cmd, false);
+	}
+	
+	private boolean executeSuCommand(String cmd, boolean showToast) {
+		return ((ServalActivity) getActivity()).executeSuCommand(cmd, showToast);
 	}
 	
 	private boolean isTranslatorRunning() {
