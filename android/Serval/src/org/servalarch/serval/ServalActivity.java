@@ -25,6 +25,7 @@ import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -211,6 +212,7 @@ public class ServalActivity extends FragmentActivity {
 		}
 
 		Log.d("Serval", cmd + " failed!");
+		Toast.makeText(getApplicationContext(), "'" + cmd +"' failed!", Toast.LENGTH_SHORT).show();
 
 		return false;
 	}
@@ -263,14 +265,14 @@ public class ServalActivity extends FragmentActivity {
 	}
 	
 	public void setModuleLoaded(boolean loaded) {
-		String text = getString(loaded ? R.string.module_loaded : 
-										 R.string.module_unloaded);
+		CharSequence text = Html.fromHtml(getString(loaded ?
+				R.string.module_loaded : R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
 	}
 	
 	public void setUdpEncap(boolean on) {
-		String text = getString(on ? R.string.udp_on : R.string.udp_off);
+		CharSequence text = Html.fromHtml(getString(on ? R.string.udp_on : R.string.udp_off));
 		udpEncapButton.setSelected(on);
 		udpEncapButton.setText(text);
 	}

@@ -6,38 +6,20 @@
 
     <LinearLayout
         xmlns:android="http://schemas.android.com/apk/res/android"
-        android:layout_width="fill_parent"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="left|right"
+        android:gravity="center"
         android:padding="8dp"
         android:orientation="vertical" >
-
-        <RelativeLayout
-            android:id="@+id/layout_trans_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" >
-
-            <ToggleButton
-                android:id="@+id/translatorToggle"
-                android:layout_width="75dp"
-                android:layout_height="wrap_content"
-                android:layout_alignParentRight="true"
-                android:layout_centerVertical="true"
-                android:layout_marginRight="30dp"
-                android:textOff="Off"
-                android:textOn="Running" />
-
-            <TextView
-                android:id="@+id/label_trans_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_centerVertical="true"
-                android:layout_toLeftOf="@+id/translatorToggle"
-                android:text="@string/translator_label"
-                android:textAppearance="?android:attr/textAppearanceLarge"
-                android:textSize="15dp" />
-        </RelativeLayout>
-
+        <Button 
+            android:id="@+id/translator_toggle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="20dp"
+            android:gravity="center"
+            android:textSize="20dp"
+            android:background="@drawable/button" />
         <RelativeLayout
             android:id="@+id/layout_trans_http"
             android:layout_width="match_parent"
@@ -90,6 +72,16 @@
                 android:textAppearance="?android:attr/textAppearanceLarge"
                 android:textSize="15dp" />
         </RelativeLayout>
+        
+        <TextView
+            android:id="@+id/error_msg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="20dp"
+            android:gravity="center"
+            android:textStyle="bold"
+            android:textColor="#EE3333"
+            android:textSize="16dp" />
 	</LinearLayout>
 
 </ScrollView>

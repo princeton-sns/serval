@@ -6,11 +6,16 @@ import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.text.Html;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
+import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.TextView;
 import android.widget.ToggleButton;
 
 public class TranslatorFragment extends Fragment {
@@ -60,7 +65,8 @@ public class TranslatorFragment extends Fragment {
 		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
 	};
 	
-	private ToggleButton translatorButton, transHttpButton, transAllButton;
+	private Button translatorButton;
+	private ToggleButton transHttpButton, transAllButton;
 	
 	private View view;
 	
@@ -68,18 +74,19 @@ public class TranslatorFragment extends Fragment {
 		super.onCreateView(inflater, container, savedInstanceState);
 		view = inflater.inflate(R.layout.frag_translator, container, false);
 
-		this.translatorButton = (ToggleButton) view.findViewById(R.id.translatorToggle);
-		this.translatorButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+		this.translatorButton = (Button) view.findViewById(R.id.translator_toggle);
+		this.translatorButton.setOnClickListener(new OnClickListener() {
 			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
-				if (isChecked) {
-					getActivity().startService(new Intent(getActivity(), TranslatorService.class));
-					if (transAllButton.isChecked())
-						executeRules(ADD_ALL_RULES);
-					else if (transHttpButton.isChecked())
-						executeRules(ADD_HTTP_RULES);
-				} else {
+			public void onClick(View view) {
+				if (!view.isSelected()) {
+					String[] rules = transAllButton.isChecked() ? ADD_ALL_RULES : ADD_HTTP_RULES;
+					if (executeRules(rules)) {
+						getActivity().startService(new Intent(getActivity(), TranslatorService.class));
+						setTranslatorButton(true);
+					}
+				} 
+				else {
+					setTranslatorButton(false);
 					getActivity().stopService(new Intent(getActivity(), TranslatorService.class));
 					if (transAllButton.isChecked())
 						executeRules(DEL_ALL_RULES);
@@ -133,19 +140,42 @@ public class TranslatorFragment extends Fragment {
 			}
 		});
 		
-		if (isTranslatorRunning())
-			translatorButton.setChecked(true);
-		else
-			translatorButton.setChecked(false);
+		setTranslatorButton(isTranslatorRunning());
+		
+		if (!testDummyIface()) {
+			((TextView) view.findViewById(R.id.error_msg)).setText(getString(R.string.no_dummy));
+			translatorButton.setClickable(false);
+			AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
+			anim.setFillAfter(true);
+			translatorButton.startAnimation(anim);
+		}
+		else {
+			((TextView) view.findViewById(R.id.error_msg)).setText("");
+			translatorButton.setClickable(true);
+		}
 		
 		return view;
 	}
 	
-	private void executeRules(String[] rules) {
+	private void setTranslatorButton(boolean running) {
+		CharSequence text = Html.fromHtml(getString(running ? 
+				R.string.translator_running : R.string.translator_off));
+		translatorButton.setSelected(running);
+		translatorButton.setText(text);
+	}
+	
+	private boolean testDummyIface() {
+		return executeSuCommand("ifconfig dummy0 up");
+	}
+	
+	private boolean executeRules(String[] rules) {
+		boolean success = true;
 		for (String rule : rules) {
-			executeSuCommand(rule);
+			success = success &&executeSuCommand(rule);
+			if (!success)
+				return false;
 		}
-
+		return success;
 	}
 	
 	private boolean executeSuCommand(String cmd) {
