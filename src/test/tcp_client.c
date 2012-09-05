@@ -14,10 +14,9 @@
 #include <libserval/serval.h>
 #include "common.h"
 
-static const char *progname = "foo";
-static unsigned short DEFAULT_SERVER_PORT = 16385;
-static struct service_id server_srvid;
+static const char *progname = NULL;
 static int should_exit = 0;
+#define DEFAULT_SERVER_PORT 16385
 #define RECVBUF_SIZE (sizeof(long) * 1460)
 
 static void signal_handler(int sig)
@@ -118,7 +117,8 @@ static int recv_file(int sock, const char *filepath,
         return ret;
 }
 
-static int client(const char *filepath, 
+static int client(const char *filepath,
+                  struct service_id *server_srvid,
                   struct in_addr *srv_inetaddr, int port)
 {
         int sock, ret = EXIT_FAILURE;
@@ -150,7 +150,7 @@ static int client(const char *filepath,
                             &cliaddr.serval.sv_srvid);
                 srvaddr.serval.sv_family = AF_SERVAL;
                 memcpy(&srvaddr.serval.sv_srvid, 
-                       &server_srvid, sizeof(server_srvid));
+                       server_srvid, sizeof(*server_srvid));
                 addrlen = sizeof(cliaddr.serval);
         }
         
@@ -178,6 +178,7 @@ static int client(const char *filepath,
                 printf("Connecting to service id %s\n", 
                        service_id_to_str(&srvaddr.serval.sv_srvid));
         }
+
         ret = connect_sv(sock, &srvaddr.saddr, addrlen);
     
         if (ret < 0) {
@@ -282,8 +283,9 @@ main(int argc, char **argv)
         struct in_addr srv_inetaddr;
         int port = DEFAULT_SERVER_PORT;
         int family = AF_SERVAL;
+        struct service_id server_srvid;
 
-        serval_pton("tcp.server.localdomain", &server_srvid);
+        progname = argv[0];
 
 	memset (&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -293,7 +295,8 @@ main(int argc, char **argv)
         sigaction(SIGHUP, &action, 0);
         sigaction(SIGINT, &action, 0);
 
-        progname = argv[0];
+        serval_pton("tcp.server.localdomain", &server_srvid);
+
         argc--;
         argv++;
     
@@ -330,6 +333,7 @@ main(int argc, char **argv)
                 argc--;
                 argv++;
         }
-    
-        return client(filepath, family == AF_INET ? &srv_inetaddr : NULL, port);
+        
+        return client(filepath, &server_srvid, 
+                      family == AF_INET ? &srv_inetaddr : NULL, port);
 }
