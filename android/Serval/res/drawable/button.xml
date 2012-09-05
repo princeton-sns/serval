@@ -23,7 +23,9 @@
             <solid android:color="#CCCCCC" />
             <padding 
                 android:top="8dp"
-                android:bottom="8dp" />
+                android:bottom="8dp"
+                android:left="8dp"
+                android:right="8dp" />
             <corners android:radius="1dp" />
         </shape>
     </item>

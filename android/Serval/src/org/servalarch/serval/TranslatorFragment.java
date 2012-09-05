@@ -1,15 +1,24 @@
 package org.servalarch.serval;
 
+import java.io.File;
+import java.io.IOException;
+
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningServiceInfo;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
+import android.text.Html;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.ViewGroup;
+import android.view.animation.AlphaAnimation;
+import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.TextView;
 import android.widget.ToggleButton;
 
 public class TranslatorFragment extends Fragment {
@@ -43,7 +52,6 @@ public class TranslatorFragment extends Fragment {
 		"ip rule del to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule del from 192.168.25.0/24 table main priority 20",
 		"ip rule del from all table 1 priority 30",
-		"ip route del default via 192.168.25.25 dev dummy0 table 1",
 		"echo 0 > /proc/sys/net/ipv4/ip_forward",
 		"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
 		"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
@@ -59,7 +67,10 @@ public class TranslatorFragment extends Fragment {
 		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
 	};
 	
-	private ToggleButton translatorButton, transHttpButton, transAllButton;
+	private static boolean dummyTested = false;
+	
+	private Button translatorButton;
+	private ToggleButton transHttpButton, transAllButton;
 	
 	private View view;
 	
@@ -67,22 +78,24 @@ public class TranslatorFragment extends Fragment {
 		super.onCreateView(inflater, container, savedInstanceState);
 		view = inflater.inflate(R.layout.frag_translator, container, false);
 
-		this.translatorButton = (ToggleButton) view.findViewById(R.id.translatorToggle);
-		this.translatorButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+		this.translatorButton = (Button) view.findViewById(R.id.translator_toggle);
+		this.translatorButton.setOnClickListener(new OnClickListener() {
 			@Override
-			public void onCheckedChanged(CompoundButton buttonView,
-					boolean isChecked) {
-				if (isChecked) {
-					getActivity().startService(new Intent(getActivity(), TranslatorService.class));
-					if (transAllButton.isChecked())
-						executeRules(ADD_ALL_RULES);
-					else if (transHttpButton.isChecked())
-						executeRules(ADD_HTTP_RULES);
-				} else {
+			public void onClick(View view) {
+				if (!view.isSelected()) {
+					String[] rules = transAllButton.isChecked() ? ADD_ALL_RULES : ADD_HTTP_RULES;
+					if (executeRules(rules)) {
+						getActivity().startService(new Intent(getActivity(), TranslatorService.class));
+						setTranslatorButton(true);
+					}
+				} 
+				else {
+					setTranslatorButton(false);
 					getActivity().stopService(new Intent(getActivity(), TranslatorService.class));
 					if (transAllButton.isChecked())
 						executeRules(DEL_ALL_RULES);
 					else if (transHttpButton.isChecked())
+						Log.d("TransFrag", "Deleting Rules");
 						executeRules(DEL_HTTP_RULES);
 				}
 			}
@@ -131,23 +144,69 @@ public class TranslatorFragment extends Fragment {
 			}
 		});
 		
-		if (isTranslatorRunning())
-			translatorButton.setChecked(true);
-		else
-			translatorButton.setChecked(false);
+		setTranslatorButton(isTranslatorRunning());
+		
+		if (!dummyTested && !testDummyIface()) {
+			ServalActivity act = (ServalActivity) getActivity();
+			File filesDir = act.getExternalFilesDir(null);
+			try {
+				filesDir.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			File module = new File(filesDir, "dummy.ko");
+			boolean success = act.extractKernelModule(module, "dummy.ko");
+			if (success)
+				executeSuCommand("insmod " + module.getAbsolutePath());
+			
+			if (!success || !testDummyIface()) {
+				((TextView) view.findViewById(R.id.error_msg)).setText(getString(R.string.no_dummy));
+				translatorButton.setClickable(false);
+				AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
+				anim.setFillAfter(true);
+				translatorButton.startAnimation(anim);
+				dummyTested = false;
+			}
+			else {
+				dummyTested = true;
+			}
+		}
+		else {
+			((TextView) view.findViewById(R.id.error_msg)).setText("");
+			translatorButton.setClickable(true);
+			dummyTested = true;
+		}
 		
 		return view;
 	}
 	
-	private void executeRules(String[] rules) {
+	private void setTranslatorButton(boolean running) {
+		CharSequence text = Html.fromHtml(getString(running ? 
+				R.string.translator_running : R.string.translator_off));
+		translatorButton.setSelected(running);
+		translatorButton.setText(text);
+	}
+	
+	private boolean testDummyIface() {
+		return executeSuCommand("ifconfig dummy0 up");
+	}
+	
+	private boolean executeRules(String[] rules) {
+		boolean success = true;
 		for (String rule : rules) {
-			executeSuCommand(rule);
+			success = success &&executeSuCommand(rule, true);
+			if (!success)
+				return false;
 		}
-
+		return success;
 	}
 	
 	private boolean executeSuCommand(String cmd) {
-		return ((ServalActivity) getActivity()).executeSuCommand(cmd);
+		return executeSuCommand(cmd, false);
+	}
+	
+	private boolean executeSuCommand(String cmd, boolean showToast) {
+		return ((ServalActivity) getActivity()).executeSuCommand(cmd, showToast);
 	}
 	
 	private boolean isTranslatorRunning() {
