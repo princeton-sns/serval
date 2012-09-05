@@ -25,13 +25,13 @@ import android.support.v4.app.FragmentActivity;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentPagerAdapter;
 import android.support.v4.view.ViewPager;
+import android.text.Html;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.Toast;
-import android.widget.ToggleButton;
 
 
 public class ServalActivity extends FragmentActivity {
@@ -158,12 +158,12 @@ public class ServalActivity extends FragmentActivity {
 		
 	}
 		
-	private boolean extractKernelModule(final File module) {
+	boolean extractKernelModule(final File module, String name) {
 		if (module.exists())
 			return true;
 
 		try {
-			BufferedInputStream in = new BufferedInputStream(getAssets().open("serval.ko"));
+			BufferedInputStream in = new BufferedInputStream(getAssets().open(name));
 
 			byte[] buffer = new byte[1024];
 			int n, tot = 0;
@@ -186,8 +186,12 @@ public class ServalActivity extends FragmentActivity {
 
 		return false;
 	}
-
+	
 	boolean executeSuCommand(final String cmd) {
+		return executeSuCommand(cmd, false);
+	}
+
+	boolean executeSuCommand(final String cmd, boolean showToast) {
 		try {
 			Process shell;
 			int err;
@@ -212,6 +216,8 @@ public class ServalActivity extends FragmentActivity {
 		}
 
 		Log.d("Serval", cmd + " failed!");
+		if (showToast)
+			Toast.makeText(getApplicationContext(), "'" + cmd +"' failed!", Toast.LENGTH_SHORT).show();
 
 		return false;
 	}
@@ -264,14 +270,14 @@ public class ServalActivity extends FragmentActivity {
 	}
 	
 	public void setModuleLoaded(boolean loaded) {
-		String text = getString(loaded ? R.string.module_loaded : 
-										 R.string.module_unloaded);
+		CharSequence text = Html.fromHtml(getString(loaded ?
+				R.string.module_loaded : R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
 	}
 	
 	public void setUdpEncap(boolean on) {
-		String text = getString(on ? R.string.udp_on : R.string.udp_off);
+		CharSequence text = Html.fromHtml(getString(on ? R.string.udp_on : R.string.udp_off));
 		udpEncapButton.setSelected(on);
 		udpEncapButton.setText(text);
 	}
@@ -290,7 +296,7 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						if (servalFrag.servicePerm.isChecked()) {
+						if (servalFrag != null && servalFrag.servicePerm != null && servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
 							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 
 									servalFrag.editIpText.getText().toString()).commit();
@@ -343,7 +349,7 @@ public class ServalActivity extends FragmentActivity {
 
 		Log.d("Serval", "module path is " + module.getAbsolutePath());
 
-		if (!extractKernelModule(module)) {
+		if (!extractKernelModule(module, "serval.ko")) {
 			Log.d("Serval", "Could not extract kernel module");
 		}
 
