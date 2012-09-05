@@ -149,6 +149,7 @@ clean-local:
 if ENABLE_LINUX_MODULE
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 endif
+	rm -f serval.ko
 	rm -f *~
 	rm -f linux/*~
 	rm -f userlevel/*~
