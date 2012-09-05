@@ -23,20 +23,20 @@ public abstract class HostCtrl {
     public static final int DELAY_DROP = 1;
 
     public HostCtrl(int type, final HostCtrlCallbacks cb) 
-	throws HostCtrlException {
-	switch (type) {
-	case HOSTCTRL_LOCAL:
-	case HOSTCTRL_REMOTE:
-	    int ret = nativeInit(type);
+        throws HostCtrlException {
+        switch (type) {
+        case HOSTCTRL_LOCAL:
+        case HOSTCTRL_REMOTE:
+            int ret = nativeInit(type);
 			
-	    if (ret == -1)
-		throw new HostCtrlException("Initialization failure ret=" + ret);
-	    break;
-	default:
-	    throw new IllegalArgumentException("No such host control type " + type);
-	}
-	this.type = type;
-	this.callbacks = cb;
+            if (ret == -1)
+                throw new HostCtrlException("Initialization failure ret=" + ret);
+            break;
+        default:
+            throw new IllegalArgumentException("No such host control type " + type);
+        }
+        this.type = type;
+        this.callbacks = cb;
     }
 
     private native int nativeInit(int type);
@@ -45,7 +45,7 @@ public abstract class HostCtrl {
     public native int migrateInterface(String fromDevice, String toDevice);
 
     private native int addService4(ServiceID id, int type, 
-				   int prority, int weight, Inet4Address addr);
+                                   int prority, int weight, Inet4Address addr);
     private native int getService4(ServiceID id, Inet4Address addr);
     private native int removeService4(ServiceID id, Inet4Address addr);
     private native int registerService4(ServiceID id, Inet4Address oldAddr);
@@ -85,12 +85,12 @@ public abstract class HostCtrl {
     }
 	
     public synchronized void dispose()
-    {
-        if (!isDisposed) {
-            isDisposed = true;
-            nativeFree();
+        {
+            if (!isDisposed) {
+                isDisposed = true;
+                nativeFree();
+            }
         }
-    }
     protected void finalize() throws Throwable {
         dispose();
         super.finalize();
