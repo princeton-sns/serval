@@ -67,6 +67,8 @@ public class TranslatorFragment extends Fragment {
 		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
 	};
 	
+	private static boolean dummyTested = false;
+	
 	private Button translatorButton;
 	private ToggleButton transHttpButton, transAllButton;
 	
@@ -144,7 +146,7 @@ public class TranslatorFragment extends Fragment {
 		
 		setTranslatorButton(isTranslatorRunning());
 		
-		if (!testDummyIface()) {
+		if (!dummyTested && !testDummyIface()) {
 			ServalActivity act = (ServalActivity) getActivity();
 			File filesDir = act.getExternalFilesDir(null);
 			try {
@@ -163,11 +165,16 @@ public class TranslatorFragment extends Fragment {
 				AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
 				anim.setFillAfter(true);
 				translatorButton.startAnimation(anim);
+				dummyTested = false;
+			}
+			else {
+				dummyTested = true;
 			}
 		}
 		else {
 			((TextView) view.findViewById(R.id.error_msg)).setText("");
 			translatorButton.setClickable(true);
+			dummyTested = true;
 		}
 		
 		return view;

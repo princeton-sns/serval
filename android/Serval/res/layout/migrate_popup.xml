@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/migrate_layout"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="#EC242424"
+    android:padding="8dp"
+    android:orientation="vertical">
+    <TextView
+        android:id="@+id/migrate_header"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="21dp"
+        android:textStyle="bold"
+        android:text="Select new interface: " />
+	<ListView
+		android:id="@+id/migrate_list"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:layout_gravity="center" />
+</LinearLayout>
