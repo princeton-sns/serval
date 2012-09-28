@@ -166,6 +166,12 @@ struct serval_sock {
                 u32        wnd;
                 u32        iss;
         } rcv_seq;
+        u32	                ack_rcv_tstamp;	/* timestamp of last received ACK (for keepalives) */
+        u32	                last_rcv_tstamp;       /* timestamp of last received packet */
+	unsigned int		keepalive_time;	  /* time before keep alive takes place */
+	unsigned int		keepalive_intvl;  /* time interval between keep alive probes */
+        u8	                keepalive_probes; /* num of allowed keep alive probes	*/
+        u8                      probes_out;
         u8                      retransmits;
         u8                      backoff;
         u8                      pending;
@@ -295,6 +301,9 @@ static inline void serval_sock_reset_xmit_timer(struct sock *sk,
         sk_reset_timer(sk, &ssk->retransmit_timer, ssk->timeout);
 }
 
+void serval_sock_delete_keepalive_timer(struct sock *sk);
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len);
+
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
                              gfp_t priority, int protocol, 
@@ -338,9 +347,6 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 	skb->sk = sk;
 	skb->destructor = serval_sock_rfree;
 }
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req);
 
 int serval_sock_rebuild_header(struct sock *sk);
 

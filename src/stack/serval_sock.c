@@ -569,9 +569,11 @@ void serval_sock_init(struct sock *sk)
         setup_timer(&ssk->retransmit_timer, 
                     serval_sal_rexmit_timeout,
                     (unsigned long)sk);
-
         setup_timer(&ssk->tw_timer, 
                     serval_sal_timewait_timeout,
+                    (unsigned long)sk);
+	setup_timer(&sk->sk_timer, 
+                    serval_sal_keepalive_timeout, 
                     (unsigned long)sk);
 
         serval_sal_init_ctrl_queue(sk);
@@ -654,7 +656,18 @@ void serval_sock_destroy(struct sock *sk)
 static void serval_sock_clear_xmit_timers(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        sk_stop_timer(sk, &ssk->retransmit_timer);        
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+	sk_stop_timer(sk, &sk->sk_timer);   
+}
+
+void serval_sock_delete_keepalive_timer(struct sock *sk)
+{
+	sk_stop_timer(sk, &sk->sk_timer);
+}
+
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len)
+{
+	sk_reset_timer(sk, &sk->sk_timer, jiffies + len);
 }
 
 void serval_sock_done(struct sock *sk)
@@ -837,68 +850,6 @@ int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
         serval_sk(sk)->sal_state = new_state;
 
         return new_state;
-}
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req)
-{
-#if defined(OS_LINUX_KERNEL)
-	struct rtable *rt;
-	struct inet_request_sock *ireq = inet_rsk(req);
-	/* struct ip_options *opt = inet_rsk(req)->opt; */
-        struct flowi fl;
-
-        serval_flow_init_output(&fl, sk->sk_bound_dev_if, sk->sk_mark, 
-                                0, 0, sk->sk_protocol, 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                                inet_sk_flowi_flags(sk),
-#else
-                                0,
-#endif
-                                ireq->rmt_addr, ireq->loc_addr, 0, 0);
-
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
-                        inet_ntop(AF_INET, &ireq->rmt_addr, rmtstr, 18),
-                        inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
-                        sk->sk_protocol);
-        }
-#endif
-	serval_security_req_classify_flow(req, &fl);
-
-        rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
-
-        if (!rt)
-                goto no_route;
-
-        /*
-	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
-		goto route_err;
-        */
-
-        /* Save the route addresses to make sure they match
-           what is configured in the socket. If we do not make
-           sure they are the same, there can be checksum
-           problems. */
-        memcpy(&ireq->rmt_addr, &rt->rt_dst, sizeof(ireq->rmt_addr));
-        memcpy(&ireq->loc_addr, &rt->rt_src, sizeof(ireq->loc_addr));
-
-	return route_dst(rt);
-/*
-route_err:
-*/
-	ip_rt_put(rt);
-
-  no_route:
-/*
-	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
-*/
-	return NULL;
-#else
-        return NULL;
-#endif
 }
 
 /* 

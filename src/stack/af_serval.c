@@ -317,6 +317,8 @@ static int serval_listen_stop(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
+        serval_sock_delete_keepalive_timer(sk);
+
         /* Destroy queue of sockets that haven't completed three-way
          * handshake */
         while (1) {
