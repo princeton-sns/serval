@@ -258,137 +258,128 @@ static inline int serval_pton(const char *src, void *dst)
         return serval_hexton(src, 64, dst, sizeof(struct service_id));
 }
 
-struct serval_hdr {
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-	uint8_t	res1:3,
-                rsyn:1,
-                fin:1,
-                rst:1,
-                ack:1,
-		syn:1;
-#elif defined (__BIG_ENDIAN_BITFIELD)
-	uint8_t	syn:1,
-  		ack:1,
-                rst:1,
-                fin:1,
-                rsyn:1,
-                res1:3;
-#else
-#error	"Please fix <asm/byteorder.h>"
-#endif
-        uint8_t  protocol;
-        uint16_t check;
-        uint16_t length;  
-        uint16_t res2;       
+struct sal_hdr {
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
+        uint8_t  length;
+        uint8_t  protocol;
+        uint16_t check;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_hdr) == 16)
+SERVAL_ASSERT(sizeof(struct sal_hdr) == 12)
 
 /* Generic extension header */
-struct serval_ext {
+struct sal_ext {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
-	uint8_t	flags:4,
+	uint8_t	res:4,
 		type:4;
 #elif defined (__BIG_ENDIAN_BITFIELD)
 	uint8_t	type:4,
-                flags:4;
+                res:4;
 #else
 #error	"Please fix <asm/byteorder.h>"
 #endif
         uint8_t length;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
 #define sv_ext_type exthdr.type
-#define sv_ext_flags exthdr.flags
 #define sv_ext_length exthdr.length
 
-#define SERVAL_EXT_FIRST(sh) \
-        ((struct serval_ext *)((char *)sh + sizeof(struct serval_hdr)))
+#define SAL_EXT_FIRST(sh) \
+        ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
 
-#define SERVAL_EXT_NEXT(ext) \
-        ((struct serval_ext *)((char *)ext + ext->length))
+#define SAL_EXT_NEXT(ext) \
+        ((struct sal_ext *)((char *)ext + ext->length))
 
-enum serval_ext_type {
-        SERVAL_CONNECTION_EXT = 1,
-        SERVAL_CONTROL_EXT,
-        SERVAL_SERVICE_EXT,
-        SERVAL_DESCRIPTION_EXT,
-        SERVAL_SOURCE_EXT,
-        SERVAL_MIGRATE_EXT,
-        __SERVAL_EXT_TYPE_MAX,
+enum sal_ext_type {
+        SAL_CONTROL_EXT = 1,
+        SAL_CONNECTION_EXT,
+        SAL_SERVICE_EXT,
+        SAL_ADDRESS_EXT,
+        SAL_SOURCE_EXT,
+        __SAL_EXT_TYPE_MAX,
 };
 
-struct serval_connection_ext {
-        struct serval_ext exthdr;
-        uint32_t seqno;
+#define SAL_NONCE_SIZE 8
+
+struct sal_control_ext {
+        struct sal_ext exthdr;
+#if defined(__LITTLE_ENDIAN_BITFIELD)
+	uint8_t	res1:2,
+                fin:1,
+                rst:1,
+                nack:1,
+                ack:1,
+                rsyn:1,
+		syn:1;
+#elif defined (__BIG_ENDIAN_BITFIELD)
+	uint8_t	syn:1,
+                rsyn:1,
+  		ack:1,
+                nack:1,
+                rst:1,
+                fin:1,
+                res1:2;
+#else
+#error	"Please fix <asm/byteorder.h>"
+#endif
+        uint8_t  res2;
+        uint32_t verno;
         uint32_t ackno;
-        uint8_t  nonce[8];
+        uint8_t  nonce[SAL_NONCE_SIZE];
+} __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
+
+struct sal_connection_ext {
+        struct sal_control_ext ctrl_ext;
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_connection_ext) == 50)
+SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 52)
 
-#define SERVAL_NONCE_SIZE 8
-
-struct serval_control_ext {
-        struct serval_ext exthdr;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t  nonce[8];
-} __attribute__((packed));
-
-SERVAL_ASSERT(sizeof(struct serval_control_ext) == 18)
-
-struct serval_service_ext {
-        struct serval_ext exthdr;
+struct sal_service_ext {
+        struct sal_control_ext ctrl_ext;
         struct service_id src_srvid;
         struct service_id dst_srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_service_ext) == 66)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 84)
 
-struct serval_description_ext {
-        struct serval_ext exthdr;
+struct sal_address_ext {
+        struct sal_ext exthdr;
+        uint16_t res;
+        uint32_t verno;
+        uint32_t ackno;
         struct net_addr addrs[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_description_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_address_ext) == 12)
 
-struct serval_source_ext {
-        struct serval_ext exthdr;
+struct sal_source_ext {
+        struct sal_ext exthdr;
         uint8_t source[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct serval_source_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
 
-struct serval_migrate_ext {
-        struct serval_ext exthdr;
-        uint32_t seqno;
-        uint32_t ackno;
-        uint8_t nonce[8];
-} __attribute__((packed));
+#define __SAL_SOURCE_EXT_LEN(sz)             \
+        (sz + sizeof(struct sal_source_ext))
 
-SERVAL_ASSERT(sizeof(struct serval_migrate_ext) == 18)
+#define SAL_SOURCE_EXT_LEN __SAL_SOURCE_EXT_LEN(4)
 
-#define __SERVAL_SOURCE_EXT_LEN(sz)             \
-        (sz + sizeof(struct serval_source_ext))
+#define SAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
+        (((ext)->sv_ext_length - sizeof(struct sal_source_ext)) / 4) 
 
-#define SERVAL_SOURCE_EXT_LEN __SERVAL_SOURCE_EXT_LEN(4)
-
-#define SERVAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
-        (((ext)->sv_ext_length - sizeof(struct serval_source_ext)) / 4) 
-
-#define SERVAL_SOURCE_EXT_GET_ADDR(ext, n)      \
+#define SAL_SOURCE_EXT_GET_ADDR(ext, n)      \
         (&(ext)->source[n*4])
 
-#define SERVAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
-        (&(ext)->source[(SERVAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
+#define SAL_SOURCE_EXT_GET_LAST_ADDR(ext)                            \
+        (&(ext)->source[(SAL_SOURCE_EXT_NUM_ADDRS(ext)-1)*4])
 
 #endif /* _SERVAL_H */

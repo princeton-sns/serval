@@ -43,22 +43,22 @@ static DEFINE_RWLOCK(sock_list_lock);
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        [ SERVAL_INIT ]      = "INIT",
-        [ SERVAL_CONNECTED ] = "CONNECTED",
-        [ SERVAL_REQUEST ]   = "REQUEST",
-        [ SERVAL_RESPOND ]   = "RESPOND",
-        [ SERVAL_FINWAIT1 ]  = "FINWAIT1",
-        [ SERVAL_FINWAIT2 ]  = "FINWAIT2",
-        [ SERVAL_TIMEWAIT ]  = "TIMEWAIT",
-        [ SERVAL_CLOSED ]    = "CLOSED",
-        [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
-        [ SERVAL_LASTACK ]   = "LASTACK",
-        [ SERVAL_LISTEN ]    = "LISTEN",
-        [ SERVAL_CLOSING ]   = "CLOSING"
+        [ SAL_INIT ]      = "INIT",
+        [ SAL_CONNECTED ] = "CONNECTED",
+        [ SAL_REQUEST ]   = "REQUEST",
+        [ SAL_RESPOND ]   = "RESPOND",
+        [ SAL_FINWAIT1 ]  = "FINWAIT1",
+        [ SAL_FINWAIT2 ]  = "FINWAIT2",
+        [ SAL_TIMEWAIT ]  = "TIMEWAIT",
+        [ SAL_CLOSED ]    = "CLOSED",
+        [ SAL_CLOSEWAIT ] = "CLOSEWAIT",
+        [ SAL_LASTACK ]   = "LASTACK",
+        [ SAL_LISTEN ]    = "LISTEN",
+        [ SAL_CLOSING ]   = "CLOSING"
 };
 
 static const char *sock_sal_state_str[] = {
-        [ SAL_INITIAL ]        = "SAL_INITIAL",
+        [ SAL_RSYN_INITIAL ]        = "SAL_RSYN_INITIAL",
         [ SAL_RSYN_SENT ]      = "SAL_RSYN_SENT",
         [ SAL_RSYN_RECV ]      = "SAL_RSYN_RECV",
         [ SAL_RSYN_SENT_RECV ] = "SAL_RSYN_SENT_RECV",
@@ -349,8 +349,8 @@ static void __serval_sock_hash(struct sock *sk)
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
                 LOG_DBG("hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
                 ssk->hash_key = &ssk->local_flowid;
@@ -370,12 +370,12 @@ void serval_sock_hash(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
         
         /* Do not hash if closed or already hashed */
-        if (sk->sk_state == SERVAL_CLOSED ||
+        if (sk->sk_state == SAL_CLOSED ||
             ssk->hash_key_len > 0)
                 return;
 
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
 		local_bh_disable();
 		__serval_sock_hash(sk);
                 serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
@@ -425,8 +425,8 @@ void serval_sock_unhash(struct sock *sk)
         if (ssk->hash_key_len == 0)
                 return;
                 
-        if (sk->sk_state == SERVAL_LISTEN ||
-            sk->sk_state == SERVAL_INIT) {
+        if (sk->sk_state == SAL_LISTEN ||
+            sk->sk_state == SAL_INIT) {
                 /*
                 lock = &listen_table.hashslot(&listen_table, net, 
                                               &ssk->local_srvid, 
@@ -564,7 +564,7 @@ void serval_sock_init(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         sk->sk_state = 0;
-        ssk->sal_state = SAL_INITIAL;
+        ssk->sal_state = SAL_RSYN_INITIAL;
         ssk->udp_encap_sport = 0;
         ssk->udp_encap_dport = 0;
         INIT_LIST_HEAD(&ssk->sock_node);
@@ -573,21 +573,23 @@ void serval_sock_init(struct sock *sk)
         setup_timer(&ssk->retransmit_timer, 
                     serval_sal_rexmit_timeout,
                     (unsigned long)sk);
-
         setup_timer(&ssk->tw_timer, 
                     serval_sal_timewait_timeout,
+                    (unsigned long)sk);
+	setup_timer(&sk->sk_timer, 
+                    serval_sal_keepalive_timeout, 
                     (unsigned long)sk);
 
         serval_sal_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(ssk->local_nonce, SAL_NONCE_SIZE);
         get_random_bytes(&ssk->snd_seq.iss, sizeof(ssk->snd_seq.iss));
 #else
         {
                 unsigned int i;
                 unsigned char *seqno = (unsigned char *)&ssk->snd_seq.iss;
-                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                for (i = 0; i < SAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
                 for (i = 0; i < sizeof(ssk->snd_seq.iss); i++) {
@@ -620,7 +622,7 @@ void serval_sock_destroy(struct sock *sk)
 
         LOG_DBG("Destroying Serval sock %p\n", sk);
         
-	WARN_ON(sk->sk_state != SERVAL_CLOSED);
+	WARN_ON(sk->sk_state != SAL_CLOSED);
 
 	/* It cannot be in hash table! */
 	//WARN_ON(!sk_unhashed(sk));
@@ -658,12 +660,23 @@ void serval_sock_destroy(struct sock *sk)
 static void serval_sock_clear_xmit_timers(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        sk_stop_timer(sk, &ssk->retransmit_timer);        
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+	sk_stop_timer(sk, &sk->sk_timer);   
+}
+
+void serval_sock_delete_keepalive_timer(struct sock *sk)
+{
+	sk_stop_timer(sk, &sk->sk_timer);
+}
+
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len)
+{
+	sk_reset_timer(sk, &sk->sk_timer, jiffies + len);
 }
 
 void serval_sock_done(struct sock *sk)
 {
-	serval_sock_set_state(sk, SERVAL_CLOSED);
+	serval_sock_set_state(sk, SAL_CLOSED);
 	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
@@ -686,7 +699,7 @@ void serval_sock_destruct(struct sock *sk)
         serval_sal_ctrl_queue_purge(sk);
 
 	if (sk->sk_type == SOCK_STREAM && 
-            (sk->sk_state != SERVAL_CLOSED && 
+            (sk->sk_state != SAL_CLOSED && 
              sk->sk_state != 0)) {
                 /*
                   Note: in user mode, a respond sock created as a
@@ -762,7 +775,7 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 
 const char *serval_sock_state_str(struct sock *sk)
 {
-        if (sk->sk_state >= __SERVAL_MAX_STATE) {
+        if (sk->sk_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -771,7 +784,7 @@ const char *serval_sock_state_str(struct sock *sk)
 
 const char *serval_state_str(unsigned int state)
 {
-        if (state >= __SERVAL_MAX_STATE) {
+        if (state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -781,8 +794,8 @@ const char *serval_state_str(unsigned int state)
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 { 
-        if (new_state == __SERVAL_MIN_STATE ||
-            new_state >= __SERVAL_MAX_STATE) {
+        if (new_state == __SAL_MIN_STATE ||
+            new_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
@@ -794,7 +807,7 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
                 flow_id_to_str(&serval_sk(sk)->peer_flowid));
         
         switch (new_state) {
-        case SERVAL_CLOSED:
+        case SAL_CLOSED:
                 sk->sk_prot->unhash(sk);
                 break;
         default:
@@ -808,7 +821,7 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 const char *serval_sock_sal_state_str(struct sock *sk)
 {
-        if (serval_sk(sk)->sal_state >= __SAL_MAX_STATE) {
+        if (serval_sk(sk)->sal_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n",
                         serval_sk(sk)->sal_state);
                 return sock_sal_state_str[0];
@@ -818,7 +831,7 @@ const char *serval_sock_sal_state_str(struct sock *sk)
 
 const char *serval_sal_state_str(unsigned int state)
 {
-        if (state >= __SAL_MAX_STATE) {
+        if (state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", state);
                 return sock_sal_state_str[0];
         }
@@ -827,7 +840,7 @@ const char *serval_sal_state_str(unsigned int state)
 
 int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state >= __SAL_MAX_STATE) {
+        if (new_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", new_state);
                 return -1;
         }
@@ -841,68 +854,6 @@ int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
         serval_sk(sk)->sal_state = new_state;
 
         return new_state;
-}
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req)
-{
-#if defined(OS_LINUX_KERNEL)
-	struct rtable *rt;
-	struct inet_request_sock *ireq = inet_rsk(req);
-	/* struct ip_options *opt = inet_rsk(req)->opt; */
-        struct flowi fl;
-
-        serval_flow_init_output(&fl, sk->sk_bound_dev_if, sk->sk_mark, 
-                                0, 0, sk->sk_protocol, 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                                inet_sk_flowi_flags(sk),
-#else
-                                0,
-#endif
-                                ireq->rmt_addr, ireq->loc_addr, 0, 0);
-
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
-                        inet_ntop(AF_INET, &ireq->rmt_addr, rmtstr, 18),
-                        inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
-                        sk->sk_protocol);
-        }
-#endif
-	serval_security_req_classify_flow(req, &fl);
-
-        rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
-
-        if (!rt)
-                goto no_route;
-
-        /*
-	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
-		goto route_err;
-        */
-
-        /* Save the route addresses to make sure they match
-           what is configured in the socket. If we do not make
-           sure they are the same, there can be checksum
-           problems. */
-        memcpy(&ireq->rmt_addr, &rt->rt_dst, sizeof(ireq->rmt_addr));
-        memcpy(&ireq->loc_addr, &rt->rt_src, sizeof(ireq->loc_addr));
-
-	return route_dst(rt);
-/*
-route_err:
-*/
-	ip_rt_put(rt);
-
-  no_route:
-/*
-	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
-*/
-	return NULL;
-#else
-        return NULL;
-#endif
 }
 
 /* 

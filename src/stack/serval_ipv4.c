@@ -185,16 +185,15 @@ static inline int serval_ip_local_out(struct sk_buff *skb)
 }
 
 #if defined(OS_LINUX_KERNEL)
-
 /*
   This will route a SYN-ACK, i.e., the response to a request to open a
   new connection.
  */
-struct dst_entry *serval_ipv4_req_route(struct sock *sk,
-                                        struct request_sock *rsk,
-                                        int protocol,
-                                        u32 saddr,
-                                        u32 daddr)
+struct dst_entry *serval_ipv4_route(struct sock *sk,
+                                    struct request_sock *rsk,
+                                    int protocol,
+                                    u32 saddr,
+                                    u32 daddr)
 {
 	struct rtable *rt;
 	struct ip_options *opt = NULL; /* inet_rsk(req)->opt; */
@@ -224,11 +223,6 @@ struct dst_entry *serval_ipv4_req_route(struct sock *sk,
 route_err:
 	ip_rt_put(rt);
 no_route:
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-	IP_INC_STATS_BH(sock_net(sk), IPSTATS_MIB_OUTNOROUTES);
-#else
-	IP_INC_STATS(IPSTATS_MIB_OUTNOROUTES);
-#endif
 	return NULL;
 }
 

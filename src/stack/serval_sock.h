@@ -37,20 +37,20 @@
 	TCP_MAX_STATES	
  */
 enum {
-        __SERVAL_MIN_STATE = 0,
-        SERVAL_INIT = __SERVAL_MIN_STATE,
-        SERVAL_CONNECTED,
-        SERVAL_REQUEST,
-        SERVAL_RESPOND,
-        SERVAL_FINWAIT1,
-        SERVAL_FINWAIT2,
-        SERVAL_TIMEWAIT,
-        SERVAL_CLOSED,
-        SERVAL_CLOSEWAIT,
-        SERVAL_LASTACK,
-        SERVAL_LISTEN,
-        SERVAL_CLOSING,
-        __SERVAL_MAX_STATE
+        __SAL_MIN_STATE = 0,
+        SAL_INIT = __SAL_MIN_STATE,
+        SAL_CONNECTED,
+        SAL_REQUEST,
+        SAL_RESPOND,
+        SAL_FINWAIT1,
+        SAL_FINWAIT2,
+        SAL_TIMEWAIT,
+        SAL_CLOSED,
+        SAL_CLOSEWAIT,
+        SAL_LASTACK,
+        SAL_LISTEN,
+        SAL_CLOSING,
+        __SAL_MAX_STATE
 };
 
 enum {
@@ -71,11 +71,11 @@ enum {
    Service Access Layer (SAL) socket states used for, e.g., migration.
  */
 enum {
-        SAL_INITIAL = 0,
+        SAL_RSYN_INITIAL = 0,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
         SAL_RSYN_SENT_RECV, /* Receive RSYN after having sent RSYN */
-        __SAL_MAX_STATE,
+        __SAL_RSYN_MAX_STATE,
 };
 
 enum serval_sock_flags {
@@ -150,8 +150,8 @@ struct serval_sock {
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
-        u8                      local_nonce[SERVAL_NONCE_SIZE];
-        u8                      peer_nonce[SERVAL_NONCE_SIZE];
+        u8                      local_nonce[SAL_NONCE_SIZE];
+        u8                      peer_nonce[SAL_NONCE_SIZE];
         u16                     ext_hdr_len;
         u16                     udp_encap_sport;
         u16                     udp_encap_dport;
@@ -167,6 +167,12 @@ struct serval_sock {
                 u32        wnd;
                 u32        iss;
         } rcv_seq;
+        u32	                ack_rcv_tstamp;	/* timestamp of last received ACK (for keepalives) */
+        u32	                last_rcv_tstamp;       /* timestamp of last received packet */
+	unsigned int		keepalive_time;	  /* time before keep alive takes place */
+	unsigned int		keepalive_intvl;  /* time interval between keep alive probes */
+        u8	                keepalive_probes; /* num of allowed keep alive probes	*/
+        u8                      probes_out;
         u8                      retransmits;
         u8                      backoff;
         u8                      pending;
@@ -296,6 +302,9 @@ static inline void serval_sock_reset_xmit_timer(struct sock *sk,
         sk_reset_timer(sk, &ssk->retransmit_timer, ssk->timeout);
 }
 
+void serval_sock_delete_keepalive_timer(struct sock *sk);
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len);
+
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
                              gfp_t priority, int protocol, 
@@ -339,9 +348,6 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 	skb->sk = sk;
 	skb->destructor = serval_sock_rfree;
 }
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req);
 
 int serval_sock_rebuild_header(struct sock *sk);
 
