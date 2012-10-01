@@ -288,7 +288,8 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 /* payload + LL + IP + extra */
 #define MAX_SAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
                      sizeof(struct sal_hdr) +                    \
-                     sizeof(struct sal_connection_ext))
+                     sizeof(struct sal_control_ext) +            \
+                     2 * sizeof(struct sal_service_ext))
 
 #define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +              \
                             sizeof(struct sal_hdr))

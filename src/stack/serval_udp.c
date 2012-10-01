@@ -429,7 +429,7 @@ static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk,
 	timeo = sock_sndtimeo(sk, nonblock);
 
 	/* Wait for a connection to finish. */
-	if ((1 << sk->sk_state) & SERVALF_REQUEST)
+	if ((1 << sk->sk_state) & SALF_REQUEST)
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
                         goto out;
 
@@ -794,7 +794,7 @@ static ssize_t serval_udp_do_sendpages(struct sock *sk, struct page **pages,
         }
 
 	/* Wait for a connection to finish. */
-	if ((1 << sk->sk_state) & (SERVALF_REQUEST))
+	if ((1 << sk->sk_state) & (SALF_REQUEST))
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
 			goto out_err;
 

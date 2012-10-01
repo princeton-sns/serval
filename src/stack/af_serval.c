@@ -203,8 +203,8 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 sizeof(struct sockaddr_in);
 	
         if (peer) {
-		if ((((1 << sk->sk_state) & (SERVALF_CLOSED | 
-                                             SERVALF_REQUEST)) &&
+		if ((((1 << sk->sk_state) & (SALF_CLOSED | 
+                                             SALF_REQUEST)) &&
 		     peer == 1))
 			return -ENOTCONN;
                 
@@ -582,7 +582,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 
         timeo = sock_sndtimeo(sk, nonblock);
 
-        if ((1 << sk->sk_state) & (SERVALF_REQUEST | SERVALF_RESPOND)) {
+        if ((1 << sk->sk_state) & (SALF_REQUEST | SALF_RESPOND)) {
                 /* Error code is set above */
                 LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
 
@@ -858,7 +858,7 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	if ((1 << sk->sk_state) & ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+	if ((1 << sk->sk_state) & ~(SALF_REQUEST | SALF_RESPOND)) {
                 if (atomic_read(&sk->sk_rmem_alloc) > 0)
 			mask |= POLLIN | POLLRDNORM;
 

@@ -54,17 +54,17 @@ enum {
 };
 
 enum {
-        SERVALF_CONNECTED = (1 << 1),
-        SERVALF_REQUEST   = (1 << 2),
-        SERVALF_RESPOND   = (1 << 3),
-        SERVALF_FINWAIT1  = (1 << 4),
-        SERVALF_FINWAIT2  = (1 << 5),
-        SERVALF_TIMEWAIT  = (1 << 6),
-        SERVALF_CLOSED    = (1 << 7), 
-        SERVALF_CLOSEWAIT = (1 << 8),
-        SERVALF_LASTACK   = (1 << 9),
-        SERVALF_LISTEN    = (1 << 10),
-        SERVALF_CLOSING   = (1 << 11)
+        SALF_CONNECTED = (1 << 1),
+        SALF_REQUEST   = (1 << 2),
+        SALF_RESPOND   = (1 << 3),
+        SALF_FINWAIT1  = (1 << 4),
+        SALF_FINWAIT2  = (1 << 5),
+        SALF_TIMEWAIT  = (1 << 6),
+        SALF_CLOSED    = (1 << 7), 
+        SALF_CLOSEWAIT = (1 << 8),
+        SALF_LASTACK   = (1 << 9),
+        SALF_LISTEN    = (1 << 10),
+        SALF_CLOSING   = (1 << 11)
 };
 
 /**

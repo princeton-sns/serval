@@ -84,6 +84,12 @@ SERVAL_ASSERT(sizeof(struct service_id) == 32)
 
 #define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
 
+static inline struct service_id *service_id_copy(struct service_id *s1,
+                                                 struct service_id *s2)
+{
+        return (struct service_id *)memcpy(s1, s2, sizeof(*s1));
+}
+
 enum sv_service_flags {
         /* bottom 2 bits reserved for scope - resolution and
          * registration */
@@ -287,8 +293,8 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 /*
   These defines can be used for convenient access to the fields in the
   base extension in extensions below. */
-#define sv_ext_type exthdr.type
-#define sv_ext_length exthdr.length
+#define ext_type exthdr.type
+#define ext_length exthdr.length
 
 #define SAL_EXT_FIRST(sh) \
         ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
@@ -336,20 +342,16 @@ struct sal_control_ext {
 
 SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
 
-struct sal_connection_ext {
-        struct sal_control_ext ctrl_ext;
+#define SAL_CONTROL_EXT_LEN(sid)                \
+        sizeof(struct sal_control_ext)
+
+
+struct sal_service_ext {
+        struct sal_ext exthdr;
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 52)
-
-struct sal_service_ext {
-        struct sal_control_ext ctrl_ext;
-        struct service_id src_srvid;
-        struct service_id dst_srvid;
-} __attribute__((packed));
-
-SERVAL_ASSERT(sizeof(struct sal_service_ext) == 84)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 34)
 
 struct sal_address_ext {
         struct sal_ext exthdr;
@@ -368,13 +370,19 @@ struct sal_source_ext {
 
 SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
 
+#define SAL_SOURCE_EXT_MIN_LEN                  \
+        (sizeof(struct sal_source_ext) + 4)
+
+#define SAL_SOURCE_EXT_MAX_LEN                          \
+        (sizeof(struct sal_source_ext) + (20 * 4))
+
 #define __SAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct sal_source_ext))
 
 #define SAL_SOURCE_EXT_LEN __SAL_SOURCE_EXT_LEN(4)
 
 #define SAL_SOURCE_EXT_NUM_ADDRS(ext)                                \
-        (((ext)->sv_ext_length - sizeof(struct sal_source_ext)) / 4) 
+        (((ext)->ext_length - sizeof(struct sal_source_ext)) / 4) 
 
 #define SAL_SOURCE_EXT_GET_ADDR(ext, n)      \
         (&(ext)->source[n*4])
