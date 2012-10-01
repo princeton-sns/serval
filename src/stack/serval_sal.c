@@ -167,12 +167,9 @@ static int print_service_ext(struct sal_ext *xt, char *buf, int buflen)
 {
         struct sal_service_ext *sxt = 
                 (struct sal_service_ext *)xt;
-        int len;
-
-        len = print_control_ext(xt, buf, buflen);        
         
-        return snprintf(buf + len, buflen - len,
-                        " srvid=%s",
+        return snprintf(buf, buflen,
+                        "srvid=%s",
                         service_id_to_str(&sxt->srvid));
 }
 
@@ -334,9 +331,6 @@ static int parse_service_ext(struct sal_ext *ext,
         if (ctx->srv_ext_src && ctx->srv_ext_dst)
                 return -1;
 
-        if (parse_control_ext(ext, ext_len, skb, ctx) == -1)
-                return -1;
-        
         if (!ctx->srv_ext_src)
                 ctx->srv_ext_src = (struct sal_service_ext *)ext;
         else if (!ctx->srv_ext_dst)
@@ -421,7 +415,6 @@ static inline int parse_ext(struct sal_ext *ext, struct sk_buff *skb,
         }
         
         LOG_DBG("EXT %s length=%u\n",
-
                 sal_ext_name[ext->type], 
                 ext_len);
 
@@ -454,8 +447,10 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         ext = SAL_EXT_FIRST(ctx->hdr);
         
         /* Sanity checks */
-        if (ctx->length < sizeof(struct sal_hdr))
+        if (ctx->length < sizeof(struct sal_hdr)) {
+                LOG_ERR("Header length(=%u) too small\n", ctx->length);
                 return -1;
+        }
 
         /* Only base header parse, return */
         if (mode == SAL_PARSE_BASE)
@@ -467,14 +462,19 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         while (hdr_len > 0 && i < MAX_NUM_SAL_EXTENSIONS) {
                 int ext_len = parse_ext(ext, skb, ctx);
 
-                if (ext_len < 0)
+                if (ext_len < 0) {
+                        LOG_ERR("Negative extension length\n");
                         return -1;
+                }
 
                 ctx->ext[i++] = ext;                
                 hdr_len -= ext_len;
                 ext = SAL_EXT_NEXT(ext);
         }
 
+        if (hdr_len != 0) {
+                LOG_ERR("hdr_len=%d (should be 0)\n", hdr_len);
+        }
         /* hdr_len should be zero if everything was OK */
         return hdr_len;
 }
@@ -2224,7 +2224,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         LOG_INF("received Migration REQUEST\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
-                LOG_ERR("Bad migration extension\n");
+                LOG_ERR("Bad migration control packet\n");
                 return -1;
         }
        
@@ -3872,14 +3872,14 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
             SAL_SKB_CB(skb)->flags & SVH_FIN ||
             SAL_SKB_CB(skb)->flags & SVH_RST ||
             SAL_SKB_CB(skb)->flags & SVH_ACK) {
-                hdr_len += serval_sal_add_ctrl_ext(sk, skb);
-                
                 /* The SYN and SYN-ACK must carry a serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
                     ((SAL_SKB_CB(skb)->flags & SVH_SYN) &&
                      (SAL_SKB_CB(skb)->flags & SVH_ACK))) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);               
                 }
+
+                hdr_len += serval_sal_add_ctrl_ext(sk, skb);                
         } else {
                 /* Unconnected datagram, add service extension */
                 if (sk->sk_state == SAL_INIT && 
