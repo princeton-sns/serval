@@ -2894,14 +2894,7 @@ int serval_sal_state_process(struct sock *sk,
                 LOG_DBG("SAL PROCESS START %s\n",
                         serval_sock_print_state(sk, buf, 512));
         }
-#endif
-
-        if (has_verno(ctx) && !has_valid_verno(ctx->verno, sk)) {
-                LOG_DBG("Sending RST packet due to invalid verno\n");
-                serval_sal_send_reset(sk, skb, ctx);
-                goto drop;
-        }
-        
+#endif        
         /* Is this a reset packet */
         if (ctx->ctrl_ext) {
                 if (ctx->ctrl_ext->rst) {
