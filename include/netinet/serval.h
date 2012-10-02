@@ -480,6 +480,9 @@ struct sal_hdr {
 
 SERVAL_ASSERT(sizeof(struct sal_hdr) == 12)
 
+#define SAL_HEADER_LEN                          \
+        sizeof(struct sal_hdr)
+
 /* Generic extension header */
 struct sal_ext {
 #if defined(__LITTLE_ENDIAN_BITFIELD)
@@ -510,7 +513,6 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 
 enum sal_ext_type {
         SAL_CONTROL_EXT = 1,
-        SAL_CONNECTION_EXT,
         SAL_SERVICE_EXT,
         SAL_ADDRESS_EXT,
         SAL_SOURCE_EXT,
@@ -548,44 +550,24 @@ struct sal_control_ext {
 
 SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
 
-#define SAL_CONTROL_EXT_LEN sizeof(struct sal_control_ext)
-
-struct sal_connection_ext {
-        struct sal_control_ext ctrl_ext;
-        struct service_id srvid;
-} __attribute__((packed));
-
-SERVAL_ASSERT(sizeof(struct sal_connection_ext) == 126)
-
-#define SAL_CONNECTION_EXT_LEN(sid)          \
-        (sizeof(struct sal_connection_ext) - \
-         sizeof(struct service_id) +         \
-         strlen((sid)->s_sid) + 1)
-
-#define SAL_CONNECTION_EXT_MIN_LEN           \
-        (sizeof(struct sal_connection_ext) - \
-         sizeof(struct service_id) + 3)
-
-#define SAL_CONNECTION_EXT_MAX_LEN              \
-        sizeof(struct sal_connection_ext)
+#define SAL_CONTROL_EXT_LEN                     \
+        sizeof(struct sal_control_ext)
 
 struct sal_service_ext {
-        struct sal_control_ext ctrl_ext;
+        struct sal_ext exthdr;
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_service_ext) == 126)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 108)
 
 #define SAL_SERVICE_EXT_LEN(sid)             \
-        (sizeof(struct sal_service_ext) -    \
-         sizeof(struct service_id) +         \
+        (sizeof(struct sal_ext) +            \
          strlen((sid)->s_sid) + 1)
 
-#define SAL_SERVICE_EXT_MIN_LEN             \
-        (sizeof(struct sal_service_ext) -   \
-         sizeof(struct service_id) + 3)
+#define SAL_SERVICE_EXT_MIN_LEN                 \
+        (sizeof(struct sal_ext) + 3)
 
-#define SAL_SERVICE_EXT_MAX_LEN             \
+#define SAL_SERVICE_EXT_MAX_LEN                 \
         sizeof(struct sal_service_ext)
 
 struct sal_address_ext {
@@ -597,6 +579,9 @@ struct sal_address_ext {
 } __attribute__((packed));
 
 SERVAL_ASSERT(sizeof(struct sal_address_ext) == 12)
+
+#define SAL_ADDRESS_EXT_LEN                     \
+        sizeof(struct sal_address_ext)
 
 struct sal_source_ext {
         struct sal_ext exthdr;
@@ -610,8 +595,6 @@ SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
 
 #define SAL_SOURCE_EXT_MAX_LEN                          \
         (sizeof(struct sal_source_ext) + (20 * 4))
-
-SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
 
 #define __SAL_SOURCE_EXT_LEN(sz)             \
         (sz + sizeof(struct sal_source_ext))

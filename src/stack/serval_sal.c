@@ -88,9 +88,8 @@ struct sal_context {
         uint32_t ackno; /* Acknowledgement number of control information */
         struct sal_ext *ext[MAX_NUM_SAL_EXTENSIONS];
         struct sal_control_ext *ctrl_ext;
-        struct sal_connection_ext *conn_ext;
         struct sal_address_ext *addr_ext;
-        struct sal_service_ext *srv_ext_src, *srv_ext_dst;
+        struct sal_service_ext *srv_ext[2];
         struct sal_source_ext *src_ext;
 };
 
@@ -110,16 +109,14 @@ static int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 static size_t min_ext_length[] = {
         [0] = sizeof(struct sal_hdr),
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
-        [SAL_CONNECTION_EXT] = sizeof(struct sal_connection_ext),
-        [SAL_SERVICE_EXT] = sizeof(struct sal_service_ext),
+        [SAL_SERVICE_EXT] = SAL_SERVICE_EXT_MIN_LEN,
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
-        [SAL_SOURCE_EXT] = sizeof(struct sal_source_ext),
+        [SAL_SOURCE_EXT] = SAL_SOURCE_EXT_MIN_LEN,
 };
 
 static size_t max_ext_length[] = {
         [0] = sizeof(struct sal_hdr),
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
-        [SAL_CONNECTION_EXT] = SAL_CONNECTION_EXT_MAX_LEN,
         [SAL_SERVICE_EXT] = SAL_SERVICE_EXT_MAX_LEN,
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
         [SAL_SOURCE_EXT] = SAL_SOURCE_EXT_MAX_LEN,
@@ -130,7 +127,6 @@ static size_t max_ext_length[] = {
 static char* sal_ext_name[] = {
         [0] = "INVALID",
         [SAL_CONTROL_EXT] = "CONTROL",
-        [SAL_CONNECTION_EXT] = "CONNECTION",
         [SAL_SERVICE_EXT] = "SERVICE",
         [SAL_ADDRESS_EXT] = "ADDRESS",
         [SAL_SOURCE_EXT] = "SOURCE",
@@ -167,29 +163,13 @@ static int print_control_ext(struct sal_ext *xt, char *buf, int buflen)
                         ntohl(cxt->ackno));
 }
 
-static int print_connection_ext(struct sal_ext *xt, char *buf, int buflen)
-{
-        struct sal_connection_ext *cxt = 
-                (struct sal_connection_ext *)xt;
-        int len;
-
-        len = print_control_ext(xt, buf, buflen);        
-
-        return snprintf(buf + len, buflen - len,
-                        " service=%s",
-                        service_id_to_str(&cxt->srvid));
-}
-
 static int print_service_ext(struct sal_ext *xt, char *buf, int buflen)
 {
         struct sal_service_ext *sxt = 
                 (struct sal_service_ext *)xt;
-        int len;
-
-        len = print_control_ext(xt, buf, buflen);        
         
-        return snprintf(buf + len, buflen - len,
-                        " srvid=%s",
+        return snprintf(buf, buflen,
+                        "srvid=%s",
                         service_id_to_str(&sxt->srvid));
 }
 
@@ -228,7 +208,6 @@ typedef int (*print_ext_func_t)(struct sal_ext *, char *, int);
 static print_ext_func_t print_ext_func[] = {
         [0] = &print_base_ext,
         [SAL_CONTROL_EXT] = &print_control_ext,
-        [SAL_CONNECTION_EXT] = &print_connection_ext,
         [SAL_SERVICE_EXT] = &print_service_ext,
         [SAL_ADDRESS_EXT] = &print_address_ext,
         [SAL_SOURCE_EXT] = &print_source_ext,
@@ -266,7 +245,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
         ext = SAL_EXT_FIRST(sh);
                 
         while (hdr_len > 0) {
-                uint16_t ext_len = ntohs(ext->length);
+                uint16_t ext_len = ext->length;
 
                 if (ext->type >= __SAL_EXT_TYPE_MAX) {
                         LOG_DBG("Bad extension type (=%u)\n",
@@ -344,35 +323,18 @@ static int parse_control_ext(struct sal_ext *ext,
         return ext->length;
 }
 
-static int parse_connection_ext(struct sal_ext *ext, 
-                                uint16_t ext_len,
-                                struct sk_buff *skb,
-                                struct sal_context *ctx)
-{
-        if (ctx->conn_ext)
-                return -1;
-
-        if (parse_control_ext(ext, ext_len, skb, ctx) == -1)
-                return -1;
-        
-        return ext_len;
-}
-
 static int parse_service_ext(struct sal_ext *ext, 
                              uint16_t ext_len,
                              struct sk_buff *skb,
                              struct sal_context *ctx)
 {
-        if (ctx->srv_ext_src && ctx->srv_ext_dst)
+        if (ctx->srv_ext[0] && ctx->srv_ext[1])
                 return -1;
 
-        if (parse_control_ext(ext, ext_len, skb, ctx) == -1)
-                return -1;
-        
-        if (!ctx->srv_ext_src)
-                ctx->srv_ext_src = (struct sal_service_ext *)ext;
-        else if (!ctx->srv_ext_dst)
-                ctx->srv_ext_dst = (struct sal_service_ext *)ext;
+        if (!ctx->srv_ext[0])
+                ctx->srv_ext[0] = (struct sal_service_ext *)ext;
+        else if (!ctx->srv_ext[1])
+                ctx->srv_ext[1] = (struct sal_service_ext *)ext;
         else
                 return -1;
 
@@ -428,7 +390,6 @@ typedef int (*parse_ext_func_t)(struct sal_ext *,
 static parse_ext_func_t parse_ext_func[] = {
         [0] = &parse_base_ext,
         [SAL_CONTROL_EXT] = &parse_control_ext,
-        [SAL_CONNECTION_EXT] = &parse_connection_ext,
         [SAL_SERVICE_EXT] = &parse_service_ext,
         [SAL_ADDRESS_EXT] = &parse_address_ext,
         [SAL_SOURCE_EXT] = &parse_source_ext,
@@ -483,12 +444,14 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         
         ctx->skb = skb;
         ctx->hdr = sal_hdr(skb);
-        ctx->length = ntohs(ctx->hdr->length);
+        ctx->length = ctx->hdr->length;
         ext = SAL_EXT_FIRST(ctx->hdr);
         
         /* Sanity checks */
-        if (ctx->length < sizeof(struct sal_hdr))
+        if (ctx->length < sizeof(struct sal_hdr)) {
+                LOG_ERR("Header length(=%u) too small\n", ctx->length);
                 return -1;
+        }
 
         /* Only base header parse, return */
         if (mode == SAL_PARSE_BASE)
@@ -500,14 +463,19 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         while (hdr_len > 0 && i < MAX_NUM_SAL_EXTENSIONS) {
                 int ext_len = parse_ext(ext, skb, ctx);
 
-                if (ext_len < 0)
+                if (ext_len < 0) {
+                        LOG_ERR("Negative extension length\n");
                         return -1;
+                }
 
                 ctx->ext[i++] = ext;                
                 hdr_len -= ext_len;
                 ext = SAL_EXT_NEXT(ext);
         }
 
+        if (hdr_len != 0) {
+                LOG_ERR("hdr_len=%d (should be 0)\n", hdr_len);
+        }
         /* hdr_len should be zero if everything was OK */
         return hdr_len;
 }
@@ -515,7 +483,7 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
 static inline int has_verno(struct sal_context *ctx)
 {
         /* Real control packets are those with sequence numbers */
-        if (ctx->conn_ext || ctx->ctrl_ext)
+        if (ctx->ctrl_ext)
                 return 1;
         return 0;
 }
@@ -535,38 +503,11 @@ static inline int is_pure_ack(struct sal_context *ctx)
                 !ctx->ctrl_ext->rst;
 }
 
-static inline int has_connection_extension(struct sal_context *ctx)
+static inline int has_service_extension(struct sal_context *ctx,
+                                        int index)
 {
-        struct sal_ext *ext = (struct sal_ext *)ctx->conn_ext;
+        struct sal_service_ext *srv_ext = ctx->srv_ext[index];
 
-        /* Check for connection extension. We require that this
-         * extension always directly follows the main Serval
-         * header */
-        if (!ctx->conn_ext)
-                return 0;
-
-        if (ctx->length < (sizeof(*ctx->hdr) + 
-                           min_ext_length[SAL_CONNECTION_EXT])) {
-                LOG_PKT("No connection extension, hdr_len=%u\n", 
-                        ctx->length);
-                return 0;
-        }
-        
-        if (ext->type != SAL_CONNECTION_EXT || 
-            ext->length < 
-            min_ext_length[SAL_CONNECTION_EXT] ||
-            ext->length > 
-            max_ext_length[SAL_CONNECTION_EXT]) {
-                LOG_DBG("No connection extension, bad extension type\n");
-                return 0;
-        }
-
-        return 1;
-}
-
-static inline int has_service_extension(struct sal_context *ctx, 
-                                        struct sal_service_ext *srv_ext)
-{
         if (!srv_ext)
                 return 0;
 
@@ -577,10 +518,10 @@ static inline int has_service_extension(struct sal_context *ctx,
                 return 0;
         }
         
-        if (srv_ext->ctrl_ext.ext_type != SAL_SERVICE_EXT || 
-            srv_ext->ctrl_ext.ext_length < 
+        if (srv_ext->exthdr.type != SAL_SERVICE_EXT || 
+            srv_ext->exthdr.length < 
             min_ext_length[SAL_SERVICE_EXT] ||
-            srv_ext->ctrl_ext.ext_length > 
+            srv_ext->exthdr.length > 
             max_ext_length[SAL_SERVICE_EXT]) {
                 LOG_DBG("No service extension, bad extension type\n");
                 return 0;
@@ -589,15 +530,14 @@ static inline int has_service_extension(struct sal_context *ctx,
         return 1;
 }
 
-
 static inline int has_service_extension_src(struct sal_context *ctx)
 {
-        return has_service_extension(ctx, ctx->srv_ext_src);
+        return has_service_extension(ctx, 0);
 }
 
 static inline int has_service_extension_dst(struct sal_context *ctx)
 {
-        return has_service_extension(ctx, ctx->srv_ext_dst);
+        return has_service_extension(ctx, 1);
 }
 
 static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
@@ -636,23 +576,6 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
         return skb->len > 0;
 }
 
-static inline int has_valid_connection_extension(struct sock *sk, 
-                                                 struct sal_context *ctx)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-
-        if (!has_connection_extension(ctx))
-                return 0;
-
-        if (memcmp(ctx->ctrl_ext->nonce, ssk->peer_nonce, 
-                   SAL_NONCE_SIZE) != 0) {
-                LOG_PKT("Connection extension has bad nonce\n");
-                return 0;
-        }
-
-        return 1;
-}
-
 static inline int has_valid_control_extension(struct sock *sk, 
                                               struct sal_context *ctx)
 {
@@ -672,13 +595,16 @@ static inline int has_valid_control_extension(struct sock *sk,
         }
         
         if (ctx->ctrl_ext->ext_type != SAL_CONTROL_EXT ||
-            ntohs(ctx->ctrl_ext->ext_length) != 
+            ctx->ctrl_ext->ext_length != 
             min_ext_length[SAL_CONTROL_EXT]) {
                 LOG_PKT("No control extension, bad extension type\n");
                 return 0;
         }
 
-        if (memcmp(ctx->ctrl_ext->nonce, ssk->peer_nonce, 
+        /* Check nonce for all control extensions except SYNs, since
+           those are actually establishing nonces. */
+        if (!ctx->ctrl_ext->syn &&
+            memcmp(ctx->ctrl_ext->nonce, ssk->peer_nonce, 
                    SAL_NONCE_SIZE) != 0) {
                 LOG_PKT("Control extension has bad nonce\n");
                 return 0;
@@ -693,8 +619,8 @@ static inline int has_valid_address_extension(struct sock *sk,
         /*struct serval_sock *ssk = serval_sk(sk);
         struct sal_address_ext *addr_ext =
                 (struct sal_address_ext *)(sfh + 1);
-        unsigned int hdr_len = ntohs(sfh->length);
-        unsigned int addr_list_len = (ntohs(sfh->length) - 2 * sizeof(uint8_t) -
+        unsigned int hdr_len = sfh->length;
+        unsigned int addr_list_len = (sfh->length - 2 * sizeof(uint8_t) -
                                      sizeof(uint16_t)) / sizeof(net_addr);
 
         if (hdr_len < sizeof(*sfh) + sizeof(*desc_ext)) {
@@ -703,7 +629,7 @@ static inline int has_valid_address_extension(struct sock *sk,
         }
 
         if (addr_ext->type != SAL_ADDRESS_EXT ||
-                ntohs(addr_ext->length) != sizeof(*addr_ext)) {
+                addr_ext->length != sizeof(*addr_ext)) {
                 LOG_PKT("No addr extension, bad extension type\n");
                 return 0;
         }
@@ -1283,27 +1209,12 @@ void serval_sal_close(struct sock *sk, long timeout)
         sk->sk_shutdown |= SEND_SHUTDOWN;
         
         switch (sk->sk_state) {
+        case SAL_CLOSEWAIT:
+                serval_sock_set_state(sk, SAL_LASTACK);
+                break;
         case SAL_CONNECTED:
         case SAL_RESPOND:
-        case SAL_CLOSEWAIT:
-                if (sk->sk_state == SAL_CLOSEWAIT) {
-                        serval_sal_timewait(sk, SAL_LASTACK, 0);
-                } else {
-                        serval_sal_timewait(sk, SAL_FINWAIT1, 0);
-                }
-
-                if (ssk->af_ops->conn_close) {
-                        /* Tell transport to, e.g., schedule
-                           end-of-stream (i.e., put FIN in the last
-                           queued transport segment) */
-                        err = ssk->af_ops->conn_close(sk);
-
-                        if (err != 0) {
-                                LOG_ERR("Transport error %d\n", err);
-                        }
-                } else {
-                        err = serval_sal_send_shutdown(sk);
-                }
+                serval_sock_set_state(sk, SAL_FINWAIT1);
                 break;
         case SAL_FINWAIT1:
         case SAL_FINWAIT2:
@@ -1311,12 +1222,27 @@ void serval_sal_close(struct sock *sk, long timeout)
         case SAL_TIMEWAIT:
                 LOG_ERR("Close called in post close() state %s\n",
                         serval_sock_state_str(sk));
-                break;
+                return;
         default:
                 LOG_DBG("Calling serval_sal_done on socket in state %s\n",
                         serval_sock_state_str(sk));
                 serval_sal_done(sk);
-                break;
+                return;
+        }
+
+        if (ssk->af_ops->conn_close) {
+                /* Tell transport to, e.g., schedule
+                   end-of-stream (i.e., put FIN in the last
+                   queued transport segment). This will defer
+                   the call to serval_sal_send_shutdown()
+                   until transport is done. */
+                err = ssk->af_ops->conn_close(sk);
+                
+                if (err != 0) {
+                        LOG_ERR("Transport error %d\n", err);
+                }
+        } else {
+                err = serval_sal_send_shutdown(sk);
         }
 }
 
@@ -1585,10 +1511,10 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
 
         /* Add control extension */
         ctrl_ext = (struct sal_control_ext *)
-                skb_push(rskb, sizeof(*ctrl_ext));
-        memset(ctrl_ext, 0, sizeof(*ctrl_ext));
-        ctrl_ext->exthdr.type = SAL_CONTROL_EXT;
-        ctrl_ext->exthdr.length = sizeof(*ctrl_ext);
+                skb_push(rskb, SAL_CONTROL_EXT_LEN);
+        memset(ctrl_ext, 0, SAL_CONTROL_EXT_LEN);
+        ctrl_ext->ext_type = SAL_CONTROL_EXT;
+        ctrl_ext->ext_length = SAL_CONTROL_EXT_LEN;
         ctrl_ext->rst = 1;
         
 	if (ctx->flags & SVH_ACK) {
@@ -1600,7 +1526,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
                                         (ctx->flags & SVH_FIN));
 	}
 
-        /* Copy our nonce to connection extension */
+        /* Copy our nonce to control extension */
         if (ctx->ctrl_ext) {
                 memcpy(ctrl_ext->nonce, 
                        ctx->ctrl_ext->nonce, SAL_NONCE_SIZE);
@@ -1698,7 +1624,8 @@ static int serval_sal_send_synack(struct sock *sk,
         struct sk_buff *rskb;
         struct dst_entry *dst = NULL;
         struct sal_hdr *rsh;
-        struct sal_connection_ext *conn_ext;
+        struct sal_control_ext *ctrl_ext;
+        /* struct sal_service_ext *srv_ext; */
         unsigned int sal_len = 0;
         uint16_t ext_len;
         int err = 0;
@@ -1781,30 +1708,46 @@ static int serval_sal_send_synack(struct sock *sk,
                 sal_len += ext_len + 4;
         } 
 
-        /* Add connection extension */
-        ext_len = SAL_CONNECTION_EXT_LEN(&srsk->peer_srvid);
-        conn_ext = (struct sal_connection_ext *)
+        /* Add service and control extensions */
+        /*
+        ext_len = SAL_SERVICE_EXT_LEN;
+        srv_ext = (struct sal_service_ext *)
                 skb_push(rskb, ext_len);
-        conn_ext->ctrl_ext.exthdr.type = SAL_CONNECTION_EXT;
-        conn_ext->ctrl_ext.exthdr.length = ext_len;
-        conn_ext->ctrl_ext.verno = htonl(srsk->iss_seq);
-        conn_ext->ctrl_ext.ackno = htonl(srsk->rcv_seq + 1);
-        conn_ext->ctrl_ext.syn = 1;
-        conn_ext->ctrl_ext.ack = 1;
-        service_id_copy(&conn_ext->srvid, &srsk->peer_srvid);
 
-        /* Copy our nonce to connection extension */
-        memcpy(conn_ext->ctrl_ext.nonce, srsk->local_nonce, SAL_NONCE_SIZE);
+        if (!srv_ext)
+                goto drop_and_release;
+        
+        memset(srv_ext, 0, ext_len);
+        srv_ext->ext_type = SAL_SERVICE_EXT;
+        srv_ext->ext_length = ext_len;
+        service_id_copy(&srv_ext->srvid, &srsk->peer_srvid);
         sal_len += ext_len;
- 
+        */
+        ext_len = SAL_CONTROL_EXT_LEN;
+        ctrl_ext = (struct sal_control_ext *)
+                skb_push(rskb, ext_len);
+
+        if (!ctrl_ext)
+                goto drop_and_release;
+
+        memset(ctrl_ext, 0, ext_len);
+        ctrl_ext->ext_type = SAL_CONTROL_EXT;
+        ctrl_ext->ext_length = ext_len;
+        ctrl_ext->verno = htonl(srsk->iss_seq);
+        ctrl_ext->ackno = htonl(srsk->rcv_seq + 1);
+        ctrl_ext->syn = 1;
+        ctrl_ext->ack = 1;
+        memcpy(ctrl_ext->nonce, srsk->local_nonce, SAL_NONCE_SIZE);
+        sal_len += ext_len;
+
         /* Add Serval header */
-        rsh = (struct sal_hdr *)skb_push(rskb, sizeof(*rsh));
+        rsh = (struct sal_hdr *)skb_push(rskb, SAL_HEADER_LEN);
         memcpy(&rsh->dst_flowid, &srsk->peer_flowid, 
                sizeof(rsh->dst_flowid));
         memcpy(&rsh->src_flowid, &srsk->local_flowid, 
                sizeof(srsk->local_flowid));
         rsh->protocol = ctx->hdr->protocol;
-        rsh->length = sal_len + sizeof(*rsh);
+        rsh->length = SAL_HEADER_LEN + sal_len;
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 sal_hdr_to_str(rsh), rskb->len);
@@ -1858,11 +1801,15 @@ static int serval_sal_rcv_syn(struct sock *sk,
                               struct sal_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct sal_connection_ext *conn_ext = ctx->conn_ext;
+        struct sal_control_ext *ctrl_ext = ctx->ctrl_ext;
         struct request_sock *rsk;
         struct serval_request_sock *srsk;
         struct net_addr myaddr;
         int err = 0;
+
+        if (!has_valid_control_extension(sk, ctx) ||
+            !has_service_extension_src(ctx))
+                goto drop;
 
         /* Make compiler be quiet */
         memset(&myaddr, 0, sizeof(myaddr));
@@ -1895,9 +1842,9 @@ static int serval_sal_rcv_syn(struct sock *sk,
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &ctx->hdr->src_flowid, 
                sizeof(ctx->hdr->src_flowid));
-        memcpy(&srsk->peer_srvid, &ctx->conn_ext->srvid,
-               sizeof(ctx->conn_ext->srvid));
-        memcpy(srsk->peer_nonce, conn_ext->ctrl_ext.nonce, SAL_NONCE_SIZE);
+        memcpy(&srsk->peer_srvid, &ctx->srv_ext[0]->srvid,
+               sizeof(ctx->srv_ext[0]->srvid));
+        memcpy(srsk->peer_nonce, ctrl_ext->nonce, SAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->verno;
 
         /* Save our local address that we grabbed from the incoming
@@ -2098,7 +2045,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         struct inet_sock *newinet;
                         
                         if (memcmp(srsk->peer_nonce, 
-                                   ctx->conn_ext->ctrl_ext.nonce, 
+                                   ctx->ctrl_ext->nonce, 
                                    SAL_NONCE_SIZE) != 0) {
                                 LOG_ERR("Bad nonce\n");
                                 return NULL;
@@ -2155,7 +2102,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         nssk->udp_encap_dport = srsk->udp_encap_dport;
                         rsk->sk = nsk;
                         
-                        /* Hash the sock to make it available */
+                        /* Hash the sock to make it demuxable */
                         nsk->sk_prot->hash(nsk);
 
                         return nsk;
@@ -2171,7 +2118,7 @@ static int serval_sal_ack_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         
-        if (!ctx->ctrl_ext || !ctx->ctrl_ext->ack)
+        if (!(ctx->flags & SVH_ACK))
                 return -1;
 
 	/* If the ack is older than previous acks
@@ -2196,18 +2143,18 @@ static int serval_sal_ack_process(struct sock *sk,
         /* Check for migration handshake ACK */
         switch (ssk->sal_state) {
         case SAL_RSYN_RECV:
-                if (!ctx->ctrl_ext->rsyn)
+                if (!(ctx->flags & SVH_RSYN))
                         serval_sock_set_sal_state(sk, SAL_RSYN_INITIAL);
                 break;
         case SAL_RSYN_SENT_RECV:
-                if (!ctx->ctrl_ext->rsyn)
+                if (!(ctx->flags & SVH_RSYN))
                         serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
                 break;
         default:
                 return 0;
         }
         
-        if (!ctx->ctrl_ext->rsyn) {
+        if (!(ctx->flags & SVH_RSYN)) {
                 LOG_DBG("Migration complete for flow %s\n",
                         flow_id_to_str(&ssk->local_flowid));
                 memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
@@ -2297,7 +2244,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         LOG_INF("received Migration REQUEST\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
-                LOG_ERR("Bad migration extension\n");
+                LOG_ERR("Bad migration control packet\n");
                 return -1;
         }
        
@@ -2420,10 +2367,6 @@ int serval_sal_send_shutdown(struct sock *sk)
          * normally expected after having sent a FIN. */
         if (serval_sock_flag(ssk, SSK_FLAG_FIN_SENT))
                 return 0;
-
-        /* Not sure we need to set SEND_SHUTDOWN here, since it is
-           alread set in serval_sal_close() */
-        sk->sk_shutdown |= SEND_SHUTDOWN;
         
         /* SOCK_DEAD would mean there is no user app attached
            anymore */
@@ -2465,7 +2408,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         /* Should pass FINs to transport and ultimately the user, as
          * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
-            ctx->ctrl_ext->fin) {
+            (ctx->flags & SVH_FIN)) {
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
@@ -2481,7 +2424,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 should_drop = 1;
         }
 
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 err = serval_sal_rcv_fin(sk, skb, ctx);
                 
                 if (err == 0) {
@@ -2575,7 +2518,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                            struct sal_context *ctx)
 {
         /* Is this a SYN? */
-        if (ctx->ctrl_ext->syn && !ctx->ctrl_ext->ack) {
+        if ((ctx->flags & SVH_SYN) && !(ctx->flags & SVH_ACK)) {
                 struct request_sock *rsk = serval_sal_find_rsk(sk, ctx);
                 
                 if (rsk) {
@@ -2584,7 +2527,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         goto drop;
                 }
                 return serval_sal_rcv_syn(sk, skb, ctx);
-        } else if (ctx->ctrl_ext->ack) {
+        } else if (ctx->flags & SVH_ACK) {
                         struct sock *nsk;
                         /* Processing for socket that has received SYN
                            already */
@@ -2621,14 +2564,15 @@ static int serval_sal_request_state_process(struct sock *sk,
         struct sk_buff *rskb;
         int err = 0;
                 
-        if (!has_connection_extension(ctx))
+        if (!has_valid_control_extension(sk, ctx))
                 goto drop;
         
-        if (!(ctx->ctrl_ext->syn && ctx->ctrl_ext->ack)) {
-                LOG_ERR("packet is not a SYN+ACK response\n");
+        if (!((ctx->flags & SVH_SYN) && (ctx->flags & SVH_ACK))) {
+                LOG_ERR("packet is not a SYN-ACK response\n");
                 goto drop;
         }
-        /* Process potential ACK */
+
+        /* Process ACK */
         if (serval_sal_ack_process(sk, skb, ctx) != 0) {
                 LOG_DBG("ACK is invalid\n");
                 goto drop;
@@ -2637,7 +2581,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         LOG_DBG("Got RESPONSE verno=%u ackno=%u TCP off=%u hdrlen=%u\n",
                 ctx->verno, ctx->ackno,
                 skb_transport_header(skb) - (unsigned char *)sh,
-                sizeof(*sh) + sizeof(*ctx->conn_ext));
+                ctx->hdr->length);
 
         /* Save device and peer flow id */
         serval_sock_set_dev(sk, skb->dev);
@@ -2738,7 +2682,7 @@ static int serval_sal_respond_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        if (!has_valid_connection_extension(sk, ctx))
+        if (!has_valid_control_extension(sk, ctx))
                 goto drop;
 
         /* Process ACK */
@@ -2781,22 +2725,23 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         int err = 0;
         int ack_ok = 0;
 
-        if (ctx->ctrl_ext->ack && serval_sal_ack_process(sk, skb, ctx) == 0)
+        if (ctx->flags & SVH_ACK && 
+            serval_sal_ack_process(sk, skb, ctx) == 0)
                 ack_ok = 1;
 
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 if (serval_sal_rcv_fin(sk, skb, ctx) == 0) {
                         if (ack_ok)
                                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
                         else
-                                serval_sal_timewait(sk, SAL_CLOSING, 0);
+                                serval_sock_set_state(sk, SAL_CLOSING);
                 }
         } else if (ack_ok) {
                 serval_sal_timewait(sk, SAL_FINWAIT2, 0);
         }
         
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
-            ctx->ctrl_ext->fin) {
+            ctx->flags & SVH_FIN) {
                 /* Set the received service id */
                 SAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -2820,7 +2765,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         int err = 0;
         
         /* We've received our FIN-ACK already */
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 err = serval_sal_rcv_fin(sk, skb, ctx);
 
                 if (err == 0) {
@@ -2830,7 +2775,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         }
 
         if (packet_has_transport_hdr(skb, ctx->hdr) ||
-            ctx->ctrl_ext->fin) {
+            ctx->flags & SVH_FIN) {
                 /* Set the received service id */
                 SAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -2853,7 +2798,8 @@ static int serval_sal_closing_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
                 
-        if (ctx->ctrl_ext->ack && serval_sal_ack_process(sk, skb, ctx) == 0) {
+        if ((ctx->flags & SVH_ACK) && 
+            serval_sal_ack_process(sk, skb, ctx) == 0) {
                 /* ACK was valid */
                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
         }
@@ -2914,7 +2860,7 @@ static int serval_sal_init_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        if (ssk->hash_key && ctx->srv_ext_src && ctx->srv_ext_dst) {
+        if (ssk->hash_key && ctx->srv_ext[0] && ctx->srv_ext[1]) {
                 LOG_DBG("Receiving unconnected datagram for service %s\n", 
                         service_id_to_str((struct service_id*) ssk->hash_key));
         } else {
@@ -2924,7 +2870,7 @@ static int serval_sal_init_state_process(struct sock *sk,
 
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
                 /* Set source serviceID */
-                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext_src->srvid; 
+                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext[0]->srvid; 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
@@ -2948,25 +2894,21 @@ int serval_sal_state_process(struct sock *sk,
                 LOG_DBG("SAL PROCESS START %s\n",
                         serval_sock_print_state(sk, buf, 512));
         }
-#endif
-
-        if (has_verno(ctx) && !has_valid_verno(ctx->verno, sk)) {
-                serval_sal_send_reset(sk, skb, ctx);
-                goto drop;
-        }
-        
+#endif        
         /* Is this a reset packet */
-        if (ctx->ctrl_ext && ctx->ctrl_ext->rst) {
-                serval_sal_rcv_reset(sk);
-                goto drop;
-        }
-
-        /* Check for migration */
-        if (ctx->ctrl_ext && ctx->ctrl_ext->rsyn) {
-                if (ctx->ctrl_ext->ack)
-                        err = serval_sal_rcv_rsynack(sk, skb, ctx);
-                else
-                        err = serval_sal_rcv_rsyn(sk, skb, ctx);
+        if (ctx->ctrl_ext) {
+                if (ctx->ctrl_ext->rst) {
+                        serval_sal_rcv_reset(sk);
+                        goto drop;
+                }
+                
+                /* Check for migration */
+                if (ctx->ctrl_ext->rsyn) {
+                        if (ctx->ctrl_ext->ack)
+                                err = serval_sal_rcv_rsynack(sk, skb, ctx);
+                        else
+                                err = serval_sal_rcv_rsyn(sk, skb, ctx);
+                }
         }
 
         switch (sk->sk_state) {
@@ -3357,21 +3299,17 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
 {
         struct sock *sk = NULL;
         
-        /* If SYN and not ACK is set, we know for sure that we must
-         * demux on service id instead of socket id */
-        if (!ctx->ctrl_ext)
+        /* If this is a pure SYN, then we know that we must demux on
+           service */
+        if ((ctx->flags & SVH_SYN) && !(ctx->flags && SVH_ACK))
                 return NULL;
 
-        if (!(ctx->ctrl_ext->syn && !ctx->ctrl_ext->ack)) {
-                /* Ok, check if we can demux on socket id */
-                sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
+        /* Ok, try to demux on flowID */
+        sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
                 
-                if (!sk) {
-                        LOG_INF("No matching sock for flowid %s\n",
-                                flow_id_to_str(&ctx->hdr->dst_flowid));
-                }
-        } else {
-                LOG_DBG("cannot demux on flowid\n");
+        if (!sk) {
+                LOG_INF("No matching sock for flowid %s\n",
+                        flow_id_to_str(&ctx->hdr->dst_flowid));
         }
 
         return sk;
@@ -3387,12 +3325,10 @@ static int serval_sal_resolve(struct sk_buff *skb,
         if (ctx->length <= sizeof(struct sal_hdr))
                 return ret;
         
-        if (ctx->conn_ext)
-                srvid = &ctx->conn_ext->srvid;
-        else if (ctx->srv_ext_dst)
-                srvid = &ctx->srv_ext_dst->srvid;
-        else 
+        if (!ctx->srv_ext[0])
                 return SAL_RESOLVE_ERROR;
+
+        srvid = &ctx->srv_ext[0]->srvid;
 
         if (net_serval.sysctl_sal_forward) {
                 ret = serval_sal_resolve_service(skb, ctx, srvid, sk);
@@ -3544,8 +3480,6 @@ int serval_sal_rcv(struct sk_buff *skb)
           checks here so that we can drop bad packets before we put
           them on, e.g., the backlog queue
         */
-        
-        /* Try flowID demux first */
         sk = serval_sal_demux_flow(skb, &ctx);
         
         if (!sk) {
@@ -3564,6 +3498,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
+                        LOG_PKT("Could not demux or forward packet\n");
                         goto drop;
                         break;
                 }
@@ -3889,16 +3824,17 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         return err;
 }
 
-static inline int serval_sal_init_ctrl_ext(struct sal_control_ext *ctrl_ext,
-                                           uint8_t type,
-                                           uint8_t length,
-                                           struct sock *sk, 
-                                           struct sk_buff *skb)
+static inline int serval_sal_add_ctrl_ext(struct sock *sk, 
+                                          struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct sal_control_ext *ctrl_ext;
 
-        ctrl_ext->exthdr.type = type;
-        ctrl_ext->exthdr.length = length;
+        ctrl_ext = (struct sal_control_ext *)
+                skb_push(skb, SAL_CONTROL_EXT_LEN);
+
+        ctrl_ext->ext_type = SAL_CONTROL_EXT;
+        ctrl_ext->ext_length = SAL_CONTROL_EXT_LEN;
         ctrl_ext->verno = htonl(SAL_SKB_CB(skb)->verno);
         ctrl_ext->ackno = htonl(ssk->rcv_seq.nxt);
         memcpy(ctrl_ext->nonce, ssk->local_nonce, SAL_NONCE_SIZE);
@@ -3909,42 +3845,7 @@ static inline int serval_sal_init_ctrl_ext(struct sal_control_ext *ctrl_ext,
         ctrl_ext->fin = SAL_SKB_CB(skb)->flags & SVH_FIN ? 1 : 0;
         ctrl_ext->rst = SAL_SKB_CB(skb)->flags & SVH_RST ? 1 : 0;
 
-        return length;
-}
-
-static inline int serval_sal_add_ctrl_ext(struct sock *sk, 
-                                          struct sk_buff *skb)
-{
-        struct sal_control_ext *ctrl_ext;
-
-        ctrl_ext = (struct sal_control_ext *)
-                skb_push(skb, sizeof(*ctrl_ext));
-        
-        return serval_sal_init_ctrl_ext(ctrl_ext,
-                                        SAL_CONTROL_EXT, 
-                                        SAL_CONTROL_EXT_LEN,
-                                        sk, skb);
-}
-
-
-static inline int serval_sal_add_conn_ext(struct sock *sk, 
-                                          struct sk_buff *skb)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-        struct sal_connection_ext *conn_ext;
-        uint8_t ext_len = SAL_CONNECTION_EXT_LEN(&ssk->peer_srvid);
- 
-        conn_ext = (struct sal_connection_ext *)
-                skb_push(skb, sizeof(*conn_ext));
-        serval_sal_init_ctrl_ext(&conn_ext->ctrl_ext,
-                                 SAL_CONNECTION_EXT, 
-                                 ext_len, sk, skb);
-        service_id_copy(&conn_ext->srvid, &ssk->peer_srvid);
-        /*
-        LOG_DBG("Connection extension srvid=%s\n",
-                service_id_to_str(&conn_ext->srvid));
-        */
-        return ext_len;
+        return SAL_CONTROL_EXT_LEN;
 }
 
 static inline int serval_sal_add_service_ext(struct sock *sk, 
@@ -3955,11 +3856,11 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
         uint8_t ext_len = SAL_SERVICE_EXT_LEN(srvid);
 
         srv_ext = (struct sal_service_ext *)
-                skb_push(skb, sizeof(*srv_ext));
-        serval_sal_init_ctrl_ext(&srv_ext->ctrl_ext, SAL_SERVICE_EXT, 
-                                 ext_len, sk, skb);
+                skb_push(skb, ext_len);
+        srv_ext->ext_type = SAL_SERVICE_EXT;
+        srv_ext->ext_length = ext_len;
         service_id_copy(&srv_ext->srvid, srvid);
-
+        
         return ext_len;
 }
 
@@ -3968,19 +3869,24 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
 {
         struct sal_hdr *sh;
         struct serval_sock *ssk = serval_sk(sk);
-        unsigned short hdr_len = sizeof(*sh);
+        unsigned short hdr_len = SAL_HEADER_LEN;
 
-        /* Add appropriate flags and headers */
+        /* Add appropriate extension headers */
         if (SAL_SKB_CB(skb)->flags & SVH_SYN || 
-            SAL_SKB_CB(skb)->flags & SVH_CONN_ACK)
-                hdr_len += serval_sal_add_conn_ext(sk, skb);
-        else if (SAL_SKB_CB(skb)->flags & SVH_RSYN ||
-                 SAL_SKB_CB(skb)->flags & SVH_FIN ||
-                 SAL_SKB_CB(skb)->flags & SVH_RST ||
-                 SAL_SKB_CB(skb)->flags & SVH_ACK)
-                hdr_len += serval_sal_add_ctrl_ext(sk, skb);
-        else {
-                /* Unconnected datagram, add service extension */
+            SAL_SKB_CB(skb)->flags & SVH_RSYN ||
+            SAL_SKB_CB(skb)->flags & SVH_FIN ||
+            SAL_SKB_CB(skb)->flags & SVH_RST ||
+            SAL_SKB_CB(skb)->flags & SVH_ACK) {
+                /* The ACK for a SYN-ACK must carry a
+                   serviceID. */
+                if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
+                    SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
+                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
+                }
+
+                hdr_len += serval_sal_add_ctrl_ext(sk, skb);                
+        } else {
+                /* Unconnected datagram, add service extensions */
                 if (sk->sk_state == SAL_INIT && 
                     sk->sk_type == SOCK_DGRAM) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->local_srvid);
@@ -3988,8 +3894,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                 }
         }
 
-        /* Add Serval header */
-        sh = (struct sal_hdr *)skb_push(skb, sizeof(*sh));
+        /* Add Serval base header */
+        sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
                sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
