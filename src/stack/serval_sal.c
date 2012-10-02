@@ -2734,7 +2734,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                         if (ack_ok)
                                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
                         else
-                                serval_sal_timewait(sk, SAL_CLOSING, 0);
+                                serval_sock_set_state(sk, SAL_CLOSING);
                 }
         } else if (ack_ok) {
                 serval_sal_timewait(sk, SAL_FINWAIT2, 0);
@@ -3887,7 +3887,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
             SAL_SKB_CB(skb)->flags & SVH_ACK) {
                 /* The ACK for a SYN-ACK must carry a
                    serviceID. */
-                if (SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
+                if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
+                    SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
                 }
 
