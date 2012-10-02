@@ -3307,16 +3307,15 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         
         /* If this is a pure SYN, then we know that we must demux on
            service */
-        if (!(ctx->ctrl_ext->syn && !ctx->ctrl_ext->ack)) {
-                /* Ok, check if we can demux on flowID */
-                sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
+        if ((ctx->flags & SVH_SYN) && !(ctx->flags && SVH_ACK))
+                return NULL;
+
+        /* Ok, try to demux on flowID */
+        sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
                 
-                if (!sk) {
-                        LOG_INF("No matching sock for flowid %s\n",
-                                flow_id_to_str(&ctx->hdr->dst_flowid));
-                }
-        } else {
-                LOG_DBG("cannot demux on flowid\n");
+        if (!sk) {
+                LOG_INF("No matching sock for flowid %s\n",
+                        flow_id_to_str(&ctx->hdr->dst_flowid));
         }
 
         return sk;
