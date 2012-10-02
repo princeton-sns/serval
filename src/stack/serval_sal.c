@@ -3305,13 +3305,10 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
 {
         struct sock *sk = NULL;
         
-        /* If SYN and not ACK is set, we know for sure that we must
-         * demux on service id instead of socket id */
-        if (!ctx->ctrl_ext)
-                return NULL;
-
+        /* If this is a pure SYN, then we know that we must demux on
+           service */
         if (!(ctx->ctrl_ext->syn && !ctx->ctrl_ext->ack)) {
-                /* Ok, check if we can demux on socket id */
+                /* Ok, check if we can demux on flowID */
                 sk = serval_sock_lookup_flow(&ctx->hdr->dst_flowid);
                 
                 if (!sk) {
@@ -3508,6 +3505,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
+                        LOG_PKT("Could not demux or forward packet\n");
                         goto drop;
                         break;
                 }
