@@ -1209,27 +1209,12 @@ void serval_sal_close(struct sock *sk, long timeout)
         sk->sk_shutdown |= SEND_SHUTDOWN;
         
         switch (sk->sk_state) {
+        case SAL_CLOSEWAIT:
+                serval_sock_set_state(sk, SAL_LASTACK);
+                break;
         case SAL_CONNECTED:
         case SAL_RESPOND:
-        case SAL_CLOSEWAIT:
-                if (sk->sk_state == SAL_CLOSEWAIT) {
-                        serval_sal_timewait(sk, SAL_LASTACK, 0);
-                } else {
-                        serval_sal_timewait(sk, SAL_FINWAIT1, 0);
-                }
-
-                if (ssk->af_ops->conn_close) {
-                        /* Tell transport to, e.g., schedule
-                           end-of-stream (i.e., put FIN in the last
-                           queued transport segment) */
-                        err = ssk->af_ops->conn_close(sk);
-
-                        if (err != 0) {
-                                LOG_ERR("Transport error %d\n", err);
-                        }
-                } else {
-                        err = serval_sal_send_shutdown(sk);
-                }
+                serval_sock_set_state(sk, SAL_FINWAIT1);
                 break;
         case SAL_FINWAIT1:
         case SAL_FINWAIT2:
@@ -1237,12 +1222,27 @@ void serval_sal_close(struct sock *sk, long timeout)
         case SAL_TIMEWAIT:
                 LOG_ERR("Close called in post close() state %s\n",
                         serval_sock_state_str(sk));
-                break;
+                return;
         default:
                 LOG_DBG("Calling serval_sal_done on socket in state %s\n",
                         serval_sock_state_str(sk));
                 serval_sal_done(sk);
-                break;
+                return;
+        }
+
+        if (ssk->af_ops->conn_close) {
+                /* Tell transport to, e.g., schedule
+                   end-of-stream (i.e., put FIN in the last
+                   queued transport segment). This will defer
+                   the call to serval_sal_send_shutdown()
+                   until transport is done. */
+                err = ssk->af_ops->conn_close(sk);
+                
+                if (err != 0) {
+                        LOG_ERR("Transport error %d\n", err);
+                }
+        } else {
+                err = serval_sal_send_shutdown(sk);
         }
 }
 
@@ -1625,7 +1625,7 @@ static int serval_sal_send_synack(struct sock *sk,
         struct dst_entry *dst = NULL;
         struct sal_hdr *rsh;
         struct sal_control_ext *ctrl_ext;
-        struct sal_service_ext *srv_ext;
+        /* struct sal_service_ext *srv_ext; */
         unsigned int sal_len = 0;
         uint16_t ext_len;
         int err = 0;
@@ -1709,6 +1709,7 @@ static int serval_sal_send_synack(struct sock *sk,
         } 
 
         /* Add service and control extensions */
+        /*
         ext_len = SAL_SERVICE_EXT_LEN;
         srv_ext = (struct sal_service_ext *)
                 skb_push(rskb, ext_len);
@@ -1721,7 +1722,7 @@ static int serval_sal_send_synack(struct sock *sk,
         srv_ext->ext_length = ext_len;
         service_id_copy(&srv_ext->srvid, &srsk->peer_srvid);
         sal_len += ext_len;
-
+        */
         ext_len = SAL_CONTROL_EXT_LEN;
         ctrl_ext = (struct sal_control_ext *)
                 skb_push(rskb, ext_len);
@@ -2366,10 +2367,6 @@ int serval_sal_send_shutdown(struct sock *sk)
          * normally expected after having sent a FIN. */
         if (serval_sock_flag(ssk, SSK_FLAG_FIN_SENT))
                 return 0;
-
-        /* Not sure we need to set SEND_SHUTDOWN here, since it is
-           alread set in serval_sal_close() */
-        sk->sk_shutdown |= SEND_SHUTDOWN;
         
         /* SOCK_DEAD would mean there is no user app attached
            anymore */
@@ -2567,8 +2564,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         struct sk_buff *rskb;
         int err = 0;
                 
-        if (!has_valid_control_extension(sk, ctx) || 
-            !has_service_extension_src(ctx))
+        if (!has_valid_control_extension(sk, ctx))
                 goto drop;
         
         if (!(ctx->ctrl_ext->syn && ctx->ctrl_ext->ack)) {
@@ -3844,7 +3840,7 @@ static inline int serval_sal_add_ctrl_ext(struct sock *sk,
         struct sal_control_ext *ctrl_ext;
 
         ctrl_ext = (struct sal_control_ext *)
-                skb_push(skb, sizeof(*ctrl_ext));
+                skb_push(skb, SAL_CONTROL_EXT_LEN);
 
         ctrl_ext->ext_type = SAL_CONTROL_EXT;
         ctrl_ext->ext_length = SAL_CONTROL_EXT_LEN;
@@ -3883,23 +3879,21 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         unsigned short hdr_len = SAL_HEADER_LEN;
 
-        /* Add appropriate flags and headers */
+        /* Add appropriate extension headers */
         if (SAL_SKB_CB(skb)->flags & SVH_SYN || 
             SAL_SKB_CB(skb)->flags & SVH_RSYN ||
             SAL_SKB_CB(skb)->flags & SVH_FIN ||
             SAL_SKB_CB(skb)->flags & SVH_RST ||
             SAL_SKB_CB(skb)->flags & SVH_ACK) {
-                /* The SYN and SYN-ACK must carry a serviceID. */
-                if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
-                    SAL_SKB_CB(skb)->flags & SVH_CONN_ACK ||
-                    ((SAL_SKB_CB(skb)->flags & SVH_SYN) &&
-                     (SAL_SKB_CB(skb)->flags & SVH_ACK))) {
-                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);               
+                /* The ACK for a SYN-ACK must carry a
+                   serviceID. */
+                if (SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
+                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
                 }
 
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb);                
         } else {
-                /* Unconnected datagram, add service extension */
+                /* Unconnected datagram, add service extensions */
                 if (sk->sk_state == SAL_INIT && 
                     sk->sk_type == SOCK_DGRAM) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->local_srvid);
@@ -3907,8 +3901,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                 }
         }
 
-        /* Add Serval header */
-        sh = (struct sal_hdr *)skb_push(skb, sizeof(*sh));
+        /* Add Serval base header */
+        sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
                sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
