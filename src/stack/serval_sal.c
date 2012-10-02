@@ -594,8 +594,8 @@ static inline int has_valid_control_extension(struct sock *sk,
                 return 0;
         }
         
-        if (ctx->ctrl_ext->exthdr.type != SAL_CONTROL_EXT ||
-            ctx->ctrl_ext->exthdr.length != 
+        if (ctx->ctrl_ext->ext_type != SAL_CONTROL_EXT ||
+            ctx->ctrl_ext->ext_length != 
             min_ext_length[SAL_CONTROL_EXT]) {
                 LOG_PKT("No control extension, bad extension type\n");
                 return 0;
@@ -1511,10 +1511,10 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
 
         /* Add control extension */
         ctrl_ext = (struct sal_control_ext *)
-                skb_push(rskb, sizeof(*ctrl_ext));
-        memset(ctrl_ext, 0, sizeof(*ctrl_ext));
-        ctrl_ext->exthdr.type = SAL_CONTROL_EXT;
-        ctrl_ext->exthdr.length = sizeof(*ctrl_ext);
+                skb_push(rskb, SAL_CONTROL_EXT_LEN);
+        memset(ctrl_ext, 0, SAL_CONTROL_EXT_LEN);
+        ctrl_ext->ext_type = SAL_CONTROL_EXT;
+        ctrl_ext->ext_length = SAL_CONTROL_EXT_LEN;
         ctrl_ext->rst = 1;
         
 	if (ctx->flags & SVH_ACK) {
@@ -2118,7 +2118,7 @@ static int serval_sal_ack_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         
-        if (!ctx->ctrl_ext || !ctx->ctrl_ext->ack)
+        if (!(ctx->flags & SVH_ACK))
                 return -1;
 
 	/* If the ack is older than previous acks
@@ -2143,18 +2143,18 @@ static int serval_sal_ack_process(struct sock *sk,
         /* Check for migration handshake ACK */
         switch (ssk->sal_state) {
         case SAL_RSYN_RECV:
-                if (!ctx->ctrl_ext->rsyn)
+                if (!(ctx->flags & SVH_RSYN))
                         serval_sock_set_sal_state(sk, SAL_RSYN_INITIAL);
                 break;
         case SAL_RSYN_SENT_RECV:
-                if (!ctx->ctrl_ext->rsyn)
+                if (!(ctx->flags & SVH_RSYN))
                         serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
                 break;
         default:
                 return 0;
         }
         
-        if (!ctx->ctrl_ext->rsyn) {
+        if (!(ctx->flags & SVH_RSYN)) {
                 LOG_DBG("Migration complete for flow %s\n",
                         flow_id_to_str(&ssk->local_flowid));
                 memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
@@ -2408,7 +2408,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
         /* Should pass FINs to transport and ultimately the user, as
          * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
-            ctx->ctrl_ext->fin) {
+            (ctx->flags & SVH_FIN)) {
                 /* Set the received service id.
 
                    NOTE: The transport protocol is free to overwrite
@@ -2424,7 +2424,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 should_drop = 1;
         }
 
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 err = serval_sal_rcv_fin(sk, skb, ctx);
                 
                 if (err == 0) {
@@ -2518,7 +2518,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                                            struct sal_context *ctx)
 {
         /* Is this a SYN? */
-        if (ctx->ctrl_ext->syn && !ctx->ctrl_ext->ack) {
+        if ((ctx->flags & SVH_SYN) && !(ctx->flags & SVH_ACK)) {
                 struct request_sock *rsk = serval_sal_find_rsk(sk, ctx);
                 
                 if (rsk) {
@@ -2527,7 +2527,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         goto drop;
                 }
                 return serval_sal_rcv_syn(sk, skb, ctx);
-        } else if (ctx->ctrl_ext->ack) {
+        } else if (ctx->flags & SVH_ACK) {
                         struct sock *nsk;
                         /* Processing for socket that has received SYN
                            already */
@@ -2567,7 +2567,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         if (!has_valid_control_extension(sk, ctx))
                 goto drop;
         
-        if (!(ctx->ctrl_ext->syn && ctx->ctrl_ext->ack)) {
+        if (!((ctx->flags & SVH_SYN) && (ctx->flags & SVH_ACK))) {
                 LOG_ERR("packet is not a SYN-ACK response\n");
                 goto drop;
         }
@@ -2725,11 +2725,11 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         int err = 0;
         int ack_ok = 0;
 
-        if (ctx->ctrl_ext->ack && 
+        if (ctx->flags & SVH_ACK && 
             serval_sal_ack_process(sk, skb, ctx) == 0)
                 ack_ok = 1;
 
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 if (serval_sal_rcv_fin(sk, skb, ctx) == 0) {
                         if (ack_ok)
                                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
@@ -2741,7 +2741,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         }
         
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
-            ctx->ctrl_ext->fin) {
+            ctx->flags & SVH_FIN) {
                 /* Set the received service id */
                 SAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -2765,7 +2765,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         int err = 0;
         
         /* We've received our FIN-ACK already */
-        if (ctx->ctrl_ext->fin) {
+        if (ctx->flags & SVH_FIN) {
                 err = serval_sal_rcv_fin(sk, skb, ctx);
 
                 if (err == 0) {
@@ -2775,7 +2775,7 @@ static int serval_sal_finwait2_state_process(struct sock *sk,
         }
 
         if (packet_has_transport_hdr(skb, ctx->hdr) ||
-            ctx->ctrl_ext->fin) {
+            ctx->flags & SVH_FIN) {
                 /* Set the received service id */
                 SAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
                 
@@ -2798,7 +2798,8 @@ static int serval_sal_closing_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
                 
-        if (ctx->ctrl_ext->ack && serval_sal_ack_process(sk, skb, ctx) == 0) {
+        if ((ctx->flags & SVH_ACK) && 
+            serval_sal_ack_process(sk, skb, ctx) == 0) {
                 /* ACK was valid */
                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
         }
