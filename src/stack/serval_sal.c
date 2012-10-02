@@ -2101,7 +2101,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         nssk->udp_encap_dport = srsk->udp_encap_dport;
                         rsk->sk = nsk;
                         
-                        /* Hash the sock to make it available */
+                        /* Hash the sock to make it demuxable */
                         nsk->sk_prot->hash(nsk);
 
                         return nsk;
@@ -3494,8 +3494,6 @@ int serval_sal_rcv(struct sk_buff *skb)
           checks here so that we can drop bad packets before we put
           them on, e.g., the backlog queue
         */
-        
-        /* Try flowID demux first */
         sk = serval_sal_demux_flow(skb, &ctx);
         
         if (!sk) {
@@ -3893,6 +3891,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
             SAL_SKB_CB(skb)->flags & SVH_ACK) {
                 /* The SYN and SYN-ACK must carry a serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
+                    SAL_SKB_CB(skb)->flags & SVH_CONN_ACK ||
                     ((SAL_SKB_CB(skb)->flags & SVH_SYN) &&
                      (SAL_SKB_CB(skb)->flags & SVH_ACK))) {
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);               
