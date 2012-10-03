@@ -35,7 +35,7 @@
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
 static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
-static struct serval_table listen_table;
+static struct serval_table request_table;
 static struct list_head sock_list = { &sock_list, &sock_list };
 static DEFINE_RWLOCK(sock_list_lock);
 
@@ -310,15 +310,6 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
                              table->mask);
 }
 
-static inline unsigned int serval_sock_lhash(struct serval_table *table, 
-                                             struct sock *sk)
-{
-        return serval_hashfn(sock_net(sk), 
-                             serval_sk(sk)->hash_key, 
-                             serval_sk(sk)->hash_key_len,
-                             table->mask);
-}
-
 static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 {
         struct serval_hslot *slot;
@@ -357,11 +348,6 @@ static void __serval_sock_hash(struct sock *sk)
                 ssk->hash_key_len = sizeof(ssk->local_flowid);
 
                 __serval_table_hash(&established_table, sk);
-        } else { 
-                /* We use the service table for listening sockets. See
-                 * serval_sock_hash() */
-                /* __serval_table_hash(&listen_table, sk); */
-
         }
 }
 
@@ -425,12 +411,6 @@ void serval_sock_unhash(struct sock *sk)
                 
         if (sk->sk_state == SAL_LISTEN ||
             sk->sk_state == SAL_INIT) {
-                /*
-                lock = &listen_table.hashslot(&listen_table, net, 
-                                              &ssk->local_srvid, 
-                                              ssk->hash_key_len)->lock;
-                */
-                                
                 LOG_DBG("removing socket %p from service table\n", sk);
 
                 service_del_target(&ssk->local_srvid,
@@ -476,16 +456,16 @@ int __init serval_sock_tables_init(void)
 {
         int ret;
 
-        ret = serval_table_init(&listen_table, 
-                                serval_sock_lhash, 
-                                serval_hashslot_listen,
-                                "LISTEN");
+        ret = serval_table_init(&request_table,
+                                serval_sock_ehash, 
+                                serval_hashslot,
+                                "REQUEST");
 
         if (ret < 0)
                 goto fail_table;
         
         ret = serval_table_init(&established_table, 
-                                serval_sock_ehash, 
+                                serval_sock_ehash,
                                 serval_hashslot,
                                 "ESTABLISHED");
 
@@ -495,7 +475,7 @@ fail_table:
 
 void __exit serval_sock_tables_fini(void)
 {
-        serval_table_fini(&listen_table);
+        serval_table_fini(&request_table);
         serval_table_fini(&established_table);
         if (sock_state_str[0]) {} /* Avoid compiler warning when
                                    * compiling with debug off */

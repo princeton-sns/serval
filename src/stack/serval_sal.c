@@ -3138,26 +3138,26 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 
                 next_target = service_iter_next(&iter);
                 
-                switch (target->type) {
-                case SERVICE_RULE_DEMUX:
-                         /* local resolution */
+                if (target->type == SERVICE_RULE_DEMUX) {
+                        /* local resolution */
                         *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
                         num_forward++;
                         break;
-                case SERVICE_RULE_DELAY:
+                } else if (target->type == SERVICE_RULE_DELAY) {
                         delay_queue_skb(cskb, srvid);
                         err = SAL_RESOLVE_DELAY;
                         num_forward++;
                         break;
-                case SERVICE_RULE_DROP:
+                } else if (target->type == SERVICE_RULE_DROP) {
                         err = SAL_RESOLVE_DROP;
                         num_forward++;
                         break;
-                default:
-                        break;
                 }
+
+                /* We only get here if we resolved on a FORWARD RULE */
+                err = SAL_RESOLVE_FORWARD;
 
                 if (skb->pkt_type != PACKET_HOST &&
                     skb->pkt_type != PACKET_OTHERHOST) {
@@ -3169,7 +3169,12 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         break;
                 }
                 
-                if (next_target == NULL) {
+                if (!next_target && !(*sk)) {
+                        /* Only consume this skb if there are no more
+                           targets and we didn't resolve to a local
+                           socket (in which case we must continue
+                           processing the packet after this function
+                           returns). */
                         cskb = skb;
                 } else {
                         cskb = skb_copy(skb, GFP_ATOMIC);
@@ -3180,9 +3185,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 break;
                         }
                 }
-                
-
-                err = SAL_RESOLVE_FORWARD;
 
                 iph = ip_hdr(cskb);
                 iph_len = iph->ihl << 2;
@@ -3335,10 +3337,10 @@ static int serval_sal_resolve(struct sk_buff *skb,
         } else {
                 *sk = serval_sal_demux_service(skb, srvid, ctx->hdr->protocol);
                 
-                if (!(*sk))
-                        ret = SAL_RESOLVE_NO_MATCH;
-                else 
+                if (*sk)
                         ret = SAL_RESOLVE_DEMUX;
+                else
+                        ret = SAL_RESOLVE_NO_MATCH;
         }
         
         return ret;
