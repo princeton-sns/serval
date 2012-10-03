@@ -239,15 +239,6 @@ struct serval_hslot *serval_hashslot(struct serval_table *table,
 	return &table->hash[serval_hashfn(net, key, keylen, table->mask)];
 }
 
-static inline 
-struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
-                                            struct net *net, 
-                                            void *key,
-                                            size_t keylen)
-{
-	return &table->hash[serval_hashfn(net, key, keylen*8, table->mask)];
-}
-
 void serval_sock_migrate_iface(struct net_device *old_if, 
                                struct net_device *new_if);
 void serval_sock_migrate_flow(struct flow_id *old_f,
