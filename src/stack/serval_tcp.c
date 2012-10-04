@@ -367,16 +367,10 @@ discard_it:
         return 0;
 }
 
-static void __serval_tcp_done(struct sock *sk)
-{
-        LOG_DBG("socket done!\n");
-	serval_tcp_clear_xmit_timers(sk);
-}
-
 void serval_tcp_done(struct sock *sk)
 {
-        LOG_DBG("calling serval_sal_done\n");
-	//serval_sal_done(sk);
+        LOG_DBG("TCP done!\n");
+	serval_tcp_clear_xmit_timers(sk);
 }
 
 void __init serval_tcp_init(void)
@@ -2528,7 +2522,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .migration_completed = serval_tcp_migration_completed,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
-        .done = __serval_tcp_done,
+        .done = serval_tcp_done,
 };
 
 static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
@@ -2550,7 +2544,7 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .freeze_flow = serval_tcp_freeze_flow,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
-        .done = __serval_tcp_done,
+        .done = serval_tcp_done,
 };
 
 /*

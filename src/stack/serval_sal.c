@@ -1439,7 +1439,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
 }
 
 /* Kill this socket if we receive a reset. */
-static void serval_sal_rcv_reset(struct sock *sk)
+void serval_sal_rcv_reset(struct sock *sk)
 {
 	/* We want the right error as BSD sees it (and indeed as we do). */
 	switch (sk->sk_state) {
@@ -1454,9 +1454,6 @@ static void serval_sal_rcv_reset(struct sock *sk)
 	default:
 		sk->sk_err = ECONNRESET;
 	}
-
-	/* This barrier is coupled with smp_rmb() in tcp_poll() */
-	//smp_wmb();
 
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_error_report(sk);
@@ -1588,8 +1585,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         return;
 }
 
-#ifdef __DISABLED__
-static void serval_sal_send_active_reset(struct sock *sk, gfp_t priority)
+void serval_sal_send_active_reset(struct sock *sk, gfp_t priority)
 {
 	struct sk_buff *skb;
         struct serval_sock *ssk = serval_sk(sk);
@@ -1611,8 +1607,6 @@ static void serval_sal_send_active_reset(struct sock *sk, gfp_t priority)
 
 	serval_sal_transmit_skb(sk, skb, 0, priority);
 }
-
-#endif /* __DISABLED__ */
 
 static int serval_sal_send_synack(struct sock *sk,
                                   struct request_sock *rsk,

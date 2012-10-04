@@ -31,7 +31,7 @@ static void serval_tcp_write_err(struct sock *sk)
 	sk->sk_error_report(sk);
 
         LOG_DBG("Write ERROR, socket DONE\n");
-	serval_tcp_done(sk);
+	serval_sal_done(sk);
 	//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONTIMEOUT);
 }
 
@@ -72,10 +72,10 @@ static int serval_tcp_out_of_resources(struct sock *sk, int do_reset)
 		    (!tp->snd_wnd && !tp->packets_out))
 			do_reset = 1;
 		if (do_reset)
-			serval_tcp_send_active_reset(sk, GFP_ATOMIC);
+			serval_sal_send_active_reset(sk, GFP_ATOMIC);
 
                 LOG_DBG("Too many orphans, TCP done!\n");
-		serval_tcp_done(sk);
+		serval_sal_done(sk);
 		//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONMEMORY);
 		return 1;
 	}

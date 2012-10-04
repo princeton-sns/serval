@@ -278,6 +278,9 @@ static inline u32 serval_sal_keepalive_time_elapsed(const struct serval_sock *ss
 			  sal_time_stamp - ssk->ack_rcv_tstamp);
 }
 
+void serval_sal_rcv_reset(struct sock *sk);
+void serval_sal_send_active_reset(struct sock *sk, gfp_t priority);
+
 static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 {
         return (struct sal_hdr *)skb_transport_header(skb);
