@@ -2268,39 +2268,6 @@ int serval_tcp_connection_build_ack(struct sock *sk,
         return 0;
 }
 
-/* We get here when a process closes a file descriptor (either due to
- * an explicit close() or as a byproduct of exit()'ing) and there
- * was unread data in the receive queue.  This behavior is recommended
- * by RFC 2525, section 2.17.  -DaveM
- */
-void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority)
-{
-	struct sk_buff *skb;
-
-        LOG_DBG("Sending Active RESET\n");
-
-	/* NOTE: No TCP options attached and we never retransmit this. */
-	skb = alloc_skb(MAX_SERVAL_TCP_HEADER, priority);
-	if (!skb) {
-		//NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
-		return;
-	}
-
-	/* Reserve space for headers and prepare control bits. */
-	skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
-	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk),
-                                    TCPH_ACK | TCPH_RST);
-	/* Send it off. */
-	TCP_SKB_CB(skb)->when = tcp_time_stamp;
-
-        serval_tcp_transmit_skb(sk, skb, 0, priority);
-        /*
-	if (tcp_transmit_skb(sk, skb, 0, priority))
-		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
-        */
-	//TCP_INC_STATS(sock_net(sk), TCP_MIB_OUTRSTS);
-}
-
 /* Send out a delayed ack, the caller does the policy checking
  * to see if we should even be here.  See tcp_input.c:tcp_ack_snd_check()
  * for details.

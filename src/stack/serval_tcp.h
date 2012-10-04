@@ -938,7 +938,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn);
 
 void serval_tcp_done(struct sock *sk);
 
-void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority);
 void serval_tcp_send_delayed_ack(struct sock *sk);
 void serval_tcp_send_ack(struct sock *sk);
 void serval_tcp_send_fin(struct sock *sk);

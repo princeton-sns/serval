@@ -2552,35 +2552,6 @@ static inline void serval_tcp_ack_snd_check(struct sock *sk)
 	__serval_tcp_ack_snd_check(sk, 1);
 }
 
-/* When we get a reset we do this. */
-static void serval_tcp_reset(struct sock *sk)
-{
-        LOG_DBG("RESET received\n");
-
-	/* We want the right error as BSD sees it (and indeed as we do). */
-	switch (sk->sk_state) {
-	case TCP_SYN_SENT:
-		sk->sk_err = ECONNREFUSED;
-		break;
-	case TCP_CLOSE_WAIT:
-		sk->sk_err = EPIPE;
-		break;
-	case TCP_CLOSE:
-		return;
-	default:
-		sk->sk_err = ECONNRESET;
-	}
-#if defined(OS_LINUX_KERNEL)
-	/* This barrier is coupled with smp_rmb() in tcp_poll() */
-	smp_wmb();
-#endif
-	if (!sock_flag(sk, SOCK_DEAD))
-		sk->sk_error_report(sk);
-
-	serval_tcp_done(sk);
-}
-
-
 /* Fast parse options. This hopes to only see timestamps.
  * If it is wrong it falls back on tcp_parse_options().
  */
@@ -3482,7 +3453,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 
 	/* Step 2: check RST bit */
 	if (th->rst) {
-		serval_tcp_reset(sk);
+		serval_sal_rcv_reset(sk);
                 LOG_DBG("RST bit set!\n");
 		goto discard;
 	}
@@ -3501,7 +3472,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONSYN);
                 */
                 LOG_DBG("SYN out of window. Handling as RESET\n");
-		serval_tcp_reset(sk);
+		serval_sal_rcv_reset(sk);
 		return -1;
 	}
 
@@ -3713,7 +3684,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 					    (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
                                                 LOG_DBG("TCP Done!\n");
-						serval_tcp_done(sk);
+						serval_sal_done(sk);
 						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
                            
 						return 1;
@@ -3778,7 +3749,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
                                 LOG_DBG("received seqno after rcv_nxt. Handling as RESET\n");
-				serval_tcp_reset(sk);
+				serval_sal_rcv_reset(sk);
                                 /* FIXME: free_skb here, or handle in
                                    calling func? */
 				return 1;
