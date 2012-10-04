@@ -467,6 +467,8 @@ static inline int serval_pton(const char *src, void *dst)
         if (strlen(src) > SERVICE_ID_MAX_LEN)
                 return -1;
         
+        memset(dst, 0, sizeof(struct service_id));
+
         return fqdn_reverse(src, (char *)dst, WP_BEGINNING);
 }
 
