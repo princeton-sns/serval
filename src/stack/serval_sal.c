@@ -2428,7 +2428,7 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 err = serval_sal_rcv_fin(sk, skb, ctx);
                 
                 if (err == 0) {
-                        serval_sal_timewait(sk, SAL_CLOSEWAIT, 0);
+                        serval_sock_set_state(sk, SAL_CLOSEWAIT);
                 }
         }
 
