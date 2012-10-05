@@ -241,6 +241,8 @@ static int netlink_send_iov(message_channel_t *channel,
     vec[0].iov_base = &nh;
     vec[0].iov_len = sizeof(nh);
     
+    nh.nlmsg_type = NLMSG_MIN_TYPE;
+    nh.nlmsg_flags = NLM_F_REQUEST;
     nh.nlmsg_pid = mcn->base.peer.nl.nl_pid;
     nh.nlmsg_seq = atomic_inc_return(&mcn->seq_num);
     nh.nlmsg_len = NLMSG_LENGTH(datalen);
@@ -269,6 +271,8 @@ static int netlink_send(message_channel_t *channel, void *message,
     /* LOG_DBG("Sending NETLINK %zu byte message to the local stack\n", datalen); */
 
     memset(&nh, 0, sizeof(nh));
+    nh.nlmsg_type = NLMSG_MIN_TYPE;
+    nh.nlmsg_flags = NLM_F_REQUEST;
     nh.nlmsg_pid = mcn->base.peer.nl.nl_pid;
     nh.nlmsg_seq = atomic_inc_return(&mcn->seq_num);
     nh.nlmsg_len = NLMSG_LENGTH(datalen);
