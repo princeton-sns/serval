@@ -2974,26 +2974,25 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 
                 next_target = service_iter_next(&iter);
                 
-                switch (target->type) {
-                case SERVICE_RULE_DEMUX:
+                if (target->type == SERVICE_RULE_DEMUX) {
                          /* local resolution */
                         *sk = target->out.sk;
                         sock_hold(*sk);
                         err = SAL_RESOLVE_DEMUX;
                         num_forward++;
                         break;
-                case SERVICE_RULE_DELAY:
+                } else if (target->type == SERVICE_RULE_DELAY) {
                         delay_queue_skb(cskb, srvid);
                         err = SAL_RESOLVE_DELAY;
                         num_forward++;
                         break;
-                case SERVICE_RULE_DROP:
+                } else if (target->type == SERVICE_RULE_DROP) {
                         err = SAL_RESOLVE_DROP;
                         num_forward++;
                         break;
-                default:
-                        break;
                 }
+
+                err = SAL_RESOLVE_FORWARD;
 
                 if (skb->pkt_type != PACKET_HOST &&
                     skb->pkt_type != PACKET_OTHERHOST) {
@@ -3015,10 +3014,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 err = SAL_RESOLVE_DROP;
                                 break;
                         }
-                }
-                
-
-                err = SAL_RESOLVE_FORWARD;
+                }               
 
                 iph = ip_hdr(cskb);
                 iph_len = iph->ihl << 2;
@@ -3340,7 +3336,6 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_ERROR:
                 default:
                         goto drop;
-                        break;
                 }
         }
 
