@@ -2984,6 +2984,22 @@ drop:
         return 0;
 }
 
+static int serval_sal_do_rcv_ctx(struct sock *sk, struct sk_buff *skb, 
+                                 struct sal_context *ctx)
+{
+        pskb_pull(skb, ctx->length);
+        skb_reset_transport_header(skb);
+        
+        SAL_SKB_CB(skb)->flags = ctx->flags;
+        SAL_SKB_CB(skb)->srvid = NULL;
+        
+        return serval_sal_state_process(sk, skb, ctx);
+}
+
+/* 
+   This function is called when processing the backlog, and must
+   conform to that interface. We have to reparse the Serval headers.
+ */
 int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct sal_context ctx;
@@ -2994,13 +3010,7 @@ int serval_sal_do_rcv(struct sock *sk, struct sk_buff *skb)
                 return -1;
         }
 
-        pskb_pull(skb, ctx.length);
-        skb_reset_transport_header(skb);
-
-        SAL_SKB_CB(skb)->flags = ctx.flags;
-        SAL_SKB_CB(skb)->srvid = NULL;
-                
-        return serval_sal_state_process(sk, skb, &ctx);
+        return serval_sal_do_rcv_ctx(sk, skb, &ctx);
 }
 
 void serval_sal_error_rcv(struct sk_buff *skb, u32 info)
@@ -3343,6 +3353,61 @@ static int serval_sal_resolve(struct sk_buff *skb,
         return ret;
 }
 
+static int serval_sal_rcv_finish(struct sock *sk, 
+                                 struct sk_buff *skb, 
+                                 struct sal_context *ctx)
+{
+        int err = 0;
+
+        bh_lock_sock_nested(sk);
+
+        /* We only reach this point if a valid local socket destination
+         * has been found */
+        
+        if (!sock_owned_by_user(sk)) {
+                /* We cannot pass on the sal_context here, because
+                   serval_sal_do_rcv must conform to the
+                   sk_backlog_rcv callback interface. */
+                err = serval_sal_do_rcv_ctx(sk, skb, ctx);
+        } else {
+                /*
+                  Add to backlog and process in user context when
+                  the user process releases its lock ownership.
+                  
+                  Note, for kernels >= 2.6.33 the sk_add_backlog()
+                  function adds the total allocated memory for the
+                  backlog to that of the receive buffer and rejects
+                  queuing in case the new total overreaches the
+                  socket's configured receive buffer size.
+
+                  This may not be the wanted behavior in case we are
+                  processing control packets in the backlog (i.e.,
+                  control packets can be dropped because the data
+                  receive buffer is full. This might not be a big deal
+                  though, as control packets are retransmitted.
+                */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
+        }
+
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
+	return err;
+drop:
+        service_inc_stats(-1, -(skb->len - ctx->length));
+        LOG_DBG("Dropping packet\n");
+        bh_unlock_sock(sk);
+        sock_put(sk);
+        kfree_skb(skb);
+        return err;
+}
+
 int serval_sal_reresolve(struct sk_buff *skb)
 {
         struct sal_context ctx;
@@ -3359,7 +3424,7 @@ int serval_sal_reresolve(struct sk_buff *skb)
 
         switch (err) {
         case SAL_RESOLVE_DEMUX:
-                return sk_receive_skb(sk, skb, 1);
+                return serval_sal_rcv_finish(sk, skb, &ctx);
         case SAL_RESOLVE_FORWARD:                
                 return 0;
         case SAL_RESOLVE_DELAY:
@@ -3451,7 +3516,12 @@ int serval_sal_rcv(struct sk_buff *skb)
                 }
         }
 
-        err = sk_receive_skb(sk, skb, 1);
+        /* We could potentially call sk_receive_skb() here, which does
+           pretty much the same thing as
+           serval_sal_rcv_finish(). However, sk_receive_skb() sets
+           skb->dev to NULL, so that later processing won't be able to
+           learn the incoming interface. */
+        err = serval_sal_rcv_finish(sk, skb, &ctx);
         
         if (err < 0)
                 return NET_RX_DROP;
