@@ -1455,6 +1455,9 @@ void serval_sal_rcv_reset(struct sock *sk)
 		sk->sk_err = ECONNRESET;
 	}
 
+	/* This barrier is coupled with smp_rmb() in tcp_poll() */
+	smp_wmb();
+
 	if (!sock_flag(sk, SOCK_DEAD))
 		sk->sk_error_report(sk);
 
@@ -3340,58 +3343,6 @@ static int serval_sal_resolve(struct sk_buff *skb,
         return ret;
 }
 
-static int serval_sal_rcv_finish(struct sock *sk, 
-                                 struct sk_buff *skb, 
-                                 struct sal_context *ctx)
-{
-        int err = 0;
-
-        bh_lock_sock_nested(sk);
-
-        /* We only reach this point if a valid local socket destination
-         * has been found */
-        
-        if (!sock_owned_by_user(sk)) {
-                err = serval_sal_do_rcv(sk, skb);
-        } else {
-                /*
-                  Add to backlog and process in user context when
-                  the user process releases its lock ownership.
-                  
-                  Note, for kernels >= 2.6.33 the sk_add_backlog()
-                  function adds the total allocated memory for the
-                  backlog to that of the receive buffer and rejects
-                  queuing in case the new total overreaches the
-                  socket's configured receive buffer size.
-
-                  This may not be the wanted behavior in case we are
-                  processing control packets in the backlog (i.e.,
-                  control packets can be dropped because the data
-                  receive buffer is full. This might not be a big deal
-                  though, as control packets are retransmitted.
-                */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb)) {
-                        goto drop;
-                }
-#else
-                sk_add_backlog(sk, skb);
-#endif
-        }
-
-        bh_unlock_sock(sk);
-        sock_put(sk);
-
-	return err;
-drop:
-        service_inc_stats(-1, -(skb->len - ctx->length));
-        LOG_DBG("Dropping packet\n");
-        bh_unlock_sock(sk);
-        sock_put(sk);
-        kfree_skb(skb);
-        return err;
-}
-
 int serval_sal_reresolve(struct sk_buff *skb)
 {
         struct sal_context ctx;
@@ -3408,7 +3359,7 @@ int serval_sal_reresolve(struct sk_buff *skb)
 
         switch (err) {
         case SAL_RESOLVE_DEMUX:
-                return serval_sal_rcv_finish(sk, skb, &ctx);
+                return sk_receive_skb(sk, skb, 1);
         case SAL_RESOLVE_FORWARD:                
                 return 0;
         case SAL_RESOLVE_DELAY:
@@ -3500,7 +3451,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 }
         }
 
-        err = serval_sal_rcv_finish(sk, skb, &ctx);
+        err = sk_receive_skb(sk, skb, 1);
         
         if (err < 0)
                 return NET_RX_DROP;
