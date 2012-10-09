@@ -28,4 +28,10 @@
     <string name="no_service_table">No service table found.</string>
     <string name="no_flow_table">No flow table found.</string>
     <string name="no_dummy">Your phone has no dummy interface and a kernel module was not supplied or it did not install. The translator will not work.</string>
+    <string-array name="service_rule_types">
+        <item >FORWARD</item>
+        <item >DELAY</item>
+        <item >DROP</item>
+    </string-array>
+    <string name="label_rule_type">Type:</string>
 </resources>

@@ -582,6 +582,42 @@ static int on_service_remove(struct hostctrl *hc,
     return 0;
 }
 
+static int on_service_delayed(struct hostctrl *hc,
+                              unsigned int xid,
+                              unsigned int pkt_id,
+                              struct service_id *service)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jobject service_id;
+    jmethodID mid;
+    jthrowable exc;
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceDelayed", 
+                              "(JJLorg/servalarch/net/ServiceID;)V");
+    
+    if (!mid)
+        return -1;
+
+    service_id = new_service_id(env, service);
+
+    if (!service_id)
+        return -1;
+    
+    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+                           (jlong)xid, (jlong)pkt_id, service_id);
+
+    exc = (*env)->ExceptionOccurred(env);
+    
+    if (exc) {
+        LOG_DBG("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+    
+    return 0;
+}
+
 #include <common/platform.h>
 #if defined(OS_ANDROID)
 #define JNI_ENV_CAST(env) (env)
@@ -612,8 +648,8 @@ static struct hostctrl_callback cb = {
     .service_add_result = on_service_add,
     .service_mod_result = on_service_mod,
     .service_remove_result = on_service_remove,
+    .service_delay_notification = on_service_delayed,
 };
-
 
 enum {
 	HOSTCTRL_LOCAL,
@@ -724,7 +760,9 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env,
                                                                  jint type,
                                                                  jobject service_id, 
                                                                  jint prefix_bits, 
-                                                                 jint priority, jint weight, jobject addr)
+                                                                 jint priority, 
+                                                                 jint weight, 
+                                                                 jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
     struct service_id srvid;
@@ -733,8 +771,10 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env,
     if (fill_in_service_id(env, service_id, &srvid) == -1)
         return -1;
     
-    if (fill_in_addr(env, addr, &ipaddr) == -1)
-        return -1;
+    if (type == SERVICE_RULE_FORWARD && addr != NULL) {
+        if (fill_in_addr(env, addr, &ipaddr) == -1)
+            return -1;
+    }
 
     return hostctrl_service_add(ctx->hc, (enum service_rule_type)type, 
                                 &srvid, 
@@ -744,7 +784,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env,
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jobject obj, 
-                                                                 jobject service_id, jint prefix_bits, 
+                                                                 jobject service_id, 
+                                                                 jint prefix_bits, 
                                                                  jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -778,7 +819,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4(JNIEnv *env,
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4(JNIEnv *env, jobject obj, 
-                                                                      jobject service_id, jint prefix_bits, 
+                                                                      jobject service_id, 
+                                                                      jint prefix_bits, 
                                                                       jobject addr)
 {
     struct jni_context *ctx = get_native_context(env, obj);
@@ -795,7 +837,8 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4(JNIEnv *en
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4(JNIEnv *env, jobject obj, 
-                                                                        jobject service_id, jint prefix_bits)
+                                                                        jobject service_id, 
+                                                                        jint prefix_bits)
 {
     struct jni_context *ctx = get_native_context(env, obj);
     struct service_id srvid;
@@ -804,6 +847,25 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4(JNIEnv *
         return -1;
     
     return hostctrl_service_unregister(ctx->hc, &srvid, (unsigned short)prefix_bits);
+}
+
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_setDelayVerdict(JNIEnv *env, jobject obj, 
+                                                                     jlong pkt_id, jint verdict)
+{
+    struct jni_context *ctx = get_native_context(env, obj);
+    
+    if (!ctx->hc)
+        return -1;
+
+    switch (verdict) {
+    case DELAY_RELEASE:
+    case DELAY_DROP:
+        break;
+    default:
+        return -1;
+    }
+    
+    return hostctrl_set_delay_verdict(ctx->hc, (unsigned int)pkt_id, (enum delay_verdict)verdict);
 }
 
 jlong JNICALL Java_org_servalarch_servalctrl_HostCtrl_getXid(JNIEnv *env, jobject obj)

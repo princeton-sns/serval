@@ -76,10 +76,12 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                 struct service_info *entry = &cmr->service[i];
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
-                dev = resolve_dev(entry);
-                
-                if (!dev)
-                        continue;
+                if (entry->type == SERVICE_RULE_FORWARD) {
+                        dev = resolve_dev(entry);
+                        
+                        if (!dev)
+                                continue;
+                }
 
                 if (entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
@@ -105,8 +107,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                                   &entry->address, 
                                   sizeof(entry->address),
                                   make_target(dev), GFP_KERNEL);
-
-                dev_put(dev);
+                if (dev)
+                        dev_put(dev);
 
                 if (err > 0) {
                         if (index < i) {
@@ -187,7 +189,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                 memset(&tstat, 0, sizeof(tstat));
                 
                 err = service_entry_remove_target(se,
-                                                  SERVICE_RULE_FORWARD, 
+                                                  entry->type,
                                                   &entry->address, 
                                                   sizeof(entry->address), 
                                                   &tstat);

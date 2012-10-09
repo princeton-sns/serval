@@ -1373,17 +1373,16 @@ static int service_table_add(struct service_table *tbl,
                 goto out;
         }
 
-        if (out.raw) {
-                ret = __service_entry_add_target(se, type, flags, priority, 
-                                                 weight, dst, dstlen, out,
-                                                 GFP_ATOMIC);
-
-                if (ret < 0) {
-                        service_entry_free(se);
-                        ret = -ENOMEM;
-                        goto out;
-
-                }
+        
+        ret = __service_entry_add_target(se, type, flags, priority, 
+                                         weight, dst, dstlen, out,
+                                         GFP_ATOMIC);
+        
+        if (ret < 0) {
+                service_entry_free(se);
+                ret = -ENOMEM;
+                goto out;
+                
         }
 
         se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
