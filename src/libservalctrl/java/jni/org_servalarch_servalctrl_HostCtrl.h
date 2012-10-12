@@ -21,10 +21,11 @@ extern "C" {
 #define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DELAY 3L
 #undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DROP
 #define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DROP 4L
-#undef org_servalarch_servalctrl_HostCtrl_DELAY_RELEASE
-#define org_servalarch_servalctrl_HostCtrl_DELAY_RELEASE 0L
-#undef org_servalarch_servalctrl_HostCtrl_DELAY_DROP
-#define org_servalarch_servalctrl_HostCtrl_DELAY_DROP 1L
+#undef org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_RELEASE
+#define org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_RELEASE 0L
+#undef org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_DROP
+#define org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_DROP 1L
+
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    nativeInit
@@ -63,7 +64,7 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface
  * Signature: (Lorg/servalarch/net/ServiceID;IIILjava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4
-  (JNIEnv *, jobject, jobject, jint, jint, jint, jobject);
+(JNIEnv *, jobject, jint, jobject, jint, jint, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
@@ -100,10 +101,10 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    setDelayVerdict
- * Signature: (JJ)I
+ * Signature: (JI)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_setDelayVerdict
-  (JNIEnv *, jobject, jlong, jlong);
+  (JNIEnv *, jobject, jlong, jint);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl

@@ -16,76 +16,83 @@ import android.widget.Toast;
 
 public class AppHostCtrl {
 
-    static final int SERVICE_ADD = 0;
-    static final int SERVICE_REMOVE = 1;
-    static HostCtrlCallbacks cbs = null;
-    static HostCtrl hc = null;
-	
-    static int init(final HostCtrlCallbacks cbs) {
-		
-        if (hc != null) {
-            Log.d("Serval", "HostCtrl already initialized");
-            return 0;
-        }
-		
-        try {
-            AppHostCtrl.hc = new LocalHostCtrl(cbs);
-        } catch (HostCtrlException e) {
-            Log.d("Serval", "Could not initialize HostCtrl");
-            return -1;
-        }
-        AppHostCtrl.cbs = cbs;
-        Log.d("Serval", "HostCtrl initialized");
-        return 0;
-    }
-	
-    static void fini() {
-        if (hc != null) {
-            hc.dispose();
-            hc = null;
-            cbs = null;
-        }
-    }
+	static final int SERVICE_ADD = 0;
+	static final int SERVICE_REMOVE = 1;
+	static HostCtrlCallbacks cbs = null;
+	static HostCtrl hc = null;
 
-    static void performOp(Context context, final String serviceStr, final String ipStr, int op) {
-        ServiceID sid;
-        InetAddress addr;
-		
-        if (hc == null)
-            return;
+	static int init(final HostCtrlCallbacks cbs) {
 
-        sid = AppHostCtrl.createServiceID(serviceStr);
-		
-        if (sid == null) {
-            Toast t = Toast.makeText(context, "Not a valid serviceID", 
-                                     Toast.LENGTH_SHORT);
-            t.show();
-            return;
-        }
-		
-        addr = AppHostCtrl.createAddress(ipStr);
-		
-        if (addr == null) {
-            Toast t = Toast.makeText(context, "Not a valid IP address", 
-                                     Toast.LENGTH_SHORT);
-            t.show();
-            return;
-        }
-		
+		if (hc != null) {
+			Log.d("Serval", "HostCtrl already initialized");
+			return 0;
+		}
 
-        switch (op) {
-        case AppHostCtrl.SERVICE_ADD:
-            Log.d("Serval", "adding service " + sid + " address " + addr);
-            AppHostCtrl.hc.addService(sid, 1, 1, addr);
-            break;
-        case AppHostCtrl.SERVICE_REMOVE:
-            AppHostCtrl.hc.removeService(sid, addr);
-            break;
-        default:
-            break;
-        }
-    }
-	
+		try {
+			AppHostCtrl.hc = new LocalHostCtrl(cbs);
+		} catch (HostCtrlException e) {
+			Log.d("Serval", "Could not initialize HostCtrl");
+			return -1;
+		}
+		AppHostCtrl.cbs = cbs;
+		Log.d("Serval", "HostCtrl initialized");
+		return 0;
+	}
+
+	static void fini() {
+		if (hc != null) {
+			hc.dispose();
+			hc = null;
+			cbs = null;
+		}
+	}
+
+	static void performOp(Context context, final String serviceStr,
+			final String ipStr, int op) {
+		ServiceID sid;
+		InetAddress addr = null;
+		int type = HostCtrl.SERVICE_RULE_FORWARD;
+
+		if (hc == null)
+			return;
+
+		sid = AppHostCtrl.createServiceID(serviceStr);
+
+		if (sid == null) {
+			Toast t = Toast.makeText(context, "Not a valid serviceID",
+					Toast.LENGTH_SHORT);
+			t.show();
+			return;
+		}
+
+		if (ipStr == "delay") {
+			type = HostCtrl.SERVICE_RULE_DELAY;
+		} else if (ipStr == "drop") {
+			type = HostCtrl.SERVICE_RULE_DROP;
+		} else {
+			addr = AppHostCtrl.createAddress(ipStr);
+
+			if (addr == null) {
+				Toast t = Toast.makeText(context, "Not a valid IP address",
+						Toast.LENGTH_SHORT);
+				t.show();
+				return;
+			}
+		}
+
+		switch (op) {
+		case AppHostCtrl.SERVICE_ADD:
+			Log.d("Serval", "adding service " + sid + " type " + type + " address " + addr);
+			AppHostCtrl.hc.addService(type, sid, 1, 1, addr);
+			break;
+		case AppHostCtrl.SERVICE_REMOVE:
+			AppHostCtrl.hc.removeService(sid, addr);
+			break;
+		default:
+			break;
+		}
+	}
+
     static InetAddress createAddress(String ipStr) {
         InetAddress addr = null;
         try {

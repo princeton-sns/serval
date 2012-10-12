@@ -247,7 +247,7 @@ CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == 133)
 #define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
 
 enum delay_verdict {
-        DELAY_RELEASE,
+        DELAY_RELEASE = 0,
         DELAY_DROP,
 };
 
