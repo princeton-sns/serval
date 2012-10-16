@@ -196,6 +196,9 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         LOG_DBG("Migrated %d flows\n", n);
 }
 
+/*
+  This function is called from BH context.
+*/
 void serval_sock_freeze_flows(struct net_device *dev)
 {
         int i;
@@ -210,16 +213,16 @@ void serval_sock_freeze_flows(struct net_device *dev)
                 spin_lock_bh(&slot->lock);
                                 
                 hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
-                        struct serval_sock *ssk = serval_sk(sk);
-                        
-                        lock_sock(sk);
+                        struct serval_sock *ssk = serval_sk(sk);                       
                         
                         if (sk->sk_bound_dev_if > 0 && 
                             sk->sk_bound_dev_if == dev->ifindex) {
-                                if (ssk->af_ops->freeze_flow)
+                                if (ssk->af_ops->freeze_flow) {
+                                        bh_lock_sock(sk);
                                         ssk->af_ops->freeze_flow(sk);
+                                        bh_unlock_sock(sk);
+                                }
                         }
-                        release_sock(sk);
                 }
                 spin_unlock_bh(&slot->lock);
         }
