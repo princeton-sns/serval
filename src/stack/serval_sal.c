@@ -107,7 +107,7 @@ static int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    int use_copy, gfp_t gfp_mask);
 
 static size_t min_ext_length[] = {
-        [0] = sizeof(struct sal_hdr),
+        [SAL_PAD_EXT] = 0,
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
         [SAL_SERVICE_EXT] = sizeof(struct sal_service_ext),
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
@@ -115,7 +115,7 @@ static size_t min_ext_length[] = {
 };
 
 static size_t max_ext_length[] = {
-        [0] = sizeof(struct sal_hdr),
+        [SAL_PAD_EXT] = 3,
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
         [SAL_SERVICE_EXT] = sizeof(struct sal_service_ext),
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
@@ -404,27 +404,23 @@ static parse_ext_func_t parse_ext_func[] = {
 static inline int parse_ext(struct sal_ext *ext, struct sk_buff *skb,
                             struct sal_context *ctx)
 {
-        uint16_t ext_len;
-
         if (ext->type >= __SAL_EXT_TYPE_MAX) {
                 LOG_DBG("Bad extension type (=%u)\n",
                         ext->type);
                 return -1;
         }
         
-        ext_len = ext->length;
-
-        if (ext_len < min_ext_length[ext->type]) {
+        if (ext->length < min_ext_length[ext->type]) {
                 LOG_DBG("Bad extension \'%s\' length (=%u)\n",
-                        sal_ext_name[ext->type], ext_len);
+                        sal_ext_name[ext->type], ext->length);
                 return -1;
         }
         
         LOG_DBG("EXT %s length=%u\n",
                 sal_ext_name[ext->type], 
-                ext_len);
+                ext->length);
 
-        return parse_ext_func[ext->type](ext, ext_len, skb, ctx);
+        return parse_ext_func[ext->type](ext, ext->length, skb, ctx);
 }
 
 enum sal_parse_mode {
