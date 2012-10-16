@@ -267,7 +267,7 @@ static inline int serval_pton(const char *src, void *dst)
 struct sal_hdr {
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
-        uint8_t  length;
+        uint8_t  shl; /* SAL Header Length (in number of 32-bit words) */
         uint8_t  protocol;
         uint16_t check;
 } __attribute__((packed));
@@ -306,12 +306,19 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
         ((struct sal_ext *)((char *)ext + ext->length))
 
 enum sal_ext_type {
+        SAL_PAD_EXT = 0,
         SAL_CONTROL_EXT = 1,
         SAL_SERVICE_EXT,
         SAL_ADDRESS_EXT,
         SAL_SOURCE_EXT,
         __SAL_EXT_TYPE_MAX,
 };
+
+struct sal_pad_ext {
+        uint8_t pad[1];
+} __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct sal_pad_ext) == 1);
 
 #define SAL_NONCE_SIZE 8
 

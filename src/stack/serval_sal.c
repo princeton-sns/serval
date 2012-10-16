@@ -136,7 +136,7 @@ static int print_base_hdr(struct sal_hdr *sh, char *buf, int buflen)
 {
         return snprintf(buf, buflen,
                         "len=%u proto=%u src_fl=%s dst_fl=%s",
-                        sh->length, sh->protocol,
+                        sh->shl << 2, sh->protocol,
                         flow_id_to_str(&sh->src_flowid), 
                         flow_id_to_str(&sh->dst_flowid));
 }
@@ -146,6 +146,11 @@ static int print_base_ext(struct sal_ext *xt, char *buf, int buflen)
         return snprintf(buf, buflen, "%s length=%u",
                         sal_ext_name[xt->type],
                         xt->length);
+}
+
+static int print_pad_ext(struct sal_ext *xt, char *buf, int buflen)
+{
+        return 0;
 }
 
 static int print_control_ext(struct sal_ext *xt, char *buf, int buflen)
@@ -206,7 +211,7 @@ static int print_source_ext(struct sal_ext *xt, char *buf, int buflen)
 typedef int (*print_ext_func_t)(struct sal_ext *, char *, int);
 
 static print_ext_func_t print_ext_func[] = {
-        [0] = &print_base_ext,
+        [SAL_PAD_EXT] = &print_pad_ext,
         [SAL_CONTROL_EXT] = &print_control_ext,
         [SAL_SERVICE_EXT] = &print_service_ext,
         [SAL_ADDRESS_EXT] = &print_address_ext,
@@ -228,7 +233,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
 {
 #define HDR_BUFLEN 512
         static char buf[HDR_BUFLEN];
-        int hdr_len = sh->length;
+        int hdr_len = sh->shl << 2;
         struct sal_ext *ext;
         int len = 0;
         
@@ -284,11 +289,10 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
 
 #endif /* ENABLE_DEBUG */
 
-
-static int parse_base_ext(struct sal_ext *ext, 
-                          uint16_t ext_len,
-                          struct sk_buff *skb,
-                          struct sal_context *ctx)
+static int parse_pad_ext(struct sal_ext *ext, 
+                         uint16_t ext_len,
+                         struct sk_buff *skb,
+                         struct sal_context *ctx)
 {
         return 0;
 }
@@ -365,8 +369,10 @@ static int parse_source_ext(struct sal_ext *ext,
         ctx->src_ext = (struct sal_source_ext *)ext;
 
         /* Should be two addresses minimum */
-        if (SAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) < 2)
+        if (SAL_SOURCE_EXT_NUM_ADDRS(ctx->src_ext) < 2) {
+                LOG_ERR("less than two addresses\n");
                 return -1;
+        }
 
         /*
         dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &addr);
@@ -388,7 +394,7 @@ typedef int (*parse_ext_func_t)(struct sal_ext *,
                                 struct sal_context *ctx);
 
 static parse_ext_func_t parse_ext_func[] = {
-        [0] = &parse_base_ext,
+        [SAL_PAD_EXT] = &parse_pad_ext,
         [SAL_CONTROL_EXT] = &parse_control_ext,
         [SAL_SERVICE_EXT] = &parse_service_ext,
         [SAL_ADDRESS_EXT] = &parse_address_ext,
@@ -443,7 +449,7 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         
         ctx->skb = skb;
         ctx->hdr = sal_hdr(skb);
-        ctx->length = ctx->hdr->length;
+        ctx->length = ctx->hdr->shl << 2;
         ext = SAL_EXT_FIRST(ctx->hdr);
         
         /* Sanity checks */
@@ -475,6 +481,7 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         if (hdr_len != 0) {
                 LOG_ERR("hdr_len=%d (should be 0)\n", hdr_len);
         }
+
         /* hdr_len should be zero if everything was OK */
         return hdr_len;
 }
@@ -567,9 +574,9 @@ static inline int packet_has_transport_hdr(struct sk_buff *skb,
 {
         /* We might have pulled the serval header already. */
         if (sh && ((unsigned char *)sh == skb_transport_header(skb))) {
-                LOG_DBG("skb->len=%u sh->length=%u\n", 
-                        skb->len, sh->length);
-                return skb->len > sh->length;
+                LOG_DBG("skb->len=%u sal_length=%u\n", 
+                        skb->len, sh->shl << 2);
+                return skb->len > (sh->shl << 2);
         }
             
         LOG_DBG("skb->len=%u\n", skb->len);
@@ -619,8 +626,8 @@ static inline int has_valid_address_extension(struct sock *sk,
         /*struct serval_sock *ssk = serval_sk(sk);
         struct sal_address_ext *addr_ext =
                 (struct sal_address_ext *)(sfh + 1);
-        unsigned int hdr_len = sfh->length;
-        unsigned int addr_list_len = (sfh->length - 2 * sizeof(uint8_t) -
+        unsigned int hdr_len = sfh->shl << 2;
+        unsigned int addr_list_len = (hdr_len - 2 * sizeof(uint8_t) -
                                      sizeof(uint16_t)) / sizeof(net_addr);
 
         if (hdr_len < sizeof(*sfh) + sizeof(*desc_ext)) {
@@ -650,7 +657,7 @@ static inline __sum16 serval_sal_csum(struct sal_hdr *sh, int len)
 static inline void serval_sal_send_check(struct sal_hdr *sh)
 {
         sh->check = 0;
-        sh->check = serval_sal_csum(sh, sh->length);
+        sh->check = serval_sal_csum(sh, sh->shl << 2);
 }
 
 /* Compute the actual rto_min value */
@@ -1429,7 +1436,7 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         }
         
         sh->check = 0;
-        sh->length = sal_len;
+        sh->shl = sal_len >> 2;
         
         LOG_DBG("New hdr: skb->len=%u %s\n",
                 skb->len,
@@ -1540,7 +1547,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         memcpy(&rsh->src_flowid, &ctx->hdr->dst_flowid, 
                sizeof(rsh->src_flowid));
         rsh->protocol = ctx->hdr->protocol;
-        rsh->length = sal_len + sizeof(*rsh);
+        rsh->shl = (SAL_HEADER_LEN + sal_len) >> 2;
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 sal_hdr_to_str(rsh), rskb->len);
@@ -1744,7 +1751,7 @@ static int serval_sal_send_synack(struct sock *sk,
         memcpy(&rsh->src_flowid, &srsk->local_flowid, 
                sizeof(srsk->local_flowid));
         rsh->protocol = ctx->hdr->protocol;
-        rsh->length = SAL_HEADER_LEN + sal_len;
+        rsh->shl = (SAL_HEADER_LEN + sal_len) >> 2;
 
         LOG_PKT("Serval XMIT RESPONSE %s skb->len=%u\n",
                 sal_hdr_to_str(rsh), rskb->len);
@@ -2578,7 +2585,7 @@ static int serval_sal_request_state_process(struct sock *sk,
         LOG_DBG("Got RESPONSE verno=%u ackno=%u TCP off=%u hdrlen=%u\n",
                 ctx->verno, ctx->ackno,
                 skb_transport_header(skb) - (unsigned char *)sh,
-                ctx->hdr->length);
+                ctx->hdr->shl << 2);
 
         /* Save device and peer flow id */
         serval_sock_set_dev(sk, skb->dev);
@@ -3417,6 +3424,7 @@ int serval_sal_reresolve(struct sk_buff *skb)
         if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
                 LOG_DBG("Bad Serval header %s\n",
                         ctx.hdr ? sal_hdr_to_str(ctx.hdr) : "NULL");
+                kfree_skb(skb);
                 return -1;
         }
 
@@ -3880,6 +3888,21 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
         return SAL_SERVICE_EXT_LEN;
 }
 
+static inline int serval_sal_add_pad_ext(struct sock *sk, 
+                                         struct sk_buff *skb,
+                                         unsigned short pad_bytes)
+{
+        struct sal_pad_ext *pad_ext;
+
+        if (pad_bytes == 0)
+                return 0;
+
+        pad_ext = (struct sal_pad_ext *)skb_push(skb, pad_bytes);
+        memset(pad_ext, 0, pad_bytes);
+        
+        return pad_bytes;
+}
+
 static struct sal_hdr *serval_sal_build_header(struct sock *sk, 
                                                struct sk_buff *skb)
 {
@@ -3897,6 +3920,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                    serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
                     SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
+                        hdr_len += serval_sal_add_pad_ext(sk, skb, 2);
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
                 }
 
@@ -3910,17 +3934,20 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                 }
         }
 
-        /* Add Serval base header */
+        /* Add SAL base header */
         sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
                sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
                sizeof(ssk->peer_flowid));
         sh->protocol = sk->sk_protocol;
-        sh->length = hdr_len;
+        sh->shl = (hdr_len >> 2);
 
         skb->protocol = IPPROTO_SERVAL;
 
+#if defined(ENABLED_DEBUG)
+        BUG_ON(hdr_len % 4 != 0);
+#endif
         return sh;
 }
 
