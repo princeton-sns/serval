@@ -316,10 +316,10 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
+        LOG_DBG("timeout\n");
+
 	if (!tp->packets_out)
 		goto out;
-
-        LOG_DBG("timeout\n");
 
 	WARN_ON(serval_tcp_write_queue_empty(sk));
 

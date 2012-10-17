@@ -3458,6 +3458,18 @@ int serval_sal_rcv(struct sk_buff *skb)
         struct sal_context ctx;
         int err = 0;
         
+#if defined(ENABLE_DEBUG)
+        {
+                struct iphdr *iph = ip_hdr(skb);
+                char src[18], dst[18];
+
+                LOG_PKT("PKT: skb->len=%u : %s -> %s\n",
+                        skb->len, 
+                        inet_ntop(AF_INET, &iph->saddr, src, 18),
+                        inet_ntop(AF_INET, &iph->daddr, dst, 18));
+        }
+#endif
+
         if (skb->len < sizeof(struct sal_hdr)) {
                 LOG_DBG("skb length too short (%u bytes)\n", 
                         skb->len);
@@ -3481,17 +3493,8 @@ int serval_sal_rcv(struct sk_buff *skb)
                 goto drop;
         }
 
-#if defined(ENABLE_DEBUG)
-        {
-                struct iphdr *iph = ip_hdr(skb);
-                char src[18], dst[18];
+        LOG_PKT("SAL %s\n", sal_hdr_to_str(ctx.hdr));
 
-                LOG_PKT("SAL RECEIVE %s skb->len=%u : %s -> %s\n",
-                        sal_hdr_to_str(ctx.hdr), skb->len, 
-                        inet_ntop(AF_INET, &iph->saddr, src, 18),
-                        inet_ntop(AF_INET, &iph->daddr, dst, 18));
-        }
-#endif
         /*
           FIXME: We should try to do early transport layer header
           checks here so that we can drop bad packets before we put
