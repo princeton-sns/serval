@@ -109,7 +109,6 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
-        .recv_shutdown = serval_sal_recv_shutdown,
 };
 
 static struct serval_sock_af_ops serval_udp_encap_af_ops = {
@@ -124,7 +123,6 @@ static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
-        .recv_shutdown = serval_sal_recv_shutdown,
 };
 
 /*
@@ -330,9 +328,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	 *  Validate the packet.
 	 */
 
-        if (SAL_SKB_CB(skb)->flags & SVH_FIN) {
-                serval_sk(sk)->af_ops->recv_shutdown(sk);
-        } else {
+        if (!(SAL_SKB_CB(skb)->flags & SVH_FIN)) { 
                 unsigned short datalen = ntohs(uh->len) - sizeof(*uh);
                 
                 if (!pskb_may_pull(skb, sizeof(struct udphdr)))

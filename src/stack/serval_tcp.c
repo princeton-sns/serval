@@ -2519,8 +2519,6 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .conn_child_sock = serval_tcp_syn_recv_sock,
         .freeze_flow = serval_tcp_freeze_flow, 
         .migration_completed = serval_tcp_migration_completed,
-        .send_shutdown = serval_sal_send_shutdown,
-        .recv_shutdown = serval_sal_recv_shutdown,
         .done = serval_tcp_done,
 };
 
@@ -2541,8 +2539,6 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .conn_child_sock = serval_tcp_syn_recv_sock,
         .migration_completed = serval_tcp_migration_completed,
         .freeze_flow = serval_tcp_freeze_flow,
-        .send_shutdown = serval_sal_send_shutdown,
-        .recv_shutdown = serval_sal_recv_shutdown,
         .done = serval_tcp_done,
 };
 

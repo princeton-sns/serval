@@ -2350,48 +2350,6 @@ static int serval_sal_rcv_fin(struct sock *sk,
         return err;
 }
 
-int serval_sal_send_shutdown(struct sock *sk)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-
-        LOG_DBG("SEND_SHUTDOWN\n");
-
-        /* We use this extra flag to not send a FIN
-         * twice. Unfortunately, we cannot rely on the socket state as
-         * we must wait for transport to send its FIN
-         * first. Therefore, we are not necessarily in the state
-         * normally expected after having sent a FIN. */
-        if (serval_sock_flag(ssk, SSK_FLAG_FIN_SENT))
-                return 0;
-        
-        /* SOCK_DEAD would mean there is no user app attached
-           anymore */
-        if (!sock_flag(sk, SOCK_DEAD))
-                /* Wake up lingering close() */
-                sk->sk_state_change(sk);
-
-        return serval_sal_send_fin(sk);
-}
-
-/* 
-   Called by transport protocol when it wants to indicate that it has
-   stopped receiving data.
- */
-int serval_sal_recv_shutdown(struct sock *sk)
-{
-        LOG_DBG("RCV_SHUTDOWN\n");
-        
-        sk->sk_shutdown |= RCV_SHUTDOWN;
-        /*
-        if (sock_flag(sk, SOCK_DONE))
-                return 0;
-
-        sock_set_flag(sk, SOCK_DONE);
-        */
-
-        return 0;
-}
-
 static int serval_sal_connected_state_process(struct sock *sk,
                                               struct sk_buff *skb,
                                               struct sal_context *ctx)
@@ -2823,6 +2781,8 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0, ack_ok;
         
+        LOG_DBG("SAL pkt %s\n", sal_hdr_to_str(ctx->hdr));
+
         ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
                 
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
@@ -2839,6 +2799,8 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 /* ACK was valid */
                 LOG_DBG("Valid ACK, closing socket\n");
                 serval_sal_done(sk);
+        } else {
+                LOG_ERR("Packet not a valid ACK\n");
         }
 
         return err;

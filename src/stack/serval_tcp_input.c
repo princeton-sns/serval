@@ -2135,9 +2135,10 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 		}
 	}
 
-        if (flag & FLAG_FIN_ACKED)
+        if (flag & FLAG_FIN_ACKED) {
+                LOG_DBG("End of stream ACK, sending SAL FIN\n");
                 serval_sal_send_fin(sk);
-
+        }
 	return flag;
 }
 
@@ -3618,7 +3619,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
-                                serval_sk(sk)->af_ops->send_shutdown(sk);
+                                //serval_sk(sk)->af_ops->send_shutdown(sk);
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
