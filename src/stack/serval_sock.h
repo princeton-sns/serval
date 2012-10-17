@@ -115,9 +115,6 @@ struct serval_sock_af_ops {
 	u16	        sockaddr_len;
         int             (*migration_completed)(struct sock *sk);
         int             (*freeze_flow)(struct sock *sk);
-        int             (*send_shutdown)(struct sock *sk);
-        int             (*recv_shutdown)(struct sock *sk);
-        int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
         void            (*done)(struct sock *sk);
 };
 
