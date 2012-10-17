@@ -128,8 +128,9 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
 
-        return serval_sal_rcv(skb);
+        serval_sal_rcv(skb);
 
+        return 0;
 pass_up:
 	return 1;
 }

@@ -213,14 +213,14 @@ void serval_sock_freeze_flows(struct net_device *dev)
                 hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
                         struct serval_sock *ssk = serval_sk(sk);
                         
-                        lock_sock(sk);
+                        bh_lock_sock(sk);
                         
                         if (sk->sk_bound_dev_if > 0 && 
                             sk->sk_bound_dev_if == dev->ifindex) {
                                 if (ssk->af_ops->freeze_flow)
                                         ssk->af_ops->freeze_flow(sk);
                         }
-                        release_sock(sk);
+                        bh_unlock_sock(sk);
                 }
                 spin_unlock_bh(&slot->lock);
         }
