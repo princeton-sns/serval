@@ -1163,28 +1163,6 @@ int serval_sal_send_fin(struct sock *sk)
         struct sk_buff *skb;
         int err;
 
-        switch (sk->sk_state) {
-        case SAL_CLOSEWAIT:
-                serval_sock_set_state(sk, SAL_LASTACK);
-                break;
-        case SAL_CONNECTED:
-        case SAL_RESPOND:
-                serval_sock_set_state(sk, SAL_FINWAIT1);
-                break;
-        case SAL_FINWAIT1:
-        case SAL_FINWAIT2:
-        case SAL_CLOSING:
-        case SAL_TIMEWAIT:
-                LOG_ERR("Close called in post close() state %s\n",
-                        serval_sock_state_str(sk));
-                return -1;
-        default:
-                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
-                        serval_sock_state_str(sk));
-                serval_sal_done(sk);
-                return -1;
-        }
-
         /* We are under lock, so allocation must be atomic */
         /* Socket is locked, keep trying until memory is available. */
         for (;;) {
@@ -1231,6 +1209,28 @@ void serval_sal_close(struct sock *sk, long timeout)
 
         LOG_INF("Closing socket %p in state %s\n",
                 sk, serval_sock_state_str(sk));
+
+        switch (sk->sk_state) {
+        case SAL_CLOSEWAIT:
+                serval_sock_set_state(sk, SAL_LASTACK);
+                break;
+        case SAL_CONNECTED:
+        case SAL_RESPOND:
+                serval_sock_set_state(sk, SAL_FINWAIT1);
+                break;
+        case SAL_FINWAIT1:
+        case SAL_FINWAIT2:
+        case SAL_CLOSING:
+        case SAL_TIMEWAIT:
+                LOG_ERR("Close called in post close() state %s\n",
+                        serval_sock_state_str(sk));
+                return;
+        default:
+                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
+                        serval_sock_state_str(sk));
+                serval_sal_done(sk);
+                return;
+        }
         
         if (ssk->af_ops->conn_close) {
                 /* Tell transport to, e.g., schedule
@@ -1244,7 +1244,6 @@ void serval_sal_close(struct sock *sk, long timeout)
                         LOG_ERR("Transport error %d\n", err);
                 }
         } else {
-                //err = serval_sal_send_shutdown(sk);
                 err = serval_sal_send_fin(sk);
         }
 
