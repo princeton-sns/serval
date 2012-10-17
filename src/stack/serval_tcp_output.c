@@ -1093,13 +1093,12 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (skb->len != tcp_header_size)
 		serval_tcp_event_data_sent(tp, skb, sk);
 
+        /*
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq) {
-		/*
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
-                serval_tcp_skb_pcount(skb));
-		*/
+                              serval_tcp_skb_pcount(skb));
 	}
-
+        */
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18];

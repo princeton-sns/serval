@@ -421,8 +421,6 @@ static int serval_tcp_connection_close(struct sock *sk)
 
 	sk_mem_reclaim(sk);
         
-        LOG_DBG("Sending transport FIN\n");
-
         serval_tcp_send_fin(sk);
 
         return 0;
@@ -777,6 +775,7 @@ int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 
 	if (sk->sk_state == TCP_LISTEN)
 		return -ENOTCONN;
+
 	while ((skb = serval_tcp_recv_skb(sk, seq, &offset)) != NULL) {
 		if (offset < skb->len) {
 			int used;

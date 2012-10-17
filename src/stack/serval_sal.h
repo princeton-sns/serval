@@ -286,6 +286,8 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
         return (struct sal_hdr *)skb_transport_header(skb);
 }
 
+int serval_sal_send_fin(struct sock *sk);
+
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE sizeof(struct iphdr)
 /* payload + LL + IP + extra */

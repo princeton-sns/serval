@@ -1157,11 +1157,33 @@ int serval_sal_migrate(struct sock *sk)
         return serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 }
 
-static int serval_sal_send_fin(struct sock *sk, u32 verno)
+int serval_sal_send_fin(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb;
         int err;
+
+        switch (sk->sk_state) {
+        case SAL_CLOSEWAIT:
+                serval_sock_set_state(sk, SAL_LASTACK);
+                break;
+        case SAL_CONNECTED:
+        case SAL_RESPOND:
+                serval_sock_set_state(sk, SAL_FINWAIT1);
+                break;
+        case SAL_FINWAIT1:
+        case SAL_FINWAIT2:
+        case SAL_CLOSING:
+        case SAL_TIMEWAIT:
+                LOG_ERR("Close called in post close() state %s\n",
+                        serval_sock_state_str(sk));
+                return -1;
+        default:
+                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
+                        serval_sock_state_str(sk));
+                serval_sal_done(sk);
+                return -1;
+        }
 
         /* We are under lock, so allocation must be atomic */
         /* Socket is locked, keep trying until memory is available. */
@@ -1176,7 +1198,7 @@ static int serval_sal_send_fin(struct sock *sk, u32 verno)
         
         LOG_DBG("Sending SAL FIN\n");
         SAL_SKB_CB(skb)->flags = SVH_FIN;
-        SAL_SKB_CB(skb)->verno = verno;
+        SAL_SKB_CB(skb)->verno = ssk->snd_seq.nxt++;
         
         /* If we are in the process of migrating, then we should
            probably add also the RSYN flag. Otherwise, if the previous
@@ -1209,31 +1231,7 @@ void serval_sal_close(struct sock *sk, long timeout)
 
         LOG_INF("Closing socket %p in state %s\n",
                 sk, serval_sock_state_str(sk));
-
-        sk->sk_shutdown |= SEND_SHUTDOWN;
         
-        switch (sk->sk_state) {
-        case SAL_CLOSEWAIT:
-                serval_sock_set_state(sk, SAL_LASTACK);
-                break;
-        case SAL_CONNECTED:
-        case SAL_RESPOND:
-                serval_sock_set_state(sk, SAL_FINWAIT1);
-                break;
-        case SAL_FINWAIT1:
-        case SAL_FINWAIT2:
-        case SAL_CLOSING:
-        case SAL_TIMEWAIT:
-                LOG_ERR("Close called in post close() state %s\n",
-                        serval_sock_state_str(sk));
-                return;
-        default:
-                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
-                        serval_sock_state_str(sk));
-                serval_sal_done(sk);
-                return;
-        }
-
         if (ssk->af_ops->conn_close) {
                 /* Tell transport to, e.g., schedule
                    end-of-stream (i.e., put FIN in the last
@@ -1246,8 +1244,11 @@ void serval_sal_close(struct sock *sk, long timeout)
                         LOG_ERR("Transport error %d\n", err);
                 }
         } else {
-                err = serval_sal_send_shutdown(sk);
+                //err = serval_sal_send_shutdown(sk);
+                err = serval_sal_send_fin(sk);
         }
+
+        sk_stream_wait_close(sk, timeout);
 }
 
 static int serval_sal_send_ack(struct sock *sk)
@@ -2322,16 +2323,10 @@ static int serval_sal_rcv_fin(struct sock *sk,
                 return -1;
         }
         
-        /* Just ignore this close request in case transport
-           has not yet indicated it is ready. */
-        if (!(sk->sk_shutdown & RCV_SHUTDOWN))
-                return 1;
+        sk->sk_shutdown |= RCV_SHUTDOWN;
+        sock_set_flag(sk, SOCK_DONE);
 
         ssk->rcv_seq.nxt = ctx->verno + 1;
-        
-        LOG_DBG("Transport is ready to close\n");
-        
-        sock_set_flag(sk, SOCK_DONE);
         
         /* If there is still an application attached to the
            sock, then wake it up. */
@@ -2360,7 +2355,7 @@ int serval_sal_send_shutdown(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         LOG_DBG("SEND_SHUTDOWN\n");
-        
+
         /* We use this extra flag to not send a FIN
          * twice. Unfortunately, we cannot rely on the socket state as
          * we must wait for transport to send its FIN
@@ -2375,7 +2370,7 @@ int serval_sal_send_shutdown(struct sock *sk)
                 /* Wake up lingering close() */
                 sk->sk_state_change(sk);
 
-        return serval_sal_send_fin(sk, serval_sk(sk)->snd_seq.nxt++);
+        return serval_sal_send_fin(sk);
 }
 
 /* 
@@ -2385,13 +2380,14 @@ int serval_sal_send_shutdown(struct sock *sk)
 int serval_sal_recv_shutdown(struct sock *sk)
 {
         LOG_DBG("RCV_SHUTDOWN\n");
-
+        
         sk->sk_shutdown |= RCV_SHUTDOWN;
-
+        /*
         if (sock_flag(sk, SOCK_DONE))
                 return 0;
 
         sock_set_flag(sk, SOCK_DONE);
+        */
 
         return 0;
 }

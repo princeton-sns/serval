@@ -41,6 +41,7 @@ int sysctl_serval_tcp_nometrics_save __read_mostly;
 #define FLAG_DSACKING_ACK	0x800 /* SACK blocks contained D-SACK info */
 #define FLAG_NONHEAD_RETRANS_ACKED	0x1000 /* Non-head rexmitted data was ACKed */
 #define FLAG_SACK_RENEGING	0x2000 /* snd_una advanced to a sacked seq */
+#define FLAG_FIN_ACKED          0x4000
 
 #define FLAG_ACKED		(FLAG_DATA_ACKED|FLAG_SYN_ACKED)
 #define FLAG_NOT_DUP		(FLAG_DATA|FLAG_WIN_UPDATE|FLAG_ACKED)
@@ -2056,6 +2057,8 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 		 */
 		if (!(scb->tcp_flags & TCPH_SYN)) {
 			flag |= FLAG_DATA_ACKED;
+                        if (scb->tcp_flags & TCPH_FIN)
+                                flag |= FLAG_FIN_ACKED;
 		} else {
 			flag |= FLAG_SYN_ACKED;
 			tp->retrans_stamp = 0;
@@ -2131,6 +2134,9 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 			ca_ops->pkts_acked(sk, pkts_acked, rtt_us);
 		}
 	}
+
+        if (flag & FLAG_FIN_ACKED)
+                serval_sal_send_fin(sk);
 
 	return flag;
 }
@@ -2239,11 +2245,9 @@ static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 		if ((flag & FLAG_DATA_ACKED) /* && !frto_cwnd */ &&
 		    serval_tcp_may_raise_cwnd(sk, flag))
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
-
-        LOG_DBG("snd_ssthresh retx before: %lu\n", tp->snd_ssthresh);
-		serval_tcp_fastretrans_alert(sk, prior_packets - 
+		
+                serval_tcp_fastretrans_alert(sk, prior_packets - 
                                              tp->packets_out, flag, ack);
-        LOG_DBG("snd_ssthresh retx after: %lu\n", tp->snd_ssthresh);
 	} else {
 		if ((flag & FLAG_DATA_ACKED) /* && !frto_cwnd */)
 			serval_tcp_cong_avoid(sk, ack, prior_in_flight);
@@ -2683,55 +2687,10 @@ static void serval_tcp_fin(struct sk_buff *skb,
 
         LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
 
+        /* Ignore this FIN, wait for SAL fin */
+                th->fin = 0;
+        
 	serval_tsk_schedule_ack(sk);
-
-        /* Tell service access layer this stream is closed at other
-         * end */
-        serval_sk(sk)->af_ops->recv_shutdown(sk);
-
-	/*sk->sk_shutdown |= RCV_SHUTDOWN;
-          sock_set_flag(sk, SOCK_DONE);
-        */
-
-	switch (sk->sk_state) {
-	case TCP_SYN_RECV:
-	case TCP_ESTABLISHED:
-		/* Move to CLOSE_WAIT */
-		//tcp_set_state(sk, TCP_CLOSE_WAIT);
-		tp->tp_ack.pingpong = 1;
-		break;
-
-	case TCP_CLOSE_WAIT:
-	case TCP_CLOSING:
-		/* Received a retransmission of the FIN, do
-		 * nothing.
-		 */
-		break;
-	case TCP_LAST_ACK:
-		/* RFC793: Remain in the LAST-ACK state. */
-		break;
-
-	case TCP_FIN_WAIT1:
-		/* This case occurs when a simultaneous close
-		 * happens, we must ack the received FIN and
-		 * enter the CLOSING state.
-		 */
-		serval_tcp_send_ack(sk);
-		//tcp_set_state(sk, TCP_CLOSING);
-		break;
-	case TCP_FIN_WAIT2:
-		/* Received a FIN -- send ACK and enter TIME_WAIT. */
-		serval_tcp_send_ack(sk);
-		//serval_tcp_time_wait(sk, TCP_TIME_WAIT, 0);
-		break;
-	default:
-		/* Only TCP_LISTEN and TCP_CLOSE are left, in these
-		 * cases we should never reach this piece of code.
-		 */
-		LOG_ERR("Impossible, sk->sk_state=%d\n",
-                        sk->sk_state);
-		break;
-	}
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.
 	 * Probably, we should reset in this case. For now drop them.
@@ -2742,19 +2701,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
 		serval_tcp_sack_reset(&tp->rx_opt);
 #endif
 	sk_mem_reclaim(sk);
-#if 0
-        /* Should be handled by service access layer... */
-	if (!sock_flag(sk, SOCK_DEAD)) {
-		sk->sk_state_change(sk);
-
-		/* Do not send POLL_HUP for half duplex close. */
-		if (sk->sk_shutdown == SHUTDOWN_MASK ||
-		    sk->sk_state == TCP_CLOSE)
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_HUP);
-		else
-			sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
-	}
-#endif
 }
 
 /* This one checks to see if we can put data from the
@@ -2907,7 +2853,7 @@ queue_and_out:
 			sk->sk_data_ready(sk, 0);
                 }
 		return;
-	}
+        }
 
 	if (!after(TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt)) {
 		/* A retransmit, 2nd most common case.  Force an immediate ack. */
