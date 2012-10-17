@@ -741,13 +741,11 @@ int serval_release(struct socket *sock)
         int err = 0;
         struct sock *sk = sock->sk;
 
-        LOG_DBG("\n");
-
 	if (sk) {
                 int state;
                 long timeout = 0;
 
-                serval_shutdown(sock, 2);
+                LOG_DBG("\n");
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
@@ -758,11 +756,11 @@ int serval_release(struct socket *sock)
                 lock_sock(sk);
 
                 sk->sk_shutdown = SHUTDOWN_MASK;
-
+                
                 if (sk->sk_state == SAL_LISTEN) {
                         serval_listen_stop(sk);
                         serval_sock_set_state(sk, SAL_CLOSED);
-                } else {
+                } else if (sk->sk_state != SAL_CLOSED) {
                         /* the protocol specific function called here
                          * should not lock sock */
                         sk->sk_prot->close(sk, timeout);
