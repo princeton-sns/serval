@@ -2792,7 +2792,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 err = 0;
-                goto drop;
+                kfree_skb(skb);
         }
 
         if (ack_ok) {
@@ -2803,9 +2803,6 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 LOG_ERR("Packet not a valid ACK\n");
         }
 
-        return err;
- drop:
-        kfree_skb(skb);
         return err;
 }
 
