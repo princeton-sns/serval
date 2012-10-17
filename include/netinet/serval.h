@@ -302,8 +302,10 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 #define SAL_EXT_FIRST(sh) \
         ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
 
-#define SAL_EXT_NEXT(ext) \
-        ((struct sal_ext *)((char *)ext + ext->length))
+#define SAL_EXT_NEXT(ext)                                               \
+        ((struct sal_ext *)((ext->type == SAL_PAD_EXT ?                 \
+                             (char *)ext + 1 :                          \
+                             (char *)ext + ext->length)))
 
 enum sal_ext_type {
         SAL_PAD_EXT = 0,

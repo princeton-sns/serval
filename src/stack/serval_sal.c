@@ -56,7 +56,7 @@ static struct net_addr zero_addr = {
         .net_raw = { 0x00, 0x00, 0x00, 0x00 }
 };
 
-#define MAX_NUM_SAL_EXTENSIONS 5 /* TODO: Set reasonable number */
+#define MAX_NUM_SAL_EXTENSIONS 10 /* Includes padding */
 
 /*
  * The next routines deal with comparing 32 bit unsigned ints
@@ -271,7 +271,6 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
                 len += print_ext(ext, buf + len, 
                                  HDR_BUFLEN - len);
 
-
                 hdr_len -= ext_len;
                 ext = SAL_EXT_NEXT(ext);
         }       
@@ -294,7 +293,7 @@ static int parse_pad_ext(struct sal_ext *ext,
                          struct sk_buff *skb,
                          struct sal_context *ctx)
 {
-        return 0;
+        return 1;
 }
 
 
@@ -464,12 +463,12 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         while (hdr_len > 0 && i < MAX_NUM_SAL_EXTENSIONS) {
                 int ext_len = parse_ext(ext, skb, ctx);
 
-                if (ext_len < 0) {
-                        LOG_ERR("Negative extension length\n");
+                if (ext_len <= 0) {
+                        LOG_ERR("Bad extension length=%d\n", ext_len);
                         return -1;
                 }
 
-                ctx->ext[i++] = ext;                
+                ctx->ext[i++] = ext;
                 hdr_len -= ext_len;
                 ext = SAL_EXT_NEXT(ext);
         }
