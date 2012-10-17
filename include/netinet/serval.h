@@ -307,6 +307,10 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
                              (char *)ext + 1 :                          \
                              (char *)ext + ext->length)))
 
+#define SAL_EXT_LEN(ext)                                \
+        (ext->type == SAL_PAD_EXT ?                     \
+         sizeof(struct sal_pad_ext) : ext->length)
+
 enum sal_ext_type {
         SAL_PAD_EXT = 0,
         SAL_CONTROL_EXT = 1,

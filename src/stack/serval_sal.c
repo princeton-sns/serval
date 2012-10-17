@@ -107,7 +107,7 @@ static int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    int use_copy, gfp_t gfp_mask);
 
 static size_t min_ext_length[] = {
-        [SAL_PAD_EXT] = 0,
+        [SAL_PAD_EXT] = sizeof(struct sal_pad_ext),
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
         [SAL_SERVICE_EXT] = sizeof(struct sal_service_ext),
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
@@ -115,7 +115,7 @@ static size_t min_ext_length[] = {
 };
 
 static size_t max_ext_length[] = {
-        [SAL_PAD_EXT] = 3,
+        [SAL_PAD_EXT] = sizeof(struct sal_pad_ext),
         [SAL_CONTROL_EXT] = sizeof(struct sal_control_ext),
         [SAL_SERVICE_EXT] = sizeof(struct sal_service_ext),
         [SAL_ADDRESS_EXT] = sizeof(struct sal_address_ext),
@@ -125,11 +125,11 @@ static size_t max_ext_length[] = {
 #if defined(ENABLE_DEBUG)
 
 static char* sal_ext_name[] = {
-        [0] = "INVALID",
+        [SAL_PAD_EXT] =     "PAD",
         [SAL_CONTROL_EXT] = "CONTROL",
         [SAL_SERVICE_EXT] = "SERVICE",
         [SAL_ADDRESS_EXT] = "ADDRESS",
-        [SAL_SOURCE_EXT] = "SOURCE",
+        [SAL_SOURCE_EXT] =  "SOURCE",
 };
 
 static int print_base_hdr(struct sal_hdr *sh, char *buf, int buflen)
@@ -250,7 +250,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
         ext = SAL_EXT_FIRST(sh);
                 
         while (hdr_len > 0) {
-                uint16_t ext_len = ext->length;
+                uint16_t ext_len = SAL_EXT_LEN(ext);
 
                 if (ext->type >= __SAL_EXT_TYPE_MAX) {
                         LOG_DBG("Bad extension type (=%u)\n",
@@ -323,7 +323,7 @@ static int parse_control_ext(struct sal_ext *ext,
         if (ctx->ctrl_ext->rst)
                 ctx->flags |= SVH_RST;
 
-        return ext->length;
+        return ext_len;
 }
 
 static int parse_service_ext(struct sal_ext *ext, 
@@ -349,6 +349,7 @@ static int parse_address_ext(struct sal_ext *ext,
                              struct sk_buff *skb,
                              struct sal_context *ctx)
 {
+        LOG_INF("Address extension support not implemented\n");
         return ext_len;
 }
 
@@ -403,23 +404,24 @@ static parse_ext_func_t parse_ext_func[] = {
 static inline int parse_ext(struct sal_ext *ext, struct sk_buff *skb,
                             struct sal_context *ctx)
 {
+        unsigned short ext_len = SAL_EXT_LEN(ext);
+
         if (ext->type >= __SAL_EXT_TYPE_MAX) {
                 LOG_DBG("Bad extension type (=%u)\n",
                         ext->type);
                 return -1;
         }
-        
-        if (ext->length < min_ext_length[ext->type]) {
+        if (ext_len < min_ext_length[ext->type]) {
                 LOG_DBG("Bad extension \'%s\' length (=%u)\n",
-                        sal_ext_name[ext->type], ext->length);
+                        sal_ext_name[ext->type], ext_len);
                 return -1;
         }
         
         LOG_DBG("EXT %s length=%u\n",
                 sal_ext_name[ext->type], 
-                ext->length);
+                ext_len);
 
-        return parse_ext_func[ext->type](ext, ext->length, skb, ctx);
+        return parse_ext_func[ext->type](ext, ext_len, skb, ctx);
 }
 
 enum sal_parse_mode {
