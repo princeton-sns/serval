@@ -362,10 +362,11 @@ SERVAL_ASSERT(sizeof(struct sal_control_ext) == 20)
 
 struct sal_service_ext {
         struct sal_ext exthdr;
+        uint16_t res;
         struct service_id srvid;
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_service_ext) == 34)
+SERVAL_ASSERT(sizeof(struct sal_service_ext) == 36)
 
 #define SAL_SERVICE_EXT_LEN                     \
         sizeof(struct sal_service_ext)
@@ -385,10 +386,11 @@ SERVAL_ASSERT(sizeof(struct sal_address_ext) == 12)
 
 struct sal_source_ext {
         struct sal_ext exthdr;
+        uint16_t res;
         uint8_t source[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_source_ext) == 4)
 
 #define SAL_SOURCE_EXT_MIN_LEN                  \
         (sizeof(struct sal_source_ext) + 4)

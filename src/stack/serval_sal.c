@@ -3842,6 +3842,7 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
         return SAL_SERVICE_EXT_LEN;
 }
 
+/*
 static inline int serval_sal_add_pad_ext(struct sock *sk, 
                                          struct sk_buff *skb,
                                          unsigned short pad_bytes)
@@ -3856,6 +3857,7 @@ static inline int serval_sal_add_pad_ext(struct sock *sk,
         
         return pad_bytes;
 }
+*/
 
 static struct sal_hdr *serval_sal_build_header(struct sock *sk, 
                                                struct sk_buff *skb)
@@ -3874,7 +3876,6 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                    serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
                     SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
-                        hdr_len += serval_sal_add_pad_ext(sk, skb, 2);
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
                 }
 
