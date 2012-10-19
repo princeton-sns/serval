@@ -33,4 +33,5 @@ serval-y := \
 	   serval_tcp_output.o \
 	   serval_tcp_input.o \
 	   serval_tcp_cong.o \
-	   serval_tcp_timer.o
+	   serval_tcp_timer.o \
+	   serval_tcp_metrics.o

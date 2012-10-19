@@ -3344,10 +3344,13 @@ static int serval_sal_rcv_finish(struct sock *sk,
                   receive buffer is full. This might not be a big deal
                   though, as control packets are retransmitted.
                 */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb)) {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+                if (sk_add_backlog(sk, skb, 
+                                   sk->sk_rcvbuf + sk->sk_sndbuf))
                         goto drop;
-                }
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb))
+                        goto drop;
 #else
                 sk_add_backlog(sk, skb);
 #endif

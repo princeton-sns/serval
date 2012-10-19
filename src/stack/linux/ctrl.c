@@ -90,9 +90,20 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int peer, int mask)
 
 int __init ctrl_init(void)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
+        struct netlink_kernel_cfg cfg = {
+                .groups = 1,
+                .input = ctrl_rcv_skb,
+                .cb_mutex = NULL,
+                .bind = NULL,
+        };
+
+        nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL,
+                                      THIS_MODULE, &cfg);
+#else
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL, 1, 
 				      ctrl_rcv_skb, NULL, THIS_MODULE);
-
+#endif
 	if (!nl_sk)
 		return -ENOMEM;
 

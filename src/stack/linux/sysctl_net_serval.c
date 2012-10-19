@@ -92,11 +92,13 @@ static ctl_table serval_table[] = {
 	{ }
 };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,5,0)
 static struct ctl_path serval_path[] = {
 	{ .procname = "net", },
 	{ .procname = "serval", },
 	{ },
 };
+#endif
 
 int __net_init serval_sysctl_register(struct net *net)
 {
@@ -107,7 +109,11 @@ int __net_init serval_sysctl_register(struct net *net)
 		goto err_alloc;
 
 	table[0].data = &net_serval.sysctl_sal_forward;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
+	net_serval.ctl = register_net_sysctl(net, "net/serval", table);
+#else
 	net_serval.ctl = register_net_sysctl_table(net, serval_path, table);
+#endif
 	if (net_serval.ctl == NULL)
 		goto err_reg;
 

@@ -119,9 +119,6 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                 LOG_ERR("Could not forward SAL packet, NO route [err=%d]\n", err);
                 kfree_skb(skb);
                 return NET_RX_DROP;
-        } else {
-                struct rtable *rt = skb_rtable(skb);
-                iph->saddr = rt->rt_src;
         }
 #else
         iph->ttl = iph->ttl - 1;
@@ -215,7 +212,7 @@ struct dst_entry *serval_ipv4_route(struct sock *sk,
         if (!rt)
 		goto no_route;
         
-	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
+	if (opt && opt->is_strictroute && rt->rt_gateway)
 		goto route_err;
 
 	return route_dst(rt);
@@ -434,26 +431,13 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 LOG_PKT("Using route already associated with socket\n");
         }
         
-#if defined(ENABLE_DEBUG)
-        {
-                char src[18], dst[18];
-                LOG_PKT("Route found %s -> %s %s\n",
-                        inet_ntop(AF_INET, &rt->rt_src, 
-                                  src, sizeof(src)),
-                        inet_ntop(AF_INET, &rt->rt_dst, 
-                                  dst, sizeof(dst)),
-                        route_dst(rt)->dev ? 
-                        route_dst(rt)->dev->name : "(null)");
-        }
-#endif
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
         skb_dst_set(skb, dst_clone(route_dst(rt)));
 #else
         skb_dst_set_noref(skb, route_dst(rt));
 #endif
  packet_routed:
-        if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
+        if (opt && opt->is_strictroute && rt->rt_gateway) {
                 err = -EHOSTUNREACH;
                 rcu_read_unlock();
                 LOG_DBG("dest is not gateway!\n");
@@ -472,8 +456,8 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 		iph->frag_off = 0;
 	iph->ttl      = ip_select_ttl(inet, route_dst(rt));
 	iph->protocol = skb->protocol;
-	iph->saddr    = rt->rt_src;
-	iph->daddr    = rt->rt_dst;
+	iph->saddr    = inet->inet_saddr; //rt->rt_src;
+	iph->daddr    = inet->inet_daddr; //rt->rt_dst;
 
 	if (opt && opt->optlen) {
                 LOG_WARN("IP options not implemented\n");

@@ -17,6 +17,7 @@ serval_common_SRC = \
 	serval_tcp_input.c \
 	serval_tcp_output.c \
 	serval_tcp_cong.c \
+	serval_tcp_metrics.c \
 	serval_tcp_timer.c
 
 serval_SOURCES = \

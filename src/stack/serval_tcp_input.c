@@ -25,7 +25,7 @@ int sysctl_serval_tcp_adv_win_scale __read_mostly = 2;
 int sysctl_serval_tcp_app_win __read_mostly = 31;
 int sysctl_serval_tcp_max_orphans __read_mostly = NR_FILE;
 int sysctl_serval_tcp_thin_dupack __read_mostly;
-int sysctl_serval_tcp_nometrics_save __read_mostly;
+
 
 #define FLAG_DATA		0x01 /* Incoming frame contained data.		*/
 #define FLAG_WIN_UPDATE		0x02 /* Incoming ACK was a window update.	*/
@@ -670,7 +670,7 @@ static void serval_tcp_rtt_estimator(struct sock *sk, const __u32 mrtt)
 /* Calculate rto without backoff.  This is the second half of Van Jacobson's
  * routine referred to above.
  */
-static inline void serval_tcp_set_rto(struct sock *sk)
+void serval_tcp_set_rto(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	/* Old crap is replaced with new one. 8)
@@ -770,7 +770,7 @@ static void serval_tcp_cwnd_down(struct sock *sk, int flag)
  * Packet counting of FACK is based on in-order assumptions, therefore
  * TCP disables it when reordering is detected
  */
-static void serval_tcp_disable_fack(struct serval_tcp_sock *tp)
+void serval_tcp_disable_fack(struct serval_tcp_sock *tp)
 {
 	/* RFC3517 uses different metric in lost marker => reset on
            change */
@@ -1732,92 +1732,6 @@ static u32 serval_tcp_tso_acked(struct sock *sk, struct sk_buff *skb)
 	return packets_acked;
 }
 
-/* Initialize metrics on socket. */
-
-static void serval_tcp_init_metrics(struct sock *sk)
-{
-	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	struct dst_entry *dst = __sk_dst_get(sk);
-
-	if (dst == NULL)
-		goto reset;
-
-#if defined(OS_LINUX_KERNEL)
-
-        LOG_DBG("preinit: snd_ssthresh=%u snd_cwnd_clamp=%u\n",
-                tp->snd_ssthresh, tp->snd_cwnd_clamp);
-
-	dst_confirm(dst);
-
-	if (dst_metric_locked(dst, RTAX_CWND))
-		tp->snd_cwnd_clamp = dst_metric(dst, RTAX_CWND);
-	if (dst_metric(dst, RTAX_SSTHRESH)) {
-		tp->snd_ssthresh = dst_metric(dst, RTAX_SSTHRESH);
-		if (tp->snd_ssthresh > tp->snd_cwnd_clamp)
-			tp->snd_ssthresh = tp->snd_cwnd_clamp;	}
-        /*
-	if (dst_metric(dst, RTAX_REORDERING) &&
-	    tp->reordering != dst_metric(dst, RTAX_REORDERING)) {
-		tcp_disable_fack(tp);
-		tp->reordering = dst_metric(dst, RTAX_REORDERING);
-	}
-        */
-
-	if (dst_metric(dst, RTAX_RTT) == 0)
-		goto reset;
-
-	if (!tp->srtt && dst_metric_rtt(dst, RTAX_RTT) < (SERVAL_TCP_TIMEOUT_INIT << 3))
-		goto reset;
-
-	/* Initial rtt is determined from SYN,SYN-ACK.
-	 * The segment is small and rtt may appear much
-	 * less than real one. Use per-dst memory
-	 * to make it more realistic.
-	 *
-	 * A bit of theory. RTT is time passed after "normal" sized packet
-	 * is sent until it is ACKed. In normal circumstances sending small
-	 * packets force peer to delay ACKs and calculation is correct too.
-	 * The algorithm is adaptive and, provided we follow specs, it
-	 * NEVER underestimate RTT. BUT! If peer tries to make some clever
-	 * tricks sort of "quick acks" for time long enough to decrease RTT
-	 * to low value, and then abruptly stops to do it and starts to delay
-	 * ACKs, wait for troubles.
-	 */
-	if (dst_metric_rtt(dst, RTAX_RTT) > tp->srtt) {
-		tp->srtt = dst_metric_rtt(dst, RTAX_RTT);
-		tp->rtt_seq = tp->snd_nxt;
-	}
-	if (dst_metric_rtt(dst, RTAX_RTTVAR) > tp->mdev) {
-		tp->mdev = dst_metric_rtt(dst, RTAX_RTTVAR);
-		tp->mdev_max = tp->rttvar = max(tp->mdev, tcp_rto_min(sk));
-	}
-        
-        LOG_DBG("postinit: snd_ssthresh=%u snd_cwnd_clamp=%u\n",
-                tp->snd_ssthresh, tp->snd_cwnd_clamp);
-
-#endif
-	serval_tcp_set_rto(sk);
-
-	if (tp->rto < SERVAL_TCP_TIMEOUT_INIT && !tp->rx_opt.saw_tstamp)
-		goto reset;
-
-cwnd:
-	tp->snd_cwnd = serval_tcp_init_cwnd(tp, dst);
-	tp->snd_cwnd_stamp = tcp_time_stamp;
-	return;
-
-reset:
-	/* Play conservative. If timestamps are not
-	 * supported, TCP will fail to recalculate correct
-	 * rtt, if initial rto is too small. FORGET ALL AND RESET!
-	 */
-	if (!tp->rx_opt.saw_tstamp && tp->srtt) {
-		tp->srtt = 0;
-		tp->mdev = tp->mdev_max = tp->rttvar = SERVAL_TCP_TIMEOUT_INIT;
-		tp->rto = SERVAL_TCP_TIMEOUT_INIT;
-	}
-	goto cwnd;
-}
 
 /* Read draft-ietf-tcplw-high-performance before mucking
  * with this code. (Supersedes RFC1323)
@@ -2749,19 +2663,33 @@ static int serval_tcp_prune_ofo_queue(struct sock *sk);
 static int serval_tcp_prune_queue(struct sock *sk);
 
 static inline int serval_tcp_try_rmem_schedule(struct sock *sk, 
+                                               struct sk_buff *skb,
                                                unsigned int size)
 {
 	if (atomic_read(&sk->sk_rmem_alloc) > sk->sk_rcvbuf ||
-	    !sk_rmem_schedule(sk, size)) {
-
+	    !sk_rmem_schedule(sk,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
+                              skb,
+#endif
+                              size)) {
+                
 		if (serval_tcp_prune_queue(sk) < 0)
 			return -1;
-
-		if (!sk_rmem_schedule(sk, size)) {
-			if (!serval_tcp_prune_ofo_queue(sk))
-				return -1;
-
-			if (!sk_rmem_schedule(sk, size))
+                
+		if (!sk_rmem_schedule(sk, 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
+                                      skb,
+#endif
+                                      size)) {
+                        
+                        if (!serval_tcp_prune_ofo_queue(sk))
+                                return -1;
+                        
+                        if (!sk_rmem_schedule(sk, 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0))
+                                              skb,
+#endif
+                                              size))
 				return -1;
 		}
 	}
@@ -2819,7 +2747,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 		if (eaten <= 0) {
 queue_and_out:
 			if (eaten < 0 &&
-			    serval_tcp_try_rmem_schedule(sk, skb->truesize))
+			    serval_tcp_try_rmem_schedule(sk, skb, skb->truesize))
 				goto drop;
                         
 			skb_set_owner_r(skb, sk);
@@ -2896,7 +2824,7 @@ queue_and_out:
 
 	//TCP_ECN_check_ce(tp, skb);
 
-	if (serval_tcp_try_rmem_schedule(sk, skb->truesize)) {
+	if (serval_tcp_try_rmem_schedule(sk, skb, skb->truesize)) {
                 LOG_DBG("rmem schedule failed\n");
 		goto drop;
         }
@@ -3476,111 +3404,6 @@ static inline int serval_tcp_checksum_complete_user(struct sock *sk,
 {
 	return !skb_csum_unnecessary(skb) &&
                 __serval_tcp_checksum_complete_user(sk, skb);
-}
-
-
-/* Save metrics learned by this TCP session.
-   This function is called only, when TCP finishes successfully
-   i.e. when it enters TIME-WAIT or goes from LAST-ACK to CLOSE.
- */
-void serval_tcp_update_metrics(struct sock *sk)
-{
-#if defined(OS_LINUX_KERNEL)
-       	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-	struct dst_entry *dst = __sk_dst_get(sk);
-
-	if (sysctl_serval_tcp_nometrics_save)
-		return;
-
-	dst_confirm(dst);
-
-	if (dst && (dst->flags & DST_HOST)) {
-		int m;
-		unsigned long rtt;
-
-		if (tp->backoff || !tp->srtt) {
-			/* This session failed to estimate rtt. Why?
-			 * Probably, no packets returned in time.
-			 * Reset our results.
-			 */
-			if (!(dst_metric_locked(dst, RTAX_RTT)))
-				dst_metric_set(dst, RTAX_RTT, 0);
-			return;
-		}
-
-		rtt = dst_metric_rtt(dst, RTAX_RTT);
-		m = rtt - tp->srtt;
-
-		/* If newly calculated rtt larger than stored one,
-		 * store new one. Otherwise, use EWMA. Remember,
-		 * rtt overestimation is always better than underestimation.
-		 */
-		if (!(dst_metric_locked(dst, RTAX_RTT))) {
-			if (m <= 0)
-				set_dst_metric_rtt(dst, RTAX_RTT, tp->srtt);
-			else
-				set_dst_metric_rtt(dst, RTAX_RTT, rtt - (m >> 3));
-		}
-
-		if (!(dst_metric_locked(dst, RTAX_RTTVAR))) {
-			unsigned long var;
-			if (m < 0)
-				m = -m;
-
-			/* Scale deviation to rttvar fixed point */
-			m >>= 1;
-			if (m < tp->mdev)
-				m = tp->mdev;
-
-			var = dst_metric_rtt(dst, RTAX_RTTVAR);
-			if (m >= var)
-				var = m;
-			else
-				var -= (var - m) >> 2;
-
-			set_dst_metric_rtt(dst, RTAX_RTTVAR, var);
-		}
-
-		if (serval_tcp_in_initial_slowstart(tp)) {
-			/* Slow start still did not finish. */
-			if (dst_metric(dst, RTAX_SSTHRESH) &&
-			    !dst_metric_locked(dst, RTAX_SSTHRESH) &&
-			    (tp->snd_cwnd >> 1) > dst_metric(dst, RTAX_SSTHRESH))
-				dst_metric_set(dst, RTAX_SSTHRESH, tp->snd_cwnd >> 1);
-			if (!dst_metric_locked(dst, RTAX_CWND) &&
-			    tp->snd_cwnd > dst_metric(dst, RTAX_CWND))
-				dst_metric_set(dst, RTAX_CWND, tp->snd_cwnd);
-		} else if (tp->snd_cwnd > tp->snd_ssthresh &&
-			   tp->ca_state == TCP_CA_Open) {
-			/* Cong. avoidance phase, cwnd is reliable. */
-			if (!dst_metric_locked(dst, RTAX_SSTHRESH))
-				dst_metric_set(dst, RTAX_SSTHRESH,
-					       max(tp->snd_cwnd >> 1, tp->snd_ssthresh));
-			if (!dst_metric_locked(dst, RTAX_CWND))
-				dst_metric_set(dst, RTAX_CWND,
-					       (dst_metric(dst, RTAX_CWND) +
-						tp->snd_cwnd) >> 1);
-		} else {
-			/* Else slow start did not finish, cwnd is non-sense,
-			   ssthresh may be also invalid.
-			 */
-			if (!dst_metric_locked(dst, RTAX_CWND))
-				dst_metric_set(dst, RTAX_CWND,
-					       (dst_metric(dst, RTAX_CWND) +
-						tp->snd_ssthresh) >> 1);
-			if (dst_metric(dst, RTAX_SSTHRESH) &&
-			    !dst_metric_locked(dst, RTAX_SSTHRESH) &&
-			    tp->snd_ssthresh > dst_metric(dst, RTAX_SSTHRESH))
-				dst_metric_set(dst, RTAX_SSTHRESH, tp->snd_ssthresh);
-		}
-
-		if (!dst_metric_locked(dst, RTAX_REORDERING)) {
-			if (dst_metric(dst, RTAX_REORDERING) < tp->reordering &&
-			    tp->reordering != sysctl_tcp_reordering)
-				dst_metric_set(dst, RTAX_REORDERING, tp->reordering);
-		}
-	}
-#endif /* OS_LINUX_KERNEL */
 }
 
 /*
