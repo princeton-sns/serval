@@ -309,7 +309,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         if (saddr == 0) {
                 if (!skb->dev) {
                         LOG_ERR("no device set\n");
-                        FREE_SKB(skb);
+                        kfree_skb(skb);
                         return -ENODEV;
                 }
                 dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &saddr);
@@ -319,7 +319,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         
         if (err < 0) {
                 LOG_ERR("hdr failed\n");
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 return err;
         }
 
@@ -520,7 +520,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 drop:
         LOG_DBG("Dropping skb!\n");
 
-        FREE_SKB(skb);
+        kfree_skb(skb);
         
         goto out;
 }

@@ -2686,7 +2686,8 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
         if (ctx->flags & SVH_FIN) {
                 if (serval_sal_rcv_fin(sk, skb, ctx) == 0) {
                         if (ack_ok)
-                                serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
+                                serval_sal_timewait(sk, SAL_TIMEWAIT, 
+                                                    SAL_TIMEWAIT_LEN);
                         else
                                 serval_sock_set_state(sk, SAL_CLOSING);
                 }
