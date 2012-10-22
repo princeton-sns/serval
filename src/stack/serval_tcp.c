@@ -423,7 +423,7 @@ static int serval_tcp_connection_close(struct sock *sk)
         
         serval_tcp_send_fin(sk);
 
-        return 0;
+        return data_was_unread;
 }
 
 static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,

@@ -1240,8 +1240,12 @@ void serval_sal_close(struct sock *sk, long timeout)
                    until transport is done. */
                 err = ssk->af_ops->conn_close(sk);
                 
-                if (err != 0) {
+                if (err < 0) {
                         LOG_ERR("Transport error %d\n", err);
+                } else if (err > 0) {
+                        /* Data was unread, we need to send RESET */
+                        serval_sock_set_state(sk, SAL_CLOSED);
+                        serval_sal_send_active_reset(sk, sk->sk_allocation);
                 }
         } else {
                 err = serval_sal_send_fin(sk);

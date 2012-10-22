@@ -793,7 +793,6 @@ int serval_release(struct socket *sock)
                         goto out;
 
                 /* Other cleanup stuff goes here */
-
                 if (sk->sk_state == SAL_CLOSED)
                         serval_sock_destroy(sk);
         out:

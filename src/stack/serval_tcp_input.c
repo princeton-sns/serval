@@ -2706,7 +2706,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
                 skb->len, th->doff * 4);
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
-		LOG_DBG("seq is end_seq, dropping\n");
+		//LOG_DBG("seq is end_seq, dropping\n");
                 goto drop;
         }
 
@@ -2795,7 +2795,6 @@ queue_and_out:
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
         drop:
-                LOG_DBG("Dropping segment!\n");
 		__kfree_skb(skb);
 		return;
 	}
