@@ -808,6 +808,7 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4(JNIEnv *env,
     struct jni_context *ctx = get_native_context(env, obj);
     struct service_id srvid;
     struct in_addr ipaddr;
+    enum service_rule_type type = SERVICE_RULE_FORWARD;
 
     if (fill_in_service_id(env, service_id, &srvid) == -1)
         return -1;
@@ -815,7 +816,11 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_removeService4(JNIEnv *env,
     if (fill_in_addr(env, addr, &ipaddr) == -1)
         return -1;
 
-    return hostctrl_service_remove(ctx->hc, &srvid, (unsigned short)prefix_bits, &ipaddr);
+    if (ipaddr.s_addr == 0)
+        type = SERVICE_RULE_DELAY;
+
+    return hostctrl_service_remove(ctx->hc, type, &srvid, 
+                                   (unsigned short)prefix_bits, &ipaddr);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4(JNIEnv *env, jobject obj, 

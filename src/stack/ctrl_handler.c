@@ -207,8 +207,11 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                                        sizeof(*entry));
                         }
                         index++;
+                } else if (err == 0) {
+                        LOG_ERR("Could not find target for service %s\n", 
+                                service_id_to_str(&entry->srvid));
                 } else {
-                        LOG_ERR("Could not remove service %s: %d\n", 
+                        LOG_ERR("Could not remove service %s - err %d\n", 
                                 service_id_to_str(&entry->srvid), 
                                 err);
                 }

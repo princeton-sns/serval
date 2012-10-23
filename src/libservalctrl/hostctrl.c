@@ -290,11 +290,12 @@ int hostctrl_service_add(struct hostctrl *hc,
 }
 
 int hostctrl_service_remove(struct hostctrl *hc,
+                            enum service_rule_type type,
                             const struct service_id *srvid, 
                             unsigned short prefix_bits,
                             const struct in_addr *ipaddr)
 {
-    return hc->ops->service_remove(hc, srvid, prefix_bits, ipaddr);
+    return hc->ops->service_remove(hc, type, srvid, prefix_bits, ipaddr);
 }
 
 int hostctrl_service_get(struct hostctrl *hc, 
@@ -313,6 +314,7 @@ int hostctrl_service_get(struct hostctrl *hc,
 }
 
 int hostctrl_service_modify(struct hostctrl *hc,
+                            enum service_rule_type type,
                             const struct service_id *srvid, 
                             unsigned short prefix_bits,
                             unsigned int priority,
@@ -320,7 +322,7 @@ int hostctrl_service_modify(struct hostctrl *hc,
                             const struct in_addr *old_ip,
                             const struct in_addr *new_ip)
 {
-    return hc->ops->service_modify(hc, srvid, prefix_bits,
+    return hc->ops->service_modify(hc, type, srvid, prefix_bits,
                                    priority, weight,
                                    old_ip, new_ip);
 }

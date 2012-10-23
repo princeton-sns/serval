@@ -91,6 +91,7 @@ static int service_parse_args(int argc, char **argv, void **result)
 
         memset(&args, 0, sizeof(args));
         args.op = __SERVICE_OP_MAX;
+        args.type = SERVICE_RULE_FORWARD;
         args.prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
         args.priority = 1;
         args.weight = 0;
@@ -277,11 +278,13 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
                                            args->weight, args->ip1);
                 break;
         case SERVICE_OP_DEL:
-                ret = hostctrl_service_remove(hctl, &args->srvid, 
+                ret = hostctrl_service_remove(hctl, args->type, &args->srvid, 
                                               args->prefix_bits, args->ip1);
                 break;
         case SERVICE_OP_MOD:
-                ret = hostctrl_service_modify(hctl, &args->srvid, 
+                ret = hostctrl_service_modify(hctl, 
+                                              args->type,
+                                              &args->srvid, 
                                               args->prefix_bits, 
                                               args->priority, 
                                               args->weight, 
