@@ -13,31 +13,13 @@
 #include <serval/platform.h>
 #include <serval/debug.h>
 #include <serval/netdevice.h>
-#include <serval/skbuff.h>
 #include <netinet/serval.h>
-#include <serval_udp_sock.h>
 #include <serval_sock.h>
 #include <serval_request_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
+#include <serval_udp.h>
 #include <af_serval.h>
-
-#if defined(OS_LINUX_KERNEL)
-#include <linux/ip.h>
-#include <net/udp.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-#include <linux/export.h>
-#endif
-#endif
-
-#if defined(OS_USER)
-#include <netinet/ip.h>
-#if defined(OS_BSD)
-#include <serval/platform_tcpip.h>
-#else
-#include <netinet/udp.h>
-#endif
-#endif /* OS_USER */
 
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
@@ -124,39 +106,6 @@ static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
 };
-
-/*
- *	Generic checksumming routines for UDP(-Lite) v4 and v6
- */
-static inline __sum16 __udp_checksum_complete(struct sk_buff *skb)
-{
-	return __skb_checksum_complete(skb);
-}
-
-static inline int udp_checksum_complete(struct sk_buff *skb)
-{
-	return !skb_csum_unnecessary(skb) &&
-		__udp_checksum_complete(skb);
-}
-
-static inline int udp_csum_init(struct sk_buff *skb, 
-                                struct udphdr *uh,
-                                int proto)
-{
-	const struct iphdr *iph = ip_hdr(skb);
-
-	if (uh->check == 0) {
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-	} else if (skb->ip_summed == CHECKSUM_COMPLETE) {
-		if (!csum_tcpudp_magic(iph->saddr, iph->daddr, skb->len,
-				      proto, skb->csum))
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-	}
-	if (!skb_csum_unnecessary(skb))
-		skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
-					       skb->len, proto, 0);
-	return 0;
-}
 
 static void __serval_udp_v4_send_check(struct sk_buff *skb,
                                 __be32 saddr, __be32 daddr)
@@ -289,7 +238,7 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("data len=%u skb->len=%u\n",
                 ntohs(udp_hdr(skb)->len) - sizeof(struct udphdr), skb->len); 
 
-        if (udp_checksum_complete(skb)) {
+        if (serval_udp_checksum_complete(skb)) {
                 LOG_DBG("Checksum error, dropping.\n");
                 kfree_skb(skb);
                 return 0;
@@ -338,11 +287,6 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                       * not a FIN */
                 if (datalen == 0) 
                         goto drop;
-        }
-
-        if (udp_csum_init(skb, uh, IPPROTO_UDP)) {
-                LOG_DBG("Checksum init error, dropping.\n");
-                goto drop;
         }
 
         /* Drop if receive queue is full. Dropping due to full queue

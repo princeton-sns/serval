@@ -9,6 +9,7 @@
 #include <serval_sal.h>
 #include <serval_ipv4.h>
 #include <serval/debug.h>
+#include <serval_udp.h>
 
 #define UDP_ENCAP_SALINUDP 7 /* This must be something which is not
                                 defined in linux/udp.h */
@@ -126,6 +127,12 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 
 	if (encap == NULL)
 		goto pass_up;
+
+        if (serval_udp_checksum_complete(skb)) {
+                LOG_DBG("Checksum error, dropping.\n");
+                kfree_skb(skb);
+                return 0;
+        }
 
 	/* UDP always verifies the packet length. */
 	__skb_pull(skb, sizeof(struct udphdr));
