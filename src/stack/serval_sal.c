@@ -443,14 +443,21 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         int hdr_len;
 
         memset(ctx, 0, sizeof(struct sal_context));
-        
         ctx->skb = skb;
         ctx->hdr = sal_hdr(skb);
         ctx->length = ctx->hdr->shl << 2;
         ext = SAL_EXT_FIRST(ctx->hdr);
         
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                print_base_hdr(ctx->hdr, buf, 512);
+                LOG_PKT("SAL HDR len=%u [%s]\n", ctx->length, buf);
+        }
+#endif
+
         /* Sanity checks */
-        if (ctx->length < sizeof(struct sal_hdr)) {
+        if (ctx->length < SAL_HEADER_LEN) {
                 LOG_ERR("Header length(=%u) too small\n", ctx->length);
                 return -1;
         }
@@ -460,11 +467,11 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
                 return 0;
 
         /* Parse extensions */
-        hdr_len = ctx->length - sizeof(*ctx->hdr);
+        hdr_len = ctx->length - SAL_HEADER_LEN;
 
         while (hdr_len > 0 && i < MAX_NUM_SAL_EXTENSIONS) {
                 int ext_len = parse_ext(ext, skb, ctx);
-
+                
                 if (ext_len <= 0) {
                         LOG_ERR("Bad extension length=%d\n", ext_len);
                         return -1;
@@ -1539,7 +1546,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
                 memcpy(ctrl_ext->nonce, 
                        ctx->ctrl_ext->nonce, SAL_NONCE_SIZE);
         }
-        sal_len += sizeof(*ctrl_ext);
+        sal_len += SAL_CONTROL_EXT_LEN;
  
         /* Add Serval header */
         rsh = (struct sal_hdr *)skb_push(rskb, sizeof(*rsh));
@@ -1713,21 +1720,7 @@ static int serval_sal_send_synack(struct sock *sk,
                 sal_len += ext_len + 4;
         } 
 
-        /* Add service and control extensions */
-        /*
-        ext_len = SAL_SERVICE_EXT_LEN;
-        srv_ext = (struct sal_service_ext *)
-                skb_push(rskb, ext_len);
-
-        if (!srv_ext)
-                goto drop_and_release;
-        
-        memset(srv_ext, 0, ext_len);
-        srv_ext->ext_type = SAL_SERVICE_EXT;
-        srv_ext->ext_length = ext_len;
-        service_id_copy(&srv_ext->srvid, &srsk->peer_srvid);
-        sal_len += ext_len;
-        */
+        /* Add control extensions */
         ext_len = SAL_CONTROL_EXT_LEN;
         ctrl_ext = (struct sal_control_ext *)
                 skb_push(rskb, ext_len);
@@ -3874,7 +3867,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
 {
         struct sal_hdr *sh;
         struct serval_sock *ssk = serval_sk(sk);
-        unsigned short hdr_len = SAL_HEADER_LEN;
+        unsigned short hdr_len = 0;
 
         /* Add appropriate extension headers */
         if (SAL_SKB_CB(skb)->flags & SVH_SYN || 
@@ -3901,6 +3894,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
 
         /* Add SAL base header */
         sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
+        hdr_len += SAL_HEADER_LEN;
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
                sizeof(ssk->local_flowid));
         memcpy(&sh->dst_flowid, &ssk->peer_flowid, 
