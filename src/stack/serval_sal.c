@@ -1934,20 +1934,22 @@ static int serval_sal_rcv_syn(struct sock *sk,
                                   replystr, 18));
         }
 #endif
-
-        /* Add the new request socket to the SYN queue. */
-        list_add(&srsk->lh, &ssk->syn_queue);
-        sk->sk_ack_backlog++;
-        
+ 
         /* Call upper transport protocol handler */
         if (ssk->af_ops->conn_request) {
                 err = ssk->af_ops->conn_request(sk, rsk, skb);
-                
-                /* Transport protocol will free the skb on error */
-                if (err)
+
+                if (err) {
+                        /* Transport will free the skb on error */
+                        reqsk_free(rsk);
                         goto done;
+                }
         }
         
+        /* Add the new request socket to the SYN queue. */
+        list_add(&srsk->lh, &ssk->syn_queue);
+        sk->sk_ack_backlog++;
+       
         err = serval_sal_send_synack(sk, rsk, skb, ctx);
  drop:
         /* Free the SYN request */
