@@ -3432,6 +3432,13 @@ int serval_sal_rcv(struct sk_buff *skb)
                         skb->len);
                 goto drop;
         }
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                LOG_PKT("dump: %s\n",
+                        hexdump(skb->data, sizeof(struct sal_hdr), buf, 512));
+        }
+#endif
 
         if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
                 LOG_DBG("Bad Serval header %s\n",
@@ -3968,7 +3975,13 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
                 LOG_PKT("Serval XMIT %s skb->len=%u\n",
                         sal_hdr_to_str(sh), skb->len);
-
+#if defined(ENABLE_DEBUG)
+                {
+                        char buf[512];
+                        LOG_PKT("dump: %s\n",
+                                hexdump(sh, sh->shl << 2, buf, 512));
+                }
+#endif
                 return serval_sal_do_xmit(skb);
         }
         

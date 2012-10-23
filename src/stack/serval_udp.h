@@ -46,9 +46,9 @@ static inline int serval_udp_checksum_complete(struct sk_buff *skb)
 		__serval_udp_checksum_complete(skb);
 }
 
-static inline int udp_csum_init(struct sk_buff *skb, 
-                                struct udphdr *uh,
-                                int proto)
+static inline int serval_udp_csum_init(struct sk_buff *skb, 
+                                       struct udphdr *uh,
+                                       int proto)
 {
         const struct iphdr *iph = ip_hdr(skb);
 

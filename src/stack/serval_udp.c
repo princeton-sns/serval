@@ -288,6 +288,9 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 if (datalen == 0) 
                         goto drop;
         }
+        
+        if (serval_udp_csum_init(skb, uh, IPPROTO_UDP))
+                goto drop;
 
         /* Drop if receive queue is full. Dropping due to full queue
          * is done below in sock_queue_rcv for those kernel versions

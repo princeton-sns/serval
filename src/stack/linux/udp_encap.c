@@ -59,6 +59,14 @@ int serval_udp_encap_skb(struct sk_buff *skb,
                                       csum_partial(uh, skb->len, 0));
         skb->protocol = IPPROTO_UDP;
 
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[512];
+                LOG_PKT("dump: %s\n",
+                        hexdump(uh, 20, buf, 512));
+        }
+#endif
+
         return 0;
 }
 
@@ -117,24 +125,39 @@ out:
  */
 int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
+        struct udphdr *uh = udp_hdr(skb);
 	struct udp_encap *encap;
-        
-        LOG_PKT("UDP encapsulated packet [%u:%u]\n",
-                ntohs(udp_hdr(skb)->source),
-                ntohs(udp_hdr(skb)->dest));
+
+        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u\n",
+                ntohs(uh->source),
+                ntohs(uh->dest),
+                ntohs(uh->len),
+                skb->len);
+
+#if defined(ENABLE_DEBUG)
+                {
+                        char buf[512];
+                        LOG_PKT("dump: %s\n",
+                                hexdump(uh, 20, buf, 512));
+                }
+#endif
         
 	encap = sock_to_encap(sk);
 
 	if (encap == NULL)
 		goto pass_up;
 
+        if (serval_udp_csum_init(skb, uh, IPPROTO_UDP)) {
+                kfree_skb(skb);
+                return 0;
+        }
+                
         if (serval_udp_checksum_complete(skb)) {
                 LOG_DBG("Checksum error, dropping.\n");
                 kfree_skb(skb);
                 return 0;
         }
 
-	/* UDP always verifies the packet length. */
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
 
