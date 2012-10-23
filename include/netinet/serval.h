@@ -300,7 +300,7 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 #define ext_length exthdr.length
 
 #define SAL_EXT_FIRST(sh) \
-        ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
+        ((struct sal_ext *)((char *)sh + SAL_HEADER_LEN))
 
 #define SAL_EXT_NEXT(ext)                                               \
         ((struct sal_ext *)((ext->type == SAL_PAD_EXT ?                 \
