@@ -30,7 +30,7 @@ public class TranslatorFragment extends Fragment {
 
 	private static final String[] ADD_HTTP_RULES = {
 			"ifconfig dummy0 192.168.25.25 -arp",
-			"ip rule add to 128.112.7.54 table main priority 10", // TODO this
+			"ip rule add to 128.112.7.146 table main priority 10", // TODO this
 																	// change
 																	// based on
 																	// the proxy

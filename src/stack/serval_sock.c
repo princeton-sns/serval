@@ -58,7 +58,7 @@ static const char *sock_state_str[] = {
 };
 
 static const char *sock_sal_state_str[] = {
-        [ SAL_RSYN_INITIAL ]        = "SAL_RSYN_INITIAL",
+        [ SAL_RSYN_INITIAL ]   = "SAL_RSYN_INITIAL",
         [ SAL_RSYN_SENT ]      = "SAL_RSYN_SENT",
         [ SAL_RSYN_RECV ]      = "SAL_RSYN_RECV",
         [ SAL_RSYN_SENT_RECV ] = "SAL_RSYN_SENT_RECV",
@@ -145,6 +145,9 @@ void serval_sock_migrate_iface(struct net_device *old_if,
         } *msk;
         int i, n = 0;
         
+        if (!new_if)
+                return;
+
         /* Initialize our private list. */
         INIT_LIST_HEAD(&mlist);
 
@@ -174,20 +177,39 @@ void serval_sock_migrate_iface(struct net_device *old_if,
            access the device pointer and perform migration for
            matching interfaces. */
         while (!list_empty(&mlist)) {
-        
+                int should_migrate = 0;
+
                 msk = list_first_entry(&mlist, struct migrate_sock, lh);
                 sk = msk->sk;
 
-                lock_sock(sk);
+                local_bh_disable();
+                bh_lock_sock(sk);
                 
-                if (sk->sk_bound_dev_if > 0 && 
-                    sk->sk_bound_dev_if == old_if->ifindex) {
+                if (!old_if || old_if == new_if) {
+                        struct net_device *i = dev_get_by_index(&init_net, 
+                                                                sk->sk_bound_dev_if);
+                        
+                        if (i) {
+                                /* If this interface is down, then
+                                 * migrate its flows. */
+                                if (!(i->flags & IFF_UP))
+                                        should_migrate = 1;
+                                dev_put(i);
+                        }
+                } else {
+                        /* We were told which interface to migrate. */
+                        should_migrate = sk->sk_bound_dev_if == old_if->ifindex;
+                }
+
+                if (should_migrate) {
                         LOG_DBG("Socket matches old if\n");
                         serval_sock_set_mig_dev(sk, new_if);
                         serval_sal_migrate(sk);
                         n++;
                 }
-                release_sock(sk);
+
+                bh_unlock_sock(sk);
+                local_bh_enable();
                 list_del(&msk->lh);
                 sock_put(sk);
                 kfree(msk);

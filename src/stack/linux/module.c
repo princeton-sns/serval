@@ -37,6 +37,10 @@ unsigned int checksum_mode = 0;
 module_param(checksum_mode, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(debug, "Set checksum mode (0=software, 1=hardware)");
 
+unsigned int auto_migrate = 1;
+module_param(auto_migrate, uint, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(auto_migrate, "Set auto migrate ON/OFF (default ON)");
+
 static char *ifname = NULL;
 module_param(ifname, charp, S_IRUGO);
 MODULE_PARM_DESC(ifname, "Resolve only on this device");
@@ -169,7 +173,8 @@ static int serval_inetaddr_event(struct notifier_block *this,
         {
                 LOG_DBG("inetdev UP %s - migrating\n", dev->name);
                 dev_configuration(dev);
-                serval_sock_migrate_iface(dev, dev);
+                if (auto_migrate)
+                        serval_sock_migrate_iface(NULL, dev);
                 break;
         }
 	case NETDEV_GOING_DOWN:

@@ -2372,7 +2372,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 ssk->last_rcv_tstamp = sal_time_stamp;
                 err = ssk->af_ops->receive(sk, skb);
         } else {
-                LOG_PKT("Dropping packet\n");
+                /* No transport header, so we just drop the packet
+                 * since there is nothing more to do with it. */
                 err = 0;
                 should_drop = 1;
         }

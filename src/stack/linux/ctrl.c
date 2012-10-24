@@ -17,7 +17,7 @@ extern ctrlmsg_handler_t handlers[];
 
 static int ctrl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
 {
-	int flags, nlmsglen, ret = 0;
+	int nlmsglen, ret = 0;
         struct ctrlmsg *cm;
 
         nlmsglen = nlh->nlmsg_len;
@@ -26,7 +26,6 @@ static int ctrl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
                 return -EINVAL;
 
         peer_pid = nlh->nlmsg_pid;
-        flags = nlh->nlmsg_flags;
 
         cm = (struct ctrlmsg *)NLMSG_DATA(nlh);
         
