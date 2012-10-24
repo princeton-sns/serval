@@ -59,14 +59,6 @@ int serval_udp_encap_skb(struct sk_buff *skb,
                                       csum_partial(uh, skb->len, 0));
         skb->protocol = IPPROTO_UDP;
 
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[512];
-                LOG_PKT("dump: %s\n",
-                        hexdump(uh, 20, buf, 512));
-        }
-#endif
-
         return 0;
 }
 
@@ -128,20 +120,14 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
         struct udphdr *uh = udp_hdr(skb);
 	struct udp_encap *encap;
 
-        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u\n",
+        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u check=%u skb_is_nonlinear=%u\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len),
-                skb->len);
+                skb->len,
+                uh->check,
+                skb_is_nonlinear(skb));
 
-#if defined(ENABLE_DEBUG)
-                {
-                        char buf[512];
-                        LOG_PKT("dump: %s\n",
-                                hexdump(uh, 20, buf, 512));
-                }
-#endif
-        
 	encap = sock_to_encap(sk);
 
 	if (encap == NULL)
@@ -160,7 +146,7 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
-
+        
         serval_sal_rcv(skb);
 
         return 0;

@@ -246,7 +246,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
                 buf[len] = '\0';
         }
         
-        hdr_len -= sizeof(*sh);
+        hdr_len -= SAL_HEADER_LEN;
         ext = SAL_EXT_FIRST(sh);
                 
         while (hdr_len > 0) {
@@ -2945,7 +2945,12 @@ drop:
 static int serval_sal_do_rcv_ctx(struct sock *sk, struct sk_buff *skb, 
                                  struct sal_context *ctx)
 {
-        pskb_pull(skb, ctx->length);
+        /* We can safely use __skb_pull here, because we have already
+         * linearized the SAL header part of the skb */
+        __skb_pull(skb, ctx->length);
+
+        /* Repoint to the transport header pointer to the actual
+         * transport layer header */
         skb_reset_transport_header(skb);
         
         SAL_SKB_CB(skb)->flags = ctx->flags;
@@ -3289,7 +3294,7 @@ static int serval_sal_resolve(struct sk_buff *skb,
         int ret = SAL_RESOLVE_ERROR;
         struct service_id *srvid = NULL;
         
-        if (ctx->length <= sizeof(struct sal_hdr))
+        if (ctx->length <= SAL_HEADER_LEN)
                 return ret;
         
         if (!ctx->srv_ext[0])
@@ -3413,6 +3418,7 @@ int serval_sal_rcv(struct sk_buff *skb)
 {
         struct sock *sk = NULL;
         struct sal_context ctx;
+        unsigned int sal_length;
         int err = 0;
         
 #if defined(ENABLE_DEBUG)
@@ -3427,28 +3433,41 @@ int serval_sal_rcv(struct sk_buff *skb)
         }
 #endif
 
-        if (skb->len < sizeof(struct sal_hdr)) {
+        if (skb->len < SAL_HEADER_LEN) {
                 LOG_DBG("skb length too short (%u bytes)\n", 
                         skb->len);
                 goto drop;
         }
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[512];
-                LOG_PKT("dump: %s\n",
-                        hexdump(skb->data, sizeof(struct sal_hdr), buf, 512));
-        }
-#endif
-
-        if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
-                LOG_DBG("Bad Serval header %s\n",
-                        ctx.hdr ? sal_hdr_to_str(ctx.hdr) : "NULL");
+        
+        /* First see if we can pull the base header, because we know
+         * the packet should have at least that size SAL header. Note,
+         * we cannot simply look into the packet and check the real
+         * SAL header length (including extensions), because the skb
+         * migth be paged. This function call will also linearize the
+         * requested length. */
+        if (!pskb_may_pull(skb, SAL_HEADER_LEN)) {
+                LOG_DBG("Cannot pull base SAL header\n",
+                        SAL_HEADER_LEN);
                 goto drop;
         }
         
-        if (!pskb_may_pull(skb, ctx.length)) {
-                LOG_DBG("Cannot pull header (hdr_len=%u)\n",
-                        ctx.length);
+        /* Now we can actually look into the base header */
+        sal_length = sal_hdr(skb)->shl << 2;
+
+        if (sal_length > SAL_HEADER_LEN) {
+                /* There are extensions, so we need to check that we
+                 * can pull more than the base header */
+                if (!pskb_may_pull(skb, sal_length)) {
+                        LOG_DBG("Cannot pull %u bytes SAL header\n",
+                                sal_length);
+                        goto drop;
+                }
+        }
+
+        /* Ok, we are ready to parse the full header. */       
+        if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
+                LOG_DBG("Bad Serval header %s\n",
+                        ctx.hdr ? sal_hdr_to_str(ctx.hdr) : "NULL");
                 goto drop;
         }
         
@@ -3975,13 +3994,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
                 LOG_PKT("Serval XMIT %s skb->len=%u\n",
                         sal_hdr_to_str(sh), skb->len);
-#if defined(ENABLE_DEBUG)
-                {
-                        char buf[512];
-                        LOG_PKT("dump: %s\n",
-                                hexdump(sh, sh->shl << 2, buf, 512));
-                }
-#endif
+
                 return serval_sal_do_xmit(skb);
         }
         
