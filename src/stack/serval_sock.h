@@ -236,12 +236,9 @@ struct serval_hslot *serval_hashslot(struct serval_table *table,
 	return &table->hash[serval_hashfn(net, key, keylen, table->mask)];
 }
 
-void serval_sock_migrate_iface(struct net_device *old_if, 
-                               struct net_device *new_if);
-void serval_sock_migrate_flow(struct flow_id *old_f,
-                              struct net_device *new_if);
-void serval_sock_migrate_service(struct service_id *old_s,
-                                 struct net_device *new_if);
+void serval_sock_migrate_iface(int old_dev, int new_dev);
+void serval_sock_migrate_flow(struct flow_id *old_f, int new_dev);
+void serval_sock_migrate_service(struct service_id *old_s, int new_if);
 void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
@@ -301,12 +298,21 @@ void serval_sock_init(struct sock *sk);
 void serval_sock_destroy(struct sock *sk);
 void serval_sock_done(struct sock *sk);
 
-void serval_sock_set_dev(struct sock *sk, struct net_device *dev);
-void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev);
+static inline void serval_sock_set_dev(struct sock *sk, int ifindex)
+{
+        sk->sk_bound_dev_if = ifindex;
+}
+
+static inline void serval_sock_set_mig_dev(struct sock *sk, int ifindex)
+{
+        serval_sk(sk)->mig_dev_if = ifindex;
+}
+
 const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen);
 const char *serval_sock_state_str(struct sock *sk);
 const char *serval_state_str(unsigned int state);
 int serval_sock_set_state(struct sock *sk, unsigned int state);
+const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen);
 
 const char *serval_sock_sal_state_str(struct sock *sk);
 const char *serval_sal_state_str(unsigned int state);

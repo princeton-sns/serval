@@ -120,13 +120,11 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
         struct udphdr *uh = udp_hdr(skb);
 	struct udp_encap *encap;
 
-        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u check=%u skb_is_nonlinear=%u\n",
+        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u\n",
                 ntohs(uh->source),
                 ntohs(uh->dest),
                 ntohs(uh->len),
-                skb->len,
-                uh->check,
-                skb_is_nonlinear(skb));
+                skb->len);
 
 	encap = sock_to_encap(sk);
 

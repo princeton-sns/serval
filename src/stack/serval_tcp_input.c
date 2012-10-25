@@ -2702,9 +2702,6 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int eaten = -1;
 
-        LOG_PKT("Incoming segment skb->len=%u doff=%u\n", 
-                skb->len, th->doff * 4);
-
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
 		//LOG_DBG("seq is end_seq, dropping\n");
                 goto drop;
@@ -2775,10 +2772,9 @@ queue_and_out:
 		serval_tcp_fast_path_check(sk);
 
 		if (eaten > 0) {
-                        LOG_PKT("skb eaten\n");
 			__kfree_skb(skb);
                 } else if (!sock_flag(sk, SOCK_DEAD)) {
-                        LOG_PKT("Signal data ready!\n");
+
 			sk->sk_data_ready(sk, 0);
                 }
 		return;
@@ -2791,7 +2787,6 @@ queue_and_out:
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, 
                                      TCP_SKB_CB(skb)->end_seq);
         out_of_window:
-                LOG_DBG("Segment out of window!\n");
 		serval_tcp_enter_quickack_mode(sk);
 		serval_tsk_schedule_ack(sk);
         drop:
@@ -2808,9 +2803,6 @@ queue_and_out:
 
 	if (before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt)) {
 		/* Partial packet, seq < rcv_next < end_seq */
-		LOG_PKT("partial segment: rcv_next %X seq %X - %X\n",
-                        tp->rcv_nxt, TCP_SKB_CB(skb)->seq,
-                        TCP_SKB_CB(skb)->end_seq);
                 
 		serval_tcp_dsack_set(sk, TCP_SKB_CB(skb)->seq, tp->rcv_nxt);
 		/* If window is closed, drop tail of packet. But after
@@ -2831,9 +2823,6 @@ queue_and_out:
 	/* Disable header prediction. */
 	tp->pred_flags = 0;
 	serval_tsk_schedule_ack(sk);
-
-        LOG_PKT("out of order segment: rcv_next %X seq %X - %X\n",
-                tp->rcv_nxt, TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq);
         
 	skb_set_owner_r(skb, sk);
 
@@ -3147,8 +3136,6 @@ static int serval_tcp_prune_queue(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-	LOG_DBG("prune_queue: c=%x\n", tp->copied_seq);
-
 	//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PRUNECALLED);
 
 	if (atomic_read(&sk->sk_rmem_alloc) >= sk->sk_rcvbuf)
@@ -3295,7 +3282,6 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		if (!th->rst) {
 			//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSESTABREJECTED);
 			serval_tcp_send_dupack(sk, skb);
-                        LOG_DBG("Paws check discarding packet\n");
 			goto discard;
 		}
 		/* Reset is accepted even if it did not pass PAWS. */
@@ -3522,7 +3508,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		}
 		/* Fall through */
 	case TCP_ESTABLISHED:
-                LOG_DBG("Queuing packet\n");
 		serval_tcp_data_queue(sk, skb);
 		queued = 1;
 		break;
