@@ -59,8 +59,8 @@ const char *print_ssk(struct sock *sk, char *buf, size_t buflen);
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
 #define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
 #define LOG_PKT(fmt, ...) logme(LOG_LEVEL_PKT, __func__, fmt, ##__VA_ARGS__)
-#define LOG_SSK(sk, fmt, ...) ({ char _buf[512]; logme(LOG_LEVEL_PKT, __func__, \
-                                "%s "fmt, print_ssk(sk, _buf, 512), ##__VA_ARGS__); })
+#define LOG_SSK(sk, fmt, ...) ({ char _buf[200]; logme(LOG_LEVEL_PKT, __func__, \
+                                "%s "fmt, print_ssk(sk, _buf, 200), ##__VA_ARGS__); })
 
 #else
 

@@ -127,12 +127,13 @@ static enum work_status work_translate(struct socket *from,
                 return WORK_ERROR;
         }
 
-        readlen = from->sndbuf - bytes_queued;
+        readlen = to->sndbuf - bytes_queued;
         
+        LOG_DBG("translating %zu bytes from %d to %d\n", 
+                readlen, from->fd, to->fd);
+
         if (readlen == 0)
                 return WORK_NOSPACE;
-
-        /* LOG_DBG("reading %zu bytes\n", readlen); */
 
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
                      readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
@@ -741,7 +742,9 @@ static void print_usage(void)
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-s, --serval\t\t run an AF_SERVAL to AF_INET translator.\n");
-        printf("\t-x, --x-translate\t\t cross translate, i.e., this translator will connect to another translator that reverses the translation.\n");
+        printf("\t-x, --x-translate\t\t cross translate, i.e., " 
+               "this translator will connect to another translator "
+               "that reverses the translation.\n");
 }
 
 static int daemonize(void)
