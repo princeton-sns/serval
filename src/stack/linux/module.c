@@ -52,6 +52,10 @@ extern void serval_sysctl_unregister(struct net *net);
 extern int udp_encap_init(void);
 extern void udp_encap_fini(void);
 
+/* Keeps track of the last interface that we know is up. Used for auto
+ * migration. */
+//static int last_up_ifindex = -1;
+
 struct net_device *resolve_dev_impl(const struct in_addr *addr,
                                     int ifindex)
 {
@@ -174,7 +178,7 @@ static int serval_inetaddr_event(struct notifier_block *this,
                 LOG_DBG("inetdev UP %s - migrating\n", dev->name);
                 dev_configuration(dev);
                 if (auto_migrate)
-                        serval_sock_migrate_iface(NULL, dev);
+                        serval_sock_migrate_iface(0, dev->ifindex);
                 break;
         }
 	case NETDEV_GOING_DOWN:
@@ -188,6 +192,8 @@ static int serval_inetaddr_event(struct notifier_block *this,
                         dev->name);
                 serval_sock_freeze_flows(dev);
                 service_del_dev_all(dev->name);
+                if (auto_migrate)
+                        serval_sock_migrate_iface(dev->ifindex, 0);
                 break;
 	default:
 		break;

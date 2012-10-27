@@ -132,10 +132,7 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 {
 	u8 options = opts->options;	/* mungable copy */
 
-        LOG_DBG("Writing TCP options\n");
-
 	if (unlikely(opts->mss)) {
-                LOG_DBG("Writing MSS option\n");
 		*ptr++ = htonl((TCPOPT_MSS << 24) |
 			       (TCPOLEN_MSS << 16) |
 			       opts->mss);
@@ -159,7 +156,6 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 	}
         */
 	if (unlikely(OPTION_WSCALE & options)) {
-                LOG_DBG("Writing window scale option\n");
 		*ptr++ = htonl((TCPOPT_NOP << 24) |
 			       (TCPOPT_WINDOW << 16) |
 			       (TCPOLEN_WINDOW << 8) |

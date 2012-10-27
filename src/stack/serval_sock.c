@@ -131,8 +131,8 @@ void __exit serval_table_fini(struct serval_table *table)
   then safely iterate through the private list without holding a list
   lock, and are thereby free lock each socket.
  */
-void serval_sock_migrate_iface(struct net_device *old_if,
-                               struct net_device *new_if)
+void serval_sock_migrate_iface_old(struct net_device *old_if,
+                                   struct net_device *new_if)
 {
         struct hlist_node *walk;
         struct sock *sk = NULL;
@@ -185,8 +185,15 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                 local_bh_disable();
                 bh_lock_sock(sk);
                 
-                if (!old_if || old_if == new_if) {
-                        struct net_device *i = dev_get_by_index(&init_net, 
+                if (old_if == new_if) {
+                        /* An existing interface changed its address,
+                         * i.e., physical mobility. */
+                        should_migrate = 1;
+                } else if (!old_if) {
+                        /* A new interface came up, migrate all flows
+                         * with a DOWN interface to this new
+                         * interface. */
+                        struct net_device *i = dev_get_by_index(sock_net(sk), 
                                                                 sk->sk_bound_dev_if);
                         
                         if (i) {
@@ -203,7 +210,7 @@ void serval_sock_migrate_iface(struct net_device *old_if,
 
                 if (should_migrate) {
                         LOG_DBG("Socket matches old if\n");
-                        serval_sock_set_mig_dev(sk, new_if);
+                        serval_sock_set_mig_dev(sk, new_if->ifindex);
                         serval_sal_migrate(sk);
                         n++;
                 }
@@ -213,6 +220,89 @@ void serval_sock_migrate_iface(struct net_device *old_if,
                 list_del(&msk->lh);
                 sock_put(sk);
                 kfree(msk);
+        }
+
+        LOG_DBG("Migrated %d flows\n", n);
+}
+
+void serval_sock_migrate_iface(int old_dev, int new_dev)
+{
+        struct hlist_node *walk;
+        struct sock *sk = NULL;
+        int i, n = 0;
+
+        for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
+                struct serval_hslot *slot;
+                
+                slot = &established_table.hash[i];
+                
+                local_bh_disable();
+                spin_lock(&slot->lock);
+                                
+                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
+                        int should_migrate = 0;
+
+                        if (old_dev > 0 && new_dev > 0) {
+
+                                if (old_dev == new_dev) {
+                                        /* An existing interface changed its address,
+                                         * i.e., physical mobility. */
+                                        should_migrate = 1;
+                                } else {
+                                        /* We were told which
+                                         * interface to migrate, but
+                                         * we need to check that this
+                                         * sock matches. */
+                                        should_migrate = sk->sk_bound_dev_if == old_dev;
+                                }
+                        } else if (old_dev <= 0) {
+                                /* A new interface came up, migrate all flows
+                                 * with a DOWN interface to this new
+                                 * interface. */
+                                struct net_device *i = dev_get_by_index(sock_net(sk), 
+                                                                        sk->sk_bound_dev_if);
+                                
+                                if (i) {
+                                        /* If this interface is down, then
+                                         * migrate its flows. */
+                                        if (!(i->flags & IFF_UP))
+                                                should_migrate = 1;
+                                        dev_put(i);
+                                }
+                        } else if (new_dev <= 0 && old_dev == sk->sk_bound_dev_if) {
+                                /* An interface went down, and we
+                                 * need to figure out a new target
+                                 * dev. */
+#if defined(OS_LINUX_KERNEL)
+                                struct rtable *rt;
+                                
+                                rt = serval_ip_route_output(sock_net(sk),
+                                                            inet_sk(sk)->inet_daddr,
+                                                            0, 0, 0);
+                                
+                                if (rt) {
+                                        should_migrate = 1;
+                                        new_dev = rt->rt_iif;
+                                        LOG_DBG("Found new output dev %d\n", new_dev);
+                                        ip_rt_put(rt);
+                                } else {
+                                        LOG_DBG("socket not routable\n");
+                                } 
+#endif /* OS_LINUX_KERNEL */
+                        }
+                        
+                        if (should_migrate) {
+                                bh_lock_sock(sk);
+                                LOG_SSK(sk, "migrating from dev %d to %d\n", 
+                                        old_dev, new_dev);
+                                serval_sock_set_mig_dev(sk, new_dev);
+                                serval_sal_migrate(sk);
+                                bh_unlock_sock(sk);
+                                n++;
+                        }                       
+                }
+                spin_unlock(&slot->lock);
+                local_bh_enable();
         }
 
         LOG_DBG("Migrated %d flows\n", n);
@@ -250,15 +340,14 @@ void serval_sock_freeze_flows(struct net_device *dev)
         }
 }
 
-void serval_sock_migrate_flow(struct flow_id *old_f,
-                              struct net_device *new_if)
+void serval_sock_migrate_flow(struct flow_id *old_flow, int new_dev)
 {
-        struct sock *sk = serval_sock_lookup_flow(old_f);
+        struct sock *sk = serval_sock_lookup_flow(old_flow);
 
         if (sk) {
                 LOG_DBG("Found sock, migrating...\n");
                 lock_sock(sk);
-                serval_sock_set_mig_dev(sk, new_if);
+                serval_sock_set_mig_dev(sk, new_dev);
                 serval_sal_migrate(sk);
                 release_sock(sk);
                 sock_put(sk);
@@ -268,15 +357,14 @@ void serval_sock_migrate_flow(struct flow_id *old_f,
 /* For now this looks pretty much like migrating a flow, but I suspect it'll
  * be a little more involved once we support multiple flows per service.
  */
-void serval_sock_migrate_service(struct service_id *old_s,
-                                 struct net_device *new_if)
+void serval_sock_migrate_service(struct service_id *old_s, int new_dev)
 {
         /* FIXME: Set protocol type of socket */
         struct sock *sk = serval_sock_lookup_service(old_s, IPPROTO_TCP);
 
         if (sk) {
                 lock_sock(sk);
-                serval_sock_set_mig_dev(sk, new_if);
+                serval_sock_set_mig_dev(sk, new_dev);
                 serval_sal_migrate(sk);
                 release_sock(sk);
                 sock_put(sk);
@@ -742,24 +830,6 @@ void serval_sock_destruct(struct sock *sk)
                 sk, atomic_read(&serval_nr_socks));
 }
 
-void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
-{
-        if (dev)
-                sk->sk_bound_dev_if = dev->ifindex;
-        else
-                sk->sk_bound_dev_if = 0;
-}
-
-void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-
-        if (dev)
-                ssk->mig_dev_if = dev->ifindex;
-        else
-                ssk->mig_dev_if = 0;
-}
-
 const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 {
         struct serval_sock *ssk = serval_sk(sk);
@@ -774,6 +844,23 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
                  ssk->rcv_seq.nxt,
                  ssk->rcv_seq.wnd,
                  ssk->rcv_seq.iss);
+
+        return buf;
+}
+
+const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct net_device *dev = dev_get_by_index(sock_net(sk), 
+                                                  sk->sk_bound_dev_if);
+
+        snprintf(buf, buflen, "[%s:%s %s]",
+                 flow_id_to_str(&ssk->local_flowid),
+                 flow_id_to_str(&ssk->peer_flowid),
+                 dev ? dev->name : "nodev");
+
+        if (dev)
+                dev_put(dev);
 
         return buf;
 }
@@ -805,11 +892,9 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
                 return -1;
         }
         
-        LOG_INF("%s -> %s local_flowid=%s peer_flowid=%s\n",
+        LOG_SSK(sk, "%s -> %s\n",
                 sock_state_str[sk->sk_state],
-                sock_state_str[new_state],
-                flow_id_to_str(&serval_sk(sk)->local_flowid),
-                flow_id_to_str(&serval_sk(sk)->peer_flowid));
+                sock_state_str[new_state]);
         
         switch (new_state) {
         case SAL_CLOSED:
@@ -850,11 +935,9 @@ int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
                 return -1;
         }
         
-        LOG_INF("SAL %s -> %s local_flowid=%s peer_flowid=%s\n",
+        LOG_SSK(sk, "SAL %s -> %s\n",
                 sock_sal_state_str[serval_sk(sk)->sal_state],
-                sock_sal_state_str[new_state],
-                flow_id_to_str(&serval_sk(sk)->local_flowid),
-                flow_id_to_str(&serval_sk(sk)->peer_flowid));
+                sock_sal_state_str[new_state]);
         
         serval_sk(sk)->sal_state = new_state;
 

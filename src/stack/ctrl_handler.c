@@ -466,18 +466,19 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm, int peer)
                         LOG_ERR("No old interface %s\n", cmm->from_i);
                         ret = -1;
                 } else {
-                        serval_sock_migrate_iface(old_dev, new_dev);
+                        serval_sock_migrate_iface(old_dev->ifindex, 
+                                                  new_dev->ifindex);
                         dev_put(old_dev);
                 }
                 break;
         case CTRL_MIG_FLOW:
                 LOG_DBG("migrate flow %s to iface %s\n", 
                         flow_id_to_str(&cmm->from_f), cmm->to_i);
-                serval_sock_migrate_flow(&cmm->from_f, new_dev);
+                serval_sock_migrate_flow(&cmm->from_f, new_dev->ifindex);
                 break;
         case CTRL_MIG_SERVICE:
                 LOG_DBG("migrate service to iface %s\n", cmm->to_i);
-                serval_sock_migrate_service(&cmm->from_s, new_dev);
+                serval_sock_migrate_service(&cmm->from_s, new_dev->ifindex);
                 break;
         }
 

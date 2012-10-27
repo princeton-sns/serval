@@ -418,7 +418,14 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
 
                 if (!rt) {
-                        LOG_DBG("No route!\n");
+#if defined(ENABLE_DEBUG)
+                        {
+                                char ip[18];
+                                LOG_SSK(sk, "No route for %s on if=%d bound_if=%d!\n",
+                                        inet_ntop(AF_INET, &inet->inet_daddr, ip, 18),
+                                        ifindex, sk->sk_bound_dev_if);
+                        }
+#endif
                         err = -EHOSTUNREACH;
                         rcu_read_unlock();
                         goto drop;
@@ -428,7 +435,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 sk_setup_caps(sk, route_dst(rt));
 
         } else {
-                LOG_PKT("Using route already associated with socket\n");
+                LOG_SSK(sk, "Using existing sock route\n");
         }
         
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))

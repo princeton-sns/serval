@@ -447,14 +447,6 @@ static int serval_sal_parse_hdr(struct sk_buff *skb,
         ctx->hdr = sal_hdr(skb);
         ctx->length = ctx->hdr->shl << 2;
         ext = SAL_EXT_FIRST(ctx->hdr);
-        
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[512];
-                print_base_hdr(ctx->hdr, buf, 512);
-                LOG_PKT("SAL HDR len=%u [%s]\n", ctx->length, buf);
-        }
-#endif
 
         /* Sanity checks */
         if (ctx->length < SAL_HEADER_LEN) {
@@ -1137,7 +1129,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
 
         /* Use same sequence number as previous packet for migration
            requests */
-        LOG_DBG("Sending Migrate Request\n");
+        LOG_SSK(sk, "Sending RSYN\n");
         SAL_SKB_CB(skb)->flags = SVH_RSYN;
         SAL_SKB_CB(skb)->verno = verno;
 
@@ -1214,8 +1206,7 @@ void serval_sal_close(struct sock *sk, long timeout)
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        LOG_INF("Closing socket %p in state %s\n",
-                sk, serval_sock_state_str(sk));
+        LOG_SSK(sk, "Closing socket\n");
 
         switch (sk->sk_state) {
         case SAL_CLOSEWAIT:
@@ -2190,8 +2181,7 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                                                       ssk->mig_dev_if);
         int err = 0;
 
-        LOG_DBG("Recv RSYN+ACK in %s state\n",
-                serval_sock_sal_state_str(sk));
+        LOG_SSK(sk, "received RSYN-ACK\n");
 
         if (!mig_dev) {
                 LOG_ERR("No migration device set\n");
@@ -2200,14 +2190,14 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
 
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
-                LOG_DBG("Migration complete for flow %s!\n",
+                LOG_SSK(sk, "Migration complete for flow %s!\n",
                         flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_RSYN_INITIAL);
                 
                 dev_get_ipv4_addr(mig_dev, IFADDR_LOCAL, 
                                   &inet_sk(sk)->inet_saddr);
-                serval_sock_set_dev(sk, mig_dev);
-                serval_sock_set_mig_dev(sk, NULL);
+                serval_sock_set_dev(sk, mig_dev->ifindex);
+                serval_sock_set_mig_dev(sk, 0);
                 sk_dst_reset(sk);
 
                 if (ssk->af_ops->migration_completed)
@@ -2240,8 +2230,8 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb = NULL;
-
-        LOG_INF("received Migration REQUEST\n");
+        
+        LOG_SSK(sk, "received RSYN\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
                 LOG_ERR("Bad migration control packet\n");
@@ -2253,10 +2243,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
             sk->sk_state == SAL_LISTEN ||
             sk->sk_state == SAL_REQUEST)
                 return -1;
-        
-        LOG_DBG("RSYN received in %s state\n",
-                serval_sock_sal_state_str(sk));
-        
+                
         switch(ssk->sal_state) {
         case SAL_RSYN_INITIAL:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
@@ -2314,7 +2301,7 @@ static int serval_sal_rcv_fin(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        LOG_INF("received SAL FIN\n");
+        LOG_SSK(sk, "received SAL FIN\n");
         
         if (!has_valid_control_extension(sk, ctx)) {
                 LOG_ERR("Bad control extension\n");
@@ -2486,7 +2473,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         /* Processing for socket that has received SYN
                            already */
 
-                        LOG_PKT("ACK recv\n");
+                        LOG_DBG("received ACK\n");
                         
                         nsk = serval_sal_request_sock_handle(sk, skb, ctx);
                         
@@ -2538,7 +2525,7 @@ static int serval_sal_request_state_process(struct sock *sk,
                 ctx->hdr->shl << 2);
 
         /* Save device and peer flow id */
-        serval_sock_set_dev(sk, skb->dev);
+        serval_sock_set_dev(sk, skb->dev->ifindex);
 
         /* Save IP addresses. These are important for checksumming in
            transport protocols */
@@ -2644,7 +2631,7 @@ static int serval_sal_respond_state_process(struct sock *sk,
                 LOG_DBG("\n");
 
                 /* Save device */
-                serval_sock_set_dev(sk, skb->dev);
+                serval_sock_set_dev(sk, skb->dev->ifindex);
 
                 memcpy(&inet_sk(sk)->inet_daddr, &ip_hdr(skb)->saddr, 
                        sizeof(inet_sk(sk)->inet_daddr));
@@ -2842,15 +2829,14 @@ int serval_sal_state_process(struct sock *sk,
 {
         int err = 0;
 
-        LOG_PKT("receive in state %s\n", serval_sock_state_str(sk));
-
 #if defined(ENABLE_DEBUG)
         {
                 char buf[512];
-                LOG_DBG("SAL PROCESS START %s\n",
+                LOG_SSK(sk, "SAL %s\n",
                         serval_sock_print_state(sk, buf, 512));
         }
-#endif        
+#endif
+
         /* Is this a reset packet */
         if (ctx->ctrl_ext) {
                 if (ctx->ctrl_ext->rst) {
@@ -2914,14 +2900,6 @@ int serval_sal_state_process(struct sock *sk,
                         serval_sock_state_str(sk), sk->sk_state);
                 goto drop;
         }
-
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[512];
-                LOG_DBG("SAL PROCESS END %s\n",
-                        serval_sock_print_state(sk, buf, 512));
-        }
-#endif
                 
         if (err) {
                 LOG_ERR("Error on receive: %d\n", err);
@@ -2929,15 +2907,6 @@ int serval_sal_state_process(struct sock *sk,
 
         return 0;
 drop:
-
-#if defined(ENABLE_DEBUG)
-        {
-                char buf[512];
-                LOG_DBG("SAL PROCESS END %s\n",
-                        serval_sock_print_state(sk, buf, 512));
-        }
-#endif
-
         kfree_skb(skb);
 
         return 0;
@@ -3325,6 +3294,8 @@ static int serval_sal_rcv_finish(struct sock *sk,
 
         bh_lock_sock_nested(sk);
 
+        LOG_SSK(sk, "SAL %s\n", sal_hdr_to_str(ctx->hdr));
+
         /* We only reach this point if a valid local socket destination
          * has been found */
         
@@ -3368,7 +3339,7 @@ static int serval_sal_rcv_finish(struct sock *sk,
 	return err;
 drop:
         service_inc_stats(-1, -(skb->len - ctx->length));
-        LOG_DBG("Dropping packet\n");
+        LOG_SSK(sk, "Dropping packet\n");
         bh_unlock_sock(sk);
         sock_put(sk);
         kfree_skb(skb);
@@ -3427,7 +3398,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                 struct iphdr *iph = ip_hdr(skb);
                 char src[18], dst[18];
 
-                LOG_PKT("PKT: skb->len=%u : %s -> %s\n",
+                LOG_PKT("skb->len=%u : %s -> %s\n",
                         skb->len, 
                         inet_ntop(AF_INET, &iph->saddr, src, 18),
                         inet_ntop(AF_INET, &iph->daddr, dst, 18));
@@ -3475,15 +3446,8 @@ int serval_sal_rcv(struct sk_buff *skb)
         if (unlikely(serval_sal_csum(ctx.hdr, ctx.length))) {
                 LOG_DBG("SAL checksum error!\n");
                 goto drop;
-        }
+        }       
 
-        LOG_PKT("SAL %s\n", sal_hdr_to_str(ctx.hdr));
-
-        /*
-          FIXME: We should try to do early transport layer header
-          checks here so that we can drop bad packets before we put
-          them on, e.g., the backlog queue
-        */
         sk = serval_sal_demux_flow(skb, &ctx);
         
         if (!sk) {
@@ -3496,13 +3460,14 @@ int serval_sal_rcv(struct sk_buff *skb)
                 case SAL_RESOLVE_FORWARD:
                         /* Packet forwarded on out device */
                 case SAL_RESOLVE_DELAY:
+                        LOG_DBG("SAL FWD/DLY %s\n", sal_hdr_to_str(ctx.hdr));
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
-                        LOG_PKT("Could not demux or forward packet\n");
+                        LOG_PKT("SAL DROPPING %s\n", sal_hdr_to_str(ctx.hdr));
                         goto drop;
                         break;
                 }
@@ -3522,8 +3487,8 @@ int serval_sal_rcv(struct sk_buff *skb)
  drop:
         if (sk)
                 sock_put(sk);
+
         service_inc_stats(-1, -(skb->len - ctx.length));
-        LOG_DBG("Dropping packet\n");
         kfree_skb(skb);
 
         /* We always return zero here, since function processes an
@@ -3756,7 +3721,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
 #if defined(ENABLE_DEBUG)
                         {
                                 char src[18];
-                                LOG_DBG("Sending on mig_dev %s src=%s\n",
+                                LOG_SSK(sk, "Sending on mig_dev %s src=%s\n",
                                         mig_dev->name, 
                                         inet_ntop(AF_INET, 
                                                   &inet_sk(sk)->inet_saddr, 
@@ -3764,14 +3729,17 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
                         }
 #endif
                         skb->dev = mig_dev;
+                } else {
+                        LOG_SSK(sk, "No migration device %d\n",
+                                ssk->mig_dev_if);
                 }
                 
                 if (ssk->sal_state == SAL_RSYN_RECV) {
 #if defined(ENABLE_DEBUG)
                         char dst[18];
-                        LOG_DBG("Sending to MIG dest addr %s\n",
+                        LOG_SSK(sk, "Sending to migration addr %s\n",
                                 inet_ntop(AF_INET, 
-                                              &ssk->mig_daddr, 
+                                          &ssk->mig_daddr, 
                                           dst, 18));
 #endif
                         memcpy(&temp_daddr, &inet_sk(sk)->inet_daddr, 4);
@@ -3993,7 +3961,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
 
-                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                LOG_SSK(sk, "Serval XMIT %s skb->len=%u\n",
                         sal_hdr_to_str(sh), skb->len);
 
                 return serval_sal_do_xmit(skb);
@@ -4018,7 +3986,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
                 serval_sal_send_check(sh);
                 
-                LOG_PKT("Serval XMIT %s skb->len=%u\n",
+                LOG_SSK(sk, "Serval XMIT %s skb->len=%u\n",
                         sal_hdr_to_str(sh), skb->len);
                 
                 /* note that the service resolution stats
