@@ -121,7 +121,8 @@ SERVAL_KERNEL_SRC = \
 	linux/user_dma.c \
 	linux/iovlock.c \
 	linux/udp_encap.c \
-	linux/sysctl_net_serval.c
+	linux/sysctl_net_serval.c \
+	linux/inet_to_serval.c
 
 SERVAL_KERNEL_DEP = \
 	$(SERVAL_INCLUDE_DIR)/serval/ctrlmsg.h \

@@ -2800,7 +2800,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
                 LOG_DBG("Valid ACK, closing socket\n");
                 serval_sal_done(sk);
         } else {
-                LOG_ERR("Packet not a valid ACK\n");
+                LOG_DBG("Packet not a valid ACK\n");
         }
 
         return err;

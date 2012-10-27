@@ -1,3 +1,4 @@
+/* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
 /*
  * NET4:Sysctl interface to net af_serval subsystem.
  *
@@ -11,6 +12,7 @@
 #include <linux/sysctl.h>
 #include <net/net_namespace.h>
 #include <af_serval.h>
+#include <serval/debug.h>
 
 extern struct netns_serval net_serval;
 static int encap_port_max = 65535;
@@ -20,6 +22,37 @@ extern int udp_encap_client_init(unsigned short);
 extern int udp_encap_server_init(unsigned short);
 extern void udp_encap_client_fini(void);
 extern void udp_encap_server_fini(void);
+extern int inet_to_serval_enable(void);
+extern void inet_to_serval_disable(void);
+
+static int proc_inet_to_serval(struct ctl_table *table, int write,
+			       void *buffer, size_t *lenp, loff_t *ppos)
+{
+        int old_val = *((int *)table->data);
+        int err;
+
+        err = proc_dointvec(table, write, buffer, lenp, ppos);
+
+        if (write && err == 0) {
+                int val = *((int *)table->data);
+                
+                LOG_DBG("New val is %d\n", val);
+
+                if (old_val != 0 && val == 0) {
+                        inet_to_serval_disable();
+                } else if (old_val == 0 && val != 0) {
+                        err = inet_to_serval_enable();
+                        
+                        if (err) {
+                                LOG_ERR("Could not enable INET to SERVAL support!\n");
+                                *((int *)table->data) = 0;
+                        } else 
+                                *((int *)table->data) = 1;
+                }
+        }
+        
+        return err;
+}
 
 static int proc_udp_encap_port(struct ctl_table *table, int write,
 			       void *buffer, size_t *lenp, loff_t *ppos)
@@ -57,6 +90,13 @@ static int proc_udp_encap_port(struct ctl_table *table, int write,
 }
 
 static ctl_table serval_table[] = {
+        {
+                .procname= "inet_to_serval",
+		.data= &net_serval.sysctl_inet_to_serval,
+		.maxlen= sizeof(int),
+		.mode= 0644,
+		.proc_handler= proc_inet_to_serval
+	},
 	{
 		.procname= "sal_forward",
 		.data= &net_serval.sysctl_sal_forward,

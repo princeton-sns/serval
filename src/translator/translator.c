@@ -52,6 +52,8 @@ typedef union sockaddr_generic {
 
 struct socket {
         int fd;
+        sockaddr_generic_t addr;
+        socklen_t addrlen;
         unsigned char should_close:1;
         size_t bytes_written, bytes_read;
         socklen_t sndbuf;
@@ -65,8 +67,6 @@ enum sockettype {
 struct client {
         int from_family;
         unsigned int id;
-        sockaddr_generic_t addr;
-        socklen_t addrlen;
         pthread_t thr;
         struct socket sock[2];
         int translator_port;
@@ -183,12 +183,14 @@ static enum work_status work_translate(struct socket *from,
 
 static enum work_status work_inet_to_serval(struct client *c)
 {
-        return work_translate(&c->sock[ST_INET], &c->sock[ST_SERVAL], c->splicefd);
+        return work_translate(&c->sock[ST_INET], 
+                              &c->sock[ST_SERVAL], c->splicefd);
 }
 
 static enum work_status work_serval_to_inet(struct client *c)
 {
-        return work_translate(&c->sock[ST_SERVAL], &c->sock[ST_INET], c->splicefd);
+        return work_translate(&c->sock[ST_SERVAL], 
+                              &c->sock[ST_INET], c->splicefd);
 }
 
 struct client *client_create(int sock, struct sockaddr *sa, 
@@ -220,7 +222,8 @@ struct client *client_create(int sock, struct sockaddr *sa,
         if (c->from_family == AF_INET) {
                 /* We're translating from AF_INET to AF_SERVAL */
                 c->sock[ST_INET].fd = sock;
-                memcpy(&c->addr, sa, salen);
+                memcpy(&c->sock[ST_INET].addr, sa, salen);
+                c->sock[ST_INET].addrlen = salen;
 
                 c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
@@ -232,8 +235,17 @@ struct client *client_create(int sock, struct sockaddr *sa,
         } else if (c->from_family == AF_SERVAL) {
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->sock[ST_SERVAL].fd = sock;
-                memcpy(&c->addr, sa, salen);
-                
+                memcpy(&c->sock[ST_SERVAL].addr, sa, salen);
+                c->sock[ST_SERVAL].addrlen = salen;
+
+                /* The end of the serviceID contains the original port
+                   and IP. */ 
+                c->sock[ST_INET].addr.in.sin_family = AF_INET;
+                c->sock[ST_INET].addr.in.sin_addr.s_addr =
+                        c->sock[ST_SERVAL].addr.sv.sv_srvid.s_sid32[7];
+                c->sock[ST_INET].addr.in.sin_port =
+                        c->sock[ST_SERVAL].addr.sv.sv_srvid.s_sid16[13];
+                                              
                 c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
                 
                 if (c->sock[ST_INET].fd == -1) {
@@ -339,13 +351,14 @@ static void *client_thread(void *arg)
         memset(&addr, 0, sizeof(addr));
         
         if (c->from_family == AF_SERVAL) {
-                struct translator_init_pkt tip;
+                //struct translator_init_pkt tip;
                 
                 if (!cross_translate) {
                         LOG_ERR("AF_SERVAL to AF_INET without cross-translation enabled\n");
                         goto done;
                 }
                 /* Receive destination addr and port from other end */
+                /*
                 ret = recv(c->sock[ST_SERVAL].fd, &tip, sizeof(tip), MSG_WAITALL);
 
                 if (ret == -1) {
@@ -360,10 +373,13 @@ static void *client_thread(void *arg)
                 
                 LOG_DBG("client %u received %d bytes init pkt\n",
                         c->id, ret);
-
+                */
+                memcpy(&addr, &c->sock[ST_INET].addr, sizeof(addr));
+                /*
                 addr.in.sin_family = AF_INET;
                 memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
                 addr.in.sin_port = tip.port;
+                */
                 addrlen = sizeof(addr.in);
                 sock = c->sock[ST_INET].fd;
 
@@ -377,9 +393,10 @@ static void *client_thread(void *arg)
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
                 sock = c->sock[ST_SERVAL].fd;
-                if (cross_translate)
-                        should_send_init_pkt = 1;
-                inet_ntop(AF_INET, &c->addr.in.sin_addr, ipstr, 18);
+                //                if (cross_translate)
+                //      should_send_init_pkt = 1;
+                inet_ntop(AF_INET, &c->sock[ST_INET].addr.in.sin_addr, 
+                          ipstr, 18);
 
                 LOG_DBG("client %u from %s connecting to service %s...\n",
                         c->id, ipstr, service_id_to_str(&addr.sv.sv_srvid));
@@ -554,6 +571,7 @@ static int create_server_sock(int family, unsigned short port)
         } else if (family == AF_SERVAL) {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(port);
+                addr.sv.sv_prefix_bits = 128;
                 addrlen = sizeof(addr.sv);
         } else {
                 close(sock);

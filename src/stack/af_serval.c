@@ -25,6 +25,9 @@
 #include <net/protocol.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
 #include <linux/export.h>
+
+extern int __init inet_to_serval_init(void);
+extern void __exit inet_to_serval_fini(void);
 #endif
 
 #elif defined(OS_USER)
@@ -478,8 +481,9 @@ static int serval_wait_for_connect(struct sock *sk, long timeo)
 	return err;
 }
 
-static int serval_accept(struct socket *sock, struct socket *newsock,
-                           int flags)
+static int serval_accept(struct socket *sock, 
+                         struct socket *newsock,
+                         int flags)
 {
 	struct sock *sk = sock->sk, *nsk;
         struct serval_sock *ssk = serval_sk(sk);
@@ -622,7 +626,7 @@ sock_error:
 }
 
 static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg, size_t size)
+                          struct msghdr *msg, size_t size)
 {
 	struct sock *sk = sock->sk;
         int err;
@@ -641,8 +645,7 @@ static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
 }
 
 static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg,
-                            size_t size, int flags)
+                          struct msghdr *msg, size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
 	int addr_len = 0;
@@ -908,7 +911,7 @@ extern ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
 #endif /* ENABLE_SPLICE */
 #endif /* OS_LINUX_KERNEL */
 
-static const struct proto_ops serval_stream_ops = {
+const struct proto_ops serval_stream_ops = {
 	.family =	PF_SERVAL,
 	.owner =	THIS_MODULE,
 	.release =	serval_release,
@@ -1090,22 +1093,34 @@ int __init serval_init(void)
                 goto fail_sock_register;
         }
 
+#if defined(OS_LINUX_KERNEL)
+        err = inet_to_serval_init();
+
+        if (err != 0) {
+                LOG_CRIT("Cannot initialize INET to SERVAL support\n");
+                goto fail_inet_to_serval;
+        }
+#endif
         serval_tcp_init();
         
         delay_queue_init();
-out:
+ out:
         return err;
-fail_sock_register:
+#if defined(OS_LINUX_KERNEL)
+ fail_inet_to_serval:
+        sock_unregister(PF_SERVAL);
+#endif
+ fail_sock_register:
 	proto_unregister(&serval_tcp_proto);     
-fail_tcp_proto:
+ fail_tcp_proto:
 	proto_unregister(&serval_udp_proto);     
-fail_udp_proto:
+ fail_udp_proto:
         packet_fini();
-fail_packet:
+ fail_packet:
         serval_sock_tables_fini();
-fail_sock:
+ fail_sock:
         service_fini();
-fail_service:
+ fail_service:
         goto out;      
 }
 
@@ -1115,6 +1130,9 @@ fail_service:
 
 void __exit serval_fini(void)
 {
+#if defined(OS_LINUX_KERNEL)
+        inet_to_serval_fini();
+#endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);

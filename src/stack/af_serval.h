@@ -12,6 +12,7 @@ struct ctl_table_header;
 /* Control variables for Serval. */
 struct netns_serval {
 	int sysctl_sal_forward;
+        int sysctl_inet_to_serval;
 	int sysctl_udp_encap;
         int sysctl_udp_encap_client_port;
         int sysctl_udp_encap_server_port;
