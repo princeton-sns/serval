@@ -92,6 +92,10 @@ struct serval_sock_af_ops {
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
+        int	        (*setsockopt)(struct sock *sk, int level, int optname, 
+                                      char __user *optval, unsigned int optlen);
+	int	        (*getsockopt)(struct sock *sk, int level, int optname, 
+                                      char __user *optval, int __user *optlen);
         int             (*conn_build_syn)(struct sock *sk, struct sk_buff *skb);
         int             (*conn_build_synack)(struct sock *sk,
                                              struct dst_entry *dst,

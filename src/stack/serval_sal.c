@@ -619,28 +619,7 @@ static inline int has_valid_control_extension(struct sock *sk,
 static inline int has_valid_address_extension(struct sock *sk,
                                               struct sal_hdr *sfh)
 {
-        /*struct serval_sock *ssk = serval_sk(sk);
-        struct sal_address_ext *addr_ext =
-                (struct sal_address_ext *)(sfh + 1);
-        unsigned int hdr_len = sfh->shl << 2;
-        unsigned int addr_list_len = (hdr_len - 2 * sizeof(uint8_t) -
-                                     sizeof(uint16_t)) / sizeof(net_addr);
-
-        if (hdr_len < sizeof(*sfh) + sizeof(*desc_ext)) {
-                LOG_PKT("No address extension, hdr_len=%u\n", hdr_len);
-                return 0;
-        }
-
-        if (addr_ext->type != SAL_ADDRESS_EXT ||
-                addr_ext->length != sizeof(*addr_ext)) {
-                LOG_PKT("No addr extension, bad extension type\n");
-                return 0;
-        }
-
-        if (addr_list_len < 1) {
-        	    LOG_PKT("No addr extension, no list of addrs\n");
-                return 0;
-        }*/
+        LOG_DBG("Address extensions not supported yet\n");
 
         return 1;
 }
@@ -874,7 +853,6 @@ static void serval_sal_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
         /* Cannot release header here in case this is an unresolved
            packet. We need the skb_transport_header() pointer to
            calculate checksum */
-	//skb_header_release(skb);
 
 	serval_sal_add_ctrl_queue_tail(sk, skb);
         
@@ -1073,12 +1051,6 @@ static void serval_sal_timewait(struct sock *sk, int state, int timeo)
                 timeout = jiffies + rto;
 
         sk_reset_timer(sk, &ssk->tw_timer, timeout); 
-}
-
-/* Called by transport when it is done sending/receiving data */
-void serval_transport_done(struct sock *sk)
-{
-        
 }
 
 void serval_sal_done(struct sock *sk)

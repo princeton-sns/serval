@@ -82,6 +82,10 @@ static int serval_udp_build_ack(struct sock *sk,
 
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_udp_build_syn,
         .conn_build_synack = serval_udp_build_synack,
         .conn_build_ack = serval_udp_build_ack,
@@ -95,6 +99,10 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
 
 static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_udp_build_syn,
         .conn_build_synack = serval_udp_build_synack,
         .conn_build_ack = serval_udp_build_ack,
@@ -833,6 +841,13 @@ static void serval_udp_request_sock_destructor(struct request_sock *rsk)
 static int serval_udp_setsockopt(struct sock *sk, int level, int optname, 
                                  char __user *optval, unsigned int optlen)
 {
+#if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+        
+	if (level != IPPROTO_UDP)
+		return ssk->af_ops->setsockopt(sk, level, optname,
+                                               optval, optlen);
+#endif
         return -EOPNOTSUPP;
 }
 
@@ -840,6 +855,13 @@ static int serval_udp_getsockopt(struct sock *sk, int level,
                                  int optname, char __user *optval,
                                  int __user *optlen)
 {
+#if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+
+	if (level != IPPROTO_UDP)
+		return ssk->af_ops->getsockopt(sk, level, optname,
+                                               optval, optlen);
+#endif
         return -EOPNOTSUPP;
 }
 

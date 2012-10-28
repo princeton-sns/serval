@@ -414,6 +414,28 @@ void proto_unregister(struct proto *prot)
 	write_unlock(&proto_list_lock);
 }
 
+/*
+ *	Get a socket option on an socket.
+ *
+ *	FIX: POSIX 1003.1g is very ambiguous here. It states that
+ *	asynchronous errors should be reported by getsockopt. We assume
+ *	this means if you specify SO_ERROR (otherwise whats the point of it).
+ */
+int sock_common_getsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, int __user *optlen)
+{
+	return 0;
+}
+
+/*
+ *	Set socket options on an inet socket.
+ */
+int sock_common_setsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, unsigned int optlen)
+{
+	return 0;
+}
+
 /* 
    Wait for data in receive queue, return 1 if data exists, else 0.
  */

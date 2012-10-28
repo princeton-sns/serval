@@ -187,8 +187,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 /*
  *	This does both peername and sockname.
  */
-int serval_getname(struct socket *sock, struct sockaddr *uaddr,
-                   int *uaddr_len, int peer)
+static int serval_getname(struct socket *sock, struct sockaddr *uaddr,
+                          int *uaddr_len, int peer)
 {
 	struct sock *sk		= sock->sk;
 	struct inet_sock *inet	= inet_sk(sk);
@@ -285,26 +285,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 }
 	}
 	return 0;
-}
-
-int serval_getsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, int __user *optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-
-	return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
-}
-
-int serval_setsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, unsigned int optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-	
-        return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
 }
 
 static int serval_listen_start(struct sock *sk, int backlog)
@@ -923,8 +903,8 @@ const struct proto_ops serval_stream_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_tcp_poll,
@@ -949,8 +929,8 @@ static const struct proto_ops serval_dgram_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_poll,
@@ -962,7 +942,6 @@ static const struct proto_ops serval_dgram_ops = {
 #endif
 #endif
 };
-
 
 /**
    Create a new Serval socket.

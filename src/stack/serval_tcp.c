@@ -2239,7 +2239,6 @@ static int serval_do_tcp_getsockopt(struct sock *sk, int level,
                                     int optname, char __user *optval, 
                                     int __user *optlen)
 {
-	//struct serval_sock *ssk = serval_sk(sk);
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int val, len;
 
@@ -2384,8 +2383,11 @@ int serval_tcp_setsockopt(struct sock *sk, int level, int optname,
                           char __user *optval, unsigned int optlen)
 {
 #if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+
 	if (level != SOL_TCP)
-		return -EOPNOTSUPP;
+		return ssk->af_ops->setsockopt(sk, level, optname,
+                                               optval, optlen);
 
 	return serval_do_tcp_setsockopt(sk, level, optname, optval, optlen);
 #else
@@ -2398,8 +2400,11 @@ int serval_tcp_getsockopt(struct sock *sk, int level,
                           int __user *optlen)
 {
 #if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+
 	if (level != SOL_TCP)
-		return -EOPNOTSUPP;
+		return  ssk->af_ops->getsockopt(sk, level, optname,
+						     optval, optlen);
 
 	return serval_do_tcp_getsockopt(sk, level, optname, optval, optlen);
 #else
@@ -2513,6 +2518,10 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .receive = serval_tcp_rcv,
         .send_check = serval_tcp_v4_send_check,
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
@@ -2533,6 +2542,10 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .receive = serval_tcp_rcv,
         .send_check = serval_tcp_v4_send_check,
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_tcp_connection_build_syn,
         .conn_build_synack = serval_tcp_connection_build_synack,
         .conn_build_ack = serval_tcp_connection_build_ack,
@@ -2872,6 +2885,7 @@ struct proto serval_tcp_proto = {
         .sendmsg                = serval_tcp_sendmsg,
         .recvmsg                = serval_tcp_recvmsg,
         .setsockopt             = serval_tcp_setsockopt,
+        .getsockopt             = serval_tcp_getsockopt,
 #if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
         .sendpage               = serval_tcp_sendpage,
 #endif

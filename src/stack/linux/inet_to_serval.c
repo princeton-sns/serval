@@ -28,6 +28,9 @@ extern const struct proto_ops serval_stream_ops;
 static struct proto old_tcp_prot;
 static int enabled = 0;
 
+extern int inet_getname(struct socket *sock, struct sockaddr *uaddr,
+			int *uaddr_len, int peer);
+
 static void inet_addr_to_service(struct sockaddr_in *in,
                                  struct sockaddr_sv *sv)
 {
@@ -170,6 +173,7 @@ int __init inet_to_serval_init(void)
                sizeof(serval_inet_stream_ops));
         serval_inet_stream_ops.bind = serval_inet_bind;
         serval_inet_stream_ops.connect = serval_inet_connect;
+        serval_inet_stream_ops.getname = inet_getname;
         memcpy(&old_tcp_prot, &tcp_prot, sizeof(old_tcp_prot));
         return 0;
 }
