@@ -54,7 +54,7 @@ struct socket {
         int fd;
         sockaddr_generic_t addr;
         socklen_t addrlen;
-        unsigned char should_close:1;
+        unsigned char should_close;
         size_t bytes_written, bytes_read;
         socklen_t sndbuf;
 };
@@ -85,7 +85,6 @@ struct translator_init_pkt {
 static LOG_DEFINE(logh);
 struct signal exit_signal;
 static LIST_HEAD(client_list);
-int cross_translate = 0;
 
 static const char *family_to_str(int family)
 {
@@ -128,10 +127,10 @@ static enum work_status work_translate(struct socket *from,
         }
 
         readlen = to->sndbuf - bytes_queued;
-        
+        /*
         LOG_DBG("translating %zu bytes from %d to %d\n", 
                 readlen, from->fd, to->fd);
-
+        */
         if (readlen == 0)
                 return WORK_NOSPACE;
 
@@ -164,6 +163,7 @@ static enum work_status work_translate(struct socket *from,
                                 LOG_DBG("splice2: EPIPE\n");
                                 status = WORK_ERROR;
                         } else if (errno == EWOULDBLOCK) {
+                                /* Try again */
                         } else {
                                 LOG_ERR("splice2: %s\n",
                                         strerror(errno));
@@ -223,8 +223,9 @@ struct client *client_create(int sock, struct sockaddr *sa,
         if (c->from_family == AF_INET) {
                 /* We're translating from AF_INET to AF_SERVAL */
                 c->sock[ST_INET].fd = sock;
-                memcpy(&c->sock[ST_INET].addr, sa, salen);
-                c->sock[ST_INET].addrlen = salen;
+                memcpy(&c->sock[ST_INET].addr, sa, 
+                       sizeof(struct sockaddr_in));
+                c->sock[ST_INET].addrlen = sizeof(struct sockaddr_in);
 
                 c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
@@ -236,8 +237,9 @@ struct client *client_create(int sock, struct sockaddr *sa,
         } else if (c->from_family == AF_SERVAL) {
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->sock[ST_SERVAL].fd = sock;
-                memcpy(&c->sock[ST_SERVAL].addr, sa, salen);
-                c->sock[ST_SERVAL].addrlen = salen;
+                memcpy(&c->sock[ST_SERVAL].addr, sa, 
+                       sizeof(struct sockaddr_sv));
+                c->sock[ST_SERVAL].addrlen = sizeof(struct sockaddr_sv);
 
                 /* The end of the serviceID contains the original port
                    and IP. */ 
@@ -258,7 +260,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 LOG_ERR("Unsupported client family\n");
                 goto fail_sock;
         }
-
+                
         for (i = 0; i < 2; i++) {
                 socklen_t len = sizeof(c->sock[i].sndbuf);
 
@@ -287,58 +289,6 @@ static void client_free(struct client *c)
         free(c);
 }
 
-static int client_send_init_packet(struct client *c)
-{
-        struct translator_init_pkt tip;
-        struct sockaddr_in addr;
-        socklen_t addrlen = sizeof(addr);
-        size_t tot_sent = 0, send_len = sizeof(tip);
-        unsigned char *send_ptr = (unsigned char *)&tip;
-        int ret;
-
-        ret = getsockopt(c->sock[ST_INET].fd, SOL_IP, SO_ORIGINAL_DST, 
-                         &addr, &addrlen);
-        
-        if (ret == -1) {
-                LOG_DBG("client %u, could not get original port."
-                        "Probably not NAT'ed\n", c->id);
-                return -1;
-        } else {
-                char buf[18];
-                
-                inet_ntop(AF_INET, &addr.sin_addr, buf, sizeof(buf));
-
-                LOG_DBG("Original dst: %s:%u\n",
-                        buf, ntohs(addr.sin_port));
-        }
-
-        /* Send destination addr and port to other end */        
-        memset(&tip, 0, sizeof(tip));
-        memcpy(&tip.addr, &addr.sin_addr, sizeof(tip.addr));
-        tip.port = addr.sin_port;
-        
-        do {
-                ret = send(c->sock[ST_SERVAL].fd, send_ptr, send_len, 0);
-                
-                if (ret == 0) {
-                        LOG_DBG("client %u other proxy closed\n",
-                                c->id);
-                } else if (ret == -1) {
-                        LOG_ERR("client %u init packet: %s\n", 
-                                c->id, strerror(errno));
-                } else {
-                        tot_sent += ret;
-                        send_len -= ret;
-                        send_ptr += ret;
-                }
-        } while (send_len > 0 && ret > 0);
-
-        LOG_DBG("client %u sent %zu bytes init pkt\n",
-                c->id, tot_sent);
-
-        return ret;
-}
-
 static void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
@@ -347,41 +297,12 @@ static void *client_thread(void *arg)
         int sock = -1;
         char ipstr[18];
         int running = 1, ret;
-        int should_send_init_pkt = 0;
 
         memset(&addr, 0, sizeof(addr));
         
         if (c->from_family == AF_SERVAL) {
-                //struct translator_init_pkt tip;
-                
-                if (!cross_translate) {
-                        LOG_ERR("AF_SERVAL to AF_INET without cross-translation enabled\n");
-                        goto done;
-                }
-                /* Receive destination addr and port from other end */
-                /*
-                ret = recv(c->sock[ST_SERVAL].fd, &tip, sizeof(tip), MSG_WAITALL);
-
-                if (ret == -1) {
-                        LOG_ERR("client %u could not read init packet: %s\n",
-                                c->id, strerror(errno));
-                        goto done;
-                } else if (ret != sizeof(tip)) {
-                        LOG_ERR("client %u bad init packet size %d\n",
-                                c->id, ret);
-                        goto done;
-                }
-                
-                LOG_DBG("client %u received %d bytes init pkt\n",
-                        c->id, ret);
-                */
-                memcpy(&addr, &c->sock[ST_INET].addr, sizeof(addr));
-                /*
-                addr.in.sin_family = AF_INET;
-                memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
-                addr.in.sin_port = tip.port;
-                */
                 addrlen = sizeof(addr.in);
+                memcpy(&addr, &c->sock[ST_INET].addr, addrlen);
                 sock = c->sock[ST_INET].fd;
 
                 inet_ntop(AF_INET, &addr.in.sin_addr, 
@@ -394,8 +315,7 @@ static void *client_thread(void *arg)
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
                 sock = c->sock[ST_SERVAL].fd;
-                //                if (cross_translate)
-                //      should_send_init_pkt = 1;
+
                 inet_ntop(AF_INET, &c->sock[ST_INET].addr.in.sin_addr, 
                           ipstr, 18);
 
@@ -446,17 +366,6 @@ static void *client_thread(void *arg)
                 if (fds[1].revents & POLLERR) {
                         running = 0;
                 } else if (fds[1].revents) {
-                        if (should_send_init_pkt == 1) {
-                                ret = client_send_init_packet(c);
-
-                                if (ret <= 0) {
-                                        LOG_ERR("client %u could not send init packet, ret=%d\n", c->id, ret);
-                                        running = 0;
-                                        break;
-                                }
-                                should_send_init_pkt = 0;
-                        }
-                        
                         status = work_inet_to_serval(c);
                         
                         if (status == WORK_ERROR) {
@@ -477,8 +386,9 @@ static void *client_thread(void *arg)
                 }
 
                 if (c->sock[0].should_close ||
-                    c->sock[1].should_close) 
+                    c->sock[1].should_close) {
                         running = 0;
+                }
         }
  done:
         LOG_DBG("client %u exits, "
@@ -625,16 +535,24 @@ static int accept_client(int sock, int port)
                 return -1;
         }
 
-        LOG_DBG("accepted %s client\n", 
-                family_to_str(addr.sa.sa_family));
+        LOG_DBG("accepted %s client, addrlen=%u\n", 
+                family_to_str(addr.sa.sa_family), addrlen);
 
-        c = client_create(client_sock, &addr.sa, addrlen);        
+        if (addr.sa.sa_family == AF_SERVAL && 
+            addrlen > sizeof(addr.sv)) {
+                /* Serval accept() could also return IP appended after
+                   serviceID */
+                addrlen = sizeof(addr.sv);
+        }
+                
+        c = client_create(client_sock, &addr.sa, addrlen);
+
         if (!c) {
                 LOG_ERR("Could not create client, family=%d\n", 
                         addr.sa.sa_family);
                 goto err;
         }
-
+               
         c->translator_port = port;
         
         ret = pthread_create(&c->thr, NULL, client_thread, c);
@@ -760,9 +678,6 @@ static void print_usage(void)
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-s, --serval\t\t run an AF_SERVAL to AF_INET translator.\n");
-        printf("\t-x, --x-translate\t\t cross translate, i.e., " 
-               "this translator will connect to another translator "
-               "that reverses the translation.\n");
 }
 
 static int daemonize(void)
@@ -855,9 +770,6 @@ int main(int argc, char **argv)
                 } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") ==  0) {
                         daemon = 1;
-                } else if (strcmp(argv[0], "-x") == 0 ||
-                           strcmp(argv[0], "--x-translate") ==  0) {
-                        cross_translate = 1;
                 } else if (strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--log") ==  0) {
                         if (argc == 1 || log_is_open(&logh)) {

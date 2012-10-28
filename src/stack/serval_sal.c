@@ -2679,7 +2679,7 @@ static int serval_sal_finwait1_state_process(struct sock *sk,
                                 serval_sock_set_state(sk, SAL_CLOSING);
                 }
         } else if (ack_ok) {
-                serval_sal_timewait(sk, SAL_FINWAIT2, 0);
+                serval_sal_timewait(sk, SAL_FINWAIT2, SAL_FIN_TIMEOUT);
         }
         
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
