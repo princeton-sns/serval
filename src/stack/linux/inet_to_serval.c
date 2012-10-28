@@ -98,7 +98,7 @@ static int serval_inet_tcp_init_sock(struct sock *sk)
         sock->ops = &serval_inet_stream_ops;
         sk = serval_sk_alloc(sock_net(sk), sock,
                              GFP_KERNEL,
-                             SERVAL_PROTO_UDP,
+                             SERVAL_PROTO_TCP,
                              &serval_tcp_proto);
         
         if (!sk) {
