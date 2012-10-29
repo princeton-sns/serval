@@ -25,10 +25,10 @@
 #include <net/protocol.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
 #include <linux/export.h>
+#endif
 
 extern int __init inet_to_serval_init(void);
 extern void __exit inet_to_serval_fini(void);
-#endif
 
 #elif defined(OS_USER)
 /* User-level declarations */

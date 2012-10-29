@@ -51,12 +51,18 @@ public class AppHostCtrl {
 			final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr = null;
+		int prefixBits = 0;
 		int type = HostCtrl.SERVICE_RULE_FORWARD;
 
 		if (hc == null)
 			return;
 
-		sid = AppHostCtrl.createServiceID(serviceStr);
+		String res[] = serviceStr.split(":");
+		
+		if (res.length == 2)
+			prefixBits = Integer.parseInt(res[1]);
+		
+		sid = AppHostCtrl.createServiceID(res[0]);
 
 		if (sid == null) {
 			Toast t = Toast.makeText(context, "Not a valid serviceID",
@@ -83,10 +89,10 @@ public class AppHostCtrl {
 		switch (op) {
 		case AppHostCtrl.SERVICE_ADD:
 			Log.d("Serval", "adding service " + sid + " type " + type + " address " + addr);
-			AppHostCtrl.hc.addService(type, sid, 0, 1, 1, addr);
+			AppHostCtrl.hc.addService(type, sid, prefixBits, 1, 1, addr);
 			break;
 		case AppHostCtrl.SERVICE_REMOVE:
-			AppHostCtrl.hc.removeService(sid, 0, addr);
+			AppHostCtrl.hc.removeService(sid, prefixBits, addr);
 			break;
 		default:
 			break;
