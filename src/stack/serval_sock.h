@@ -126,6 +126,9 @@ struct serval_sock_af_ops {
 struct serval_sock {
 	/* NOTE: sk has to be the first member */
         struct inet_sock        sk;
+        struct sock             *old_sk; /* see linux/inet_to_serval.c
+                                            for how this pointer is
+                                            used. */
 #if defined(OS_USER)
         struct client           *client;
 #endif

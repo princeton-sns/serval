@@ -25,8 +25,10 @@
 extern struct proto tcp_prot;
 extern struct proto serval_tcp_proto;
 extern const struct proto_ops serval_stream_ops;
+extern const struct proto_ops inet_stream_ops;
 static struct proto old_tcp_prot;
 static int enabled = 0;
+static struct proto_ops serval_inet_stream_ops;
 
 extern int inet_getname(struct socket *sock, struct sockaddr *uaddr,
 			int *uaddr_len, int peer);
@@ -64,12 +66,32 @@ static int serval_inet_connect(struct socket *sock, struct sockaddr *addr,
 {
         struct sockaddr_in *in = (struct sockaddr_in *)addr;
         struct sockaddr_sv sv;
-
+        unsigned char localhost[4] = { 0x7f, 0x0, 0x0, 0x1 };
+        struct sock *sk = sock->sk;
+        
         if (alen < sizeof(addr->sa_family))
 		return -EINVAL;
 
         if (addr->sa_family != AF_INET)
                 return -EAFNOSUPPORT;
+
+        if (memcmp(&in->sin_addr, &localhost, sizeof(in->sin_addr)) == 0) {
+                /* Give back control to legacy TCP in case of localhost */
+                LOG_DBG("Dest is localhost\n");
+                sock->ops = &inet_stream_ops;
+		sock->sk = serval_sk(sk)->old_sk;
+                module_put(serval_inet_stream_ops.owner);
+                sk_common_release(sk);
+                sk = sock->sk;
+                sk->sk_type = sock->type;
+		sk->sk_wq = sock->wq;
+                return inet_stream_ops.connect(sock, addr, alen, flags);
+        }
+        
+        /* Release old TCP sock */
+        module_put(inet_stream_ops.owner);
+        sk_common_release(serval_sk(sk)->old_sk);
+        serval_sk(sk)->old_sk = NULL;
 
         inet_addr_to_service(in, &sv);
         alen = sizeof(sv);
@@ -78,14 +100,11 @@ static int serval_inet_connect(struct socket *sock, struct sockaddr *addr,
                                          alen, flags);
 }
 
-static struct proto_ops serval_inet_stream_ops;
-
 static int serval_inet_tcp_init_sock(struct sock *sk)
 {
         struct socket *sock = sk->sk_socket;
         struct sock *old_sk = sk;
         const struct proto_ops *old_ops = sock->ops;
-        struct module *owner = sock->ops->owner;
         struct inet_sock *inet;
         int err = 0;
 
@@ -130,9 +149,10 @@ static int serval_inet_tcp_init_sock(struct sock *sk)
 	}
  
         /* Decrease usage count in old protocol module */
-        module_put(owner);
+        serval_sk(sk)->old_sk = old_sk;
+        //module_put(owner);
 
-        sk_common_release(old_sk);
+        //sk_common_release(old_sk);
 
         LOG_DBG("Successfully stole sock\n");
 
