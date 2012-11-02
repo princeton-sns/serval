@@ -747,8 +747,10 @@ void serval_sock_destroy(struct sock *sk)
                 atomic_read(&sk->sk_wmem_alloc),
                 atomic_read(&sk->sk_omem_alloc));
 
-        if (serval_sk(sk)->old_sk)
-                sk_common_release(serval_sk(sk)->old_sk);
+        if (ssk->old_sk) {
+                sock_put(ssk->old_sk);
+                sk_common_release(ssk->old_sk);
+        }
 
 	sock_put(sk);
 }

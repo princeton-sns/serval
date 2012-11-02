@@ -1838,7 +1838,6 @@ skip_copy:
 			copied_early = 0;
 		}
                 break;
-                
 	} while (len > 0);
 
 	if (user_recv) {

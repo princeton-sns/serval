@@ -77,12 +77,13 @@ static int serval_inet_connect(struct socket *sock, struct sockaddr *addr,
 
         if (memcmp(&in->sin_addr, &localhost, sizeof(in->sin_addr)) == 0) {
                 /* Give back control to legacy TCP in case of localhost */
-                LOG_DBG("Dest is localhost\n");
+                LOG_DBG("Dest is localhost, giving back sock\n");
                 sock->ops = &inet_stream_ops;
 		sock->sk = serval_sk(sk)->old_sk;
                 module_put(serval_inet_stream_ops.owner);
                 sk_common_release(sk);
                 sk = sock->sk;
+                sock_put(sk);
                 sk->sk_type = sock->type;
 		sk->sk_wq = sock->wq;
                 return inet_stream_ops.connect(sock, addr, alen, flags);
@@ -90,6 +91,7 @@ static int serval_inet_connect(struct socket *sock, struct sockaddr *addr,
         
         /* Release old TCP sock */
         module_put(inet_stream_ops.owner);
+        sock_put(serval_sk(sk)->old_sk);
         sk_common_release(serval_sk(sk)->old_sk);
         serval_sk(sk)->old_sk = NULL;
 
@@ -148,13 +150,10 @@ static int serval_inet_tcp_init_sock(struct sock *sk)
                 }
 	}
  
-        /* Decrease usage count in old protocol module */
+        sock_hold(old_sk);
         serval_sk(sk)->old_sk = old_sk;
-        //module_put(owner);
 
-        //sk_common_release(old_sk);
-
-        LOG_DBG("Successfully stole sock\n");
+        LOG_DBG("Successfully hijacked sock\n");
 
         return 0;
         
