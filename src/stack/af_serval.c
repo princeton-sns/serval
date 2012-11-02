@@ -165,7 +165,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         sk->sk_prot->hash(sk);
                
         if (!serval_sock_flag(ssk, SSK_FLAG_HASHED)) {
-                LOG_DBG("Could not bind socket, hashing failed\n");
+                LOG_SSK(sk, "Could not bind socket, hashing failed\n");
                 return -EINVAL;
         }
 
@@ -314,7 +314,7 @@ static int serval_listen_stop(struct sock *sk)
                 
                 list_del(&srsk->lh);
 
-                LOG_DBG("deleting SYN queued request socket\n");
+                LOG_SSK(sk, "deleting SYN queued request socket\n");
 
                 reqsk_free(&srsk->rsk.req);
                 sk->sk_ack_backlog--;
@@ -563,7 +563,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if ((1 << sk->sk_state) & (SALF_REQUEST | SALF_RESPOND)) {
                 /* Error code is set above */
-                LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
+                LOG_SSK(sk, "Waiting for connect, timeo=%ld\n", timeo);
 
                 if (!timeo)
                         goto out;
@@ -572,9 +572,9 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
                 if (err) {
                         if (err == -ERESTARTSYS) {
-                                LOG_DBG("sk_stream_wait_connect interrupted\n");
+                                LOG_SSK(sk, "sk_stream_wait_connect interrupted\n");
                         } else {
-                                LOG_DBG("sk_stream_wait_connect err=%d\n",
+                                LOG_SSK(sk, "sk_stream_wait_connect err=%d\n",
                                         err);
                         }
                         goto out;
@@ -728,7 +728,7 @@ int serval_release(struct socket *sock)
                 int state;
                 long timeout = 0;
 
-                LOG_DBG("\n");
+                LOG_SSK(sk, "\n");
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)

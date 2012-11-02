@@ -328,7 +328,7 @@ void serval_tcp_initialize_rcv_mss(struct sock *sk)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	unsigned int hint = min_t(unsigned int, tp->advmss, tp->mss_cache);
 
-        LOG_DBG("tp->advmss=%u tp->mss_cache=%u tp->rcv_wnd/2=%u hint=%u\n",
+        LOG_SSK(sk, "tp->advmss=%u tp->mss_cache=%u tp->rcv_wnd/2=%u hint=%u\n",
                 tp->advmss, tp->mss_cache, tp->rcv_wnd/2, hint);
 
 	hint = min(hint, tp->rcv_wnd / 2);
@@ -337,7 +337,7 @@ void serval_tcp_initialize_rcv_mss(struct sock *sk)
 
 	tp->tp_ack.rcv_mss = hint;
 
-        LOG_DBG("rcv_mss=%u\n", hint);
+        LOG_SSK(sk, "rcv_mss=%u\n", hint);
 }
 
 
@@ -565,7 +565,7 @@ void serval_tcp_enter_cwr(struct sock *sk, const int set_ssthresh)
 		//TCP_ECN_queue_cwr(tp);
 
 		serval_tcp_set_ca_state(sk, TCP_CA_CWR);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	}
@@ -587,7 +587,7 @@ void serval_tcp_cwnd_application_limited(struct sock *sk)
 		if (win_used < tp->snd_cwnd) {        
 			tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_cwnd = (tp->snd_cwnd + win_used) >> 1;
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                        LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);                        
 		}
 		tp->snd_cwnd_used = 0;
@@ -896,7 +896,7 @@ void serval_tcp_enter_loss(struct sock *sk, int how)
 		tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 		tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
 		serval_tcp_ca_event(sk, CA_EVENT_LOSS);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 	}
 	tp->snd_cwnd	   = 1;
@@ -980,7 +980,7 @@ static void serval_tcp_undo_cwr(struct sock *sk, const int undo)
 		if (undo && tp->prior_ssthresh > tp->snd_ssthresh) {
 			tp->snd_ssthresh = tp->prior_ssthresh;
 			//TCP_ECN_withdraw_cwr(tp);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                        LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 		}
 	} else {
@@ -1152,7 +1152,7 @@ static void serval_tcp_mtup_probe_failed(struct sock *sk)
 
 	tp->tp_mtup.search_high = tp->tp_mtup.probe_size - 1;
 	tp->tp_mtup.probe_size = 0;
-        LOG_DBG("TCP MTU probe failed!\n");
+        LOG_SSK(sk, "TCP MTU probe failed!\n");
 }
 
 static void serval_tcp_mtup_probe_success(struct sock *sk)
@@ -1168,14 +1168,14 @@ static void serval_tcp_mtup_probe_success(struct sock *sk)
 	tp->snd_cwnd_stamp = tcp_time_stamp;
 	tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
 
-        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+        LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 	tp->tp_mtup.search_low = tp->tp_mtup.probe_size;
 	tp->tp_mtup.probe_size = 0;
 	serval_tcp_sync_mss(sk, tp->pmtu_cookie);
 
-        LOG_DBG("TCP MTU probe success!\n");
+        LOG_SSK(sk, "TCP MTU probe success!\n");
 }
 
 /* If ACK arrived pointing to a remembered SACK, it means that our
@@ -1505,7 +1505,7 @@ void serval_tcp_simple_retransmit(struct sock *sk)
 	if (tp->ca_state != TCP_CA_Loss) {
 		tp->high_seq = tp->snd_nxt;
 		tp->snd_ssthresh = serval_tcp_current_ssthresh(sk);
-                LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                         tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 
 		tp->prior_ssthresh = 0;
@@ -1655,9 +1655,9 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 		}
 
         /* If we've migrated, just retransmit, don't necessarily adjust cwnd */
-        LOG_DBG("Fast retx ack=%lu snd_mig_last=%lu\n", ack, tp->snd_mig_last); 
+        LOG_SSK(sk, "Fast retx ack=%lu snd_mig_last=%lu\n", ack, tp->snd_mig_last); 
         if (before(ack, tp->snd_mig_last)) {
-            LOG_DBG("Out-of-order due to migration, potentially.\n", ack);
+            LOG_SSK(sk, "Out-of-order due to migration, potentially.\n", ack);
             serval_tcp_xmit_retransmit_queue(sk);
             return;
         }
@@ -1680,7 +1680,7 @@ static void serval_tcp_fastretrans_alert(struct sock *sk,
 			if (!(flag & FLAG_ECE))
 				tp->prior_ssthresh = serval_tcp_current_ssthresh(sk);
 			tp->snd_ssthresh = tp->ca_ops->ssthresh(sk);
-                        LOG_DBG("snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
+                        LOG_SSK(sk, "snd_ssthresh=%u snd_cwnd_clamp=%u snd_cwnd=%u\n",
                                 tp->snd_ssthresh, tp->snd_cwnd_clamp, tp->snd_cwnd);
 			//TCP_ECN_queue_cwr(tp);
 		}
@@ -2050,7 +2050,7 @@ static int serval_tcp_clean_rtx_queue(struct sock *sk,
 	}
 
         if (flag & FLAG_FIN_ACKED) {
-                LOG_DBG("End of stream ACK, sending SAL FIN\n");
+                LOG_SSK(sk, "End of stream ACK, sending SAL FIN\n");
                 serval_sal_send_fin(sk);
         }
 	return flag;
@@ -2184,7 +2184,7 @@ no_queue:
 	return 1;
 
 invalid_ack:
-        LOG_DBG("invalid ACK %u after %u:%u\n", 
+        LOG_SSK(sk, "invalid ACK %u after %u:%u\n", 
                 ack, tp->snd_una, tp->snd_nxt);
 	//SOCK_DEBUG(sk, "Ack %u after %u:%u\n", ack, tp->snd_una, tp->snd_nxt);
 	return -1;
@@ -2197,7 +2197,7 @@ old_ack:
 			tcp_try_keep_open(sk);
 	}
         */
-        LOG_DBG("old ACK %u before %u:%u\n", 
+        LOG_SSK(sk, "old ACK %u before %u:%u\n", 
                 ack, tp->snd_una, tp->snd_nxt);
 
 	//SOCK_DEBUG(sk, "Ack %u before %u:%u\n", ack, tp->snd_una, tp->snd_nxt);
@@ -2436,7 +2436,7 @@ static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
         int window = __serval_tcp_select_window(sk);
 
-        LOG_DBG("rcv_nxt=%u rcv_wup=%u rcv_mss=%u window=%d rcv_wnd=%u quickack=%d ofo=%d\n", 
+        LOG_SSK(sk, "rcv_nxt=%u rcv_wup=%u rcv_mss=%u window=%d rcv_wnd=%u quickack=%d ofo=%d\n", 
                 tp->rcv_nxt, tp->rcv_wup, tp->tp_ack.rcv_mss, window, 
                 tp->rcv_wnd, serval_tcp_in_quickack_mode(sk), 
                 (ofo_possible && skb_peek(&tp->out_of_order_queue)));
@@ -2454,10 +2454,10 @@ static void __serval_tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 		/* Then ack it now */
 		serval_tcp_send_ack(sk);
 
-                LOG_DBG("sending normal ACK\n");
+                LOG_SSK(sk, "sending normal ACK\n");
 	} else {
 		/* Else, send delayed ack. */
-                LOG_DBG("sending delayed ACK\n");
+                LOG_SSK(sk, "sending delayed ACK\n");
 		serval_tcp_send_delayed_ack(sk);
 	}
 }
@@ -2600,7 +2600,7 @@ static void serval_tcp_fin(struct sk_buff *skb,
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-        LOG_DBG("TCP FIN %s\n", tcphdr_to_str(th));
+        LOG_SSK(sk, "TCP FIN %s\n", tcphdr_to_str(th));
 
         /* Ignore this FIN, wait for SAL fin */
         //th->fin = 0;
@@ -2642,7 +2642,7 @@ static void serval_tcp_ofo_queue(struct sock *sk)
 		}
                 */
 		if (!after(TCP_SKB_CB(skb)->end_seq, tp->rcv_nxt)) {
-			LOG_DBG("ofo packet was already received\n");
+			LOG_SSK(sk, "ofo packet was already received\n");
 			__skb_unlink(skb, &tp->out_of_order_queue);
 			__kfree_skb(skb);
 			continue;
@@ -2703,7 +2703,7 @@ static void serval_tcp_data_queue(struct sock *sk, struct sk_buff *skb)
 	int eaten = -1;
 
 	if (TCP_SKB_CB(skb)->seq == TCP_SKB_CB(skb)->end_seq) {
-		//LOG_DBG("seq is end_seq, dropping\n");
+		//LOG_SSK(sk, "seq is end_seq, dropping\n");
                 goto drop;
         }
 
@@ -2816,7 +2816,7 @@ queue_and_out:
 	//TCP_ECN_check_ce(tp, skb);
 
 	if (serval_tcp_try_rmem_schedule(sk, skb, skb->truesize)) {
-                LOG_DBG("rmem schedule failed\n");
+                LOG_SSK(sk, "rmem schedule failed\n");
 		goto drop;
         }
 
@@ -3302,7 +3302,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 		if (!th->rst)
 			serval_tcp_send_dupack(sk, skb);
 
-                LOG_DBG("Bad seqno seq=%u end_seq=%u rcv_nxt=%u rcv_wnd=%u\n", 
+                LOG_SSK(sk, "Bad seqno seq=%u end_seq=%u rcv_nxt=%u rcv_wnd=%u\n", 
                         TCP_SKB_CB(skb)->seq, 
                         TCP_SKB_CB(skb)->end_seq, 
                         tp->rcv_nxt, 
@@ -3314,7 +3314,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	/* Step 2: check RST bit */
 	if (th->rst) {
 		serval_sal_rcv_reset(sk);
-                LOG_DBG("RST bit set!\n");
+                LOG_SSK(sk, "RST bit set!\n");
 		goto discard;
 	}
 
@@ -3331,7 +3331,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 			TCP_INC_STATS_BH(sock_net(sk), TCP_MIB_INERRS);
 		NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONSYN);
                 */
-                LOG_DBG("SYN out of window. Handling as RESET\n");
+                LOG_SSK(sk, "SYN out of window. Handling as RESET\n");
 		serval_sal_rcv_reset(sk);
 		return -1;
 	}
@@ -3339,7 +3339,7 @@ static int serval_tcp_validate_incoming(struct sock *sk, struct sk_buff *skb,
 	return 1;
 
 discard:
-        LOG_DBG("Discarding packet\n");
+        LOG_SSK(sk, "Discarding packet\n");
         kfree_skb(skb);
 	return 0;
 }
@@ -3438,7 +3438,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 					if (tp->linger2 < 0 ||
 					    (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
-                                                LOG_DBG("TCP Done!\n");
+                                                LOG_SSK(sk, "TCP Done!\n");
 						serval_sal_done(sk);
 						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
                            
@@ -3476,7 +3476,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			break;
 		}
 	} else {
-                LOG_DBG("NO ACK in packet -> goto discard\n");
+                LOG_SSK(sk, "NO ACK in packet -> goto discard\n");
 		goto discard;
         }
 	/* step 6: check the URG bit */
@@ -3499,7 +3499,7 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
-                                LOG_DBG("received seqno after rcv_nxt. Handling as RESET\n");
+                                LOG_SSK(sk, "received seqno after rcv_nxt. Handling as RESET\n");
 				serval_sal_rcv_reset(sk);
                                 /* FIXME: free_skb here, or handle in
                                    calling func? */
@@ -3820,7 +3820,7 @@ int serval_tcp_syn_recv_state_process(struct sock *sk, struct sk_buff *skb)
                         return 1;
                 }
 
-                LOG_DBG("ACK is acceptable!\n");
+                LOG_SSK(sk, "ACK is acceptable!\n");
 
                 tp->copied_seq = tp->rcv_nxt;
 #if defined(OS_LINUX_KERNEL)
@@ -3881,7 +3881,7 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 	serval_tcp_parse_options(skb, &tp->rx_opt, &hash_location, 0);
 
         if (th->ack) {
-                LOG_DBG("SYN-ACK %s\n", tcphdr_to_str(th));
+                LOG_SSK(sk, "SYN-ACK %s\n", tcphdr_to_str(th));
 
 		/* rfc793:
 		 * "If the state is SYN-SENT then
@@ -3914,10 +3914,10 @@ int serval_tcp_syn_sent_state_process(struct sock *sk, struct sk_buff *skb)
 		tp->snd_wnd = ntohs(th->window);
 		serval_tcp_init_wl(tp, TCP_SKB_CB(skb)->seq);
 
-                LOG_DBG("rx_opt.wscale_ok=%u\n", tp->rx_opt.wscale_ok);
+                LOG_SSK(sk, "rx_opt.wscale_ok=%u\n", tp->rx_opt.wscale_ok);
 
 		if (!tp->rx_opt.wscale_ok) {
-                        LOG_DBG("Window scaling is NOT OK!\n");
+                        LOG_SSK(sk, "Window scaling is NOT OK!\n");
 			tp->rx_opt.snd_wscale = tp->rx_opt.rcv_wscale = 0;
 			tp->window_clamp = min(tp->window_clamp, 65535U);
                 }

@@ -781,7 +781,7 @@ static inline void serval_sal_ack_update_rtt(struct sock *sk,
 	serval_sal_set_rto(sk);
 	serval_sk(sk)->backoff = 0; 
 
-        LOG_DBG("Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
+        LOG_SSK(sk, "Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
                 HZ, seq_rtt, serval_sk(sk)->rto);
 }
 
@@ -883,7 +883,7 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
         LOG_PKT("writing from queue snd_una=%u snd_nxt=%u snd_wnd=%u\n",
                 ssk->snd_seq.una, ssk->snd_seq.nxt, ssk->snd_seq.wnd);
         
-        LOG_DBG("RTO HZ=%u rto=%u rto_msec=%u\n",
+        LOG_SSK(sk, "RTO HZ=%u rto=%u rto_msec=%u\n",
                 HZ, ssk->rto, jiffies_to_msecs(ssk->rto));
 
 	while ((skb = serval_sal_send_head(sk)) && 
@@ -983,7 +983,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 verno)
                 err = ssk->af_ops->conn_build_syn(sk, skb);
 
                 if (err) {
-                        LOG_ERR("Transport protocol returned error\n");
+                        LOG_SSK(sk, "Transport protocol returned error\n");
                         kfree_skb(skb);
                         return err;
                 }
@@ -994,7 +994,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 verno)
         SAL_SKB_CB(skb)->verno = verno;
         ssk->snd_seq.nxt = verno + 1;
 
-        LOG_INF("Sending REQUEST verno=%u local_flowid=%s srvid=%s\n",
+        LOG_SSK(sk, "Sending REQUEST verno=%u local_flowid=%s srvid=%s\n",
                 SAL_SKB_CB(skb)->verno,
                 flow_id_to_str(&ssk->local_flowid),
                 service_id_to_str(&ssk->peer_srvid));
@@ -1055,7 +1055,7 @@ static void serval_sal_timewait(struct sock *sk, int state, int timeo)
 
 void serval_sal_done(struct sock *sk)
 {
-        LOG_DBG("socket DONE!\n");
+        LOG_SSK(sk, "socket DONE!\n");
 
         if (serval_sk(sk)->af_ops->done)
                 serval_sk(sk)->af_ops->done(sk);
@@ -1072,7 +1072,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
         if (sk->sk_state == SAL_REQUEST ||
             sk->sk_state == SAL_LISTEN ||
             sk->sk_state == SAL_CLOSED) {
-                LOG_DBG("Cannot send RSYN in state %s\n",
+                LOG_SSK(sk, "Cannot send RSYN in state %s\n",
                         serval_sock_state_str(sk));
                 return 0;
         }
@@ -1124,7 +1124,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
 
 int serval_sal_migrate(struct sock *sk)
 {
-        LOG_DBG("Sending RSYN\n");
+        LOG_SSK(sk, "Sending RSYN\n");
         return serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 }
 
@@ -1145,7 +1145,7 @@ int serval_sal_send_fin(struct sock *sk)
                 yield();
         }
         
-        LOG_DBG("Sending SAL FIN\n");
+        LOG_SSK(sk, "Sending SAL FIN\n");
         SAL_SKB_CB(skb)->flags = SVH_FIN;
         SAL_SKB_CB(skb)->verno = ssk->snd_seq.nxt++;
         
@@ -1155,7 +1155,7 @@ int serval_sal_send_fin(struct sock *sk)
            the migration will never happen. TODO: verify that this is
            really the way to handle this situation. */
         if (ssk->sal_state == SAL_RSYN_SENT) {
-                LOG_DBG("RSYN was in progress, adding RSYN flag\n");
+                LOG_SSK(sk, "RSYN was in progress, adding RSYN flag\n");
                 SAL_SKB_CB(skb)->flags |= SVH_RSYN;
         } else if (serval_sk(sk)->sal_state == SAL_RSYN_RECV) {
                 SAL_SKB_CB(skb)->flags |= SVH_RSYN | SVH_ACK;
@@ -1196,7 +1196,7 @@ void serval_sal_close(struct sock *sk, long timeout)
                         serval_sock_state_str(sk));
                 return;
         default:
-                LOG_DBG("Calling serval_sal_done on socket in state %s\n",
+                LOG_SSK(sk, "Calling serval_sal_done on socket in state %s\n",
                         serval_sock_state_str(sk));
                 serval_sal_done(sk);
                 return;
@@ -1239,7 +1239,7 @@ static int serval_sal_send_ack(struct sock *sk)
         /* Do not increment sequence numbers for pure ACKs */
         SAL_SKB_CB(skb)->verno = ssk->snd_seq.nxt;
 
-        LOG_DBG("Sending ACK verno=%u\n", ssk->rcv_seq.nxt);
+        LOG_SSK(sk, "Sending ACK verno=%u\n", ssk->rcv_seq.nxt);
 
         if (err == 0) {
                 /* Do not queue pure ACKs */
@@ -1775,7 +1775,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
         /* Make compiler be quiet */
         memset(&myaddr, 0, sizeof(myaddr));
 
-        LOG_DBG("REQUEST verno=%u\n", ctx->verno);
+        LOG_SSK(sk, "REQUEST verno=%u\n", ctx->verno);
 
         if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
                 goto drop;
@@ -1788,7 +1788,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
          * want to reply on another interface than the incoming one.
          */
         if (!dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &myaddr)) {
-                LOG_ERR("No source address for interface %s\n",
+                LOG_SSK(sk, "No source address for interface %s\n",
                         skb->dev);
                 goto drop;
         }
@@ -1881,7 +1881,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18], replystr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s reply_saddr=%s\n",
+                LOG_SSK(sk, "rmt_addr=%s loc_addr=%s reply_saddr=%s\n",
                         inet_ntop(AF_INET, &inet_rsk(rsk)->rmt_addr, 
                                   rmtstr, 18),
                         inet_ntop(AF_INET, &inet_rsk(rsk)->loc_addr, 
@@ -2118,7 +2118,7 @@ static int serval_sal_ack_process(struct sock *sk,
         }
         
         if (!(ctx->flags & SVH_RSYN)) {
-                LOG_DBG("Migration complete for flow %s\n",
+                LOG_SSK(sk, "Migration complete for flow %s\n",
                         flow_id_to_str(&ssk->local_flowid));
                 memcpy(&inet_sk(sk)->inet_daddr, &ssk->mig_daddr, 4);
                 memset(&ssk->mig_daddr, 0, 4);
@@ -2135,11 +2135,11 @@ static int serval_sal_ack_process(struct sock *sk,
 
         return 0;
  invalid_ack:
-        LOG_DBG("invalid ackno %u out of sequence, expected %u\n",
+        LOG_SSK(sk, "invalid ackno %u out of sequence, expected %u\n",
                 ctx->ackno, ssk->snd_seq.una + 1);
         return -1;
  old_ack:
-        LOG_DBG("old ackno %u, expected %u\n",
+        LOG_SSK(sk, "old ackno %u, expected %u\n",
                 ctx->ackno, ssk->snd_seq.una + 1);
         return -1;
 }
@@ -2229,7 +2229,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                    address change */
                 break;
         default:
-                LOG_DBG("RSYN in SAL state %s\n", 
+                LOG_SSK(sk, "RSYN in SAL state %s\n", 
                         serval_sock_sal_state_str(sk));
                 return 0;
         }
@@ -2288,7 +2288,7 @@ static int serval_sal_rcv_fin(struct sock *sk,
         /* If there is still an application attached to the
            sock, then wake it up. */
         if (!sock_flag(sk, SOCK_DEAD)) {
-                LOG_DBG("Wake user\n");
+                LOG_SSK(sk, "Wake user\n");
                 sk->sk_state_change(sk);
                 
                 /* Do not send POLL_HUP for half
@@ -2408,7 +2408,7 @@ static int serval_sal_child_process(struct sock *parent,
                 if (ret == 0 && 
                     state == SAL_RESPOND && 
                     child->sk_state != state) {
-                        LOG_DBG("waking up parent (listening) sock\n");
+                        LOG_SSK(parent, "waking up parent (listening) sock\n");
                         parent->sk_data_ready(parent, 0);
                 }
         } else {
@@ -2422,7 +2422,7 @@ static int serval_sal_child_process(struct sock *parent,
 
         bh_unlock_sock(child);
         sock_put(child);
-        LOG_DBG("child refcnt=%d\n", atomic_read(&child->sk_refcnt));
+        LOG_SSK(child, "child refcnt=%d\n", atomic_read(&child->sk_refcnt));
         return ret;
 }
 
@@ -2435,7 +2435,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                 struct request_sock *rsk = serval_sal_find_rsk(sk, ctx);
                 
                 if (rsk) {
-                        LOG_DBG("SYN already received, dropping!\n");
+                        LOG_SSK(sk, "SYN already received, dropping!\n");
                         serval_sal_send_synack(sk, rsk, skb, ctx);
                         goto drop;
                 }
@@ -2445,7 +2445,7 @@ static int serval_sal_listen_state_process(struct sock *sk,
                         /* Processing for socket that has received SYN
                            already */
 
-                        LOG_DBG("received ACK\n");
+                        LOG_SSK(sk, "received ACK\n");
                         
                         nsk = serval_sal_request_sock_handle(sk, skb, ctx);
                         
@@ -2487,11 +2487,11 @@ static int serval_sal_request_state_process(struct sock *sk,
 
         /* Process ACK */
         if (serval_sal_ack_process(sk, skb, ctx) != 0) {
-                LOG_DBG("ACK is invalid\n");
+                LOG_SSK(sk, "ACK is invalid\n");
                 goto drop;
         }
         
-        LOG_DBG("Got RESPONSE verno=%u ackno=%u TCP off=%u hdrlen=%u\n",
+        LOG_SSK(sk, "Got RESPONSE verno=%u ackno=%u TCP off=%u hdrlen=%u\n",
                 ctx->verno, ctx->ackno,
                 skb_transport_header(skb) - (unsigned char *)sh,
                 ctx->hdr->shl << 2);
@@ -2509,7 +2509,7 @@ static int serval_sal_request_state_process(struct sock *sk,
 #if defined(ENABLE_DEBUG)
                 {
                         char dststr[18];
-                        LOG_DBG("Response had source extension, using %s as service IP\n",
+                        LOG_SSK(sk, "Response had source extension, using %s as service IP\n",
                                 inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
                                           dststr, 18)); 
                 }
@@ -2600,7 +2600,7 @@ static int serval_sal_respond_state_process(struct sock *sk,
 
         /* Process ACK */
         if (serval_sal_ack_process(sk, skb, ctx) == 0) {
-                LOG_DBG("\n");
+                LOG_SSK(sk, "\n");
 
                 /* Save device */
                 serval_sock_set_dev(sk, skb->dev->ifindex);
@@ -2740,7 +2740,7 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0, ack_ok;
         
-        LOG_DBG("SAL pkt %s\n", sal_hdr_to_str(ctx->hdr));
+        LOG_SSK(sk, "SAL pkt %s\n", sal_hdr_to_str(ctx->hdr));
 
         ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
                 
@@ -2756,10 +2756,10 @@ static int serval_sal_lastack_state_process(struct sock *sk,
 
         if (ack_ok) {
                 /* ACK was valid */
-                LOG_DBG("Valid ACK, closing socket\n");
+                LOG_SSK(sk, "Valid ACK, closing socket\n");
                 serval_sal_done(sk);
         } else {
-                LOG_DBG("Packet not a valid ACK\n");
+                LOG_SSK(sk, "Packet not a valid ACK\n");
         }
 
         return err;
@@ -2776,10 +2776,10 @@ static int serval_sal_init_state_process(struct sock *sk,
         int err = 0;
 
         if (ssk->hash_key && ctx->srv_ext[0] && ctx->srv_ext[1]) {
-                LOG_DBG("Receiving unconnected datagram for service %s\n", 
+                LOG_SSK(sk, "Receiving unconnected datagram for service %s\n", 
                         service_id_to_str((struct service_id*) ssk->hash_key));
         } else {
-                LOG_DBG("Non-matching datagram\n");
+                LOG_SSK(sk, "Non-matching datagram\n");
                 return -1;
         }
 
@@ -3526,6 +3526,15 @@ static int serval_sal_rexmit(struct sock *sk)
         return err;
 }
 
+static void serval_sal_write_err(struct sock *sk)
+{
+	sk->sk_err = sk->sk_err_soft ? : ETIMEDOUT;
+	sk->sk_error_report(sk);
+
+        LOG_SSK(sk, "Write ERROR, socket DONE\n");
+	serval_sal_done(sk);
+}
+
 void serval_sal_rexmit_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
@@ -3533,16 +3542,15 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock(sk);
 
-        LOG_DBG("Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
+        LOG_SSK(sk, "Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
                 sk, jiffies_to_msecs(ssk->rto), ssk->backoff);
         
         if (ssk->retransmits == 10) {
                 /* TODO: check error values here */
-                LOG_DBG("NOT rescheduling timer! Closing socket\n");
-                sk->sk_err = ETIMEDOUT;
-                serval_sal_done(sk);
+                LOG_SSK(sk, "NOT rescheduling timer! Closing socket\n");
+                serval_sal_write_err(sk);
         } else {
-                LOG_DBG("ReXmit and rescheduling timer\n");
+                LOG_SSK(sk, "ReXmit and rescheduling timer\n");
                 serval_sal_rexmit(sk);
 
                 ssk->backoff++;
@@ -3561,7 +3569,7 @@ void serval_sal_timewait_timeout(unsigned long data)
 {
         struct sock *sk = (struct sock *)data;
         bh_lock_sock(sk);
-        LOG_DBG("Timeout in state %s\n", serval_sock_state_str(sk));
+        LOG_SSK(sk, "Timeout in state %s\n", serval_sock_state_str(sk));
         serval_sal_done(sk);
         bh_unlock_sock(sk);
         /* put for the timer. */
@@ -3947,7 +3955,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 skb_reset_transport_header(skb);
                 /*
                 char ip[18];
-                LOG_DBG("Sending packet to user-specified "
+                LOG_SSK(sk, "Sending packet to user-specified "
                         "advisory address: %s\n", 
                         inet_ntop(AF_INET, &SAL_SKB_CB(skb)->addr, 
                                   ip, 17));
@@ -3970,13 +3978,13 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 return serval_sal_do_xmit(skb);
         }
 
-        LOG_DBG("Resolving service %s\n",
+        LOG_SSK(sk, "Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
 
         se = service_find(&ssk->peer_srvid, SERVICE_ID_MAX_PREFIX_BITS);
 
 	if (!se) {
-		LOG_DBG("service lookup failed for [%s]\n",
+		LOG_SSK(sk, "service lookup failed for [%s]\n",
                         service_id_to_str(&ssk->peer_srvid));
                 service_inc_stats(-1, -dlen);
                 kfree_skb(skb);
@@ -3994,7 +4002,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	target = service_iter_next(&iter);
 	
         if (!target) {
-                LOG_DBG("No device to transmit on!\n");
+                LOG_SSK(sk, "No device to transmit on!\n");
                 service_iter_inc_stats(&iter, -1, -dlen);
                 kfree_skb(skb);
                 service_iter_destroy(&iter);
@@ -4078,7 +4086,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #if defined(ENABLE_DEBUG)
                 {
                         char src[18], dst[18];
-                        LOG_DBG("Resolved service %s with IP %s->%s " 
+                        LOG_SSK(sk, "Resolved service %s with IP %s->%s " 
                                 "on device=%s\n",
                                 service_id_to_str(&ssk->peer_srvid),
                                 inet_ntop(AF_INET, &inet->inet_saddr, 
@@ -4106,7 +4114,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 */
                 if (ssk->af_ops->send_check &&
                     packet_has_transport_hdr(cskb, NULL)) {
-                        LOG_DBG("Calculating transport checksum\n");
+                        LOG_SSK(sk, "Calculating transport checksum\n");
                         ssk->af_ops->send_check(sk, cskb);
                 }
 
