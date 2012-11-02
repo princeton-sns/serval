@@ -116,7 +116,7 @@ static enum work_status work_translate(struct socket *from,
                                        int splicefd[2])
 {
         ssize_t ret;
-        size_t readlen, nbytes;
+        size_t readlen, nbytes = 0;
         enum work_status status = WORK_OK;
         int bytes_queued = 0;
         
@@ -127,7 +127,7 @@ static enum work_status work_translate(struct socket *from,
                 return WORK_ERROR;
         }
 
-        readlen = from->sndbuf - bytes_queued;
+        readlen = to->sndbuf - bytes_queued;
         
         if (readlen == 0)
                 return WORK_NOSPACE;
@@ -175,7 +175,6 @@ static enum work_status work_translate(struct socket *from,
                         readlen -= ret;
                 }
         }
-        
         /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
         
         return status;

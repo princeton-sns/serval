@@ -40,7 +40,10 @@ public class TranslatorFragment extends Fragment {
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
 		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-		"iptables -t nat -A POSTROUTING ! -o dummy0 -j MASQUERADE"
+		"iptables -t nat -N serval_POSTROUTING",
+		"iptables -t nat -A serval_POSTROUTING ! -o dummy0 -j MASQUERADE",
+		"iptables -t nat -A serval_POSTROUTING -j ACCEPT",
+		"iptables -t nat -A POSTROUTING ! -o lo -j MASQUERADE"
 	};
 	
 	private static final String[] ADD_ALL_RULES = {
@@ -60,7 +63,9 @@ public class TranslatorFragment extends Fragment {
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
 		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-		"iptables -t nat -D POSTROUTING ! -o dummy0 -j MASQUERADE"
+		"iptables -t nat -F serval_POSTROUTING",
+		"iptables -t nat -D POSTROUTING ! -o lo -j serval_POSTROUTING",
+		"iptables -t nat -X serval_POSTROUTING"
 	};
 	
 	private static final String[] DEL_ALL_RULES = {
