@@ -151,13 +151,21 @@ static enum work_status work_translate(struct socket *from,
 
         readlen = to->sndbuf - bytes_queued;
 
+        /*
         LOG_DBG("translating %zu bytes from %d to %d\n", 
                 readlen, from->fd, to->fd);
-
+        */
         if (readlen == 0) {
+                /* There wasn't enough space in send buffer of the
+                 * socket we are writing to, we need to stop monitor
+                 * readability on the "from" socket and instead watch
+                 * for writability on the "to" socket. */
                 from->events &= ~EPOLLIN;
                 to->events |= EPOLLOUT;
-                LOG_DBG("readlen 0, waiting for readability\n");
+                /*
+                LOG_DBG("readlen 0, waiting for readability from->events=%u to->events=%u\n",
+                        from->events, to->events);
+                */
                 return WORK_NOSPACE;
         }
 
@@ -165,11 +173,13 @@ static enum work_status work_translate(struct socket *from,
                      readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
         
         if (ret == -1) {
-                LOG_ERR("splice1: %s\n",
+                LOG_ERR("splice1 from %s %s\n",
+                        &from->c->sock[ST_INET] == from ? "INET" : "SERVAL",
                         strerror(errno));
-                if (errno == EWOULDBLOCK) 
-                        status = WORK_ERROR;
-                
+
+                /* Try again if we would block */
+                if (errno != EWOULDBLOCK) 
+                        status = WORK_ERROR;                
                 goto out;
         } else if (ret == 0) {
                 LOG_DBG("splice1: %s end closed\n", 
@@ -195,7 +205,8 @@ static enum work_status work_translate(struct socket *from,
                         } else if (errno == EWOULDBLOCK) {
                                 /* Try again */
                         } else {
-                                LOG_ERR("splice2: %s\n",
+                                LOG_ERR("splice2: to %s %s\n",
+                                        &to->c->sock[ST_INET] == to ? "INET" : "SERVAL",
                                         strerror(errno));
                                 status = WORK_ERROR;
                         }
@@ -367,7 +378,6 @@ static int client_add_work(struct client *c, work_t work)
         if (c->num_work == MAX_WORK)
                 return -1;
         
-        LOG_DBG("Adding work \n");
         c->work[c->num_work++] = work;
         return 0;
 }
@@ -423,13 +433,22 @@ static void *worker_thread(void *arg)
                         
                         status = c->work[i](c);
                         
-                        if (status == WORK_ERROR) {
-                                LOG_ERR("work error\n");
+                        switch (status) {
+                        case WORK_ERROR:
+                                LOG_ERR("work error, closing socket\n");
+                                client_add_work(c, client_close);
+                                break;
+                        case WORK_NOSPACE:
+                        case WORK_OK:
+                        default:
+                                break;
                         }
                 }
                 c->is_scheduled = 0;
                 c->num_work = 0;
-                client_epoll_set(c, EPOLL_CTL_ADD);
+
+                if (!c->is_garbage)
+                        client_epoll_set(c, EPOLL_CTL_ADD);
         }
         
         LOG_DBG("Worker %u exits\n", w->id);
@@ -732,6 +751,7 @@ static void schedule_client(struct client *c)
         pthread_cond_signal(&work_cond);        
 }
 
+/*
 static void print_events(struct socket *s, uint32_t events)
 {
         struct client *c = s->c;
@@ -744,6 +764,7 @@ static void print_events(struct socket *s, uint32_t events)
                         (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
         }
 }
+*/
 
 #define MAX_EVENTS 10
 
@@ -791,6 +812,8 @@ int run_translator(int family, unsigned short port)
                 goto err_server_sock;
         }
         
+        /* Set events. EPOLLERR and EPOLLHUP may always be returned,
+         * even if not set here */
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN;
         ev.data.ptr = &sock;
@@ -850,9 +873,9 @@ int run_translator(int family, unsigned short port)
                                 struct client *c = s->c;
                                 uint32_t monitored_events = 
                                         EPOLLIN | EPOLLERR | EPOLLHUP; 
-
-                                print_events(s, events[i].events);
                                 
+                                /* print_events(s, events[i].events); */
+
                                 if ((&c->sock[ST_INET] == s && 
                                      (events[i].events & monitored_events)) ||
                                     (&c->sock[ST_SERVAL] == s && 
