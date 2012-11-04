@@ -72,6 +72,31 @@
                 android:textAppearance="?android:attr/textAppearanceLarge"
                 android:textSize="15dp" />
         </RelativeLayout>
+
+        <RelativeLayout
+            android:id="@+id/layout_inet_hijack"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" >
+		<TextView
+                android:id="@+id/label_inet_hijack"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_centerVertical="true"
+                android:layout_toLeftOf="@+id/toggle_inet_hijack"
+                android:text="@string/inet_hijack"
+                android:textAppearance="?android:attr/textAppearanceLarge"
+                android:textSize="15dp" />
+            <ToggleButton
+                android:id="@+id/toggle_inet_hijack"
+                android:layout_width="75dp"
+                android:layout_height="wrap_content"
+                android:layout_alignParentRight="true"
+                android:layout_centerVertical="true"
+                android:layout_marginRight="30dp"
+               	android:textOn = "Yes"
+               	android:textOff = "No" />
+
+        </RelativeLayout>
         
         <TextView
             android:id="@+id/error_msg"

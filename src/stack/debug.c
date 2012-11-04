@@ -12,12 +12,10 @@
  */
 #include <serval/debug.h>
 #include <serval_sock.h>
+#include <af_serval.h>
 #if defined(OS_USER)
 #include <pthread.h>
 #endif
-
-/* Debug level */
-unsigned int debug = LOG_LEVEL_DBG;
 
 static const char *log_level_str[] = {
         [ 0 ] = "UNDEF",
@@ -44,7 +42,7 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
         
-        if ((unsigned int)level > debug)
+        if ((unsigned int)level > net_serval.sysctl_debug)
                 return;
         
 #if defined(OS_LINUX_KERNEL)

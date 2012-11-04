@@ -34,4 +34,5 @@
         <item >DROP</item>
     </string-array>
     <string name="label_rule_type">Type:</string>
+    <string name="inet_hijack">Hijack AF_INET sockets:</string>
 </resources>
