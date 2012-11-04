@@ -12,6 +12,7 @@ import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemSelectedListener;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.ToggleButton;
@@ -20,7 +21,7 @@ public class ServalFragment extends Fragment {
 
 	private Button addServiceButton, removeServiceButton;
 	EditText editServiceText, editIpText;
-	ToggleButton servicePerm;
+	ToggleButton servicePerm, autoMigrationButton;
 	private View view;
 	private Spinner spinner;
 
@@ -80,7 +81,18 @@ public class ServalFragment extends Fragment {
 			}
 		});
 		servicePerm = (ToggleButton) view.findViewById(R.id.servicePerm);
-
+		this.autoMigrationButton = (ToggleButton) view.findViewById(R.id.toggle_auto_migration);
+		this.autoMigrationButton
+		.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				String cmd = "echo " + (isChecked ? "1" : "0") + " >/proc/sys/net/serval/auto_migrate";
+				((ServalActivity) getActivity()).executeSuCommand(cmd, false);
+			}
+		});
+		this.autoMigrationButton.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/auto_migrate"));
+		
 		return view;
 	}
 

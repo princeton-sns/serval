@@ -15,13 +15,11 @@
 
 extern int run_translator(int, int);
 extern struct signal exit_signal;
-extern int cross_translate;
 
 JNIEXPORT 
 jint JNICALL Java_org_servalarch_serval_TranslatorService_runTranslator(JNIEnv *env, 
                                                                         jobject obj, jint port, jboolean xtranslate)
 {
-        cross_translate = (xtranslate == JNI_TRUE) ? 1 : 0;
         return run_translator(AF_INET, (int)port);
 }
 

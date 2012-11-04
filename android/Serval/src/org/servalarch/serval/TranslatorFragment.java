@@ -194,6 +194,9 @@ public class TranslatorFragment extends Fragment {
 				executeSuCommand(cmd, false);
 			}
 		});
+		
+		this.hijackButton
+			.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/inet_to_serval"));
 		setTranslatorButton(isTranslatorRunning());
 		((TextView) view.findViewById(R.id.error_msg)).setText("");
 		translatorButton.setClickable(true);

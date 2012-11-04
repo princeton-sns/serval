@@ -36,7 +36,9 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.Toast;
+import android.widget.ToggleButton;
 
 public class ServalActivity extends FragmentActivity {
 
@@ -44,7 +46,6 @@ public class ServalActivity extends FragmentActivity {
 
 	private Button moduleStatusButton;
 	private Button udpEncapButton;
-
 	private SharedPreferences prefs;
 	private PagerAdapter pagerAdapter;
 
@@ -162,10 +163,10 @@ public class ServalActivity extends FragmentActivity {
 							+ " failed!", Toast.LENGTH_SHORT);
 					t.show();
 				}
-				setUdpEncap(isUdpEncapEnabled());
+				setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 			}
 		});
-
+		
 		Log.d("Serval", "onCreate finished");
 	}
 
@@ -228,7 +229,7 @@ public class ServalActivity extends FragmentActivity {
 		return executeSuCommand(cmd, false);
 	}
 
-	boolean executeSuCommand(final String cmd, boolean showToast) {
+	public boolean executeSuCommand(final String cmd, boolean showToast) {
 		try {
 			Process shell;
 			int err;
@@ -260,9 +261,9 @@ public class ServalActivity extends FragmentActivity {
 		return false;
 	}
 
-	private boolean isUdpEncapEnabled() {
-		boolean encapIsEnabled = false;
-		File encap = new File("/proc/sys/net/serval/udp_encap");
+	static public boolean readBooleanProcEntry(String entry) {
+		boolean isEnabled = false;
+		File encap = new File(entry);
 
 		if (encap.exists() && encap.canRead()) {
 			try {
@@ -272,7 +273,7 @@ public class ServalActivity extends FragmentActivity {
 				String line = in.readLine();
 
 				if (line.contains("1"))
-					encapIsEnabled = true;
+					isEnabled = true;
 				in.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -280,12 +281,12 @@ public class ServalActivity extends FragmentActivity {
 				e.printStackTrace();
 			}
 		} else {
-			Log.d("Serval", "could not open /proc/sys/net/serval/udp_encap");
+			Log.d("Serval", "could not open " + entry);
 		}
-		return encapIsEnabled;
+		return isEnabled;
 	}
 
-	private boolean isModuleLoaded(String module) {
+	static private boolean isModuleLoaded(String module) {
 		File procModules = new File("/proc/modules");
 
 		if (procModules.exists() && procModules.canRead()) {
@@ -331,7 +332,7 @@ public class ServalActivity extends FragmentActivity {
       This function is taken from the Android Open Source Project.
       packages/apps/Settings/src/com/android/settings/DeviceInfoSettings.java
     */
-    private String getFormattedKernelVersion() {
+    static private String getFormattedKernelVersion() {
         String procVersionStr;
 
         try {
@@ -453,7 +454,7 @@ public class ServalActivity extends FragmentActivity {
 	protected void onStart() {
 		super.onStart();
 		setModuleLoaded(isModuleLoaded("serval"));
-		setUdpEncap(isUdpEncapEnabled());
+		setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 
 		AppHostCtrl.init(cbs);
 		Log.d("Serval", "onStart finished");
