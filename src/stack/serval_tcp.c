@@ -820,9 +820,9 @@ int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 
 		if (tcp_hdr(skb)->fin) {
                         LOG_SSK(sk, "Read FIN\n");
-			//sk_eat_skb(sk, skb, 0);
+			/* sk_eat_skb(sk, skb, 0); */
 			++seq;
-			//break;
+			/* break; */
 		}
 
 		sk_eat_skb(sk, skb, 0);
@@ -1577,11 +1577,9 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			if (tcp_hdr(skb)->syn)
 				offset--;
                         
-                        /* Ignore FINs */
-                        tcp_hdr(skb)->fin = 0;
-                        
 			if (offset < skb->len)
 				goto found_ok_skb;
+
 			         /*
 			WARN(!(flags & MSG_PEEK), KERN_INFO "recvmsg bug 2: "
 					"copied %X seq %X rcvnxt %X fl %X\n",
@@ -1826,23 +1824,13 @@ skip_copy:
 			continue;
 
 		if (tcp_hdr(skb)->fin)
-			goto found_fin_ok;
+                        ++*seq;
 
    		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, copied_early);
 			copied_early = 0;
 		}
 		continue;
-
-	found_fin_ok:
-		/* Process the FIN. */
-                LOG_SSK(sk, "processing FIN\n");
-		++*seq;
-		if (!(flags & MSG_PEEK)) {
-			sk_eat_skb(sk, skb, copied_early);
-			copied_early = 0;
-		}
-                break;                
 	} while (len > 0);
 
 	if (user_recv) {

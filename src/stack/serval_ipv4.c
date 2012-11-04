@@ -241,10 +241,20 @@ const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
 int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
                             u32 saddr, u32 daddr)
 {
-	struct inet_sock *inet = inet_sk(sk);
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
+        u8 tos = 0, ttl = SERVAL_DEFTTL;
+        u32 priority = 0, mark = 0;
 
+        if (sk) {
+                struct inet_sock *inet = inet_sk(sk);
+                tos = inet->tos;
+                priority = sk->sk_priority;
+                mark = sk->sk_mark;
+                if (inet->uc_ttl >= 0)
+                        ttl = inet->uc_ttl;
+        }
+        
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
 
@@ -252,7 +262,7 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         memset(iph, 0, iph_len);
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
-        iph->tos = inet->tos;
+        iph->tos = tos;
 #if defined(OS_USER) && defined(OS_BSD)
         /* BSD/Mac OS X requires tot_len to be in host byte order when
          * sending over IP raw socket */
@@ -262,14 +272,14 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 #endif
         iph->id = 0;
         iph->frag_off = 0;
-        iph->ttl = inet->uc_ttl < 0 ? SERVAL_DEFTTL : inet->uc_ttl;
+        iph->ttl = ttl;
         iph->protocol = skb->protocol;
         iph->saddr = saddr;
         iph->daddr = daddr;
 	skb->protocol = htons(ETH_P_IP);
-	skb->priority = sk->sk_priority;
+	skb->priority = priority;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-	skb->mark = sk->sk_mark;
+	skb->mark = mark;
 #endif
 
 #if defined(ENABLE_DEBUG)
@@ -292,7 +302,8 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         return 0;
 }
 
-int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
+int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, 
+                                   struct sock *sk,
                                    u32 saddr, u32 daddr, 
                                    struct ip_options *opt)
 {
@@ -329,6 +340,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
         }
+
         return err;
 }
 

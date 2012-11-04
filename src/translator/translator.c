@@ -49,6 +49,10 @@ typedef union sockaddr_generic {
         struct sockaddr sa;
         struct sockaddr_sv sv;
         struct sockaddr_in in;
+        struct {
+                struct sockaddr_sv sv;
+                struct sockaddr_in in;
+        } sv_in;
 } sockaddr_generic_t;
 
 
@@ -60,13 +64,21 @@ struct worker {
 
 struct client;
 
+
+enum socket_state {
+        SS_CLOSED,
+        SS_CONNECTING,
+        SS_CONNECTED,
+        SS_CLOSING,
+};
+
 struct socket {
         int fd; /* Must be first */
+        enum socket_state state;
         struct client *c;
         uint32_t events;
         sockaddr_generic_t addr;
         socklen_t addrlen;
-        unsigned char should_close;
         size_t bytes_written, bytes_read;
         socklen_t sndbuf;
 };
@@ -78,7 +90,7 @@ enum sockettype {
 
 enum work_status {
         WORK_OK,
-        WORK_CLOSED,
+        WORK_CLOSE,
         WORK_NOSPACE,
         WORK_ERROR,
 };
@@ -151,10 +163,10 @@ static enum work_status work_translate(struct socket *from,
 
         readlen = to->sndbuf - bytes_queued;
 
-        /*
-        LOG_DBG("translating %zu bytes from %d to %d\n", 
-                readlen, from->fd, to->fd);
-        */
+
+        /* LOG_DBG("translating %zu bytes from %d to %d\n", 
+           readlen, from->fd, to->fd); */
+
         if (readlen == 0) {
                 /* There wasn't enough space in send buffer of the
                  * socket we are writing to, we need to stop monitor
@@ -170,22 +182,24 @@ static enum work_status work_translate(struct socket *from,
         }
 
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
-                     readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+                     readlen, SPLICE_F_MOVE);
         
         if (ret == -1) {
-                LOG_ERR("splice1 from %s %s\n",
-                        &from->c->sock[ST_INET] == from ? "INET" : "SERVAL",
-                        strerror(errno));
-
-                /* Try again if we would block */
-                if (errno != EWOULDBLOCK) 
-                        status = WORK_ERROR;                
+                if (errno == EWOULDBLOCK) {
+                        /* Just return and retry */
+                } else { 
+                        status = WORK_ERROR;
+                        LOG_ERR("client %u splice1 from %s %s\n",
+                                from->c->id, 
+                                &from->c->sock[ST_INET] == from ? "INET" : "SERVAL",
+                                strerror(errno));
+                }                
                 goto out;
         } else if (ret == 0) {
-                LOG_DBG("splice1: %s end closed\n", 
+                LOG_DBG("client %u splice1: %s end closed\n", 
+                        from->c->id, 
                         &from->c->sock[ST_INET] == from ? "INET" : "SERVAL");
-                from->should_close = 1;
-                client_add_work(from->c, client_close);
+                status = WORK_CLOSE;
                 goto out;
         }       
         
@@ -194,23 +208,23 @@ static enum work_status work_translate(struct socket *from,
 
         /* LOG_DBG("splice1 %zu bytes\n", readlen); */
 
-        while (readlen) {
+        while (readlen && status == WORK_OK) {
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
-                             readlen, SPLICE_F_MOVE);
+                             readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
                 
                 if (ret == -1) {
                         if (errno == EPIPE) {
-                                LOG_DBG("splice2: EPIPE\n");
+                                LOG_DBG("client %u splice2: EPIPE\n", from->c->id);
                                 status = WORK_ERROR;
                         } else if (errno == EWOULDBLOCK) {
                                 /* Try again */
                         } else {
-                                LOG_ERR("splice2: to %s %s\n",
+                                LOG_ERR("client %u splice2: to %s %s\n",
+                                        from->c->id,
                                         &to->c->sock[ST_INET] == to ? "INET" : "SERVAL",
                                         strerror(errno));
                                 status = WORK_ERROR;
                         }
-                        break;
                 } else if (ret > 0) {
                         to->bytes_written += ret;
                         nbytes += ret;
@@ -218,6 +232,12 @@ static enum work_status work_translate(struct socket *from,
                 }
         }
         
+#if defined(ENABLE_DEBUG)
+        if (readlen) {
+                LOG_ERR("client %u read/write mismatch (%zu bytes)\n",
+                        from->c->id, readlen);
+        }
+#endif
         /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
  out:
         to->events &= ~EPOLLOUT;
@@ -249,15 +269,20 @@ static int client_epoll_set(struct client *c, int op)
 
         for (i = 0; i < 2; i++) {
                 struct epoll_event ev;
+
                 memset(&ev, 0, sizeof(ev));
                 ev.events = c->sock[i].events;
                 ev.data.ptr = &c->sock[i];
                 
+                /*
+                  LOG_DBG("Watching events %u on sock %d\n",
+                        ev.events, c->sock[i].fd);
+                */
                 ret = epoll_ctl(epollfd, op, c->sock[i].fd, &ev);
                 
                 if (ret == -1) {
-                        LOG_ERR("epoll_ctl op=%d: %s\n",
-                                op, strerror(errno));
+                        LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
+                                op, c->sock[i].fd, strerror(errno));
                         break;
                 }
         }
@@ -299,6 +324,10 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 memcpy(&c->sock[ST_INET].addr, sa, 
                        sizeof(struct sockaddr_in));
                 c->sock[ST_INET].addrlen = sizeof(struct sockaddr_in);
+                c->sock[ST_INET].state = SS_CONNECTED;
+                c->sock[ST_INET].events = 0;
+                c->sock[ST_SERVAL].state = SS_CLOSED;
+                c->sock[ST_SERVAL].events = EPOLLOUT;
 
                 c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
@@ -313,6 +342,10 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 memcpy(&c->sock[ST_SERVAL].addr, sa, 
                        sizeof(struct sockaddr_sv));
                 c->sock[ST_SERVAL].addrlen = sizeof(struct sockaddr_sv);
+                c->sock[ST_SERVAL].state = SS_CONNECTED;
+                c->sock[ST_SERVAL].events = 0;
+                c->sock[ST_INET].state = SS_CLOSED;
+                c->sock[ST_INET].events = EPOLLOUT;
 
                 /* The end of the serviceID contains the original port
                    and IP. */ 
@@ -336,6 +369,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
         
         for (i = 0; i < 2; i++) {
                 socklen_t len = sizeof(c->sock[i].sndbuf);
+                long flags;
 
                 ret = getsockopt(c->sock[i].fd, SOL_SOCKET, 
                                  SO_SNDBUF, &c->sock[i].sndbuf, 
@@ -344,24 +378,38 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 if (ret == -1) {
                         LOG_ERR("getsockopt(sndbuf) - %s\n", strerror(errno));
                 }
-        }
 
-        c->sock[ST_INET].events = EPOLLIN;
-        c->sock[ST_SERVAL].events = EPOLLIN;
+                flags = fcntl(c->sock[i].fd, F_GETFL, ret);
 
-        ret = client_epoll_set(c, EPOLL_CTL_ADD);
-        
-        if (ret == -1) {
-                LOG_DBG("epoll error\n");
-                goto fail_epoll_ctl;
+                if (flags == -1) {
+                        LOG_ERR("fctnl(F_GETFL): %s\n", strerror(errno));
+                        goto fail_post_sock;
+                }
+                
+                ret = fcntl(c->sock[i].fd, F_SETFL, flags | O_NONBLOCK);
+
+                if (ret == -1) {
+                        LOG_ERR("fctnl(F_SETFL): %s\n", strerror(errno));
+                        goto fail_post_sock;
+                }
         }
+        /* Add the file descriptors to the epoll set just to avoid
+         * complaints when we call EPOLL_CTL_DEL when we schedule the
+         * client later */
+        client_epoll_set(c, EPOLL_CTL_ADD);
 
         return c;
- fail_epoll_ctl:
+
+fail_post_sock:
+        if (c->sock[1].fd == sock)
+                close(c->sock[0].fd);
+        else
+                close(c->sock[1].fd);
  fail_sock:
         close(c->splicefd[0]);
         close(c->splicefd[1]);
  fail_pipe:
+        close(sock);
         free(c);
         signal_destroy(&c->exit_signal);
         return NULL;
@@ -386,11 +434,6 @@ static pthread_cond_t work_cond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t work_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int worker_running = 1;
 static LIST_HEAD(workq);
-
-enum {
-        WORK_INET_TO_SERVAL = 1,
-        WORK_SERVAL_TO_INET = 1 << 1,
-};
 
 static void *worker_thread(void *arg)
 {
@@ -428,7 +471,7 @@ static void *worker_thread(void *arg)
                 list_del_init(&c->wq);
                 pthread_mutex_unlock(&work_mutex);
 
-                for (i = 0; i < c->num_work; i++) {
+                for (i = 0; i < c->num_work && !c->is_garbage; i++) {
                         enum work_status status;
                         
                         status = c->work[i](c);
@@ -436,7 +479,8 @@ static void *worker_thread(void *arg)
                         switch (status) {
                         case WORK_ERROR:
                                 LOG_ERR("work error, closing socket\n");
-                                client_add_work(c, client_close);
+                        case WORK_CLOSE:
+                                client_close(c);
                                 break;
                         case WORK_NOSPACE:
                         case WORK_OK:
@@ -460,7 +504,7 @@ static enum work_status client_connect(struct client *c)
 {
         sockaddr_generic_t addr;
         socklen_t addrlen;
-        int sock = -1;
+        struct socket *s, *s2;
         char ipstr[18];
         int ret;
 
@@ -469,40 +513,82 @@ static enum work_status client_connect(struct client *c)
         if (c->from_family == AF_SERVAL) {
                 addrlen = sizeof(addr.in);
                 memcpy(&addr, &c->sock[ST_INET].addr, addrlen);
-                sock = c->sock[ST_INET].fd;
+                s = &c->sock[ST_INET];
+                s2 = &c->sock[ST_SERVAL];
 
                 inet_ntop(AF_INET, &addr.in.sin_addr, 
                           ipstr, sizeof(ipstr));
                 
-                LOG_DBG("client %u connecting to %s:%u\n",
-                        c->id, ipstr, ntohs(addr.in.sin_port));
+                LOG_DBG("client %u connecting to %s:%u on fd=%d\n",
+                        c->id, ipstr, ntohs(addr.in.sin_port), s->fd);
         } else if (c->from_family == AF_INET) {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
                 addrlen = sizeof(addr.sv);
-                sock = c->sock[ST_SERVAL].fd;
+                s = &c->sock[ST_SERVAL];
+                s2 = &c->sock[ST_INET];
 
                 inet_ntop(AF_INET, &c->sock[ST_INET].addr.in.sin_addr, 
                           ipstr, 18);
 
-                LOG_DBG("client %u from %s connecting to service %s...\n",
-                        c->id, ipstr, service_id_to_str(&addr.sv.sv_srvid));
+                LOG_DBG("client %u from %s connecting to service %s on fd=%d...\n",
+                        c->id, ipstr, service_id_to_str(&addr.sv.sv_srvid), s->fd);
         } else {
                 LOG_ERR("client %u - bad address family, exiting\n",
                         c->id);
                 return WORK_ERROR;
          }
        
-        ret = connect(sock, &addr.sa, addrlen);
+        ret = connect(s->fd, &addr.sa, addrlen);
 
         if (ret == -1) {
-                LOG_ERR("connect failed: %s\n",
-                        strerror(errno));
+                if (errno == EINPROGRESS) {
+                        s->state = SS_CONNECTING;
+                        s->events = EPOLLOUT;
+                } else {
+                        LOG_ERR("client %u connect failed: %s\n",
+                                c->id, strerror(errno));
+                        return WORK_ERROR;
+                }
+        } else {
+                LOG_DBG("client %u successfully connected\n", c->id);
+                s->state = SS_CONNECTED;
+                s->events = s2->events = EPOLLIN;
+        }
+  
+        return WORK_OK;
+}
+
+static enum work_status client_connect_result(struct client *c)
+{
+        struct socket *s = c->from_family == AF_INET ?
+                &c->sock[ST_SERVAL] : &c->sock[ST_INET];
+        int err = 0;
+        socklen_t errlen = sizeof(err);
+        int ret;
+
+        ret = getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
+        
+        if (ret == -1) {
+                LOG_ERR("getsockopt: %s\n", strerror(errno));
                 return WORK_ERROR;
         }
         
-        LOG_DBG("client %u connected successfully!\n", c->id);
-
+        switch (err) {
+        case 0:
+                c->sock[ST_INET].events = c->sock[ST_SERVAL].events = EPOLLIN;
+                s->state = SS_CONNECTED;
+                LOG_DBG("client %u connected\n", c->id);
+                break;
+        case EINPROGRESS:
+                LOG_DBG("client %u connection still in progress\n", c->id);
+                break;
+        default:
+                s->state = SS_CLOSED;
+                LOG_DBG("client %u connection error\n", c->id);
+                return WORK_ERROR;
+        }
+        
         return WORK_OK;
 }
 
@@ -626,7 +712,9 @@ static struct client *accept_client(int sock, int port)
         socklen_t addrlen = sizeof(addr);
         int client_sock;
         struct client *c;
-
+#if defined(ENABLE_DEBUG)
+        char ip[18];
+#endif
         client_sock = accept(sock, &addr.sa, &addrlen);
         
         if (client_sock == -1) {
@@ -643,16 +731,18 @@ static struct client *accept_client(int sock, int port)
                 return NULL;
         }
 
-        LOG_DBG("accepted %s client, addrlen=%u\n", 
-                family_to_str(addr.sa.sa_family), addrlen);
-
-        if (addr.sa.sa_family == AF_SERVAL && 
-            addrlen > sizeof(addr.sv)) {
-                /* Serval accept() could also return IP appended after
+        if (addr.sa.sa_family == AF_SERVAL) {
+                /* Serval accept() could also returns IP appended after
                    serviceID */
-                addrlen = sizeof(addr.sv);
-        }
                 
+                inet_ntop(AF_INET, &addr.sv_in.in.sin_addr, ip, 18);
+                /* Only make serviceID visible */
+                addrlen = sizeof(addr.sv);
+        } else {
+                inet_ntop(AF_INET, &addr.in.sin_addr, ip, 18);
+        }
+        
+
         c = client_create(client_sock, &addr.sa, addrlen);
 
         if (!c) {
@@ -660,6 +750,10 @@ static struct client *accept_client(int sock, int port)
                         addr.sa.sa_family);
                 goto err;
         }
+
+        LOG_DBG("client %u %s from %s addrlen=%u fd=%d\n", 
+                c->id, family_to_str(addr.sa.sa_family), ip,
+                addrlen, client_sock);
                
         c->translator_port = port;
 
@@ -685,8 +779,9 @@ static struct client *accept_client(int sock, int port)
         return NULL;
 }
 
+#define MAX_WORKERS 20
 static struct worker *workers;
-static unsigned int num_workers = 0;
+static unsigned int num_workers = 4;
 
 static int start_workers(unsigned int num)
 {
@@ -716,7 +811,6 @@ static int start_workers(unsigned int num)
                                 strerror(errno));
                         return -1;
                 }
-                num_workers++;
         }
 
         return 0;
@@ -743,7 +837,7 @@ static void schedule_client(struct client *c)
                 return;
 
         c->is_scheduled = 1;
-        
+        //LOG_DBG("client %u scheduling\n", c->id);
         client_epoll_set(c, EPOLL_CTL_DEL);
         pthread_mutex_lock(&work_mutex);
         list_add_tail(&c->wq, &workq);
@@ -757,11 +851,11 @@ static void print_events(struct socket *s, uint32_t events)
         struct client *c = s->c;
 
         if (s == &c->sock[ST_INET]) {
-                LOG_DBG("ST_INET R=%d W=%d\n",
-                        (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
+                LOG_DBG("client %u ST_INET state=%u R=%d W=%d\n",
+                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
         } else {
-                LOG_DBG("ST_SERVAL R=%d W=%d\n",
-                        (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
+                LOG_DBG("client %u ST_SERVAL state=%u R=%d W=%d\n",
+                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
         }
 }
 */
@@ -824,7 +918,7 @@ int run_translator(int family, unsigned short port)
                 goto err_epoll_ctl;
         }
 
-        ret = start_workers(4);
+        ret = start_workers(num_workers);
         
         if (ret == -1) {
                 goto err_workers;
@@ -842,9 +936,13 @@ int run_translator(int family, unsigned short port)
                                   MAX_EVENTS, 10000);
                 
                 if (nfds == -1) {
-                        LOG_ERR("epoll_wait: %s\n",
-                                strerror(errno));
-                        ret = -1;
+                        if (errno == EINTR) {
+                                /* Just exit */
+                        } else {
+                                LOG_ERR("epoll_wait: %s\n",
+                                        strerror(errno));
+                                ret = -1;
+                        }
                         break;
                 } else if (nfds == 0) {
                         garbage_collect_clients();
@@ -880,12 +978,18 @@ int run_translator(int family, unsigned short port)
                                      (events[i].events & monitored_events)) ||
                                     (&c->sock[ST_SERVAL] == s && 
                                      (events[i].events & EPOLLOUT))) {
-                                        client_add_work(c, work_inet_to_serval);
+                                        if (s->state == SS_CONNECTING)
+                                                client_add_work(c, client_connect_result);
+                                        else
+                                                client_add_work(c, work_inet_to_serval);
                                 } else if ((&c->sock[ST_SERVAL] == s && 
                                             (events[i].events & monitored_events)) ||
                                            (&c->sock[ST_INET] == s && 
                                             (events[i].events & EPOLLOUT))) {
-                                        client_add_work(c, work_serval_to_inet);
+                                        if (s->state == SS_CONNECTING)
+                                                client_add_work(c, client_connect_result);
+                                        else
+                                                client_add_work(c, work_serval_to_inet);
                                 }
                                 
                                 if (c->num_work) {
@@ -919,6 +1023,8 @@ static void print_usage(void)
         printf("\t-p, --port PORT\t\t port to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-s, --serval\t\t run an AF_SERVAL to AF_INET translator.\n");
+        printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
+               num_workers);
 }
 
 static int daemonize(void)
@@ -1011,6 +1117,27 @@ int main(int argc, char **argv)
                 } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") ==  0) {
                         daemon = 1;
+                } else if (strcmp(argv[0], "-w") == 0 ||
+                           strcmp(argv[0], "--workers") ==  0) {
+                        unsigned long n;
+                        char *tmp;
+
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        n = strtoul(argv[1], &tmp, 10);
+
+                        if (!(*argv[1] != '\0' && *tmp == '\0')) {
+                                print_usage();
+                                goto fail;
+                        }
+                        if (n > MAX_WORKERS) {
+                                fprintf(stderr, "Too many worker threads (max %u)\n",
+                                        MAX_WORKERS);
+                                goto fail;
+                        }
+                        num_workers = n;
                 } else if (strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--log") ==  0) {
                         if (argc == 1 || log_is_open(&logh)) {

@@ -1452,11 +1452,21 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         unsigned int sal_len = 0;
         int err = 0;
 
+        if (ctx->ctrl_ext && ctx->ctrl_ext->rst)
+                return;
+
         /* Allocate RESPONSE reply */
-        rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header, GFP_ATOMIC);
+        rskb = alloc_skb(MAX_SAL_HDR, GFP_ATOMIC);
 
         if (!rskb)
                 return;
+
+        skb_reserve(rskb, MAX_SAL_HDR);
+        rskb->protocol = IPPROTO_SERVAL;
+        rskb->ip_summed = CHECKSUM_NONE;
+
+        if (sk)
+                skb_serval_set_owner_w(rskb, sk);
 
 #if defined(OS_LINUX_KERNEL)
         /*
@@ -1466,11 +1476,18 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         */
         {
                 struct rtable *rt;
+                struct net *net = &init_net;
+                int ifindex = skb->dev ? skb->dev->ifindex : 0;
                 
-                rt = serval_ip_route_output(sock_net(sk),
+                if (sk) {
+                        net = sock_net(sk);
+                        ifindex = sk->sk_bound_dev_if;
+                }
+               
+                rt = serval_ip_route_output(net,
                                             ip_hdr(skb)->daddr,
                                             ip_hdr(skb)->saddr,
-                                            0, sk->sk_bound_dev_if);
+                                            0, ifindex);
                 
                 if (!rt) {
                         LOG_ERR("RESPONSE not routable\n");
@@ -1481,7 +1498,6 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         }
 #endif /* OS_LINUX_KERNEL */
 
-        rskb->protocol = IPPROTO_SERVAL;
         skb_dst_set(rskb, dst);
         rskb->dev = skb->dev;
         
@@ -1509,6 +1525,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
                 memcpy(ctrl_ext->nonce, 
                        ctx->ctrl_ext->nonce, SAL_NONCE_SIZE);
         }
+
         sal_len += SAL_CONTROL_EXT_LEN;
  
         /* Add Serval header */
@@ -3224,6 +3241,7 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         if (!sk) {
                 LOG_INF("No matching sock for flowid %s\n",
                         flow_id_to_str(&ctx->hdr->dst_flowid));
+                serval_sal_send_reset(NULL, skb, ctx);
         }
 
         return sk;
