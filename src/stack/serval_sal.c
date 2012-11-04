@@ -2375,6 +2375,9 @@ static int serval_sal_closewait_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
+        if (ctx->flags & SVH_FIN)
+                serval_sal_send_ack(sk);
+
         serval_sal_ack_process(sk, skb, ctx);
 
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
@@ -2735,6 +2738,10 @@ static int serval_sal_closing_state_process(struct sock *sk,
                 serval_sal_timewait(sk, SAL_TIMEWAIT, SAL_TIMEWAIT_LEN);
         }
 
+        if (ctx->flags & SVH_FIN) {
+                serval_sal_send_ack(sk);
+        }
+
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
                 /* Set the received service id */
                 SAL_SKB_CB(skb)->srvid = &ssk->peer_srvid;
@@ -2758,6 +2765,9 @@ static int serval_sal_lastack_state_process(struct sock *sk,
         int err = 0, ack_ok;
         
         LOG_SSK(sk, "SAL pkt %s\n", sal_hdr_to_str(ctx->hdr));
+
+        if (ctx->flags & SVH_FIN)
+                serval_sal_send_ack(sk);
 
         ack_ok = serval_sal_ack_process(sk, skb, ctx) == 0;
                 
