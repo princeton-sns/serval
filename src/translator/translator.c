@@ -869,7 +869,6 @@ int run_translator(int family, unsigned short port)
 	int sock, ret = 0, running = 1, sig_fd;
         struct epoll_event ev, events[MAX_EVENTS];
         int gc_timeout = GC_TIMEOUT;
-        struct timespec prev_time, now;
 
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -932,19 +931,21 @@ int run_translator(int family, unsigned short port)
                 port);
         
         while (running) {
+                struct timespec prev_time, now;
                 int nfds, i;
-                long elapsed = 0;
 
                 clock_gettime(CLOCK_REALTIME, &prev_time);
 
                 nfds = epoll_wait(epollfd, events, 
-                                  MAX_EVENTS, timeout);
+                                  MAX_EVENTS, gc_timeout);
                 
                 clock_gettime(CLOCK_REALTIME, &now);
 
                 timespec_sub(&now, &prev_time);
                 
-                elapsed = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
+                gc_timeout = GC_TIMEOUT - ((now.tv_sec * 1000) + (now.tv_nsec / 1000000));
+
+                /* LOG_DBG("gc_timeout=%d\n", gc_timeout); */
                 
                 if (nfds == -1) {
                         if (errno == EINTR) {
@@ -955,13 +956,11 @@ int run_translator(int family, unsigned short port)
                                 ret = -1;
                         }
                         break;
-                } else if (nfds == 0 || (GC_TIMEOUT - elapsed) < 50) {
+                } else if (nfds == 0 || gc_timeout < 50) {
                         garbage_collect_clients();
                         gc_timeout = GC_TIMEOUT;
                         continue;
                 } 
-                
-                gc_timeout = GC_TIMEOUT - elapsed; 
 
                 for (i = 0; i < nfds; i++) {
                         /* We can cast to struct socket here since we
@@ -984,7 +983,7 @@ int run_translator(int family, unsigned short port)
                         } else {
                                 struct client *c = s->c;
                                 uint32_t monitored_events = 
-                                        EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP; 
+                                        EPOLLIN | EPOLLERR | EPOLLHUP ; 
                                 
                                 /* print_events(s, events[i].events); */
 
