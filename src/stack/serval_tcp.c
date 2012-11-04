@@ -721,7 +721,7 @@ unsigned int serval_tcp_poll(struct file *file,
 		if (tp->urg_data & TCP_URG_VALID)
 			mask |= POLLPRI;
 	}
-	/* This barrier is coupled with smp_wmb() in tcp_reset() */
+	/* This barrier is coupled with smp_wmb() in serval_sal_rcv_reset() */
 	smp_rmb();
 	if (sk->sk_err) {
                 LOG_SSK(sk, "POLLERR returned\n");

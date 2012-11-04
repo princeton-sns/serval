@@ -1433,7 +1433,7 @@ void serval_sal_rcv_reset(struct sock *sk)
 		sk->sk_err = ECONNRESET;
 	}
 
-	/* This barrier is coupled with smp_rmb() in tcp_poll() */
+	/* This barrier is coupled with smp_rmb() in serval_tcp_poll() */
 	smp_wmb();
 
 	if (!sock_flag(sk, SOCK_DEAD))

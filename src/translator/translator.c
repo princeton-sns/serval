@@ -31,6 +31,7 @@
 #include <sys/ioctl.h>
 #include <common/signal.h>
 #include <common/list.h>
+#include <common/timer.h>
 #define ENABLE_DEBUG 1
 #include <common/debug.h>
 #include <sys/epoll.h>
@@ -741,7 +742,6 @@ static struct client *accept_client(int sock, int port)
         } else {
                 inet_ntop(AF_INET, &addr.in.sin_addr, ip, 18);
         }
-        
 
         c = client_create(client_sock, &addr.sa, addrlen);
 
@@ -861,12 +861,15 @@ static void print_events(struct socket *s, uint32_t events)
 */
 
 #define MAX_EVENTS 10
+#define GC_TIMEOUT 3000
 
 int run_translator(int family, unsigned short port)
 {
 	struct sigaction action;
 	int sock, ret = 0, running = 1, sig_fd;
         struct epoll_event ev, events[MAX_EVENTS];
+        int gc_timeout = GC_TIMEOUT;
+        struct timespec prev_time, now;
 
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -920,20 +923,28 @@ int run_translator(int family, unsigned short port)
 
         ret = start_workers(num_workers);
         
-        if (ret == -1) {
+        if (ret == -1)
                 goto err_workers;
-        }
 
         LOG_DBG("%s to %s translator running on port/serviceID %u\n", 
                 family_to_str(family), 
                 family_to_str(family == AF_INET ? AF_SERVAL : AF_INET),
                 port);
-
+        
         while (running) {
                 int nfds, i;
+                long elapsed = 0;
+
+                clock_gettime(CLOCK_REALTIME, &prev_time);
 
                 nfds = epoll_wait(epollfd, events, 
-                                  MAX_EVENTS, 10000);
+                                  MAX_EVENTS, timeout);
+                
+                clock_gettime(CLOCK_REALTIME, &now);
+
+                timespec_sub(&now, &prev_time);
+                
+                elapsed = (now.tv_sec * 1000) + (now.tv_nsec / 1000000);
                 
                 if (nfds == -1) {
                         if (errno == EINTR) {
@@ -944,11 +955,14 @@ int run_translator(int family, unsigned short port)
                                 ret = -1;
                         }
                         break;
-                } else if (nfds == 0) {
+                } else if (nfds == 0 || (GC_TIMEOUT - elapsed) < 50) {
                         garbage_collect_clients();
+                        gc_timeout = GC_TIMEOUT;
                         continue;
                 } 
                 
+                gc_timeout = GC_TIMEOUT - elapsed; 
+
                 for (i = 0; i < nfds; i++) {
                         /* We can cast to struct socket here since we
                            know fd is first member of the struct */
@@ -970,7 +984,7 @@ int run_translator(int family, unsigned short port)
                         } else {
                                 struct client *c = s->c;
                                 uint32_t monitored_events = 
-                                        EPOLLIN | EPOLLERR | EPOLLHUP; 
+                                        EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP; 
                                 
                                 /* print_events(s, events[i].events); */
 
