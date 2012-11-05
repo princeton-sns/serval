@@ -1433,6 +1433,8 @@ void serval_sal_rcv_reset(struct sock *sk)
 		sk->sk_err = ECONNRESET;
 	}
 
+        LOG_SSK(sk, "RESET received\n");
+
 	/* This barrier is coupled with smp_rmb() in serval_tcp_poll() */
 	smp_wmb();
 
@@ -3249,9 +3251,11 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
 {
         struct sock *sk = NULL;
         
-        /* If this is a pure SYN, then we know that we must demux on
+        /* If this is a SYN, then we know that we must demux on
            service */
-        if ((ctx->flags & SVH_SYN) && !(ctx->flags && SVH_ACK))
+        if (ctx->ctrl_ext && 
+            ctx->ctrl_ext->syn && 
+            !ctx->ctrl_ext->ack)
                 return NULL;
 
         /* Ok, try to demux on flowID */
@@ -3260,7 +3264,6 @@ static struct sock *serval_sal_demux_flow(struct sk_buff *skb,
         if (!sk) {
                 LOG_INF("No matching sock for flowid %s\n",
                         flow_id_to_str(&ctx->hdr->dst_flowid));
-                serval_sal_send_reset(NULL, skb, ctx);
         }
 
         return sk;
@@ -3270,11 +3273,11 @@ static int serval_sal_resolve(struct sk_buff *skb,
                               struct sal_context *ctx,
                               struct sock **sk)
 {
-        int ret = SAL_RESOLVE_ERROR;
+        int ret = SAL_RESOLVE_NO_MATCH;
         struct service_id *srvid = NULL;
         
         if (ctx->length <= SAL_HEADER_LEN)
-                return ret;
+                return SAL_RESOLVE_ERROR;
         
         if (!ctx->srv_ext[0])
                 return SAL_RESOLVE_ERROR;
@@ -3288,8 +3291,6 @@ static int serval_sal_resolve(struct sk_buff *skb,
                 
                 if (*sk)
                         ret = SAL_RESOLVE_DEMUX;
-                else
-                        ret = SAL_RESOLVE_NO_MATCH;
         }
         
         return ret;
@@ -3473,6 +3474,7 @@ int serval_sal_rcv(struct sk_buff *skb)
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
+                        serval_sal_send_reset(NULL, skb, &ctx);
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
