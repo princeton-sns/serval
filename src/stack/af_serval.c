@@ -63,7 +63,13 @@ extern void __exit delay_queue_fini(void);
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
 
-struct netns_serval net_serval;
+struct netns_serval net_serval = {
+        .sysctl_sal_forward = 0,
+        .sysctl_inet_to_serval = 0,
+        .sysctl_auto_migrate = 1,
+        .sysctl_debug = 0,
+        .sysctl_udp_encap = 0,       
+};
 
 extern void serval_tcp_init(void);
 
@@ -1083,6 +1089,7 @@ int __init serval_init(void)
         serval_tcp_init();
         
         delay_queue_init();
+        net_serval.sysctl_auto_migrate = 1;
  out:
         return err;
 #if defined(OS_LINUX_KERNEL)

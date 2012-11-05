@@ -208,9 +208,6 @@ int serval_module_init(void)
 
         pr_alert("Loaded Serval protocol module\n");
 
-        net_serval.sysctl_debug = debug;
-        net_serval.sysctl_auto_migrate = 1;
-
         err = proc_init();
         
         if (err < 0) {
@@ -245,6 +242,8 @@ int serval_module_init(void)
                 LOG_CRIT("Cannot register inetaddr notifier\n");
                 goto fail_inetaddr_notifier;
         }
+
+        net_serval.sysctl_debug = debug;
 
         err = serval_sysctl_register(&init_net);
 

@@ -36,9 +36,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.Toast;
-import android.widget.ToggleButton;
 
 public class ServalActivity extends FragmentActivity {
 
@@ -319,6 +317,8 @@ public class ServalActivity extends FragmentActivity {
 						: R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
+		if (servalFrag.autoMigrationButton != null)
+			servalFrag.autoMigrationButton.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/auto_migrate"));
 	}
 
 	public void setUdpEncap(boolean on) {

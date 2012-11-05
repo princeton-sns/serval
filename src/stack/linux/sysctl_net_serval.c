@@ -172,7 +172,7 @@ int __net_init serval_sysctl_register(struct net *net)
 	if (table == NULL)
 		goto err_alloc;
 
-	table[0].data = &net_serval.sysctl_sal_forward;
+	table[0].data = &net_serval;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 	net_serval.ctl = register_net_sysctl(net, "net/serval", table);
 #else
