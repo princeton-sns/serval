@@ -65,7 +65,6 @@ struct worker {
 
 struct client;
 
-
 enum socket_state {
         SS_CLOSED,
         SS_CONNECTING,
@@ -110,6 +109,7 @@ struct client {
         work_t work[MAX_WORK];
         unsigned char is_scheduled:1;
         unsigned char is_garbage:1;
+        unsigned char cross_translate:1;
         struct list_head lh, wq;
         struct signal exit_signal;
 };
@@ -181,6 +181,11 @@ static enum work_status work_translate(struct socket *from,
                 */
                 return WORK_NOSPACE;
         }
+
+        /* Make sure we write to the pipe atomically without
+         * blocking */
+        if (readlen > PIPE_BUF)
+                readlen = PIPE_BUF;
 
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
                      readlen, SPLICE_F_MOVE);
@@ -525,6 +530,24 @@ static enum work_status client_connect(struct client *c)
         } else if (c->from_family == AF_INET) {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
+
+                if (c->cross_translate) {
+                        /* We are cross translating, i.e., this
+                         * AF_INET to AF_SERVAL translator connects to
+                         * another AF_SERVAL to AF_INET translator. We
+                         * put the original AF_INET destination
+                         * address and port at the end of the
+                         * serviceID, so that the other translator
+                         * knows where to connect to. NOTE: The other
+                         * translator must listen to a serviceID
+                         * prefix, since every serviceID will now be
+                         * unique. */
+                        addr.sv.sv_srvid.s_sid16[13] = 
+                                c->sock[ST_INET].addr.in.sin_port;
+                        addr.sv.sv_srvid.s_sid32[7] = 
+                                c->sock[ST_INET].addr.in.sin_addr.s_addr;
+                }
+
                 addrlen = sizeof(addr.sv);
                 s = &c->sock[ST_SERVAL];
                 s2 = &c->sock[ST_INET];
@@ -645,7 +668,8 @@ static void cleanup_clients(void)
         }
 }
 
-static int create_server_sock(int family, unsigned short port)
+static int create_server_sock(int family, unsigned short port, 
+                              int cross_translate)
 {
         sockaddr_generic_t addr;
         socklen_t addrlen = 0;
@@ -677,7 +701,12 @@ static int create_server_sock(int family, unsigned short port)
         } else if (family == AF_SERVAL) {
                 addr.sv.sv_family = AF_SERVAL;
                 addr.sv.sv_srvid.s_sid32[0] = htonl(port);
-                addr.sv.sv_prefix_bits = 128;
+                /* Listen to a prefix, since, in case of cross
+                 * translation, the incoming connections will have a
+                 * serviceID with the lower order bits being the IP
+                 * address and port. */
+                if (cross_translate)
+                        addr.sv.sv_prefix_bits = 128;
                 addrlen = sizeof(addr.sv);
         } else {
                 close(sock);
@@ -863,7 +892,7 @@ static void print_events(struct socket *s, uint32_t events)
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
 
-int run_translator(int family, unsigned short port)
+int run_translator(int family, unsigned short port, int cross_translate)
 {
 	struct sigaction action;
 	int sock, ret = 0, running = 1, sig_fd;
@@ -900,7 +929,7 @@ int run_translator(int family, unsigned short port)
                 goto err_epoll_create;
         }
         
-        sock = create_server_sock(family, port);
+        sock = create_server_sock(family, port, cross_translate);
 
         if (sock == -1) {
                 LOG_ERR("could not create AF_INET server sock\n");
@@ -975,6 +1004,7 @@ int run_translator(int family, unsigned short port)
                                 if (!c) {
                                         LOG_ERR("client accept failure\n");
                                 } else {
+                                        c->cross_translate = (cross_translate == 1);
                                         client_add_work(c, client_connect);
                                         schedule_client(c);
                                 }
@@ -1032,12 +1062,14 @@ static void print_usage(void)
 {
         printf("Usage: translator [ OPTIONS ]\n");
         printf("where OPTIONS:\n");
-        printf("\t-d, --daemon\t\t run in the background as a daemon.\n");
-        printf("\t-p, --port PORT\t\t port to listen on.\n");
+        printf("\t-d, --daemon\t\t\t run in the background as a daemon.\n");
+        printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
-        printf("\t-s, --serval\t\t run an AF_SERVAL to AF_INET translator.\n");
+        printf("\t-s, --serval\t\t\t run an AF_SERVAL to AF_INET translator.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
+        printf("\t-x, --cross-translate\t\t an AF_SERVAL->AF_INET translator connects to "
+               "an AF_SERVAL->AF_INET translator. Both need this option set.\n");
 }
 
 static int daemonize(void)
@@ -1104,6 +1136,7 @@ int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
         int ret = 0, family = AF_INET, daemon = 0;
+        int cross_translate = 0;
 
         argc--;
 	argv++;
@@ -1130,6 +1163,9 @@ int main(int argc, char **argv)
                 } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") ==  0) {
                         daemon = 1;
+                } else if (strcmp(argv[0], "-x") == 0 ||
+                           strcmp(argv[0], "--cross-translate") ==  0) {
+                        cross_translate = 1;
                 } else if (strcmp(argv[0], "-w") == 0 ||
                            strcmp(argv[0], "--workers") ==  0) {
                         unsigned long n;
@@ -1185,7 +1221,7 @@ int main(int argc, char **argv)
                 } 
         }
 
-        ret = run_translator(family, port);
+        ret = run_translator(family, port, cross_translate);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);

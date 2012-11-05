@@ -682,7 +682,6 @@ unsigned int serval_tcp_poll(struct file *file,
         }
 	if (sk->sk_shutdown & RCV_SHUTDOWN) {
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
-                LOG_SSK(sk, "POLLRDHUP\n");
         }
 
 	/* Connected? */
