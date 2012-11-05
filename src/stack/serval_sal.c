@@ -1483,14 +1483,23 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
                         net = sock_net(sk);
                         ifindex = sk->sk_bound_dev_if;
                 }
-               
+#if defined(ENABLE_DEBUG)
+                {
+                        char daddr[18], saddr[18];
+                        LOG_DBG("routing reset saddr=%s daddr=%s ifindex=%d\n",
+                                inet_ntop(AF_INET, &ip_hdr(skb)->saddr, 
+                                          saddr, 18),
+                                inet_ntop(AF_INET, &ip_hdr(skb)->daddr, 
+                                          daddr, 18), ifindex);
+                }
+#endif
                 rt = serval_ip_route_output(net,
-                                            ip_hdr(skb)->daddr,
                                             ip_hdr(skb)->saddr,
+                                            ip_hdr(skb)->daddr,
                                             0, ifindex);
                 
                 if (!rt) {
-                        LOG_ERR("RESPONSE not routable\n");
+                        LOG_DBG("RESET not routable\n");
                         goto drop_response;
                 }
                 
