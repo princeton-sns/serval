@@ -337,27 +337,34 @@ static int client_epoll_set(struct client *c, int op)
 
 static int service_to_sockaddr_in(struct service_id *srvid, struct sockaddr_in *in)
 {
-        size_t i = strlen(srvid->s_sid);
-        size_t n = 0;
+        char buf[SERVICE_ID_MAX_LEN+1];
+        size_t i = 0;
 
-        while (i) {
-                if (srvid->s_sid[i] == '-') {
-                        in->sin_port = htons(atoi(&srvid->s_sid[i+1]));
-                        n = i;
-                } else if (srvid->s_sid[i] == '.') {
-                        char ip[18];
-                        
-                        if (n == 0)
+        
+        if (!serval_ntop(srvid, buf, sizeof(buf)))
+                return -1;
+        
+        /* buf is now a string in the format IP-PORT.FQDN */
+
+        while (buf[i] != '\0') {
+                if (buf[i] == '-') {
+                        char *tmp = '\0';
+                        unsigned long port;
+
+                        buf[i] = '\0';
+
+                        if (inet_pton(AF_INET, buf, &in->sin_addr) != 1)
                                 return -1;
                         
-                        strncpy(ip, &srvid->s_sid[i+1], n - i);
-               
-                        if (inet_pton(AF_INET, ip, &in->sin_addr) != 1)
-                                return -1;
-                        return 0;
+                        port = strtoul(&buf[i+1], &tmp, 10);
+
+                        if (*tmp == '.' && port > 0 && port <= USHRT_MAX) {
+                                in->sin_port = htons(port & 0xFFFF);
+                                return 0;
+                        } 
+                        return -1;
                 }
-
-                i--;
+                i++;
         }
 
         return -1;
@@ -437,12 +444,12 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         /* The end of the serviceID contains the original port
                            and IP. */ 
                         
-                        ret = service_to_sockaddr_in(&c->sock[ST_SERVAL].addr.sv.sv_srvid,
+                        ret = service_to_sockaddr_in(&sv.sv_srvid,
                                                      &c->sock[ST_INET].addr.in);
                         
                         if (ret == -1) {
                                 LOG_ERR("Could not extract IP and port from serviceID %s\n",
-                                        service_id_to_str(&c->sock[ST_SERVAL].addr.sv.sv_srvid));
+                                        service_id_to_str(&sv.sv_srvid));
                         }
                 } else {
                         service_id_to_ip(&sv.sv_srvid, &c->sock[ST_INET].addr.in.sin_addr);
