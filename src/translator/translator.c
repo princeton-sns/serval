@@ -146,7 +146,7 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
-static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
+static int resolve_service(struct service_id *srvid, struct sockaddr *sa)
 {
         struct addrinfo hints, *ai, *ai_it;
         const char *port = NULL;
@@ -160,6 +160,8 @@ static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
         
         serval_ntop(srvid, host, sizeof(host));
         
+        LOG_DBG("resolving %s\n", host);
+
         ret = getaddrinfo(host, port, &hints, &ai);
 
         if (ret != 0) {
@@ -171,11 +173,8 @@ static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
 
         for (ai_it = ai; ai_it; ai_it = ai_it->ai_next) {
                 if (ai_it->ai_family == AF_INET) {
-                        char buf[20];
+                        memcpy(sa, ai_it->ai_addr, ai_it->ai_addrlen);
                         ret = 0;
-                        LOG_DBG("found ip %s\n", 
-                                inet_ntop(AF_INET, &ai_it->ai_addr, buf, 20));
-                        memcpy(addr, ai_it->ai_addr, sizeof(struct in_addr));
                         break;
                 }
         }
@@ -433,7 +432,8 @@ struct client *client_create(int sock, struct sockaddr *sa,
 
                 c->sock[ST_INET].addr.in.sin_family = AF_INET;
 
-                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+                ret = getsockname(c->sock[ST_SERVAL].fd, 
+                                  (struct sockaddr *)&sv, &svlen);
                 
                 if (ret == -1) {
                         LOG_DBG("getsockname: %s\n", strerror(errno));
@@ -452,9 +452,18 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                         service_id_to_str(&sv.sv_srvid));
                         }
                 } else {
-                        service_id_to_ip(&sv.sv_srvid, &c->sock[ST_INET].addr.in.sin_addr);
-                        /* Assume port 80 */
-                        c->sock[ST_INET].addr.in.sin_port = htons(80);
+                        ret = resolve_service(&sv.sv_srvid, &c->sock[ST_INET].addr.sa);
+
+                        if (ret == -1) {
+                                LOG_ERR("could not resolve %s\n",
+                                        service_id_to_str(&sv.sv_srvid));
+                                goto fail_sock;
+                        }
+
+                        if (c->sock[ST_INET].addr.in.sin_port == 0) {
+                                /* Assume port 80 */
+                                c->sock[ST_INET].addr.in.sin_port = htons(80);
+                        }
                 }
 
                 c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -827,7 +836,6 @@ static int create_server_sock(int family, unsigned short port,
         } else if (family == AF_SERVAL) {
                 addr.sv.sv_family = AF_SERVAL;
                 
-                
                 if (cross_translate) {
                         /* Listen to a "prefix", since, in case of cross
                          * translation, the incoming connections will have a
@@ -849,8 +857,7 @@ static int create_server_sock(int family, unsigned short port,
         ret = bind(sock, &addr.sa, addrlen);
 
         if (ret == -1) {
-		LOG_ERR("inet bind: %s\n",
-			strerror(errno));
+		LOG_ERR("bind: %s\n", strerror(errno));
                 goto failure;
 	}
 
@@ -1196,9 +1203,10 @@ static void print_usage(void)
         printf("Usage: translator [ OPTIONS ]\n");
         printf("where OPTIONS:\n");
         printf("\t-d, --daemon\t\t\t run in the background as a daemon.\n");
+        printf("\t-n, --name\t\t\t service name to listen on in case of AF_SERVAL->AF_INET.\n");
         printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
-        printf("\t-s, --serval\t\t\t run an AF_SERVAL to AF_INET translator.\n");
+        printf("\t-s, --serval\t\t\t run an AF_SERVAL->AF_INET translator.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
         printf("\t-x, --cross-translate\t\t an AF_SERVAL->AF_INET translator connects to "
@@ -1289,6 +1297,15 @@ int main(int argc, char **argv)
                            strcmp(argv[0], "--help") ==  0) {
                         print_usage();
                         goto fail;
+                } else if (strcmp(argv[0], "-n") == 0 ||
+                           strcmp(argv[0], "--name") ==  0) {
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        translator_service_name = argv[1];
+                        argv++;
+                        argc--;
                 } else if (strcmp(argv[0], "-s") == 0 ||
                            strcmp(argv[0], "--serval") ==  0) {
                         /* Run a SERVAL to INET translator */
