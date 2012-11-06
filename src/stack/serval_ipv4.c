@@ -119,9 +119,6 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
                 LOG_ERR("Could not forward SAL packet, NO route [err=%d]\n", err);
                 kfree_skb(skb);
                 return NET_RX_DROP;
-        } else {
-                struct rtable *rt = skb_rtable(skb);
-                iph->saddr = rt->rt_src;
         }
 #else
         iph->ttl = iph->ttl - 1;
@@ -215,7 +212,7 @@ struct dst_entry *serval_ipv4_route(struct sock *sk,
         if (!rt)
 		goto no_route;
         
-	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
+	if (opt && opt->is_strictroute && rt->rt_gateway)
 		goto route_err;
 
 	return route_dst(rt);
@@ -244,10 +241,20 @@ const char *ipv4_hdr_dump(const void *hdr, char *buf, int buflen)
 int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
                             u32 saddr, u32 daddr)
 {
-	struct inet_sock *inet = inet_sk(sk);
         struct iphdr *iph;
         unsigned int iph_len = sizeof(struct iphdr);
+        u8 tos = 0, ttl = SERVAL_DEFTTL;
+        u32 priority = 0, mark = 0;
 
+        if (sk) {
+                struct inet_sock *inet = inet_sk(sk);
+                tos = inet->tos;
+                priority = sk->sk_priority;
+                mark = sk->sk_mark;
+                if (inet->uc_ttl >= 0)
+                        ttl = inet->uc_ttl;
+        }
+        
         iph = (struct iphdr *)skb_push(skb, iph_len);
 	skb_reset_network_header(skb);
 
@@ -255,7 +262,7 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         memset(iph, 0, iph_len);
         iph->version = 4; 
         iph->ihl = iph_len >> 2;
-        iph->tos = inet->tos;
+        iph->tos = tos;
 #if defined(OS_USER) && defined(OS_BSD)
         /* BSD/Mac OS X requires tot_len to be in host byte order when
          * sending over IP raw socket */
@@ -265,14 +272,14 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
 #endif
         iph->id = 0;
         iph->frag_off = 0;
-        iph->ttl = inet->uc_ttl < 0 ? SERVAL_DEFTTL : inet->uc_ttl;
+        iph->ttl = ttl;
         iph->protocol = skb->protocol;
         iph->saddr = saddr;
         iph->daddr = daddr;
 	skb->protocol = htons(ETH_P_IP);
-	skb->priority = sk->sk_priority;
+	skb->priority = priority;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25))
-	skb->mark = sk->sk_mark;
+	skb->mark = mark;
 #endif
 
 #if defined(ENABLE_DEBUG)
@@ -295,7 +302,8 @@ int serval_ipv4_fill_in_hdr(struct sock *sk, struct sk_buff *skb,
         return 0;
 }
 
-int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
+int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, 
+                                   struct sock *sk,
                                    u32 saddr, u32 daddr, 
                                    struct ip_options *opt)
 {
@@ -312,7 +320,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         if (saddr == 0) {
                 if (!skb->dev) {
                         LOG_ERR("no device set\n");
-                        FREE_SKB(skb);
+                        kfree_skb(skb);
                         return -ENODEV;
                 }
                 dev_get_ipv4_addr(skb->dev, IFADDR_LOCAL, &saddr);
@@ -322,7 +330,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         
         if (err < 0) {
                 LOG_ERR("hdr failed\n");
-                FREE_SKB(skb);
+                kfree_skb(skb);
                 return err;
         }
 
@@ -332,6 +340,7 @@ int serval_ipv4_build_and_send_pkt(struct sk_buff *skb, struct sock *sk,
         if (err < 0) {
                 LOG_ERR("xmit failed\n");
         }
+
         return err;
 }
 
@@ -421,7 +430,14 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
 
                 if (!rt) {
-                        LOG_DBG("No route!\n");
+#if defined(ENABLE_DEBUG)
+                        {
+                                char ip[18];
+                                LOG_SSK(sk, "No route for %s on if=%d bound_if=%d!\n",
+                                        inet_ntop(AF_INET, &inet->inet_daddr, ip, 18),
+                                        ifindex, sk->sk_bound_dev_if);
+                        }
+#endif
                         err = -EHOSTUNREACH;
                         rcu_read_unlock();
                         goto drop;
@@ -431,29 +447,16 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 sk_setup_caps(sk, route_dst(rt));
 
         } else {
-                LOG_PKT("Using route already associated with socket\n");
+                LOG_SSK(sk, "Using existing sock route\n");
         }
         
-#if defined(ENABLE_DEBUG)
-        {
-                char src[18], dst[18];
-                LOG_PKT("Route found %s -> %s %s\n",
-                        inet_ntop(AF_INET, &rt->rt_src, 
-                                  src, sizeof(src)),
-                        inet_ntop(AF_INET, &rt->rt_dst, 
-                                  dst, sizeof(dst)),
-                        route_dst(rt)->dev ? 
-                        route_dst(rt)->dev->name : "(null)");
-        }
-#endif
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35))
         skb_dst_set(skb, dst_clone(route_dst(rt)));
 #else
         skb_dst_set_noref(skb, route_dst(rt));
 #endif
  packet_routed:
-        if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway) {
+        if (opt && opt->is_strictroute && rt->rt_gateway) {
                 err = -EHOSTUNREACH;
                 rcu_read_unlock();
                 LOG_DBG("dest is not gateway!\n");
@@ -472,8 +475,8 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 		iph->frag_off = 0;
 	iph->ttl      = ip_select_ttl(inet, route_dst(rt));
 	iph->protocol = skb->protocol;
-	iph->saddr    = rt->rt_src;
-	iph->daddr    = rt->rt_dst;
+	iph->saddr    = inet->inet_saddr; //rt->rt_src;
+	iph->daddr    = inet->inet_daddr; //rt->rt_dst;
 
 	if (opt && opt->optlen) {
                 LOG_WARN("IP options not implemented\n");
@@ -530,7 +533,7 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 drop:
         LOG_DBG("Dropping skb!\n");
 
-        FREE_SKB(skb);
+        kfree_skb(skb);
         
         goto out;
 }

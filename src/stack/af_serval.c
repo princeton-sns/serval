@@ -27,6 +27,9 @@
 #include <linux/export.h>
 #endif
 
+extern int __init inet_to_serval_init(void);
+extern void __exit inet_to_serval_fini(void);
+
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
@@ -60,7 +63,13 @@ extern void __exit delay_queue_fini(void);
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
 
-struct netns_serval net_serval;
+struct netns_serval net_serval = {
+        .sysctl_sal_forward = 0,
+        .sysctl_inet_to_serval = 0,
+        .sysctl_auto_migrate = 1,
+        .sysctl_debug = 0,
+        .sysctl_udp_encap = 0,       
+};
 
 extern void serval_tcp_init(void);
 
@@ -178,7 +187,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         sk->sk_prot->hash(sk);
                
         if (!serval_sock_flag(ssk, SSK_FLAG_HASHED)) {
-                LOG_DBG("Could not bind socket, hashing failed\n");
+                LOG_SSK(sk, "Could not bind socket, hashing failed\n");
                 return -EINVAL;
         }
 
@@ -198,8 +207,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 /*
  *	This function does both peername and sockname.
  */
-int serval_getname(struct socket *sock, struct sockaddr *uaddr,
-                   int *uaddr_len, int peer)
+static int serval_getname(struct socket *sock, struct sockaddr *uaddr,
+                          int *uaddr_len, int peer)
 {
 	struct sock *sk		= sock->sk;
 	struct inet_sock *inet	= inet_sk(sk);
@@ -285,26 +294,6 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
 	return 0;
 }
 
-int serval_getsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, int __user *optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-
-	return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
-}
-
-int serval_setsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, unsigned int optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-	
-        return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
-}
-
 static int serval_listen_start(struct sock *sk, int backlog)
 {
         serval_sock_set_state(sk, SAL_LISTEN);
@@ -332,7 +321,7 @@ static int serval_listen_stop(struct sock *sk)
                 
                 list_del(&srsk->lh);
 
-                LOG_DBG("deleting SYN queued request socket\n");
+                LOG_SSK(sk, "deleting SYN queued request socket\n");
 
                 reqsk_free(&srsk->rsk.req);
                 sk->sk_ack_backlog--;
@@ -478,8 +467,9 @@ static int serval_wait_for_connect(struct sock *sk, long timeo)
 	return err;
 }
 
-static int serval_accept(struct socket *sock, struct socket *newsock,
-                           int flags)
+static int serval_accept(struct socket *sock, 
+                         struct socket *newsock,
+                         int flags)
 {
 	struct sock *sk = sock->sk, *nsk;
         struct serval_sock *ssk = serval_sk(sk);
@@ -587,7 +577,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         if ((1 << sk->sk_state) & (SALF_REQUEST | SALF_RESPOND)) {
                 /* Error code is set above */
-                LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
+                LOG_SSK(sk, "Waiting for connect, timeo=%ld\n", timeo);
 
                 if (!timeo)
                         goto out;
@@ -596,9 +586,9 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
                 if (err) {
                         if (err == -ERESTARTSYS) {
-                                LOG_DBG("sk_stream_wait_connect interrupted\n");
+                                LOG_SSK(sk, "sk_stream_wait_connect interrupted\n");
                         } else {
-                                LOG_DBG("sk_stream_wait_connect err=%d\n",
+                                LOG_SSK(sk, "sk_stream_wait_connect err=%d\n",
                                         err);
                         }
                         goto out;
@@ -630,7 +620,7 @@ sock_error:
 }
 
 static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg, size_t size)
+                          struct msghdr *msg, size_t size)
 {
 	struct sock *sk = sock->sk;
         int err;
@@ -649,8 +639,7 @@ static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
 }
 
 static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg,
-                            size_t size, int flags)
+                          struct msghdr *msg, size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
 	int addr_len = 0;
@@ -747,13 +736,11 @@ int serval_release(struct socket *sock)
         int err = 0;
         struct sock *sk = sock->sk;
 
-        LOG_DBG("\n");
-
 	if (sk) {
                 int state;
                 long timeout = 0;
 
-                serval_shutdown(sock, 2);
+                LOG_SSK(sk, "\n");
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
@@ -764,11 +751,11 @@ int serval_release(struct socket *sock)
                 lock_sock(sk);
 
                 sk->sk_shutdown = SHUTDOWN_MASK;
-
+                
                 if (sk->sk_state == SAL_LISTEN) {
                         serval_listen_stop(sk);
                         serval_sock_set_state(sk, SAL_CLOSED);
-                } else {
+                } else if (sk->sk_state != SAL_CLOSED) {
                         /* the protocol specific function called here
                          * should not lock sock */
                         sk->sk_prot->close(sk, timeout);
@@ -801,7 +788,6 @@ int serval_release(struct socket *sock)
                         goto out;
 
                 /* Other cleanup stuff goes here */
-
                 if (sk->sk_state == SAL_CLOSED)
                         serval_sock_destroy(sk);
         out:
@@ -922,7 +908,7 @@ extern ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
 #endif /* ENABLE_SPLICE */
 #endif /* OS_LINUX_KERNEL */
 
-static const struct proto_ops serval_stream_ops = {
+const struct proto_ops serval_stream_ops = {
 	.family =	PF_SERVAL,
 	.owner =	THIS_MODULE,
 	.release =	serval_release,
@@ -934,8 +920,8 @@ static const struct proto_ops serval_stream_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_tcp_poll,
@@ -960,8 +946,8 @@ static const struct proto_ops serval_dgram_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_poll,
@@ -973,7 +959,6 @@ static const struct proto_ops serval_dgram_ops = {
 #endif
 #endif
 };
-
 
 /**
    Create a new Serval socket.
@@ -1104,22 +1089,35 @@ int __init serval_init(void)
                 goto fail_sock_register;
         }
 
+#if defined(OS_LINUX_KERNEL)
+        err = inet_to_serval_init();
+
+        if (err != 0) {
+                LOG_CRIT("Cannot initialize INET to SERVAL support\n");
+                goto fail_inet_to_serval;
+        }
+#endif
         serval_tcp_init();
         
         delay_queue_init();
-out:
+        net_serval.sysctl_auto_migrate = 1;
+ out:
         return err;
-fail_sock_register:
+#if defined(OS_LINUX_KERNEL)
+ fail_inet_to_serval:
+        sock_unregister(PF_SERVAL);
+#endif
+ fail_sock_register:
 	proto_unregister(&serval_tcp_proto);     
-fail_tcp_proto:
+ fail_tcp_proto:
 	proto_unregister(&serval_udp_proto);     
-fail_udp_proto:
+ fail_udp_proto:
         packet_fini();
-fail_packet:
+ fail_packet:
         serval_sock_tables_fini();
-fail_sock:
+ fail_sock:
         service_fini();
-fail_service:
+ fail_service:
         goto out;      
 }
 
@@ -1129,6 +1127,9 @@ fail_service:
 
 void __exit serval_fini(void)
 {
+#if defined(OS_LINUX_KERNEL)
+        inet_to_serval_fini();
+#endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);

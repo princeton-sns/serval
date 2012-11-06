@@ -62,15 +62,16 @@ static int local_service_add(struct hostctrl *hc,
 }
 
 static int local_service_remove(struct hostctrl *hc, 
+                                enum service_rule_type type,
                                 const struct service_id *srvid,
                                 const struct in_addr *ipaddr)
 {
-	return local_service_generic(hc, CTRLMSG_TYPE_DEL_SERVICE,
-                                 SERVICE_RULE_UNDEFINED, 
-                                 srvid, 0, 0, ipaddr);
+	return local_service_generic(hc, CTRLMSG_TYPE_DEL_SERVICE, 
+                                 type, srvid, 0, 0, ipaddr);
 }
 
 static int local_service_modify(struct hostctrl *hc, 
+                                enum service_rule_type type,
                                 const struct service_id *srvid,
                                 unsigned int priority,
                                 unsigned int weight,
@@ -89,6 +90,7 @@ static int local_service_modify(struct hostctrl *hc,
     req.cm.cmh.type = CTRLMSG_TYPE_MOD_SERVICE;
     req.cm.cmh.len = CTRLMSG_SERVICE_NUM_LEN(2);
     req.cm.cmh.xid = ++hc->xid;
+    req.service[0].type = type;
     req.service[0].priority = priority;
     req.service[0].weight = weight;
     memcpy(&req.service[0].srvid, srvid, sizeof(*srvid));

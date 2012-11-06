@@ -13,31 +13,13 @@
 #include <serval/platform.h>
 #include <serval/debug.h>
 #include <serval/netdevice.h>
-#include <serval/skbuff.h>
 #include <netinet/serval.h>
-#include <serval_udp_sock.h>
 #include <serval_sock.h>
 #include <serval_request_sock.h>
 #include <serval_ipv4.h>
 #include <serval_sal.h>
+#include <serval_udp.h>
 #include <af_serval.h>
-
-#if defined(OS_LINUX_KERNEL)
-#include <linux/ip.h>
-#include <net/udp.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-#include <linux/export.h>
-#endif
-#endif
-
-#if defined(OS_USER)
-#include <netinet/ip.h>
-#if defined(OS_BSD)
-#include <serval/platform_tcpip.h>
-#else
-#include <netinet/udp.h>
-#endif
-#endif /* OS_USER */
 
 #define EXTRA_HDR (20)
 /* payload + LL + IP + extra */
@@ -100,6 +82,10 @@ static int serval_udp_build_ack(struct sock *sk,
 
 static struct serval_sock_af_ops serval_udp_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_udp_build_syn,
         .conn_build_synack = serval_udp_build_synack,
         .conn_build_ack = serval_udp_build_ack,
@@ -109,11 +95,14 @@ static struct serval_sock_af_ops serval_udp_af_ops = {
         .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
-        .recv_shutdown = serval_sal_recv_shutdown,
 };
 
 static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .rebuild_header = serval_sock_rebuild_header,
+#if defined(OS_LINUX_KERNEL)
+        .setsockopt = ip_setsockopt,
+        .getsockopt = ip_getsockopt,
+#endif
         .conn_build_syn = serval_udp_build_syn,
         .conn_build_synack = serval_udp_build_synack,
         .conn_build_ack = serval_udp_build_ack,
@@ -124,41 +113,7 @@ static struct serval_sock_af_ops serval_udp_encap_af_ops = {
         .net_header_len = SAL_NET_HEADER_LEN,
         .conn_request = serval_udp_connection_request,
         .conn_child_sock = serval_udp_connection_respond_sock,
-        .recv_shutdown = serval_sal_recv_shutdown,
 };
-
-/*
- *	Generic checksumming routines for UDP(-Lite) v4 and v6
- */
-static inline __sum16 __udp_checksum_complete(struct sk_buff *skb)
-{
-	return __skb_checksum_complete(skb);
-}
-
-static inline int udp_checksum_complete(struct sk_buff *skb)
-{
-	return !skb_csum_unnecessary(skb) &&
-		__udp_checksum_complete(skb);
-}
-
-static inline int udp_csum_init(struct sk_buff *skb, 
-                                struct udphdr *uh,
-                                int proto)
-{
-	const struct iphdr *iph = ip_hdr(skb);
-
-	if (uh->check == 0) {
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-	} else if (skb->ip_summed == CHECKSUM_COMPLETE) {
-		if (!csum_tcpudp_magic(iph->saddr, iph->daddr, skb->len,
-				      proto, skb->csum))
-			skb->ip_summed = CHECKSUM_UNNECESSARY;
-	}
-	if (!skb_csum_unnecessary(skb))
-		skb->csum = csum_tcpudp_nofold(iph->saddr, iph->daddr,
-					       skb->len, proto, 0);
-	return 0;
-}
 
 static void __serval_udp_v4_send_check(struct sk_buff *skb,
                                 __be32 saddr, __be32 daddr)
@@ -291,7 +246,7 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
         LOG_DBG("data len=%u skb->len=%u\n",
                 ntohs(udp_hdr(skb)->len) - sizeof(struct udphdr), skb->len); 
 
-        if (udp_checksum_complete(skb)) {
+        if (serval_udp_checksum_complete(skb)) {
                 LOG_DBG("Checksum error, dropping.\n");
                 kfree_skb(skb);
                 return 0;
@@ -330,9 +285,7 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 	 *  Validate the packet.
 	 */
 
-        if (SAL_SKB_CB(skb)->flags & SVH_FIN) {
-                serval_sk(sk)->af_ops->recv_shutdown(sk);
-        } else {
+        if (!(SAL_SKB_CB(skb)->flags & SVH_FIN)) { 
                 unsigned short datalen = ntohs(uh->len) - sizeof(*uh);
                 
                 if (!pskb_may_pull(skb, sizeof(struct udphdr)))
@@ -343,16 +296,21 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
                 if (datalen == 0) 
                         goto drop;
         }
-
-        if (udp_csum_init(skb, uh, IPPROTO_UDP)) {
-                LOG_DBG("Checksum init error, dropping.\n");
+        
+        if (serval_udp_csum_init(skb, uh, IPPROTO_UDP))
                 goto drop;
-        }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
         /* Drop if receive queue is full. Dropping due to full queue
          * is done below in sock_queue_rcv for those kernel versions
          * that do not define this sk_rcvqueues_full().  */
+   
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+        if (sk_rcvqueues_full(sk, skb, 
+                              sk->sk_rcvbuf + sk->sk_sndbuf)) {
+                kfree_skb(skb);
+                return -ENOBUFS; 
+        }
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
         if (sk_rcvqueues_full(sk, skb)) {
                 kfree_skb(skb);
                 return -ENOBUFS; 
@@ -883,6 +841,13 @@ static void serval_udp_request_sock_destructor(struct request_sock *rsk)
 static int serval_udp_setsockopt(struct sock *sk, int level, int optname, 
                                  char __user *optval, unsigned int optlen)
 {
+#if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+        
+	if (level != IPPROTO_UDP)
+		return ssk->af_ops->setsockopt(sk, level, optname,
+                                               optval, optlen);
+#endif
         return -EOPNOTSUPP;
 }
 
@@ -890,6 +855,13 @@ static int serval_udp_getsockopt(struct sock *sk, int level,
                                  int optname, char __user *optval,
                                  int __user *optlen)
 {
+#if defined(OS_LINUX_KERNEL)
+        struct serval_sock *ssk = serval_sk(sk);
+
+	if (level != IPPROTO_UDP)
+		return ssk->af_ops->getsockopt(sk, level, optname,
+                                               optval, optlen);
+#endif
         return -EOPNOTSUPP;
 }
 

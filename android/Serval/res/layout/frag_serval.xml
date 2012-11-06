@@ -129,6 +129,28 @@
                 android:text="@string/remove_service_button" />
         </LinearLayout>
 
+        <LinearLayout
+            android:id="@+id/auto_migration_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center|center_vertical|left" >
+
+            <TextView
+                android:id="@+id/auto_migration_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginRight="40dp"
+                android:text="@string/auto_migration_label"
+                android:textAppearance="?android:attr/textAppearanceMedium" />
+
+            <ToggleButton
+                android:id="@+id/toggle_auto_migration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/toggle_auto_migration" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
 </ScrollView>

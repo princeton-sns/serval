@@ -267,6 +267,12 @@ static inline ssize_t sock_no_sendpage(struct socket *sock,
         return -EOPNOTSUPP;
 }
 
+int sock_common_getsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, int __user *optlen);
+
+int sock_common_setsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, unsigned int optlen);
+
 extern int proto_register(struct proto *prot, int);
 extern void proto_unregister(struct proto *prot);
 

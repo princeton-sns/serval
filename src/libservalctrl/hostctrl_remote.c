@@ -72,6 +72,7 @@ static int remote_service_add_dummy(struct hostctrl *hc,
 }
 
 static int remote_service_remove_dummy(struct hostctrl *hc,
+                                       enum service_rule_type type,
                                        const struct service_id *srvid, 
                                        const struct in_addr *ipaddr)
 {

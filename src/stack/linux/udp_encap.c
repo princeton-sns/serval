@@ -9,6 +9,10 @@
 #include <serval_sal.h>
 #include <serval_ipv4.h>
 #include <serval/debug.h>
+#include <serval_udp.h>
+
+#define UDP_ENCAP_SALINUDP 7 /* This must be something which is not
+                                defined in linux/udp.h */
 
 #define UDP_ENCAP_CLIENT_PORT 54324
 #define UDP_ENCAP_SERVER_PORT 54325
@@ -113,22 +117,37 @@ out:
  */
 int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
 {
+        struct udphdr *uh = udp_hdr(skb);
 	struct udp_encap *encap;
-        
-        LOG_PKT("UDP encapsulated packet [%u:%u]\n",
-                ntohs(udp_hdr(skb)->source),
-                ntohs(udp_hdr(skb)->dest));
-        
+
+        LOG_PKT("UDP encapsulated packet [%u:%u len=%u] skb->len=%u\n",
+                ntohs(uh->source),
+                ntohs(uh->dest),
+                ntohs(uh->len),
+                skb->len);
+
 	encap = sock_to_encap(sk);
 
 	if (encap == NULL)
 		goto pass_up;
 
-	/* UDP always verifies the packet length. */
+        if (serval_udp_csum_init(skb, uh, IPPROTO_UDP)) {
+                kfree_skb(skb);
+                return 0;
+        }
+                
+        if (serval_udp_checksum_complete(skb)) {
+                LOG_DBG("Checksum error, dropping.\n");
+                kfree_skb(skb);
+                return 0;
+        }
+
 	__skb_pull(skb, sizeof(struct udphdr));
         skb_reset_transport_header(skb);
+        
+        serval_sal_rcv(skb);
 
-        return serval_sal_rcv(skb);
+        return 0;
 
 pass_up:
 	return 1;
@@ -168,8 +187,8 @@ static void udp_encap_destruct(struct sock *sk)
 {
         struct udp_encap *encap = sk->sk_user_data;
 
-	(udp_sk(sk))->encap_type = 0;
-        (udp_sk(sk))->encap_rcv = NULL;
+	udp_sk(sk)->encap_type = 0;
+        udp_sk(sk)->encap_rcv = NULL;
 
         sk->sk_destruct = encap->old_sk_destruct;
 	sk->sk_user_data = NULL;
@@ -213,8 +232,14 @@ static struct udp_encap *udp_encap_create(unsigned short port)
 	sk->sk_user_data = encap;
         sk->sk_destruct = udp_encap_destruct;
 
-        udp_sk(sk)->encap_type = 4; /* This is an unallocated type */
+        udp_sk(sk)->encap_type = UDP_ENCAP_SALINUDP; /* This is an
+                                                        unallocated
+                                                        type */
         udp_sk(sk)->encap_rcv = udp_encap_recv;
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+        udp_encap_enable();
+#endif
         LOG_DBG("UDP encap initialized\n");
  error:
 	/* If tunnel's socket was created by the kernel, it doesn't
