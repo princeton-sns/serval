@@ -528,14 +528,15 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
         long timeo;
 
         if (addr->sa_family != AF_SERVAL) {
-                LOG_ERR("Bad address family %d!\n", addr->sa_family);
+                LOG_ERR("Bad address family %u!\n", addr->sa_family);
                 return -EAFNOSUPPORT;
         } 
 
-        /* Verify the format of the serviceID. We do not allow a
-           connect() to a wildcard serviceID. */
+        /* Verify the format of the serviceID. We do not allow
+           connecting on a wildcard serviceID. */
         if (service_id_verify(&((struct sockaddr_sv *)addr)->sv_srvid) != 1) {
-                LOG_ERR("Invalid serviceID format\n");
+                LOG_ERR("Invalid serviceID format: '%s'\n",
+                        service_id_to_str(&((struct sockaddr_sv *)addr)->sv_srvid));
                 return -EINVAL;
         }
 
