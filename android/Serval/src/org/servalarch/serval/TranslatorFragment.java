@@ -33,17 +33,25 @@ public class TranslatorFragment extends Fragment {
 		"echo 1024 > /proc/sys/net/ipv4/neigh/default/gc_thresh1",
 		"echo 2048 > /proc/sys/net/ipv4/neigh/default/gc_thresh2",
 		"echo 4096 > /proc/sys/net/ipv4/neigh/default/gc_thresh3",
-		"iptables -t nat -A OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -t nat -A OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -t nat -A OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
-		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
-		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
-		"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
+		
+		"iptables -t nat -N serval_OUTPUT",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -j RETURN",
+		"iptables -t nat -I OUTPUT 1 -j serval_OUTPUT",
+		
+		"iptables -N serval_FORWARD",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -j RETURN",
+		"iptables -I FORWARD 1 -j serval_FORWARD",
+		
 		"iptables -t nat -N serval_POSTROUTING",
 		"iptables -t nat -A serval_POSTROUTING ! -o dummy0 -j MASQUERADE",
-		"iptables -t nat -A serval_POSTROUTING -j ACCEPT",
-		"iptables -t nat -A POSTROUTING ! -o lo -j MASQUERADE"
+		"iptables -t nat -A serval_POSTROUTING -j RETURN",
+		"iptables -t nat -I POSTROUTING 1 ! -o lo -j serval_POSTROUTING"
 	};
 	
 	private static final String[] ADD_ALL_RULES = {
@@ -56,13 +64,14 @@ public class TranslatorFragment extends Fragment {
 		"ip rule del from 192.168.25.0/24 table main priority 20",
 		"ip rule del from all table 1 priority 30",
 		"echo 0 > /proc/sys/net/ipv4/ip_forward",
-		"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -t nat -D OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
-		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
-		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
-		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
-		"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
+		"iptables -t nat -F serval_OUTPUT",
+		"iptables -t nat -D OUTPUT -j serval_OUTPUT",
+		"iptables -t nat -X serval_OUTPUT",
+		
+		"iptables -F serval_FORWARD",
+		"iptables -D FORWARD -j serval_FORWARD",
+		"iptables -X serval_FORWARD",
+		
 		"iptables -t nat -F serval_POSTROUTING",
 		"iptables -t nat -D POSTROUTING ! -o lo -j serval_POSTROUTING",
 		"iptables -t nat -X serval_POSTROUTING"
