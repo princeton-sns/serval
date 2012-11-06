@@ -146,6 +146,44 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
+static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
+{
+        struct addrinfo hints, *ai, *ai_it;
+        const char *port = NULL;
+        char host[128];
+        int ret;
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = 0;
+        
+        serval_ntop(srvid, host, sizeof(host));
+        
+        ret = getaddrinfo(host, port, &hints, &ai);
+
+        if (ret != 0) {
+                LOG_ERR("%s", gai_strerror(ret));
+                return ret;
+        }
+
+        ret = -1;
+
+        for (ai_it = ai; ai_it; ai_it = ai_it->ai_next) {
+                if (ai_it->ai_family == AF_INET) {
+                        char buf[20];
+                        ret = 0;
+                        LOG_DBG("found ip %s\n", 
+                                inet_ntop(AF_INET, &ai_it->ai_addr, buf, 20));
+                        memcpy(addr, ai_it->ai_addr, sizeof(struct in_addr));
+                        break;
+                }
+        }
+
+        freeaddrinfo(ai);                                
+
+        return ret;
+}
 
 static enum work_status work_translate(struct socket *from, 
                                        struct socket *to,
@@ -326,7 +364,7 @@ static int service_to_sockaddr_in(struct service_id *srvid, struct sockaddr_in *
 }
 
 struct client *client_create(int sock, struct sockaddr *sa, 
-                             socklen_t salen)
+                             socklen_t salen, int cross_translate)
 {
         struct client *c;
         int ret, i;
@@ -340,6 +378,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
         c->id = client_num++;
         c->from_family = sa->sa_family;
         c->is_garbage = 0;
+        c->cross_translate = cross_translate == 1;
         c->sock[0].c = c->sock[1].c = c;
         INIT_LIST_HEAD(&c->lh);
         INIT_LIST_HEAD(&c->wq);
@@ -385,25 +424,32 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_INET].state = SS_CLOSED;
                 c->sock[ST_INET].events = EPOLLOUT;
 
-                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+                c->sock[ST_INET].addr.in.sin_family = AF_INET;
 
+                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+                
                 if (ret == -1) {
                         LOG_DBG("getsockname: %s\n", strerror(errno));
                         goto fail_sock;
                 }
-
-                /* The end of the serviceID contains the original port
-                   and IP. */ 
-                c->sock[ST_INET].addr.in.sin_family = AF_INET;
-
-                ret = service_to_sockaddr_in(&c->sock[ST_SERVAL].addr.sv.sv_srvid,
-                                             &c->sock[ST_INET].addr.in);
-
-                if (ret == -1) {
-                        LOG_ERR("Could not extract IP and port from serviceID %s\n",
-                                service_id_to_str(&c->sock[ST_SERVAL].addr.sv.sv_srvid));
+                        
+                if (c->cross_translate) {
+                        /* The end of the serviceID contains the original port
+                           and IP. */ 
+                        
+                        ret = service_to_sockaddr_in(&c->sock[ST_SERVAL].addr.sv.sv_srvid,
+                                                     &c->sock[ST_INET].addr.in);
+                        
+                        if (ret == -1) {
+                                LOG_ERR("Could not extract IP and port from serviceID %s\n",
+                                        service_id_to_str(&c->sock[ST_SERVAL].addr.sv.sv_srvid));
+                        }
+                } else {
+                        service_id_to_ip(&sv.sv_srvid, &c->sock[ST_INET].addr.in.sin_addr);
+                        /* Assume port 80 */
+                        c->sock[ST_INET].addr.in.sin_port = htons(80);
                 }
-                                              
+
                 c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
                 
                 if (c->sock[ST_INET].fd == -1) {
@@ -549,44 +595,6 @@ static void *worker_thread(void *arg)
         return NULL;
 }
 
-static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
-{
-        struct addrinfo hints, *ai, *ai_it;
-        const char *port = NULL;
-        char host[128];
-        int ret;
-
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_family = AF_INET;
-        hints.ai_socktype = SOCK_STREAM;
-        hints.ai_flags = 0;
-        
-        serval_ntop(srvid, host, sizeof(host));
-        
-        ret = getaddrinfo(host, port, &hints, &ai);
-
-        if (ret != 0) {
-                LOG_ERR("%s", gai_strerror(ret));
-                return ret;
-        }
-
-        ret = -1;
-
-        for (ai_it = ai; ai_it; ai_it = ai_it->ai_next) {
-                if (ai_it->ai_family == AF_INET) {
-                        char buf[20];
-                        ret = 0;
-                        LOG_DBG("found ip %s\n", 
-                                inet_ntop(AF_INET, &ai_it->ai_addr, buf, 20));
-                        memcpy(addr, ai_it->ai_addr, sizeof(struct in_addr));
-                        break;
-                }
-        }
-
-        freeaddrinfo(ai);                                
-
-        return ret;
-}
 
 static enum work_status client_connect(struct client *c)
 {
@@ -651,6 +659,10 @@ static enum work_status client_connect(struct client *c)
 
                         serval_pton(buf, &addr.sv.sv_srvid);
                 } else {
+                        /* We have a client connecting on, e.g., port
+                         * 80. There is really no way of knowing which
+                         * service name to map this to, except when
+                         * using a fixed service name */
                         serval_pton(translator_service_name, 
                                     &addr.sv.sv_srvid);
                 }
@@ -850,7 +862,8 @@ static int create_server_sock(int family, unsigned short port,
         return -1;
 }
 
-static struct client *accept_client(int sock, int port)
+static struct client *accept_client(int sock, int port, 
+                                    int cross_translate)
 {
         sockaddr_generic_t addr;
         socklen_t addrlen = sizeof(addr);
@@ -886,7 +899,8 @@ static struct client *accept_client(int sock, int port)
                 inet_ntop(AF_INET, &addr.in.sin_addr, ip, 18);
         }
 
-        c = client_create(client_sock, &addr.sa, addrlen);
+        c = client_create(client_sock, &addr.sa, 
+                          addrlen, cross_translate);
 
         if (!c) {
                 LOG_ERR("Could not create client, family=%d\n", 
@@ -1112,12 +1126,11 @@ int run_translator(int family, unsigned short port, int cross_translate)
                         if (s->fd == sock) {
                                 struct client *c;
                                 
-                                c = accept_client(sock, port); 
+                                c = accept_client(sock, port, cross_translate); 
                                 
                                 if (!c) {
                                         LOG_ERR("client accept failure\n");
                                 } else {
-                                        c->cross_translate = (cross_translate == 1);
                                         client_add_work(c, client_connect);
                                         schedule_client(c);
                                 }
