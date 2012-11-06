@@ -343,6 +343,9 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         goto fail_sock;
                 }
         } else if (c->from_family == AF_SERVAL) {
+                struct sockaddr_sv sv;
+                socklen_t svlen = sizeof(sv);
+
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->sock[ST_SERVAL].fd = sock;
                 memcpy(&c->sock[ST_SERVAL].addr, sa, 
@@ -353,13 +356,18 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_INET].state = SS_CLOSED;
                 c->sock[ST_INET].events = EPOLLOUT;
 
+                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+
+                if (ret == -1) {
+                        LOG_DBG("getsockname: %s\n", strerror(errno));
+                        goto fail_sock;
+                }
+
                 /* The end of the serviceID contains the original port
                    and IP. */ 
                 c->sock[ST_INET].addr.in.sin_family = AF_INET;
-                c->sock[ST_INET].addr.in.sin_addr.s_addr =
-                        c->sock[ST_SERVAL].addr.sv.sv_srvid.s_sid32[7];
-                c->sock[ST_INET].addr.in.sin_port =
-                        c->sock[ST_SERVAL].addr.sv.sv_srvid.s_sid16[13];
+                c->sock[ST_INET].addr.in.sin_addr.s_addr = sv.sv_srvid.s_sid32[7];
+                c->sock[ST_INET].addr.in.sin_port = sv.sv_srvid.s_sid16[13];
                                               
                 c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
                 
