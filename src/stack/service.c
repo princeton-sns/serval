@@ -42,6 +42,38 @@ struct service_table {
 
 static struct service_table srvtable;
 
+static const char *rule_str[] = {
+        [SERVICE_RULE_UNDEFINED] = "UDF",
+        [SERVICE_RULE_FORWARD] = "FWD",
+        [SERVICE_RULE_DEMUX] = "DMX",
+        [SERVICE_RULE_DELAY] = "DLY",
+        [SERVICE_RULE_DROP] = "DRP"
+};
+
+static const char *rule_to_str(service_rule_type_t type)
+{
+        return rule_str[type];
+}
+
+static const char *protocol_to_str(int protocol)
+{
+        static char buf[20];
+        
+        switch (protocol) {
+        case IPPROTO_TCP:
+                sprintf(buf, "TCP");
+                break;
+        case IPPROTO_UDP:
+                sprintf(buf, "UDP");
+                break;
+        default:
+                sprintf(buf, "%d", protocol);
+                break;
+        }
+        
+        return buf;
+}
+
 static struct target *target_create(service_rule_type_t type,
                                     const void *dst, int dstlen,
                                     const union target_out out, 
@@ -473,7 +505,7 @@ int __service_entry_remove_target(struct service_entry *se,
                             (t->type == SERVICE_RULE_FORWARD && 
                              memcmp(t->dst, dst, dstlen) == 0))) {
                                 target_set_remove_target(set, t);
-
+                                
                                 if (stats) {
                                         stats->packets_resolved = atomic_read(&t->packets_resolved);
                                         stats->bytes_resolved = atomic_read(&t->bytes_resolved);
@@ -752,36 +784,6 @@ int service_iter_get_flags(struct service_iter *iter)
                 return iter->set->flags;
 
         return 0;
-}
-
-static const char *rule_str[] = {
-        [SERVICE_RULE_UNDEFINED] = "UDF",
-        [SERVICE_RULE_FORWARD] = "FWD",
-        [SERVICE_RULE_DEMUX] = "DMX",
-        [SERVICE_RULE_DELAY] = "DLY",
-        [SERVICE_RULE_DROP] = "DRP"
-};
-
-static const char *rule_to_str(service_rule_type_t type)
-{
-        return rule_str[type];
-}
-
-static const char *protocol_to_str(int protocol)
-{
-        static char buf[20];
-        
-        switch (protocol) {
-        case IPPROTO_TCP:
-                return "TCP";
-        case IPPROTO_UDP:
-                return "UDP";
-        default:
-                sprintf(buf, "%d", protocol);
-                break;
-        }
-        
-        return buf;
 }
 
 struct print_buf {

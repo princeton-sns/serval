@@ -25,9 +25,11 @@ struct hostctrl_ops {
                        unsigned int weight,
                        const struct in_addr *ipaddr);
     int (*service_remove)(struct hostctrl *hc, 
+                          enum service_rule_type type,
                           const struct service_id *srvid, 
                           const struct in_addr *ipaddr);
     int (*service_modify)(struct hostctrl *hc,
+                          enum service_rule_type type,
                           const struct service_id *srvid, 
                           unsigned int priority,
                           unsigned int weight,

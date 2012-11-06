@@ -749,6 +749,8 @@ static inline u32 __serval_tcp_set_rto(const struct serval_tcp_sock *tp)
 	return (tp->srtt >> 3) + tp->rttvar;
 }
 
+void serval_tcp_set_rto(struct sock *sk);
+
 static inline void __serval_tcp_fast_path_on(struct serval_tcp_sock *tp, 
 					     u32 snd_wnd)
 {
@@ -911,6 +913,9 @@ extern void serval_tcp_init_congestion_control(struct sock *sk);
 void serval_tcp_cleanup_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 
+void serval_tcp_update_metrics(struct sock *sk);
+void serval_tcp_init_metrics(struct sock *sk);
+
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
 int serval_tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
                         unsigned int mss_now);
@@ -947,6 +952,9 @@ static inline void serval_tcp_clear_xmit_timers(struct sock *sk)
 {
 	serval_tsk_clear_xmit_timers(sk);
 }
+
+void serval_tcp_disable_fack(struct serval_tcp_sock *tp);
+
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary
  * between different flows.

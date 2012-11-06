@@ -286,16 +286,15 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
         return (struct sal_hdr *)skb_transport_header(skb);
 }
 
+int serval_sal_send_fin(struct sock *sk);
+
 #define EXTRA_HEADER (20)
-#define IP_HDR_SIZE sizeof(struct iphdr)
-/* MAX_HEADER = LL + Max IP (48 bytes)
- */
 #define MAX_SAL_HDR (MAX_HEADER + EXTRA_HEADER +                 \
                      sizeof(struct sal_hdr) +                    \
                      sizeof(struct sal_control_ext) +            \
                      2 * sizeof(struct sal_service_ext))
 
-#define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +              \
+#define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +      \
                             sizeof(struct sal_hdr))
 
 extern int serval_sal_forwarding;

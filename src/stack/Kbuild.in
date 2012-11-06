@@ -17,6 +17,7 @@ serval-y := \
 	   linux/iovlock.o \
 	   linux/udp_encap.o \
 	   linux/sysctl_net_serval.o \
+	   linux/inet_to_serval.o \
 	   debug.o \
 	   delay_queue.o \
 	   platform.o \
@@ -33,4 +34,5 @@ serval-y := \
 	   serval_tcp_output.o \
 	   serval_tcp_input.o \
 	   serval_tcp_cong.o \
-	   serval_tcp_timer.o
+	   serval_tcp_timer.o \
+	   serval_tcp_metrics.o

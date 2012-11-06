@@ -30,7 +30,7 @@ public class TranslatorFragment extends Fragment {
 
 	private static final String[] ADD_HTTP_RULES = {
 			"ifconfig dummy0 192.168.25.25 -arp",
-			"ip rule add to 128.112.7.54 table main priority 10", // TODO this
+			"ip rule add to 128.112.7.146 table main priority 10", // TODO this
 																	// change
 																	// based on
 																	// the proxy
@@ -75,7 +75,7 @@ public class TranslatorFragment extends Fragment {
 	private static final String[] DEL_ALL_RULES = { "iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080" };
 
 	private Button translatorButton;
-	private ToggleButton transHttpButton, transAllButton;
+	private ToggleButton transHttpButton, transAllButton, hijackButton;
 
 	private View view;
 
@@ -178,7 +178,25 @@ public class TranslatorFragment extends Fragment {
 						}
 					}
 				});
+		
+		this.hijackButton = (ToggleButton) view
+				.findViewById(R.id.toggle_inet_hijack);
+		
+		this.hijackButton
+		.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
 
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				
+				String cmd = "echo " + (isChecked ? "1" : "0") + 
+						" > /proc/sys/net/serval/inet_to_serval";
+				executeSuCommand(cmd, false);
+			}
+		});
+		
+		this.hijackButton
+			.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/inet_to_serval"));
 		setTranslatorButton(isTranslatorRunning());
 		((TextView) view.findViewById(R.id.error_msg)).setText("");
 		translatorButton.setClickable(true);

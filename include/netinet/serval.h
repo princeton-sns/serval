@@ -475,7 +475,7 @@ static inline int serval_pton(const char *src, void *dst)
 struct sal_hdr {
         struct flow_id src_flowid;
         struct flow_id dst_flowid;
-        uint8_t  length;
+        uint8_t  shl; /* SAL Header Length (in number of 32-bit words) */
         uint8_t  protocol;
         uint16_t check;
 } __attribute__((packed));
@@ -508,18 +508,31 @@ SERVAL_ASSERT(sizeof(struct sal_ext) == 2)
 #define ext_length exthdr.length
 
 #define SAL_EXT_FIRST(sh) \
-        ((struct sal_ext *)((char *)sh + sizeof(struct sal_hdr)))
+        ((struct sal_ext *)((char *)sh + SAL_HEADER_LEN))
 
-#define SAL_EXT_NEXT(ext) \
-        ((struct sal_ext *)((char *)ext + ext->length))
+#define SAL_EXT_NEXT(ext)                                               \
+        ((struct sal_ext *)((ext->type == SAL_PAD_EXT ?                 \
+                             (char *)ext + 1 :                          \
+                             (char *)ext + ext->length)))
+
+#define SAL_EXT_LEN(ext)                                \
+        (ext->type == SAL_PAD_EXT ?                     \
+         sizeof(struct sal_pad_ext) : ext->length)
 
 enum sal_ext_type {
+        SAL_PAD_EXT = 0,
         SAL_CONTROL_EXT = 1,
         SAL_SERVICE_EXT,
         SAL_ADDRESS_EXT,
         SAL_SOURCE_EXT,
         __SAL_EXT_TYPE_MAX,
 };
+
+struct sal_pad_ext {
+        uint8_t pad[1];
+} __attribute__((packed));
+
+SERVAL_ASSERT(sizeof(struct sal_pad_ext) == 1);
 
 #define SAL_NONCE_SIZE 8
 
@@ -587,10 +600,11 @@ SERVAL_ASSERT(sizeof(struct sal_address_ext) == 12)
 
 struct sal_source_ext {
         struct sal_ext exthdr;
+        uint16_t res;
         uint8_t source[0];
 } __attribute__((packed));
 
-SERVAL_ASSERT(sizeof(struct sal_source_ext) == 2)
+SERVAL_ASSERT(sizeof(struct sal_source_ext) == 4)
 
 #define SAL_SOURCE_EXT_MIN_LEN                  \
         (sizeof(struct sal_source_ext) + 4)

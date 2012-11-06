@@ -6,6 +6,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -14,6 +15,8 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
@@ -41,7 +44,6 @@ public class ServalActivity extends FragmentActivity {
 
 	private Button moduleStatusButton;
 	private Button udpEncapButton;
-
 	private SharedPreferences prefs;
 	private PagerAdapter pagerAdapter;
 
@@ -159,10 +161,10 @@ public class ServalActivity extends FragmentActivity {
 							+ " failed!", Toast.LENGTH_SHORT);
 					t.show();
 				}
-				setUdpEncap(isUdpEncapEnabled());
+				setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 			}
 		});
-
+		
 		Log.d("Serval", "onCreate finished");
 	}
 
@@ -171,10 +173,10 @@ public class ServalActivity extends FragmentActivity {
 			@Override
 			public void run() {
 				for (String name : modules) {
-					name += ".ko";
-					final File module = new File(filesDir, name);
+                    String assetsName = name + "-" + getFormattedKernelVersion() + ".ko";
+					final File module = new File(filesDir, name + ".ko");
 
-					Log.d("Serval", "extracting module " + name + " to "
+					Log.d("Serval", "extracting module " + assetsName + " to "
 							+ module.getAbsolutePath());
 
 					if (module.exists())
@@ -182,7 +184,7 @@ public class ServalActivity extends FragmentActivity {
 
 					try {
 						BufferedInputStream in = new BufferedInputStream(
-								getAssets().open(name));
+								getAssets().open(assetsName));
 
 						byte[] buffer = new byte[1024];
 						int n, tot = 0;
@@ -202,7 +204,7 @@ public class ServalActivity extends FragmentActivity {
 										+ module.getAbsolutePath());
 
 					} catch (IOException e) {
-						Log.d("Serval", "Could not extract " + name);
+						Log.d("Serval", "Could not extract " + assetsName);
 						// e.printStackTrace();
 					}
 				}
@@ -225,7 +227,7 @@ public class ServalActivity extends FragmentActivity {
 		return executeSuCommand(cmd, false);
 	}
 
-	boolean executeSuCommand(final String cmd, boolean showToast) {
+	public boolean executeSuCommand(final String cmd, boolean showToast) {
 		try {
 			Process shell;
 			int err;
@@ -257,9 +259,9 @@ public class ServalActivity extends FragmentActivity {
 		return false;
 	}
 
-	private boolean isUdpEncapEnabled() {
-		boolean encapIsEnabled = false;
-		File encap = new File("/proc/sys/net/serval/udp_encap");
+	static public boolean readBooleanProcEntry(String entry) {
+		boolean isEnabled = false;
+		File encap = new File(entry);
 
 		if (encap.exists() && encap.canRead()) {
 			try {
@@ -269,7 +271,7 @@ public class ServalActivity extends FragmentActivity {
 				String line = in.readLine();
 
 				if (line.contains("1"))
-					encapIsEnabled = true;
+					isEnabled = true;
 				in.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -277,12 +279,12 @@ public class ServalActivity extends FragmentActivity {
 				e.printStackTrace();
 			}
 		} else {
-			Log.d("Serval", "could not open /proc/sys/net/serval/udp_encap");
+			Log.d("Serval", "could not open " + entry);
 		}
-		return encapIsEnabled;
+		return isEnabled;
 	}
 
-	private boolean isModuleLoaded(String module) {
+	static private boolean isModuleLoaded(String module) {
 		File procModules = new File("/proc/modules");
 
 		if (procModules.exists() && procModules.canRead()) {
@@ -315,6 +317,8 @@ public class ServalActivity extends FragmentActivity {
 						: R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
+		if (servalFrag.autoMigrationButton != null)
+			servalFrag.autoMigrationButton.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/auto_migrate"));
 	}
 
 	public void setUdpEncap(boolean on) {
@@ -323,6 +327,53 @@ public class ServalActivity extends FragmentActivity {
 		udpEncapButton.setSelected(on);
 		udpEncapButton.setText(text);
 	}
+
+    /*
+      This function is taken from the Android Open Source Project.
+      packages/apps/Settings/src/com/android/settings/DeviceInfoSettings.java
+    */
+    static private String getFormattedKernelVersion() {
+        String procVersionStr;
+
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader("/proc/version"), 256);
+            try {
+                procVersionStr = reader.readLine();
+            } finally {
+                reader.close();
+            }
+
+            final String PROC_VERSION_REGEX =
+                "\\w+\\s+" + /* ignore: Linux */
+                "\\w+\\s+" + /* ignore: version */
+                "([^\\s]+)\\s+" + /* group 1: 2.6.22-omap1 */
+                "\\(([^\\s@]+(?:@[^\\s.]+)?)[^)]*\\)\\s+" + /* group 2: (xxxxxx@xxxxx.constant) */
+                "\\((?:[^(]*\\([^)]*\\))?[^)]*\\)\\s+" + /* ignore: (gcc ..) */
+                "([^\\s]+)\\s+" + /* group 3: #26 */
+                "(?:PREEMPT\\s+)?" + /* ignore: PREEMPT (optional) */
+                "(.+)"; /* group 4: date */
+
+            Pattern p = Pattern.compile(PROC_VERSION_REGEX);
+            Matcher m = p.matcher(procVersionStr);
+
+            if (!m.matches()) {
+                Log.e("Serval", "Regex did not match on /proc/version: " + procVersionStr);
+                return "Unavailable";
+            } else if (m.groupCount() < 4) {
+                Log.e("Serval", "Regex match on /proc/version only returned " + m.groupCount()
+                      + " groups");
+                return "Unavailable";
+            } else {
+                return (new StringBuilder(m.group(1))).toString();
+            }
+        } catch (IOException e) {
+            Log.e("Serval",
+                  "IO Exception when getting kernel version for Device Info screen",
+                  e);
+
+            return "Unavailable";
+        }
+    }
 
 	@Override
 	public void onBackPressed() {
@@ -403,7 +454,7 @@ public class ServalActivity extends FragmentActivity {
 	protected void onStart() {
 		super.onStart();
 		setModuleLoaded(isModuleLoaded("serval"));
-		setUdpEncap(isUdpEncapEnabled());
+		setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 
 		AppHostCtrl.init(cbs);
 		Log.d("Serval", "onStart finished");

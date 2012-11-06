@@ -3,6 +3,7 @@
 #define __DEBUG_H_
 
 #include <serval/platform.h>
+#include <serval/sock.h>
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/kernel.h>
@@ -50,12 +51,16 @@ static inline const char *hexdump(const void *data, int datalen,
         return buf;
 }
 
+const char *print_ssk(struct sock *sk, char *buf, size_t buflen);
+ 
 #define LOG_CRIT(fmt, ...) logme(LOG_LEVEL_CRIT, __func__, fmt, ##__VA_ARGS__)
 #define LOG_ERR(fmt, ...) logme(LOG_LEVEL_ERR, __func__, fmt, ##__VA_ARGS__)
 #define LOG_WARN(fmt, ...) logme(LOG_LEVEL_WARN, __func__, fmt, ##__VA_ARGS__)
 #define LOG_INF(fmt, ...) logme(LOG_LEVEL_INF, __func__, fmt, ##__VA_ARGS__)
 #define LOG_DBG(fmt, ...) logme(LOG_LEVEL_DBG, __func__, fmt, ##__VA_ARGS__)
 #define LOG_PKT(fmt, ...) logme(LOG_LEVEL_PKT, __func__, fmt, ##__VA_ARGS__)
+#define LOG_SSK(sk, fmt, ...) ({ char _buf[200]; logme(LOG_LEVEL_PKT, __func__, \
+                                "%s "fmt, print_ssk(sk, _buf, 200), ##__VA_ARGS__); })
 
 #else
 
@@ -65,6 +70,7 @@ static inline const char *hexdump(const void *data, int datalen,
 #define LOG_INF(fmt, ...)
 #define LOG_DBG(fmt, ...)
 #define LOG_PKT(fmt, ...)
+#define LOG_SSK(fmt, ...)
 
 #endif /* ENABLE_DEBUG */
 

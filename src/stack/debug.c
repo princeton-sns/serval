@@ -11,12 +11,11 @@
  *	the License, or (at your option) any later version.
  */
 #include <serval/debug.h>
+#include <serval_sock.h>
+#include <af_serval.h>
 #if defined(OS_USER)
 #include <pthread.h>
 #endif
-
-/* Debug level */
-unsigned int debug = LOG_LEVEL_DBG;
 
 static const char *log_level_str[] = {
         [ 0 ] = "UNDEF",
@@ -33,11 +32,17 @@ extern int log_vprintk(const char *levelstr, const char *func,
                        const char *fmt, va_list args);
 #endif
 
+
+const char *print_ssk(struct sock *sk, char *buf, size_t buflen)
+{
+        return serval_sock_print(sk, buf, buflen);
+}
+
 void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
         
-        if ((unsigned int)level > debug)
+        if ((unsigned int)level > net_serval.sysctl_debug)
                 return;
         
 #if defined(OS_LINUX_KERNEL)
