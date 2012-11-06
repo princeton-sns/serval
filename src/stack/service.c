@@ -1228,25 +1228,7 @@ static int service_table_add(struct service_table *tbl,
 
                 /* Unlock table and lock service entry instead */
                 write_unlock_bh(&tbl->lock);
-                
-                /*
-                service_iter_init(&iter, se, SERVICE_ITER_ALL);                
-                target = service_iter_next(&iter);
 
-                while (target) {
-                       
-                        if (is_target(target, type, dst, dstlen) ||
-                            target->type == SERVICE_RULE_DROP || 
-                            target->type == SERVICE_RULE_DELAY) {
-                                service_iter_destroy(&iter);
-                                ret = -EEXIST;
-                                goto error;
-                        }
-                        target = service_iter_next(&iter);
-                }
-                
-                service_iter_destroy(&iter);
-                */
                 read_lock_bh(&se->lock);
 
                 t = __service_entry_get_target(se, type, dst, dstlen,
@@ -1307,7 +1289,7 @@ static int service_table_add(struct service_table *tbl,
         
         service_entry_put(se);
 
-        return ret;
+        return 1;
 
 error_unlock:
         write_unlock_bh(&se->lock);

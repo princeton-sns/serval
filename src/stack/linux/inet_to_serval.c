@@ -46,6 +46,8 @@ static void inet_addr_to_service(struct sockaddr_in *in,
                  inet_ntop(AF_INET, &in->sin_addr, ip, 18), 
                  ntohs(in->sin_port),
                  translator_service_name);
+
+        serval_pton(buf, &sv->sv_srvid);
 }
 
 static int serval_inet_bind(struct socket *sock, struct sockaddr *addr, 
