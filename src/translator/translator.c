@@ -297,7 +297,7 @@ static int client_epoll_set(struct client *c, int op)
 }
 
 struct client *client_create(int sock, struct sockaddr *sa, 
-                             socklen_t salen)
+                             socklen_t salen, int cross_translate)
 {
         struct client *c;
         int ret, i;
@@ -311,6 +311,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
         c->id = client_num++;
         c->from_family = sa->sa_family;
         c->is_garbage = 0;
+        c->cross_translate = cross_translate == 1;
         c->sock[0].c = c->sock[1].c = c;
         INIT_LIST_HEAD(&c->lh);
         INIT_LIST_HEAD(&c->wq);
@@ -356,19 +357,26 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_INET].state = SS_CLOSED;
                 c->sock[ST_INET].events = EPOLLOUT;
 
-                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
-
-                if (ret == -1) {
-                        LOG_DBG("getsockname: %s\n", strerror(errno));
+                c->sock[ST_INET].addr.in.sin_family = AF_INET;
+                        
+                if (c->cross_translate) {
+                        ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+                        
+                        if (ret == -1) {
+                                LOG_DBG("getsockname: %s\n", strerror(errno));
+                                goto fail_sock;
+                        }
+                        
+                        /* The end of the serviceID contains the original port
+                           and IP. */ 
+                        c->sock[ST_INET].addr.in.sin_addr.s_addr = sv.sv_srvid.s_sid32[7];
+                        c->sock[ST_INET].addr.in.sin_port = sv.sv_srvid.s_sid16[13];
+                } else {
+                        /* We need a way to map a serviceID to an IP address. */
+                        LOG_ERR("serviceID lookup not implemented\n");
                         goto fail_sock;
                 }
-
-                /* The end of the serviceID contains the original port
-                   and IP. */ 
-                c->sock[ST_INET].addr.in.sin_family = AF_INET;
-                c->sock[ST_INET].addr.in.sin_addr.s_addr = sv.sv_srvid.s_sid32[7];
-                c->sock[ST_INET].addr.in.sin_port = sv.sv_srvid.s_sid16[13];
-                                              
+                
                 c->sock[ST_INET].fd = socket(AF_INET, SOCK_STREAM, 0);
                 
                 if (c->sock[ST_INET].fd == -1) {
@@ -762,7 +770,8 @@ static int create_server_sock(int family, unsigned short port,
         return -1;
 }
 
-static struct client *accept_client(int sock, int port)
+static struct client *accept_client(int sock, int port, 
+                                    int cross_translate)
 {
         sockaddr_generic_t addr;
         socklen_t addrlen = sizeof(addr);
@@ -798,7 +807,8 @@ static struct client *accept_client(int sock, int port)
                 inet_ntop(AF_INET, &addr.in.sin_addr, ip, 18);
         }
 
-        c = client_create(client_sock, &addr.sa, addrlen);
+        c = client_create(client_sock, &addr.sa, 
+                          addrlen, cross_translate);
 
         if (!c) {
                 LOG_ERR("Could not create client, family=%d\n", 
@@ -1025,12 +1035,11 @@ int run_translator(int family, unsigned short port, int cross_translate)
                         if (s->fd == sock) {
                                 struct client *c;
                                 
-                                c = accept_client(sock, port); 
+                                c = accept_client(sock, port, cross_translate); 
                                 
                                 if (!c) {
                                         LOG_ERR("client accept failure\n");
                                 } else {
-                                        c->cross_translate = (cross_translate == 1);
                                         client_add_work(c, client_connect);
                                         schedule_client(c);
                                 }
