@@ -31,7 +31,7 @@
 
 #define EXTRA_HDR (20)
 
-/* payload + LL + IP + extra */
+/* Max TCP header + LL + IP + extra */
 #define MAX_SERVAL_TCP_HEADER (MAX_SAL_HDR + 128)
 
 #define MAX_SERVAL_TCP_OPTION_SPACE 40

@@ -2180,8 +2180,8 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	}
 
 	serval_tcp_init_nondata_skb(skb, serval_tcp_rsk(req)->snt_isn,
-                                     TCPH_SYN | TCPH_ACK);
-
+                                    TCPH_SYN | TCPH_ACK);
+        
 	memset(&opts, 0, sizeof(opts));
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 	tcp_options_size = serval_tcp_synack_options(sk, req, mss,
