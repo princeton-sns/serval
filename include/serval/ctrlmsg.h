@@ -247,7 +247,7 @@ CTRLMSG_ASSERT(sizeof(struct ctrlmsg_migrate) == 133)
 #define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
 
 enum delay_verdict {
-        DELAY_RELEASE,
+        DELAY_RELEASE = 0,
         DELAY_DROP,
 };
 
@@ -271,6 +271,7 @@ enum {
 #include <linux/netlink.h>
 #define NETLINK_SERVAL 17
 #define NLMSG_SERVAL NLMSG_MIN_TYPE
+#define SVGRP_CTRL 0x1
 #endif /* __linux__ */
 
 #if defined(OS_ANDROID)

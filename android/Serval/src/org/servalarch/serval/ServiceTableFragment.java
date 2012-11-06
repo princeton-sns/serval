@@ -75,6 +75,7 @@ public class ServiceTableFragment extends Fragment {
 					while ((line = in.readLine()) != null) {
 						builder.append(line + "\n");
 					}
+					in.close();
 				} catch (Exception e) {
 					return getString(R.string.no_service_table);
 				}

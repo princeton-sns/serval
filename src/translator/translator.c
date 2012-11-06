@@ -326,6 +326,45 @@ static int client_send_init_packet(struct client *c)
         return ret;
 }
 
+static int service_id_to_ip(struct service_id *srvid, struct in_addr *addr)
+{
+        struct addrinfo hints, *ai, *ai_it;
+        const char *port = NULL;
+        char host[128];
+        int ret;
+
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_INET;
+        hints.ai_socktype = SOCK_STREAM;
+        hints.ai_flags = 0;
+        
+        serval_ntop(srvid, host, sizeof(host));
+        
+        ret = getaddrinfo(host, port, &hints, &ai);
+
+        if (ret != 0) {
+                LOG_ERR("%s", gai_strerror(ret));
+                return ret;
+        }
+
+        ret = -1;
+
+        for (ai_it = ai; ai_it; ai_it = ai_it->ai_next) {
+                if (ai_it->ai_family == AF_INET) {
+                        char buf[20];
+                        ret = 0;
+                        LOG_DBG("found ip %s\n", 
+                                inet_ntop(AF_INET, &ai_it->ai_addr, buf, 20));
+                        memcpy(addr, ai_it->ai_addr, sizeof(struct in_addr));
+                        break;
+                }
+        }
+
+        freeaddrinfo(ai);                                
+
+        return ret;
+}
+
 static void *client_thread(void *arg)
 {
         struct client *c = (struct client *)arg;
@@ -340,36 +379,59 @@ static void *client_thread(void *arg)
         
         if (c->from_family == AF_SERVAL) {
                 struct translator_init_pkt tip;
-                
-                if (!cross_translate) {
-                        LOG_ERR("AF_SERVAL to AF_INET without cross-translation enabled\n");
-                        goto done;
-                }
-                /* Receive destination addr and port from other end */
-                ret = recv(c->sock[ST_SERVAL].fd, &tip, sizeof(tip), MSG_WAITALL);
-
-                if (ret == -1) {
-                        LOG_ERR("client %u could not read init packet: %s\n",
-                                c->id, strerror(errno));
-                        goto done;
-                } else if (ret != sizeof(tip)) {
-                        LOG_ERR("client %u bad init packet size %d\n",
-                                c->id, ret);
-                        goto done;
-                }
-                
-                LOG_DBG("client %u received %d bytes init pkt\n",
-                        c->id, ret);
 
                 addr.in.sin_family = AF_INET;
-                memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
-                addr.in.sin_port = tip.port;
                 addrlen = sizeof(addr.in);
                 sock = c->sock[ST_INET].fd;
 
+                if (cross_translate) {
+                        /* Receive destination addr and port from other end */
+                        ret = recv(c->sock[ST_SERVAL].fd, &tip, sizeof(tip), MSG_WAITALL);
+                        
+                        if (ret == -1) {
+                                LOG_ERR("client %u could not read init packet: %s\n",
+                                        c->id, strerror(errno));
+                                goto done;
+                        } else if (ret != sizeof(tip)) {
+                                LOG_ERR("client %u bad init packet size %d\n",
+                                        c->id, ret);
+                                goto done;
+                        }
+                        
+                        LOG_DBG("client %u received %d bytes init pkt\n",
+                                c->id, ret);
+                        
+                        memcpy(&addr.in.sin_addr, &tip.addr, sizeof(tip.addr));
+                        addr.in.sin_port = tip.port;                
+                } else {
+                        struct sockaddr_sv peer_svaddr;
+                        socklen_t addrlen = sizeof(peer_svaddr);
+                        
+                        ret = getpeername(c->sock[ST_SERVAL].fd, 
+                                          (struct sockaddr *)&peer_svaddr, &addrlen);
+
+                        if (ret != 0) {
+                                LOG_ERR("Could not get peer name\n");
+                                goto done;
+                        }
+                        
+                        LOG_DBG("connection to %s\n", 
+                                service_id_to_str(&peer_svaddr.sv_srvid));
+
+                        ret = service_id_to_ip(&peer_svaddr.sv_srvid, &addr.in.sin_addr);
+                        
+                        if (ret != 0) {
+                                LOG_ERR("Could not lookup service %s\n",
+                                        service_id_to_str(&peer_svaddr.sv_srvid));
+                                goto done;
+                        }
+                        /* FIXME: Assume port 80 for now */
+                        addr.in.sin_port = htons(80);
+                }
+                
                 inet_ntop(AF_INET, &addr.in.sin_addr, 
                           ipstr, sizeof(ipstr));
-                
+
                 LOG_DBG("client %u connecting to %s:%u\n",
                         c->id, ipstr, ntohs(addr.in.sin_port));
         } else if (c->from_family == AF_INET) {
@@ -557,7 +619,7 @@ static int create_server_sock(int family, unsigned short port)
                 char buf[SERVICE_ID_MAX_LEN+1];
                 sprintf(buf, "%u.translator.localdomain", port);
                 addr.sv.sv_family = AF_SERVAL;
-                serval_pton(buf, &addr.sv.sv_srvid);
+                serval_pton("*", &addr.sv.sv_srvid);
                 addrlen = sizeof(addr.sv);
         } else {
                 close(sock);

@@ -232,6 +232,8 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 /* Hotfix for detecting Ubuntu 12.04 kernel, which seems to have
  * patches applied from later kernels */
 #if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE == 197148) ||               \
+        (LINUX_VERSION_CODE == 197150) ||               \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
 #define CONST const
 #else
@@ -255,6 +257,8 @@ int splice_grow_spd(CONST struct pipe_inode_info *pipe, struct splice_pipe_desc 
 }
 
 #if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE == 197148) ||               \
+        (LINUX_VERSION_CODE == 197150) ||               \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
 void splice_shrink_spd(struct splice_pipe_desc *spd)
 {
@@ -524,6 +528,8 @@ done:
 	}
 
 #if (LINUX_VERSION_CODE == 197144) ||                   \
+        (LINUX_VERSION_CODE == 197148) ||               \
+        (LINUX_VERSION_CODE == 197150) ||               \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
         splice_shrink_spd(&spd);
 #else

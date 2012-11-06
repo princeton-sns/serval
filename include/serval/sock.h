@@ -364,6 +364,7 @@ static inline int sock_rcvlowat(const struct sock *sk, int waitall, int len)
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
                     unsigned long expires);
 void sk_stop_timer(struct sock *sk, struct timer_list* timer);
+int sk_receive_skb(struct sock *sk, struct sk_buff *skb, const int nested);
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb);
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb);
 

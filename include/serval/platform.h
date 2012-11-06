@@ -66,6 +66,8 @@ typedef unsigned char gfp_t;
 #define EXPORT_SYMBOL(x)
 #define EXPORT_SYMBOL_GPL(x)
 
+#define smp_wmb()
+
 #define prefetch(x) x
 #define __read_mostly
 /*

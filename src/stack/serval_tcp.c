@@ -368,16 +368,10 @@ discard_it:
         return 0;
 }
 
-static void __serval_tcp_done(struct sock *sk)
-{
-        LOG_DBG("socket done!\n");
-	serval_tcp_clear_xmit_timers(sk);
-}
-
 void serval_tcp_done(struct sock *sk)
 {
-        LOG_DBG("calling serval_sal_done\n");
-	//serval_sal_done(sk);
+        LOG_DBG("TCP done!\n");
+	serval_tcp_clear_xmit_timers(sk);
 }
 
 void __init serval_tcp_init(void)
@@ -645,7 +639,7 @@ unsigned int serval_tcp_poll(struct file *file,
 
 	sock_poll_wait(file, sk_sleep(sk), wait);
         
-        if (sk->sk_state == SAL_LISTEN) {
+        if (sk->sk_state == TCP_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
                         (POLLIN | POLLRDNORM);
@@ -2541,7 +2535,7 @@ static struct serval_sock_af_ops serval_tcp_af_ops = {
         .migration_completed = serval_tcp_migration_completed,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
-        .done = __serval_tcp_done,
+        .done = serval_tcp_done,
 };
 
 static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
@@ -2563,7 +2557,7 @@ static struct serval_sock_af_ops serval_tcp_encap_af_ops = {
         .freeze_flow = serval_tcp_freeze_flow,
         .send_shutdown = serval_sal_send_shutdown,
         .recv_shutdown = serval_sal_recv_shutdown,
-        .done = __serval_tcp_done,
+        .done = serval_tcp_done,
 };
 
 /*
@@ -2707,9 +2701,22 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
                 tcphdr_to_str(tcp_hdr(skb)));
 
 #if defined(OS_LINUX_KERNEL)
-        /* Must make sure we have a route */
-	if (!dst && (dst = serval_sock_route_req(sk, req)) == NULL)
-		goto exit;
+        if (!dst) {
+                struct inet_request_sock *ireq = inet_rsk(req);
+                struct rtable *rt;
+                
+                rt = serval_ip_route_output(sock_net(sk),
+                                            ireq->rmt_addr,
+                                            ireq->loc_addr,
+                                            0, sk->sk_bound_dev_if);
+                
+                if (!rt) {
+                        LOG_ERR("SYN-ACK not routable\n");
+                        goto exit;
+                }
+                
+                dst = route_dst(rt);
+        }
 #endif
 
         newsk = serval_tcp_create_openreq_child(sk, req, newsk, skb);

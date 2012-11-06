@@ -35,21 +35,22 @@ struct service_entry;
  */
 struct sal_skb_cb {
         u8 flags;
-        u32 seqno;
+        u32 verno;
         u32 when;
         struct service_id *srvid;
 };
 
 enum sal_ctrl_flags {
         SVH_SYN       = 1 << 0,
-        SVH_ACK       = 1 << 1,
-        SVH_RST       = 1 << 2,
-        SVH_FIN       = 1 << 3,
-        SVH_RSYN      = 1 << 4,
-        SVH_CONN_ACK  = 1 << 5, /* Only used internally to signal that
+        SVH_RSYN      = 1 << 1,
+        SVH_ACK       = 1 << 2,
+        SVH_NACK      = 1 << 3,
+        SVH_RST       = 1 << 4,
+        SVH_FIN       = 1 << 5,
+        SVH_CONN_ACK  = 1 << 6, /* Only used internally to signal that
                                    the ACK should carry a connection
                                    extension (for SYN-ACKs). */
-        SVH_RETRANS   = 1 << 6,
+        SVH_RETRANS   = 1 << 7,
 };
 
 #define sal_time_stamp ((u32)(jiffies))
@@ -58,10 +59,32 @@ static inline struct sal_skb_cb *__sal_skb_cb(struct sk_buff *skb)
 {
         struct sal_skb_cb * sscb = 
                 (struct sal_skb_cb *)&(skb)->cb[0];
+#if defined(ENABLE_DEBUG)
+        /*
+          if (sizeof(struct sal_skb_cb) > sizeof(skb->cb)) {
+                 LOG_WARN("sal_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
+                          "skb->cb may overflow!\n", 
+                          sizeof(struct sal_skb_cb), 
+                          sizeof(skb->cb));
+         } 
+         */
+         /*
+            else {
+                LOG_WARN("sal_skb_cb (%zu bytes) skb->cb (%zu bytes).\n", 
+                         sizeof(struct sal_skb_cb), 
+                         sizeof(skb->cb));
+                 } 
+          */
+#endif
 	return sscb;
 }
 
 #define SAL_SKB_CB(__skb) __sal_skb_cb(__skb)
+
+extern int sysctl_tcp_fin_timeout;
+extern int sysctl_sal_keepalive_time;
+extern int sysctl_sal_keepalive_probes;
+extern int sysctl_sal_keepalive_intvl;
 
 #define MAX_CTRL_QUEUE_LEN 20
 
@@ -232,6 +255,32 @@ void serval_sal_done(struct sock *sk);
 int serval_sal_rcv(struct sk_buff *skb);
 int serval_sal_reresolve(struct sk_buff *skb);
 
+void serval_sal_keepalive_timeout(unsigned long data);
+
+static inline int serval_sal_keepalive_intvl_when(const struct serval_sock *ssk)
+{
+	return ssk->keepalive_intvl ? : sysctl_sal_keepalive_intvl;
+}
+
+static inline int serval_sal_keepalive_time_when(const struct serval_sock *ssk)
+{
+	return ssk->keepalive_time ? : sysctl_sal_keepalive_time;
+}
+
+static inline int serval_sal_keepalive_probes(const struct serval_sock *ssk)
+{
+	return ssk->keepalive_probes ? : sysctl_sal_keepalive_probes;
+}
+
+static inline u32 serval_sal_keepalive_time_elapsed(const struct serval_sock *ssk)
+{
+	return min_t(u32, sal_time_stamp - ssk->last_rcv_tstamp,
+			  sal_time_stamp - ssk->ack_rcv_tstamp);
+}
+
+void serval_sal_rcv_reset(struct sock *sk);
+void serval_sal_send_active_reset(struct sock *sk, gfp_t priority);
+
 static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 {
         return (struct sal_hdr *)skb_transport_header(skb);
@@ -242,11 +291,28 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 /* payload + LL + IP + extra */
 #define MAX_SAL_HDR (MAX_HEADER + IP_HDR_SIZE + EXTRA_HDR_SIZE + \
                      sizeof(struct sal_hdr) +                    \
-                     sizeof(struct sal_connection_ext))
+                     sizeof(struct sal_control_ext) +            \
+                     2 * sizeof(struct sal_service_ext))
 
-#define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +      \
+#define SAL_NET_HEADER_LEN (sizeof(struct iphdr) +              \
                             sizeof(struct sal_hdr))
 
 extern int serval_sal_forwarding;
+
+#define SAL_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
+					                 * for local resources.
+					                 */
+#define SAL_TIMEWAIT_LEN (60*HZ) /* how long to wait to destroy TIME-WAIT
+				  * state, about 60 seconds	*/
+#define SAL_FIN_TIMEOUT	SAL_TIMEWAIT_LEN
+                                 /* BSD style FIN_WAIT2 deadlock breaker.
+				  * It used to be 3min, new value is 60sec,
+				  * to combine FIN-WAIT-2 timeout with
+				  * TIME-WAIT timer.
+				  */
+
+#define SAL_KEEPALIVE_TIME	(120*60*HZ) /* two hours */
+#define SAL_KEEPALIVE_PROBES	9	    /* Max of 9 keepalive probes */
+#define SAL_KEEPALIVE_INTVL	(75*HZ)
 
 #endif /* _SERVAL_SAL_H_ */

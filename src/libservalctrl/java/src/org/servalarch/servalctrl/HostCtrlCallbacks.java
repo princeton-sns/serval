@@ -5,11 +5,11 @@ import java.net.InetAddress;
 import org.servalarch.net.ServiceID;
 
 /**
- * HostCtrlCallbacks is an abstract class that can be extended or 
- * overridden to implement callback handlers for Serval events.
+ * HostCtrlCallbacks is an abstract class that can be extended or overridden to
+ * implement callback handlers for Serval events.
  * 
- * @author Erik NordstrÃ¶m <enordstr@cs.princeton.edu>
- *
+ * @author Erik Nordström <enordstr@cs.princeton.edu>
+ * 
  */
 public abstract class HostCtrlCallbacks {
     public static final int RETVAL_OK = 0;
@@ -111,18 +111,18 @@ public abstract class HostCtrlCallbacks {
     public void onServiceGet(long xid, int retval, ServiceInfo[] info) {
 		
     }
+	
+	/**
+	 * Called as a result of a delayed service resolution.
+	 * 
+	 * @param xid
+	 *            The transaction ID of this event refers to.
+	 * @param pktId
+	 *            The ID of the packet that needs resolution.
+	 * @param service
+	 *            The service that needs to be resolved.
+	 */
+	public void onServiceDelayed(long xid, long pktId, ServiceID service) {
 
-    /**
-     * Called as a result of a packet waiting for delayed resolution. 
-     * 
-     * @param xid	The transaction ID of this event refers to.
-     * @param service	The serviceID the packet matched.
-     * @param pkt_id    An ID that identifies the packet which has been
-     *                  delayed.
-     */
-    public void onServiceDelayNotification(long xid, 
-					   long pkt_id,
-					   ServiceID service) {
-		
-    }
+	}
 }

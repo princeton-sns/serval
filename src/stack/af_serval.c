@@ -317,6 +317,8 @@ static int serval_listen_stop(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
+        serval_sock_delete_keepalive_timer(sk);
+
         /* Destroy queue of sockets that haven't completed three-way
          * handshake */
         while (1) {
@@ -403,15 +405,10 @@ static int serval_listen(struct socket *sock, int backlog)
         }
 
         if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND) &&
-            serval_autobind(sk) < 0)
-		return -EAGAIN;
-        /*
-	if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND)) {
-                LOG_ERR("socket not BOUND\n");
-                err = -EDESTADDRREQ;
+            serval_autobind(sk) < 0) {
+                err =-EAGAIN;
                 goto out;
         }
-        */
 
         err = serval_listen_start(sk, backlog);
 
@@ -900,14 +897,10 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 	struct sock *sk = sock->sk;
 	int ret = 0;
 
-        lock_sock(sk);
-
         if (sk->sk_prot->ioctl) 
                 ret = sk->sk_prot->ioctl(sk, cmd, arg);
         else
                 ret = -ENOIOCTLCMD;
-
-        release_sock(sk);
 
 	return ret;
 }
