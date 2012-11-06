@@ -532,6 +532,9 @@ static enum work_status client_connect(struct client *c)
                 addr.sv.sv_srvid.s_sid32[0] = htonl(c->translator_port);
 
                 if (c->cross_translate) {
+                        struct sockaddr_in orig_addr;
+                        socklen_t orig_addrlen;
+
                         /* We are cross translating, i.e., this
                          * AF_INET to AF_SERVAL translator connects to
                          * another AF_SERVAL to AF_INET translator. We
@@ -542,10 +545,25 @@ static enum work_status client_connect(struct client *c)
                          * translator must listen to a serviceID
                          * prefix, since every serviceID will now be
                          * unique. */
-                        addr.sv.sv_srvid.s_sid16[13] = 
-                                c->sock[ST_INET].addr.in.sin_port;
-                        addr.sv.sv_srvid.s_sid32[7] = 
-                                c->sock[ST_INET].addr.in.sin_addr.s_addr;
+                        
+                        ret = getsockopt(c->sock[ST_INET].fd, SOL_IP, 
+                                         SO_ORIGINAL_DST, 
+                                         &orig_addr, &orig_addrlen);
+                        
+                        if (ret == -1) {
+                                LOG_DBG("client %u, could not get original port."
+                                        "Probably not NAT'ed\n", c->id);
+                                return WORK_ERROR;
+                        } else {
+                                inet_ntop(AF_INET, &orig_addr.sin_addr, 
+                                          ipstr, sizeof(ipstr));
+                                
+                                LOG_DBG("Original destination: %s:%u\n",
+                                        ipstr, ntohs(orig_addr.sin_port));
+                        }
+
+                        addr.sv.sv_srvid.s_sid16[13] = orig_addr.sin_port;
+                        addr.sv.sv_srvid.s_sid32[7] = orig_addr.sin_addr.s_addr;
                 }
 
                 addrlen = sizeof(addr.sv);
