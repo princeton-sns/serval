@@ -408,7 +408,7 @@ int service_entry_modify_target(struct service_entry *se,
         ret = __service_entry_modify_target(se, type, flags, priority, 
                                             weight, dst, dstlen, 
                                             new_dst, new_dstlen,
-                                            out, alloc);
+                                            out, GFP_ATOMIC);
         write_unlock_bh(&se->lock);
 
         return ret;
@@ -1247,15 +1247,13 @@ static int service_table_add(struct service_table *tbl,
                 
                 service_iter_destroy(&iter);
                 */
-                write_lock_bh(&se->lock);
+                read_lock_bh(&se->lock);
 
                 t = __service_entry_get_target(se, type, dst, dstlen,
                                                out, &set,
                                                dstlen == 0 ? 
                                                out.sk->sk_protocol :
                                                MATCH_NO_PROTOCOL);
-
-                set = __service_entry_get_target_set(se, priority);
 
                 if (t) {
                         ret = -EEXIST;
@@ -1267,17 +1265,17 @@ static int service_table_add(struct service_table *tbl,
                                  * a result of a bind() */
                                 ret = -EADDRINUSE;
                         }
-                        write_unlock_bh(&se->lock);
+                        read_unlock_bh(&se->lock);
                         service_entry_put(se);
                         return ret;
                 }
+                read_unlock_bh(&se->lock);
         } else {
                 /* Hold this entry since it is now in the table */
                 service_entry_hold(se);
                 se->node = n;
                 /* We should add target to new service entry */
                 write_unlock_bh(&tbl->lock);
-                write_lock_bh(&se->lock);
         }
 
         t = target_create(type, dst, dstlen, out, weight, alloc);
@@ -1285,13 +1283,17 @@ static int service_table_add(struct service_table *tbl,
         if (!t)
                 goto error;
 
+        write_lock_bh(&se->lock);
+
+        set = __service_entry_get_target_set(se, priority);
+
         if (!set) {
                 /* No existing set, we must create one */
-                set = target_set_create(flags, priority, alloc);
+                set = target_set_create(flags, priority, GFP_ATOMIC);
                 
                 if (!set) {
                         target_free(t);
-                        goto error;
+                        goto error_unlock;
                 }
                 /* Insert the new set */
                 __service_entry_insert_target_set(se, set);
@@ -1306,9 +1308,10 @@ static int service_table_add(struct service_table *tbl,
         service_entry_put(se);
 
         return ret;
-error:
-        write_unlock_bh(&se->lock);
 
+error_unlock:
+        write_unlock_bh(&se->lock);
+error:
         if (n) {
                 /* If n is non-NULL, we created the entry
                  * above. Since we failed to create the target,

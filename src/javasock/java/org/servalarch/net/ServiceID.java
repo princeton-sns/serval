@@ -22,9 +22,11 @@ public class ServiceID {
             throw new IllegalArgumentException("Invalid domain name");
         }
     } 
-
-    public ServiceID(byte[] id) {
-        this(new String(id));
+    /*
+      This constructor is typically called from JNI to convert a
+      C-style serviceID to a Java object. */
+    private ServiceID(byte[] id) {
+        identifier = new String(id);
     } 
 
     public ServiceID(char[] id) {
