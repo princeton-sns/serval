@@ -15,6 +15,7 @@
 struct serval_request_sock {
         struct inet_request_sock rsk;
         struct service_id peer_srvid;
+        struct service_id target_srvid;
         struct flow_id local_flowid;
         struct flow_id peer_flowid;
         __u32 reply_saddr; /* The address to use as source in the

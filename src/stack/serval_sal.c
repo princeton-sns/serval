@@ -1831,7 +1831,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
         /* Copy fields in request packet into request sock */
         memcpy(&srsk->peer_flowid, &ctx->hdr->src_flowid, 
                sizeof(ctx->hdr->src_flowid));
-        memcpy(&srsk->peer_srvid, &ctx->srv_ext[0]->srvid,
+        memcpy(&srsk->target_srvid, &ctx->srv_ext[0]->srvid,
                sizeof(ctx->srv_ext[0]->srvid));
         memcpy(srsk->peer_nonce, ctrl_ext->nonce, SAL_NONCE_SIZE);
         srsk->rcv_seq = ctx->verno;
@@ -2075,6 +2075,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         memcpy(&nssk->peer_flowid, &srsk->peer_flowid, 
                                sizeof(srsk->peer_flowid));
                         service_id_copy(&nssk->peer_srvid, &srsk->peer_srvid);
+                        service_id_copy(&nssk->local_srvid, &srsk->target_srvid);
                         memcpy(&newinet->inet_daddr, &irsk->rmt_addr,
                                sizeof(newinet->inet_daddr));
                         memcpy(&newinet->inet_saddr, &irsk->loc_addr,

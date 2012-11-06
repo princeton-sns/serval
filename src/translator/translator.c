@@ -372,6 +372,9 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         goto fail_sock;
                 }
         } else if (c->from_family == AF_SERVAL) {
+                struct sockaddr_sv sv;
+                socklen_t svlen = sizeof(sv);
+
                 /* We're translating from AF_SERVAL to AF_INET */
                 c->sock[ST_SERVAL].fd = sock;
                 memcpy(&c->sock[ST_SERVAL].addr, sa, 
@@ -382,9 +385,17 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_INET].state = SS_CLOSED;
                 c->sock[ST_INET].events = EPOLLOUT;
 
+                ret = getsockname(c->sock[ST_SERVAL].fd, (struct sockaddr *)&sv, &svlen);
+
+                if (ret == -1) {
+                        LOG_DBG("getsockname: %s\n", strerror(errno));
+                        goto fail_sock;
+                }
+
                 /* The end of the serviceID contains the original port
                    and IP. */ 
                 c->sock[ST_INET].addr.in.sin_family = AF_INET;
+
                 ret = service_to_sockaddr_in(&c->sock[ST_SERVAL].addr.sv.sv_srvid,
                                              &c->sock[ST_INET].addr.in);
 
@@ -603,6 +614,9 @@ static enum work_status client_connect(struct client *c)
 
                 if (c->cross_translate) {
                         char buf[SERVICE_ID_MAX_LEN+1];
+                        struct sockaddr_in orig_addr;
+                        socklen_t orig_addrlen;
+
                         /* We are cross translating, i.e., this
                          * AF_INET to AF_SERVAL translator connects to
                          * another AF_SERVAL to AF_INET translator. We
@@ -613,10 +627,28 @@ static enum work_status client_connect(struct client *c)
                          * translator must listen to a serviceID
                          * prefix, since every serviceID will now be
                          * unique. */
+                        
+                        ret = getsockopt(c->sock[ST_INET].fd, SOL_IP, 
+                                         SO_ORIGINAL_DST, 
+                                         &orig_addr, &orig_addrlen);
+                        
+                        if (ret == -1) {
+                                LOG_DBG("client %u, could not get original port."
+                                        "Probably not NAT'ed\n", c->id);
+                                return WORK_ERROR;
+                        } 
+                        
+                        inet_ntop(AF_INET, &orig_addr.sin_addr, 
+                                  ipstr, sizeof(ipstr));
+                        
+                        LOG_DBG("Original destination: %s:%u\n",
+                                ipstr, ntohs(orig_addr.sin_port));
+                        
                         sprintf(buf, "%s-%u.%s",
                                 ipstr,
                                 ntohs(c->sock[ST_INET].addr.in.sin_port), 
                                 translator_service_name);
+
                         serval_pton(buf, &addr.sv.sv_srvid);
                 } else {
                         serval_pton(translator_service_name, 
