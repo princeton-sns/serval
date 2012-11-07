@@ -143,9 +143,9 @@ static int print_base_hdr(struct sal_hdr *sh, char *buf, int buflen)
 
 static int print_base_ext(struct sal_ext *xt, char *buf, int buflen)
 {
-        return snprintf(buf, buflen, "%s length=%u",
+        return snprintf(buf, buflen, "%s length=%zu",
                         sal_ext_name[xt->type],
-                        xt->length);
+                        SAL_EXT_LEN(xt));
 }
 
 static int print_pad_ext(struct sal_ext *xt, char *buf, int buflen)
@@ -419,7 +419,7 @@ static inline int parse_ext(struct sal_ext *ext, struct sk_buff *skb,
         
         LOG_DBG("EXT %s length=%u\n",
                 sal_ext_name[ext->type], 
-                ext_len);
+                ext->type == SAL_PAD_EXT ? 1 : ext_len);
 
         return parse_ext_func[ext->type](ext, ext_len, skb, ctx);
 }

@@ -19,6 +19,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 #include <arpa/inet.h>
 #include <netinet/serval.h>
 #include <sys/socket.h>
@@ -111,7 +113,6 @@ struct client {
         unsigned char is_garbage:1;
         unsigned char cross_translate:1;
         struct list_head lh, wq;
-        struct signal exit_signal;
 };
 
 struct translator_init_pkt {
@@ -144,7 +145,6 @@ static const char *family_to_str(int family)
         }
         return unknown;
 }
-
 
 static enum work_status work_translate(struct socket *from, 
                                        struct socket *to,
@@ -315,7 +315,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
         c->sock[0].c = c->sock[1].c = c;
         INIT_LIST_HEAD(&c->lh);
         INIT_LIST_HEAD(&c->wq);
-        signal_init(&c->exit_signal);
         
         ret = pipe(c->splicefd);
 
@@ -433,13 +432,11 @@ fail_post_sock:
  fail_pipe:
         close(sock);
         free(c);
-        signal_destroy(&c->exit_signal);
         return NULL;
 }
 
 static void client_free(struct client *c)
 {
-        signal_destroy(&c->exit_signal);
         free(c);
 }
 
@@ -1098,6 +1095,7 @@ static void print_usage(void)
         printf("Usage: translator [ OPTIONS ]\n");
         printf("where OPTIONS:\n");
         printf("\t-d, --daemon\t\t\t run in the background as a daemon.\n");
+        printf("\t-f, --file-limit LIMIT\t\t set the maximum number of open file descriptors.\n");
         printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-s, --serval\t\t\t run an AF_SERVAL to AF_INET translator.\n");
@@ -1172,6 +1170,8 @@ int main(int argc, char **argv)
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
         int ret = 0, family = AF_INET, daemon = 0;
         int cross_translate = 0;
+        struct rlimit limit;
+        rlim_t file_limit = 0;
 
         argc--;
 	argv++;
@@ -1195,6 +1195,13 @@ int main(int argc, char **argv)
                            strcmp(argv[0], "--serval") ==  0) {
                         /* Run a SERVAL to INET translator */
                         family = AF_SERVAL;
+                } else if (strcmp(argv[0], "-f") == 0 ||
+                           strcmp(argv[0], "--file-limit") ==  0) {
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        file_limit = atoi(argv[1]);
                 } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") ==  0) {
                         daemon = 1;
@@ -1256,6 +1263,29 @@ int main(int argc, char **argv)
                 } 
         }
 
+        ret = getrlimit(RLIMIT_NOFILE, &limit);
+        
+        if (ret == -1) {
+                LOG_ERR("Could not get file limit: %s\n", strerror(errno));
+        } else {
+                /* Increase file limit as much as we can. If we are
+                 * root, we might be able to set a higher limit. */
+                if (file_limit > 0) 
+                        limit.rlim_cur = limit.rlim_max = file_limit;
+                else
+                        limit.rlim_cur = limit.rlim_max;
+                
+                LOG_DBG("Setting open file limit to %lu\n",
+                        limit.rlim_cur);
+                
+                ret = setrlimit(RLIMIT_NOFILE, &limit);
+
+                if (ret == -1) {
+                        LOG_ERR("could not set file limit: %s\n", 
+                                strerror(errno));
+                }
+        }
+        
         ret = run_translator(family, port, cross_translate);
 fail:
         if (log_is_open(&logh))
