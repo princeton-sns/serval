@@ -2876,15 +2876,9 @@ int serval_sal_state_process(struct sock *sk,
                 
                 /* Check for migration */
                 if (ctx->ctrl_ext->rsyn) {
-                        static int first = 1;
-                        
-                        if (ctx->ctrl_ext->ack) {
-                                if (first) {
-                                        first = 0;
-                                        goto drop;
-                                }
+                        if (ctx->ctrl_ext->ack)
                                 err = serval_sal_rcv_rsynack(sk, skb, ctx);
-                        } else
+                        else
                                 err = serval_sal_rcv_rsyn(sk, skb, ctx);
                 }
         }
