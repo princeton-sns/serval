@@ -6,6 +6,7 @@
 #include <serval/sock.h>
 #include <netinet/serval.h>
 #include <serval_sock.h>
+#include <serval/debug.h>
 
 int serval_sal_xmit_skb(struct sk_buff *skb);
 
@@ -287,6 +288,7 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 }
 
 int serval_sal_send_fin(struct sock *sk);
+void serval_sal_ack_update_rtt(struct sock *sk, const s32 seq_rtt);
 
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE sizeof(struct iphdr)
@@ -300,6 +302,12 @@ int serval_sal_send_fin(struct sock *sk);
                             sizeof(struct sal_hdr))
 
 extern int serval_sal_forwarding;
+
+
+#define SAL_RTO_MAX	((unsigned)(120*HZ))
+#define SAL_RTO_MIN	((unsigned)(HZ/5))
+#define SAL_TIMEOUT_INIT ((unsigned)(3*HZ))
+#define SAL_RETRANSMITS_MAX 15
 
 #define SAL_RESOURCE_PROBE_INTERVAL ((unsigned)(HZ/2U)) /* Maximal interval between probes
 					                 * for local resources.

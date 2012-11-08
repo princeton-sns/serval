@@ -52,6 +52,7 @@ extern void __exit inet_to_serval_fini(void);
 #include <delay_queue.h>
 #include <ctrl.h>
 #include <af_serval.h>
+#include <serval_sal.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -68,7 +69,8 @@ struct netns_serval net_serval = {
         .sysctl_inet_to_serval = 0,
         .sysctl_auto_migrate = 1,
         .sysctl_debug = 0,
-        .sysctl_udp_encap = 0,       
+        .sysctl_udp_encap = 0,
+        .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
 };
 
 extern void serval_tcp_init(void);

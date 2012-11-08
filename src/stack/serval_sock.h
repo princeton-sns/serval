@@ -192,10 +192,6 @@ struct serval_sock {
         unsigned long           tot_pkts_sent;
 };
 
-#define SAL_RTO_MAX	((unsigned)(120*HZ))
-#define SAL_RTO_MIN	((unsigned)(HZ/5))
-#define SAL_TIMEOUT_INIT ((unsigned)(3*HZ))
-
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 
 /* Should be power of two */
@@ -275,8 +271,6 @@ static inline void serval_sock_clear_xmit_timer(struct sock *sk)
 {
 	struct serval_sock *ssk = serval_sk(sk);
         ssk->pending = 0;
-        ssk->retransmits = 0;
-        ssk->backoff = 0;
         sk_stop_timer(sk, &ssk->retransmit_timer);
 }
 

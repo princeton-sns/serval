@@ -16,6 +16,7 @@ struct netns_serval {
         unsigned int sysctl_auto_migrate;
         unsigned int sysctl_debug;
 	unsigned int sysctl_udp_encap;
+        unsigned int sysctl_sal_max_retransmits;
         unsigned short sysctl_udp_encap_client_port;
         unsigned short sysctl_udp_encap_server_port;
 	struct ctl_table_header *ctl;
