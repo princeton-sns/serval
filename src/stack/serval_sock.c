@@ -139,7 +139,6 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                         int should_migrate = 0;
 
                         if (old_dev > 0 && new_dev > 0) {
-
                                 if (old_dev == new_dev) {
                                         /* An existing interface changed its address,
                                          * i.e., physical mobility. */
@@ -214,7 +213,7 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                 local_bh_enable();
         }
 
-        LOG_SSK(sk, "Migrated %d flows\n", n);
+        LOG_DBG("Migrated %d flows\n", n);
 }
 
 /*

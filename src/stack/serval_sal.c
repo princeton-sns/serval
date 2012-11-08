@@ -3499,7 +3499,8 @@ int serval_sal_rcv(struct sk_buff *skb)
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
-                        if (skb->pkt_type != PACKET_BROADCAST)
+                        if (!(ctx.flags & SVH_SYN && 
+                              !(ctx.flags & SVH_ACK)))
                                 serval_sal_send_reset(NULL, skb, &ctx);
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
