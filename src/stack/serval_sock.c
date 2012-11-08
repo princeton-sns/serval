@@ -139,7 +139,6 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                         int should_migrate = 0;
 
                         if (old_dev > 0 && new_dev > 0) {
-
                                 if (old_dev == new_dev) {
                                         /* An existing interface changed its address,
                                          * i.e., physical mobility. */
@@ -214,7 +213,7 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                 local_bh_enable();
         }
 
-        LOG_SSK(sk, "Migrated %d flows\n", n);
+        LOG_DBG("Migrated %d flows\n", n);
 }
 
 /*
@@ -600,14 +599,14 @@ void serval_sock_init(struct sock *sk)
         ssk->rcv_seq.nxt = 0;        
         ssk->snd_seq.una = 0;
         ssk->snd_seq.nxt = 0;
-        /* Default to stop-and-wait behavior */
+        /* Default to stop-and-wait behavior (wnd = 1) */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
         ssk->retransmits = 0;
         ssk->backoff = 0;
         ssk->srtt = 0;
-        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
-        ssk->rto = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
+        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_TIMEOUT_INIT;
+        ssk->rto = SAL_TIMEOUT_INIT;
 
         write_lock_bh(&sock_list_lock);
         list_add_tail(&ssk->sock_node, &sock_list);

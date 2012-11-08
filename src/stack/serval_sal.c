@@ -221,7 +221,7 @@ static print_ext_func_t print_ext_func[] = {
 static int print_ext(struct sal_ext *xt, char *buf, int buflen)
 {
         int len;
-
+        
         len = snprintf(buf, buflen, "{");
         len += print_base_ext(xt, buf + len, buflen - len);
         len += snprintf(buf + len, buflen - len, " ");
@@ -420,7 +420,7 @@ static inline int parse_ext(struct sal_ext *ext, struct sk_buff *skb,
         LOG_DBG("EXT %s length=%u\n",
 
                 sal_ext_name[ext->type], 
-                ext_len);
+                ext->type == SAL_PAD_EXT ? 1 : ext_len);
 
         return parse_ext_func[ext->type](ext, ext_len, skb, ctx);
 }
@@ -552,13 +552,11 @@ static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
             sk->sk_state == SAL_REQUEST)
                 return 1;
 
-        if (!before(seg_seq, ssk->rcv_seq.nxt) 
-            /* && !after(seg_seq, ssk->rcv_seq.nxt + ssk->rcv_seq.wnd) */) {
+        if (!before(seg_seq, ssk->rcv_seq.nxt)) 
                 ret = 1;
-        }
 
         if (ret == 0) {
-                LOG_DBG("Verno not in sequence received=%u next=%u."
+                LOG_DBG("Invalid version number received=%u next=%u."
                         " Could be ACK though...\n",
                         seg_seq, ssk->rcv_seq.nxt);
         }
@@ -774,15 +772,14 @@ static void serval_sal_rearm_rto(struct sock *sk)
 	}
 }
 
-static inline void serval_sal_ack_update_rtt(struct sock *sk,
-                                             const s32 seq_rtt)
+void serval_sal_update_rtt(struct sock *sk, const s32 seq_rtt)
 {
         serval_sal_rtt_estimator(sk, seq_rtt);
 	serval_sal_set_rto(sk);
-	serval_sk(sk)->backoff = 0; 
+        serval_sk(sk)->backoff = 0;
 
-        LOG_SSK(sk, "Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
-                HZ, seq_rtt, serval_sk(sk)->rto);
+        LOG_SSK(sk, "Updated RTO HZ=%u seq_rtt=%d rto_msecs=%u\n",
+                HZ, seq_rtt, jiffies_to_msecs(serval_sk(sk)->rto));
 }
 
 /*
@@ -794,7 +791,8 @@ static inline void serval_sal_ack_update_rtt(struct sock *sk,
   still unacked packets in the queue and we removed the first packet
   in the queue.
 */
-static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
+static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all, 
+                                      struct sal_skb_cb *cb_out)
 {
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *skb, *fskb = serval_sal_ctrl_queue_head(sk);
@@ -805,14 +803,19 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
        
         while ((skb = serval_sal_ctrl_queue_head(sk)) && 
                skb != serval_sal_send_head(sk)) {
-                if (ackno > SAL_SKB_CB(skb)->verno || all) {
+                if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
+
+                        if (cb_out) {
+                                /* merge the state */
+                                cb_out->flags |= SAL_SKB_CB(skb)->flags;
+                        }
 
                         if (SAL_SKB_CB(skb)->flags & SVH_RETRANS) {
                                 seq_rtt = -1;
                         } else if (!all) {
                                 seq_rtt = now - SAL_SKB_CB(skb)->when;
-                                serval_sal_ack_update_rtt(sk, seq_rtt);
+                                serval_sal_update_rtt(sk, seq_rtt);
                                 serval_sal_rearm_rto(sk);
                         }
 
@@ -833,9 +836,11 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all)
         LOG_PKT("cleaned up %u packets from rtx queue, queue len=%u\n", 
                 num, serval_sal_ctrl_queue_len(sk));
         
-        /* Did we remove the first packet in the queue? */
+        /* If we removed the first packet in the queue, we should also
+         * clear the retransmit timer since it is no longer valid.  */
         if (serval_sal_ctrl_queue_head(sk) != fskb) {
                 serval_sock_clear_xmit_timer(sk);
+                ssk->retransmits = 0;
         }
 
         if (serval_sal_ctrl_queue_head(sk)) {
@@ -919,15 +924,23 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
 static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        struct sal_skb_cb cb;
         int err;
         
+        memset(&cb, 0, sizeof(cb));
+
         /* Remove previously queued control packet(s). We currently
            only queue one control packet at a time, allowing control
            packets to override each other (necessary for, e.g.,
            (re)migration). It is not strictly necessary to use a queue
            for this, but we use it anyway for convenience and future
            proofness (in case we want to implement a send window). */
-        serval_sal_clean_rtx_queue(sk, 0, 1);
+        serval_sal_clean_rtx_queue(sk, 0, 1, &cb);
+
+        /* We need to merge the state in unacknowledged packets with
+         * the our new state when we are overriding (currently
+         * previous flags) */
+        SAL_SKB_CB(skb)->flags |= cb.flags;
 
         /* Queue the new packet */
         serval_sal_queue_ctrl_skb(sk, skb);
@@ -1101,7 +1114,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
 
         /* Use same sequence number as previous packet for migration
            requests */
-        LOG_SSK(sk, "Sending RSYN\n");
+        LOG_SSK(sk, "Sending RSYN verno=%u\n", verno);
         SAL_SKB_CB(skb)->flags = SVH_RSYN;
         SAL_SKB_CB(skb)->verno = verno;
 
@@ -2125,7 +2138,7 @@ static int serval_sal_ack_process(struct sock *sk,
 	if (after(ctx->ackno, ssk->snd_seq.nxt))
 		goto invalid_ack;
 
-        serval_sal_clean_rtx_queue(sk, ctx->ackno, 0);
+        serval_sal_clean_rtx_queue(sk, ctx->ackno, 0, NULL);
         ssk->snd_seq.una = ctx->ackno;
         ssk->ack_rcv_tstamp = sal_time_stamp;
 
@@ -2232,8 +2245,13 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct sk_buff *rskb = NULL;
         
-        LOG_SSK(sk, "received RSYN\n");
-        
+#if defined(ENABLE_DEBUG)
+        {
+                char buf[18];
+                LOG_SSK(sk, "RSYN from address %s\n",
+                        inet_ntop(AF_INET, &ip_hdr(skb)->saddr, buf, 18));
+        }
+#endif
         if (!has_valid_control_extension(sk, ctx)) {
                 LOG_ERR("Bad migration control packet\n");
                 return -1;
@@ -2847,9 +2865,11 @@ int serval_sal_state_process(struct sock *sk,
                         serval_sock_print_state(sk, buf, 512));
         }
 #endif
+        if (ctx->ctrl_ext) {                
+                if (!has_valid_verno(ctx->verno, sk))
+                        goto drop;
 
-        /* Is this a reset packet */
-        if (ctx->ctrl_ext) {
+                /* Is this a reset packet */
                 if (ctx->ctrl_ext->rst) {
                         serval_sal_rcv_reset(sk);
                         goto drop;
@@ -3310,51 +3330,16 @@ static int serval_sal_rcv_finish(struct sock *sk,
         /* We only reach this point if a valid local socket destination
          * has been found */
         
-        if (!sock_owned_by_user(sk)) {
-                /* We cannot pass on the sal_context here, because
-                   serval_sal_do_rcv must conform to the
-                   sk_backlog_rcv callback interface. */
-                err = serval_sal_do_rcv_ctx(sk, skb, ctx);
-        } else {
-                /*
-                  Add to backlog and process in user context when
-                  the user process releases its lock ownership.
-                  
-                  Note, for kernels >= 2.6.33 the sk_add_backlog()
-                  function adds the total allocated memory for the
-                  backlog to that of the receive buffer and rejects
-                  queuing in case the new total overreaches the
-                  socket's configured receive buffer size.
+        err = serval_sal_do_rcv_ctx(sk, skb, ctx);
 
-                  This may not be the wanted behavior in case we are
-                  processing control packets in the backlog (i.e.,
-                  control packets can be dropped because the data
-                  receive buffer is full. This might not be a big deal
-                  though, as control packets are retransmitted.
-                */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
-                if (sk_add_backlog(sk, skb, 
-                                   sk->sk_rcvbuf + sk->sk_sndbuf))
-                        goto drop;
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb))
-                        goto drop;
-#else
-                sk_add_backlog(sk, skb);
-#endif
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
+        if (err != 0) {
+                service_inc_stats(-1, -(skb->len - ctx->length));
         }
 
-        bh_unlock_sock(sk);
-        sock_put(sk);
-
 	return err;
-drop:
-        service_inc_stats(-1, -(skb->len - ctx->length));
-        LOG_SSK(sk, "Dropping packet\n");
-        bh_unlock_sock(sk);
-        sock_put(sk);
-        kfree_skb(skb);
-        return err;
 }
 
 int serval_sal_reresolve(struct sk_buff *skb)
@@ -3475,7 +3460,9 @@ int serval_sal_rcv(struct sk_buff *skb)
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
-                        serval_sal_send_reset(NULL, skb, &ctx);
+                        if (!(ctx.flags & SVH_SYN && 
+                              !(ctx.flags & SVH_ACK)))
+                                serval_sal_send_reset(NULL, skb, &ctx);
                 case SAL_RESOLVE_DROP:
                 case SAL_RESOLVE_ERROR:
                 default:
@@ -3582,12 +3569,13 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock(sk);
 
-        LOG_SSK(sk, "Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
+        LOG_SSK(sk, "Transmit timeout sock=%p rto_msecs=%u backoff=%u\n", 
                 sk, jiffies_to_msecs(ssk->rto), ssk->backoff);
-        
-        if (ssk->retransmits == 10) {
+
+        if (ssk->retransmits == net_serval.sysctl_sal_max_retransmits) {
                 /* TODO: check error values here */
-                LOG_SSK(sk, "NOT rescheduling timer! Closing socket\n");
+                LOG_SSK(sk, "max retransmits=%u reached. NOT rescheduling timer! Closing socket\n",
+                        net_serval.sysctl_sal_max_retransmits);
                 serval_sal_write_err(sk);
         } else {
                 LOG_SSK(sk, "ReXmit and rescheduling timer\n");

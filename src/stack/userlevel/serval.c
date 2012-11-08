@@ -560,10 +560,7 @@ int main(int argc, char **argv)
         gettimeofday(&now, NULL);
         
         srandom((unsigned int)now.tv_usec);
-        
-        /* Init configuration parameters */
-        memset(&net_serval, 0, sizeof(net_serval));
-        
+                
 	argc--;
 	argv++;
         

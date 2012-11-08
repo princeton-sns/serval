@@ -1703,6 +1703,7 @@ static void serval_tcp_valid_rtt_meas(struct sock *sk, u32 seq_rtt)
 	serval_tcp_rtt_estimator(sk, seq_rtt);
 	serval_tcp_set_rto(sk);
 	serval_tcp_sk(sk)->backoff = 0;
+        serval_sal_update_rtt(sk, seq_rtt);
 }
 
 /* If we get here, the whole TSO packet has not been acked. */

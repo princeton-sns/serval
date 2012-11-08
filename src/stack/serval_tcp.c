@@ -357,9 +357,19 @@ static int serval_tcp_rcv(struct sock *sk, struct sk_buff *skb)
         } else {
                 /* We are processing the backlog in user/process
                    context */
-                err = serval_tcp_do_rcv(sk, skb);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+                if (sk_add_backlog(sk, skb, 
+                                   sk->sk_rcvbuf + sk->sk_sndbuf))
+                        goto discard_it;
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        goto discard_it;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
         }
-        
+     
         return err;
 discard_it:
         kfree_skb(skb);
@@ -1466,19 +1476,8 @@ static void serval_tcp_prequeue_process(struct sock *sk)
 	 * necessary */
 	local_bh_disable();
 	while ((skb = __skb_dequeue(&tp->ucopy.prequeue)) != NULL)
-                /* We cannot call sk_backlog_rcv here as we do backlog
-                   queueing and processing in the SAL, and therefore
-                   sk_backlog_rcv will put the packet back in SAL and
-                   then through TCP processing again (part of which we
-                   have already done at this point.
-
-                   We must instead call serval_tcp_do_rcv directly
-                   since that is the logical next step in the packet
-                   processing. 
-                */
-		/* sk_backlog_rcv(sk, skb); */
-                serval_tcp_do_rcv(sk, skb);
-
+		sk_backlog_rcv(sk, skb);
+        
 	local_bh_enable();
 
 	/* Clear memory counter. */
@@ -2883,7 +2882,7 @@ struct proto serval_tcp_proto = {
 #if defined(OS_LINUX_KERNEL) && defined(ENABLE_SPLICE)
         .sendpage               = serval_tcp_sendpage,
 #endif
-	.backlog_rcv		= serval_sal_do_rcv,
+	.backlog_rcv		= serval_tcp_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.enter_memory_pressure	= serval_tcp_enter_memory_pressure,
