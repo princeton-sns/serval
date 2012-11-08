@@ -288,7 +288,7 @@ static inline struct sal_hdr *sal_hdr(struct sk_buff *skb)
 }
 
 int serval_sal_send_fin(struct sock *sk);
-void serval_sal_ack_update_rtt(struct sock *sk, const s32 seq_rtt);
+void serval_sal_update_rtt(struct sock *sk, const s32 seq_rtt);
 
 #define EXTRA_HDR_SIZE (20)
 #define IP_HDR_SIZE sizeof(struct iphdr)

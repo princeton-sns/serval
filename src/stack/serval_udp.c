@@ -281,6 +281,8 @@ static int serval_udp_do_rcv(struct sock *sk, struct sk_buff *skb)
 int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
 {
         struct udphdr *uh = udp_hdr(skb);
+        int ret = 0;
+
    	/*
 	 *  Validate the packet.
 	 */
@@ -305,23 +307,32 @@ int serval_udp_rcv(struct sock *sk, struct sk_buff *skb)
          * that do not define this sk_rcvqueues_full().  */
    
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
-        if (sk_rcvqueues_full(sk, skb, 
-                              sk->sk_rcvbuf + sk->sk_sndbuf)) {
-                kfree_skb(skb);
-                return -ENOBUFS; 
+        if (sk_rcvqueues_full(sk, skb, sk->sk_rcvbuf)) {
+                goto drop;
         }
 #elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
         if (sk_rcvqueues_full(sk, skb)) {
-                kfree_skb(skb);
-                return -ENOBUFS; 
+                goto drop;
         }
 #endif
-        
-        return serval_udp_do_rcv(sk, skb);
+        if (!sock_owned_by_user(sk)) {
+                ret = serval_udp_do_rcv(sk, skb);
+        } else {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
+                if (sk_add_backlog(sk, skb, sk->sk_rcvbuf))
+                        goto drop;
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
+                if (sk_add_backlog(sk, skb)) {
+                        goto drop;
+                }
+#else
+                sk_add_backlog(sk, skb);
+#endif
+        }
+        return ret;
  drop:
-        LOG_DBG("Dropping bad UDP packet\n");
         kfree_skb(skb);
-        return 0;
+        return -1;
 }
 
 static int serval_udp_sendmsg(struct kiocb *iocb, struct sock *sk, 
@@ -888,7 +899,7 @@ struct proto serval_udp_proto = {
         .recvmsg                = serval_udp_recvmsg,
         .getsockopt             = serval_udp_getsockopt,
         .setsockopt             = serval_udp_setsockopt,
-	.backlog_rcv		= serval_sal_do_rcv,
+	.backlog_rcv		= serval_udp_do_rcv,
         .hash                   = serval_sock_hash,
         .unhash                 = serval_sock_unhash,
 	.max_header		= MAX_SERVAL_UDP_HDR,

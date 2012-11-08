@@ -771,14 +771,14 @@ static void serval_sal_rearm_rto(struct sock *sk)
 	}
 }
 
-void serval_sal_ack_update_rtt(struct sock *sk, const s32 seq_rtt)
+void serval_sal_update_rtt(struct sock *sk, const s32 seq_rtt)
 {
         serval_sal_rtt_estimator(sk, seq_rtt);
 	serval_sal_set_rto(sk);
         serval_sk(sk)->backoff = 0;
 
-        LOG_SSK(sk, "Updated RTO HZ=%u seq_rtt=%d rto=%u\n",
-                HZ, seq_rtt, serval_sk(sk)->rto);
+        LOG_SSK(sk, "Updated RTO HZ=%u seq_rtt=%d rto_msecs=%u\n",
+                HZ, seq_rtt, jiffies_to_msecs(serval_sk(sk)->rto));
 }
 
 /*
@@ -814,7 +814,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
                                 seq_rtt = -1;
                         } else if (!all) {
                                 seq_rtt = now - SAL_SKB_CB(skb)->when;
-                                serval_sal_ack_update_rtt(sk, seq_rtt);
+                                serval_sal_update_rtt(sk, seq_rtt);
                                 serval_sal_rearm_rto(sk);
                         }
 
@@ -905,9 +905,6 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
                         break;
                 }
                 serval_sal_advance_send_head(sk, skb);
-                
-                LOG_DBG("Q head=%p send_head=%p\n",
-                        serval_sal_ctrl_queue_head(sk), serval_sal_send_head(sk));
                 num++;
         }
 
@@ -2867,8 +2864,6 @@ int serval_sal_state_process(struct sock *sk,
                         serval_sock_print_state(sk, buf, 512));
         }
 #endif
-
-
         if (ctx->ctrl_ext) {                
                 if (!has_valid_verno(ctx->verno, sk))
                         goto drop;
@@ -2881,9 +2876,15 @@ int serval_sal_state_process(struct sock *sk,
                 
                 /* Check for migration */
                 if (ctx->ctrl_ext->rsyn) {
-                        if (ctx->ctrl_ext->ack)
+                        static int first = 1;
+                        
+                        if (ctx->ctrl_ext->ack) {
+                                if (first) {
+                                        first = 0;
+                                        goto drop;
+                                }
                                 err = serval_sal_rcv_rsynack(sk, skb, ctx);
-                        else
+                        } else
                                 err = serval_sal_rcv_rsyn(sk, skb, ctx);
                 }
         }
@@ -3334,51 +3335,16 @@ static int serval_sal_rcv_finish(struct sock *sk,
         /* We only reach this point if a valid local socket destination
          * has been found */
         
-        if (!sock_owned_by_user(sk)) {
-                /* We cannot pass on the sal_context here, because
-                   serval_sal_do_rcv must conform to the
-                   sk_backlog_rcv callback interface. */
-                err = serval_sal_do_rcv_ctx(sk, skb, ctx);
-        } else {
-                /*
-                  Add to backlog and process in user context when
-                  the user process releases its lock ownership.
-                  
-                  Note, for kernels >= 2.6.33 the sk_add_backlog()
-                  function adds the total allocated memory for the
-                  backlog to that of the receive buffer and rejects
-                  queuing in case the new total overreaches the
-                  socket's configured receive buffer size.
+        err = serval_sal_do_rcv_ctx(sk, skb, ctx);
 
-                  This may not be the wanted behavior in case we are
-                  processing control packets in the backlog (i.e.,
-                  control packets can be dropped because the data
-                  receive buffer is full. This might not be a big deal
-                  though, as control packets are retransmitted.
-                */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0))
-                if (sk_add_backlog(sk, skb, 
-                                   sk->sk_rcvbuf + sk->sk_sndbuf))
-                        goto drop;
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
-                if (sk_add_backlog(sk, skb))
-                        goto drop;
-#else
-                sk_add_backlog(sk, skb);
-#endif
+        bh_unlock_sock(sk);
+        sock_put(sk);
+
+        if (err != 0) {
+                service_inc_stats(-1, -(skb->len - ctx->length));
         }
 
-        bh_unlock_sock(sk);
-        sock_put(sk);
-
 	return err;
-drop:
-        service_inc_stats(-1, -(skb->len - ctx->length));
-        LOG_SSK(sk, "Dropping packet\n");
-        bh_unlock_sock(sk);
-        sock_put(sk);
-        kfree_skb(skb);
-        return err;
 }
 
 int serval_sal_reresolve(struct sk_buff *skb)
@@ -3608,7 +3574,7 @@ void serval_sal_rexmit_timeout(unsigned long data)
 
         bh_lock_sock(sk);
 
-        LOG_SSK(sk, "Transmit timeout sock=%p rto=%u (ms) backoff=%u\n", 
+        LOG_SSK(sk, "Transmit timeout sock=%p rto_msecs=%u backoff=%u\n", 
                 sk, jiffies_to_msecs(ssk->rto), ssk->backoff);
 
         if (ssk->retransmits == net_serval.sysctl_sal_max_retransmits) {
