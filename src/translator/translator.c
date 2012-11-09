@@ -887,6 +887,7 @@ static void stop_workers(void)
 
         for (i = 0; i < num_workers; i++) {
                 if (workers[i].running) {
+                        LOG_DBG("joining with worker %u\n", i);
                         pthread_join(workers[i].thr, NULL);
                 }
         }
@@ -925,10 +926,11 @@ static void print_events(struct socket *s, uint32_t events)
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
 
-int run_translator(int family, unsigned short port, int cross_translate)
+int run_translator(unsigned short port, int cross_translate, 
+                   int inet_server_only)
 {
 	struct sigaction action;
-	int sock, ret = 0, running = 1, sig_fd;
+	int inet_sock, serval_sock = -1, ret = 0, running = 1, sig_fd;
         struct epoll_event ev, events[MAX_EVENTS];
         int gc_timeout = GC_TIMEOUT;
 
@@ -962,24 +964,44 @@ int run_translator(int family, unsigned short port, int cross_translate)
                 goto err_epoll_create;
         }
         
-        sock = create_server_sock(family, port, cross_translate);
+        inet_sock = create_server_sock(AF_INET, port, cross_translate);
 
-        if (sock == -1) {
+        if (inet_sock == -1) {
                 LOG_ERR("could not create AF_INET server sock\n");
-                ret = sock;
-                goto err_server_sock;
+                ret = inet_sock;
+                goto err_inet_sock;
         }
         
         /* Set events. EPOLLERR and EPOLLHUP may always be returned,
          * even if not set here */
         memset(&ev, 0, sizeof(ev));
         ev.events = EPOLLIN;
-        ev.data.ptr = &sock;
+        ev.data.ptr = &inet_sock;
         
-        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sock, &ev) == -1) {
+        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev) == -1) {
                 LOG_ERR("Could not add listen sock to epoll events: %s\n",
                         strerror(errno));
-                goto err_epoll_ctl;
+                goto err_epoll_ctl_inet;
+        }
+
+        if (!inet_server_only) {
+                serval_sock = create_server_sock(AF_SERVAL, port, cross_translate);
+                
+                if (serval_sock == -1) {
+                        LOG_ERR("could not create AF_SERVAL server sock\n");
+                        ret = serval_sock;
+                        goto err_serval_sock;
+                }
+
+                memset(&ev, 0, sizeof(ev));
+                ev.events = EPOLLIN;
+                ev.data.ptr = &serval_sock;
+        
+                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, serval_sock, &ev) == -1) {
+                        LOG_ERR("Could not add listen sock to epoll events: %s\n",
+                                strerror(errno));
+                        goto err_epoll_ctl_serval;
+                }
         }
 
         ret = start_workers(num_workers);
@@ -987,11 +1009,8 @@ int run_translator(int family, unsigned short port, int cross_translate)
         if (ret == -1)
                 goto err_workers;
 
-        LOG_DBG("%s to %s translator running on port/serviceID %u\n", 
-                family_to_str(family), 
-                family_to_str(family == AF_INET ? AF_SERVAL : AF_INET),
-                port);
-        
+        LOG_DBG("translator running on port/serviceID %u\n", port);
+
         while (running) {
                 struct timespec prev_time, now;
                 int nfds, i;
@@ -1029,10 +1048,10 @@ int run_translator(int family, unsigned short port, int cross_translate)
                            know fd is first member of the struct */
                         struct socket *s = (struct socket *)events[i].data.ptr;
 
-                        if (s->fd == sock) {
+                        if (s->fd == inet_sock || s->fd == serval_sock) {
                                 struct client *c;
                                 
-                                c = accept_client(sock, port, cross_translate); 
+                                c = accept_client(s->fd, port, cross_translate); 
                                 
                                 if (!c) {
                                         LOG_ERR("client accept failure\n");
@@ -1078,9 +1097,14 @@ int run_translator(int family, unsigned short port, int cross_translate)
         stop_workers();
         LOG_DBG("Cleaning up clients\n");
         cleanup_clients();
- err_epoll_ctl:
-	close(sock);
- err_server_sock:
+ err_epoll_ctl_serval:
+        if (serval_sock > 0)
+                close(serval_sock);
+ err_epoll_ctl_inet:
+ err_serval_sock:
+        if (inet_sock > 0)
+                close(inet_sock);
+ err_inet_sock:
         close(epollfd);
  err_epoll_create:
         signal_destroy(&exit_signal);
@@ -1098,11 +1122,9 @@ static void print_usage(void)
         printf("\t-f, --file-limit LIMIT\t\t set the maximum number of open file descriptors.\n");
         printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
-        printf("\t-s, --serval\t\t\t run an AF_SERVAL to AF_INET translator.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
-        printf("\t-x, --cross-translate\t\t an AF_SERVAL->AF_INET translator connects to "
-               "an AF_SERVAL->AF_INET translator. Both need this option set.\n");
+        printf("\t-x, --cross-translate\t\t allow connections from another AF_SERVAL->AF_INET.\n");
 }
 
 static int daemonize(void)
@@ -1168,8 +1190,7 @@ static int daemonize(void)
 int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
-        int ret = 0, family = AF_INET, daemon = 0;
-        int cross_translate = 0;
+        int ret = 0, daemon = 0, cross_translate = 0;
         struct rlimit limit;
         rlim_t file_limit = 0;
 
@@ -1191,10 +1212,6 @@ int main(int argc, char **argv)
                            strcmp(argv[0], "--help") ==  0) {
                         print_usage();
                         goto fail;
-                } else if (strcmp(argv[0], "-s") == 0 ||
-                           strcmp(argv[0], "--serval") ==  0) {
-                        /* Run a SERVAL to INET translator */
-                        family = AF_SERVAL;
                 } else if (strcmp(argv[0], "-f") == 0 ||
                            strcmp(argv[0], "--file-limit") ==  0) {
                         if (argc == 1) {
@@ -1286,7 +1303,7 @@ int main(int argc, char **argv)
                 }
         }
         
-        ret = run_translator(family, port, cross_translate);
+        ret = run_translator(port, cross_translate, 0);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);
