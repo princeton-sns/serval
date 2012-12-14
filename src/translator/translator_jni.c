@@ -20,7 +20,7 @@ JNIEXPORT
 jint JNICALL Java_org_servalarch_serval_TranslatorService_runTranslator(JNIEnv *env, 
                                                                         jobject obj, jint port, jboolean xtranslate)
 {
-        return run_translator(AF_INET, (int)port, (int)xtranslate, 1);
+        return run_translator((int)port, (int)xtranslate, 1);
 }
 
 JNIEXPORT 
