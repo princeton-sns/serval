@@ -76,7 +76,7 @@ static inline void __delay_queue_purge_sock(struct sock *sk)
         
         list_for_each_entry_safe(entry, tmp, &delay_queue, lh) {                
                 if (sk == NULL || (sk == entry->sk)) {
-                        list_del(&entry->lh);
+                        list_del_init(&entry->lh);
                         queue_total--;
                         kfree_skb(entry->skb);
                         delay_entry_free(entry);

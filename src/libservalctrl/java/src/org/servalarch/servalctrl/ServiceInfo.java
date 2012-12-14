@@ -1,3 +1,4 @@
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.servalctrl;
 
 import java.net.InetAddress;
@@ -13,9 +14,9 @@ public class ServiceInfo {
 	long weight;
 	long idleTimeout;
 	long hardTimeout;
-	
-	public ServiceInfo(ServiceID id, int prefixBits, int flags, 
-			InetAddress addr, long ifindex, long priority, long weight, 
+
+	public ServiceInfo(ServiceID id, int prefixBits, int flags,
+			InetAddress addr, long ifindex, long priority, long weight,
 			long idleTimeout, long hardTimeout) {
 		this.service = id;
 		this.prefixBits = prefixBits;
@@ -27,16 +28,16 @@ public class ServiceInfo {
 		this.idleTimeout = idleTimeout;
 		this.hardTimeout = hardTimeout;
 	}
-	
-	public ServiceInfo(ServiceID id, short prefixBits, 
-			InetAddress addr, long priority, long weight) {
+
+	public ServiceInfo(ServiceID id, short prefixBits, InetAddress addr,
+			long priority, long weight) {
 		this(id, prefixBits, 0, addr, 0, priority, weight, 0, 0);
 	}
-	
+
 	public ServiceInfo(ServiceID id, InetAddress addr) {
 		this(id, 0, 0, addr, 0, 0, 0, 0, 0);
 	}
-	
+
 	public ServiceID getServiceID() {
 		return service;
 	}

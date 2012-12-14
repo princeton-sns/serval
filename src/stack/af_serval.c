@@ -27,6 +27,9 @@
 #include <linux/export.h>
 #endif
 
+extern int __init inet_to_serval_init(void);
+extern void __exit inet_to_serval_fini(void);
+
 #elif defined(OS_USER)
 /* User-level declarations */
 #include <errno.h>
@@ -49,6 +52,7 @@
 #include <delay_queue.h>
 #include <ctrl.h>
 #include <af_serval.h>
+#include <serval_sal.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -60,7 +64,14 @@ extern void __exit delay_queue_fini(void);
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
 
-struct netns_serval net_serval;
+struct netns_serval net_serval = {
+        .sysctl_sal_forward = 0,
+        .sysctl_inet_to_serval = 0,
+        .sysctl_auto_migrate = 1,
+        .sysctl_debug = 0,
+        .sysctl_udp_encap = 0,
+        .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
+};
 
 extern void serval_tcp_init(void);
 
@@ -162,7 +173,7 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         sk->sk_prot->hash(sk);
                
         if (!serval_sock_flag(ssk, SSK_FLAG_HASHED)) {
-                LOG_DBG("Could not bind socket, hashing failed\n");
+                LOG_SSK(sk, "Could not bind socket, hashing failed\n");
                 return -EINVAL;
         }
 
@@ -184,8 +195,8 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 /*
  *	This does both peername and sockname.
  */
-int serval_getname(struct socket *sock, struct sockaddr *uaddr,
-                   int *uaddr_len, int peer)
+static int serval_getname(struct socket *sock, struct sockaddr *uaddr,
+                          int *uaddr_len, int peer)
 {
 	struct sock *sk		= sock->sk;
 	struct inet_sock *inet	= inet_sk(sk);
@@ -203,8 +214,8 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
                 sizeof(struct sockaddr_in);
 	
         if (peer) {
-		if ((((1 << sk->sk_state) & (SERVALF_CLOSED | 
-                                             SERVALF_REQUEST)) &&
+		if ((((1 << sk->sk_state) & (SALF_CLOSED | 
+                                             SALF_REQUEST)) &&
 		     peer == 1))
 			return -ENOTCONN;
                 
@@ -284,29 +295,9 @@ int serval_getname(struct socket *sock, struct sockaddr *uaddr,
 	return 0;
 }
 
-int serval_getsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, int __user *optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-
-	return sk->sk_prot->getsockopt(sk, level, optname, optval, optlen);
-}
-
-int serval_setsockopt(struct socket *sock, int level, int optname,
-                      char __user *optval, unsigned int optlen)
-{
-	struct sock *sk = sock->sk;
-
-        LOG_DBG("level=%d optname=%d\n", level, optname);
-	
-        return sk->sk_prot->setsockopt(sk, level, optname, optval, optlen);
-}
-
 static int serval_listen_start(struct sock *sk, int backlog)
 {
-        serval_sock_set_state(sk, SERVAL_LISTEN);
+        serval_sock_set_state(sk, SAL_LISTEN);
         sk->sk_ack_backlog = 0;
  
         return 0;
@@ -315,6 +306,8 @@ static int serval_listen_start(struct sock *sk, int backlog)
 static int serval_listen_stop(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+
+        serval_sock_delete_keepalive_timer(sk);
 
         /* Destroy queue of sockets that haven't completed three-way
          * handshake */
@@ -329,7 +322,7 @@ static int serval_listen_stop(struct sock *sk)
                 
                 list_del(&srsk->lh);
 
-                LOG_DBG("deleting SYN queued request socket\n");
+                LOG_SSK(sk, "deleting SYN queued request socket\n");
 
                 reqsk_free(&srsk->rsk.req);
                 sk->sk_ack_backlog--;
@@ -402,15 +395,10 @@ static int serval_listen(struct socket *sock, int backlog)
         }
 
         if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND) &&
-            serval_autobind(sk) < 0)
-		return -EAGAIN;
-        /*
-	if (!serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND)) {
-                LOG_ERR("socket not BOUND\n");
-                err = -EDESTADDRREQ;
+            serval_autobind(sk) < 0) {
+                err =-EAGAIN;
                 goto out;
         }
-        */
 
         err = serval_listen_start(sk, backlog);
 
@@ -468,7 +456,7 @@ static int serval_wait_for_connect(struct sock *sk, long timeo)
 		if (!list_empty(&ssk->accept_queue))
 			break;
 		err = -EINVAL;
-		if (sk->sk_state != SERVAL_LISTEN)
+		if (sk->sk_state != SAL_LISTEN)
 			break;
 		err = sock_intr_errno(timeo);
 		if (signal_pending(current))
@@ -481,8 +469,9 @@ static int serval_wait_for_connect(struct sock *sk, long timeo)
 	return err;
 }
 
-static int serval_accept(struct socket *sock, struct socket *newsock,
-                           int flags)
+static int serval_accept(struct socket *sock, 
+                         struct socket *newsock,
+                         int flags)
 {
 	struct sock *sk = sock->sk, *nsk;
         struct serval_sock *ssk = serval_sk(sk);
@@ -490,7 +479,7 @@ static int serval_accept(struct socket *sock, struct socket *newsock,
 
 	lock_sock(sk);
 
-	if (sk->sk_state != SERVAL_LISTEN) {
+	if (sk->sk_state != SAL_LISTEN) {
 		err = -EBADFD;
 		goto out;
 	}
@@ -547,7 +536,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 	case SS_UNCONNECTED:
 		err = -EISCONN;
 
-		if (sk->sk_state == SERVAL_LISTEN)
+		if (sk->sk_state == SAL_LISTEN)
 			goto out;
 
                 /*
@@ -558,14 +547,14 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 if (serval_sock_flag(serval_sk(sk), SSK_FLAG_BOUND))
                         sk->sk_prot->unhash(sk);
 
-                serval_sock_set_state(sk, SERVAL_REQUEST);
+                serval_sock_set_state(sk, SAL_REQUEST);
 
                 sk->sk_prot->hash(sk);
                 
                 err = sk->sk_prot->connect(sk, addr, alen);
 
 		if (err < 0) {
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
+                        serval_sock_set_state(sk, SAL_CLOSED);
 			goto out;
                 }
 		sock->state = SS_CONNECTING;
@@ -580,9 +569,9 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
                 
         timeo = sock_sndtimeo(sk, nonblock);
 
-        if ((1 << sk->sk_state) & (SERVALF_REQUEST | SERVALF_RESPOND)) {
+        if ((1 << sk->sk_state) & (SALF_REQUEST | SALF_RESPOND)) {
                 /* Error code is set above */
-                LOG_DBG("Waiting for connect, timeo=%ld\n", timeo);
+                LOG_SSK(sk, "Waiting for connect, timeo=%ld\n", timeo);
 
                 if (!timeo)
                         goto out;
@@ -591,9 +580,9 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
                 if (err) {
                         if (err == -ERESTARTSYS) {
-                                LOG_DBG("sk_stream_wait_connect interrupted\n");
+                                LOG_SSK(sk, "sk_stream_wait_connect interrupted\n");
                         } else {
-                                LOG_DBG("sk_stream_wait_connect err=%d\n",
+                                LOG_SSK(sk, "sk_stream_wait_connect err=%d\n",
                                         err);
                         }
                         goto out;
@@ -607,7 +596,7 @@ static int serval_connect(struct socket *sock, struct sockaddr *addr,
 
         /* We must be in SERVAL_REQUEST or later state. All those
            states are valid "connected" states, except for CLOSED. */
-        if (sk->sk_state == SERVAL_CLOSED)
+        if (sk->sk_state == SAL_CLOSED)
                 goto sock_error;
 
         sock->state = SS_CONNECTED;
@@ -625,7 +614,7 @@ sock_error:
 }
 
 static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg, size_t size)
+                          struct msghdr *msg, size_t size)
 {
 	struct sock *sk = sock->sk;
         int err;
@@ -644,8 +633,7 @@ static int serval_sendmsg(struct kiocb *iocb, struct socket *sock,
 }
 
 static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
-                            struct msghdr *msg,
-                            size_t size, int flags)
+                          struct msghdr *msg, size_t size, int flags)
 {
 	struct sock *sk = sock->sk;
 	int addr_len = 0;
@@ -707,7 +695,7 @@ static int serval_shutdown(struct socket *sock, int how)
 	}
 
 	switch (sk->sk_state) {
-	case SERVAL_CLOSED:
+	case SAL_CLOSED:
 		err = -ENOTCONN;
 		/* Hack to wake up other listeners, who can poll for
 		   POLLHUP, even on eg. unconnected UDP sockets -- RR */
@@ -721,11 +709,11 @@ static int serval_shutdown(struct socket *sock, int how)
 	 * close() in multithreaded environment. It is _not_ a good idea,
 	 * but we have no choice until close() is repaired at VFS level.
 	 */
-	case SERVAL_LISTEN:
+	case SAL_LISTEN:
 		if (!(how & RCV_SHUTDOWN))
 			break;
 		/* Fall through */
-	case SERVAL_REQUEST:
+	case SAL_REQUEST:
 		err = sk->sk_prot->disconnect(sk, O_NONBLOCK);
 		sock->state = err ? SS_DISCONNECTING : SS_UNCONNECTED;
 		break;
@@ -744,13 +732,11 @@ int serval_release(struct socket *sock)
         int err = 0;
         struct sock *sk = sock->sk;
 
-        LOG_DBG("\n");
-
 	if (sk) {
                 int state;
                 long timeout = 0;
 
-                serval_shutdown(sock, 2);
+                LOG_SSK(sk, "\n");
 
 		if (sock_flag(sk, SOCK_LINGER) && 0
                     /*!(current->flags & PF_EXITING) */)
@@ -761,11 +747,11 @@ int serval_release(struct socket *sock)
                 lock_sock(sk);
 
                 sk->sk_shutdown = SHUTDOWN_MASK;
-
-                if (sk->sk_state == SERVAL_LISTEN) {
+                
+                if (sk->sk_state == SAL_LISTEN) {
                         serval_listen_stop(sk);
-                        serval_sock_set_state(sk, SERVAL_CLOSED);
-                } else {
+                        serval_sock_set_state(sk, SAL_CLOSED);
+                } else if (sk->sk_state != SAL_CLOSED) {
                         /* the protocol specific function called here
                          * should not lock sock */
                         sk->sk_prot->close(sk, timeout);
@@ -793,13 +779,12 @@ int serval_release(struct socket *sock)
                 bh_lock_sock(sk);
 
                 /* Have we already been destroyed by a softirq or backlog? */
-                if (state != SERVAL_CLOSED &&
-                    sk->sk_state == SERVAL_CLOSED)
+                if (state != SAL_CLOSED &&
+                    sk->sk_state == SAL_CLOSED)
                         goto out;
 
                 /* Other cleanup stuff goes here */
-
-                if (sk->sk_state == SERVAL_CLOSED)
+                if (sk->sk_state == SAL_CLOSED)
                         serval_sock_destroy(sk);
         out:
                 bh_unlock_sock(sk);
@@ -839,7 +824,7 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 #else
         poll_wait(file, sk->sk_sleep, wait);
 #endif
-        if (sk->sk_state == SERVAL_LISTEN) {
+        if (sk->sk_state == SAL_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
                         (POLLIN | POLLRDNORM);
@@ -851,12 +836,12 @@ static unsigned int serval_poll(struct file *file, struct socket *sock,
 		mask = POLLERR;
 
 	if (sk->sk_shutdown == SHUTDOWN_MASK ||
-            sk->sk_state == SERVAL_CLOSED)
+            sk->sk_state == SAL_CLOSED)
 		mask |= POLLHUP;
 	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
 
-	if ((1 << sk->sk_state) & ~(SERVALF_REQUEST | SERVALF_RESPOND)) {
+	if ((1 << sk->sk_state) & ~(SALF_REQUEST | SALF_RESPOND)) {
                 if (atomic_read(&sk->sk_rmem_alloc) > 0)
 			mask |= POLLIN | POLLRDNORM;
 
@@ -889,14 +874,10 @@ static int serval_ioctl(struct socket *sock, unsigned int cmd,
 	struct sock *sk = sock->sk;
 	int ret = 0;
 
-        lock_sock(sk);
-
         if (sk->sk_prot->ioctl) 
                 ret = sk->sk_prot->ioctl(sk, cmd, arg);
         else
                 ret = -ENOIOCTLCMD;
-
-        release_sock(sk);
 
 	return ret;
 }
@@ -918,7 +899,7 @@ extern ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
 #endif /* ENABLE_SPLICE */
 #endif /* OS_LINUX_KERNEL */
 
-static const struct proto_ops serval_stream_ops = {
+const struct proto_ops serval_stream_ops = {
 	.family =	PF_SERVAL,
 	.owner =	THIS_MODULE,
 	.release =	serval_release,
@@ -930,8 +911,8 @@ static const struct proto_ops serval_stream_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_tcp_poll,
@@ -956,8 +937,8 @@ static const struct proto_ops serval_dgram_ops = {
 	.shutdown =	serval_shutdown,
 	.sendmsg =	serval_sendmsg,
 	.recvmsg =	serval_recvmsg,
-	.setsockopt =	serval_setsockopt,
-	.getsockopt =	serval_getsockopt,
+	.setsockopt =	sock_common_setsockopt,
+	.getsockopt =	sock_common_getsockopt,
 #if defined(OS_LINUX_KERNEL)
 	.socketpair =	sock_no_socketpair,
 	.poll =	        serval_poll,
@@ -969,7 +950,6 @@ static const struct proto_ops serval_dgram_ops = {
 #endif
 #endif
 };
-
 
 /**
    Create a new Serval socket.
@@ -1100,22 +1080,35 @@ int __init serval_init(void)
                 goto fail_sock_register;
         }
 
+#if defined(OS_LINUX_KERNEL)
+        err = inet_to_serval_init();
+
+        if (err != 0) {
+                LOG_CRIT("Cannot initialize INET to SERVAL support\n");
+                goto fail_inet_to_serval;
+        }
+#endif
         serval_tcp_init();
         
         delay_queue_init();
-out:
+        net_serval.sysctl_auto_migrate = 1;
+ out:
         return err;
-fail_sock_register:
+#if defined(OS_LINUX_KERNEL)
+ fail_inet_to_serval:
+        sock_unregister(PF_SERVAL);
+#endif
+ fail_sock_register:
 	proto_unregister(&serval_tcp_proto);     
-fail_tcp_proto:
+ fail_tcp_proto:
 	proto_unregister(&serval_udp_proto);     
-fail_udp_proto:
+ fail_udp_proto:
         packet_fini();
-fail_packet:
+ fail_packet:
         serval_sock_tables_fini();
-fail_sock:
+ fail_sock:
         service_fini();
-fail_service:
+ fail_service:
         goto out;      
 }
 
@@ -1125,6 +1118,9 @@ fail_service:
 
 void __exit serval_fini(void)
 {
+#if defined(OS_LINUX_KERNEL)
+        inet_to_serval_fini();
+#endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);

@@ -1,3 +1,4 @@
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.serval;
 
 import java.io.BufferedInputStream;
@@ -5,6 +6,7 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -13,7 +15,10 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.servalarch.net.ServiceID;
 import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
@@ -33,165 +38,196 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.Toast;
 
-
 public class ServalActivity extends FragmentActivity {
 
 	private static final int DEFAULT_IDX = 2;
 
 	private Button moduleStatusButton;
 	private Button udpEncapButton;
-	private File module = null;
-	
 	private SharedPreferences prefs;
 	private PagerAdapter pagerAdapter;
 
 	private ServalFragment servalFrag;
-	
+	private File filesDir;
+
 	/** Called when the activity is first created. */
 	@Override
-	public void onCreate(Bundle savedInstanceState)
-	{
+	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-		prefs = getSharedPreferences("serval", 0);
-		setContentView(R.layout.main);
-		List<Fragment> fragments = new Vector<Fragment>();
-		fragments.add(Fragment.instantiate(this, FlowTableFragment.class.getName()));
-		fragments.add(Fragment.instantiate(this, ServiceTableFragment.class.getName()));
-		servalFrag = (ServalFragment) Fragment.instantiate(this, ServalFragment.class.getName());
-		fragments.add(servalFrag);
-		fragments.add(Fragment.instantiate(this, TranslatorFragment.class.getName()));
-		this.pagerAdapter = new PagerAdapter(super.getSupportFragmentManager(), fragments);
-		ViewPager pager = (ViewPager) super.findViewById(R.id.pager);
-		pager.setAdapter(this.pagerAdapter);
-		pager.setCurrentItem(DEFAULT_IDX);
+		filesDir = getExternalFilesDir(null);
 
-		File filesDir = getExternalFilesDir(null);
 		try {
 			filesDir.createNewFile();
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		module = new File(filesDir, "serval.ko");
-		
+
+		String[] modules = { "serval", "dummy" };
+		extractKernelModules(modules);
+
+		prefs = getSharedPreferences("serval", 0);
+		setContentView(R.layout.main);
+		List<Fragment> fragments = new Vector<Fragment>();
+		fragments.add(Fragment.instantiate(this,
+				FlowTableFragment.class.getName()));
+		fragments.add(Fragment.instantiate(this,
+				ServiceTableFragment.class.getName()));
+		servalFrag = (ServalFragment) Fragment.instantiate(this,
+				ServalFragment.class.getName());
+		fragments.add(servalFrag);
+		fragments.add(Fragment.instantiate(this,
+				TranslatorFragment.class.getName()));
+		this.pagerAdapter = new PagerAdapter(super.getSupportFragmentManager(),
+				fragments);
+		ViewPager pager = (ViewPager) super.findViewById(R.id.pager);
+		pager.setAdapter(this.pagerAdapter);
+		pager.setCurrentItem(DEFAULT_IDX);
+
 		this.moduleStatusButton = (Button) findViewById(R.id.moduleStatusToggle);
 		this.moduleStatusButton.setOnClickListener(new OnClickListener() {
-			
+
 			@Override
 			public void onClick(View v) {
-				boolean isLoaded = isServalModuleLoaded();
+				boolean isLoaded = isModuleLoaded("serval");
 				boolean addPersistent = !isLoaded;
-				String cmd;
+				boolean result = false;
+
+				Log.d("Serval", "Clicked moduleStatusButton");
 
 				if (!moduleStatusButton.isSelected()) {
 					if (isLoaded) {
 						setModuleLoaded(isLoaded);
 						return;
 					}
+					result = loadKernelModule("serval");
 
-					cmd = "insmod " + module.getAbsolutePath();
-					
-				} 
-				else {
+					if (!result) {
+						Toast t = Toast.makeText(getApplicationContext(),
+								"Failed to load the Serval kernel module.",
+								Toast.LENGTH_SHORT);
+						t.show();
+					}
+				} else {
+					AppHostCtrl.fini();
+
 					if (!isLoaded) {
 						setModuleLoaded(isLoaded);
 						return;
 					}
-					cmd = "rmmod serval";
-					
-
-					AppHostCtrl.fini();					
+					result = unloadKernelModule("serval");
 				}
 
-				if (!executeSuCommand(cmd)) {
-					Toast t = Toast.makeText(getApplicationContext(), cmd + " failed!", 
-							Toast.LENGTH_SHORT);
-					t.show();
-				}
-
-				if (!isServalModuleLoaded()) {
+				if (!isModuleLoaded("serval")) {
 					setModuleLoaded(false);
 					setUdpEncap(false);
-				} 
-				else {
+				} else {
 					setModuleLoaded(true);
-					
+
 					AppHostCtrl.init(cbs);
 					/* insert persistent rules */
 					if (addPersistent) {
 						Map<String, ?> idMap = prefs.getAll();
-		        		for (String srvID : idMap.keySet()) {
-		        			if (!(idMap.get(srvID) instanceof String))
-		        				continue;
-		        			String addr = (String) idMap.get(srvID);
-		        			AppHostCtrl.performOp(getApplicationContext(), srvID, addr, AppHostCtrl.SERVICE_ADD);
-		        		}
+						for (String srvID : idMap.keySet()) {
+							if (!(idMap.get(srvID) instanceof String))
+								continue;
+							String addr = (String) idMap.get(srvID);
+							AppHostCtrl.performOp(getApplicationContext(),
+									srvID, addr, AppHostCtrl.SERVICE_ADD);
+						}
 					}
 				}
 			}
 
 		});
-		
+
 		this.udpEncapButton = (Button) findViewById(R.id.udpEncapToggle);
 		this.udpEncapButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
 				String cmd;
-				
-				if (!isServalModuleLoaded()) {
+
+				if (!isModuleLoaded("serval")) {
 					setUdpEncap(false);
 					return;
 				}
-				
+
 				if (!udpEncapButton.isSelected())
-					 cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
+					cmd = "echo 1 > /proc/sys/net/serval/udp_encap";
 				else
-					 cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
+					cmd = "echo 0 > /proc/sys/net/serval/udp_encap";
 
 				if (!executeSuCommand(cmd)) {
-					Toast t = Toast.makeText(getApplicationContext(), cmd + " failed!", 
-							Toast.LENGTH_SHORT);
+					Toast t = Toast.makeText(getApplicationContext(), cmd
+							+ " failed!", Toast.LENGTH_SHORT);
 					t.show();
 				}
-				setUdpEncap(isUdpEncapEnabled());
+				setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 			}
 		});
 		
+		Log.d("Serval", "onCreate finished");
 	}
-		
-	boolean extractKernelModule(final File module, String name) {
-		if (module.exists())
-			return true;
 
-		try {
-			BufferedInputStream in = new BufferedInputStream(getAssets().open(name));
+	void extractKernelModules(final String[] modules) {
+		new Thread(new Runnable() {
+			@Override
+			public void run() {
+				for (String name : modules) {
+                    String assetsName = name + "-" + getFormattedKernelVersion() + ".ko";
+					final File module = new File(filesDir, name + ".ko");
 
-			byte[] buffer = new byte[1024];
-			int n, tot = 0;
+					Log.d("Serval", "extracting module " + assetsName + " to "
+							+ module.getAbsolutePath());
 
-			FileOutputStream os = new FileOutputStream(module);
-			BufferedOutputStream out = new BufferedOutputStream(os);
+					if (module.exists())
+						continue;
 
-			while ((n = in.read(buffer, 0, 1024)) != -1) {
-				out.write(buffer, 0, n);
-				tot += n;
+					try {
+						BufferedInputStream in = new BufferedInputStream(
+								getAssets().open(assetsName));
+
+						byte[] buffer = new byte[1024];
+						int n, tot = 0;
+
+						FileOutputStream os = new FileOutputStream(module);
+						BufferedOutputStream out = new BufferedOutputStream(os);
+
+						while ((n = in.read(buffer, 0, 1024)) != -1) {
+							out.write(buffer, 0, n);
+							tot += n;
+						}
+						out.close();
+						in.close();
+
+						Log.d("Serval",
+								"Wrote " + tot + " bytes to "
+										+ module.getAbsolutePath());
+
+					} catch (IOException e) {
+						Log.d("Serval", "Could not extract " + assetsName);
+						// e.printStackTrace();
+					}
+				}
 			}
-			out.close();
-			in.close();
-			
-			Log.d("Serval", "Wrote " + tot + " bytes to " + module.getAbsolutePath());
-			return true;
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		}).start();
+	}
 
-		return false;
+	public boolean loadKernelModule(final String name) {
+		return executeSuCommand("insmod "
+				+ new File(filesDir, name + ".ko").getAbsolutePath());
+	}
+
+	public boolean unloadKernelModule(final String name) {
+		return executeSuCommand("rmmod "
+				+ new File(filesDir, name).getAbsolutePath());
 	}
 	
 	boolean executeSuCommand(final String cmd) {
+		Log.d("Serval", "executing su command: " + cmd);
 		return executeSuCommand(cmd, false);
 	}
 
-	boolean executeSuCommand(final String cmd, boolean showToast) {
+	public boolean executeSuCommand(final String cmd, boolean showToast) {
 		try {
 			Process shell;
 			int err;
@@ -217,47 +253,53 @@ public class ServalActivity extends FragmentActivity {
 
 		Log.d("Serval", cmd + " failed!");
 		if (showToast)
-			Toast.makeText(getApplicationContext(), "'" + cmd +"' failed!", Toast.LENGTH_SHORT).show();
+			Toast.makeText(getApplicationContext(), "'" + cmd + "' failed!",
+					Toast.LENGTH_SHORT).show();
 
 		return false;
 	}
-	
-	private boolean isUdpEncapEnabled() {
-		boolean encapIsEnabled = false;
-		File encap = new File("/proc/sys/net/serval/udp_encap");
+
+	static public boolean readBooleanProcEntry(String entry) {
+		boolean isEnabled = false;
+		File encap = new File(entry);
 
 		if (encap.exists() && encap.canRead()) {
 			try {
-				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(encap)));
+				BufferedReader in = new BufferedReader(new InputStreamReader(
+						new FileInputStream(encap)));
 
 				String line = in.readLine();
 
 				if (line.contains("1"))
-					encapIsEnabled = true;
+					isEnabled = true;
+				in.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		} else {
-			Log.d("Serval", "could not open /proc/sys/net/serval/udp_encap");
+			Log.d("Serval", "could not open " + entry);
 		}
-		return encapIsEnabled;
+		return isEnabled;
 	}
-	
-	private boolean isServalModuleLoaded() {
+
+	static private boolean isModuleLoaded(String module) {
 		File procModules = new File("/proc/modules");
 
 		if (procModules.exists() && procModules.canRead()) {
 			try {
-				BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(procModules)));
+				BufferedReader in = new BufferedReader(new InputStreamReader(
+						new FileInputStream(procModules)));
 
-				String line = null; 
+				String line = null;
 				while ((line = in.readLine()) != null) {
-					if (line.contains("serval")) {
+					if (line.contains(module)) {
+						in.close();
 						return true;
 					}
 				}
+				in.close();
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
@@ -268,19 +310,69 @@ public class ServalActivity extends FragmentActivity {
 		}
 		return false;
 	}
-	
+
 	public void setModuleLoaded(boolean loaded) {
 		CharSequence text = Html.fromHtml(getString(loaded ?
 				R.string.module_loaded : R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
+		if (servalFrag.autoMigrationButton != null)
+			servalFrag.autoMigrationButton.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/auto_migrate"));
 	}
-	
+
 	public void setUdpEncap(boolean on) {
-		CharSequence text = Html.fromHtml(getString(on ? R.string.udp_on : R.string.udp_off));
+		CharSequence text = Html.fromHtml(getString(on ? R.string.udp_on
+				: R.string.udp_off));
 		udpEncapButton.setSelected(on);
 		udpEncapButton.setText(text);
 	}
+
+    /*
+      This function is taken from the Android Open Source Project.
+      packages/apps/Settings/src/com/android/settings/DeviceInfoSettings.java
+    */
+    static private String getFormattedKernelVersion() {
+        String procVersionStr;
+
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader("/proc/version"), 256);
+            try {
+                procVersionStr = reader.readLine();
+            } finally {
+                reader.close();
+            }
+
+            final String PROC_VERSION_REGEX =
+                "\\w+\\s+" + /* ignore: Linux */
+                "\\w+\\s+" + /* ignore: version */
+                "([^\\s]+)\\s+" + /* group 1: 2.6.22-omap1 */
+                "\\(([^\\s@]+(?:@[^\\s.]+)?)[^)]*\\)\\s+" + /* group 2: (xxxxxx@xxxxx.constant) */
+                "\\((?:[^(]*\\([^)]*\\))?[^)]*\\)\\s+" + /* ignore: (gcc ..) */
+                "([^\\s]+)\\s+" + /* group 3: #26 */
+                "(?:PREEMPT\\s+)?" + /* ignore: PREEMPT (optional) */
+                "(.+)"; /* group 4: date */
+
+            Pattern p = Pattern.compile(PROC_VERSION_REGEX);
+            Matcher m = p.matcher(procVersionStr);
+
+            if (!m.matches()) {
+                Log.e("Serval", "Regex did not match on /proc/version: " + procVersionStr);
+                return "Unavailable";
+            } else if (m.groupCount() < 4) {
+                Log.e("Serval", "Regex match on /proc/version only returned " + m.groupCount()
+                      + " groups");
+                return "Unavailable";
+            } else {
+                return (new StringBuilder(m.group(1))).toString();
+            }
+        } catch (IOException e) {
+            Log.e("Serval",
+                  "IO Exception when getting kernel version for Device Info screen",
+                  e);
+
+            return "Unavailable";
+        }
+    }
 
 	@Override
 	public void onBackPressed() {
@@ -298,14 +390,18 @@ public class ServalActivity extends FragmentActivity {
 						msg = "Added service";
 						if (servalFrag != null && servalFrag.servicePerm != null && servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
-							prefs.edit().putString(servalFrag.editServiceText.getText().toString(), 
-									servalFrag.editIpText.getText().toString()).commit();
+							prefs.edit()
+									.putString(
+											servalFrag.editServiceText
+													.getText().toString(),
+											servalFrag.editIpText.getText()
+													.toString()).commit();
 						}
-					}
-					else
-						msg = "Add service failed retval=" + retval + " " + getRetvalString(retval);
-					
-					Toast t = Toast.makeText(getApplicationContext(), msg, 
+					} else
+						msg = "Add service failed retval=" + retval + " "
+								+ getRetvalString(retval);
+
+					Toast t = Toast.makeText(getApplicationContext(), msg,
 							Toast.LENGTH_SHORT);
 					t.setGravity(Gravity.CENTER, 0, 0);
 					t.show();
@@ -314,19 +410,22 @@ public class ServalActivity extends FragmentActivity {
 		}
 
 		@Override
-		public void onServiceRemove(long xid, final int retval, ServiceInfoStat[] info) {
+		public void onServiceRemove(long xid, final int retval,
+				ServiceInfoStat[] info) {
 			runOnUiThread(new Runnable() {
 				@Override
 				public void run() {
 					String msg;
-					if (retval == RETVAL_OK) { 
+					if (retval == RETVAL_OK) {
 						msg = "Removed service";
-						prefs.edit().remove(servalFrag.editServiceText.getText().toString()).commit();
-					}
-					else
-						msg = "Remove service failed retval=" + retval + " " + getRetvalString(retval);
-					
-					Toast t = Toast.makeText(getApplicationContext(), msg, 
+						prefs.edit()
+								.remove(servalFrag.editServiceText.getText()
+										.toString()).commit();
+					} else
+						msg = "Remove service failed retval=" + retval + " "
+								+ getRetvalString(retval);
+
+					Toast t = Toast.makeText(getApplicationContext(), msg,
 							Toast.LENGTH_LONG);
 					t.setGravity(Gravity.CENTER, 0, 0);
 					t.show();
@@ -337,41 +436,40 @@ public class ServalActivity extends FragmentActivity {
 		@Override
 		public void onServiceGet(long xid, final int retval, ServiceInfo[] info) {
 			for (int i = 0; i < info.length; i++) {
-				Log.d("Serval", "RETRIEVED: Service " + info[i].getServiceID() + 
-						"address " + info[i].getAddress());
+				Log.d("Serval", "RETRIEVED: Service " + info[i].getServiceID()
+						+ "address " + info[i].getAddress());
 			}
 		}
+		
+		@Override
+		public void onServiceDelayed(long xid, long pktId, ServiceID service) {
+			Log.d("Serval", "Delayed resolution for pkt " + pktId + " service " + service);
+		}
 	};
-	
+
 	@Override
 	protected void onStart() {
 		super.onStart();
-
-		Log.d("Serval", "module path is " + module.getAbsolutePath());
-
-		if (!extractKernelModule(module, "serval.ko")) {
-			Log.d("Serval", "Could not extract kernel module");
-		}
-
-		setModuleLoaded(isServalModuleLoaded());
-		setUdpEncap(isUdpEncapEnabled());
+		setModuleLoaded(isModuleLoaded("serval"));
+		setUdpEncap(readBooleanProcEntry("/proc/sys/net/serval/udp_encap"));
 
 		AppHostCtrl.init(cbs);
+		Log.d("Serval", "onStart finished");
 	}
-	
+
 	@Override
 	protected void onStop() {
 		super.onStop();
 		Log.d("Serval", "Stopping Serval host control");
 	}
-	
+
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
 		Log.d("Serval", "Destroying Serval host control");
 		AppHostCtrl.fini();
 	}
-	
+
 	private class PagerAdapter extends FragmentPagerAdapter {
 
 		private List<Fragment> fragments;
@@ -380,19 +478,20 @@ public class ServalActivity extends FragmentActivity {
 		public PagerAdapter(FragmentManager fm, List<Fragment> fragments) {
 			super(fm);
 			this.fragments = fragments;
-			this.titles = ServalActivity.this.getResources().getStringArray(R.array.pager_titles);
+			this.titles = ServalActivity.this.getResources().getStringArray(
+					R.array.pager_titles);
 		}
 
 		@Override
 		public Fragment getItem(int position) {
 			return this.fragments.get(position);
 		}
-		
+
 		@Override
 		public CharSequence getPageTitle(int position) {
 			return titles[position];
 		}
-		
+
 		@Override
 		public int getCount() {
 			return this.fragments.size();

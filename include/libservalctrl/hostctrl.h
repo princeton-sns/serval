@@ -130,6 +130,7 @@ int hostctrl_service_add(struct hostctrl *hc,
                          unsigned int weight,
                          const struct in_addr *ipaddr);
 int hostctrl_service_remove(struct hostctrl *hc,
+                            enum service_rule_type type,
                             const struct service_id *srvid, 
                             unsigned short prefix_bits,
                             const struct in_addr *ipaddr);
@@ -138,6 +139,7 @@ int hostctrl_service_get(struct hostctrl *hc,
                          unsigned short prefix_bits,
                          const struct in_addr *ipaddr);
 int hostctrl_service_modify(struct hostctrl *hc,
+                            enum service_rule_type type,
                             const struct service_id *srvid, 
                             unsigned short prefix_bits,
                             unsigned int priority,

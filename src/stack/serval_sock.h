@@ -38,45 +38,45 @@
 	TCP_MAX_STATES	
  */
 enum {
-        __SERVAL_MIN_STATE = 0,
-        SERVAL_INIT = __SERVAL_MIN_STATE,
-        SERVAL_CONNECTED,
-        SERVAL_REQUEST,
-        SERVAL_RESPOND,
-        SERVAL_FINWAIT1,
-        SERVAL_FINWAIT2,
-        SERVAL_TIMEWAIT,
-        SERVAL_CLOSED,
-        SERVAL_CLOSEWAIT,
-        SERVAL_LASTACK,
-        SERVAL_LISTEN,
-        SERVAL_CLOSING,
-        __SERVAL_MAX_STATE
+        __SAL_MIN_STATE = 0,
+        SAL_INIT = __SAL_MIN_STATE,
+        SAL_CONNECTED,
+        SAL_REQUEST,
+        SAL_RESPOND,
+        SAL_FINWAIT1,
+        SAL_FINWAIT2,
+        SAL_TIMEWAIT,
+        SAL_CLOSED,
+        SAL_CLOSEWAIT,
+        SAL_LASTACK,
+        SAL_LISTEN,
+        SAL_CLOSING,
+        __SAL_MAX_STATE
 };
 
 enum {
-        SERVALF_CONNECTED = (1 << 1),
-        SERVALF_REQUEST   = (1 << 2),
-        SERVALF_RESPOND   = (1 << 3),
-        SERVALF_FINWAIT1  = (1 << 4),
-        SERVALF_FINWAIT2  = (1 << 5),
-        SERVALF_TIMEWAIT  = (1 << 6),
-        SERVALF_CLOSED    = (1 << 7), 
-        SERVALF_CLOSEWAIT = (1 << 8),
-        SERVALF_LASTACK   = (1 << 9),
-        SERVALF_LISTEN    = (1 << 10),
-        SERVALF_CLOSING   = (1 << 11)
+        SALF_CONNECTED = (1 << 1),
+        SALF_REQUEST   = (1 << 2),
+        SALF_RESPOND   = (1 << 3),
+        SALF_FINWAIT1  = (1 << 4),
+        SALF_FINWAIT2  = (1 << 5),
+        SALF_TIMEWAIT  = (1 << 6),
+        SALF_CLOSED    = (1 << 7), 
+        SALF_CLOSEWAIT = (1 << 8),
+        SALF_LASTACK   = (1 << 9),
+        SALF_LISTEN    = (1 << 10),
+        SALF_CLOSING   = (1 << 11)
 };
 
 /**
    Service Access Layer (SAL) socket states used for, e.g., migration.
  */
 enum {
-        SAL_INITIAL = 0,
+        SAL_RSYN_INITIAL = 0,
         SAL_RSYN_SENT,
         SAL_RSYN_RECV,
         SAL_RSYN_SENT_RECV, /* Receive RSYN after having sent RSYN */
-        __SAL_MAX_STATE,
+        __SAL_RSYN_MAX_STATE,
 };
 
 enum serval_sock_flags {
@@ -93,6 +93,10 @@ struct serval_sock_af_ops {
 	int	        (*receive)(struct sock *sk, struct sk_buff *skb);
 	void	        (*send_check)(struct sock *sk, struct sk_buff *skb);
 	int	        (*rebuild_header)(struct sock *sk);
+        int	        (*setsockopt)(struct sock *sk, int level, int optname, 
+                                      char __user *optval, unsigned int optlen);
+	int	        (*getsockopt)(struct sock *sk, int level, int optname, 
+                                      char __user *optval, int __user *optlen);
         int             (*conn_build_syn)(struct sock *sk, struct sk_buff *skb);
         int             (*conn_build_synack)(struct sock *sk,
                                              struct dst_entry *dst,
@@ -116,9 +120,6 @@ struct serval_sock_af_ops {
 	u16	        sockaddr_len;
         int             (*migration_completed)(struct sock *sk);
         int             (*freeze_flow)(struct sock *sk);
-        int             (*send_shutdown)(struct sock *sk);
-        int             (*recv_shutdown)(struct sock *sk);
-        int             (*close_ack)(struct sock *sk, struct sk_buff *skb);
         void            (*done)(struct sock *sk);
 };
 
@@ -126,6 +127,9 @@ struct serval_sock_af_ops {
 struct serval_sock {
 	/* NOTE: sk has to be the first member */
         struct inet_sock        sk;
+        struct sock             *old_sk; /* see linux/inet_to_serval.c
+                                            for how this pointer is
+                                            used. */
 #if defined(OS_USER)
         struct client           *client;
 #endif
@@ -151,8 +155,8 @@ struct serval_sock {
         struct list_head        accept_queue;
 	struct sk_buff_head	ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
-        u8                      local_nonce[SERVAL_NONCE_SIZE];
-        u8                      peer_nonce[SERVAL_NONCE_SIZE];
+        u8                      local_nonce[SAL_NONCE_SIZE];
+        u8                      peer_nonce[SAL_NONCE_SIZE];
         u16                     ext_hdr_len;
         u16                     udp_encap_sport;
         u16                     udp_encap_dport;
@@ -168,6 +172,12 @@ struct serval_sock {
                 u32        wnd;
                 u32        iss;
         } rcv_seq;
+        u32	                ack_rcv_tstamp;	/* timestamp of last received ACK (for keepalives) */
+        u32	                last_rcv_tstamp;       /* timestamp of last received packet */
+	unsigned int		keepalive_time;	  /* time before keep alive takes place */
+	unsigned int		keepalive_intvl;  /* time interval between keep alive probes */
+        u8	                keepalive_probes; /* num of allowed keep alive probes	*/
+        u8                      probes_out;
         u8                      retransmits;
         u8                      backoff;
         u8                      pending;
@@ -183,10 +193,6 @@ struct serval_sock {
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
 };
-
-#define SAL_RTO_MAX	((unsigned)(120*HZ))
-#define SAL_RTO_MIN	((unsigned)(HZ/5))
-#define SAL_TIMEOUT_INIT ((unsigned)(3*HZ))
 
 #define serval_sk(__sk) ((struct serval_sock *)__sk)
 
@@ -235,23 +241,11 @@ struct serval_hslot *serval_hashslot(struct serval_table *table,
 	return &table->hash[serval_hashfn(net, key, keylen, table->mask)];
 }
 
-static inline 
-struct serval_hslot *serval_hashslot_listen(struct serval_table *table,
-                                            struct net *net, 
-                                            void *key,
-                                            size_t keylen)
-{
-	return &table->hash[serval_hashfn(net, key, keylen*8, table->mask)];
-}
-
-void serval_sock_migrate_iface(struct net_device *old_if, 
-                               struct net_device *new_if);
-void serval_sock_migrate_flow(struct flow_id *old_f,
-                              struct net_device *new_if);
-void serval_sock_migrate_service(struct service_id *old_s,
-                                 struct net_device *new_if);
 struct flow_info *serval_sock_stats_flow(struct flow_id *flow, 
                             struct ctrlmsg_stats_response *resp, int idx);
+void serval_sock_migrate_iface(int old_dev, int new_dev);
+void serval_sock_migrate_flow(struct flow_id *old_f, int new_dev);
+void serval_sock_migrate_service(struct service_id *old_s, int new_if);
 void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
@@ -281,8 +275,6 @@ static inline void serval_sock_clear_xmit_timer(struct sock *sk)
 {
 	struct serval_sock *ssk = serval_sk(sk);
         ssk->pending = 0;
-        ssk->retransmits = 0;
-        ssk->backoff = 0;
         sk_stop_timer(sk, &ssk->retransmit_timer);
 }
 
@@ -300,6 +292,9 @@ static inline void serval_sock_reset_xmit_timer(struct sock *sk,
         sk_reset_timer(sk, &ssk->retransmit_timer, ssk->timeout);
 }
 
+void serval_sock_delete_keepalive_timer(struct sock *sk);
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len);
+
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 
                              gfp_t priority, int protocol, 
@@ -308,12 +303,21 @@ void serval_sock_init(struct sock *sk);
 void serval_sock_destroy(struct sock *sk);
 void serval_sock_done(struct sock *sk);
 
-void serval_sock_set_dev(struct sock *sk, struct net_device *dev);
-void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev);
+static inline void serval_sock_set_dev(struct sock *sk, int ifindex)
+{
+        sk->sk_bound_dev_if = ifindex;
+}
+
+static inline void serval_sock_set_mig_dev(struct sock *sk, int ifindex)
+{
+        serval_sk(sk)->mig_dev_if = ifindex;
+}
+
 const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen);
 const char *serval_sock_state_str(struct sock *sk);
 const char *serval_state_str(unsigned int state);
 int serval_sock_set_state(struct sock *sk, unsigned int state);
+const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen);
 
 const char *serval_sock_sal_state_str(struct sock *sk);
 const char *serval_sal_state_str(unsigned int state);
@@ -343,9 +347,6 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 	skb->sk = sk;
 	skb->destructor = serval_sock_rfree;
 }
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req);
 
 int serval_sock_rebuild_header(struct sock *sk);
 

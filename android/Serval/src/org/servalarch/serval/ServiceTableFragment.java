@@ -1,3 +1,4 @@
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.serval;
 
 import java.io.BufferedReader;
@@ -74,6 +75,7 @@ public class ServiceTableFragment extends Fragment {
 					while ((line = in.readLine()) != null) {
 						builder.append(line + "\n");
 					}
+					in.close();
 				} catch (Exception e) {
 					return getString(R.string.no_service_table);
 				}

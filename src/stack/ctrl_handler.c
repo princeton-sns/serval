@@ -76,10 +76,12 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                 struct service_info *entry = &cmr->service[i];
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
 
-                dev = resolve_dev(entry);
-                
-                if (!dev)
-                        continue;
+                if (entry->type == SERVICE_RULE_FORWARD) {
+                        dev = resolve_dev(entry);
+                        
+                        if (!dev)
+                                continue;
+                }
 
                 if (entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
@@ -105,8 +107,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                                   &entry->address, 
                                   sizeof(entry->address),
                                   make_target(dev), GFP_KERNEL);
-
-                dev_put(dev);
+                if (dev)
+                        dev_put(dev);
 
                 if (err > 0) {
                         if (index < i) {
@@ -187,7 +189,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                 memset(&tstat, 0, sizeof(tstat));
                 
                 err = service_entry_remove_target(se,
-                                                  SERVICE_RULE_FORWARD, 
+                                                  entry->type,
                                                   &entry->address, 
                                                   sizeof(entry->address), 
                                                   &tstat);
@@ -205,8 +207,11 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                                        sizeof(*entry));
                         }
                         index++;
+                } else if (err == 0) {
+                        LOG_ERR("Could not find target for service %s\n", 
+                                service_id_to_str(&entry->srvid));
                 } else {
-                        LOG_ERR("Could not remove service %s: %d\n", 
+                        LOG_ERR("Could not remove service %s - err %d\n", 
                                 service_id_to_str(&entry->srvid), 
                                 err);
                 }
@@ -461,18 +466,19 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm, int peer)
                         LOG_ERR("No old interface %s\n", cmm->from_i);
                         ret = -1;
                 } else {
-                        serval_sock_migrate_iface(old_dev, new_dev);
+                        serval_sock_migrate_iface(old_dev->ifindex, 
+                                                  new_dev->ifindex);
                         dev_put(old_dev);
                 }
                 break;
         case CTRL_MIG_FLOW:
                 LOG_DBG("migrate flow %s to iface %s\n", 
                         flow_id_to_str(&cmm->from_f), cmm->to_i);
-                serval_sock_migrate_flow(&cmm->from_f, new_dev);
+                serval_sock_migrate_flow(&cmm->from_f, new_dev->ifindex);
                 break;
         case CTRL_MIG_SERVICE:
                 LOG_DBG("migrate service to iface %s\n", cmm->to_i);
-                serval_sock_migrate_service(&cmm->from_s, new_dev);
+                serval_sock_migrate_service(&cmm->from_s, new_dev->ifindex);
                 break;
         }
 

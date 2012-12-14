@@ -1,7 +1,12 @@
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.serval;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
+import java.io.FileInputStream;
+import java.io.BufferedReader;
 
 import android.app.Activity;
 import android.app.ActivityManager;
@@ -85,10 +90,10 @@ public class TranslatorFragment extends Fragment {
 	
 	private Button translatorButton;
 	private ToggleButton transHttpButton, transAllButton;
-	
 	private View view;
-	
-	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
+
+	public View onCreateView(LayoutInflater inflater, ViewGroup container,
+			Bundle savedInstanceState) {
 		super.onCreateView(inflater, container, savedInstanceState);
 		view = inflater.inflate(R.layout.frag_translator, container, false);
 
@@ -97,139 +102,180 @@ public class TranslatorFragment extends Fragment {
 			@Override
 			public void onClick(View view) {
 				if (!view.isSelected()) {
-					String[] rules = transAllButton.isChecked() ? ADD_ALL_RULES : ADD_HTTP_RULES;
-					if (executeRules(rules)) {
-						getActivity().startService(new Intent(getActivity(), TranslatorService.class));
-						setTranslatorButton(true);
+					ServalActivity act = (ServalActivity) getActivity();
+					boolean success = testDummyIface();
+
+					if (!success) {
+						// No dummy interface, try to load module
+						act.loadKernelModule("dummy");
+						Log.d("Serval", "dummy load: " + success);
+						success = testDummyIface();
 					}
-				} 
-				else {
+
+					if (success) {
+						String[] rules = transAllButton.isChecked() ? ADD_ALL_RULES
+								: ADD_HTTP_RULES;
+						if (executeRules(rules)) {
+							getActivity().startService(
+									new Intent(getActivity(),
+											TranslatorService.class));
+							setTranslatorButton(true);
+						}
+					} else {
+						((TextView) getView().findViewById(R.id.error_msg))
+								.setText(getString(R.string.no_dummy));
+						translatorButton.setClickable(false);
+						AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
+						anim.setFillAfter(true);
+						translatorButton.startAnimation(anim);
+					}
+				} else {
 					setTranslatorButton(false);
-					getActivity().stopService(new Intent(getActivity(), TranslatorService.class));
+					getActivity().stopService(
+							new Intent(getActivity(), TranslatorService.class));
 					if (transAllButton.isChecked())
 						executeRules(DEL_ALL_RULES);
 					else if (transHttpButton.isChecked())
 						Log.d("TransFrag", "Deleting Rules");
-						executeRules(DEL_HTTP_RULES);
+					executeRules(DEL_HTTP_RULES);
 				}
 			}
 		});
-		
-		this.transHttpButton = (ToggleButton) view.findViewById(R.id.toggle_trans_http);
-		this.transHttpButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-				if (isChecked) {
-					if (isTranslatorRunning() && !transAllButton.isChecked()) {
-						executeRules(ADD_HTTP_RULES);
-					}
-				}
-				else {
-					if (isTranslatorRunning() && !transAllButton.isChecked()) {
-						executeRules(DEL_HTTP_RULES);
-					}
-				}
-			}
-		});
-		
-		this.transAllButton = (ToggleButton) view.findViewById(R.id.toggle_trans_all);
-		this.transAllButton.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-			
-			@Override
-			public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
-				if (isChecked) {
-					if (isTranslatorRunning()) { 
-						if (transHttpButton.isChecked()) {
-							executeRules(DEL_HTTP_RULES);
-						}
-						executeRules(ADD_ALL_RULES);
-					}
-					
-				}
-				else {
-					if (isTranslatorRunning()) {
-						executeRules(DEL_ALL_RULES);
-						if (transHttpButton.isChecked()) {
-							executeRules(ADD_HTTP_RULES);
+
+		this.transHttpButton = (ToggleButton) view
+				.findViewById(R.id.toggle_trans_http);
+		this.transHttpButton
+				.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
+					@Override
+					public void onCheckedChanged(CompoundButton buttonView,
+							boolean isChecked) {
+						if (isChecked) {
+							if (isTranslatorRunning()
+									&& !transAllButton.isChecked()) {
+								executeRules(ADD_HTTP_RULES);
+							}
+						} else {
+							if (isTranslatorRunning()
+									&& !transAllButton.isChecked()) {
+								executeRules(DEL_HTTP_RULES);
+							}
 						}
 					}
-				}
+				});
+
+		this.transAllButton = (ToggleButton) view
+				.findViewById(R.id.toggle_trans_all);
+		this.transAllButton
+				.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
+					@Override
+					public void onCheckedChanged(CompoundButton buttonView,
+							boolean isChecked) {
+						if (isChecked) {
+							if (isTranslatorRunning()) {
+								if (transHttpButton.isChecked()) {
+									executeRules(DEL_HTTP_RULES);
+								}
+								executeRules(ADD_ALL_RULES);
+							}
+
+						} else {
+							if (isTranslatorRunning()) {
+								executeRules(DEL_ALL_RULES);
+								if (transHttpButton.isChecked()) {
+									executeRules(ADD_HTTP_RULES);
+								}
+							}
+						}
+					}
+				});
+		
+		this.hijackButton = (ToggleButton) view
+				.findViewById(R.id.toggle_inet_hijack);
+		
+		this.hijackButton
+		.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+
+			@Override
+			public void onCheckedChanged(CompoundButton buttonView,
+					boolean isChecked) {
+				
+				String cmd = "echo " + (isChecked ? "1" : "0") + 
+						" > /proc/sys/net/serval/inet_to_serval";
+				executeSuCommand(cmd, false);
 			}
 		});
 		
+		this.hijackButton
+			.setChecked(ServalActivity.readBooleanProcEntry("/proc/sys/net/serval/inet_to_serval"));
 		setTranslatorButton(isTranslatorRunning());
-		
-		if (!dummyTested && !testDummyIface()) {
-			ServalActivity act = (ServalActivity) getActivity();
-			File filesDir = act.getExternalFilesDir(null);
-			try {
-				filesDir.createNewFile();
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			File module = new File(filesDir, "dummy.ko");
-			boolean success = act.extractKernelModule(module, "dummy.ko");
-			if (success)
-				executeSuCommand("insmod " + module.getAbsolutePath());
-			
-			if (!success || !testDummyIface()) {
-				((TextView) view.findViewById(R.id.error_msg)).setText(getString(R.string.no_dummy));
-				translatorButton.setClickable(false);
-				AlphaAnimation anim = new AlphaAnimation(1.0f, .6f);
-				anim.setFillAfter(true);
-				translatorButton.startAnimation(anim);
-				dummyTested = false;
-			}
-			else {
-				dummyTested = true;
-			}
-		}
-		else {
-			((TextView) view.findViewById(R.id.error_msg)).setText("");
-			translatorButton.setClickable(true);
-			dummyTested = true;
-		}
-		
+		((TextView) view.findViewById(R.id.error_msg)).setText("");
+		translatorButton.setClickable(true);
+
 		return view;
 	}
-	
+
 	private void setTranslatorButton(boolean running) {
-		CharSequence text = Html.fromHtml(getString(running ? 
-				R.string.translator_running : R.string.translator_off));
+		CharSequence text = Html
+				.fromHtml(getString(running ? R.string.translator_running
+						: R.string.translator_off));
 		translatorButton.setSelected(running);
 		translatorButton.setText(text);
 	}
-	
+
 	private boolean testDummyIface() {
-		return executeSuCommand("ifconfig dummy0 up");
+		File dev = new File("/proc/net/dev");
+
+		if (dev.exists() && dev.canRead()) {
+			try {
+				BufferedReader in = new BufferedReader(new InputStreamReader(
+						new FileInputStream(dev)));
+
+				String line;
+				while ((line = in.readLine()) != null) {
+					if (line.contains("dummy")) {
+						in.close();
+						return true;
+					}
+				}
+				in.close();
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else {
+			Log.d("Serval", "could not open /proc/net/dev");
+		}
+		return false;
 	}
-	
+
 	private boolean executeRules(String[] rules) {
 		boolean success = true;
 		for (String rule : rules) {
-			success = success &&executeSuCommand(rule, true);
+			success = success && executeSuCommand(rule, true);
 			if (!success)
 				return false;
 		}
 		return success;
 	}
-	
-	private boolean executeSuCommand(String cmd) {
-		return executeSuCommand(cmd, false);
-	}
-	
+
 	private boolean executeSuCommand(String cmd, boolean showToast) {
-		return ((ServalActivity) getActivity()).executeSuCommand(cmd, showToast);
+		return ((ServalActivity) getActivity())
+				.executeSuCommand(cmd, showToast);
 	}
-	
+
 	private boolean isTranslatorRunning() {
-	    ActivityManager manager = (ActivityManager) getActivity().getSystemService(Activity.ACTIVITY_SERVICE);
-	    for (RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-	        if ("org.servalarch.serval.TranslatorService".equals(service.service.getClassName())) {
-	            return true;
-	        }
-	    }
-	    return false;
+		ActivityManager manager = (ActivityManager) getActivity()
+				.getSystemService(Activity.ACTIVITY_SERVICE);
+		for (RunningServiceInfo service : manager
+				.getRunningServices(Integer.MAX_VALUE)) {
+			if ("org.servalarch.serval.TranslatorService"
+					.equals(service.service.getClassName())) {
+				return true;
+			}
+		}
+		return false;
 	}
 }

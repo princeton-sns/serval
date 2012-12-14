@@ -1,7 +1,8 @@
 top_builddir := @top_dir@
 
 EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) \
-	     -DENABLE_SPLICE=1 -D__linux__ @EXTRA_DEFINES@ \
+	     -DENABLE_SPLICE=1 -D__linux__ -fno-pic \
+	     @EXTRA_DEFINES@ \
 	     @KERNEL_EXTRA_CFLAGS@
 
 obj-m := serval.o 
@@ -16,6 +17,7 @@ serval-y := \
 	   linux/iovlock.o \
 	   linux/udp_encap.o \
 	   linux/sysctl_net_serval.o \
+	   linux/inet_to_serval.o \
 	   debug.o \
 	   delay_queue.o \
 	   platform.o \
@@ -32,4 +34,5 @@ serval-y := \
 	   serval_tcp_output.o \
 	   serval_tcp_input.o \
 	   serval_tcp_cong.o \
-	   serval_tcp_timer.o
+	   serval_tcp_timer.o \
+	   serval_tcp_metrics.o

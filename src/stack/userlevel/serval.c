@@ -43,7 +43,6 @@ static char *progname = NULL;
 
 extern int telnet_init(void);
 extern void telnet_fini(void);
-extern unsigned int debug;
 unsigned int checksum_mode = 1;
 
 #define MAX(x, y) (x >= y ? x : y)
@@ -561,10 +560,7 @@ int main(int argc, char **argv)
         gettimeofday(&now, NULL);
         
         srandom((unsigned int)now.tv_usec);
-        
-        /* Init configuration parameters */
-        memset(&net_serval, 0, sizeof(net_serval));
-        
+                
 	argc--;
 	argv++;
         
@@ -601,7 +597,7 @@ int main(int argc, char **argv)
                                 argv++;
                                 argc--;
                                 LOG_INF("Setting debug to %u\n", d);
-                                debug = d;
+                                net_serval.sysctl_debug = d;
                         } else {
                                 fprintf(stderr, "Invalid debug setting %s\n",
                                         argv[1]);

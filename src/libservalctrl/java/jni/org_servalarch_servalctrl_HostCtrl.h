@@ -11,14 +11,20 @@ extern "C" {
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_LOCAL 0L
 #undef org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE
 #define org_servalarch_servalctrl_HostCtrl_HOSTCTRL_REMOTE 1L
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_OK
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_OK 0LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_ERROR 1LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_NOENTRY 2LL
-#undef org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED
-#define org_servalarch_servalctrl_HostCtrl_RETVAL_MALFORMED 3LL
+#undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_UNDEFINED
+#define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_UNDEFINED 0L
+#undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_FORWARD
+#define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_FORWARD 1L
+#undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DEMUX
+#define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DEMUX 2L
+#undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DELAY
+#define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DELAY 3L
+#undef org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DROP
+#define org_servalarch_servalctrl_HostCtrl_SERVICE_RULE_DROP 4L
+#undef org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_RELEASE
+#define org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_RELEASE 0L
+#undef org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_DROP
+#define org_servalarch_servalctrl_HostCtrl_DELAY_VERDICT_DROP 1L
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
  * Method:    nativeInit
@@ -66,7 +72,7 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_statsFlow
  * Signature: (ILorg/servalarch/net/ServiceID;IIILjava/net/Inet4Address;)I
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4
-(JNIEnv *, jobject, jint, jobject, jint, jint, jint, jobject);
+  (JNIEnv *, jobject, jint, jobject, jint, jint, jint, jobject);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl
@@ -99,6 +105,14 @@ JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_registerService4
  */
 JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_unregisterService4
   (JNIEnv *, jobject, jobject, jint);
+
+/*
+ * Class:     org_servalarch_servalctrl_HostCtrl
+ * Method:    setDelayVerdict
+ * Signature: (JI)I
+ */
+JNIEXPORT jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_setDelayVerdict
+  (JNIEnv *, jobject, jlong, jint);
 
 /*
  * Class:     org_servalarch_servalctrl_HostCtrl

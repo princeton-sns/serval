@@ -1,3 +1,4 @@
+/* -*- Mode: Java; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 package org.servalarch.serval;
 
 import java.net.InetAddress;
@@ -19,14 +20,14 @@ public class AppHostCtrl {
 	static final int SERVICE_REMOVE = 1;
 	static HostCtrlCallbacks cbs = null;
 	static HostCtrl hc = null;
-	
+
 	static int init(final HostCtrlCallbacks cbs) {
-		
+
 		if (hc != null) {
 			Log.d("Serval", "HostCtrl already initialized");
 			return 0;
 		}
-		
+
 		try {
 			AppHostCtrl.hc = new LocalHostCtrl(cbs);
 		} catch (HostCtrlException e) {
@@ -37,7 +38,7 @@ public class AppHostCtrl {
 		Log.d("Serval", "HostCtrl initialized");
 		return 0;
 	}
-	
+
 	static void fini() {
 		if (hc != null) {
 			hc.dispose();
@@ -46,84 +47,99 @@ public class AppHostCtrl {
 		}
 	}
 
-	static void performOp(Context context, final String serviceStr, final String ipStr, int op) {
+	static void performOp(Context context, final String serviceStr,
+			final String ipStr, int op) {
 		ServiceID sid;
-		InetAddress addr;
-		
+		InetAddress addr = null;
+		int prefixBits = 0;
+		int type = HostCtrl.SERVICE_RULE_FORWARD;
+
 		if (hc == null)
 			return;
 
-		sid = AppHostCtrl.createServiceID(serviceStr);
+		String res[] = serviceStr.split(":");
 		
+		if (res.length == 2)
+			prefixBits = Integer.parseInt(res[1]);
+		
+		sid = AppHostCtrl.createServiceID(res[0]);
+
 		if (sid == null) {
-			Toast t = Toast.makeText(context, "Not a valid serviceID", 
+			Toast t = Toast.makeText(context, "Not a valid serviceID",
 					Toast.LENGTH_SHORT);
 			t.show();
 			return;
 		}
-		
-		addr = AppHostCtrl.createAddress(ipStr);
-		
-		if (addr == null) {
-			Toast t = Toast.makeText(context, "Not a valid IP address", 
-					Toast.LENGTH_SHORT);
-			t.show();
-			return;
+
+		if (ipStr == "delay") {
+			type = HostCtrl.SERVICE_RULE_DELAY;
+		} else if (ipStr == "drop") {
+			type = HostCtrl.SERVICE_RULE_DROP;
+		} else {
+			addr = AppHostCtrl.createAddress(ipStr);
+
+			if (addr == null) {
+				Toast t = Toast.makeText(context, "Not a valid IP address",
+						Toast.LENGTH_SHORT);
+				t.show();
+				return;
+			}
 		}
-		
+
 		switch (op) {
 		case AppHostCtrl.SERVICE_ADD:
-			Log.d("Serval", "adding service " + sid + " address " + addr);
-			AppHostCtrl.hc.addService(sid, 0, 1, 1, addr);
+			Log.d("Serval", "adding service " + sid + " type " + type + " address " + addr);
+			AppHostCtrl.hc.addService(type, sid, prefixBits, 1, 1, addr);
 			break;
 		case AppHostCtrl.SERVICE_REMOVE:
-			AppHostCtrl.hc.removeService(sid, 0, addr);
+			AppHostCtrl.hc.removeService(sid, prefixBits, addr);
 			break;
 		default:
 			break;
 		}
 	}
-	
+
 	static InetAddress createAddress(String ipStr) {
 		InetAddress addr = null;
 		try {
 			addr = InetAddress.getByName(ipStr);
 		} catch (UnknownHostException e) {
-			
+
 		}
 		return addr;
 	}
 
 	static ServiceID createServiceID(String serviceStr) {
 		ServiceID sid = null;
-		
-		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0' && serviceStr.charAt(1) == 'x') {
+
+		if (serviceStr.length() > 2 && serviceStr.charAt(0) == '0'
+				&& serviceStr.charAt(1) == 'x') {
 			// Hex string
 			if (!serviceStr.matches("^0x[a-fA-F0-9]{1,40}$"))
 				return null;
-			
+
 			String parseStr = serviceStr.substring(2);
 			int len = parseStr.length();
-			
+
 			byte[] rawID = new byte[ServiceID.SERVICE_ID_MAX_LENGTH];
-			
+
 			for (int i = 0; i < rawID.length; i++) {
 				char hex[] = { '0', '0' };
-		
+
 				if (len-- > 0) {
-					hex[0] = parseStr.charAt(i*2);
+					hex[0] = parseStr.charAt(i * 2);
 				}
-				
+
 				if (len-- > 0) {
-					hex[1] = parseStr.charAt((i*2) + 1);
+					hex[1] = parseStr.charAt((i * 2) + 1);
 				}
-				
-				rawID[i] = (byte)Integer.parseInt(new String(hex), 16);
-				
+
+				rawID[i] = (byte) Integer.parseInt(new String(hex), 16);
+
 				if (len <= 0)
 					break;
 			}
-			
+
 			sid = new ServiceID(rawID);
 		} else {
 			// Decimal string

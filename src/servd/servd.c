@@ -112,8 +112,8 @@ static void registration_timeout_remote(struct timer *t)
         printf("Registration timeout - service %s:%u %s\n",
                service_id_to_str(&r->srvid), r->prefix,
                inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
-        hostctrl_service_remove(r->ctx->lhc, &r->srvid, 
-                                r->prefix, &r->ipaddr);
+        hostctrl_service_remove(r->ctx->lhc, SERVICE_RULE_FORWARD,
+                                &r->srvid, r->prefix, &r->ipaddr);
 }
 
 static struct registration *registration_add(struct servd_context *ctx,
@@ -516,7 +516,8 @@ static int handle_incoming_registration(struct hostctrl *hc,
                        inet_ntop(AF_INET, remote_ip, ip1, sizeof(ip1)),
                        old_ip ? inet_ntop(AF_INET, old_ip, ip2, sizeof(ip2)) : "none");
                 */
-                ret = hostctrl_service_modify(ctx->lhc, srvid, prefix, 
+                ret = hostctrl_service_modify(ctx->lhc, SERVICE_RULE_FORWARD,
+                                              srvid, prefix, 
                                               0, 0, old_ip, remote_ip);
         } else {
                 /* Add this service the local service table. */
@@ -556,7 +557,9 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
                 
                 /* Remove this service from the local service
                    table. */
-                ret = hostctrl_service_remove(ctx->lhc, srvid, prefix, 
+                ret = hostctrl_service_remove(ctx->lhc, 
+                                              SERVICE_RULE_FORWARD,
+                                              srvid, prefix, 
                                               remote_ip);
         }
 
@@ -615,7 +618,9 @@ static int local_service_get_result(struct hostctrl *hc,
 #endif
                         /* The 'get' for the default service returned
                            something. Update the existing entry */
-                        ret = hostctrl_service_modify(ctx->lhc, &si->srvid, 
+                        ret = hostctrl_service_modify(ctx->lhc, 
+                                                      SERVICE_RULE_FORWARD,
+                                                      &si->srvid, 
                                                       si->srvid_prefix_bits, 
                                                       si->priority,
                                                       si->weight, 
@@ -994,7 +999,9 @@ int main(int argc, char **argv)
 	LOG_DBG("servd exits\n");
 
         if (ctx.router_ip_set && !ctx.router) {
-                hostctrl_service_remove(ctx.lhc, &ctx.raddr.sv_srvid, 0, 
+                hostctrl_service_remove(ctx.lhc, 
+                                        SERVICE_RULE_FORWARD,
+                                        &ctx.raddr.sv_srvid, 0, 
                                         &ctx.router_ip);
         }
 

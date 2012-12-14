@@ -29,7 +29,7 @@ MODULE_VERSION("0.1");
 */
 
 /* The debug parameter is defined in debug.c */
-extern unsigned int debug;
+unsigned int debug = 0;
 module_param(debug, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(debug, "Set debug level 0-6 (0=off).");
 
@@ -169,7 +169,8 @@ static int serval_inetaddr_event(struct notifier_block *this,
         {
                 LOG_DBG("inetdev UP %s - migrating\n", dev->name);
                 dev_configuration(dev);
-                serval_sock_migrate_iface(dev, dev);
+                if (net_serval.sysctl_auto_migrate)
+                        serval_sock_migrate_iface(0, dev->ifindex);
                 break;
         }
 	case NETDEV_GOING_DOWN:
@@ -183,6 +184,8 @@ static int serval_inetaddr_event(struct notifier_block *this,
                         dev->name);
                 serval_sock_freeze_flows(dev);
                 service_del_dev_all(dev->name);
+                if (net_serval.sysctl_auto_migrate)
+                        serval_sock_migrate_iface(dev->ifindex, 0);
                 break;
 	default:
 		break;
@@ -204,7 +207,7 @@ int serval_module_init(void)
 	int err = 0;
 
         pr_alert("Loaded Serval protocol module\n");
-        
+
         err = proc_init();
         
         if (err < 0) {
@@ -239,6 +242,8 @@ int serval_module_init(void)
                 LOG_CRIT("Cannot register inetaddr notifier\n");
                 goto fail_inetaddr_notifier;
         }
+
+        net_serval.sysctl_debug = debug;
 
         err = serval_sysctl_register(&init_net);
 

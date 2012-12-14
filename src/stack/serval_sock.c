@@ -36,7 +36,7 @@
 atomic_t serval_nr_socks = ATOMIC_INIT(0);
 static atomic_t serval_flow_id = ATOMIC_INIT(1);
 static struct serval_table established_table;
-static struct serval_table listen_table;
+static struct serval_table request_table;
 static struct list_head sock_list = { &sock_list, &sock_list };
 static DEFINE_RWLOCK(sock_list_lock);
 
@@ -44,22 +44,22 @@ static DEFINE_RWLOCK(sock_list_lock);
 #define SERVICE_KEY_LEN (8)
 
 static const char *sock_state_str[] = {
-        [ SERVAL_INIT ]      = "INIT",
-        [ SERVAL_CONNECTED ] = "CONNECTED",
-        [ SERVAL_REQUEST ]   = "REQUEST",
-        [ SERVAL_RESPOND ]   = "RESPOND",
-        [ SERVAL_FINWAIT1 ]  = "FINWAIT1",
-        [ SERVAL_FINWAIT2 ]  = "FINWAIT2",
-        [ SERVAL_TIMEWAIT ]  = "TIMEWAIT",
-        [ SERVAL_CLOSED ]    = "CLOSED",
-        [ SERVAL_CLOSEWAIT ] = "CLOSEWAIT",
-        [ SERVAL_LASTACK ]   = "LASTACK",
-        [ SERVAL_LISTEN ]    = "LISTEN",
-        [ SERVAL_CLOSING ]   = "CLOSING"
+        [ SAL_INIT ]      = "INIT",
+        [ SAL_CONNECTED ] = "CONNECTED",
+        [ SAL_REQUEST ]   = "REQUEST",
+        [ SAL_RESPOND ]   = "RESPOND",
+        [ SAL_FINWAIT1 ]  = "FINWAIT1",
+        [ SAL_FINWAIT2 ]  = "FINWAIT2",
+        [ SAL_TIMEWAIT ]  = "TIMEWAIT",
+        [ SAL_CLOSED ]    = "CLOSED",
+        [ SAL_CLOSEWAIT ] = "CLOSEWAIT",
+        [ SAL_LASTACK ]   = "LASTACK",
+        [ SAL_LISTEN ]    = "LISTEN",
+        [ SAL_CLOSING ]   = "CLOSING"
 };
 
 static const char *sock_sal_state_str[] = {
-        [ SAL_INITIAL ]        = "SAL_INITIAL",
+        [ SAL_RSYN_INITIAL ]   = "SAL_RSYN_INITIAL",
         [ SAL_RSYN_SENT ]      = "SAL_RSYN_SENT",
         [ SAL_RSYN_RECV ]      = "SAL_RSYN_RECV",
         [ SAL_RSYN_SENT_RECV ] = "SAL_RSYN_SENT_RECV",
@@ -122,81 +122,104 @@ void __exit serval_table_fini(struct serval_table *table)
         FREE(table->hash);
 }
 
-/*
-  The interface migration is somewhat ugly, but the ugliness is
-  necessary because we cannot lock a socket (an operation that can
-  sleep) while we hold the hash table lock.
-
-  We therefore create a temporary private list of all sockets where we
-  protect them from release by using the reference counter. We can
-  then safely iterate through the private list without holding a list
-  lock, and are thereby free lock each socket.
- */
-void serval_sock_migrate_iface(struct net_device *old_if,
-                               struct net_device *new_if)
+void serval_sock_migrate_iface(int old_dev, int new_dev)
 {
         struct hlist_node *walk;
         struct sock *sk = NULL;
-        struct list_head mlist;
-        /* A structure we can put on our private list, containing a
-           pointer to each socket. */
-        struct migrate_sock {
-                struct list_head lh;
-                struct sock *sk;
-        } *msk;
         int i, n = 0;
-        
-        /* Initialize our private list. */
-        INIT_LIST_HEAD(&mlist);
 
         for (i = 0; i < SERVAL_HTABLE_SIZE_MIN; i++) {
                 struct serval_hslot *slot;
                 
                 slot = &established_table.hash[i];
                 
-                spin_lock_bh(&slot->lock);
+                local_bh_disable();
+                spin_lock(&slot->lock);
                                 
                 hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
-                        msk = kmalloc(sizeof(struct migrate_sock), 
-                                      GFP_ATOMIC);
-                        
-                        if (msk) {
-                                sock_hold(sk);
-                                INIT_LIST_HEAD(&msk->lh);
-                                msk->sk = sk;
-                                list_add(&msk->lh, &mlist);
+                        int should_migrate = 0;
+
+                        if (old_dev > 0 && new_dev > 0) {
+                                if (old_dev == new_dev) {
+                                        /* An existing interface changed its address,
+                                         * i.e., physical mobility. */
+                                        should_migrate = 1;
+                                } else {
+                                        /* We were told which
+                                         * interface to migrate, but
+                                         * we need to check that this
+                                         * sock matches. */
+                                        should_migrate = sk->sk_bound_dev_if == old_dev;
+                                }
+                        } else if (old_dev <= 0) {
+                                /* A new interface came up, migrate all flows
+                                 * with a DOWN interface to this new
+                                 * interface. */
+                                struct net_device *i = dev_get_by_index(sock_net(sk), 
+                                                                        sk->sk_bound_dev_if);
+                                
+                                if (i) {
+                                        /* If this interface is down, then
+                                         * migrate its flows. */
+                                        if (!(i->flags & IFF_UP))
+                                                should_migrate = 1;
+                                        dev_put(i);
+                                }
+                        } else if (new_dev <= 0 && old_dev == sk->sk_bound_dev_if) {
+                                /* An interface went down, and we
+                                 * need to figure out a new target
+                                 * dev. */
+#if defined(OS_LINUX_KERNEL)
+                                struct rtable *rt;
+                                
+                                rt = serval_ip_route_output(sock_net(sk),
+                                                            inet_sk(sk)->inet_daddr,
+                                                            0, 0, 0);
+                                
+                                if (rt) {
+                                        should_migrate = 1;
+                                        new_dev = rt->rt_iif;
+                                        LOG_SSK(sk, "Found new output dev %d\n", new_dev);
+                                        ip_rt_put(rt);
+                                } else {
+                                        LOG_SSK(sk, "socket not routable\n");
+                                } 
+#endif /* OS_LINUX_KERNEL */
                         }
+                        
+                        if (should_migrate) {
+#if defined(ENABLE_DEBUG)
+                                struct net_device *dev1 = dev_get_by_index(sock_net(sk), 
+                                                                           old_dev);
+                                struct net_device *dev2 = dev_get_by_index(sock_net(sk), 
+                                                                           new_dev);
+                                if (dev1) {
+                                        if (dev2) {
+                                                LOG_SSK(sk, "migrating from dev %s to %s\n", 
+                                                        dev1, dev2);
+                                                
+                                                dev_put(dev2);
+                                        }
+                                        dev_put(dev1);
+                                }
+#endif
+                                bh_lock_sock(sk);
+                                serval_sock_set_mig_dev(sk, new_dev);
+                                serval_sal_migrate(sk);
+                                bh_unlock_sock(sk);
+                                n++;
+                        }                       
                 }
-                spin_unlock_bh(&slot->lock);
-        }
-
-        /* Ok, we have our private list. Now iterate through it,
-           locking each socket in the process so that we can safely
-           access the device pointer and perform migration for
-           matching interfaces. */
-        while (!list_empty(&mlist)) {
-        
-                msk = list_first_entry(&mlist, struct migrate_sock, lh);
-                sk = msk->sk;
-
-                lock_sock(sk);
-                
-                if (sk->sk_bound_dev_if > 0 && 
-                    sk->sk_bound_dev_if == old_if->ifindex) {
-                        LOG_DBG("Socket matches old if\n");
-                        serval_sock_set_mig_dev(sk, new_if);
-                        serval_sal_migrate(sk);
-                        n++;
-                }
-                release_sock(sk);
-                list_del(&msk->lh);
-                sock_put(sk);
-                kfree(msk);
+                spin_unlock(&slot->lock);
+                local_bh_enable();
         }
 
         LOG_DBG("Migrated %d flows\n", n);
 }
 
+/*
+  This function is called from BH context.
+*/
 void serval_sock_freeze_flows(struct net_device *dev)
 {
         int i;
@@ -211,30 +234,29 @@ void serval_sock_freeze_flows(struct net_device *dev)
                 spin_lock_bh(&slot->lock);
                                 
                 hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
-                        struct serval_sock *ssk = serval_sk(sk);
-                        
-                        bh_lock_sock(sk);
+                        struct serval_sock *ssk = serval_sk(sk);                       
                         
                         if (sk->sk_bound_dev_if > 0 && 
                             sk->sk_bound_dev_if == dev->ifindex) {
-                                if (ssk->af_ops->freeze_flow)
+                                if (ssk->af_ops->freeze_flow) {
+                                        bh_lock_sock(sk);
                                         ssk->af_ops->freeze_flow(sk);
+                                        bh_unlock_sock(sk);
+                                }
                         }
-                        bh_unlock_sock(sk);
                 }
                 spin_unlock_bh(&slot->lock);
         }
 }
 
-void serval_sock_migrate_flow(struct flow_id *old_f,
-                              struct net_device *new_if)
+void serval_sock_migrate_flow(struct flow_id *old_flow, int new_dev)
 {
-        struct sock *sk = serval_sock_lookup_flow(old_f);
+        struct sock *sk = serval_sock_lookup_flow(old_flow);
 
         if (sk) {
-                LOG_DBG("Found sock, migrating...\n");
+                LOG_SSK(sk, "Found sock, migrating...\n");
                 lock_sock(sk);
-                serval_sock_set_mig_dev(sk, new_if);
+                serval_sock_set_mig_dev(sk, new_dev);
                 serval_sal_migrate(sk);
                 release_sock(sk);
                 sock_put(sk);
@@ -244,15 +266,14 @@ void serval_sock_migrate_flow(struct flow_id *old_f,
 /* For now this looks pretty much like migrating a flow, but I suspect it'll
  * be a little more involved once we support multiple flows per service.
  */
-void serval_sock_migrate_service(struct service_id *old_s,
-                                 struct net_device *new_if)
+void serval_sock_migrate_service(struct service_id *old_s, int new_dev)
 {
         /* FIXME: Set protocol type of socket */
         struct sock *sk = serval_sock_lookup_service(old_s, IPPROTO_TCP);
 
         if (sk) {
                 lock_sock(sk);
-                serval_sock_set_mig_dev(sk, new_if);
+                serval_sock_set_mig_dev(sk, new_dev);
                 serval_sal_migrate(sk);
                 release_sock(sk);
                 sock_put(sk);
@@ -362,15 +383,6 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
                              table->mask);
 }
 
-static inline unsigned int serval_sock_lhash(struct serval_table *table, 
-                                             struct sock *sk)
-{
-        return serval_hashfn(sock_net(sk), 
-                             serval_sk(sk)->hash_key, 
-                             serval_sk(sk)->hash_key_len,
-                             table->mask);
-}
-
 static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 {
         struct serval_hslot *slot;
@@ -401,19 +413,14 @@ static void __serval_sock_hash(struct sock *sk)
                 LOG_ERR("socket %p already hashed\n", sk);
         }
         
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
-                LOG_DBG("hashing socket %p based on socket id %s\n",
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
+                LOG_SSK(sk, "hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
                 ssk->hash_key = &ssk->local_flowid;
                 ssk->hash_key_len = sizeof(ssk->local_flowid);
 
                 __serval_table_hash(&established_table, sk);
-        } else { 
-                /* We use the service table for listening sockets. See
-                 * serval_sock_hash() */
-                /* __serval_table_hash(&listen_table, sk); */
-
         }
 }
 
@@ -422,12 +429,12 @@ void serval_sock_hash(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
         
         /* Do not hash if closed or already hashed */
-        if (sk->sk_state == SERVAL_CLOSED ||
+        if (sk->sk_state == SAL_CLOSED ||
             ssk->hash_key_len > 0)
                 return;
 
-        if (sk->sk_state == SERVAL_REQUEST ||
-            sk->sk_state == SERVAL_RESPOND) {
+        if (sk->sk_state == SAL_REQUEST ||
+            sk->sk_state == SAL_RESPOND) {
 		local_bh_disable();
 		__serval_sock_hash(sk);
                 serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
@@ -435,7 +442,7 @@ void serval_sock_hash(struct sock *sk)
         } else {
                 int err = 0;
                 
-                LOG_DBG("adding socket %p based on service id %s\n",
+                LOG_SSK(sk, "adding socket %p based on service id %s\n",
                         sk, service_id_to_str(&ssk->local_srvid));
 
                 ssk->hash_key = &ssk->local_srvid;
@@ -477,15 +484,9 @@ void serval_sock_unhash(struct sock *sk)
         if (ssk->hash_key_len == 0)
                 return;
                 
-        if (sk->sk_state == SERVAL_LISTEN ||
-            sk->sk_state == SERVAL_INIT) {
-                /*
-                lock = &listen_table.hashslot(&listen_table, net, 
-                                              &ssk->local_srvid, 
-                                              ssk->hash_key_len)->lock;
-                */
-                                
-                LOG_DBG("removing socket %p from service table\n", sk);
+        if (sk->sk_state == SAL_LISTEN ||
+            sk->sk_state == SAL_INIT) {
+                LOG_SSK(sk, "removing socket %p from service table\n", sk);
 
                 service_del_target(&ssk->local_srvid,
                                    ssk->srvid_prefix_bits == 0 ?
@@ -505,7 +506,7 @@ void serval_sock_unhash(struct sock *sk)
                 return;
         } 
 
-        LOG_DBG("unhashing socket %p\n", sk);
+        LOG_SSK(sk, "unhashing socket %p\n", sk);
 
         lock = &established_table.hashslot(&established_table,
                                            net, &ssk->local_flowid, 
@@ -532,16 +533,16 @@ int __init serval_sock_tables_init(void)
 {
         int ret;
 
-        ret = serval_table_init(&listen_table, 
-                                serval_sock_lhash, 
-                                serval_hashslot_listen,
-                                "LISTEN");
+        ret = serval_table_init(&request_table,
+                                serval_sock_ehash, 
+                                serval_hashslot,
+                                "REQUEST");
 
         if (ret < 0)
                 goto fail_table;
         
         ret = serval_table_init(&established_table, 
-                                serval_sock_ehash, 
+                                serval_sock_ehash,
                                 serval_hashslot,
                                 "ESTABLISHED");
 
@@ -551,7 +552,7 @@ fail_table:
 
 void __exit serval_sock_tables_fini(void)
 {
-        serval_table_fini(&listen_table);
+        serval_table_fini(&request_table);
         serval_table_fini(&established_table);
         if (sock_state_str[0]) {} /* Avoid compiler warning when
                                    * compiling with debug off */
@@ -598,14 +599,14 @@ struct sock *serval_sk_alloc(struct net *net, struct socket *sock,
          * child socket from a LISTENing socket, and it will be
          * assigned the socket id from the request sock */
         if (sock && __serval_assign_flowid(sk) < 0) {
-                LOG_DBG("could not assign sock id\n");
+                LOG_SSK(sk, "could not assign sock id\n");
                 sock_put(sk);
                 return NULL;
         }
 
         atomic_inc(&serval_nr_socks);
                 
-        LOG_DBG("SERVAL socket %p created, %d are alive.\n", 
+        LOG_SSK(sk, "SERVAL socket %p created, %d are alive.\n", 
                 sk, atomic_read(&serval_nr_socks));
 
         return sk;
@@ -616,7 +617,7 @@ void serval_sock_init(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
 
         sk->sk_state = 0;
-        ssk->sal_state = SAL_INITIAL;
+        ssk->sal_state = SAL_RSYN_INITIAL;
         ssk->udp_encap_sport = 0;
         ssk->udp_encap_dport = 0;
         INIT_LIST_HEAD(&ssk->sock_node);
@@ -625,21 +626,23 @@ void serval_sock_init(struct sock *sk)
         setup_timer(&ssk->retransmit_timer, 
                     serval_sal_rexmit_timeout,
                     (unsigned long)sk);
-
         setup_timer(&ssk->tw_timer, 
                     serval_sal_timewait_timeout,
+                    (unsigned long)sk);
+	setup_timer(&sk->sk_timer, 
+                    serval_sal_keepalive_timeout, 
                     (unsigned long)sk);
 
         serval_sal_init_ctrl_queue(sk);
 
 #if defined(OS_LINUX_KERNEL)
-        get_random_bytes(ssk->local_nonce, SERVAL_NONCE_SIZE);
+        get_random_bytes(ssk->local_nonce, SAL_NONCE_SIZE);
         get_random_bytes(&ssk->snd_seq.iss, sizeof(ssk->snd_seq.iss));
 #else
         {
                 unsigned int i;
                 unsigned char *seqno = (unsigned char *)&ssk->snd_seq.iss;
-                for (i = 0; i < SERVAL_NONCE_SIZE; i++) {
+                for (i = 0; i < SAL_NONCE_SIZE; i++) {
                         ssk->local_nonce[i] = random() & 0xff;
                 }
                 for (i = 0; i < sizeof(ssk->snd_seq.iss); i++) {
@@ -652,14 +655,14 @@ void serval_sock_init(struct sock *sk)
         ssk->rcv_seq.nxt = 0;        
         ssk->snd_seq.una = 0;
         ssk->snd_seq.nxt = 0;
-        /* Default to stop-and-wait behavior */
+        /* Default to stop-and-wait behavior (wnd = 1) */
         ssk->rcv_seq.wnd = 1;
         ssk->snd_seq.wnd = 1;
         ssk->retransmits = 0;
         ssk->backoff = 0;
         ssk->srtt = 0;
-        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
-        ssk->rto = SAL_RTO_MIN; //SAL_TIMEOUT_INIT;
+        ssk->mdev = ssk->mdev_max = ssk->rttvar = SAL_TIMEOUT_INIT;
+        ssk->rto = SAL_TIMEOUT_INIT;
 
         write_lock_bh(&sock_list_lock);
         list_add_tail(&ssk->sock_node, &sock_list);
@@ -670,9 +673,9 @@ void serval_sock_destroy(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        LOG_DBG("Destroying Serval sock %p\n", sk);
+        LOG_SSK(sk, "Destroying Serval sock %p\n", sk);
         
-	WARN_ON(sk->sk_state != SERVAL_CLOSED);
+	WARN_ON(sk->sk_state != SAL_CLOSED);
 
 	/* It cannot be in hash table! */
 	//WARN_ON(!sk_unhashed(sk));
@@ -683,7 +686,7 @@ void serval_sock_destroy(struct sock *sk)
 	}
 
         /* Stop timers */
-        LOG_DBG("Stopping timers\n");
+        LOG_SSK(sk, "Stopping timers\n");
         sk_stop_timer(sk, &ssk->retransmit_timer);
         sk_stop_timer(sk, &ssk->tw_timer);
         
@@ -695,14 +698,19 @@ void serval_sock_destroy(struct sock *sk)
 
 	sk_stream_kill_queues(sk);
 
-        LOG_DBG("SERVAL sock %p refcnt=%d tot_bytes_sent=%lu\n",
+        LOG_SSK(sk, "SERVAL sock %p refcnt=%d tot_bytes_sent=%lu\n",
                 sk, atomic_read(&sk->sk_refcnt) - 1, 
                 serval_sk(sk)->tot_bytes_sent);
         
-        LOG_DBG("sock rmem=%u wmem=%u omem=%u\n",
+        LOG_SSK(sk, "sock rmem=%u wmem=%u omem=%u\n",
                 atomic_read(&sk->sk_rmem_alloc),
                 atomic_read(&sk->sk_wmem_alloc),
                 atomic_read(&sk->sk_omem_alloc));
+
+        if (ssk->old_sk) {
+                sock_put(ssk->old_sk);
+                sk_common_release(ssk->old_sk);
+        }
 
 	sock_put(sk);
 }
@@ -710,12 +718,23 @@ void serval_sock_destroy(struct sock *sk)
 static void serval_sock_clear_xmit_timers(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        sk_stop_timer(sk, &ssk->retransmit_timer);        
+        sk_stop_timer(sk, &ssk->retransmit_timer);
+	sk_stop_timer(sk, &sk->sk_timer);   
+}
+
+void serval_sock_delete_keepalive_timer(struct sock *sk)
+{
+	sk_stop_timer(sk, &sk->sk_timer);
+}
+
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len)
+{
+	sk_reset_timer(sk, &sk->sk_timer, jiffies + len);
 }
 
 void serval_sock_done(struct sock *sk)
 {
-	serval_sock_set_state(sk, SERVAL_CLOSED);
+	serval_sock_set_state(sk, SAL_CLOSED);
 	serval_sock_clear_xmit_timers(sk);
 	sk->sk_shutdown = SHUTDOWN_MASK;
 
@@ -738,7 +757,7 @@ void serval_sock_destruct(struct sock *sk)
         serval_sal_ctrl_queue_purge(sk);
 
 	if (sk->sk_type == SOCK_STREAM && 
-            (sk->sk_state != SERVAL_CLOSED && 
+            (sk->sk_state != SAL_CLOSED && 
              sk->sk_state != 0)) {
                 /*
                   Note: in user mode, a respond sock created as a
@@ -772,26 +791,8 @@ void serval_sock_destruct(struct sock *sk)
         list_del(&serval_sk(sk)->sock_node);
         write_unlock_bh(&sock_list_lock);
 
-	LOG_DBG("SERVAL socket %p destroyed, %d are still alive.\n", 
+	LOG_SSK(sk, "SERVAL socket %p destroyed, %d are still alive.\n", 
                 sk, atomic_read(&serval_nr_socks));
-}
-
-void serval_sock_set_dev(struct sock *sk, struct net_device *dev)
-{
-        if (dev)
-                sk->sk_bound_dev_if = dev->ifindex;
-        else
-                sk->sk_bound_dev_if = 0;
-}
-
-void serval_sock_set_mig_dev(struct sock *sk, struct net_device *dev)
-{
-        struct serval_sock *ssk = serval_sk(sk);
-
-        if (dev)
-                ssk->mig_dev_if = dev->ifindex;
-        else
-                ssk->mig_dev_if = 0;
 }
 
 const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
@@ -812,9 +813,26 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
         return buf;
 }
 
+const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        struct net_device *dev = dev_get_by_index(sock_net(sk), 
+                                                  sk->sk_bound_dev_if);
+
+        snprintf(buf, buflen, "[%s:%s %s]",
+                 flow_id_to_str(&ssk->local_flowid),
+                 flow_id_to_str(&ssk->peer_flowid),
+                 dev ? dev->name : "nodev");
+
+        if (dev)
+                dev_put(dev);
+
+        return buf;
+}
+
 const char *serval_sock_state_str(struct sock *sk)
 {
-        if (sk->sk_state >= __SERVAL_MAX_STATE) {
+        if (sk->sk_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -823,7 +841,7 @@ const char *serval_sock_state_str(struct sock *sk)
 
 const char *serval_state_str(unsigned int state)
 {
-        if (state >= __SERVAL_MAX_STATE) {
+        if (state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return sock_state_str[0];
         }
@@ -833,20 +851,18 @@ const char *serval_state_str(unsigned int state)
 int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 { 
-        if (new_state == __SERVAL_MIN_STATE ||
-            new_state >= __SERVAL_MAX_STATE) {
+        if (new_state == __SAL_MIN_STATE ||
+            new_state >= __SAL_MAX_STATE) {
                 LOG_ERR("invalid state\n");
                 return -1;
         }
         
-        LOG_INF("%s -> %s local_flowid=%s peer_flowid=%s\n",
+        LOG_SSK(sk, "%s -> %s\n",
                 sock_state_str[sk->sk_state],
-                sock_state_str[new_state],
-                flow_id_to_str(&serval_sk(sk)->local_flowid),
-                flow_id_to_str(&serval_sk(sk)->peer_flowid));
+                sock_state_str[new_state]);
         
         switch (new_state) {
-        case SERVAL_CLOSED:
+        case SAL_CLOSED:
                 sk->sk_prot->unhash(sk);
                 break;
         default:
@@ -860,7 +876,7 @@ int serval_sock_set_state(struct sock *sk, unsigned int new_state)
 
 const char *serval_sock_sal_state_str(struct sock *sk)
 {
-        if (serval_sk(sk)->sal_state >= __SAL_MAX_STATE) {
+        if (serval_sk(sk)->sal_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n",
                         serval_sk(sk)->sal_state);
                 return sock_sal_state_str[0];
@@ -870,7 +886,7 @@ const char *serval_sock_sal_state_str(struct sock *sk)
 
 const char *serval_sal_state_str(unsigned int state)
 {
-        if (state >= __SAL_MAX_STATE) {
+        if (state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", state);
                 return sock_sal_state_str[0];
         }
@@ -879,82 +895,18 @@ const char *serval_sal_state_str(unsigned int state)
 
 int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state)
 { 
-        if (new_state >= __SAL_MAX_STATE) {
+        if (new_state >= __SAL_RSYN_MAX_STATE) {
                 LOG_ERR("invalid state %u\n", new_state);
                 return -1;
         }
         
-        LOG_INF("SAL %s -> %s local_flowid=%s peer_flowid=%s\n",
+        LOG_SSK(sk, "SAL %s -> %s\n",
                 sock_sal_state_str[serval_sk(sk)->sal_state],
-                sock_sal_state_str[new_state],
-                flow_id_to_str(&serval_sk(sk)->local_flowid),
-                flow_id_to_str(&serval_sk(sk)->peer_flowid));
+                sock_sal_state_str[new_state]);
         
         serval_sk(sk)->sal_state = new_state;
 
         return new_state;
-}
-
-struct dst_entry *serval_sock_route_req(struct sock *sk,
-                                        struct request_sock *req)
-{
-#if defined(OS_LINUX_KERNEL)
-	struct rtable *rt;
-	struct inet_request_sock *ireq = inet_rsk(req);
-	/* struct ip_options *opt = inet_rsk(req)->opt; */
-        struct flowi fl;
-
-        serval_flow_init_output(&fl, sk->sk_bound_dev_if, sk->sk_mark, 
-                                0, 0, sk->sk_protocol, 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,28))
-                                inet_sk_flowi_flags(sk),
-#else
-                                0,
-#endif
-                                ireq->rmt_addr, ireq->loc_addr, 0, 0);
-
-#if defined(ENABLE_DEBUG)
-        {
-                char rmtstr[18], locstr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
-                        inet_ntop(AF_INET, &ireq->rmt_addr, rmtstr, 18),
-                        inet_ntop(AF_INET, &ireq->loc_addr, locstr, 18),
-                        sk->sk_protocol);
-        }
-#endif
-	serval_security_req_classify_flow(req, &fl);
-
-        rt = serval_ip_route_output_flow(sock_net(sk), &fl, sk, 0);
-
-        if (!rt)
-                goto no_route;
-
-        /*
-	if (opt && opt->is_strictroute && rt->rt_dst != rt->rt_gateway)
-		goto route_err;
-        */
-
-        /* Save the route addresses to make sure they match
-           what is configured in the socket. If we do not make
-           sure they are the same, there can be checksum
-           problems. */
-        memcpy(&ireq->rmt_addr, &rt->rt_dst, sizeof(ireq->rmt_addr));
-        memcpy(&ireq->loc_addr, &rt->rt_src, sizeof(ireq->loc_addr));
-
-	return route_dst(rt);
-/*
-route_err:
-*/
-	ip_rt_put(rt);
-
-  no_route:
-/*
-	IP_INC_STATS_BH(net, IPSTATS_MIB_OUTNOROUTES);
-*/
-	return NULL;
-#else
-        return NULL;
-#endif
 }
 
 /* 
@@ -1004,7 +956,7 @@ int serval_sock_rebuild_header(struct sock *sk)
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18], locstr[18];
-                LOG_DBG("rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
+                LOG_SSK(sk, "rmt_addr=%s loc_addr=%s sk_protocol=%u\n",
                         inet_ntop(AF_INET, &inet->inet_daddr, rmtstr, 18),
                         inet_ntop(AF_INET, &inet->inet_saddr, locstr, 18),
                         sk->sk_protocol);

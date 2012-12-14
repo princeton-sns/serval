@@ -51,6 +51,38 @@ static void service_entry_destroy(struct bst_node *n);
 static struct service_table srvtable;
 static struct service_id default_service;
 
+static const char *rule_str[] = {
+        [SERVICE_RULE_UNDEFINED] = "UDF",
+        [SERVICE_RULE_FORWARD] = "FWD",
+        [SERVICE_RULE_DEMUX] = "DMX",
+        [SERVICE_RULE_DELAY] = "DLY",
+        [SERVICE_RULE_DROP] = "DRP"
+};
+
+static const char *rule_to_str(service_rule_type_t type)
+{
+        return rule_str[type];
+}
+
+static const char *protocol_to_str(int protocol)
+{
+        static char buf[20];
+        
+        switch (protocol) {
+        case IPPROTO_TCP:
+                sprintf(buf, "TCP");
+                break;
+        case IPPROTO_UDP:
+                sprintf(buf, "UDP");
+                break;
+        default:
+                sprintf(buf, "%d", protocol);
+                break;
+        }
+        
+        return buf;
+}
+
 static struct target *target_create(service_rule_type_t type,
                                     const void *dst, int dstlen,
                                     const union target_out out, 
@@ -581,7 +613,7 @@ int __service_entry_remove_target(struct service_entry *se,
                             (t->type == SERVICE_RULE_FORWARD && 
                              memcmp(t->dst, dst, dstlen) == 0))) {
                                 target_set_remove_target(set, t);
-
+                                
                                 if (stats) {
                                         stats->packets_resolved = atomic_read(&t->packets_resolved);
                                         stats->bytes_resolved = atomic_read(&t->bytes_resolved);
@@ -875,37 +907,6 @@ int service_iter_get_flags(struct service_iter *iter)
         return 0;
 }
 
-static const char *rule_str[] = {
-        [SERVICE_RULE_UNDEFINED] = "UDF",
-        [SERVICE_RULE_FORWARD] = "FWD",
-        [SERVICE_RULE_DEMUX] = "DMX",
-        [SERVICE_RULE_DELAY] = "DLY",
-        [SERVICE_RULE_DROP] = "DRP"
-};
-
-static const char *rule_to_str(service_rule_type_t type)
-{
-        return rule_str[type];
-}
-
-static const char *protocol_to_str(int protocol)
-{
-        static char buf[20];
-        
-        switch (protocol) {
-        case IPPROTO_TCP:
-                sprintf(buf, "TCP");
-                break;
-        case IPPROTO_UDP:
-                sprintf(buf, "UDP");
-                break;
-        default:
-                sprintf(buf, "%d", protocol);
-                break;
-        }
-        
-        return buf;
-}
 
 static int __service_entry_print(struct bst_node *n, char *buf, 
                                  size_t buflen) 
@@ -1373,17 +1374,16 @@ static int service_table_add(struct service_table *tbl,
                 goto out;
         }
 
-        if (out.raw) {
-                ret = __service_entry_add_target(se, type, flags, priority, 
-                                                 weight, dst, dstlen, out,
-                                                 GFP_ATOMIC);
-
-                if (ret < 0) {
-                        service_entry_free(se);
-                        ret = -ENOMEM;
-                        goto out;
-
-                }
+        
+        ret = __service_entry_add_target(se, type, flags, priority, 
+                                         weight, dst, dstlen, out,
+                                         GFP_ATOMIC);
+        
+        if (ret < 0) {
+                service_entry_free(se);
+                ret = -ENOMEM;
+                goto out;
+                
         }
 
         se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 

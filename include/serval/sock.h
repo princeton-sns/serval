@@ -267,6 +267,12 @@ static inline ssize_t sock_no_sendpage(struct socket *sock,
         return -EOPNOTSUPP;
 }
 
+int sock_common_getsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, int __user *optlen);
+
+int sock_common_setsockopt(struct socket *sock, int level, int optname,
+			   char __user *optval, unsigned int optlen);
+
 extern int proto_register(struct proto *prot, int);
 extern void proto_unregister(struct proto *prot);
 
@@ -364,6 +370,7 @@ static inline int sock_rcvlowat(const struct sock *sk, int waitall, int len)
 void sk_reset_timer(struct sock *sk, struct timer_list* timer,
                     unsigned long expires);
 void sk_stop_timer(struct sock *sk, struct timer_list* timer);
+int sk_receive_skb(struct sock *sk, struct sk_buff *skb, const int nested);
 int sock_queue_rcv_skb(struct sock *sk, struct sk_buff *skb);
 int sock_queue_err_skb(struct sock *sk, struct sk_buff *skb);
 

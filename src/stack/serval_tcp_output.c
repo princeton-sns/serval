@@ -132,10 +132,7 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 {
 	u8 options = opts->options;	/* mungable copy */
 
-        LOG_DBG("Writing TCP options\n");
-
 	if (unlikely(opts->mss)) {
-                LOG_DBG("Writing MSS option\n");
 		*ptr++ = htonl((TCPOPT_MSS << 24) |
 			       (TCPOLEN_MSS << 16) |
 			       opts->mss);
@@ -159,7 +156,6 @@ static void serval_tcp_options_write(__be32 *ptr, struct serval_tcp_sock *tp,
 	}
         */
 	if (unlikely(OPTION_WSCALE & options)) {
-                LOG_DBG("Writing window scale option\n");
 		*ptr++ = htonl((TCPOPT_NOP << 24) |
 			       (TCPOPT_WINDOW << 16) |
 			       (TCPOLEN_WINDOW << 8) |
@@ -203,7 +199,7 @@ static unsigned serval_tcp_syn_options(struct sock *sk, struct sk_buff *skb,
 		opts->ws = tp->rx_opt.rcv_wscale;
 		opts->options |= OPTION_WSCALE;
 		remaining -= TCPOLEN_WSCALE_ALIGNED;
-                LOG_DBG("Adding window scale option ws=%u\n", opts->ws);
+                LOG_SSK(sk, "Adding window scale option ws=%u\n", opts->ws);
 	}
 	return MAX_SERVAL_TCP_OPTION_SPACE - remaining;
 }
@@ -727,7 +723,7 @@ static void serval_tcp_adjust_pcount(struct sock *sk,
 
 	tp->packets_out -= decr;
         
-        LOG_DBG("packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
+        LOG_SSK(sk, "packets_out=%u tp->write_seq=%u tp->snd_una=%u\n", 
                 tp->packets_out, tp->write_seq, tp->snd_una);
 
 	if (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED)
@@ -948,7 +944,7 @@ int serval_tcp_mtu_to_mss(struct sock *sk, int pmtu)
 	/* Now subtract TCP options size, not including SACKs */
 	mss_now -= tp->tcp_header_len - sizeof(struct tcphdr);
 
-        LOG_DBG("pmtu=%d mss_now=%u mss_clamp=%u\n", 
+        LOG_SSK(sk, "pmtu=%d mss_now=%u mss_clamp=%u\n", 
                 pmtu, mss_now, tp->rx_opt.mss_clamp);
 
 	return mss_now;
@@ -1093,13 +1089,12 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (skb->len != tcp_header_size)
 		serval_tcp_event_data_sent(tp, skb, sk);
 
+        /*
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq) {
-		/*
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
-                serval_tcp_skb_pcount(skb));
-		*/
+                              serval_tcp_skb_pcount(skb));
 	}
-
+        */
 #if defined(ENABLE_DEBUG)
         {
                 char rmtstr[18];
@@ -1256,7 +1251,7 @@ int serval_tcp_retransmit_skb(struct sock *sk, struct sk_buff *skb)
 
 	if (before(TCP_SKB_CB(skb)->seq, tp->snd_una)) {
 		if (before(TCP_SKB_CB(skb)->end_seq, tp->snd_una)) {
-                        LOG_DBG("end_seq=%u snd_una=%u\n", 
+                        LOG_SSK(sk, "end_seq=%u snd_una=%u\n", 
                                 TCP_SKB_CB(skb)->end_seq, tp->snd_una);
 			BUG();
                 }
@@ -1792,7 +1787,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 			       serval_tcp_full_space(sk));
 	int window;
 
-        LOG_DBG("tp->tp_ack.rcv_mss=%u window_clamp=%d "
+        LOG_SSK(sk, "tp->tp_ack.rcv_mss=%u window_clamp=%d "
                 "free_space=%d tcp_full_space=%d\n", 
                 tp->tp_ack.rcv_mss, 
                 tp->window_clamp,
@@ -1816,7 +1811,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 	if (free_space > tp->rcv_ssthresh)
 		free_space = tp->rcv_ssthresh;
 
-        LOG_DBG("free_space=%d\n", free_space);
+        LOG_SSK(sk, "free_space=%d\n", free_space);
 
 	/* Don't do rounding if we are using window scaling, since the
 	 * scaled window will not line up with the MSS boundary anyway.
@@ -1843,7 +1838,7 @@ u32 __serval_tcp_select_window(struct sock *sk)
 		 * is too small.
 		 */
 
-                LOG_DBG("window=%u free_space=%u mss=%u\n",
+                LOG_SSK(sk, "window=%u free_space=%u mss=%u\n",
                         window, free_space, mss);
 
 		if (window <= free_space - mss || window > free_space)
@@ -2011,7 +2006,7 @@ static void serval_tcp_connect_init(struct sock *sk)
 
 	tp->rx_opt.rcv_wscale = rcv_wscale;
 
-        LOG_DBG("rx_opt.rcv_wscale=%u\n", rcv_wscale);
+        LOG_SSK(sk, "rx_opt.rcv_wscale=%u\n", rcv_wscale);
 
 	tp->rcv_ssthresh = tp->rcv_wnd;
 
@@ -2041,7 +2036,7 @@ static int serval_tcp_build_header(struct sock *sk,
 	struct tcp_skb_cb *tcb;
 	unsigned tcp_options_size = 0, tcp_header_size;
         
-        LOG_DBG("TCP build SYNACK\n");
+        LOG_SSK(sk, "TCP build SYNACK\n");
 
         tcp_header_size = tcp_options_size + sizeof(struct tcphdr);
 
@@ -2092,7 +2087,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
         skb_reset_transport_header(skb);
 
-        LOG_DBG("Transport header=%p\n", skb_transport_header(skb));
+        LOG_SSK(sk, "Transport header=%p\n", skb_transport_header(skb));
 
 	tp->snd_nxt = tp->write_seq;
 	serval_tcp_init_nondata_skb(skb, tp->write_seq++, TCPH_SYN);
@@ -2113,7 +2108,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
-        LOG_DBG("Sending TCP SYN %s\n", tcphdr_to_str(th));
+        LOG_SSK(sk, "Sending TCP SYN %s\n", tcphdr_to_str(th));
 
         /* On SYN the checksum is deferred until after
            resolution. This is because we do not know the route and
@@ -2145,7 +2140,7 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 #else
 	mss = SERVAL_TCP_MSS_INIT; 
 #endif
-        LOG_DBG("1. req->window_clamp=%u tp->window_clamp=%u\n",
+        LOG_SSK(sk, "1. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
 
 	if (req->rcv_wnd == 0) { /* ignored for retransmitted syns */
@@ -2205,10 +2200,10 @@ int serval_tcp_connection_build_synack(struct sock *sk,
 	th->window = htons(min(req->rcv_wnd, 65535U));
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
-        LOG_DBG("TCP sending SYNACK %s optlen=%u\n", 
+        LOG_SSK(sk, "TCP sending SYNACK %s optlen=%u\n", 
                 tcphdr_to_str(th), tcp_options_size);
 
-        LOG_DBG("2. req->window_clamp=%u tp->window_clamp=%u\n",
+        LOG_SSK(sk, "2. req->window_clamp=%u tp->window_clamp=%u\n",
                 req->window_clamp, tp->window_clamp);
 
         __serval_tcp_v4_send_check(skb, serval_rsk(req)->reply_saddr, 
@@ -2252,7 +2247,7 @@ int serval_tcp_connection_build_ack(struct sock *sk,
 
 	TCP_SKB_CB(skb)->when = tcp_time_stamp;
 
-        LOG_DBG("Built ACK %s\n", tcphdr_to_str(th));                
+        LOG_SSK(sk, "Built ACK %s\n", tcphdr_to_str(th));                
 
         if (serval_sk(sk)->af_ops->send_check)
                 serval_sk(sk)->af_ops->send_check(sk, skb);
@@ -2266,39 +2261,6 @@ int serval_tcp_connection_build_ack(struct sock *sk,
         */
 
         return 0;
-}
-
-/* We get here when a process closes a file descriptor (either due to
- * an explicit close() or as a byproduct of exit()'ing) and there
- * was unread data in the receive queue.  This behavior is recommended
- * by RFC 2525, section 2.17.  -DaveM
- */
-void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority)
-{
-	struct sk_buff *skb;
-
-        LOG_DBG("Sending Active RESET\n");
-
-	/* NOTE: No TCP options attached and we never retransmit this. */
-	skb = alloc_skb(MAX_SERVAL_TCP_HEADER, priority);
-	if (!skb) {
-		//NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
-		return;
-	}
-
-	/* Reserve space for headers and prepare control bits. */
-	skb_reserve(skb, MAX_SERVAL_TCP_HEADER);
-	serval_tcp_init_nondata_skb(skb, serval_tcp_acceptable_seq(sk),
-                                    TCPH_ACK | TCPH_RST);
-	/* Send it off. */
-	TCP_SKB_CB(skb)->when = tcp_time_stamp;
-
-        serval_tcp_transmit_skb(sk, skb, 0, priority);
-        /*
-	if (tcp_transmit_skb(sk, skb, 0, priority))
-		NET_INC_STATS(sock_net(sk), LINUX_MIB_TCPABORTFAILED);
-        */
-	//TCP_INC_STATS(sock_net(sk), TCP_MIB_OUTRSTS);
 }
 
 /* Send out a delayed ack, the caller does the policy checking

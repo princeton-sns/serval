@@ -32,7 +32,7 @@
 #define EXTRA_HDR (20)
 
 /* payload + LL + IP + extra */
-#define MAX_SERVAL_TCP_HEADER (MAX_SERVAL_HDR + 128)
+#define MAX_SERVAL_TCP_HEADER (MAX_SAL_HDR + 128)
 
 #define MAX_SERVAL_TCP_OPTION_SPACE 40
 
@@ -42,7 +42,7 @@
 #define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
 #define SERVAL_TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
 
-#define SERVAL_TCP_MSS_INIT (1460 - sizeof(struct serval_hdr))
+#define SERVAL_TCP_MSS_INIT (1460 - sizeof(struct sal_hdr))
 
 /* 
  * Never offer a window over 32767 without using window scaling. Some
@@ -749,6 +749,8 @@ static inline u32 __serval_tcp_set_rto(const struct serval_tcp_sock *tp)
 	return (tp->srtt >> 3) + tp->rttvar;
 }
 
+void serval_tcp_set_rto(struct sock *sk);
+
 static inline void __serval_tcp_fast_path_on(struct serval_tcp_sock *tp, 
 					     u32 snd_wnd)
 {
@@ -911,6 +913,9 @@ extern void serval_tcp_init_congestion_control(struct sock *sk);
 void serval_tcp_cleanup_congestion_control(struct sock *sk);
 extern struct tcp_congestion_ops serval_tcp_init_congestion_ops;
 
+void serval_tcp_update_metrics(struct sock *sk);
+void serval_tcp_init_metrics(struct sock *sk);
+
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len);
 int serval_tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
                         unsigned int mss_now);
@@ -938,7 +943,6 @@ int serval_tcp_rcv_checks(struct sock *sk, struct sk_buff *skb, int is_syn);
 
 void serval_tcp_done(struct sock *sk);
 
-void serval_tcp_send_active_reset(struct sock *sk, gfp_t priority);
 void serval_tcp_send_delayed_ack(struct sock *sk);
 void serval_tcp_send_ack(struct sock *sk);
 void serval_tcp_send_fin(struct sock *sk);
@@ -948,6 +952,9 @@ static inline void serval_tcp_clear_xmit_timers(struct sock *sk)
 {
 	serval_tsk_clear_xmit_timers(sk);
 }
+
+void serval_tcp_disable_fack(struct serval_tcp_sock *tp);
+
 /* These functions determine how the current flow behaves in respect of SACK
  * handling. SACK is negotiated with the peer, and therefore it can vary
  * between different flows.

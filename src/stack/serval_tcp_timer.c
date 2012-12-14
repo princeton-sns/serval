@@ -30,9 +30,8 @@ static void serval_tcp_write_err(struct sock *sk)
 	sk->sk_err = sk->sk_err_soft ? : ETIMEDOUT;
 	sk->sk_error_report(sk);
 
-        LOG_DBG("Write ERROR, socket DONE\n");
-	serval_tcp_done(sk);
-	//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONTIMEOUT);
+        LOG_SSK(sk, "Write ERROR, socket DONE\n");
+	serval_sal_done(sk);
 }
 
 /* Do not allow orphaned sockets to eat all our resources.
@@ -72,10 +71,10 @@ static int serval_tcp_out_of_resources(struct sock *sk, int do_reset)
 		    (!tp->snd_wnd && !tp->packets_out))
 			do_reset = 1;
 		if (do_reset)
-			serval_tcp_send_active_reset(sk, GFP_ATOMIC);
+			serval_sal_send_active_reset(sk, GFP_ATOMIC);
 
-                LOG_DBG("Too many orphans, TCP done!\n");
-		serval_tcp_done(sk);
+                LOG_SSK(sk, "Too many orphans, TCP done!\n");
+		serval_sal_done(sk);
 		//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONMEMORY);
 		return 1;
 	}
@@ -168,7 +167,7 @@ static int serval_tcp_write_timeout(struct sock *sk)
 	int retry_until = 0;
 	int do_reset, syn_set = 0;
 
-        LOG_DBG("write timeout\n");
+        LOG_SSK(sk, "write timeout\n");
 
 	if (!((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV))) {
 		if (retransmits_timed_out(sk, sysctl_serval_tcp_retries1, 0)) {
@@ -187,7 +186,7 @@ static int serval_tcp_write_timeout(struct sock *sk)
 			do_reset = alive ||
 				   !retransmits_timed_out(sk, retry_until, 0);
                         
-                        LOG_DBG("do_reset=%d\n", do_reset);
+                        LOG_SSK(sk, "do_reset=%d\n", do_reset);
 
 			if (serval_tcp_out_of_resources(sk, do_reset))
 				return 1;
@@ -207,7 +206,7 @@ static void serval_tcp_delack_timer(unsigned long data)
 	struct sock *sk = (struct sock *)data;
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-        LOG_DBG("timeout\n");
+        LOG_SSK(sk, "timeout\n");
 
 	bh_lock_sock(sk);
 
@@ -316,10 +315,10 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
+        LOG_SSK(sk, "timeout\n");
+
 	if (!tp->packets_out)
 		goto out;
-
-        LOG_DBG("timeout\n");
 
 	WARN_ON(serval_tcp_write_queue_empty(sk));
 
@@ -438,7 +437,7 @@ static void serval_tcp_write_timer(unsigned long data)
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 	int event;
 
-        LOG_DBG("timeout\n");
+        LOG_SSK(sk, "timeout\n");
 
 	bh_lock_sock(sk);
 	if (sock_owned_by_user(sk)) {
@@ -486,7 +485,7 @@ static void serval_tcp_keepalive_timer (unsigned long data)
 		goto out;
 	}
 
-	LOG_DBG("Keepalive timer not implemented!\n");
+	LOG_SSK(sk, "Keepalive timer not implemented!\n");
 
 out:
 	bh_unlock_sock(sk);
