@@ -89,7 +89,7 @@ public class TranslatorFragment extends Fragment {
 	private static boolean dummyTested = false;
 	
 	private Button translatorButton;
-	private ToggleButton transHttpButton, transAllButton;
+	private ToggleButton transHttpButton, transAllButton, hijackButton;
 	private View view;
 
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
