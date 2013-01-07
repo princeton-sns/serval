@@ -348,6 +348,7 @@ static int on_service_registration(struct hostctrl *hc,
     JNIEnv *env = ctx->env;
     jobject service_id, addr, old_addr = NULL;
     jmethodID mid;
+    jobject cb;
     jthrowable exc;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRegistration", 
@@ -381,7 +382,8 @@ static int on_service_registration(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, service_id, (jint)flags, 
                            (jint)prefix, addr, old_addr);
 
     exc = (*env)->ExceptionOccurred(env);
@@ -392,6 +394,7 @@ static int on_service_registration(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, old_addr);
 err_old_addr:
     (*env)->DeleteLocalRef(env, addr);
@@ -409,7 +412,7 @@ static int on_service_unregistration(struct hostctrl *hc,
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
-    jobject service_id, addr;
+    jobject service_id, addr, cb;
     jmethodID mid;
     jthrowable exc;
 
@@ -429,7 +432,8 @@ static int on_service_unregistration(struct hostctrl *hc,
     if (!addr)
         goto err_addr;
    
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, (jint)flags, 
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, service_id, (jint)flags, 
                            (jint)prefix, addr);
     
     exc = (*env)->ExceptionOccurred(env);
@@ -440,6 +444,7 @@ static int on_service_unregistration(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, addr);
 err_addr:
     (*env)->DeleteLocalRef(env, service_id);
@@ -472,6 +477,7 @@ static int on_service_info_callback(struct hostctrl *hc,
     JNIEnv *env = ctx->env;
     jobjectArray arr = NULL;
     jthrowable exc;
+    jobject cb;
     
     if (num > 0) {
         unsigned int i;
@@ -497,7 +503,8 @@ static int on_service_info_callback(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, (jlong)xid, (jint)retval, arr);
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, (jlong)xid, (jint)retval, arr);
 
     exc = (*env)->ExceptionOccurred(env);
     
@@ -507,6 +514,7 @@ static int on_service_info_callback(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
     
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, arr);
 
     return 0;
@@ -582,6 +590,7 @@ static int on_service_remove(struct hostctrl *hc,
     jmethodID mid;
     jobjectArray arr = NULL;
     jthrowable exc;
+    jobject cb;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRemove", 
                               "(JI[Lorg/servalarch/servalctrl/ServiceInfoStat;)V");
@@ -610,7 +619,8 @@ static int on_service_remove(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
                            (jlong)xid, (jint)retval, arr);
 
     exc = (*env)->ExceptionOccurred(env);
@@ -621,6 +631,7 @@ static int on_service_remove(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, arr);
 
     return 0;
@@ -707,6 +718,7 @@ static int on_service_delayed(struct hostctrl *hc,
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jobject service_id;
+    jobject cb;
     jmethodID mid;
     jthrowable exc;
 
@@ -721,7 +733,8 @@ static int on_service_delayed(struct hostctrl *hc,
     if (!service_id)
         return -1;
     
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
                            (jlong)xid, (jlong)pkt_id, service_id);
 
     exc = (*env)->ExceptionOccurred(env);
@@ -731,6 +744,8 @@ static int on_service_delayed(struct hostctrl *hc,
         (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
     }
+    (*env)->DeleteLocalRef(env, service_id);
+    (*env)->DeleteLocalRef(env, cb);
     
     return 0;
 }
