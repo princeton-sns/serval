@@ -21,6 +21,7 @@
 #define jlong_to_ptr(l) ((void *) (((uintptr_t)l) & 0xffffffff))
 #endif
 
+
 static JavaVM *jvm = NULL;
 
 /* Cached classes */
@@ -231,6 +232,7 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
         return NULL;
     
     service_id = new_service_id(env, &si->srvid);
+    LOG_ERR("serv info\n");
 
     if (!service_id) {
         LOG_ERR("could not create service_id\n");
@@ -730,8 +732,9 @@ static int on_service_delayed(struct hostctrl *hc,
 
     service_id = new_service_id(env, service);
 
-    if (!service_id)
+    if (!service_id) {
         return -1;
+    }
     
     cb = get_callbacks(env, ctx);
     (*env)->CallVoidMethod(env, cb, mid,
@@ -740,12 +743,12 @@ static int on_service_delayed(struct hostctrl *hc,
     exc = (*env)->ExceptionOccurred(env);
     
     if (exc) {
-        LOG_DBG("Callback threw exception\n");
+        LOG_ERR("Callback threw exception\n");
         (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
     }
-    (*env)->DeleteLocalRef(env, service_id);
     (*env)->DeleteLocalRef(env, cb);
+    (*env)->DeleteLocalRef(env, service_id);
     
     return 0;
 }
