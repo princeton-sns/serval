@@ -647,22 +647,10 @@ static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
 	return err;
 }
 
-static int serval_shutdown(struct socket *sock, int how)
+static void unregister_service(struct sock *sk)
 {
-	struct sock *sk = sock->sk;
         struct serval_sock *ssk = serval_sk(sk);
-	int err = 0;
 
-	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
-		       1->2 bit 2 snds.
-		       2->3 */
-	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
-		return -EINVAL;
-
-        /*
-          Unregister notification only if we previously registered and
-          this is not a child socket.
-        */
         if (serval_sock_flag(ssk, SSK_FLAG_BOUND) &&
             !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND) && 
             !serval_sock_flag(ssk, SSK_FLAG_CHILD)) {
@@ -681,6 +669,25 @@ static int serval_shutdown(struct socket *sock, int how)
                         LOG_INF("No service daemon running?\n");
                 }
         }
+}
+
+static int serval_shutdown(struct socket *sock, int how)
+{
+	struct sock *sk = sock->sk;
+	int err = 0;
+
+	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
+		       1->2 bit 2 snds.
+		       2->3 */
+	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
+		return -EINVAL;
+
+        /*
+          Unregister notification only if we previously registered and
+          this is not a child socket.
+        */
+
+        unregister_service(sk);
 
 	lock_sock(sk);
 
@@ -743,6 +750,8 @@ int serval_release(struct socket *sock)
 			timeout = sk->sk_lingertime;
 
                 sock->sk = NULL;
+                
+                unregister_service(sk);
 
                 lock_sock(sk);
 

@@ -2841,7 +2841,7 @@ static int serval_sal_init_state_process(struct sock *sk,
 
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
                 /* Set source serviceID */
-                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext[0]->srvid; 
+                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext[1]->srvid; 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);

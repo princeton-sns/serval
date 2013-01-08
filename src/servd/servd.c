@@ -147,7 +147,7 @@ static struct registration *registration_add(struct servd_context *ctx,
         ctx->num_regs++;
         pthread_mutex_unlock(&ctx->lock);
 
-        if (type == SERVICE_LOCAL) {
+        if (type == SERVICE_LOCAL && !ctx->router) {
                 r->timer.callback = registration_timeout_local;
                 timer_schedule_secs(&ctx->tq, &r->timer, LOCAL_SERVICE_TIMEOUT);
         } else {
