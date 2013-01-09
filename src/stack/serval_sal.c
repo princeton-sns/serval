@@ -257,7 +257,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
                                 ext->type);
                         return buf;
                 }
-
+                
                 if (ext_len < min_ext_length[ext->type] ||
                     ext_len > max_ext_length[ext->type]) {
                         LOG_DBG("Bad extension \'%s\' hdr_len=%d "
@@ -1420,8 +1420,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         
         sh->check = 0;
         sh->shl = sal_len >> 2;
-        
-        LOG_DBG("New hdr: skb->len=%u %s\n",
+
+        LOG_DBG("New SAL hdr (old_len=%u new_len=%u): skb->len=%u %s\n",
+                ctx->length,
+                sal_len,
                 skb->len,
                 sal_hdr_to_str(sh));
 
@@ -3187,8 +3189,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         iph = ip_hdr(cskb);
                         hdr_len += ret;
                         
-                        LOG_DBG("new serval header len=%u\n", hdr_len);
-                        
                         /* Update destination address */
                         memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
                         
@@ -3229,7 +3229,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 /* serval_ipv4_forward_out has taken
                                    custody of packet, no need to
                                    free. */
-                                LOG_ERR("Forwarding failed err=%d\n", ret);
+                                LOG_ERR("Forwarding failed\n");
                         } else 
                                 num_forward++;
                 }
@@ -3347,6 +3347,8 @@ int serval_sal_reresolve(struct sk_buff *skb)
         struct sock *sk;
         int err = 0;
 
+        LOG_DBG("Reresolving packet\n");
+
         if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
                 LOG_DBG("Bad Serval header %s\n",
                         ctx.hdr ? sal_hdr_to_str(ctx.hdr) : "NULL");
@@ -3454,8 +3456,10 @@ int serval_sal_rcv(struct sk_buff *skb)
                         break;
                 case SAL_RESOLVE_FORWARD:
                         /* Packet forwarded on out device */
+                        LOG_PKT("SAL FORWARD\n");
+                        return NET_RX_SUCCESS;
                 case SAL_RESOLVE_DELAY:
-                        LOG_DBG("SAL FWD/DLY %s\n", sal_hdr_to_str(ctx.hdr));
+                        LOG_PKT("SAL DELAY\n");
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
