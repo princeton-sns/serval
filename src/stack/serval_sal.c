@@ -800,8 +800,8 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
         s32 seq_rtt = -1;
         int err = 0;
        
-        while ((skb = serval_sal_ctrl_queue_head(sk)) && 
-               skb != serval_sal_send_head(sk)) {
+        while ((skb = serval_sal_ctrl_queue_head(sk))) {// && 
+               //skb != serval_sal_send_head(sk)) {
                 if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
 
@@ -821,6 +821,10 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
                         LOG_PKT("cleaned rtxQ verno=%u HZ=%u seq_rtt=%d\n", 
                                 SAL_SKB_CB(skb)->verno, 
                                 HZ, seq_rtt);
+
+                        if (skb == serval_sal_send_head(sk)) {
+                            serval_sal_advance_send_head(sk, skb);
+                        }
 
                         kfree_skb(skb);
                         skb = serval_sal_ctrl_queue_head(sk);
@@ -3578,7 +3582,8 @@ void serval_sal_rexmit_timeout(unsigned long data)
                         net_serval.sysctl_sal_max_retransmits);
                 serval_sal_write_err(sk);
         } else {
-                LOG_SSK(sk, "ReXmit and rescheduling timer\n");
+                LOG_SSK(sk, "ReXmit and rescheduling timer (attempt %d)\n",
+                        ssk->retransmits);
                 serval_sal_rexmit(sk);
 
                 ssk->backoff++;
