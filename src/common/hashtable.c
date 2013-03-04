@@ -71,6 +71,7 @@ void hashtable_fini(struct hashtable *table)
 		pthread_mutex_destroy(&table->hash[i].lock);
 	}
     atomic_set(&table->count, 0);
+    free(table->hash);
 }
 
 int hashtable_for_each(struct hashtable *table, 

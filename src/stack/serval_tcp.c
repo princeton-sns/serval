@@ -75,7 +75,7 @@ static int serval_tcp_disconnect(struct sock *sk, int flags)
 	tp->snd_cwnd_cnt = 0;
 	tp->bytes_acked = 0;
 	tp->window_clamp = 0;
-    tp->snd_mig_last = 0;
+        tp->snd_mig_last = 0;
 	serval_tcp_set_ca_state(sk, TCP_CA_Open);
 	serval_tcp_clear_retrans(tp);
 	serval_tsk_delack_init(sk);

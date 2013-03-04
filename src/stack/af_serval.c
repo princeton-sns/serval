@@ -676,6 +676,8 @@ static int serval_shutdown(struct socket *sock, int how)
 	struct sock *sk = sock->sk;
 	int err = 0;
 
+        LOG_DBG("\n");
+
 	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
 		       1->2 bit 2 snds.
 		       2->3 */

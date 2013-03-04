@@ -2305,13 +2305,9 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         
         SAL_SKB_CB(rskb)->flags = SVH_RSYN | SVH_ACK;
         SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt++;
-        
-        /* FIXME: should the RSYN-ACK be queued for retransmission? I
-           guess it is not necessary since the peer that sent the RSYN
-           would retransmit. */
-        SAL_SKB_CB(skb)->when = sal_time_stamp;
+        SAL_SKB_CB(rskb)->when = sal_time_stamp;
 
-        return serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
+        return serval_sal_queue_and_push(sk, rskb);
 }
 
 static int serval_sal_rcv_fin(struct sock *sk, 

@@ -319,6 +319,9 @@ int del_timer(struct timer_list *timer)
 	if (!tlh)
 		return -1;
 	
+        if (timer->entry.next == NULL)
+                return 0;
+
 	if (timer->entry.prev == &tlh->head) {
                 /* Entry is first in queue, must signal change */
                 signal_change = 1;
