@@ -2603,9 +2603,6 @@ static void serval_tcp_fin(struct sk_buff *skb,
 
         LOG_SSK(sk, "TCP FIN %s\n", tcphdr_to_str(th));
 
-        /* Ignore this FIN, wait for SAL fin */
-        //th->fin = 0;
-        
 	serval_tsk_schedule_ack(sk);
 
 	/* It _is_ possible, that we have something out-of-order _after_ FIN.

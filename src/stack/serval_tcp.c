@@ -1578,6 +1578,8 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			if (offset < skb->len)
 				goto found_ok_skb;
 
+                        if (tcp_hdr(skb)->fin)
+                                goto found_fin_ok;
 			         /*
 			WARN(!(flags & MSG_PEEK), KERN_INFO "recvmsg bug 2: "
 					"copied %X seq %X rcvnxt %X fl %X\n",
@@ -1636,6 +1638,9 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			}
 		}
 
+                LOG_DBG("tp->copied_seq=%u tp->rcv_nxt=%u\n",
+                        tp->copied_seq, tp->rcv_nxt);
+
 		serval_tcp_cleanup_rbuf(sk, copied);
 
 		if (!sysctl_serval_tcp_low_latency && 
@@ -1692,9 +1697,10 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			/* Do not sleep, just process backlog. */
 			release_sock(sk);
 			lock_sock(sk);
-		} else
+		} else {
 			sk_wait_data(sk, &timeo);
-
+                        LOG_SSK(sk, "woke up after waiting for data\n");
+                }
 #ifdef CONFIG_NET_DMA
 		serval_tcp_service_net_dma(sk, false);  /* Don't block */
 		tp->ucopy.wakeup = 0;
@@ -1821,8 +1827,20 @@ skip_copy:
 		if (used + offset < skb->len)
 			continue;
 
-		if (tcp_hdr(skb)->fin)
+                /*
+                  Serval-specific FIN processing:
+
+                  Since Serval does not actually close a connection
+                  upon receiving a TCP FIN (closing is handled in the
+                  SAL), this FIN is simply treated as a en d of stream
+                  marker. Instead of returning to the user, we
+                  continue to hang/wait in this function until the SAL
+                  closes, and only then return 0. */
+        found_fin_ok:
+		if (tcp_hdr(skb)->fin) {
                         ++*seq;
+                        LOG_SSK(sk, "Received FIN\n");
+                }
 
    		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, copied_early);
