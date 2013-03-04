@@ -1193,6 +1193,7 @@ int main(int argc, char **argv)
         int ret = 0, daemon = 0, cross_translate = 0;
         struct rlimit limit;
         rlim_t file_limit = 0;
+        int inet_only = 0;
 
         argc--;
 	argv++;
@@ -1225,6 +1226,9 @@ int main(int argc, char **argv)
                 } else if (strcmp(argv[0], "-x") == 0 ||
                            strcmp(argv[0], "--cross-translate") ==  0) {
                         cross_translate = 1;
+                } else if (strcmp(argv[0], "-io") == 0 ||
+                           strcmp(argv[0], "--inet-only") ==  0) {
+                        inet_only = 1;
                 } else if (strcmp(argv[0], "-w") == 0 ||
                            strcmp(argv[0], "--workers") ==  0) {
                         unsigned long n;
@@ -1303,7 +1307,7 @@ int main(int argc, char **argv)
                 }
         }
         
-        ret = run_translator(port, cross_translate, 0);
+        ret = run_translator(port, cross_translate, inet_only);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);
