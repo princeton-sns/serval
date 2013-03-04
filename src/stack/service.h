@@ -35,7 +35,6 @@ struct service_entry {
         atomic_t refcnt;
 };
 
-
 typedef enum {
         SERVICE_ITER_ALL, /* Return all entries */
         SERVICE_ITER_DEMUX,

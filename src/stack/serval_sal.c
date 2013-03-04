@@ -4018,7 +4018,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0) {
+	if (service_iter_init(&iter, se, 
+                              net_serval.sysctl_resolution_mode) < 0) {
                 kfree_skb(skb);
                 return -1;
         }

@@ -53,6 +53,7 @@ extern void __exit inet_to_serval_fini(void);
 #include <ctrl.h>
 #include <af_serval.h>
 #include <serval_sal.h>
+#include <service.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -71,6 +72,7 @@ struct netns_serval net_serval = {
         .sysctl_debug = 0,
         .sysctl_udp_encap = 0,
         .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
+        .sysctl_resolution_mode = SERVICE_ITER_ALL,
 };
 
 extern void serval_tcp_init(void);
