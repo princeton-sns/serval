@@ -11,6 +11,12 @@
 #include <linux/wait.h>
 #include <net/sock.h>
 
+#define UBUNTU_NON_STANDARD_KERNEL                      \
+        ((LINUX_VERSION_CODE == 197144) ||              \
+         (LINUX_VERSION_CODE == 197148) ||              \
+         (LINUX_VERSION_CODE == 197150) ||              \
+         (LINUX_VERSION_CODE == 197157))
+        
 /* This is pure unmodified Linux kernel code. It is provided here
  * because the skb_splice_bits() function is not exported in the Linux
  * kernel, and this function is necessary to implement splice support
@@ -231,9 +237,7 @@ ssize_t splice_to_pipe(struct pipe_inode_info *pipe,
 
 /* Hotfix for detecting Ubuntu 12.04 kernel, which seems to have
  * patches applied from later kernels */
-#if (LINUX_VERSION_CODE == 197144) ||                   \
-        (LINUX_VERSION_CODE == 197148) ||               \
-        (LINUX_VERSION_CODE == 197150) ||               \
+#if UBUNTU_NON_STANDARD_KERNEL || \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
 #define CONST const
 #else
@@ -256,9 +260,7 @@ int splice_grow_spd(CONST struct pipe_inode_info *pipe, struct splice_pipe_desc 
 	return -ENOMEM;
 }
 
-#if (LINUX_VERSION_CODE == 197144) ||                   \
-        (LINUX_VERSION_CODE == 197148) ||               \
-        (LINUX_VERSION_CODE == 197150) ||               \
+#if UBUNTU_NON_STANDARD_KERNEL ||                       \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
 void splice_shrink_spd(struct splice_pipe_desc *spd)
 {
@@ -527,9 +529,7 @@ done:
 		lock_sock(sk);
 	}
 
-#if (LINUX_VERSION_CODE == 197144) ||                   \
-        (LINUX_VERSION_CODE == 197148) ||               \
-        (LINUX_VERSION_CODE == 197150) ||               \
+#if UBUNTU_NON_STANDARD_KERNEL ||                       \
         (LINUX_VERSION_CODE >= KERNEL_VERSION(3,4,5))
         splice_shrink_spd(&spd);
 #else
