@@ -1,4 +1,4 @@
-cscope 15 /mnt/sda3/src/serval/serval/src/libservalctrl               0000397832
+cscope 15 /mnt/sda3/src/serval/serval/src/libservalctrl               0000397939
 	@hostctrl.c
 
 2 
@@ -1207,7 +1207,7 @@ hc
 	}
 }
 
-273 
+278 
 	$ho¡ù¾_£rviû_add
 (
 ho¡ù¾
@@ -1215,61 +1215,67 @@ ho¡ù¾
 hc
 ,
 
-274 
+279 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-275 cÚ¡ 
+280 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-276 
+281 
 ´efix_b™s
 ,
 
-277 
+282 
 ´iÜ™y
 ,
 
-278 
+283 
 weight
 ,
 
-279 cÚ¡ 
+284 cÚ¡ 
 š_addr
  *
 addr
+,
+
+285 cÚ¡ 
+š_addr
+ *
+¤ÿddr
 )
 
-281 
+287 
 £rviû_id
  
 deçuÉ_£rviû
 ;
 
-283 
+289 
 	`mem£t
 (&
 deçuÉ_£rviû
 , 0, (default_service));
 
-285 ià(
+291 ià(
 ¤vid
  =ğ
 NULL
 )
 
-286 
+292 
 ¤vid
  = &
 deçuÉ_£rviû
 ;
 
-288  
+294  
 hc
 ->
 İs
@@ -1283,19 +1289,21 @@ ty³
 ´efix_b™s
 ,
 
-289 
+295 
 ´iÜ™y
 , 
 weight
 , 
 addr
+, 
+¤ÿddr
 );
 
-290 
+296 
 	}
 }
 
-292 
+298 
 	$ho¡ù¾_£rviû_»move
 (
 ho¡ù¾
@@ -1303,29 +1311,29 @@ ho¡ù¾
 hc
 ,
 
-293 
+299 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-294 cÚ¡ 
+300 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-295 
+301 
 ´efix_b™s
 ,
 
-296 cÚ¡ 
+302 cÚ¡ 
 š_addr
  *
 addr
 )
 
-298  
+304  
 hc
 ->
 İs
@@ -1341,11 +1349,11 @@ ty³
 addr
 );
 
-299 
+305 
 	}
 }
 
-301 
+307 
 	$ho¡ù¾_£rviû_g‘
 (
 ho¡ù¾
@@ -1353,47 +1361,47 @@ ho¡ù¾
 hc
 ,
 
-302 cÚ¡ 
+308 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-303 
+309 
 ´efix_b™s
 ,
 
-304 cÚ¡ 
+310 cÚ¡ 
 š_addr
  *
 addr
 )
 
-306 
+312 
 £rviû_id
  
 deçuÉ_£rviû
 ;
 
-308 
+314 
 	`mem£t
 (&
 deçuÉ_£rviû
 , 0, (default_service));
 
-310 ià(
+316 ià(
 ¤vid
  =ğ
 NULL
 )
 
-311 
+317 
 ¤vid
  = &
 deçuÉ_£rviû
 ;
 
-313  
+319  
 hc
 ->
 İs
@@ -1407,11 +1415,11 @@ hc
 addr
 );
 
-314 
+320 
 	}
 }
 
-316 
+322 
 	$ho¡ù¾_£rviû_modify
 (
 ho¡ù¾
@@ -1419,43 +1427,43 @@ ho¡ù¾
 hc
 ,
 
-317 
+323 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-318 cÚ¡ 
+324 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-319 
+325 
 ´efix_b™s
 ,
 
-320 
+326 
 ´iÜ™y
 ,
 
-321 
+327 
 weight
 ,
 
-322 cÚ¡ 
+328 cÚ¡ 
 š_addr
  *
 Şd_
 ,
 
-323 cÚ¡ 
+329 cÚ¡ 
 š_addr
  *
 Ãw_
 )
 
-325  
+331  
 hc
 ->
 İs
@@ -1469,23 +1477,23 @@ ty³
 ´efix_b™s
 ,
 
-326 
+332 
 ´iÜ™y
 , 
 weight
 ,
 
-327 
+333 
 Şd_
 , 
 Ãw_
 );
 
-328 
+334 
 	}
 }
 
-330 
+336 
 	$ho¡ù¾_£rviûs_add
 (
 ho¡ù¾
@@ -1493,21 +1501,21 @@ ho¡ù¾
 hc
 ,
 
-331 cÚ¡ 
+337 cÚ¡ 
 £rviû_šfo
  *
 si
 ,
 
-332 
+338 
 num_si
 )
 
-335 
+341 
 	}
 }
 
-337 
+343 
 	$ho¡ù¾_£rviûs_»move
 (
 ho¡ù¾
@@ -1515,21 +1523,21 @@ ho¡ù¾
 hc
 ,
 
-338 cÚ¡ 
+344 cÚ¡ 
 £rviû_šfo
  *
 si
 ,
 
-339 
+345 
 num_si
 )
 
-342 
+348 
 	}
 }
 
-344 
+350 
 	$ho¡ù¾_£rviû_qu”y
 (
 ho¡ù¾
@@ -1537,42 +1545,24 @@ ho¡ù¾
 hc
 ,
 
-345 
+351 
 £rviû_id
  *
 ¤vid
 ,
 
-346 
+352 
 æags
 ,
 
-347 
+353 
 ´efix
 ,
 
-348 
+354 
 £rviû_šfo_¡©
  **
 si
-)
-
-351 
-	}
-}
-
-353 
-	$ho¡ù¾_£t_ÿ·b™›s
-(
-ho¡ù¾
- *
-hc
-,
-
-354 
-ušt32_t
- 
-ÿ·b™›s
 )
 
 357 
@@ -1580,6 +1570,24 @@ ušt32_t
 }
 
 359 
+	$ho¡ù¾_£t_ÿ·b™›s
+(
+ho¡ù¾
+ *
+hc
+,
+
+360 
+ušt32_t
+ 
+ÿ·b™›s
+)
+
+363 
+	}
+}
+
+365 
 	$ho¡ù¾_g‘_loÿl_addr
 (
 ho¡ù¾
@@ -1587,19 +1595,19 @@ ho¡ù¾
 hc
 ,
 
-360 
+366 
 sockaddr
  *
 addr
 ,
 
-361 
+367 
 sockËn_t
  *
 add¾’
 )
 
-363  
+369  
 	`mes§ge_chªÃl_g‘_loÿl
 (
 hc
@@ -1611,11 +1619,11 @@ addr
 add¾’
 );
 
-364 
+370 
 	}
 }
 
-366 
+372 
 	$ho¡ù¾_g‘_³”_addr
 (
 ho¡ù¾
@@ -1623,19 +1631,19 @@ ho¡ù¾
 hc
 ,
 
-367 
+373 
 sockaddr
  *
 addr
 ,
 
-368 
+374 
 sockËn_t
  *
 add¾’
 )
 
-370  
+376  
 	`mes§ge_chªÃl_g‘_³”
 (
 hc
@@ -1647,11 +1655,11 @@ addr
 add¾’
 );
 
-371 
+377 
 	}
 }
 
-373 
+379 
 	$ho¡ù¾_£t_d–ay_v”diù
 (
 ho¡ù¾
@@ -1659,17 +1667,17 @@ ho¡ù¾
 hc
 ,
 
-374 
+380 
 pkt_id
 ,
 
-375 
+381 
 d–ay_v”diù
  
 v”diù
 )
 
-377 ià(
+383 ià(
 hc
  && hc->
 İs
@@ -1677,7 +1685,7 @@ hc
 £rviû_d–ay_v”diù
 )
 
-378  
+384  
 hc
 ->
 İs
@@ -1689,7 +1697,7 @@ pkt_id
 v”diù
 );
 
-380 
+386 
 	}
 }
 
@@ -1719,7 +1727,7 @@ v”diù
 	~"ho¡ù¾_İs.h
 "
 
-9 
+10 
 	$loÿl_£rviû_g’”ic
 (
 ho¡ù¾
@@ -1727,67 +1735,73 @@ ho¡ù¾
 hc
 ,
 
-10 
+11 
 msgty³
 ,
 
-11 
+12 
 £rviû_ruË_ty³
  
 ruËty³
 ,
 
-12 cÚ¡ 
+13 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-13 
+14 
 ´efix_b™s
 ,
 
-14 
+15 
 ´iÜ™y
 ,
 
-15 
+16 
 weight
 ,
 
-16 cÚ¡ 
+17 cÚ¡ 
 š_addr
  *
 addr
+,
+
+18 cÚ¡ 
+š_addr
+ *
+¤ÿddr
 )
 
-19 
+21 
 ù¾msg_£rviû
  
 cm
 ;
 
-20 
+22 
 £rviû_šfo
  
 £rviû
 ;
 
-21 } 
+23 } 
 »q
 ;
 
-23 ià(!
+25 ià(!
 ¤vid
 )
 
-26 
+28 
 	`mem£t
 (&
 »q
 , 0, (req));
 
-27 
+29 
 »q
 .
 cm
@@ -1799,7 +1813,7 @@ ty³
 msgty³
 ;
 
-28 
+30 
 »q
 .
 cm
@@ -1811,7 +1825,7 @@ xid
 hc
 ->xid;
 
-29 
+31 
 »q
 .
 cm
@@ -1823,7 +1837,7 @@ cmh
 	`CTRLMSG_SERVICE_NUM_LEN
 (1);
 
-30 
+32 
 »q
 .
 cm
@@ -1835,7 +1849,7 @@ ty³
 ruËty³
 ;
 
-31 
+33 
 »q
 .
 cm
@@ -1845,17 +1859,17 @@ cm
 ¤vid_´efix_b™s
  =
 
-32 (
+34 (
 ´efix_b™s
  > 
 SERVICE_ID_MAX_PREFIX_BITS
 ) ?
 
-33 0 : 
+35 0 : 
 ´efix_b™s
 ;
 
-34 
+36 
 »q
 .
 cm
@@ -1865,7 +1879,7 @@ cm
 ´iÜ™y
  =…riority;
 
-35 
+37 
 »q
 .
 cm
@@ -1875,7 +1889,7 @@ cm
 weight
  = weight;
 
-37 
+39 
 	`memıy
 (&
 »q
@@ -1887,11 +1901,11 @@ cm
 ¤vid
 , srvid, (*srvid));
 
-39 ià(
+41 ià(
 addr
 )
 
-40 
+42 
 	`memıy
 (&
 »q
@@ -1905,7 +1919,7 @@ add»ss
 addr
 , (*ipaddr));
 
-42 
+44 
 »q
 .
 cm
@@ -1915,11 +1929,11 @@ cm
 if_šdex
  = -1;
 
-46 
+48 
 	`LOG_DBG
 ("op=%d…refix_bits=%u†en=%u sizeof(req)=%zu %zu %s\n",
 
-47 
+49 
 msgty³
 , 
 »q
@@ -1931,7 +1945,7 @@ cm
 ¤vid_´efix_b™s
 ,
 
-48 
+50 
 	`CTRLMSG_SERVICE_LEN
 (&
 »q
@@ -1939,7 +1953,7 @@ cm
 cm
 ), (req),
 
-49 
+51 
 	`CTRLMSG_SERVICE_NUM
 (&
 »q
@@ -1947,7 +1961,7 @@ cm
 cm
 ),
 
-50 
+52 
 	`£rviû_id_to_¡r
 (&
 »q
@@ -1959,7 +1973,7 @@ cm
 ¤vid
 ));
 
-52  
+54  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -1975,11 +1989,11 @@ cmh
 Ën
 );
 
-53 
+55 
 	}
 }
 
-55 
+57 
 	$loÿl_£rviû_add
 (
 ho¡ù¾
@@ -1987,37 +2001,43 @@ ho¡ù¾
 hc
 ,
 
-56 
+58 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-57 cÚ¡ 
+59 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-58 
+60 
 ´efix_b™s
 ,
 
-59 
+61 
 ´iÜ™y
 ,
 
-60 
+62 
 weight
 ,
 
-61 cÚ¡ 
+63 cÚ¡ 
 š_addr
  *
 addr
+,
+
+64 cÚ¡ 
+š_addr
+ *
+¤ÿddr
 )
 
-63  
+66  
 	`loÿl_£rviû_g’”ic
 (
 hc
@@ -2025,7 +2045,7 @@ hc
 CTRLMSG_TYPE_ADD_SERVICE
 ,
 
-64 
+67 
 ty³
 , 
 ¤vid
@@ -2035,17 +2055,19 @@ ty³
 ´iÜ™y
 ,
 
-65 
+68 
 weight
 , 
 addr
+, 
+¤ÿddr
 );
 
-66 
+69 
 	}
 }
 
-68 
+71 
 	$loÿl_£rviû_»move
 (
 ho¡ù¾
@@ -2053,29 +2075,29 @@ ho¡ù¾
 hc
 ,
 
-69 
+72 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-70 cÚ¡ 
+73 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-71 
+74 
 ´efix_b™s
 ,
 
-72 cÚ¡ 
+75 cÚ¡ 
 š_addr
  *
 addr
 )
 
-74  
+77  
 	`loÿl_£rviû_g’”ic
 (
 hc
@@ -2083,7 +2105,7 @@ hc
 CTRLMSG_TYPE_DEL_SERVICE
 ,
 
-75 
+78 
 ty³
 , 
 ¤vid
@@ -2091,15 +2113,15 @@ ty³
 ´efix_b™s
 ,
 
-76 0, 0, 
+79 0, 0, 
 addr
 );
 
-77 
+80 
 	}
 }
 
-79 
+82 
 	$loÿl_£rviû_modify
 (
 ho¡ù¾
@@ -2107,69 +2129,69 @@ ho¡ù¾
 hc
 ,
 
-80 
+83 
 £rviû_ruË_ty³
  
 ty³
 ,
 
-81 cÚ¡ 
+84 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-82 
+85 
 ´efix_b™s
 ,
 
-83 
+86 
 ´iÜ™y
 ,
 
-84 
+87 
 weight
 ,
 
-85 cÚ¡ 
+88 cÚ¡ 
 š_addr
  *
 Şd_
 ,
 
-86 cÚ¡ 
+89 cÚ¡ 
 š_addr
  *
 Ãw_
 )
 
-89 
+92 
 ù¾msg_£rviû
  
 cm
 ;
 
-90 
+93 
 £rviû_šfo
  
 £rviû
 [2];
 
-91 } 
+94 } 
 »q
 ;
 
-93 ià(!
+96 ià(!
 ¤vid
 )
 
-96 
+99 
 	`mem£t
 (&
 »q
 , 0, (req));
 
-97 
+100 
 »q
 .
 cm
@@ -2181,7 +2203,7 @@ ty³
 CTRLMSG_TYPE_MOD_SERVICE
 ;
 
-98 
+101 
 »q
 .
 cm
@@ -2193,7 +2215,7 @@ cmh
 	`CTRLMSG_SERVICE_NUM_LEN
 (2);
 
-99 
+102 
 »q
 .
 cm
@@ -2205,7 +2227,7 @@ xid
 hc
 ->xid;
 
-100 
+103 
 »q
 .
 £rviû
@@ -2213,7 +2235,7 @@ hc
 ty³
  =ype;
 
-101 
+104 
 »q
 .
 £rviû
@@ -2221,17 +2243,17 @@ ty³
 ¤vid_´efix_b™s
  =
 
-102 (
+105 (
 ´efix_b™s
  > 
 SERVICE_ID_MAX_PREFIX_BITS
 ) ?
 
-103 0 : 
+106 0 : 
 ´efix_b™s
 ;
 
-104 
+107 
 »q
 .
 £rviû
@@ -2239,7 +2261,7 @@ SERVICE_ID_MAX_PREFIX_BITS
 ´iÜ™y
  =…riority;
 
-105 
+108 
 »q
 .
 £rviû
@@ -2247,7 +2269,7 @@ SERVICE_ID_MAX_PREFIX_BITS
 weight
  = weight;
 
-106 
+109 
 	`memıy
 (&
 »q
@@ -2257,11 +2279,11 @@ weight
 ¤vid
 , srvid, (*srvid));
 
-108 ià(
+111 ià(
 Şd_
 )
 
-109 
+112 
 	`memıy
 (&
 »q
@@ -2273,7 +2295,7 @@ add»ss
 Şd_
 , (*old_ip));
 
-111 
+114 
 »q
 .
 £rviû
@@ -2281,7 +2303,7 @@ add»ss
 if_šdex
  = -1;
 
-112 
+115 
 »q
 .
 £rviû
@@ -2289,13 +2311,13 @@ if_šdex
 if_šdex
  = -1;
 
-114 ià(!
+117 ià(!
 Ãw_
  && 
 Şd_
 )
 
-115 
+118 
 	`memıy
 (&
 »q
@@ -2307,11 +2329,11 @@ add»ss
 Şd_
 , (*old_ip));
 
-116 ià(
+119 ià(
 Ãw_
 )
 
-117 
+120 
 	`memıy
 (&
 »q
@@ -2323,7 +2345,7 @@ add»ss
 Ãw_
 , (*new_ip));
 
-121  
+124  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -2339,11 +2361,11 @@ cmh
 Ën
 );
 
-122 
+125 
 	}
 }
 
-124 
+127 
 	$loÿl_£rviû_g‘
 (
 ho¡ù¾
@@ -2351,23 +2373,23 @@ ho¡ù¾
 hc
 ,
 
-125 cÚ¡ 
+128 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-126 
+129 
 ´efix_b™s
 ,
 
-127 cÚ¡ 
+130 cÚ¡ 
 š_addr
  *
 addr
 )
 
-129  
+132  
 	`loÿl_£rviû_g’”ic
 (
 hc
@@ -2375,7 +2397,7 @@ hc
 CTRLMSG_TYPE_GET_SERVICE
 ,
 
-130 
+133 
 SERVICE_RULE_UNDEFINED
 , 
 ¤vid
@@ -2383,15 +2405,15 @@ SERVICE_RULE_UNDEFINED
 ´efix_b™s
 ,
 
-131 0, 0, 
+134 0, 0, 
 addr
 );
 
-132 
+135 
 	}
 }
 
-134 
+137 
 	$loÿl_£rviû_»gi¡”_dummy
 (
 ho¡ù¾
@@ -2399,27 +2421,27 @@ ho¡ù¾
 hc
 ,
 
-135 cÚ¡ 
+138 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-136 
+139 
 ´efix_b™s
 ,
 
-137 cÚ¡ 
+140 cÚ¡ 
 š_addr
  *
 Şd_
 )
 
-140 
+143 
 	}
 }
 
-142 
+145 
 	$loÿl_£rviû_uÄegi¡”_dummy
 (
 ho¡ù¾
@@ -2427,21 +2449,21 @@ ho¡ù¾
 hc
 ,
 
-143 cÚ¡ 
+146 cÚ¡ 
 £rviû_id
  *
 ¤vid
 ,
 
-144 
+147 
 ´efix_b™s
 )
 
-147 
+150 
 	}
 }
 
-149 
+152 
 	$loÿl_š‹rçû_mig¿‹
 (
 ho¡ù¾
@@ -2449,37 +2471,37 @@ ho¡ù¾
 hc
 ,
 
-150 cÚ¡ *
+153 cÚ¡ *
 äom_içû
 ,
 
-151 cÚ¡ *
+154 cÚ¡ *
 to_içû
 )
 
-153 
+156 
 ù¾msg_mig¿‹
  
 cm
 ;
 
-155 ià(!
+158 ià(!
 äom_içû
  || !
 to_içû
 ) {
 
-156 
+159 
 	`LOG_ERR
 ("Undefined interface\n");
 
-160 
+163 
 	`mem£t
 (&
 cm
 , 0, (cm));
 
-161 
+164 
 cm
 .
 cmh
@@ -2489,7 +2511,7 @@ ty³
 CTRLMSG_TYPE_MIGRATE
 ;
 
-162 
+165 
 cm
 .
 cmh
@@ -2497,7 +2519,7 @@ cmh
 Ën
  = (cm);
 
-163 
+166 
 cm
 .
 cmh
@@ -2507,7 +2529,7 @@ xid
 hc
 ->xid;
 
-164 
+167 
 cm
 .
 mig¿‹_ty³
@@ -2515,7 +2537,7 @@ mig¿‹_ty³
 CTRL_MIG_IFACE
 ;
 
-165 
+168 
 	`¡ºıy
 (
 cm
@@ -2527,7 +2549,7 @@ cm
 IFNAMSIZ
  - 1);
 
-166 
+169 
 	`¡ºıy
 (
 cm
@@ -2539,7 +2561,7 @@ to_içû
 IFNAMSIZ
  - 1);
 
-168  
+171  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -2553,11 +2575,11 @@ cmh
 Ën
 );
 
-169 
+172 
 	}
 }
 
-171 
+174 
 	$loÿl_æow_mig¿‹
 (
 ho¡ù¾
@@ -2565,45 +2587,45 @@ ho¡ù¾
 hc
 ,
 
-172 
+175 
 æow_id
  *
 æow
 ,
 
-173 cÚ¡ *
+176 cÚ¡ *
 to_içû
 )
 
-175 
+178 
 ù¾msg_mig¿‹
  
 cm
 ;
 
-177 ià(!
+180 ià(!
 æow
 ) {
 
-178 
+181 
 	`LOG_ERR
 ("Undefined flow\n");
 
-182 ià(!
+185 ià(!
 to_içû
 ) {
 
-183 
+186 
 	`LOG_ERR
 ("Undefined interface\n");
 
-187 
+190 
 	`mem£t
 (&
 cm
 , 0, (cm));
 
-188 
+191 
 cm
 .
 cmh
@@ -2613,7 +2635,7 @@ ty³
 CTRLMSG_TYPE_MIGRATE
 ;
 
-189 
+192 
 cm
 .
 cmh
@@ -2621,7 +2643,7 @@ cmh
 Ën
  = (cm);
 
-190 
+193 
 cm
 .
 cmh
@@ -2631,7 +2653,7 @@ xid
 hc
 ->xid;
 
-191 
+194 
 cm
 .
 mig¿‹_ty³
@@ -2639,7 +2661,7 @@ mig¿‹_ty³
 CTRL_MIG_FLOW
 ;
 
-192 
+195 
 	`memıy
 (&
 cm
@@ -2651,7 +2673,7 @@ cm
 æow_id
 ));
 
-193 
+196 
 	`¡ºıy
 (
 cm
@@ -2663,7 +2685,7 @@ to_içû
 IFNAMSIZ
  - 1);
 
-195  
+198  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -2677,11 +2699,11 @@ cmh
 Ën
 );
 
-196 
+199 
 	}
 }
 
-198 
+201 
 	$loÿl_£rviû_mig¿‹
 (
 ho¡ù¾
@@ -2689,45 +2711,45 @@ ho¡ù¾
 hc
 ,
 
-199 
+202 
 £rviû_id
  *
 ¤vid
 ,
 
-200 cÚ¡ *
+203 cÚ¡ *
 to_içû
 )
 
-202 
+205 
 ù¾msg_mig¿‹
  
 cm
 ;
 
-204 ià(!
+207 ià(!
 ¤vid
 ) {
 
-205 
+208 
 	`LOG_ERR
 ("Undefined service\n");
 
-209 ià(!
+212 ià(!
 to_içû
 ) {
 
-210 
+213 
 	`LOG_ERR
 ("Undefined interface\n");
 
-214 
+217 
 	`mem£t
 (&
 cm
 , 0, (cm));
 
-215 
+218 
 cm
 .
 cmh
@@ -2737,7 +2759,7 @@ ty³
 CTRLMSG_TYPE_MIGRATE
 ;
 
-216 
+219 
 cm
 .
 cmh
@@ -2745,7 +2767,7 @@ cmh
 Ën
  = (cm);
 
-217 
+220 
 cm
 .
 cmh
@@ -2755,7 +2777,7 @@ xid
 hc
 ->xid;
 
-218 
+221 
 cm
 .
 mig¿‹_ty³
@@ -2763,7 +2785,7 @@ mig¿‹_ty³
 CTRL_MIG_SERVICE
 ;
 
-219 
+222 
 	`memıy
 (&
 cm
@@ -2775,7 +2797,7 @@ cm
 £rviû_id
 ));
 
-220 
+223 
 	`¡ºıy
 (
 cm
@@ -2787,7 +2809,7 @@ to_içû
 IFNAMSIZ
  - 1);
 
-222  
+225  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -2801,11 +2823,11 @@ cmh
 Ën
 );
 
-223 
+226 
 	}
 }
 
-225 
+228 
 	$loÿl_£rviû_d–ay_v”diù
 (
 ho¡ù¾
@@ -2813,29 +2835,29 @@ ho¡ù¾
 hc
 ,
 
-226 
+229 
 pkt_id
 ,
 
-227 
+230 
 d–ay_v”diù
  
 v”diù
 )
 
-229 
+232 
 ù¾msg_d–ay
  
 cmd
 ;
 
-231 
+234 
 	`mem£t
 (&
 cmd
 , 0, (cmd));
 
-232 
+235 
 cmd
 .
 cmh
@@ -2845,7 +2867,7 @@ ty³
 CTRLMSG_TYPE_DELAY_VERDICT
 ;
 
-233 
+236 
 cmd
 .
 cmh
@@ -2853,7 +2875,7 @@ cmh
 Ën
  = (cmd);
 
-234 
+237 
 cmd
 .
 cmh
@@ -2863,19 +2885,19 @@ xid
 hc
 ->xid;
 
-235 
+238 
 cmd
 .
 pkt_id
  =…kt_id;
 
-236 
+239 
 cmd
 .
 v”diù
  = verdict;
 
-238  
+241  
 	`mes§ge_chªÃl_£nd
 (
 hc
@@ -2889,11 +2911,11 @@ cmh
 Ën
 );
 
-239 
+242 
 	}
 }
 
-241 
+244 
 	$loÿl_ù¾msg_»cv
 (
 ho¡ù¾
@@ -2905,7 +2927,7 @@ hc
 cm
 ,
 
-242 
+245 
 sockaddr
  *
 äom
@@ -2915,33 +2937,33 @@ sockËn_t
 äom_Ën
 )
 
-244 
+247 
 š_addr
  
 loÿl_
 ;
 
-245 
+248 
 »t
  = 0;
 
-247 ià(!
+250 ià(!
 hc
 ->
 cbs
 )
 
-250 
+253 
 	`mem£t
 (&
 loÿl_
 , 0, (local_ip));
 
-252 ià(
+255 ià(
 äom
 ) {
 
-253 ià(
+256 ià(
 äom
 ->
 §_çmy
@@ -2949,7 +2971,7 @@ loÿl_
 AF_INET
 )
 
-254 
+257 
 	`memıy
 (&
 loÿl_
@@ -2961,11 +2983,11 @@ sockaddr_š
 sš_addr
 ,
 
-255 (
+258 (
 loÿl_
 ));
 
-256 ià(
+259 ià(
 äom
 ->
 §_çmy
@@ -2973,13 +2995,13 @@ loÿl_
 AF_SERVAL
  &&
 
-257 
+260 
 äom_Ën
  > (
 sockaddr_š
 )) {
 
-258 
+261 
 chªÃl_addr_t
  *
 addr
@@ -2987,7 +3009,7 @@ addr
 äom
 ;
 
-260 ià(
+263 ià(
 addr
 ->
 sv_š
@@ -2999,7 +3021,7 @@ sš_çmy
 AF_INET
 ) {
 
-261 
+264 
 	`memıy
 (&
 loÿl_
@@ -3013,21 +3035,21 @@ sv_š
 sš_addr
 ,
 
-262 (
+265 (
 loÿl_
 ));
 
-267 
+270 
 cm
 ->
 ty³
 ) {
 
-268 
+271 
 CTRLMSG_TYPE_REGISTER
 : {
 
-269 
+272 
 ù¾msg_»gi¡”
  *
 cmr
@@ -3035,7 +3057,7 @@ cmr
 cm
 ;
 
-270 
+273 
 »t
  = 
 hc
@@ -3045,35 +3067,35 @@ cbs
 	`£rviû_»gi¡¿tiÚ
 (hc,
 
-271 &
+274 &
 cmr
 ->
 ¤vid
 ,
 
-272 
+275 
 cmr
 ->
 ¤vid_æags
 ,
 
-273 
+276 
 cmr
 ->
 ¤vid_´efix_b™s
 ,
 
-274 &
+277 &
 loÿl_
 , 
 NULL
 );
 
-277 
+280 
 CTRLMSG_TYPE_UNREGISTER
 : {
 
-278 
+281 
 ù¾msg_»gi¡”
  *
 cmr
@@ -3081,7 +3103,7 @@ cmr
 cm
 ;
 
-279 
+282 
 »t
  = 
 hc
@@ -3091,49 +3113,49 @@ cbs
 	`£rviû_uÄegi¡¿tiÚ
 (hc,
 
-280 &
+283 &
 cmr
 ->
 ¤vid
 ,
 
-281 
+284 
 cmr
 ->
 ¤vid_æags
 ,
 
-282 
+285 
 cmr
 ->
 ¤vid_´efix_b™s
 ,
 
-283 &
+286 &
 loÿl_
 );
 
-286 
+289 
 CTRLMSG_TYPE_RESOLVE
 :
 
-288 
+291 
 CTRLMSG_TYPE_GET_SERVICE
 : {
 
-289 
+292 
 ù¾msg_£rviû
  *
 cs
  =
 
-290 (
+293 (
 ù¾msg_£rviû
  *)
 cm
 ;
 
-292 ià(
+295 ià(
 hc
 ->
 cbs
@@ -3141,7 +3163,7 @@ cbs
 £rviû_g‘_»suÉ
 )
 
-293 
+296 
 »t
  = 
 hc
@@ -3151,47 +3173,47 @@ cbs
 	`£rviû_g‘_»suÉ
 (hc,
 
-294 
+297 
 cm
 ->
 xid
 ,
 
-295 
+298 
 cm
 ->
 »tv®
 ,
 
-296 &
+299 &
 cs
 ->
 £rviû
 [0],
 
-297 
+300 
 	`CTRLMSG_SERVICE_NUM
 (
 cs
 ));
 
-300 
+303 
 CTRLMSG_TYPE_SERVICE_STAT
 : {
 
-301 
+304 
 ù¾msg_£rviû_¡©
  *
 css
  =
 
-302 (
+305 (
 ù¾msg_£rviû_¡©
  *)
 cm
 ;
 
-304 ià(
+307 ià(
 hc
 ->
 cbs
@@ -3199,7 +3221,7 @@ cbs
 £rviû_¡©_upd©e
 )
 
-305 
+308 
 »t
  = 
 hc
@@ -3209,47 +3231,47 @@ cbs
 	`£rviû_¡©_upd©e
 (hc,
 
-306 
+309 
 cm
 ->
 xid
 ,
 
-307 
+310 
 cm
 ->
 »tv®
 ,
 
-308 &
+311 &
 css
 ->
 ¡©s
 ,
 
-309 
+312 
 	`CTRLMSG_SERVICE_STAT_NUM
 (
 css
 ));
 
-312 
+315 
 CTRLMSG_TYPE_ADD_SERVICE
 : {
 
-313 
+316 
 ù¾msg_£rviû
  *
 cs
  =
 
-314 (
+317 (
 ù¾msg_£rviû
  *)
 cm
 ;
 
-316 ià(
+319 ià(
 hc
 ->
 cbs
@@ -3257,7 +3279,7 @@ cbs
 £rviû_add_»suÉ
 )
 
-317 
+320 
 »t
  = 
 hc
@@ -3267,47 +3289,47 @@ cbs
 	`£rviû_add_»suÉ
 (hc,
 
-318 
+321 
 cm
 ->
 xid
 ,
 
-319 
+322 
 cm
 ->
 »tv®
 ,
 
-320 &
+323 &
 cs
 ->
 £rviû
 [0],
 
-321 
+324 
 	`CTRLMSG_SERVICE_NUM
 (
 cs
 ));
 
-324 
+327 
 CTRLMSG_TYPE_MOD_SERVICE
 : {
 
-325 
+328 
 ù¾msg_£rviû
  *
 cs
  =
 
-326 (
+329 (
 ù¾msg_£rviû
  *)
 cm
 ;
 
-328 ià(
+331 ià(
 hc
 ->
 cbs
@@ -3315,7 +3337,7 @@ cbs
 £rviû_mod_»suÉ
 )
 
-329 
+332 
 »t
  = 
 hc
@@ -3325,47 +3347,47 @@ cbs
 	`£rviû_mod_»suÉ
 (hc,
 
-330 
+333 
 cm
 ->
 xid
 ,
 
-331 
+334 
 cm
 ->
 »tv®
 ,
 
-332 &
+335 &
 cs
 ->
 £rviû
 [0],
 
-333 
+336 
 	`CTRLMSG_SERVICE_NUM
 (
 cs
 ));
 
-336 
+339 
 CTRLMSG_TYPE_DEL_SERVICE
 : {
 
-337 
+340 
 ù¾msg_£rviû_šfo_¡©
  *
 csis
  =
 
-338 (
+341 (
 ù¾msg_£rviû_šfo_¡©
  *)
 cm
 ;
 
-340 ià(
+343 ià(
 hc
 ->
 cbs
@@ -3373,7 +3395,7 @@ cbs
 £rviû_»move_»suÉ
 )
 
-341 
+344 
 »t
  = 
 hc
@@ -3383,47 +3405,47 @@ cbs
 	`£rviû_»move_»suÉ
 (hc,
 
-342 
+345 
 cm
 ->
 xid
 ,
 
-343 
+346 
 cm
 ->
 »tv®
 ,
 
-344 &
+347 &
 csis
 ->
 £rviû
 [0],
 
-345 
+348 
 	`CTRLMSG_SERVICE_INFO_STAT_NUM
 (
 csis
 ));
 
-348 
+351 
 CTRLMSG_TYPE_DELAY_NOTIFY
 : {
 
-349 
+352 
 ù¾msg_d–ay
  *
 cmd
  =
 
-350 (
+353 (
 ù¾msg_d–ay
  *)
 cm
 ;
 
-351 ià(
+354 ià(
 hc
 ->
 cbs
@@ -3431,7 +3453,7 @@ cbs
 £rviû_d–ay_nÙifiÿtiÚ
 )
 
-352 
+355 
 »t
  = 
 hc
@@ -3441,25 +3463,25 @@ cbs
 	`£rviû_d–ay_nÙifiÿtiÚ
 (hc,
 
-353 
+356 
 cm
 ->
 xid
 ,
 
-354 
+357 
 cmd
 ->
 pkt_id
 ,
 
-355 &
+358 &
 cmd
 ->
 £rviû
 );
 
-359 
+362 
 	`LOG_DBG
 ("Reûived mes§gty³ %u\n", 
 cm
@@ -3467,81 +3489,81 @@ cm
 ty³
 );
 
-363  
+366  
 »t
 ;
 
-364 
+367 
 	}
 }
 
-366 
+369 
 ho¡ù¾_İs
  
 	gloÿl_İs
  = {
 
-367 .
+370 .
 š‹rçû_mig¿‹
  = 
 loÿl_š‹rçû_mig¿‹
 ,
 
-368 .
+371 .
 	gæow_mig¿‹
  = 
 loÿl_æow_mig¿‹
 ,
 
-369 .
+372 .
 	g£rviû_mig¿‹
  = 
 loÿl_£rviû_mig¿‹
 ,
 
-370 .
+373 .
 	g£rviû_»gi¡”
  = 
 loÿl_£rviû_»gi¡”_dummy
 ,
 
-371 .
+374 .
 	g£rviû_uÄegi¡”
  = 
 loÿl_£rviû_uÄegi¡”_dummy
 ,
 
-372 .
+375 .
 	g£rviû_add
  = 
 loÿl_£rviû_add
 ,
 
-373 .
+376 .
 	g£rviû_»move
  = 
 loÿl_£rviû_»move
 ,
 
-374 .
+377 .
 	g£rviû_modify
  = 
 loÿl_£rviû_modify
 ,
 
-375 .
+378 .
 	g£rviû_g‘
  = 
 loÿl_£rviû_g‘
 ,
 
-376 .
+379 .
 	g£rviû_d–ay_v”diù
  = 
 loÿl_£rviû_d–ay_v”diù
 ,
 
-377 .
+380 .
 	gù¾msg_»cv
  = 
 loÿl_ù¾msg_»cv

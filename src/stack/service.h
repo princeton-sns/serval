@@ -130,6 +130,7 @@ typedef enum rule_match {
         RULE_MATCH_GLOBAL, /* Mathes FORWARD rules */
         RULE_MATCH_ANY,
         RULE_MATCH_EXACT,
+        RULE_MATCH_SRC_DST,
 } rule_match_t;
 
 void service_inc_stats(int packets, int bytes);

@@ -292,7 +292,7 @@ int hostctrl_service_add(struct hostctrl *hc,
         srvid = &default_service;
 
     return hc->ops->service_add(hc, type, srvid, prefix_bits, 
-                                priority, weight, ipaddr);
+                                priority, weight, ipaddr, srcaddr);
 }
 
 int hostctrl_service_remove(struct hostctrl *hc,

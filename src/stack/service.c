@@ -1084,7 +1084,7 @@ static int service_entry_any_match(struct bst_node *n)
         return 1;
 }
 
-static int service_src_dst_match(struct bst_node *n)
+static int service_entry_src_dst_match(struct bst_node *n)
 {
         /* Match entry accroding to source address and destination service */
         return 1;
