@@ -56,7 +56,13 @@ struct bst_node {
         struct list_head lh; /* Used for printing trees non-recursively */
 	unsigned char flags;
         void *private;
-	unsigned int prefix_bits;
+
+        /* Begin Ming's code */
+        unsigned int source_addr_size; // in terms of # of bytes
+        unsigned int source_addr_bits;
+        /* End Ming's code */
+
+        unsigned int prefix_bits;
         unsigned int prefix_size;
 	unsigned char prefix[0];
 };

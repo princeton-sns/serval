@@ -1,0 +1,12 @@
+# added by the release upgrader
+deb cdrom:[Ubuntu 10.04 LTS _Lucid Lynx_ - Release i386 (20100429)]/ lucid main restricted
+deb http://debian.ustc.edu.cn/Ubuntu/ lucid main restricted universe multiverse
+deb http://debian.ustc.edu.cn/Ubuntu/ lucid-backports restricted universe multiverse
+deb http://debian.ustc.edu.cn/Ubuntu/ lucid-proposed main restricted universe multiverse
+deb http://debian.ustc.edu.cn/Ubuntu/ lucid-security main restricted universe multiverse
+deb http://debian.ustc.edu.cn/Ubuntu/ lucid-updates main restricted universe multiverse
+deb-src http://debian.ustc.edu.cn/Ubuntu/ lucid main restricted universe multiverse
+deb-src http://debian.ustc.edu.cn/Ubuntu/ lucid-backports main restricted universe multiverse
+deb-src http://debian.ustc.edu.cn/Ubuntu/ lucid-proposed main restricted universe multiverse
+deb-src http://debian.ustc.edu.cn/Ubuntu/ lucid-security main restricted universe multiverse
+deb-src http://debian.ustc.edu.cn/Ubuntu/ lucid-updates main restricted universe multiverse

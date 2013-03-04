@@ -1,0 +1,115 @@
+Buildfile: /home/ming/src/serval/serval/android/Serval/build.xml
+
+-set-mode-check:
+
+-set-debug-files:
+
+-check-env:
+ [checkenv] Android SDK Tools Revision 21.0.1
+ [checkenv] Installed at /root/android-sdks
+
+-setup:
+     [echo] Project Name: Serval
+  [gettype] Project Type: Application
+
+-set-debug-mode:
+
+-debug-obfuscation-check:
+
+-build-setup:
+     [echo] Resolving Build Target for Serval...
+[gettarget] Project Target:   Android 3.2
+[gettarget] API level:        13
+     [echo] ----------
+     [echo] Creating output directories if needed...
+     [echo] ----------
+     [echo] Resolving Dependencies for Serval...
+[dependency] Library dependencies:
+[dependency] No Libraries
+[dependency] 
+[dependency] ------------------
+[dependency] API<=15: Adding annotations.jar to the classpath.
+     [echo] ----------
+     [echo] Building Libraries with 'debug'...
+   [subant] No sub-builds to iterate on
+
+-pre-build:
+     [copy] Copying 1 file to /home/ming/src/serval/serval/android/Serval/libs
+     [copy] Copying 1 file to /home/ming/src/serval/serval/android/Serval/libs
+     [copy] Copying 1 file to /home/ming/src/serval/serval/android/Serval/libs
+
+-code-gen:
+[mergemanifest] No changes in the AndroidManifest files.
+     [echo] Handling aidl files...
+     [aidl] No AIDL files to compile.
+     [echo] ----------
+     [echo] Handling RenderScript files...
+[renderscript] No RenderScript files to compile.
+     [echo] ----------
+     [echo] Handling Resources...
+     [aapt] No changed resources. R.java and Manifest.java untouched.
+     [echo] ----------
+     [echo] Handling BuildConfig class...
+[buildconfig] No need to generate new BuildConfig.
+
+-pre-compile:
+
+-compile:
+
+-post-compile:
+
+-obfuscate:
+
+-dex:
+      [dex] input: /home/ming/src/serval/serval/android/Serval/bin/classes
+      [dex] input: /root/android-sdks/tools/support/annotations.jar
+      [dex] input: /home/ming/src/serval/serval/android/Serval/libs/org.servalarch.servalctrl.jar
+      [dex] input: /home/ming/src/serval/serval/android/Serval/libs/org.servalarch.javasock.jar
+      [dex] input: /home/ming/src/serval/serval/android/Serval/libs/android-support-v4.jar
+      [dex] Using Pre-Dexed annotations-6dff1a4bcdc9e3b8ddeafb0f364ec70d.jar <- /root/android-sdks/tools/support/annotations.jar
+      [dex] Pre-Dexing /home/ming/src/serval/serval/android/Serval/libs/org.servalarch.servalctrl.jar -> org.servalarch.servalctrl-f5665ee663cc6ab766f0d491b1c17d4e.jar
+      [dex] Pre-Dexing /home/ming/src/serval/serval/android/Serval/libs/org.servalarch.javasock.jar -> org.servalarch.javasock-05572eefa85071d047c1f7a115cd8ebf.jar
+      [dex] Pre-Dexing /home/ming/src/serval/serval/android/Serval/libs/android-support-v4.jar -> android-support-v4-1a48688b9b43240751b1987c76fbc228.jar
+      [dex] Found modified input file
+      [dex] Converting compiled files and external libraries into /home/ming/src/serval/serval/android/Serval/bin/classes.dex...
+       [dx] Merged dex A (26 defs/33.6KiB) with dex B (2 defs/1.1KiB). Result is 28 defs/37.6KiB. Took 0.1s
+       [dx] Merged dex A (28 defs/37.6KiB) with dex B (9 defs/10.0KiB). Result is 37 defs/54.2KiB. Took 0.0s
+       [dx] Merged dex A (37 defs/54.2KiB) with dex B (29 defs/46.1KiB). Result is 66 defs/120.9KiB. Took 0.0s
+       [dx] Merged dex A (66 defs/120.9KiB) with dex B (309 defs/349.3KiB). Result is 375 defs/583.5KiB. Took 0.1s
+
+-crunch:
+   [crunch] Crunching PNG Files in source dir: /home/ming/src/serval/serval/android/Serval/res
+   [crunch] To destination dir: /home/ming/src/serval/serval/android/Serval/bin/res
+   [crunch] Crunched 0 PNG files to update cache
+
+-package-resources:
+     [aapt] Found modified input file
+     [aapt] Creating full resource package...
+     [aapt]     (skipping file '.gitignore' due to ANDROID_AAPT_IGNORE pattern '.*')
+
+-package:
+[apkbuilder] Found modified input file
+[apkbuilder] Creating Serval-debug-unaligned.apk and signing it with a debug key...
+
+-post-package:
+
+-do-debug:
+ [zipalign] Running zip align on final apk...
+     [echo] Debug Package: /home/ming/src/serval/serval/android/Serval/bin/Serval-debug.apk
+[propertyfile] Updating property file: /home/ming/src/serval/serval/android/Serval/bin/build.prop
+[propertyfile] Updating property file: /home/ming/src/serval/serval/android/Serval/bin/build.prop
+[propertyfile] Updating property file: /home/ming/src/serval/serval/android/Serval/bin/build.prop
+[propertyfile] Updating property file: /home/ming/src/serval/serval/android/Serval/bin/build.prop
+
+-post-build:
+
+debug:
+
+install:
+     [echo] Installing /home/ming/src/serval/serval/android/Serval/bin/Serval-debug.apk onto default emulator or device...
+     [exec] 385 KB/s (2391079 bytes in 6.052s)
+     [exec] 	pkg: /data/local/tmp/Serval-debug.apk
+     [exec] Success
+
+BUILD SUCCESSFUL
+Total time: 30 seconds

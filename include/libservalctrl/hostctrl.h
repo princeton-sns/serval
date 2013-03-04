@@ -115,13 +115,21 @@ int hostctrl_service_register(struct hostctrl *hc,
 int hostctrl_service_unregister(struct hostctrl *hc, 
                                 const struct service_id *srvid, 
                                 unsigned short prefix_bits);
+
+/*
+  Ming's code
+  add source address for service routing
+*/
+
 int hostctrl_service_add(struct hostctrl *hc, 
                          enum service_rule_type type,
                          const struct service_id *srvid, 
                          unsigned short prefix_bits,
                          unsigned int priority,
                          unsigned int weight,
-                         const struct in_addr *ipaddr);
+                         const struct in_addr *ipaddr,
+                         const struct in_addr *srcaddr);
+
 int hostctrl_service_remove(struct hostctrl *hc,
                             enum service_rule_type type,
                             const struct service_id *srvid, 

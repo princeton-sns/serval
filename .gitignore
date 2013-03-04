@@ -21,7 +21,6 @@ m4/ltoptions.m4
 m4/ltsugar.m4
 m4/ltversion.m4
 m4/lt~obsolete.m4
-src/servd/servd
 src/servicerouter/servr
 src/servicerouter/messagetest
 src/servicerouter/stabletest
@@ -29,7 +28,6 @@ src/servicerouter/tasktest
 src/servicerouter/trietest
 src/servicerouter/utiltest
 src/stack/Kbuild
-src/stack/serval
 src/test/nltest
 src/test/tcp_inet_client
 src/test/manysockets
@@ -44,16 +42,13 @@ src/test/listentest
 src/test/udp_client_user
 src/test/udp_client
 src/test/udp_server_user
-src/test/udp_server
 src/test/tcp_client_user
-src/test/tcp_client
 src/test/tcp_server_user
 src/test/tcp_server
 src/test/automigrated
 src/translator/translator
 src/translator/transproxy
 src/translator/servtransproxy
-src/tools/serv
 src/tools/servicetool
 src/tools/migrate
 src/javasock/classes.list

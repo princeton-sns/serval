@@ -1084,6 +1084,12 @@ static int service_entry_any_match(struct bst_node *n)
         return 1;
 }
 
+static int service_src_dst_match(struct bst_node *n)
+{
+        /* Match entry accroding to source address and destination service */
+        return 1;
+}
+
 static struct service_entry *__service_table_find(struct service_table *tbl,
                                                   struct service_id *srvid, 
                                                   int prefix, 
@@ -1107,6 +1113,13 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         case RULE_MATCH_EXACT:
                 func = service_entry_global_match;
                 break;
+
+        /* Begin Zhongxing */        
+        case RULE_MATCH_SRC_DST:
+                func = service_entry_src_dst_match;
+                break;
+        /*End Zhongxing */
+                
         case RULE_MATCH_ANY:
                 func = service_entry_any_match;
                 break;

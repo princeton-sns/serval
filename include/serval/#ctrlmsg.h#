@@ -57,11 +57,10 @@ struct service_info {
         uint32_t idle_timeout; /* Idle time before discarding (seconds). */
         uint32_t hard_timeout; /* Max time before discarding (seconds). */
         struct in_addr address;
-        struct in_addr src_address; /* Ming's code */
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info) == 64)
+CTRLMSG_ASSERT(sizeof(struct service_info) == 60)
 
 struct service_info_stat {
         struct service_info service;
@@ -74,7 +73,7 @@ struct service_info_stat {
         uint32_t tokens_consumed;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 92)
+CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 88)
 
 struct service_stat {
         uint32_t capabilities;

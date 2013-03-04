@@ -365,7 +365,7 @@ const char *mac_ntop(const void *src, char *dst, size_t size);
 const char *get_strtime(void);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-#define route_dst(rt) (&(rt)->u.dst)
+#define route_dst(rt) (&(rt)->dst)
 #else
 #define route_dst(rt) (&(rt)->dst)
 #endif /* LINUX_VERSION_CODE */

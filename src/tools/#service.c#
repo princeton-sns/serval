@@ -78,7 +78,7 @@ struct arguments {
         enum service_rule_type type;
         struct service_id srvid;
 	struct in_addr ipaddr1, ipaddr2, *ip1, *ip2;
-
+        
         /*
           Begin Ming's code, enable service router to
           forward packets according to source address
@@ -309,7 +309,7 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
                                            &args->srvid, 
                                            args->prefix_bits, 
                                            args->priority, 
-                                           args->weight, args->ip1, NULL);
+                                           args->weight, args->ip1);
                 break;
         case SERVICE_OP_DEL:
                 ret = hostctrl_service_remove(hctl, args->type, &args->srvid, 

@@ -38,7 +38,8 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.Toast;
 
-public class ServalActivity extends FragmentActivity {
+public class ServalActivity extends FragmentActivity 
+{
 
 	private static final int DEFAULT_IDX = 2;
 
