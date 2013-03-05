@@ -58,7 +58,6 @@ typedef union sockaddr_generic {
         } sv_in;
 } sockaddr_generic_t;
 
-
 struct worker {
         unsigned int id;
         pthread_t thr;
@@ -131,9 +130,14 @@ struct translator_init_pkt {
 
 #define DEFAULT_TRANSLATOR_PORT 8080
 static LOG_DEFINE(logh);
-struct signal exit_signal;
 static LIST_HEAD(client_list);
 static int epollfd = -1;
+struct signal main_signal;
+
+enum signal_types {
+        SIGNAL_EXIT = 1,
+        SIGNAL_EPOLL_REARM,
+};
 
 static int client_add_work(struct client *c, work_t work);
 static enum work_status client_close(struct client *c);
@@ -299,45 +303,74 @@ static enum work_status work_serval_to_inet(struct client *c)
                         ret;                             \
                 })
 */
-static int client_epoll_set(struct client *c, int op)
+
+static int client_epoll_set(struct client *c, struct socket *s, 
+                            int op, unsigned int extra_event)
+{
+        struct epoll_event ev;
+        int ret;
+
+        if (c->is_garbage)
+                return -1;
+        
+        memset(&ev, 0, sizeof(ev));
+        ev.events = s->monitored_events | extra_event;
+        ev.data.ptr = s;
+        
+        switch (op) {
+        case EPOLL_CTL_ADD:
+                if (s->is_monitored)
+                        return 0;
+                s->is_monitored = 1;
+                break;
+        case EPOLL_CTL_DEL:
+                if (!s->is_monitored)
+                        return 0;
+                s->is_monitored = 0;
+                break;
+        case EPOLL_CTL_MOD:
+                if (!s->is_monitored)
+                        return 0;
+                break;
+        default:
+                return 0;
+        }
+        
+        LOG_DBG("client=%u op=%s fd=%d R=%d W=%d H=%d\n",
+                c->id,
+                EPOLL_CTL_MOD == op ?                                
+                "EPOLL_CTL_MOD" :
+                (EPOLL_CTL_ADD == op ? "EPOLL_CTL_ADD" : "EPOLL_CTL_DEL"),
+                s->fd,
+                (ev.events & EPOLLIN) > 0, 
+                (ev.events & EPOLLOUT) > 0,
+                (ev.events & EPOLLHUP) > 0);
+        
+        ret = epoll_ctl(epollfd, op, s->fd, &ev);
+        
+        if (ret == -1) {
+                LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
+                        op, s->fd, strerror(errno));
+        }
+        
+        return ret;
+}
+
+static int client_epoll_set_all(struct client *c, int op, 
+                                unsigned int extra_event)
 {               
         unsigned int i;
         int ret = 0;
-        
+
         if (c->is_garbage)
                 return -1;
 
         for (i = 0; i < 2; i++) {
-                struct epoll_event ev;
-
-                memset(&ev, 0, sizeof(ev));
-                ev.events = c->sock[i].monitored_events;
-                ev.data.ptr = &c->sock[i];
+                ret = client_epoll_set(c, &c->sock[i], op,
+                                       extra_event);
                 
-                if ((op == EPOLL_CTL_DEL && c->sock[i].is_monitored) ||
-                    (op == EPOLL_CTL_ADD && !c->sock[i].is_monitored && ev.events)) {
-
-                        LOG_DBG("client=%u op=%s fd=%d R=%d W=%d H=%d\n",
-                                c->id,
-                                EPOLL_CTL_ADD == op ? "EPOLL_CTL_ADD" : "EPOLL_CTL_DEL",
-                                c->sock[i].fd,
-                                (ev.events & EPOLLIN) > 0, 
-                                (ev.events & EPOLLOUT) > 0,
-                                (ev.events & EPOLLHUP) > 0);
-                        
-                        ret = epoll_ctl(epollfd, op, c->sock[i].fd, &ev);
-                        
-                        if (ret == -1) {
-                                LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
-                                        op, c->sock[i].fd, strerror(errno));
-                                break;
-                        }
-
-                        if (op == EPOLL_CTL_ADD)
-                                c->sock[i].is_monitored = 1;
-                        else
-                                c->sock[i].is_monitored = 0;
-                }
+                if (ret == -1)
+                        break;
         }
         
         return ret;
@@ -391,6 +424,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                 strerror(errno));
                         goto fail_sock;
                 }
+                client_epoll_set(c, &c->sock[ST_SERVAL], EPOLL_CTL_ADD, 0);
         } else if (c->from_family == AF_SERVAL) {
                 struct sockaddr_sv sv;
                 socklen_t svlen = sizeof(sv);
@@ -434,6 +468,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                 strerror(errno));
                         goto fail_sock;
                 }
+                client_epoll_set(c, &c->sock[ST_INET], EPOLL_CTL_ADD, 0);
         } else {
                 LOG_ERR("Unsupported client family\n");
                 goto fail_sock;
@@ -465,10 +500,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         goto fail_post_sock;
                 }
         }
-        /* Add the file descriptors to the epoll set just to avoid
-         * complaints when we call EPOLL_CTL_DEL when we schedule the
-         * client later */
-        client_epoll_set(c, EPOLL_CTL_ADD);
 
         return c;
 
@@ -562,7 +593,7 @@ static void *worker_thread(void *arg)
                 c->num_work = 0;
 
                 if (!c->is_garbage)
-                        client_epoll_set(c, EPOLL_CTL_ADD);
+                        signal_raise_val(&main_signal, SIGNAL_EPOLL_REARM);
         }
         
         LOG_DBG("Worker %u exits\n", w->id);
@@ -663,6 +694,7 @@ static enum work_status client_connect(struct client *c)
                 s->state = SS_CONNECTED;
                 s->active_events = s2->active_events = 0;
                 s->monitored_events = s2->monitored_events = EPOLLIN | EPOLLOUT;
+                client_epoll_set(c, s2, EPOLL_CTL_ADD, 0);
         }
   
         return WORK_OK;
@@ -670,11 +702,18 @@ static enum work_status client_connect(struct client *c)
 
 static enum work_status client_connect_result(struct client *c)
 {
-        struct socket *s = c->from_family == AF_INET ?
-                &c->sock[ST_SERVAL] : &c->sock[ST_INET];
+        struct socket *s, *s2;
         int err = 0;
         socklen_t errlen = sizeof(err);
         int ret;
+
+        if (c->from_family == AF_INET) {
+                s = &c->sock[ST_SERVAL];
+                s2 = &c->sock[ST_INET];
+        } else {
+                s2 = &c->sock[ST_SERVAL];
+                s = &c->sock[ST_INET];
+        }
 
         ret = getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
         
@@ -685,11 +724,11 @@ static enum work_status client_connect_result(struct client *c)
         
         switch (err) {
         case 0:
-                c->sock[ST_INET].monitored_events = 
-                        c->sock[ST_SERVAL].monitored_events = EPOLLIN | EPOLLOUT;
-                c->sock[ST_INET].active_events = 
-                        c->sock[ST_SERVAL].active_events = 0;
+                s->monitored_events = s2->monitored_events = 
+                        EPOLLIN | EPOLLOUT;
+                s->active_events = s2->active_events = 0;
                 s->state = SS_CONNECTED;
+                client_epoll_set(c, s2, EPOLL_CTL_ADD, 0);
                 LOG_DBG("client %u connected\n", c->id);
                 break;
         case EINPROGRESS:
@@ -698,8 +737,7 @@ static enum work_status client_connect_result(struct client *c)
         default:
                 s->state = SS_CLOSED;
                 LOG_DBG("client %u connection error\n", c->id);
-                c->sock[ST_INET].monitored_events = 
-                        c->sock[ST_SERVAL].monitored_events = 0;
+                s->monitored_events = s2->monitored_events = 0;
 
                 return WORK_ERROR;
         }
@@ -731,7 +769,7 @@ static void signal_handler(int sig)
         LOG_DBG("signal %u caught!\n", sig);
 
         if (sig == SIGKILL || sig == SIGTERM)
-                signal_raise(&exit_signal);
+                signal_raise_val(&main_signal, SIGNAL_EXIT);
 }
 
 static void garbage_collect_clients(void)
@@ -876,7 +914,7 @@ static struct client *accept_client(int sock, int port,
         LOG_DBG("client %u %s from %s addrlen=%u fd=%d\n", 
                 c->id, family_to_str(addr.sa.sa_family), ip,
                 addrlen, client_sock);
-               
+
         c->translator_port = port;
 
         list_add_tail(&c->lh, &client_list);
@@ -1032,6 +1070,15 @@ static void socket_check_events(struct client *c, struct socket *s,
                 s->monitored_events &= ~EPOLLOUT;
         }
 }
+void rearm_clients(void)
+{
+        struct client *c, *tmp;
+
+        list_for_each_entry_safe(c, tmp, &client_list, lh) {
+                if (!c->is_garbage)
+                        client_epoll_set_all(c, EPOLL_CTL_MOD, EPOLLONESHOT);
+        }
+}
 
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
@@ -1053,8 +1100,8 @@ int run_translator(unsigned short port, int cross_translate,
 	sigaction(SIGINT, &action, 0);
         sigaction(SIGPIPE, &action, 0);
         
-        signal_init(&exit_signal);
-        sig_fd = signal_get_fd(&exit_signal);
+        signal_init(&main_signal);
+        sig_fd = signal_get_fd(&main_signal);
 
         epollfd = epoll_create(10);
         
@@ -1170,22 +1217,31 @@ int run_translator(unsigned short port, int cross_translate,
                                         schedule_client(c);
                                 }
                         } else if (s->fd == sig_fd) {
-                                running = 0;
+                                int val;
+
+                                signal_clear_val(&main_signal, &val);
+                                
+                                switch (val) {
+                                case SIGNAL_EXIT:
+                                        running = 0;
+                                        break;
+                                case SIGNAL_EPOLL_REARM:
+                                        /* Just indicates that we should rearm */
+                                default:
+                                        break;
+                                }
                         } else {
                                 struct client *c = s->c;
-
-                                client_epoll_set(c, EPOLL_CTL_DEL);
 
                                 s->active_events |= events[i].events;
                                 socket_check_events(c, s, events[i].events);
 
                                 if (c->num_work) {
                                         schedule_client(c);
-                                } else {
-                                        client_epoll_set(c, EPOLL_CTL_ADD);
                                 }
                         }
                 }
+                rearm_clients();
         }
         LOG_DBG("Translator exits.\n");
  err_workers:
@@ -1202,7 +1258,7 @@ int run_translator(unsigned short port, int cross_translate,
  err_inet_sock:
         close(epollfd);
  err_epoll_create:
-        signal_destroy(&exit_signal);
+        signal_destroy(&main_signal);
 
         return ret;
 }

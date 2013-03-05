@@ -29,6 +29,7 @@
                                                  __func__, ## __VA_ARGS__)
 #else
 #if defined(ENABLE_DEBUG)
+#include <sys/time.h>
 #define LOG_DBG(format, ...) ({                                         \
             struct timeval now;                                         \
             gettimeofday(&now, NULL);                                   \
