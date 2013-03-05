@@ -74,11 +74,20 @@ enum socket_state {
         SS_CLOSING,
 };
 
+const char *socket_state_str[] = {
+        "CLOSED",
+        "CONNECTING",
+        "CONNECTED",
+        "CLOSING"
+};
+
 struct socket {
         int fd; /* Must be first */
         enum socket_state state;
         struct client *c;
-        uint32_t events;
+        int is_monitored;
+        uint32_t monitored_events;
+        uint32_t active_events;
         sockaddr_generic_t addr;
         socklen_t addrlen;
         size_t bytes_written, bytes_read;
@@ -146,6 +155,32 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
+/*
+static int socket_is_readable(struct socket *s)
+{
+        char c;
+        return recv(s->fd, &c, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
+}
+*/
+static int socket_is_writable(struct socket *s, int *bytes)
+{
+        int bytes_queued = 0;
+        int ret;
+
+        ret = ioctl(s->fd, TIOCOUTQ, &bytes_queued);
+        
+        if (ret == -1) {
+                LOG_ERR("ioctl error - %s\n", strerror(errno));
+                return 0;
+        }
+        if (bytes)
+                *bytes = bytes_queued;
+
+        return s->sndbuf - bytes_queued;
+}
+
+#define writable_bytes(s,b) socket_is_writable(s,b)
+
 static enum work_status work_translate(struct socket *from, 
                                        struct socket *to,
                                        int splicefd[2])
@@ -155,38 +190,28 @@ static enum work_status work_translate(struct socket *from,
         enum work_status status = WORK_OK;
         int bytes_queued = 0;
         
-        ret = ioctl(to->fd, TIOCOUTQ, &bytes_queued);
-
-        if (ret == -1) {
-                LOG_ERR("ioctl error - %s\n", strerror(errno));
-                return WORK_ERROR;
-        }
-
-        readlen = to->sndbuf - bytes_queued;
-
-
-        /* LOG_DBG("translating %zu bytes from %d to %d\n", 
-           readlen, from->fd, to->fd); */
+        readlen = writable_bytes(to, &bytes_queued);
+        
+        LOG_DBG("translating up to %zu bytes from %d to %d\n", 
+                readlen, from->fd, to->fd); 
 
         if (readlen == 0) {
                 /* There wasn't enough space in send buffer of the
                  * socket we are writing to, we need to stop monitor
                  * readability on the "from" socket and instead watch
                  * for writability on the "to" socket. */
-                from->events &= ~EPOLLIN;
-                to->events |= EPOLLOUT;
-                /*
-                LOG_DBG("readlen 0, waiting for readability from->events=%u to->events=%u\n",
-                        from->events, to->events);
-                */
+                from->monitored_events &= ~EPOLLIN;
+                to->monitored_events |= EPOLLOUT;
+                LOG_DBG("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
+                        to->fd, bytes_queued, to->sndbuf);
                 return WORK_NOSPACE;
         }
-
+        
         /* Make sure we write to the pipe atomically without
          * blocking */
         if (readlen > PIPE_BUF)
                 readlen = PIPE_BUF;
-
+        
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
                      readlen, SPLICE_F_MOVE);
         
@@ -213,7 +238,7 @@ static enum work_status work_translate(struct socket *from,
         from->bytes_read += readlen;
 
         /* LOG_DBG("splice1 %zu bytes\n", readlen); */
-
+         
         while (readlen && status == WORK_OK) {
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
                              readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
@@ -244,10 +269,11 @@ static enum work_status work_translate(struct socket *from,
                         from->c->id, readlen);
         }
 #endif
-        /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
+        
  out:
-        to->events &= ~EPOLLOUT;
-        from->events |= EPOLLIN;
+        LOG_DBG("splice2 %zu bytes\n", nbytes); 
+        to->monitored_events &= ~EPOLLOUT;
+        from->monitored_events |= EPOLLIN;
         return status;
 }
 
@@ -265,11 +291,19 @@ static enum work_status work_serval_to_inet(struct client *c)
                               &c->sock[ST_INET], c->splicefd);
 }
 
+/*
+#define client_epoll_set(c, op) ({                       \
+                        int ret;                         \
+                        printf("%s:\n", __func__);        \
+                        ret = _client_epoll_set(c, op);  \
+                        ret;                             \
+                })
+*/
 static int client_epoll_set(struct client *c, int op)
 {               
         unsigned int i;
-        int ret;
-
+        int ret = 0;
+        
         if (c->is_garbage)
                 return -1;
 
@@ -277,22 +311,35 @@ static int client_epoll_set(struct client *c, int op)
                 struct epoll_event ev;
 
                 memset(&ev, 0, sizeof(ev));
-                ev.events = c->sock[i].events;
+                ev.events = c->sock[i].monitored_events;
                 ev.data.ptr = &c->sock[i];
                 
-                /*
-                  LOG_DBG("Watching events %u on sock %d\n",
-                        ev.events, c->sock[i].fd);
-                */
-                ret = epoll_ctl(epollfd, op, c->sock[i].fd, &ev);
-                
-                if (ret == -1) {
-                        LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
-                                op, c->sock[i].fd, strerror(errno));
-                        break;
+                if ((op == EPOLL_CTL_DEL && c->sock[i].is_monitored) ||
+                    (op == EPOLL_CTL_ADD && !c->sock[i].is_monitored && ev.events)) {
+
+                        LOG_DBG("client=%u op=%s fd=%d R=%d W=%d H=%d\n",
+                                c->id,
+                                EPOLL_CTL_ADD == op ? "EPOLL_CTL_ADD" : "EPOLL_CTL_DEL",
+                                c->sock[i].fd,
+                                (ev.events & EPOLLIN) > 0, 
+                                (ev.events & EPOLLOUT) > 0,
+                                (ev.events & EPOLLHUP) > 0);
+                        
+                        ret = epoll_ctl(epollfd, op, c->sock[i].fd, &ev);
+                        
+                        if (ret == -1) {
+                                LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
+                                        op, c->sock[i].fd, strerror(errno));
+                                break;
+                        }
+
+                        if (op == EPOLL_CTL_ADD)
+                                c->sock[i].is_monitored = 1;
+                        else
+                                c->sock[i].is_monitored = 0;
                 }
         }
-
+        
         return ret;
 }
 
@@ -331,9 +378,11 @@ struct client *client_create(int sock, struct sockaddr *sa,
                        sizeof(struct sockaddr_in));
                 c->sock[ST_INET].addrlen = sizeof(struct sockaddr_in);
                 c->sock[ST_INET].state = SS_CONNECTED;
-                c->sock[ST_INET].events = 0;
+                c->sock[ST_INET].monitored_events = 0;
+                c->sock[ST_INET].active_events = 0;
                 c->sock[ST_SERVAL].state = SS_CLOSED;
-                c->sock[ST_SERVAL].events = EPOLLOUT;
+                c->sock[ST_SERVAL].monitored_events = EPOLLOUT;
+                c->sock[ST_SERVAL].active_events = 0;
 
                 c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
@@ -352,9 +401,11 @@ struct client *client_create(int sock, struct sockaddr *sa,
                        sizeof(struct sockaddr_sv));
                 c->sock[ST_SERVAL].addrlen = sizeof(struct sockaddr_sv);
                 c->sock[ST_SERVAL].state = SS_CONNECTED;
-                c->sock[ST_SERVAL].events = 0;
+                c->sock[ST_SERVAL].monitored_events = 0;
+                c->sock[ST_SERVAL].active_events = 0;
                 c->sock[ST_INET].state = SS_CLOSED;
-                c->sock[ST_INET].events = EPOLLOUT;
+                c->sock[ST_INET].monitored_events = EPOLLOUT;
+                c->sock[ST_INET].active_events = 0;
 
                 c->sock[ST_INET].addr.in.sin_family = AF_INET;
                         
@@ -592,23 +643,26 @@ static enum work_status client_connect(struct client *c)
                 LOG_ERR("client %u - bad address family, exiting\n",
                         c->id);
                 return WORK_ERROR;
-         }
+        }
+
+        s->state = SS_CONNECTING;
        
         ret = connect(s->fd, &addr.sa, addrlen);
 
         if (ret == -1) {
                 if (errno == EINPROGRESS) {
-                        s->state = SS_CONNECTING;
-                        s->events = EPOLLOUT;
+                        s->monitored_events = EPOLLOUT;
                 } else {
                         LOG_ERR("client %u connect failed: %s\n",
                                 c->id, strerror(errno));
+                        s->state = SS_CLOSED;
                         return WORK_ERROR;
                 }
         } else {
                 LOG_DBG("client %u successfully connected\n", c->id);
                 s->state = SS_CONNECTED;
-                s->events = s2->events = EPOLLIN;
+                s->active_events = s2->active_events = 0;
+                s->monitored_events = s2->monitored_events = EPOLLIN | EPOLLOUT;
         }
   
         return WORK_OK;
@@ -631,7 +685,10 @@ static enum work_status client_connect_result(struct client *c)
         
         switch (err) {
         case 0:
-                c->sock[ST_INET].events = c->sock[ST_SERVAL].events = EPOLLIN;
+                c->sock[ST_INET].monitored_events = 
+                        c->sock[ST_SERVAL].monitored_events = EPOLLIN | EPOLLOUT;
+                c->sock[ST_INET].active_events = 
+                        c->sock[ST_SERVAL].active_events = 0;
                 s->state = SS_CONNECTED;
                 LOG_DBG("client %u connected\n", c->id);
                 break;
@@ -641,6 +698,9 @@ static enum work_status client_connect_result(struct client *c)
         default:
                 s->state = SS_CLOSED;
                 LOG_DBG("client %u connection error\n", c->id);
+                c->sock[ST_INET].monitored_events = 
+                        c->sock[ST_SERVAL].monitored_events = 0;
+
                 return WORK_ERROR;
         }
         
@@ -900,28 +960,78 @@ static void schedule_client(struct client *c)
                 return;
 
         c->is_scheduled = 1;
-        //LOG_DBG("client %u scheduling\n", c->id);
-        client_epoll_set(c, EPOLL_CTL_DEL);
+        LOG_DBG("client %u scheduling\n", c->id);
         pthread_mutex_lock(&work_mutex);
         list_add_tail(&c->wq, &workq);
         pthread_mutex_unlock(&work_mutex);
         pthread_cond_signal(&work_cond);        
 }
 
-/*
-static void print_events(struct socket *s, uint32_t events)
+static void socket_check_events(struct client *c, struct socket *s, 
+                                unsigned int events)
 {
-        struct client *c = s->c;
+        struct socket *s2;
+        
+        if (s->state == SS_CLOSED)
+                return;
 
-        if (s == &c->sock[ST_INET]) {
-                LOG_DBG("client %u ST_INET state=%u R=%d W=%d\n",
-                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
-        } else {
-                LOG_DBG("client %u ST_SERVAL state=%u R=%d W=%d\n",
-                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
+        if (s == &c->sock[ST_INET])
+                s2 = &c->sock[ST_SERVAL];
+        else
+                s2 = &c->sock[ST_INET];
+
+        LOG_DBG("s(fd=%d) state=%s events[R=%d W=%d] active[R=%d W=%d] monitored[R=%d W=%d] "
+                "s2(fd=%d) active[R=%d W=%d] monitored[R=%d W=%d]\n",
+                s->fd, 
+                socket_state_str[s->state],
+                (events & EPOLLIN) > 0,
+                (events & EPOLLOUT) > 0,
+                (s->active_events & EPOLLIN) > 0, 
+                (s->active_events & EPOLLOUT) > 0,
+                (s->monitored_events & EPOLLIN) > 0, 
+                (s->monitored_events & EPOLLOUT) > 0,
+                s2->fd, 
+                (s2->active_events & EPOLLIN) > 0, 
+                (s2->active_events & EPOLLOUT) > 0,
+                (s2->monitored_events & EPOLLIN) > 0, 
+                (s2->monitored_events & EPOLLOUT) > 0);
+        
+        if (events & EPOLLIN) {
+                if (s2->active_events & EPOLLOUT) {
+                        /* We can translate stuff from s to s2 */
+                        s->active_events &= ~EPOLLIN;
+
+                        if (s == &c->sock[ST_INET])
+                                client_add_work(c, work_inet_to_serval);
+                        else
+                                client_add_work(c, work_serval_to_inet);
+                } else {
+                        s2->monitored_events |= EPOLLOUT;
+                }
+                s->monitored_events &= ~EPOLLIN;
+        } 
+
+        if (events & EPOLLOUT) {
+                if (s->state == SS_CONNECTING) {
+                        s->monitored_events &= ~EPOLLOUT;
+                        s->active_events &= ~EPOLLOUT;
+                        client_add_work(c, client_connect_result);
+                        return;
+                }
+                if (s2->active_events & EPOLLIN) {
+                        /* We can translate stuff from s2 to s */
+                        s->active_events &= ~EPOLLOUT;
+                        
+                        if (s2 == &c->sock[ST_INET]) 
+                                client_add_work(c, work_inet_to_serval);
+                        else
+                                client_add_work(c, work_serval_to_inet);
+                } else {
+                        s2->monitored_events |= EPOLLIN;
+                }
+                s->monitored_events &= ~EPOLLOUT;
         }
 }
-*/
 
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
@@ -1049,8 +1159,8 @@ int run_translator(unsigned short port, int cross_translate,
                         struct socket *s = (struct socket *)events[i].data.ptr;
 
                         if (s->fd == inet_sock || s->fd == serval_sock) {
-                                struct client *c;
-                                
+                                struct client *c;                                
+
                                 c = accept_client(s->fd, port, cross_translate); 
                                 
                                 if (!c) {
@@ -1063,31 +1173,16 @@ int run_translator(unsigned short port, int cross_translate,
                                 running = 0;
                         } else {
                                 struct client *c = s->c;
-                                uint32_t monitored_events = 
-                                        EPOLLIN | EPOLLERR | EPOLLHUP ; 
-                                
-                                /* print_events(s, events[i].events); */
 
-                                if ((&c->sock[ST_INET] == s && 
-                                     (events[i].events & monitored_events)) ||
-                                    (&c->sock[ST_SERVAL] == s && 
-                                     (events[i].events & EPOLLOUT))) {
-                                        if (s->state == SS_CONNECTING)
-                                                client_add_work(c, client_connect_result);
-                                        else
-                                                client_add_work(c, work_inet_to_serval);
-                                } else if ((&c->sock[ST_SERVAL] == s && 
-                                            (events[i].events & monitored_events)) ||
-                                           (&c->sock[ST_INET] == s && 
-                                            (events[i].events & EPOLLOUT))) {
-                                        if (s->state == SS_CONNECTING)
-                                                client_add_work(c, client_connect_result);
-                                        else
-                                                client_add_work(c, work_serval_to_inet);
-                                }
-                                
+                                client_epoll_set(c, EPOLL_CTL_DEL);
+
+                                s->active_events |= events[i].events;
+                                socket_check_events(c, s, events[i].events);
+
                                 if (c->num_work) {
                                         schedule_client(c);
+                                } else {
+                                        client_epoll_set(c, EPOLL_CTL_ADD);
                                 }
                         }
                 }
