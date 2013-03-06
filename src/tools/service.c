@@ -83,7 +83,7 @@ struct arguments {
           Begin Ming's code, enable service router to
           forward packets according to source address
         */
-        struct in_addr srcaddr;
+        struct in_addr srcaddr, *ip_src;
         /* End Ming's code */
         
         unsigned int priority;
@@ -263,6 +263,11 @@ static int service_parse_args(int argc, char **argv, void **result)
                                       argv[0]);
                               return -1;
                         }
+
+                        args.ip_src = &args.srcaddr;
+
+                        argc--;
+                        argv++;
                       
                 } /* End Ming's code */
                 
@@ -309,7 +314,7 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
                                            &args->srvid, 
                                            args->prefix_bits, 
                                            args->priority, 
-                                           args->weight, args->ip1, NULL);
+                                           args->weight, args->ip1, args->ip_src);
                 break;
         case SERVICE_OP_DEL:
                 ret = hostctrl_service_remove(hctl, args->type, &args->srvid, 

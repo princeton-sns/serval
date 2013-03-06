@@ -57,7 +57,7 @@ struct service_info {
         uint32_t idle_timeout; /* Idle time before discarding (seconds). */
         uint32_t hard_timeout; /* Max time before discarding (seconds). */
         struct in_addr address;
-        struct in_addr src_address; /* Ming's code */
+        struct in_addr srcaddr; /* Ming's code, source address of the client */
         struct service_id srvid;
 } CTRLMSG_PACKED;
 

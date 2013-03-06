@@ -188,10 +188,16 @@ int service_entry_target_fill(struct service_entry *se, void *dst,
 int service_get_id(const struct service_entry *se, struct service_id *srvid);
 unsigned char service_get_prefix_bits(const struct service_entry *se);
 
+/*
+  Ming's code.
+  add source address
+*/
+
 int service_add(struct service_id *srvid, uint16_t prefix_bits,
                 service_rule_type_t type,
                 uint16_t flags, uint32_t priority, uint32_t weight,
-		const void *dst, int dstlen, const union target_out out, 
+		const void *dst, int dstlen, const void *src, int srclen,
+                const union target_out out,
                 gfp_t alloc);
 
 int service_modify(struct service_id *srvid, uint16_t prefix_bits,

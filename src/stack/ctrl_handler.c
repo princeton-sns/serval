@@ -60,6 +60,11 @@ static int dummy_ctrlmsg_handler(struct ctrlmsg *cm, int peer)
         return 0;
 }
 
+/*
+  Ming
+  add source address to service_add()
+*/
+
 static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
 {
         struct ctrlmsg_service *cmr = (struct ctrlmsg_service *)cm;
@@ -106,6 +111,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                                   entry->weight,
                                   &entry->address, 
                                   sizeof(entry->address),
+                                  &entry->srcaddr,
+                                  sizeof(entry->srcaddr),
                                   make_target(dev), GFP_KERNEL);
                 if (dev)
                         dev_put(dev);

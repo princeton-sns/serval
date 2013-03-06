@@ -6,6 +6,9 @@
 #include <string.h>
 #include "hostctrl_ops.h"
 
+/*
+  Ming: add source address
+*/
 
 static int local_service_generic(struct hostctrl *hc,
                                  unsigned short msgtype,
@@ -40,6 +43,18 @@ static int local_service_generic(struct hostctrl *hc,
 
     if (ipaddr)
         memcpy(&req.cm.service[0].address, ipaddr, sizeof(*ipaddr));
+
+    /*
+      Begin Ming's code
+      copy source address to service table
+    */
+
+    if (srcaddr)
+        memcpy(&req.cm.service[0].srcaddr, srcaddr, sizeof(*srcaddr));
+
+    /*
+      End Ming's code
+    */
         
     req.cm.service[0].if_index = -1;
 

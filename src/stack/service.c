@@ -307,7 +307,8 @@ static int __service_entry_add_target(struct service_entry *se,
                                       service_rule_type_t type,
                                       uint16_t flags, uint32_t priority,
                                       uint32_t weight, const void *dst, 
-                                      int dstlen, const union target_out out, 
+                                      int dstlen, 
+                                      const union target_out out, 
                                       gfp_t alloc) 
 {
         struct target_set *set = NULL;
@@ -1298,6 +1299,11 @@ int service_modify(struct service_id *srvid,
                                     out);
 }
 
+/*
+  Ming
+  add source address
+*/
+
 static int service_table_add(struct service_table *tbl,
                              struct service_id *srvid,
                              uint16_t prefix_bits, 
@@ -1306,7 +1312,9 @@ static int service_table_add(struct service_table *tbl,
                              uint32_t priority, 
                              uint32_t weight, 
                              const void *dst,
-                             int dstlen, 
+                             int dstlen,
+                             const void *src,
+                             int srclen,
                              const union target_out out, 
                              gfp_t alloc) {
         struct service_entry *se;
@@ -1427,6 +1435,11 @@ void service_inc_stats(int packets, int bytes)
         }
 }
 
+/*
+  Ming's code
+  add source address
+*/
+
 int service_add(struct service_id *srvid, 
                 uint16_t prefix_bits, 
                 service_rule_type_t type,
@@ -1434,13 +1447,16 @@ int service_add(struct service_id *srvid,
                 uint32_t priority,
                 uint32_t weight, 
                 const void *dst, 
-                int dstlen, 
+                int dstlen,
+                const void *src,
+                int srclen,
                 const union target_out out, 
                 gfp_t alloc) 
 {
         return service_table_add(&srvtable, srvid, prefix_bits, 
                                  type, flags, priority, 
                                  weight == 0 ? 1 : weight, dst, dstlen,
+                                 src, srclen,
                                  out, alloc);
 }
 

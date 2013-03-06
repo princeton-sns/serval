@@ -372,6 +372,11 @@ static void __serval_sock_hash(struct sock *sk)
         }
 }
 
+/*
+  Ming
+  add src (NULL) and srclen (0) to service_add()
+*/
+
 void serval_sock_hash(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
@@ -398,11 +403,16 @@ void serval_sock_hash(struct sock *sk)
                         SERVICE_ID_MAX_PREFIX_BITS : 
                         ssk->srvid_prefix_bits;
 
+                /*
+                  Ming
+                  add src (NULL) and srclen (0) to service_add()
+                */
+
                 err = service_add(ssk->hash_key, ssk->hash_key_len, 
                                   SERVICE_RULE_DEMUX, ssk->srvid_flags, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
-                                  NULL, 0, make_target(sk), GFP_ATOMIC);
+                                  NULL, 0, NULL, 0, make_target(sk), GFP_ATOMIC);
                 if (err < 0) {
 #if defined(OS_LINUX_KERNEL)
                         LOG_ERR("could not add service for listening demux\n");
