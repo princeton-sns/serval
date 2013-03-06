@@ -828,10 +828,11 @@ int serval_tcp_read_sock(struct sock *sk, read_descriptor_t *desc,
 		}
 
 		if (tcp_hdr(skb)->fin) {
+                        tp->fin_found = 1;
                         LOG_SSK(sk, "Read FIN\n");
-			/* sk_eat_skb(sk, skb, 0); */
+			sk_eat_skb(sk, skb, 0);
 			++seq;
-			/* break; */
+			break;
 		}
 
 		sk_eat_skb(sk, skb, 0);
@@ -915,7 +916,8 @@ ssize_t serval_tcp_splice_read(struct socket *sock, loff_t *ppos,
 	timeo = sock_rcvtimeo(sk, sock->file->f_flags & O_NONBLOCK);
 
 	while (tss.len) {
-		ret = __serval_tcp_splice_read(sk, &tss);
+                if (!serval_tcp_sk(sk)->fin_found)
+                        ret = __serval_tcp_splice_read(sk, &tss);
 		if (ret < 0)
 			break;
 		else if (!ret) {
@@ -1561,6 +1563,9 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 			}
 		}
 
+                if (tp->fin_found)
+                        goto wait_for_event;
+
 		/* Next get a buffer. */
 
 		skb_queue_walk(&sk->sk_receive_queue, skb) {
@@ -1570,7 +1575,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 			if (before(*seq, TCP_SKB_CB(skb)->seq))
 				break;
-
+                        
 			offset = *seq - TCP_SKB_CB(skb)->seq;
 			if (tcp_hdr(skb)->syn)
 				offset--;
@@ -1580,6 +1585,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
                         if (tcp_hdr(skb)->fin)
                                 goto found_fin_ok;
+
 			         /*
 			WARN(!(flags & MSG_PEEK), KERN_INFO "recvmsg bug 2: "
 					"copied %X seq %X rcvnxt %X fl %X\n",
@@ -1587,7 +1593,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 					tp->rcv_nxt, flags);
                                  */
 		}
-
+        wait_for_event:
 		/* Well, if we have backlog, try to process it now yet. */
 
 		if (copied >= target && !sk->sk_backlog.tail)
@@ -1827,26 +1833,38 @@ skip_copy:
 		if (used + offset < skb->len)
 			continue;
 
-                /*
-                  Serval-specific FIN processing:
-
-                  Since Serval does not actually close a connection
-                  upon receiving a TCP FIN (closing is handled in the
-                  SAL), this FIN is simply treated as a en d of stream
-                  marker. Instead of returning to the user, we
-                  continue to hang/wait in this function until the SAL
-                  closes, and only then return 0. */
-        found_fin_ok:
-		if (tcp_hdr(skb)->fin) {
-                        ++*seq;
-                        LOG_SSK(sk, "Received FIN\n");
-                }
+		if (tcp_hdr(skb)->fin)
+                        goto found_fin_ok;
 
    		if (!(flags & MSG_PEEK)) {
 			sk_eat_skb(sk, skb, copied_early);
 			copied_early = 0;
 		}
 		continue;
+        found_fin_ok:
+                ++*seq;
+
+                tp->fin_found = 1;
+
+                LOG_SSK(sk, "Received FIN (MSG_PEEK=%d)\n",
+                        (flags & MSG_PEEK) > 0);
+                /*
+                  Serval-specific FIN processing:
+
+                  Since Serval does not actually close a connection
+                  upon receiving a TCP FIN (closing is handled in the
+                  SAL), this FIN is simply treated as a end of stream
+                  marker. Instead of returning to the user, we
+                  continue to hang/wait in this function until the SAL
+                  closes, and only then return 0. 
+                */
+
+                if (!(flags & MSG_PEEK)) {
+                        sk_eat_skb(sk, skb, copied_early);
+                        copied_early = 0;
+                        continue;
+                }
+                break;
 	} while (len > 0);
 
 	if (user_recv) {
