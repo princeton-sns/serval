@@ -84,13 +84,16 @@ struct registration {
 static void registration_timeout_local(struct timer *t)
 {
         struct registration *r = (struct registration *)t->data;
-        char ip1[18];
         int ret;
 
-        printf("Refreshing registration of service %s:%u %s\n",
-               service_id_to_str(&r->srvid), r->prefix,
-               inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
-        
+#if defined(ENABLE_DEBUG)
+        {
+                char ip1[18];
+                LOG_DBG("Refreshing registration of service %s:%u %s\n",
+                        service_id_to_str(&r->srvid), r->prefix,
+                        inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+        }
+#endif
         ret = hostctrl_service_register(r->ctx->rhc, 
                                         &r->srvid,
                                         r->prefix, 
@@ -107,11 +110,15 @@ static void registration_timeout_local(struct timer *t)
 static void registration_timeout_remote(struct timer *t)
 {
         struct registration *r = (struct registration *)t->data;
-        char ip1[18];
-
-        printf("Registration timeout - service %s:%u %s\n",
-               service_id_to_str(&r->srvid), r->prefix,
-               inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+#if defined(ENABLE_DEBUG)
+        {
+                char ip1[18];
+                
+                LOG_DBG("Registration timeout - service %s:%u %s\n",
+                        service_id_to_str(&r->srvid), r->prefix,
+                        inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+        }
+#endif
         hostctrl_service_remove(r->ctx->lhc, SERVICE_RULE_FORWARD,
                                 &r->srvid, r->prefix, &r->ipaddr);
 }
@@ -149,10 +156,12 @@ static struct registration *registration_add(struct servd_context *ctx,
 
         if (type == SERVICE_LOCAL && !ctx->router) {
                 r->timer.callback = registration_timeout_local;
-                timer_schedule_secs(&ctx->tq, &r->timer, LOCAL_SERVICE_TIMEOUT);
+                timer_schedule_secs(&ctx->tq, &r->timer, 
+                                    LOCAL_SERVICE_TIMEOUT);
         } else {
                 r->timer.callback = registration_timeout_remote;
-                timer_schedule_secs(&ctx->tq, &r->timer, REMOTE_SERVICE_TIMEOUT);
+                timer_schedule_secs(&ctx->tq, &r->timer, 
+                                    REMOTE_SERVICE_TIMEOUT);
         }
 
         return r;        
@@ -261,13 +270,14 @@ static int registration_redo(struct servd_context *ctx,
         pthread_mutex_lock(&ctx->lock);
         
         list_for_each_entry(r, &ctx->reglist, lh) {
+#if defined(ENABLE_DEBUG)
                 char ip1[18], ip2[18];
 
-                printf("Reregistering service %s new_ip=%s old_ip=%s\n",
-                       service_id_to_str(&r->srvid),
-                       inet_ntop(AF_INET, new_ip, ip1, 18),
-                       old_ip ? inet_ntop(AF_INET, old_ip, ip2, 18) : "none");
-                
+                LOG_DBG("Reregistering service %s new_ip=%s old_ip=%s\n",
+                        service_id_to_str(&r->srvid),
+                        inet_ntop(AF_INET, new_ip, ip1, 18),
+                        old_ip ? inet_ntop(AF_INET, old_ip, ip2, 18) : "none");
+#endif
                 ret = hostctrl_service_register(ctx->rhc, &r->srvid, 0, 
                                                 old_ip);
                 
@@ -275,8 +285,6 @@ static int registration_redo(struct servd_context *ctx,
                         fprintf(stderr, "Could not reregister service %s\n",
                                 service_id_to_str(&r->srvid));
                 }
-                
-                
                 memcpy(&r->ipaddr, new_ip, sizeof(*new_ip));
         }
 
@@ -414,7 +422,7 @@ int servd_interface_up(const char *ifname,
                 /* Synchronize with callback before redoing
                    registrations. We need the default service route to
                    send them out. */
-                printf("Requesting default service route info\n");
+                LOG_DBG("Requesting default service route info\n");
                 hostctrl_service_get(ctx->lhc, &default_service, 
                                      0, NULL);
 
@@ -461,10 +469,9 @@ static int register_service_remotely(struct hostctrl *hc,
                         }
                         registration_add(ctx, SERVICE_LOCAL, srvid, prefix, &addr.in.sin_addr);
 
-
-                        printf("Local service %s @ %s registered\n", 
-                               service_id_to_str(srvid),
-                               inet_ntoa(addr.in.sin_addr));
+                        LOG_DBG("Local service %s @ %s registered\n", 
+                                service_id_to_str(srvid),
+                                inet_ntoa(addr.in.sin_addr));
                 }
         }
 
@@ -480,8 +487,8 @@ static int unregister_service_remotely(struct hostctrl *hc,
         struct servd_context *ctx = hc->context;
         int ret = 0;
 
-	printf("Local service=%s unregistered\n", 
-               service_id_to_str(srvid));
+	LOG_DBG("Local service=%s unregistered\n", 
+                service_id_to_str(srvid));
 
         if (ctx->rhc) {
                 ret = hostctrl_service_unregister(ctx->rhc, srvid, prefix);
@@ -509,24 +516,25 @@ static int handle_incoming_registration(struct hostctrl *hc,
 
         if (old_ip && registration_update_remote(ctx, srvid, prefix, 
                                                  remote_ip, old_ip)) {
-                /*
+#if defined(ENABLE_DEBUG)
                 char ip1[18], ip2[18];    
-                printf("Remote service %s:%u @ %s <- %s reregistered\n", 
-                       service_id_to_str(srvid), prefix,
-                       inet_ntop(AF_INET, remote_ip, ip1, sizeof(ip1)),
-                       old_ip ? inet_ntop(AF_INET, old_ip, ip2, sizeof(ip2)) : "none");
-                */
+                LOG_DBG("Remote service %s:%u @ %s <- %s reregistered\n", 
+                        service_id_to_str(srvid), prefix,
+                        inet_ntop(AF_INET, remote_ip, ip1, sizeof(ip1)),
+                        old_ip ? inet_ntop(AF_INET, old_ip, ip2, sizeof(ip2)) : "none");
+#endif
                 ret = hostctrl_service_modify(ctx->lhc, SERVICE_RULE_FORWARD,
                                               srvid, prefix, 
                                               0, 0, old_ip, remote_ip);
         } else {
                 /* Add this service the local service table. */
+#if defined(ENABLE_DEBUG)
                 char buf[18];
                 
-                printf("Remote service %s:%u @ %s registered\n", 
-                       service_id_to_str(srvid), prefix,
-                       inet_ntop(AF_INET, remote_ip, buf, sizeof(buf)));
-                
+                LOG_DBG("Remote service %s:%u @ %s registered\n", 
+                        service_id_to_str(srvid), prefix,
+                        inet_ntop(AF_INET, remote_ip, buf, sizeof(buf)));
+#endif
                 registration_add(ctx, SERVICE_REMOTE, srvid, 
                                  prefix, remote_ip);
 
@@ -549,12 +557,13 @@ static int handle_incoming_unregistration(struct hostctrl *hc,
         int ret = 0;
         
         if (registration_exists(ctx, SERVICE_REMOTE, srvid, remote_ip)) {
+#if defined(ENABLE_DEBUG)
                 char buf[18];
                 
-                printf("Remote service %s @ %s unregistered\n", 
-                       service_id_to_str(srvid), 
-                       inet_ntop(AF_INET, remote_ip, buf, 18));
-                
+                LOG_DBG("Remote service %s @ %s unregistered\n", 
+                        service_id_to_str(srvid), 
+                        inet_ntop(AF_INET, remote_ip, buf, 18));
+#endif
                 /* Remove this service from the local service
                    table. */
                 ret = hostctrl_service_remove(ctx->lhc, 

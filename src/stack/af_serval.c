@@ -72,7 +72,7 @@ struct netns_serval net_serval = {
         .sysctl_debug = 0,
         .sysctl_udp_encap = 0,
         .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
-        .sysctl_resolution_mode = SERVICE_ITER_ALL,
+        .sysctl_resolution_mode = SERVICE_ITER_ANYCAST,
 };
 
 extern void serval_tcp_init(void);
