@@ -46,6 +46,79 @@
 #include "splice.h"
 #endif
 
+/* 
+   High-level overview of translator
+   =================================
+
+   The translator moves data between two sockets (AF_INET and
+   AF_SERVAL) using the splice system call. With this call, the data
+   never leaves kernel space, and the whole operation is therefore
+   very efficient. The translator can accept connections on both types
+   of sockets simultaneously and then automatically create a socket of
+   the other type, connecting to the final server destination.
+
+   The splice call requires connecting the two sockets via pipes,
+   leaving us with a configuration as follows (when translating from
+   AF_INET to AF_SERVAL):
+
+   fd_inet ---> fd_pipe_w PIPE fd_pipe_r ---> fd_serval
+
+   All in all, this leaves us with four file descriptors per client
+   that connects to the translator.
+
+   There are tricky blocking situations to consider between these file
+   descriptors: for instance, there may be incoming data on the SERVAL
+   socket, which we want to write to the INET socket, but the receive
+   buffer on the INET socket may be full. So, although a
+   poll/epoll/select, may indicate non-blocking readability, we could
+   still block because the target socket is not writable. Also,
+   leaving data in the pipe might be dangerous since we are using the
+   same pipe to translate in both directions (we could use one pipe
+   for each direction, but that would require even more
+   filedescriptors, and additional monitoring of
+   those). Unfortunately, there is no easy way to monitor for complex
+   conditions that span multiple file descriptors.
+
+   With the above complexities in mind, the strategy used for
+   non-blocking operation is as follows. We only read as much data as
+   we can write to the target socket, ensuring that we never fill the
+   pipe with data that we cannot read out of the pipe. We use a
+   TIOCOUTQ ioctl() call on the target socket to learn how much free
+   space there is in the receive buffer and cap the amount of bytes
+   read from the source socket at this value. This ensures we never
+   read more than we can write to the target socket and we will never
+   leave data in the pipe.
+
+   We monitor he INET and SERVAL file descriptors for read/write
+   events, and we never translate anything unless we've seen a
+   combination of readability on the source socket and writability on
+   the target socket. Since we cannot monitor read/write events across
+   file descriptors as a single event, we need a way to "remember" the
+   last state of a file descriptor in order to wait for the
+   corresponding event on the other file descriptor. Also, if a socket
+   is readable, but the target is not writable, we need to stop
+   monitoring readability on the source until the target is
+   writable. Otherwise, we will spin in a busy "readability"-loop
+   until we can write the data.
+
+   
+   Threading
+   ---------
+
+   The translator uses a fixed number of worker threads and epoll for
+   scalability. The number of worker threads to use is a runtime
+   configurable setting.
+
+   The main thread monitors a client's file descriptors for
+   events. When the right conditions occur for translating data, the
+   main thread schedules the client on a work queue for processing,
+   and stops monitoring its file descriptors. A worker thread will
+   pick the client off the work queue and perform the
+   translation. When translation has finished, the worker signals the
+   main thread to "rearm" all non-scheduled clients so that the client
+   that just finished will have its file descriptors monitored again.
+ */
+
 static unsigned int client_num = 0;
 
 typedef union sockaddr_generic {
@@ -84,7 +157,7 @@ struct socket {
         int fd; /* Must be first */
         enum socket_state state;
         struct client *c;
-        int is_monitored;
+        char is_monitored:1;
         uint32_t monitored_events;
         uint32_t active_events;
         sockaddr_generic_t addr;
@@ -159,13 +232,6 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
-/*
-static int socket_is_readable(struct socket *s)
-{
-        char c;
-        return recv(s->fd, &c, 1, MSG_PEEK | MSG_DONTWAIT) > 0;
-}
-*/
 static int socket_is_writable(struct socket *s, int *bytes)
 {
         int bytes_queued = 0;
@@ -295,15 +361,6 @@ static enum work_status work_serval_to_inet(struct client *c)
                               &c->sock[ST_INET], c->splicefd);
 }
 
-/*
-#define client_epoll_set(c, op) ({                       \
-                        int ret;                         \
-                        printf("%s:\n", __func__);        \
-                        ret = _client_epoll_set(c, op);  \
-                        ret;                             \
-                })
-*/
-
 static int client_epoll_set(struct client *c, struct socket *s, 
                             int op, unsigned int extra_event)
 {
@@ -335,7 +392,7 @@ static int client_epoll_set(struct client *c, struct socket *s,
         default:
                 return 0;
         }
-        
+/*        
         LOG_DBG("client=%u op=%s fd=%d R=%d W=%d H=%d\n",
                 c->id,
                 EPOLL_CTL_MOD == op ?                                
@@ -345,7 +402,7 @@ static int client_epoll_set(struct client *c, struct socket *s,
                 (ev.events & EPOLLIN) > 0, 
                 (ev.events & EPOLLOUT) > 0,
                 (ev.events & EPOLLHUP) > 0);
-        
+*/      
         ret = epoll_ctl(epollfd, op, s->fd, &ev);
         
         if (ret == -1) {
@@ -589,6 +646,7 @@ static void *worker_thread(void *arg)
                                 break;
                         }
                 }
+
                 c->is_scheduled = 0;
                 c->num_work = 0;
 
@@ -998,14 +1056,14 @@ static void schedule_client(struct client *c)
                 return;
 
         c->is_scheduled = 1;
-        LOG_DBG("client %u scheduling\n", c->id);
+        /* LOG_DBG("client %u scheduled\n", c->id); */
         pthread_mutex_lock(&work_mutex);
         list_add_tail(&c->wq, &workq);
         pthread_mutex_unlock(&work_mutex);
         pthread_cond_signal(&work_cond);        
 }
 
-static void socket_check_events(struct client *c, struct socket *s, 
+static void check_socket_events(struct client *c, struct socket *s, 
                                 unsigned int events)
 {
         struct socket *s2;
@@ -1017,8 +1075,9 @@ static void socket_check_events(struct client *c, struct socket *s,
                 s2 = &c->sock[ST_SERVAL];
         else
                 s2 = &c->sock[ST_INET];
-
-        LOG_DBG("s(fd=%d) state=%s events[R=%d W=%d] active[R=%d W=%d] monitored[R=%d W=%d] "
+        /*
+        LOG_DBG("s(fd=%d) state=%s events[R=%d W=%d] "
+                "active[R=%d W=%d] monitored[R=%d W=%d] "
                 "s2(fd=%d) active[R=%d W=%d] monitored[R=%d W=%d]\n",
                 s->fd, 
                 socket_state_str[s->state],
@@ -1033,7 +1092,8 @@ static void socket_check_events(struct client *c, struct socket *s,
                 (s2->active_events & EPOLLOUT) > 0,
                 (s2->monitored_events & EPOLLIN) > 0, 
                 (s2->monitored_events & EPOLLOUT) > 0);
-        
+        */
+
         if (events & EPOLLIN) {
                 if (s2->active_events & EPOLLOUT) {
                         /* We can translate stuff from s to s2 */
@@ -1070,12 +1130,13 @@ static void socket_check_events(struct client *c, struct socket *s,
                 s->monitored_events &= ~EPOLLOUT;
         }
 }
+
 void rearm_clients(void)
 {
         struct client *c, *tmp;
 
         list_for_each_entry_safe(c, tmp, &client_list, lh) {
-                if (!c->is_garbage)
+                if (!c->is_garbage && !c->is_scheduled)
                         client_epoll_set_all(c, EPOLL_CTL_MOD, EPOLLONESHOT);
         }
 }
@@ -1234,7 +1295,7 @@ int run_translator(unsigned short port, int cross_translate,
                                 struct client *c = s->c;
 
                                 s->active_events |= events[i].events;
-                                socket_check_events(c, s, events[i].events);
+                                check_socket_events(c, s, events[i].events);
 
                                 if (c->num_work) {
                                         schedule_client(c);
@@ -1244,7 +1305,7 @@ int run_translator(unsigned short port, int cross_translate,
                 rearm_clients();
         }
         LOG_DBG("Translator exits.\n");
- err_workers:
+err_workers:
         stop_workers();
         LOG_DBG("Cleaning up clients\n");
         cleanup_clients();
