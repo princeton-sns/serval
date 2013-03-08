@@ -160,6 +160,13 @@ Configuration Options
 ---------------------
 
 ```
-/proc/sys/net/serval/sal_forward   - Enable/Disable forwarding in SAL.
-/proc/sys/net/serval/udp_encap     - Enable/Disable UDP encapsulation.
+/proc/sys/net/serval/auto_migrate             - Enable/Disable automigration between interfaces
+/proc/sys/net/serval/debug                    - Set debug level
+/proc/sys/net/serval/inet_to_serval           - Enable/Disable socket hijacking, where legacy (AF_INET) sockets are turned into Serval sockets
+/proc/sys/net/serval/sal_forward              - Enable/Disable forwarding in SAL
+/proc/sys/net/serval/sal_max_retransmits      - Max SAL retransmits
+/proc/sys/net/serval/service_resolution_mode  - Specifies which rules to use when resolving services. 0=All, 1=Demux only, 2=forward only, 3=Anycast 
+/proc/sys/net/serval/udp_encap                - Enable/Disable UDP encapsulation
+/proc/sys/net/serval/udp_encap_client_port    - List/set client UDP encap port
+/proc/sys/net/serval/udp_encap_server_port    - List/set server UDP encap port
 ```
