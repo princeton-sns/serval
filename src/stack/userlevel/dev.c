@@ -48,12 +48,22 @@ struct dev_entry {
   This adds an interface to a white list. Unless the white list is
   empty, only the interfaces in the list will be used.
 */
-void dev_list_add(char *name)
+void dev_list_add(const char *devnames)
 {
         const char *sep = ",;";
         char *save_ptr, *str;
-        
-        for (str = strtok_r(name, sep, &save_ptr); str; 
+        char *buf;
+
+        /* We need to make a copy, since strtok works only on
+           non-const strings */
+        buf = malloc(strlen(devnames) + 1);
+
+        if (!buf)
+                return;
+
+        strcpy(buf, devnames);
+
+        for (str = strtok_r(buf, sep, &save_ptr); str; 
              str = strtok_r(NULL, sep, &save_ptr)) {
                 struct dev_entry *de;
 
@@ -65,6 +75,7 @@ void dev_list_add(char *name)
                         list_add_tail(&de->lh, &dev_list);
                 }
         }
+        free(buf);
 }
 
 void dev_list_destroy(void)
@@ -283,7 +294,7 @@ struct net_device *__dev_get_by_name(struct net *net, const char *name)
 struct net_device *dev_get_by_name(struct net *net, const char *name)
 {
 	struct net_device *dev;
-
+        
         read_lock(&dev_base_lock);
 	dev = __dev_get_by_name(net, name);
 	if (dev)
@@ -310,12 +321,13 @@ struct net_device *__dev_get_by_index(struct net *net, int ifindex)
 	struct hlist_head *head = dev_index_hash(net, ifindex);
 
 	if (ifindex == 0) {
-	    /*return the first device*/
-	    if (list_empty(&dev_base_head)) {
-	        return NULL;
-	    }
-	    dev = list_entry(dev_base_head.next, struct net_device, dev_list);
-	    return dev;
+                /* return the first device */
+                if (list_empty(&dev_base_head))
+                        return NULL;
+
+                dev = list_entry(dev_base_head.next, 
+                                 struct net_device, dev_list);
+                return dev;
 	}
 
 	hlist_for_each_entry(dev, p, head, index_hlist)
@@ -492,9 +504,13 @@ int netdev_populate_table(int sizeof_priv,
 #elif defined(OS_LINUX)
                 len = sizeof(struct ifreq);
 #endif
+
                 /* If there are white listed interfaces, ignore all
-                   interfaces not in the list */
-                if (!list_empty(&dev_list) && 
+                   interfaces not in the list, except the loopback
+                   device (we need that for localhost
+                   communication). */
+                if (strncmp(name, "lo", 2) != 0 &&
+                    !list_empty(&dev_list) && 
                     !dev_list_find(ifr->ifr_name))
                         continue;
                         
@@ -504,10 +520,6 @@ int netdev_populate_table(int sizeof_priv,
                         goto out;
                 }
                 
-                /* Ignore loopback device */
-                /* if (strncmp(name, "lo", 2) == 0)
-                        continue;
-                */
                 dev = alloc_netdev(sizeof_priv, ifr->ifr_name, setup);
                 
                 if (!dev)

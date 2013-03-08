@@ -2357,10 +2357,17 @@ static int serval_sal_connected_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-        int should_drop = 0;
+        char should_drop = 0, should_close = 0;
 
         err = serval_sal_ack_process(sk, skb, ctx);
-        
+
+        if (ctx->flags & SVH_FIN) {
+                err = serval_sal_rcv_fin(sk, skb, ctx);
+                
+                if (err == 0)
+                        should_close = 1;
+        }
+
         /* Should pass FINs to transport and ultimately the user, as
          * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
@@ -2381,13 +2388,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 should_drop = 1;
         }
 
-        if (ctx->flags & SVH_FIN) {
-                err = serval_sal_rcv_fin(sk, skb, ctx);
-                
-                if (err == 0) {
-                        serval_sock_set_state(sk, SAL_CLOSEWAIT);
-                }
-        }
+        if (should_close)
+                serval_sock_set_state(sk, SAL_CLOSEWAIT);
 
         if (should_drop)
                 kfree_skb(skb);
@@ -4090,6 +4092,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * appropriate for kernel operation as well
                          */
                         dev = __dev_get_by_name(sock_net(sk), "lo");
+
+                        if (!dev)
+                                continue;
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,

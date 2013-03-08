@@ -42,8 +42,9 @@ void logme(log_level_t level, const char *func, const char *format, ...)
 {
 	va_list ap;
         
-        if ((unsigned int)level > net_serval.sysctl_debug)
+        if ((unsigned int)level > net_serval.sysctl_debug) {
                 return;
+        }
         
 #if defined(OS_LINUX_KERNEL)
         switch (level) {

@@ -410,7 +410,7 @@ out_close_pipe:
 	return ret;
 }
 
-extern void dev_list_add(char *name);
+extern void dev_list_add(const char *name);
 
 #define PID_FILE "/tmp/serval.pid"
 
@@ -632,7 +632,8 @@ int main(int argc, char **argv)
 	
 	if (ret == -1) {
 		LOG_CRIT("Could not initialize ctrl socket.\n");
-		LOG_CRIT("Check if %s already exists.\n", SERVAL_STACK_CTRL_PATH);   
+		LOG_CRIT("Check if %s already exists.\n", 
+                         SERVAL_STACK_CTRL_PATH);   
                 goto cleanup_serval;
 	}
 	
@@ -646,6 +647,7 @@ int main(int argc, char **argv)
 	ret = server_run();
 
         telnet_fini();
+
  cleanup_ctrl:
 	ctrl_fini();
  cleanup_serval:

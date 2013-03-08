@@ -895,7 +895,8 @@ int client_start(struct client *c)
 	return ret;
 }
 
-struct client *client_get_by_socket(struct socket *sock, struct client_list *list)
+struct client *client_get_by_socket(struct socket *sock, 
+                                    struct client_list *list)
 {
         struct client *c;
 

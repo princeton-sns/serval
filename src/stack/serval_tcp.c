@@ -1844,8 +1844,6 @@ skip_copy:
         found_fin_ok:
                 ++*seq;
 
-                tp->fin_found = 1;
-
                 LOG_SSK(sk, "Received FIN (MSG_PEEK=%d)\n",
                         (flags & MSG_PEEK) > 0);
                 /*
@@ -1856,10 +1854,11 @@ skip_copy:
                   SAL), this FIN is simply treated as a end of stream
                   marker. Instead of returning to the user, we
                   continue to hang/wait in this function until the SAL
-                  closes, and only then return 0. 
+                  closes (SOCK_DONE), and only then return 0. 
                 */
 
                 if (!(flags & MSG_PEEK)) {
+                        tp->fin_found = 1;
                         sk_eat_skb(sk, skb, copied_early);
                         copied_early = 0;
                         continue;

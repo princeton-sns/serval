@@ -1137,8 +1137,8 @@ void __exit serval_fini(void)
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);
-        packet_fini();
         serval_sock_tables_fini();
+        packet_fini();
         service_fini();
         delay_queue_fini();
 }
