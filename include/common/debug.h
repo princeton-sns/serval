@@ -29,7 +29,12 @@
                                                  __func__, ## __VA_ARGS__)
 #else
 #if defined(ENABLE_DEBUG)
-#define LOG_DBG(format, ...) printf("%s: "format, __func__, ## __VA_ARGS__)
+#include <sys/time.h>
+#define LOG_DBG(format, ...) ({                                         \
+            struct timeval now;                                         \
+            gettimeofday(&now, NULL);                                   \
+            printf("%ld.%06ld %s: "format, now.tv_sec, now.tv_usec, __func__, ## __VA_ARGS__); \
+        })
 #else
 #define LOG_DBG(format, ...)
 #endif

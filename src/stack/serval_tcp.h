@@ -39,7 +39,11 @@
 /*
  * TCP general constants
  */
+#if defined(OS_USER)
+#define SERVAL_TCP_MSS_DEFAULT		1460U
+#else
 #define SERVAL_TCP_MSS_DEFAULT		 524U	/* IPv4 (RFC1122, RFC2581) */
+#endif
 #define SERVAL_TCP_MSS_DESIRED		1220U	/* IPv6 (tunneled), EDNS0 (RFC3226) */
 
 #define SERVAL_TCP_MSS_INIT (1460 - sizeof(struct sal_hdr))

@@ -537,7 +537,7 @@ int main(int argc, char **argv)
         }
 
 	if (getuid() != 0 && geteuid() != 0) {
-		LOG_CRIT("%s must run as uid=0 (root)\n", progname);
+		fprintf(stderr, "%s must run as uid=0 (root)\n", progname);
                 return -1;
 	}
 

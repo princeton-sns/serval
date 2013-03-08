@@ -970,6 +970,7 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
 {
         struct radix_node *n;
         int (*func)(struct radix_node *) = NULL;
+        struct service_entry *se = NULL;
 
         if (!srvid)
                 return NULL;
@@ -1000,10 +1001,11 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                         if (service_id_cmp(&id, srvid) != 0)
                                 return NULL;
                 } 
-                return get_service(n);
+                se = get_service(n);
+                service_entry_hold(se);
         }
 
-        return NULL;
+        return se;
 }
 
 static struct service_entry *service_table_find(struct service_table *tbl,
@@ -1015,9 +1017,6 @@ static struct service_entry *service_table_find(struct service_table *tbl,
         read_lock_bh(&tbl->lock);
 
         se = __service_table_find(tbl, srvid, match);
-
-        if (se)
-                service_entry_hold(se);
 
         read_unlock_bh(&tbl->lock);
 
@@ -1048,6 +1047,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
                         sk = t->out.sk;
                         sock_hold(sk);
                 }
+                service_entry_put(se);
         }
         
         read_unlock_bh(&tbl->lock);

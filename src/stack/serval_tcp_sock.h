@@ -99,7 +99,8 @@ struct serval_tcp_sock {
 	u8 nonagle     : 4,/* Disable Nagle algorithm? */
 		thin_lto    : 1,/* Use linear timeouts for thin streams */
 		thin_dupack : 1,/* Fast retransmit on first dupack      */
-		unused      : 2;
+                fin_found   : 1,
+		unused      : 1;
         /* RTT measurement */
 	u32 srtt;		/* smoothed round trip time << 3	*/
 	u32 mdev;		/* medium deviation			*/

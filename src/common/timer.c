@@ -165,7 +165,7 @@ int timer_add(struct timer_queue *tq, struct timer *t)
 {
 	if (timer_scheduled(t))
 		return -1;
-
+    
     return timer_mod(tq, t, t->expires);
 }
 

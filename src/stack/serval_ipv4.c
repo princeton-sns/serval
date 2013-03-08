@@ -106,9 +106,8 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
 	skb->protocol = htons(ETH_P_IP);
 
 #if defined(OS_LINUX_KERNEL)
-
-        /* IP forwarding must be enabled for this to
-           work. */
+        /* Redo input routing with new destination address. IP
+           forwarding must be enabled for this to work. */
         err = ip_route_input_noref(skb, 
                                    iph->daddr, 
                                    iph->saddr, 
