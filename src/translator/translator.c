@@ -1334,9 +1334,7 @@ int run_translator(unsigned short port, int cross_translate,
         if (ret == -1)
                 goto err_workers;
 
-        LOG_DBG("%s to %s translator running\n", 
-                family_to_str(family), 
-                family_to_str(family == AF_INET ? AF_SERVAL : AF_INET));
+        LOG_DBG("translator running\n");
         
         while (running) {
                 struct timespec prev_time, now;
@@ -1444,7 +1442,6 @@ static void print_usage(void)
         printf("\t-f, --file-limit LIMIT\t\t set the maximum number of open file descriptors.\n");
         printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
-        printf("\t-s, --serval\t\t\t run an AF_SERVAL->AF_INET translator.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
         printf("\t-x, --cross-translate\t\t allow connections from another AF_SERVAL->AF_INET.\n");
@@ -1545,10 +1542,6 @@ int main(int argc, char **argv)
                         translator_service_name = argv[1];
                         argv++;
                         argc--;
-                } else if (strcmp(argv[0], "-s") == 0 ||
-                           strcmp(argv[0], "--serval") ==  0) {
-                        /* Run a SERVAL to INET translator */
-                        family = AF_SERVAL;
                 } else if (strcmp(argv[0], "-f") == 0 ||
                            strcmp(argv[0], "--file-limit") ==  0) {
                         if (argc == 1) {
