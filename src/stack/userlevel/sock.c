@@ -138,6 +138,7 @@ void sock_init_data(struct socket *sock, struct sock *sk)
 	sk->sk_write_pending	=	0;
 	sk->sk_rcvtimeo		=	MAX_SCHEDULE_TIMEOUT;
 	sk->sk_sndtimeo		=	MAX_SCHEDULE_TIMEOUT;
+        sk->sk_bound_dev_if     =       0;
 
         spin_lock_init(&sk->sk_dst_lock);
         rwlock_init(&sk->sk_callback_lock);

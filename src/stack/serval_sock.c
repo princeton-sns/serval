@@ -110,10 +110,10 @@ void __exit serval_table_fini(struct serval_table *table)
 
                         sk = hlist_entry(table->hash[i].head.first, 
                                          struct sock, sk_node);
-                        
-                        hlist_del(&sk->sk_node);
+                        LOG_SSK(sk, "unhashing socket %p\n", sk);
+                        hlist_del_init(&sk->sk_node);
                         table->hash[i].count--;
-                        sock_put(sk);
+                        serval_sock_done(sk);
                 }
                 spin_unlock_bh(&table->hash[i].lock);           
 	}
@@ -454,11 +454,10 @@ void serval_sock_unhash(struct sock *sk)
 
         lock = &established_table.hashslot(&established_table,
                                            net, &ssk->local_flowid, 
-                                           ssk->hash_key_len)->lock;
-        
-	spin_lock_bh(lock);
+                                           ssk->hash_key_len)->lock;       
 
         if (!hlist_unhashed(&sk->sk_node)) {
+                spin_lock_bh(lock);
                 hlist_del_init(&sk->sk_node);
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
@@ -469,8 +468,8 @@ void serval_sock_unhash(struct sock *sk)
 #endif
                 serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
                 ssk->hash_key_len = 0;        
+                spin_unlock_bh(lock);
         }
-	spin_unlock_bh(lock);
 }
 
 int __init serval_sock_tables_init(void)
@@ -500,6 +499,7 @@ void __exit serval_sock_tables_fini(void)
         serval_table_fini(&established_table);
         if (sock_state_str[0]) {} /* Avoid compiler warning when
                                    * compiling with debug off */
+
 }
 
 int __serval_assign_flowid(struct sock *sk)
@@ -622,7 +622,7 @@ void serval_sock_destroy(struct sock *sk)
 	WARN_ON(sk->sk_state != SAL_CLOSED);
 
 	/* It cannot be in hash table! */
-	//WARN_ON(!sk_unhashed(sk));
+	/* WARN_ON(!sk_unhashed(sk)); */
 
 	if (!sock_flag(sk, SOCK_DEAD)) {
 		LOG_WARN("Attempt to release alive inet socket %p\n", sk);

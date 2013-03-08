@@ -3425,7 +3425,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		switch (sk->sk_state) {
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
-                                //serval_sk(sk)->af_ops->send_shutdown(sk);
 #if defined(OS_LINUX_KERNEL)
 				dst_confirm(__sk_dst_get(sk));
 #endif
@@ -3438,7 +3437,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 					     after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt))) {
                                                 LOG_SSK(sk, "TCP Done!\n");
 						serval_sal_done(sk);
-						//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
                            
 						return 1;
 					}
@@ -3456,7 +3454,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 						 */
 						serval_tsk_reset_keepalive_timer(sk, tmo);
 					} else {
-						//serval_tcp_time_wait(sk, TCP_FIN_WAIT2, tmo);
 						goto discard;
 					}
 				}
@@ -3496,7 +3493,6 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		if (sk->sk_shutdown & RCV_SHUTDOWN) {
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
-				//NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
                                 LOG_SSK(sk, "received seqno after rcv_nxt. Handling as RESET\n");
 				serval_sal_rcv_reset(sk);
                                 /* FIXME: free_skb here, or handle in
@@ -3520,8 +3516,8 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	if (!queued) {
 discard:
                 kfree_skb(skb);
-		//__kfree_skb(skb);
 	}
+
 	return 0;
 }
 
