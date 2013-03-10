@@ -51,18 +51,13 @@ void signal_destroy(struct signal *s)
 
 int signal_clear_val(struct signal *s, int *val)
 {
-    int ret = 1;
+    ssize_t ret = 1;
     
     while (ret > 0) {        
         ret = read(s->fd[0], val, sizeof(*val));
-
-        if (ret == -1) {
-            if (errno == EWOULDBLOCK)
-                ret = 0;
-        }
     }
 
-    return ret > 0 ? 1 : ret;
+    return ret > 0;
 }
 
 int signal_clear(struct signal *s)

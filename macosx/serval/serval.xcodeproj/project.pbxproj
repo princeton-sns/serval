@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4D5548C616ED361500108839 /* delay_queue.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D5548C216ED361500108839 /* delay_queue.c */; };
+		4D5548C716ED361500108839 /* serval_tcp_metrics.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D5548C416ED361500108839 /* serval_tcp_metrics.c */; };
 		4D86AE1B15121B72001FFC81 /* hashtable.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AE1715121B72001FFC81 /* hashtable.c */; };
 		4D86AE1C15121B72001FFC81 /* heap.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AE1815121B72001FFC81 /* heap.c */; };
 		4D86AE1D15121B72001FFC81 /* signal.c in Sources */ = {isa = PBXBuildFile; fileRef = 4D86AE1915121B72001FFC81 /* signal.c */; };
@@ -60,6 +62,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		4D5548C216ED361500108839 /* delay_queue.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = delay_queue.c; path = ../../src/stack/delay_queue.c; sourceTree = "<group>"; };
+		4D5548C316ED361500108839 /* delay_queue.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = delay_queue.h; path = ../../src/stack/delay_queue.h; sourceTree = "<group>"; };
+		4D5548C416ED361500108839 /* serval_tcp_metrics.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = serval_tcp_metrics.c; path = ../../src/stack/serval_tcp_metrics.c; sourceTree = "<group>"; };
+		4D5548C516ED361500108839 /* serval_udp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = serval_udp.h; path = ../../src/stack/serval_udp.h; sourceTree = "<group>"; };
 		4D86AD98151219AA001FFC81 /* serval */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = serval; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D86ADA6151219C6001FFC81 /* atomic.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = atomic.h; sourceTree = "<group>"; };
 		4D86ADA7151219C6001FFC81 /* bitops.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = bitops.h; sourceTree = "<group>"; };
@@ -247,6 +253,10 @@
 			isa = PBXGroup;
 			children = (
 				4D86AE2915121C40001FFC81 /* af_serval.c */,
+				4D5548C216ED361500108839 /* delay_queue.c */,
+				4D5548C316ED361500108839 /* delay_queue.h */,
+				4D5548C416ED361500108839 /* serval_tcp_metrics.c */,
+				4D5548C516ED361500108839 /* serval_udp.h */,
 				4D86AE2A15121C40001FFC81 /* af_serval.h */,
 				4D86AE2B15121C40001FFC81 /* bst.c */,
 				4D86AE2C15121C40001FFC81 /* bst.h */,
@@ -407,6 +417,8 @@
 				4D86AE8015121C40001FFC81 /* telnet.c in Sources */,
 				4D86AE8115121C40001FFC81 /* timer.c in Sources */,
 				4D86AE8215121C40001FFC81 /* wait.c in Sources */,
+				4D5548C616ED361500108839 /* delay_queue.c in Sources */,
+				4D5548C716ED361500108839 /* serval_tcp_metrics.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
