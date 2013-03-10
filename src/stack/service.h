@@ -112,6 +112,13 @@ static inline union target_out make_target(void *t)
 /**
    A target, either a local socket or remote host.
 */
+
+/**
+   Ming
+   add source address and srclen,
+   supposely IPv4 address
+*/
+
 struct target {
         service_rule_type_t type;
         struct list_head lh;
@@ -121,6 +128,8 @@ struct target {
         atomic_t bytes_dropped;
         atomic_t packets_dropped;
         union target_out out;
+        unsigned char src[4]; /* supposely IPv4 address. */
+        int srclen;           /* reserved for future use */
         int dstlen;
         unsigned char dst[0]; /* Must be last */
 };
@@ -153,6 +162,8 @@ int service_entry_add_target(struct service_entry *se,
                              uint32_t weight,
                              const void *dst,
                              int dstlen,
+                             const void *src,
+                             int srclen,
                              const union target_out out,
                              gfp_t alloc);
 

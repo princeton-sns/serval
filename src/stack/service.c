@@ -83,8 +83,14 @@ static const char *protocol_to_str(int protocol)
         return buf;
 }
 
+/*
+  Ming
+  add source address and srclen
+*/
+
 static struct target *target_create(service_rule_type_t type,
                                     const void *dst, int dstlen,
+                                    const void *src, int srclen,
                                     const union target_out out, 
                                     uint32_t weight,
                                     gfp_t alloc) 
@@ -103,6 +109,7 @@ static struct target *target_create(service_rule_type_t type,
         t->type = type;
         t->weight = weight;
         t->dstlen = dstlen;
+        t->srclen = srclen;
 
         if (dstlen > 0) {
                 if (out.raw != NULL) {
@@ -110,6 +117,7 @@ static struct target *target_create(service_rule_type_t type,
                         dev_hold(t->out.dev);
                 }
                 memcpy(t->dst, dst, dstlen);
+                memcpy(t->src, src, srclen); /* Ming: add source address */
         } else {
                 t->out.sk = out.sk;
                 sock_hold(t->out.sk);
@@ -303,11 +311,16 @@ __service_entry_get_target_set(struct service_entry *se,
         return NULL;
 }
 
+/*
+  Ming
+  add source address and sizeof(source address)
+*/
+
 static int __service_entry_add_target(struct service_entry *se, 
                                       service_rule_type_t type,
                                       uint16_t flags, uint32_t priority,
                                       uint32_t weight, const void *dst, 
-                                      int dstlen, 
+                                      int dstlen, const void *src, int srclen,
                                       const union target_out out, 
                                       gfp_t alloc) 
 {
@@ -328,7 +341,7 @@ static int __service_entry_add_target(struct service_entry *se,
                 return 0;
         }
         
-        t = target_create(type, dst, dstlen, out, weight, alloc);
+        t = target_create(type, dst, dstlen, src, srclen, out, weight, alloc);
 
         if (!t)
                 return -ENOMEM;
@@ -352,10 +365,16 @@ static int __service_entry_add_target(struct service_entry *se,
         return 1;
 }
 
+/*
+  Ming
+  add source address and srclen
+*/
+
 int service_entry_add_target(struct service_entry *se, 
                              service_rule_type_t type, uint16_t flags, 
                              uint32_t priority, uint32_t weight, 
-                             const void *dst, int dstlen, 
+                             const void *dst, int dstlen,
+                             const void *src, int srclen,
                              const union target_out out, gfp_t alloc) 
 {
         int ret = 0;
@@ -369,6 +388,7 @@ int service_entry_add_target(struct service_entry *se,
         */
         ret = __service_entry_add_target(se, type, flags, priority, 
                                          weight, dst, dstlen, 
+                                         src, srclen,
                                          out, GFP_ATOMIC);
         write_unlock_bh(&se->lock);
 
@@ -1383,6 +1403,7 @@ static int service_table_add(struct service_table *tbl,
                                                          type,
                                                          flags, priority, 
                                                          weight, dst, dstlen,
+                                                         src, srclen,
                                                          out, GFP_ATOMIC);
                 }
                 goto out;
@@ -1397,8 +1418,8 @@ static int service_table_add(struct service_table *tbl,
 
         
         ret = __service_entry_add_target(se, type, flags, priority, 
-                                         weight, dst, dstlen, out,
-                                         GFP_ATOMIC);
+                                         weight, dst, dstlen, src, srclen,
+                                         out, GFP_ATOMIC);
         
         if (ret < 0) {
                 service_entry_free(se);

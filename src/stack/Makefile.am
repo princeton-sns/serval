@@ -1,4 +1,4 @@
-bin_PROGRAMS = serval
+bin_PROGRAMS = serval 
 
 serval_common_SRC = \
 	debug.c \
@@ -40,6 +40,45 @@ serval_SOURCES = \
 	userlevel/ctrl.c \
 	userlevel/telnet.c \
 	userlevel/serval.c
+
+
+bst_test_SOURCES = \
+	  bst.c \
+          debug.c \
+          af_serval.c \
+          platform.c \
+          serval_sock.c \
+          userlevel/sock.c \
+          serval_sal.c \
+          service.c \
+          delay_queue.c \
+          serval_udp.c \
+          serval_tcp.c \
+          serval_tcp_input.c \
+          serval_tcp_sock.c \
+          userlevel/dev.c \
+          serval_ipv4.c \
+          serval_tcp_timer.c \
+          userlevel/stream.c \
+          userlevel/timer.c \
+          userlevel/skbuff.c \
+          userlevel/bitops.c \
+          userlevel/wait.c \
+          userlevel/ctrl.c \
+          userlevel/packet_raw.c \
+          userlevel/client.c \
+          userlevel/checksum.c \
+          userlevel/dst.c \
+          userlevel/socket.c 
+          
+bst_test_include_HEADERS = \
+	$(top_srcdir)/include/netinet/serval.h               
+bst_test_includedir=$(includedir)/netinet
+bst_test_LDFLAGS =-lpthread
+bst_test_CPPFLAGS =-I$(SERVAL_INCLUDE_DIR) -I$(STACK_DIR) -DOS
+bst_test_LDADD = \
+	$(top_srcdir)/src/common/libcommon.la
+       
 
 SERVAL_INCLUDE_DIR=$(top_builddir)/include
 STACK_DIR=$(top_builddir)/src/stack
