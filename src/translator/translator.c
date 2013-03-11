@@ -686,7 +686,7 @@ static enum work_status client_connect(struct client *c)
 
                 if (c->cross_translate) {
                         struct sockaddr_in orig_addr;
-                        socklen_t orig_addrlen;
+                        socklen_t orig_addrlen = sizeof(orig_addr);
 
                         /* We are cross translating, i.e., this
                          * AF_INET to AF_SERVAL translator connects to
@@ -704,8 +704,7 @@ static enum work_status client_connect(struct client *c)
                                          &orig_addr, &orig_addrlen);
                         
                         if (ret == -1) {
-                                LOG_DBG("client %u, could not get original port."
-                                        "Probably not NAT'ed\n", c->id);
+                                LOG_ERR("client %u: could not get original port: %s\n", c->id, strerror(errno));
                                 return WORK_ERROR;
                         } else {
                                 inet_ntop(AF_INET, &orig_addr.sin_addr, 
