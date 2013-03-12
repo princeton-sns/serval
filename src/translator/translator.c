@@ -1143,8 +1143,14 @@ void rearm_clients(void)
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
 
+enum translator_mode {
+        DUAL_MODE = 0,
+        INET_ONLY_MODE,
+        SERVAL_ONLY_MODE,
+};
+
 int run_translator(unsigned short port, int cross_translate, 
-                   int inet_server_only)
+                   unsigned int mode)
 {
 	struct sigaction action;
 	int inet_sock, serval_sock = -1, ret = 0, running = 1, sig_fd;
@@ -1181,28 +1187,31 @@ int run_translator(unsigned short port, int cross_translate,
                 goto err_epoll_create;
         }
         
-        inet_sock = create_server_sock(AF_INET, port, cross_translate);
-
-        if (inet_sock == -1) {
-                LOG_ERR("could not create AF_INET server sock\n");
-                ret = inet_sock;
-                goto err_inet_sock;
+        if (mode == INET_ONLY_MODE || mode == DUAL_MODE) {
+                inet_sock = create_server_sock(AF_INET, port, cross_translate);
+                
+                if (inet_sock == -1) {
+                        LOG_ERR("could not create AF_INET server sock\n");
+                        ret = inet_sock;
+                        goto err_inet_sock;
+                }
+                
+                /* Set events. EPOLLERR and EPOLLHUP may always be returned,
+                 * even if not set here */
+                memset(&ev, 0, sizeof(ev));
+                ev.events = EPOLLIN;
+                ev.data.ptr = &inet_sock;
+                
+                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev) == -1) {
+                        LOG_ERR("Could not add listen sock to epoll events: %s\n",
+                                strerror(errno));
+                        goto err_epoll_ctl_inet;
+                }
         }
-        
-        /* Set events. EPOLLERR and EPOLLHUP may always be returned,
-         * even if not set here */
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN;
-        ev.data.ptr = &inet_sock;
-        
-        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev) == -1) {
-                LOG_ERR("Could not add listen sock to epoll events: %s\n",
-                        strerror(errno));
-                goto err_epoll_ctl_inet;
-        }
 
-        if (!inet_server_only) {
-                serval_sock = create_server_sock(AF_SERVAL, port, cross_translate);
+        if (mode == SERVAL_ONLY_MODE || mode == DUAL_MODE) {
+                serval_sock = create_server_sock(AF_SERVAL, 
+                                                 port, cross_translate);
                 
                 if (serval_sock == -1) {
                         LOG_ERR("could not create AF_SERVAL server sock\n");
@@ -1404,7 +1413,7 @@ int main(int argc, char **argv)
         int ret = 0, daemon = 0, cross_translate = 0;
         struct rlimit limit;
         rlim_t file_limit = 0;
-        int inet_only = 0;
+        unsigned int mode = DUAL_MODE;
 
         argc--;
 	argv++;
@@ -1439,7 +1448,10 @@ int main(int argc, char **argv)
                         cross_translate = 1;
                 } else if (strcmp(argv[0], "-io") == 0 ||
                            strcmp(argv[0], "--inet-only") ==  0) {
-                        inet_only = 1;
+                        mode = INET_ONLY_MODE;
+                } else if (strcmp(argv[0], "-so") == 0 ||
+                           strcmp(argv[0], "--serval-only") ==  0) {
+                        mode = SERVAL_ONLY_MODE;
                 } else if (strcmp(argv[0], "-w") == 0 ||
                            strcmp(argv[0], "--workers") ==  0) {
                         unsigned long n;
@@ -1518,7 +1530,7 @@ int main(int argc, char **argv)
                 }
         }
         
-        ret = run_translator(port, cross_translate, inet_only);
+        ret = run_translator(port, cross_translate, mode);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);
