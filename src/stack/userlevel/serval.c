@@ -36,6 +36,14 @@
 #include <userlevel/client.h>
 #include <ctrl.h>
 
+// Ming: test for bst
+
+#define BST_TEST
+
+#ifdef BST_TEST
+#include <bst.h>
+#endif
+
 struct client_list client_list;
 atomic_t num_clients = ATOMIC_INIT(0);
 static volatile int should_exit = 0;
@@ -512,12 +520,22 @@ static void print_usage()
                "-s, --sal-forward                 - Enable SAL forwarding.\n");
 }
 
+
 int main(int argc, char **argv)
 {        
 	struct sigaction action;
         int daemon = 0;
 	int ret;
         struct timeval now;
+
+        /*
+  Ming:
+  test for trie tree
+*/
+#ifdef BST_TEST
+        bst_test();
+#endif
+
         
         progname = basename(argv[0]);
 
@@ -656,6 +674,6 @@ int main(int argc, char **argv)
         LOG_DBG("num_skb_alloc=%u\n", atomic_read(&num_skb_alloc));
         LOG_DBG("num_skb_clone=%u\n", atomic_read(&num_skb_clone));
         LOG_DBG("num_skb_free=%u\n", atomic_read(&num_skb_free));
-
+        
 	return ret;
 }

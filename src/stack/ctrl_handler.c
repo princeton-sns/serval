@@ -80,6 +80,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                 struct net_device *dev = NULL;
                 struct service_info *entry = &cmr->service[i];
                 unsigned short prefix_bits = SERVICE_ID_MAX_PREFIX_BITS;
+                unsigned short src_bits = SROUCE_ADDRESS_MAX_PREFIX_BITS;
 
                 if (entry->type == SERVICE_RULE_FORWARD) {
                         dev = resolve_dev(entry);
@@ -90,6 +91,9 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
 
                 if (entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
+
+                if (entry->src_bits > 0)
+                        src_bits = entry->src_bits;
          
 #if defined(ENABLE_DEBUG)
                 {
@@ -113,6 +117,7 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                                   sizeof(entry->address),
                                   &entry->srcaddr,
                                   sizeof(entry->srcaddr),
+                                  src_bits,
                                   make_target(dev), GFP_KERNEL);
                 if (dev)
                         dev_put(dev);

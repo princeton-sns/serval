@@ -33,6 +33,8 @@
 #define CHECK_BIT(prefix, bitoffset) (((char *)prefix)[PREFIX_BYTE(bitoffset)] \
 				      & (0x1 << (7 - ((bitoffset) % 8))))
 
+//#define ENABLE_MAIN
+
 /*
   struct bst_node:
 
@@ -43,28 +45,45 @@
   BST_FLAG_ACTIVE: set if the node is an active prefix, i.e., the node
   represents is not just a necessary node because of active prefixes
   in its sub tree.
+
+  Ming:
+
+  BST_FLAG_SOURCE: set if the node is a indicates how to forward according
+  to source address
+
  */
 
 enum bst_node_flag {
         BST_FLAG_ACTIVE,
+        BST_FLAG_SOURCE
 };
 
 struct bst_node {       
         struct bst *tree;
-	struct bst_node *parent, *left, *right;
+	struct bst_node *parent, *left, *right, *source_node;
         struct bst_node_ops *ops;
         struct list_head lh; /* Used for printing trees non-recursively */
 	unsigned char flags;
         void *private;
 
         /* Begin Ming's code */
-        unsigned int source_addr_size; // in terms of # of bytes
-        unsigned int source_addr_bits;
-        /* End Ming's code */
+        
+        union {
+                unsigned int src_size; // in terms of # of bytes
+                unsigned int prefix_bits;
+        };
 
-        unsigned int prefix_bits;
-        unsigned int prefix_size;
-	unsigned char prefix[0];
+        union {
+                unsigned int src_bits;
+                unsigned int prefix_size;
+        };
+        
+        union {
+                unsigned char srcaddr[0];
+                unsigned char prefix[0];
+        };
+        
+        /* End Ming's code */
 };
 
 const unsigned char *bst_node_get_prefix(const struct bst_node *n)
@@ -278,6 +297,8 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
 struct bst_node *bst_find_longest_prefix_match(struct bst *tree, 
                                                void *prefix,
                                                unsigned int prefix_bits,
+                                               void *srcaddr,
+                                               unsigned int src_bits,
                                                int (*match)(struct bst_node *))
 {
         struct bst_node *n, *prev = NULL;
@@ -295,9 +316,11 @@ struct bst_node *bst_find_longest_prefix_match(struct bst *tree,
 
 struct bst_node *bst_find_longest_prefix(struct bst *tree, 
                                          void *prefix,
-                                         unsigned int prefix_bits)
+                                         unsigned int prefix_bits,
+                                         void *srcaddr,
+                                         unsigned int src_bits)
 {
-        return bst_find_longest_prefix_match(tree, prefix, prefix_bits, NULL);
+        return bst_find_longest_prefix_match(tree, prefix, prefix_bits, NULL, 0, NULL); 
 }
 
 /*
@@ -563,49 +586,255 @@ static struct bst_node *bst_create_node(struct bst_node *parent,
         return n;
 }
 
+static struct bst_node *bst_create_destination_node(struct bst_node *parent,
+                                        void *prefix, 
+                                        unsigned int prefix_size,
+                                        unsigned int prefix_bits,
+                                        gfp_t alloc)
+{
+        struct bst_node *n;
+
+	n = (struct bst_node *)MALLOC(sizeof(*n) + prefix_size, alloc);
+	
+	if (!n)
+		return NULL;
+	
+	memset(n, 0, sizeof(*n) + prefix_size);
+
+	if (CHECK_BIT(prefix, parent->prefix_bits)) {
+		parent->right = n;
+	} else {
+		parent->left = n;
+	}
+
+        n->tree = parent->tree;
+	n->left = NULL;
+	n->right = NULL;
+        n->ops = NULL;
+        n->private = NULL;
+	n->parent = parent;
+	n->flags = 0;
+        n->prefix_size = prefix_size;
+	n->prefix_bits = parent->prefix_bits + 1;
+	memcpy(n->prefix, prefix, n->prefix_size);
+        INIT_LIST_HEAD(&n->lh);
+        
+    
+	/* 
+	   Compute a mask that zeros out the extra bits that we might
+	   have copied in the last byte of the prefix.
+	*/
+	
+	if (n->prefix_bits % 8) {
+                unsigned char endmask = 0;
+                unsigned int i;
+
+		for (i = 0; i < n->prefix_bits % 8; i++) {
+			endmask |= (0x1 << (7-i));
+		}
+		
+		n->prefix[n->prefix_size-1] &= endmask;
+	}
+    
+        return n;
+}
+
+static struct bst_node *bst_create_source_node(struct bst_node *parent,
+                                        void *srcaddr,
+                                        unsigned int src_size,
+                                        unsigned int src_bits,
+                                        gfp_t alloc)
+{
+        struct bst_node *n;
+
+	n = (struct bst_node *)MALLOC(sizeof(*n), alloc);
+	
+	if (!n)
+		return NULL;
+	
+	memset(n, 0, sizeof(*n));
+
+	if (CHECK_BIT(srcaddr, parent->src_bits)) {
+		parent->right = n;
+	} else {
+		parent->left = n;
+	}
+
+        n->tree = parent->tree;
+	n->left = NULL;
+	n->right = NULL;
+        n->ops = NULL;
+        n->private = NULL;
+	n->parent = parent;
+	n->flags = 0;
+        n->src_size = src_size;
+	n->src_bits = parent->src_bits + 1;
+	memcpy(n->srcaddr, srcaddr, n->src_size);
+        INIT_LIST_HEAD(&n->lh);
+        
+    
+	/* 
+	   Compute a mask that zeros out the extra bits that we might
+	   have copied in the last byte of the prefix.
+	*/
+	
+	if (n->src_bits % 8) {
+                unsigned char endmask = 0;
+                unsigned int i;
+
+		for (i = 0; i < n->src_bits % 8; i++) {
+			endmask |= (0x1 << (7-i));
+		}
+		
+		n->prefix[n->src_bits - 1] &= endmask;
+	}
+    
+        return n;
+}
+
 /*
   Note for kernel: Recursive functions can easily exhaust the stack
   space in the kernel (which seems to be limited to 4k). Therefore,
   avoid implementing inserts by doing recursive callse to
   bst_node_new().
- */
+*/
+
 static struct bst_node *bst_node_new(struct bst_node *parent,
                                      struct bst_node_ops *ops,
                                      void *private,
-				     void *prefix, 
-				     unsigned int prefix_bits,
+				     void *prefix,
+                                     unsigned int prefix_bits,
                                      gfp_t alloc)
 {
 
         struct bst_node *n = NULL;
+
+        if (!parent)
+                return NULL; /* Ming: check for NULL */
         
         while (1) {
-                n =  bst_create_node(parent,
-                                     prefix,
-                                     PREFIX_SIZE(parent->prefix_bits + 1),
-                                     prefix_bits,
-                                     alloc);
+                        n =  bst_create_destination_node(parent,
+                                             prefix,
+                                             PREFIX_SIZE(parent->prefix_bits + 1),
+                                             prefix_bits,
+                                             alloc);
+                if (!n) {
+                        LOG_ERR("Memory allocation failed\n");
+                        break;
+                }
+
+                        if (CHECK_BIT(prefix, parent->prefix_bits)) {
+                                parent->right = n;
+
+                                if (parent->prefix_bits + 1 != prefix_bits)
+                                        parent = parent->right;
+                                else
+                                        break;
+                        } else {
+                                parent->left = n;
+
+                                if (parent->prefix_bits + 1 != prefix_bits)
+                                        parent = parent->left;
+                                else
+                                        break;
+                        }
+        }
+        
+        return n;
+}
+
+static struct bst_node *bst_destination_node_new(struct bst_node *parent,
+                                     struct bst_node_ops *ops,
+                                     void *private,
+				     void *prefix,
+                                     unsigned int prefix_bits,
+                                     gfp_t alloc)
+{
+
+        struct bst_node *n = NULL;
+
+        if (!parent)
+                return NULL; /* Ming: check for NULL */
+        
+        while (1) {
+                        n =  bst_create_destination_node(parent,
+                                             prefix,
+                                             PREFIX_SIZE(parent->prefix_bits + 1),
+                                             prefix_bits,
+                                             alloc);
+                if (!n) {
+                        LOG_ERR("Memory allocation failed\n");
+                        break;
+                }
+
+                        if (CHECK_BIT(prefix, parent->prefix_bits)) {
+                                parent->right = n;
+
+                                if (parent->prefix_bits + 1 != prefix_bits)
+                                        parent = parent->right;
+                                else
+                                        break;
+                        } else {
+                                parent->left = n;
+
+                                if (parent->prefix_bits + 1 != prefix_bits)
+                                        parent = parent->left;
+                                else
+                                        break;
+                        }
+        }
+        
+        return n;
+}
+
+/*
+  Ming:
+  Implement the tree as a two dimentional trie.
+  Each ACTIVE node is attached by a tree that consists
+  of SOURCE nodes that specify the forwarding rule according
+  to source address
+*/
+
+static struct bst_node *bst_source_node_new(struct bst_node *parent,
+                                     struct bst_node_ops *ops,
+                                     void *private,
+                                     void *srcaddr,
+                                     unsigned int src_bits,
+                                     gfp_t alloc)
+{
+
+        struct bst_node *n = NULL;
+
+        if (!parent)
+                return NULL; /* Ming: check for NULL */
+        
+        while (1) {
+                        n =  bst_create_source_node(parent,
+                                             srcaddr,
+                                             PREFIX_SIZE(parent->src_bits + 1),
+                                             src_bits,
+                                             alloc);     
                 
                 if (!n) {
                         LOG_ERR("Memory allocation failed\n");
                         break;
                 }
-                
-                if (CHECK_BIT(prefix, parent->prefix_bits)) {
-                        parent->right = n;
-                        
-                        if (parent->prefix_bits + 1 != prefix_bits)
-                                parent = parent->right;
-                        else 
-                                break;
+
+                if (CHECK_BIT(srcaddr, parent->src_bits)) {
+                                parent->right = n;
+
+                                if (parent->src_bits + 1 != src_bits)
+                                        parent = parent->right;
+                                else
+                                        break;
                 } else {
-                        parent->left = n;
-                        
-                        if (parent->prefix_bits + 1 != prefix_bits)
-                                parent = parent->left;
-                        else
-                                break;
-                }
+                                parent->left = n;
+
+                                if (parent->src_bits + 1 != src_bits)
+                                        parent = parent->left;
+                                else
+                                        break;
+               }
         }
         
         return n;
@@ -615,22 +844,30 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
                                         struct bst_node_ops *ops, 
                                         void *private, void *prefix, 
                                         unsigned int prefix_bits,
+                                        void * srcaddr, unsigned int src_bits,
                                         gfp_t alloc)
 {
 	struct bst_node *n, *prev = NULL;
         
 	n = bst_node_find_longest_prefix(root, &prev, prefix, 
                                          prefix_bits, NULL);	
-	
+
+        if (!n)
+                return NULL;  /* Ming: check for NULL */
+        
 	/*
           printf("found %p %p %p %p %u %u\n", 
           n, n->parent,
           n->left, n->right,
           n->prefix_bits, 
           bst_node_flag(n, BST_FLAG_ACTIVE));
+
+          Ming:
+          insert node based on destination service
+          
         */
         if (n->prefix_bits < prefix_bits) {
-                n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
+                n = bst_destination_node_new(n, ops, private, prefix, prefix_bits, alloc);
 		
 		if (!n) {
                         LOG_ERR("node_new failed\n");
@@ -645,13 +882,28 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
         }
 
         bst_node_set_flag(n, BST_FLAG_ACTIVE);
+
+        /*
+          Ming:
+          insert new node that specifies forwarding rule based on source address
+        */
+
+        n = bst_source_node_new(n, ops, private, srcaddr, src_bits, alloc);
+
+        bst_node_set_flag(n, BST_FLAG_SOURCE);
         
 	return n;
 }
 
+/*
+  Ming:
+  add source address and src_bits
+*/
+
 struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops, 
                                    void *private, void *prefix, 
                                    unsigned int prefix_bits,
+                                   void *srcaddr, unsigned int src_bits,
                                    gfp_t alloc)
 {
         struct bst_node *n;
@@ -674,7 +926,7 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
         }
 
         n = bst_node_insert_prefix(tree->root, ops, private, 
-                                   prefix, prefix_bits, alloc);
+                                   prefix, prefix_bits, srcaddr, src_bits, alloc);
 
         if (n) {
                 tree->entries++;
@@ -692,7 +944,7 @@ int bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
 {
         struct bst_node *n;
 
-        n = bst_find_longest_prefix(tree, prefix, prefix_bits);
+        n = bst_find_longest_prefix(tree, prefix, prefix_bits, NULL, 0);
         
         if (n && n->prefix_bits == prefix_bits) {
             bst_remove_node(tree, n);
@@ -763,19 +1015,19 @@ int main(int argc, char **argv)
 	bst_init(&root);
 
 	inet_aton("192.168.1.0", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, NULL, 0, 0);
 	
 	inet_aton("192.168.1.253", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, NULL, 0, 0);
 
 	inet_aton("192.168.2.0", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, NULL, 0, 0);
 
 	inet_aton("192.168.2.250", &addr);
-	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, NULL, 0, 0);
 
 
-	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, 0);
+	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, NULL, 0, 0);
 
 	bst_print(&root, buf, BUFLEN);
         
@@ -785,7 +1037,11 @@ int main(int argc, char **argv)
 
 	inet_aton("192.168.1.0", &addr);
 
-        bst_remove_prefix(&root, &addr, 24, 0);
+        /*
+          Ming:
+        */
+        //bst_remove_prefix(&root, &addr, 24, 0);
+        bst_remove_prefix(&root, &addr, 24);
 
 	bst_print(&root, buf, BUFLEN);
 
@@ -797,3 +1053,79 @@ int main(int argc, char **argv)
 }
 
 #endif
+
+/*
+  Ming:
+  Test program for two dimentional trie tree
+*/
+
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
+
+#define BUFLEN 2000
+
+static int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
+{
+	struct in_addr addr;
+        
+        memset(&addr, 0, sizeof(addr));
+        memcpy(&addr, n->prefix, PREFIX_SIZE(n->prefix_bits));
+        
+        return snprintf(buf, buflen, "\t%s", inet_ntoa(addr));
+}
+
+static struct bst_node_ops ip_ops = {
+        .init = bst_node_init_default,
+        .destroy = bst_node_destroy_default,
+        .print = print_ip_entry
+};
+
+int bst_test()
+{
+	struct bst root;
+	struct in_addr addr;
+        char buf[BUFLEN];
+
+	bst_init(&root);
+
+	inet_aton("192.168.1.0", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, NULL, 0, 0);
+	
+	inet_aton("192.168.1.253", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, NULL, 0, 0);
+
+	inet_aton("192.168.2.0", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, NULL, 0, 0);
+
+	inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, NULL, 0, 0);
+
+
+	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, NULL, 0, 0);
+
+	bst_print(&root, buf, BUFLEN);
+        
+        printf("%s", buf);
+       
+	printf("remove:\n");
+
+	inet_aton("192.168.1.0", &addr);
+
+        /*
+          Ming:
+        */
+        //bst_remove_prefix(&root, &addr, 24, 0);
+        bst_remove_prefix(&root, &addr, 24);
+
+	bst_print(&root, buf, BUFLEN);
+
+        printf("%s", buf);
+       
+	bst_destroy(&root);
+
+	return 0;
+}

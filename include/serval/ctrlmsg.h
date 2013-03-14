@@ -50,6 +50,7 @@ typedef enum service_rule_type {
 struct service_info {
         uint16_t type; /* Type of service table entry? DMX, FWD, DLY, etc. */
         uint8_t  srvid_prefix_bits;
+        uint8_t  src_bits;  /* Ming's code */
         uint8_t  srvid_flags;
         uint32_t if_index;
         uint32_t priority; /* Priority level of flow entry. */
@@ -61,7 +62,7 @@ struct service_info {
         struct service_id srvid;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info) == 64)
+CTRLMSG_ASSERT(sizeof(struct service_info) == 65)
 
 struct service_info_stat {
         struct service_info service;
@@ -74,7 +75,7 @@ struct service_info_stat {
         uint32_t tokens_consumed;
 } CTRLMSG_PACKED;
 
-CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 92)
+CTRLMSG_ASSERT(sizeof(struct service_info_stat) == 93)
 
 struct service_stat {
         uint32_t capabilities;

@@ -83,6 +83,7 @@ struct service_id {
 SERVAL_ASSERT(sizeof(struct service_id) == 32)
 
 #define SERVICE_ID_MAX_PREFIX_BITS ((unsigned)(sizeof(struct service_id)<<3))
+#define SROUCE_ADDRESS_MAX_PREFIX_BITS 32
 
 static inline struct service_id *service_id_copy(struct service_id *s1,
                                                  struct service_id *s2)

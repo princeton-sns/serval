@@ -31,7 +31,15 @@
 
 #define get_service(n) bst_node_private(n, struct service_entry)
 #define find_service_entry(tbl, prefix, bits)                           \
-        get_service(bst_find_longest_prefix(tbl->tree, prefix, bits))
+        get_service(bst_find_longest_prefix(tbl->tree, prefix, bits, NULL, 0))
+
+/*
+  Ming:
+  get service entry by both destination service and source address
+*/
+#define find_service_entry_include_source(tbl, prefix, bits, srcaddr, src_bits)  \
+        get_service(bst_find_longest_prefix(tbl->tree, prefix, bits, srcaddr, src_bits))
+
 
 struct service_table {
         struct bst tree;
@@ -1146,7 +1154,7 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                 break;
         }
 
-        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, func);
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, NULL, 0, func);
         
         if (n) {
                 if (match != RULE_MATCH_EXACT ||
@@ -1284,7 +1292,7 @@ static int service_table_modify(struct service_table *tbl,
 
         read_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, NULL, 0);
         
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 ret = service_entry_modify_target(get_service(n), type, 
@@ -1334,7 +1342,7 @@ static int service_table_add(struct service_table *tbl,
                              const void *dst,
                              int dstlen,
                              const void *src,
-                             int srclen,
+                             int srclen, const unsigned int src_bits,
                              const union target_out out, 
                              gfp_t alloc) {
         struct service_entry *se;
@@ -1365,7 +1373,7 @@ static int service_table_add(struct service_table *tbl,
 
         write_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, src, src_bits);
 
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 struct service_iter iter;
@@ -1428,8 +1436,13 @@ static int service_table_add(struct service_table *tbl,
                 
         }
 
+        /*
+          Ming:
+          add source address and src_len.
+        */
+
         se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
-                                     se, srvid, prefix_bits, GFP_ATOMIC);
+                                     se, srvid, prefix_bits, src, src_bits, GFP_ATOMIC);
 
         if (!se->node) {
                 service_entry_free(se);
@@ -1471,13 +1484,14 @@ int service_add(struct service_id *srvid,
                 int dstlen,
                 const void *src,
                 int srclen,
+                const unsigned int src_bits,
                 const union target_out out, 
                 gfp_t alloc) 
 {
         return service_table_add(&srvtable, srvid, prefix_bits, 
                                  type, flags, priority, 
                                  weight == 0 ? 1 : weight, dst, dstlen,
-                                 src, srclen,
+                                 src, srclen, src_bits,
                                  out, alloc);
 }
 
@@ -1514,7 +1528,7 @@ static void service_table_del_target(struct service_table *tbl,
         local_bh_disable();
         write_lock(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits);
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, NULL, 0);
 
         if (n) {
                 write_lock(&get_service(n)->lock);
