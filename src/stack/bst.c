@@ -59,7 +59,7 @@ enum bst_node_flag {
 };
 
 struct bst_node {       
-        struct bst *tree;
+        struct bst *tree, *source_tree; /* Ming */
 	struct bst_node *parent, *left, *right, *source_node;
         struct bst_node_ops *ops;
         struct list_head lh; /* Used for printing trees non-recursively */
@@ -253,6 +253,8 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                                               struct bst_node **prev,
                                               void *prefix,
                                               unsigned int prefix_bits,
+                                              void *srcaddr,
+                                              unsigned int src_bits,
                                               int (*match)(struct bst_node *))
 {
         if (!n)
@@ -305,7 +307,7 @@ struct bst_node *bst_find_longest_prefix_match(struct bst *tree,
 
         n = bst_node_find_longest_prefix(tree->root, 
                                          &prev, prefix, 
-                                         prefix_bits, match);
+                                         prefix_bits, srcaddr, src_bits, match);
 
         if (n && bst_node_flag(n, BST_FLAG_ACTIVE) && 
             (!match || match(n)))
@@ -647,12 +649,29 @@ static struct bst_node *bst_create_source_node(struct bst_node *parent,
 {
         struct bst_node *n;
 
-	n = (struct bst_node *)MALLOC(sizeof(*n), alloc);
+        if (bst_node_flag(parent, BST_FLAG_ACTIVE))
+                n = (struct bst_node *)MALLOC(sizeof(*n) + parent->prefix_bits, alloc);
+        else 
+                n = (struct bst_node *)MALLOC(sizeof(*n) + src_size, alloc);
 	
 	if (!n)
 		return NULL;
 	
 	memset(n, 0, sizeof(*n));
+
+        /*
+          Ming:
+          create the root node of the source tree.
+        */
+
+        if (bst_node_flag(parent, BST_FLAG_ACTIVE)) {
+                n->source_tree = parent->source_tree;
+                n->source_tree->root = n;
+                memcpy(n->prefix, parent->prefix, parent->prefix_bits);
+                n->prefix_bits = parent->prefix_bits;
+                bst_node_set_flag(n, BST_FLAG_SOURCE);
+                return n;
+        }
 
 	if (CHECK_BIT(srcaddr, parent->src_bits)) {
 		parent->right = n;
@@ -850,7 +869,7 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 	struct bst_node *n, *prev = NULL;
         
 	n = bst_node_find_longest_prefix(root, &prev, prefix, 
-                                         prefix_bits, NULL);	
+                                         prefix_bits, srcaddr, src_bits, NULL);	
 
         if (!n)
                 return NULL;  /* Ming: check for NULL */
@@ -888,9 +907,15 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
           insert new node that specifies forwarding rule based on source address
         */
 
-        n = bst_source_node_new(n, ops, private, srcaddr, src_bits, alloc);
+        if (srcaddr) {
 
-        bst_node_set_flag(n, BST_FLAG_SOURCE);
+                n->source_tree = (struct bst *)MALLOC(sizeof(struct bst), alloc);
+                bst_init(n->source_tree);
+
+                n = bst_source_node_new(n, ops, private, srcaddr, src_bits, alloc);
+
+                bst_node_set_flag(n, BST_FLAG_SOURCE);
+        }
         
 	return n;
 }
@@ -1009,7 +1034,7 @@ static struct bst_node_ops ip_ops = {
 int main(int argc, char **argv)
 {
 	struct bst root;
-	struct in_addr addr;
+	struct in_addr addr, addr2;
         char buf[BUFLEN];
 
 	bst_init(&root);
@@ -1025,10 +1050,14 @@ int main(int argc, char **argv)
 
 	inet_aton("192.168.2.250", &addr);
 	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, NULL, 0, 0);
-
-
+        
 	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, NULL, 0, 0);
 
+        inet_aton("10.10.10.10", &addr);
+        memcpy(&addr2, &addr, sizeof(struct in_addr));
+        inet_aton("100.100.100.100", &addr);
+        bst_insert_prefix(&root, &ip_ops, addr, 24, addr2, 27, 0);
+        
 	bst_print(&root, buf, BUFLEN);
         
         printf("%s", buf);
@@ -1070,12 +1099,20 @@ int main(int argc, char **argv)
 
 static int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
 {
-	struct in_addr addr;
+	struct in_addr addr, addr2;
         
         memset(&addr, 0, sizeof(addr));
-        memcpy(&addr, n->prefix, PREFIX_SIZE(n->prefix_bits));
-        
-        return snprintf(buf, buflen, "\t%s", inet_ntoa(addr));
+        memset(&addr2, 0, sizeof(addr2));
+
+        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                memcpy(&addr, n->prefix, PREFIX_SIZE(n->prefix_bits));
+                return snprintf(buf, buflen, "\t%s : any", inet_ntoa(addr));
+        }
+        else {
+                memcpy(&addr, n->source_tree->root->prefix, PREFIX_SIZE(n->source_tree->root->prefix_bits));
+                memcpy(&addr2, n->srcaddr, PREFIX_SIZE(n->src_bits));
+                return snprintf(buf, buflen, "\t%s : %s", inet_ntoa(addr), inet_ntoa(addr2));
+        }
 }
 
 static struct bst_node_ops ip_ops = {
@@ -1090,7 +1127,7 @@ int bst_test()
 	struct in_addr addr;
         char buf[BUFLEN];
 
-	bst_init(&root);
+        bst_init(&root);
 
 	inet_aton("192.168.1.0", &addr);
 	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, NULL, 0, 0);
