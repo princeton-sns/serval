@@ -15,7 +15,8 @@
         ((LINUX_VERSION_CODE == 197144) ||              \
          (LINUX_VERSION_CODE == 197148) ||              \
          (LINUX_VERSION_CODE == 197150) ||              \
-         (LINUX_VERSION_CODE == 197157))
+         (LINUX_VERSION_CODE == 197157) ||              \
+         (LINUX_VERSION_CODE == 197159))
         
 /* This is pure unmodified Linux kernel code. It is provided here
  * because the skb_splice_bits() function is not exported in the Linux
