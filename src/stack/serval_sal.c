@@ -800,8 +800,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
         s32 seq_rtt = -1;
         int err = 0;
        
-        while ((skb = serval_sal_ctrl_queue_head(sk))) {// && 
-               //skb != serval_sal_send_head(sk)) {
+        while ((skb = serval_sal_ctrl_queue_head(sk))) {
                 if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
 
@@ -823,7 +822,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
                                 HZ, seq_rtt);
 
                         if (skb == serval_sal_send_head(sk)) {
-                            serval_sal_advance_send_head(sk, skb);
+                                serval_sal_advance_send_head(sk, skb);
                         }
 
                         kfree_skb(skb);

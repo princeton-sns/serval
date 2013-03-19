@@ -27,6 +27,29 @@ static inline struct net *sock_net(struct sock *sk)
 #define __sk_add_backlog sk_add_backlog
 #endif
 
+static inline unsigned long get_socket_inode(struct socket *socket)
+{
+        if (socket) {
+                struct address_space *faddr;
+                struct inode *inode;
+                if (!socket->file) {
+                        goto out;
+                }
+
+                faddr = socket->file->f_mapping;
+                if (!faddr) {
+                        goto out;
+                }
+        
+                inode = faddr->host;
+                if (inode) {
+                        return inode->i_ino;
+                }
+        }
+out:
+        return 0;
+}
+
 #endif
 #if defined(OS_USER)
 #include <serval/atomic.h>
@@ -241,6 +264,12 @@ struct proto {
 	int			*sysctl_rmem;
 	struct list_head	node;
 };
+
+/* TODO find some way to do this in userspace? */
+static inline unsigned long get_socket_inode(struct socket *socket)
+{
+        return 0;
+}
 
 static inline int wq_has_sleeper(struct socket_wq *wq)
 {

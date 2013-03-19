@@ -318,6 +318,7 @@ struct stats_proto_tcp {
 struct flow_info {
         struct flow_id flow;
         uint8_t proto;
+        unsigned long inode;
         uint16_t len;
 
         struct stats_proto_base stats; // needs to be last

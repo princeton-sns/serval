@@ -17,11 +17,11 @@ public class FlowTCPStat extends FlowStat {
 	public long rcv_wnd;
 	public long rcv_nxt;
 
-	public FlowTCPStat(long flowId, int protocol, long pktsSent, long bytesSent, 
+	public FlowTCPStat(long flowId, int protocol, long inode, long pktsSent, long bytesSent, 
 			long pktsRecv, long bytesRecv, long retrans, long lost, long rtt, 
 			long rttvar, long mss, long snd_wnd, long snd_cwnd, long snd_ssthresh, long snd_una, 
 			long snd_nxt, long rcv_wnd, long rcv_nxt) {
-		super(flowId, protocol, pktsSent, bytesSent, pktsRecv, bytesRecv);
+		super(flowId, protocol, inode, pktsSent, bytesSent, pktsRecv, bytesRecv);
 		this.retrans = retrans;
 		this.lost = lost;
 		this.rtt = rtt;

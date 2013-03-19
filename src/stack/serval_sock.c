@@ -289,8 +289,8 @@ struct flow_info *serval_sock_stats_flow(struct flow_id *flow,
 
         if (sk) {
                 int info_size = sizeof(struct flow_id) + sizeof(uint8_t) + 
-                                sizeof(uint16_t);
-                LOG_DBG("Found something for flow.\n");            
+                                sizeof(unsigned long) + sizeof(uint16_t);
+                struct socket *socket = sk->sk_socket;
                 if (sk->sk_protocol == IPPROTO_TCP) {
                         struct serval_tcp_sock *tsk = 
                                 (struct serval_tcp_sock *) sk;
@@ -320,6 +320,7 @@ struct flow_info *serval_sock_stats_flow(struct flow_id *flow,
                         ret->len = info_size;
                 }
                 ret->proto = sk->sk_protocol;
+                ret->inode = get_socket_inode(socket);
                 memcpy(&ret->flow, flow, sizeof(struct flow_id));
                 ret->pkts_sent = serval_sk(sk)->tot_pkts_sent;
                 ret->pkts_recv = serval_sk(sk)->tot_pkts_recv;

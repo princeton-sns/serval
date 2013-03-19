@@ -3,6 +3,7 @@ package org.servalarch.servalctrl;
 public class FlowStat {
     public long flowId;
     int protocol;
+    public long inode;
 
     public long totPktsSent;
     public long totBytesSent;
@@ -16,10 +17,11 @@ public class FlowStat {
     public long dPktsRecv;
     public long dBytesRecv;
 
-    public FlowStat(long flowId, int protocol, long pktsSent, long bytesSent,
-    		long pktsRecv, long bytesRecv) {
+    public FlowStat(long flowId, int protocol, long inode, long pktsSent, 
+                    long bytesSent, long pktsRecv, long bytesRecv) {
         this.flowId = flowId;
         this.protocol = protocol;
+        this.inode = inode;
         
         this.totPktsSent = pktsSent;
         this.totBytesSent = bytesSent;
