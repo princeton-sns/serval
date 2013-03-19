@@ -1639,7 +1639,6 @@ static int serval_tcp_write_xmit(struct sock *sk, unsigned int mss_now,
 			break;
                 }
 
-
 		if (tso_segs == 1) {
 			if (unlikely(!serval_tcp_nagle_test(tp, skb, mss_now,
                                                             (serval_tcp_skb_is_last(sk, skb) ?

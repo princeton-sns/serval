@@ -315,7 +315,7 @@ void serval_tcp_retransmit_timer(struct sock *sk)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
-        LOG_SSK(sk, "timeout\n");
+        LOG_SSK(sk, "timeout, packets_out=%u\n", tp->packets_out);
 
 	if (!tp->packets_out)
 		goto out;

@@ -28,7 +28,7 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
 void bst_remove_node(struct bst *tree, struct bst_node *n);
 int bst_remove_prefix(struct bst *tree, void *prefix,
                        unsigned int prefix_bits);
-void bst_node_remove(struct bst_node *n);
+void bst_node_release(struct bst_node *n);
 
 struct bst_node *bst_find_longest_prefix(struct bst *tree, 
                                          void *prefix,

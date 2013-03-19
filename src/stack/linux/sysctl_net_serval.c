@@ -20,6 +20,7 @@ static unsigned int zero = 0;
 static unsigned int one = 1;
 static unsigned int ten = 10;
 static unsigned int cent = 1000;
+static unsigned int three = 3;
 
 extern int udp_encap_client_init(unsigned short);
 extern int udp_encap_server_init(unsigned short);
@@ -144,6 +145,15 @@ static ctl_table serval_table[] = {
 		.proc_handler = proc_dointvec_minmax,
                 .extra1 = &zero,
                 .extra2 = &cent,
+	},
+        {
+		.procname = "service_resolution_mode",
+		.data = &net_serval.sysctl_resolution_mode,
+		.maxlen = sizeof(unsigned int),
+		.mode = 0644,
+		.proc_handler = proc_dointvec_minmax,
+		.extra1 = &zero,
+		.extra2 = &three,
 	},
 	{
 		.procname = "udp_encap_client_port",

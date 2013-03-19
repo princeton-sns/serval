@@ -257,7 +257,7 @@ static const char *sal_hdr_to_str(struct sal_hdr *sh)
                                 ext->type);
                         return buf;
                 }
-
+                
                 if (ext_len < min_ext_length[ext->type] ||
                     ext_len > max_ext_length[ext->type]) {
                         LOG_DBG("Bad extension \'%s\' hdr_len=%d "
@@ -1424,8 +1424,10 @@ static int serval_sal_add_source_ext(struct sk_buff **in_skb,
         
         sh->check = 0;
         sh->shl = sal_len >> 2;
-        
-        LOG_DBG("New hdr: skb->len=%u %s\n",
+
+        LOG_DBG("New SAL hdr (old_len=%u new_len=%u): skb->len=%u %s\n",
+                ctx->length,
+                sal_len,
                 skb->len,
                 sal_hdr_to_str(sh));
 
@@ -2307,13 +2309,9 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         
         SAL_SKB_CB(rskb)->flags = SVH_RSYN | SVH_ACK;
         SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt++;
-        
-        /* FIXME: should the RSYN-ACK be queued for retransmission? I
-           guess it is not necessary since the peer that sent the RSYN
-           would retransmit. */
-        SAL_SKB_CB(skb)->when = sal_time_stamp;
+        SAL_SKB_CB(rskb)->when = sal_time_stamp;
 
-        return serval_sal_transmit_skb(sk, rskb, 0, GFP_ATOMIC);
+        return serval_sal_queue_and_push(sk, rskb);
 }
 
 static int serval_sal_rcv_fin(struct sock *sk, 
@@ -2363,10 +2361,17 @@ static int serval_sal_connected_state_process(struct sock *sk,
 {
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
-        int should_drop = 0;
+        char should_drop = 0, should_close = 0;
 
         err = serval_sal_ack_process(sk, skb, ctx);
-        
+
+        if (ctx->flags & SVH_FIN) {
+                err = serval_sal_rcv_fin(sk, skb, ctx);
+                
+                if (err == 0)
+                        should_close = 1;
+        }
+
         /* Should pass FINs to transport and ultimately the user, as
          * it needs to pick it off its receive queue to notice EOF. */
         if (packet_has_transport_hdr(skb, ctx->hdr) || 
@@ -2387,13 +2392,8 @@ static int serval_sal_connected_state_process(struct sock *sk,
                 should_drop = 1;
         }
 
-        if (ctx->flags & SVH_FIN) {
-                err = serval_sal_rcv_fin(sk, skb, ctx);
-                
-                if (err == 0) {
-                        serval_sock_set_state(sk, SAL_CLOSEWAIT);
-                }
-        }
+        if (should_close)
+                serval_sock_set_state(sk, SAL_CLOSEWAIT);
 
         if (should_drop)
                 kfree_skb(skb);
@@ -2845,7 +2845,7 @@ static int serval_sal_init_state_process(struct sock *sk,
 
         if (packet_has_transport_hdr(skb, ctx->hdr)) {
                 /* Set source serviceID */
-                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext[0]->srvid; 
+                SAL_SKB_CB(skb)->srvid = &ctx->srv_ext[1]->srvid; 
                 err = ssk->af_ops->receive(sk, skb);
         } else {
                 kfree_skb(skb);
@@ -3193,8 +3193,6 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                         iph = ip_hdr(cskb);
                         hdr_len += ret;
                         
-                        LOG_DBG("new serval header len=%u\n", hdr_len);
-                        
                         /* Update destination address */
                         memcpy(&iph->daddr, target->dst, sizeof(iph->daddr));
                         
@@ -3235,7 +3233,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                                 /* serval_ipv4_forward_out has taken
                                    custody of packet, no need to
                                    free. */
-                                LOG_ERR("Forwarding failed err=%d\n", ret);
+                                LOG_ERR("Forwarding failed\n");
                         } else 
                                 num_forward++;
                 }
@@ -3353,6 +3351,8 @@ int serval_sal_reresolve(struct sk_buff *skb)
         struct sock *sk;
         int err = 0;
 
+        LOG_DBG("Reresolving packet\n");
+
         if (serval_sal_parse_hdr(skb, &ctx, SAL_PARSE_ALL)) {
                 LOG_DBG("Bad Serval header %s\n",
                         ctx.hdr ? sal_hdr_to_str(ctx.hdr) : "NULL");
@@ -3460,8 +3460,10 @@ int serval_sal_rcv(struct sk_buff *skb)
                         break;
                 case SAL_RESOLVE_FORWARD:
                         /* Packet forwarded on out device */
+                        LOG_PKT("SAL FORWARD\n");
+                        return NET_RX_SUCCESS;
                 case SAL_RESOLVE_DELAY:
-                        LOG_DBG("SAL FWD/DLY %s\n", sal_hdr_to_str(ctx.hdr));
+                        LOG_PKT("SAL DELAY\n");
                         /* Packet in delay queue */
                         return NET_RX_SUCCESS;
                 case SAL_RESOLVE_NO_MATCH:
@@ -4029,7 +4031,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
-	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0) {
+	if (service_iter_init(&iter, se, 
+                              net_serval.sysctl_resolution_mode) < 0) {
                 kfree_skb(skb);
                 return -1;
         }
@@ -4100,6 +4103,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * appropriate for kernel operation as well
                          */
                         dev = __dev_get_by_name(sock_net(sk), "lo");
+
+                        if (!dev)
+                                continue;
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,

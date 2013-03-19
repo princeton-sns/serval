@@ -38,17 +38,10 @@
 
   A node in a bitwise trie.
 
-  flags: 
-
-  BST_FLAG_ACTIVE: set if the node is an active prefix, i.e., the node
-  represents is not just a necessary node because of active prefixes
-  in its sub tree.
- */
-
-enum bst_node_flag {
-        BST_FLAG_ACTIVE,
-};
-
+  A non-NULL private pointer indicates that the node is "active",
+  i.e., there is data associated with this node. A node can be freed
+  when private is NULL and there are no children.  
+*/
 struct bst_node {       
         struct bst *tree;
 	struct bst_node *parent, *left, *right;
@@ -74,21 +67,6 @@ unsigned int bst_node_get_prefix_size(const struct bst_node *n)
 unsigned long bst_node_get_prefix_bits(const struct bst_node *n)
 {
         return n->prefix_bits;
-}
-
-static int bst_node_flag(struct bst_node *n, enum bst_node_flag flag)
-{
-        return (n->flags & (0x1 << flag));
-}
-
-static void bst_node_set_flag(struct bst_node *n, enum bst_node_flag flag)
-{
-        n->flags |= (0x1 << flag);
-}
-
-static void bst_node_reset_flag(struct bst_node *n, enum bst_node_flag flag)
-{
-        n->flags &= ((0x1 << flag) ^ -1U);
 }
 
 void *bst_node_get_private(struct bst_node *n)
@@ -152,7 +130,7 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
         while (!list_empty(&stack)) {
                 n = stack_pop(&stack);
                 if (n) {
-                        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                        if (n->private) {
                                 if (n->ops && n->ops->print) {
                                         len = n->ops->print(n, buf + tot_len, 
                                                             buflen);
@@ -185,7 +163,7 @@ int bst_node_print_recursive(struct bst_node *n, char *buf, size_t buflen)
         int len = 0, tot_len = 0;
 
 	if (n) {
-		if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+		if (n->private) {
                         if (n->ops && n->ops->print) {
                                 len = n->ops->print(n, buf + tot_len, 
                                                     buflen);
@@ -235,7 +213,7 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
 
         while (1) {
                 /* Keep track of the previous matching node */
-                if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                if (n->private) {
                         if (match == NULL || match(n))
                                 *prev = n;
                 }
@@ -280,8 +258,7 @@ struct bst_node *bst_find_longest_prefix_match(struct bst *tree,
                                          &prev, prefix, 
                                          prefix_bits, match);
 
-        if (n && bst_node_flag(n, BST_FLAG_ACTIVE) && 
-            (!match || match(n)))
+        if (n && n->private && (!match || match(n)))
                 return n;
 
         return prev;
@@ -298,7 +275,7 @@ struct bst_node *bst_find_longest_prefix(struct bst *tree,
   Free the memory associated with a node. The node should have been
   destroyed first, and not be active 
 */
-static void __bst_node_free(struct bst_node *n)
+static void bst_node_free(struct bst_node *n)
 {
         /* Make sure the parent knows this node is dead, unless the
          * parent is the node itself. */
@@ -310,57 +287,51 @@ static void __bst_node_free(struct bst_node *n)
         } else {
                 n->tree->root = NULL;
         }
-        FREE(n);
+        kfree(n);
 }
 
-/*
-  This function will destroy a node and its associated data. However,
-  it will not free the node, as it may still be part of the prefix
-  tree. 
- */
-static void __bst_node_destroy(struct bst_node *n)
+static void bst_node_orphan(struct bst_node *n)
 {
-        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
-                if (n->ops && n->ops->destroy) {
-                        n->ops->destroy(n);
-                }
-                if (n->tree) {
+        if (n->private) {
+                if (n->tree)
                         n->tree->entries--;
-                }
-                bst_node_reset_flag(n, BST_FLAG_ACTIVE);
+                
+                if (n->ops && n->ops->destroy)
+                        n->ops->destroy(n);
+                
                 n->ops = NULL;
                 n->private = NULL;
         }
 }
 
-static void __bst_node_remove(struct bst_node *n)
+/*
+  This function will release a node and free it unless it still has
+  children. It will also free any parents that are orphaned and
+  childless.
+ */
+void bst_node_release(struct bst_node *n)
 {
-        while (1) {
-                struct bst_node *parent = n->parent;
+        struct bst_node *parent;
 
-                __bst_node_destroy(n);
-                
-                /* Node still has children, so only "destroy" it but
-                 * do not free it */
-                if (n->left || n->right)
-                        break;
-                
-                /* Call recursively to remove all parents up the tree until
-                 * hitting the first which is still active or have a remaining
-                 * child */
-                if (parent != n && !bst_node_flag(parent, BST_FLAG_ACTIVE)) {
-                        __bst_node_free(n);
-                        n = parent;
-                } else {
-                        __bst_node_free(n);
-                        break;
-                }
+        bst_node_orphan(n);
+
+        /* Node still has children, so do not free it */
+        if (n->left || n->right)
+                return;
+
+        /* Go up the tree and remove all parents until hitting the
+           first node which is still active or have a remaining
+           child */
+        parent = n->parent;
+        bst_node_free(n);
+        n = parent;
+        
+        while (n && !n->private && !n->left && 
+               !n->right && n != n->parent) {
+                parent = n->parent;
+                bst_node_free(n);
+                n = parent;
         }
-}
-
-void bst_node_remove(struct bst_node *n)
-{
-	__bst_node_remove(n);
 }
 
 /* Destroy a sub-tree by recursing down the children */
@@ -370,16 +341,16 @@ static void __bst_destroy_subtree(struct bst_node *n)
 
         while (1) {                
                 if (n == root && !n->left && !n->right) {
-                         __bst_node_destroy(n);
-                         __bst_node_free(n);
+                        bst_node_orphan(n);
+                        bst_node_free(n);
                         break;
                 }
 
                 if (!n->right) {
                         if (!n->left) {
                                 struct bst_node *parent = n->parent;
-                                __bst_node_destroy(n);
-                                __bst_node_free(n);
+                                bst_node_orphan(n);
+                                bst_node_free(n);
                                 n = parent;
                         } else {
                                 n->right = n->left;
@@ -409,7 +380,7 @@ int bst_subtree_func(struct bst_node *n,
                         struct bst_node *left = n->left, 
                                 *right = n->right;
                         
-                        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                        if (n->private) {
                                 ret = func(n, arg);
                                 
                                 if (ret < 0)
@@ -617,11 +588,10 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
                                          prefix_bits, NULL);	
 	
 	/*
-          printf("found %p %p %p %p %u %u\n", 
+          printf("found %p %p %p %p %u\n", 
           n, n->parent,
           n->left, n->right,
-          n->prefix_bits, 
-          bst_node_flag(n, BST_FLAG_ACTIVE));
+          n->prefix_bits)
         */
         if (n->prefix_bits < prefix_bits) {
                 n = bst_node_new(n, ops, private, prefix, prefix_bits, alloc);
@@ -638,8 +608,6 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
                 return NULL;
         }
 
-        bst_node_set_flag(n, BST_FLAG_ACTIVE);
-        
 	return n;
 }
 
@@ -677,11 +645,6 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
         return n;
 }
 
-void bst_remove_node(struct bst *tree, struct bst_node *n)
-{
-        bst_node_remove(n);
-}
-
 int bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
 {
         struct bst_node *n;
@@ -689,8 +652,8 @@ int bst_remove_prefix(struct bst *tree, void *prefix, unsigned int prefix_bits)
         n = bst_find_longest_prefix(tree, prefix, prefix_bits);
         
         if (n && n->prefix_bits == prefix_bits) {
-            bst_remove_node(tree, n);
-            return 1;
+                bst_node_orphan(n);
+                return 1;
         }
 
         return 0;

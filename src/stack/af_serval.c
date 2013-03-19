@@ -53,6 +53,7 @@ extern void __exit inet_to_serval_fini(void);
 #include <ctrl.h>
 #include <af_serval.h>
 #include <serval_sal.h>
+#include <service.h>
 
 extern int __init packet_init(void);
 extern void __exit packet_fini(void);
@@ -71,6 +72,7 @@ struct netns_serval net_serval = {
         .sysctl_debug = 0,
         .sysctl_udp_encap = 0,
         .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
+        .sysctl_resolution_mode = SERVICE_ITER_ANYCAST,
 };
 
 extern void serval_tcp_init(void);
@@ -647,22 +649,10 @@ static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
 	return err;
 }
 
-static int serval_shutdown(struct socket *sock, int how)
+static void unregister_service(struct sock *sk)
 {
-	struct sock *sk = sock->sk;
         struct serval_sock *ssk = serval_sk(sk);
-	int err = 0;
 
-	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
-		       1->2 bit 2 snds.
-		       2->3 */
-	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
-		return -EINVAL;
-
-        /*
-          Unregister notification only if we previously registered and
-          this is not a child socket.
-        */
         if (serval_sock_flag(ssk, SSK_FLAG_BOUND) &&
             !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND) && 
             !serval_sock_flag(ssk, SSK_FLAG_CHILD)) {
@@ -681,6 +671,27 @@ static int serval_shutdown(struct socket *sock, int how)
                         LOG_INF("No service daemon running?\n");
                 }
         }
+}
+
+static int serval_shutdown(struct socket *sock, int how)
+{
+	struct sock *sk = sock->sk;
+	int err = 0;
+
+        LOG_DBG("\n");
+
+	how++; /* maps 0->1 has the advantage of making bit 1 rcvs and
+		       1->2 bit 2 snds.
+		       2->3 */
+	if ((how & ~SHUTDOWN_MASK) || !how)	/* MAXINT->0 */
+		return -EINVAL;
+
+        /*
+          Unregister notification only if we previously registered and
+          this is not a child socket.
+        */
+
+        unregister_service(sk);
 
 	lock_sock(sk);
 
@@ -743,6 +754,8 @@ int serval_release(struct socket *sock)
 			timeout = sk->sk_lingertime;
 
                 sock->sk = NULL;
+                
+                unregister_service(sk);
 
                 lock_sock(sk);
 
@@ -1124,8 +1137,8 @@ void __exit serval_fini(void)
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);
 	proto_unregister(&serval_tcp_proto);
-        packet_fini();
         serval_sock_tables_fini();
+        packet_fini();
         service_fini();
         delay_queue_fini();
 }

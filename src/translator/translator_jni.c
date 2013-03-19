@@ -13,7 +13,7 @@
 #include <jni.h>
 #include <netinet/in.h>
 
-extern int run_translator(int, int, int);
+extern int run_translator(int, int, unsigned int);
 extern struct signal exit_signal;
 
 JNIEXPORT 

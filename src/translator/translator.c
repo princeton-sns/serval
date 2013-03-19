@@ -46,6 +46,79 @@
 #include "splice.h"
 #endif
 
+/* 
+   High-level overview of translator
+   =================================
+
+   The translator moves data between two sockets (AF_INET and
+   AF_SERVAL) using the splice system call. With this call, the data
+   never leaves kernel space, and the whole operation is therefore
+   very efficient. The translator can accept connections on both types
+   of sockets simultaneously and then automatically create a socket of
+   the other type, connecting to the final server destination.
+
+   The splice call requires connecting the two sockets via pipes,
+   leaving us with a configuration as follows (when translating from
+   AF_INET to AF_SERVAL):
+
+   fd_inet ---> fd_pipe_w PIPE fd_pipe_r ---> fd_serval
+
+   All in all, this leaves us with four file descriptors per client
+   that connects to the translator.
+
+   There are tricky blocking situations to consider between these file
+   descriptors: for instance, there may be incoming data on the SERVAL
+   socket, which we want to write to the INET socket, but the receive
+   buffer on the INET socket may be full. So, although a
+   poll/epoll/select, may indicate non-blocking readability, we could
+   still block because the target socket is not writable. Also,
+   leaving data in the pipe might be dangerous since we are using the
+   same pipe to translate in both directions (we could use one pipe
+   for each direction, but that would require even more
+   filedescriptors, and additional monitoring of
+   those). Unfortunately, there is no easy way to monitor for complex
+   conditions that span multiple file descriptors.
+
+   With the above complexities in mind, the strategy used for
+   non-blocking operation is as follows. We only read as much data as
+   we can write to the target socket, ensuring that we never fill the
+   pipe with data that we cannot read out of the pipe. We use a
+   TIOCOUTQ ioctl() call on the target socket to learn how much free
+   space there is in the receive buffer and cap the amount of bytes
+   read from the source socket at this value. This ensures we never
+   read more than we can write to the target socket and we will never
+   leave data in the pipe.
+
+   We monitor he INET and SERVAL file descriptors for read/write
+   events, and we never translate anything unless we've seen a
+   combination of readability on the source socket and writability on
+   the target socket. Since we cannot monitor read/write events across
+   file descriptors as a single event, we need a way to "remember" the
+   last state of a file descriptor in order to wait for the
+   corresponding event on the other file descriptor. Also, if a socket
+   is readable, but the target is not writable, we need to stop
+   monitoring readability on the source until the target is
+   writable. Otherwise, we will spin in a busy "readability"-loop
+   until we can write the data.
+
+   
+   Threading
+   ---------
+
+   The translator uses a fixed number of worker threads and epoll for
+   scalability. The number of worker threads to use is a runtime
+   configurable setting.
+
+   The main thread monitors a client's file descriptors for
+   events. When the right conditions occur for translating data, the
+   main thread schedules the client on a work queue for processing,
+   and stops monitoring its file descriptors. A worker thread will
+   pick the client off the work queue and perform the
+   translation. When translation has finished, the worker signals the
+   main thread to "rearm" all non-scheduled clients so that the client
+   that just finished will have its file descriptors monitored again.
+ */
+
 static unsigned int client_num = 0;
 
 typedef union sockaddr_generic {
@@ -57,7 +130,6 @@ typedef union sockaddr_generic {
                 struct sockaddr_in in;
         } sv_in;
 } sockaddr_generic_t;
-
 
 struct worker {
         unsigned int id;
@@ -74,11 +146,20 @@ enum socket_state {
         SS_CLOSING,
 };
 
+const char *socket_state_str[] = {
+        "CLOSED",
+        "CONNECTING",
+        "CONNECTED",
+        "CLOSING"
+};
+
 struct socket {
         int fd; /* Must be first */
         enum socket_state state;
         struct client *c;
-        uint32_t events;
+        char is_monitored:1;
+        uint32_t monitored_events;
+        uint32_t active_events;
         sockaddr_generic_t addr;
         socklen_t addrlen;
         size_t bytes_written, bytes_read;
@@ -121,10 +202,16 @@ struct translator_init_pkt {
 } __attribute__((packed));
 
 #define DEFAULT_TRANSLATOR_PORT 8080
+#define DEFAULT_SERVICE_ID "0x0000005"
 static LOG_DEFINE(logh);
-struct signal exit_signal;
 static LIST_HEAD(client_list);
 static int epollfd = -1;
+struct signal main_signal;
+
+enum signal_types {
+        SIGNAL_EXIT = 1,
+        SIGNAL_EPOLL_REARM,
+};
 
 static int client_add_work(struct client *c, work_t work);
 static enum work_status client_close(struct client *c);
@@ -146,6 +233,25 @@ static const char *family_to_str(int family)
         return unknown;
 }
 
+static int socket_is_writable(struct socket *s, int *bytes)
+{
+        int bytes_queued = 0;
+        int ret;
+
+        ret = ioctl(s->fd, TIOCOUTQ, &bytes_queued);
+        
+        if (ret == -1) {
+                LOG_ERR("ioctl error - %s\n", strerror(errno));
+                return 0;
+        }
+        if (bytes)
+                *bytes = bytes_queued;
+
+        return s->sndbuf - bytes_queued;
+}
+
+#define writable_bytes(s,b) socket_is_writable(s,b)
+
 static enum work_status work_translate(struct socket *from, 
                                        struct socket *to,
                                        int splicefd[2])
@@ -155,40 +261,28 @@ static enum work_status work_translate(struct socket *from,
         enum work_status status = WORK_OK;
         int bytes_queued = 0;
         
-        ret = ioctl(to->fd, TIOCOUTQ, &bytes_queued);
-
-        if (ret == -1) {
-                LOG_ERR("ioctl error - %s\n", strerror(errno));
-                return WORK_ERROR;
-        }
-
-        readlen = to->sndbuf - bytes_queued;
+        readlen = writable_bytes(to, &bytes_queued);
         
-        if (readlen == 0)
-
-
-        /* LOG_DBG("translating %zu bytes from %d to %d\n", 
-           readlen, from->fd, to->fd); */
+        LOG_DBG("translating up to %zu bytes from %d to %d\n", 
+                readlen, from->fd, to->fd); 
 
         if (readlen == 0) {
                 /* There wasn't enough space in send buffer of the
                  * socket we are writing to, we need to stop monitor
                  * readability on the "from" socket and instead watch
                  * for writability on the "to" socket. */
-                from->events &= ~EPOLLIN;
-                to->events |= EPOLLOUT;
-                /*
-                LOG_DBG("readlen 0, waiting for readability from->events=%u to->events=%u\n",
-                        from->events, to->events);
-                */
+                from->monitored_events &= ~EPOLLIN;
+                to->monitored_events |= EPOLLOUT;
+                LOG_DBG("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
+                        to->fd, bytes_queued, to->sndbuf);
                 return WORK_NOSPACE;
         }
-
+        
         /* Make sure we write to the pipe atomically without
          * blocking */
         if (readlen > PIPE_BUF)
                 readlen = PIPE_BUF;
-
+        
         ret = splice(from->fd, NULL, splicefd[1], NULL, 
                      readlen, SPLICE_F_MOVE);
         
@@ -215,7 +309,7 @@ static enum work_status work_translate(struct socket *from,
         from->bytes_read += readlen;
 
         /* LOG_DBG("splice1 %zu bytes\n", readlen); */
-
+         
         while (readlen && status == WORK_OK) {
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
                              readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
@@ -246,10 +340,11 @@ static enum work_status work_translate(struct socket *from,
                         from->c->id, readlen);
         }
 #endif
-        /* LOG_DBG("splice2 %zu bytes\n", nbytes); */
+        
  out:
-        to->events &= ~EPOLLOUT;
-        from->events |= EPOLLIN;
+        LOG_DBG("splice2 %zu bytes\n", nbytes); 
+        to->monitored_events &= ~EPOLLOUT;
+        from->monitored_events |= EPOLLIN;
         return status;
 }
 
@@ -267,34 +362,75 @@ static enum work_status work_serval_to_inet(struct client *c)
                               &c->sock[ST_INET], c->splicefd);
 }
 
-static int client_epoll_set(struct client *c, int op)
+static int client_epoll_set(struct client *c, struct socket *s, 
+                            int op, unsigned int extra_event)
+{
+        struct epoll_event ev;
+        int ret;
+
+        if (c->is_garbage)
+                return -1;
+        
+        memset(&ev, 0, sizeof(ev));
+        ev.events = s->monitored_events | extra_event;
+        ev.data.ptr = s;
+        
+        switch (op) {
+        case EPOLL_CTL_ADD:
+                if (s->is_monitored)
+                        return 0;
+                s->is_monitored = 1;
+                break;
+        case EPOLL_CTL_DEL:
+                if (!s->is_monitored)
+                        return 0;
+                s->is_monitored = 0;
+                break;
+        case EPOLL_CTL_MOD:
+                if (!s->is_monitored)
+                        return 0;
+                break;
+        default:
+                return 0;
+        }
+/*        
+        LOG_DBG("client=%u op=%s fd=%d R=%d W=%d H=%d\n",
+                c->id,
+                EPOLL_CTL_MOD == op ?                                
+                "EPOLL_CTL_MOD" :
+                (EPOLL_CTL_ADD == op ? "EPOLL_CTL_ADD" : "EPOLL_CTL_DEL"),
+                s->fd,
+                (ev.events & EPOLLIN) > 0, 
+                (ev.events & EPOLLOUT) > 0,
+                (ev.events & EPOLLHUP) > 0);
+*/      
+        ret = epoll_ctl(epollfd, op, s->fd, &ev);
+        
+        if (ret == -1) {
+                LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
+                        op, s->fd, strerror(errno));
+        }
+        
+        return ret;
+}
+
+static int client_epoll_set_all(struct client *c, int op, 
+                                unsigned int extra_event)
 {               
         unsigned int i;
-        int ret;
+        int ret = 0;
 
         if (c->is_garbage)
                 return -1;
 
         for (i = 0; i < 2; i++) {
-                struct epoll_event ev;
-
-                memset(&ev, 0, sizeof(ev));
-                ev.events = c->sock[i].events;
-                ev.data.ptr = &c->sock[i];
+                ret = client_epoll_set(c, &c->sock[i], op,
+                                       extra_event);
                 
-                /*
-                  LOG_DBG("Watching events %u on sock %d\n",
-                        ev.events, c->sock[i].fd);
-                */
-                ret = epoll_ctl(epollfd, op, c->sock[i].fd, &ev);
-                
-                if (ret == -1) {
-                        LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
-                                op, c->sock[i].fd, strerror(errno));
+                if (ret == -1)
                         break;
-                }
         }
-
+        
         return ret;
 }
 
@@ -333,9 +469,11 @@ struct client *client_create(int sock, struct sockaddr *sa,
                        sizeof(struct sockaddr_in));
                 c->sock[ST_INET].addrlen = sizeof(struct sockaddr_in);
                 c->sock[ST_INET].state = SS_CONNECTED;
-                c->sock[ST_INET].events = 0;
+                c->sock[ST_INET].monitored_events = 0;
+                c->sock[ST_INET].active_events = 0;
                 c->sock[ST_SERVAL].state = SS_CLOSED;
-                c->sock[ST_SERVAL].events = EPOLLOUT;
+                c->sock[ST_SERVAL].monitored_events = EPOLLOUT;
+                c->sock[ST_SERVAL].active_events = 0;
 
                 c->sock[ST_SERVAL].fd = socket(AF_SERVAL, SOCK_STREAM, 0);
                 
@@ -344,6 +482,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                 strerror(errno));
                         goto fail_sock;
                 }
+                client_epoll_set(c, &c->sock[ST_SERVAL], EPOLL_CTL_ADD, 0);
         } else if (c->from_family == AF_SERVAL) {
                 struct sockaddr_sv sv;
                 socklen_t svlen = sizeof(sv);
@@ -354,9 +493,11 @@ struct client *client_create(int sock, struct sockaddr *sa,
                        sizeof(struct sockaddr_sv));
                 c->sock[ST_SERVAL].addrlen = sizeof(struct sockaddr_sv);
                 c->sock[ST_SERVAL].state = SS_CONNECTED;
-                c->sock[ST_SERVAL].events = 0;
+                c->sock[ST_SERVAL].monitored_events = 0;
+                c->sock[ST_SERVAL].active_events = 0;
                 c->sock[ST_INET].state = SS_CLOSED;
-                c->sock[ST_INET].events = EPOLLOUT;
+                c->sock[ST_INET].monitored_events = EPOLLOUT;
+                c->sock[ST_INET].active_events = 0;
 
                 c->sock[ST_INET].addr.in.sin_family = AF_INET;
                         
@@ -385,6 +526,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                 strerror(errno));
                         goto fail_sock;
                 }
+                client_epoll_set(c, &c->sock[ST_INET], EPOLL_CTL_ADD, 0);
         } else {
                 LOG_ERR("Unsupported client family\n");
                 goto fail_sock;
@@ -416,10 +558,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         goto fail_post_sock;
                 }
         }
-        /* Add the file descriptors to the epoll set just to avoid
-         * complaints when we call EPOLL_CTL_DEL when we schedule the
-         * client later */
-        client_epoll_set(c, EPOLL_CTL_ADD);
 
         return c;
 
@@ -509,11 +647,12 @@ static void *worker_thread(void *arg)
                                 break;
                         }
                 }
+
                 c->is_scheduled = 0;
                 c->num_work = 0;
 
                 if (!c->is_garbage)
-                        client_epoll_set(c, EPOLL_CTL_ADD);
+                        signal_raise_val(&main_signal, SIGNAL_EPOLL_REARM);
         }
         
         LOG_DBG("Worker %u exits\n", w->id);
@@ -548,7 +687,7 @@ static enum work_status client_connect(struct client *c)
 
                 if (c->cross_translate) {
                         struct sockaddr_in orig_addr;
-                        socklen_t orig_addrlen;
+                        socklen_t orig_addrlen = sizeof(orig_addr);
 
                         /* We are cross translating, i.e., this
                          * AF_INET to AF_SERVAL translator connects to
@@ -566,8 +705,7 @@ static enum work_status client_connect(struct client *c)
                                          &orig_addr, &orig_addrlen);
                         
                         if (ret == -1) {
-                                LOG_DBG("client %u, could not get original port."
-                                        "Probably not NAT'ed\n", c->id);
+                                LOG_ERR("client %u: could not get original port: %s\n", c->id, strerror(errno));
                                 return WORK_ERROR;
                         } else {
                                 inet_ntop(AF_INET, &orig_addr.sin_addr, 
@@ -594,23 +732,27 @@ static enum work_status client_connect(struct client *c)
                 LOG_ERR("client %u - bad address family, exiting\n",
                         c->id);
                 return WORK_ERROR;
-         }
+        }
+
+        s->state = SS_CONNECTING;
        
         ret = connect(s->fd, &addr.sa, addrlen);
 
         if (ret == -1) {
                 if (errno == EINPROGRESS) {
-                        s->state = SS_CONNECTING;
-                        s->events = EPOLLOUT;
+                        s->monitored_events = EPOLLOUT;
                 } else {
                         LOG_ERR("client %u connect failed: %s\n",
                                 c->id, strerror(errno));
+                        s->state = SS_CLOSED;
                         return WORK_ERROR;
                 }
         } else {
                 LOG_DBG("client %u successfully connected\n", c->id);
                 s->state = SS_CONNECTED;
-                s->events = s2->events = EPOLLIN;
+                s->active_events = s2->active_events = 0;
+                s->monitored_events = s2->monitored_events = EPOLLIN | EPOLLOUT;
+                client_epoll_set(c, s2, EPOLL_CTL_ADD, 0);
         }
   
         return WORK_OK;
@@ -618,11 +760,18 @@ static enum work_status client_connect(struct client *c)
 
 static enum work_status client_connect_result(struct client *c)
 {
-        struct socket *s = c->from_family == AF_INET ?
-                &c->sock[ST_SERVAL] : &c->sock[ST_INET];
+        struct socket *s, *s2;
         int err = 0;
         socklen_t errlen = sizeof(err);
         int ret;
+
+        if (c->from_family == AF_INET) {
+                s = &c->sock[ST_SERVAL];
+                s2 = &c->sock[ST_INET];
+        } else {
+                s2 = &c->sock[ST_SERVAL];
+                s = &c->sock[ST_INET];
+        }
 
         ret = getsockopt(s->fd, SOL_SOCKET, SO_ERROR, &err, &errlen);
         
@@ -633,8 +782,11 @@ static enum work_status client_connect_result(struct client *c)
         
         switch (err) {
         case 0:
-                c->sock[ST_INET].events = c->sock[ST_SERVAL].events = EPOLLIN;
+                s->monitored_events = s2->monitored_events = 
+                        EPOLLIN | EPOLLOUT;
+                s->active_events = s2->active_events = 0;
                 s->state = SS_CONNECTED;
+                client_epoll_set(c, s2, EPOLL_CTL_ADD, 0);
                 LOG_DBG("client %u connected\n", c->id);
                 break;
         case EINPROGRESS:
@@ -643,6 +795,8 @@ static enum work_status client_connect_result(struct client *c)
         default:
                 s->state = SS_CLOSED;
                 LOG_DBG("client %u connection error\n", c->id);
+                s->monitored_events = s2->monitored_events = 0;
+
                 return WORK_ERROR;
         }
         
@@ -673,7 +827,7 @@ static void signal_handler(int sig)
         LOG_DBG("signal %u caught!\n", sig);
 
         if (sig == SIGKILL || sig == SIGTERM)
-                signal_raise(&exit_signal);
+                signal_raise_val(&main_signal, SIGNAL_EXIT);
 }
 
 static void garbage_collect_clients(void)
@@ -701,24 +855,20 @@ static void cleanup_clients(void)
         }
 }
 
-static int create_server_sock(int family, unsigned short port, 
-                              int cross_translate)
+static int create_server_sock(sockaddr_generic_t *addr)
 {
-        sockaddr_generic_t addr;
         socklen_t addrlen = 0;
         int sock, ret = 0;               
 
-	sock = socket(family, SOCK_STREAM, 0);
+	sock = socket(addr->sa.sa_family, SOCK_STREAM, 0);
 
 	if (sock == -1) {
-		LOG_ERR("inet socket: %s\n",
-			strerror(errno));
+		LOG_ERR("socket: %s\n", strerror(errno));
                 return -1;
 	}
         
-        memset(&addr, 0, sizeof(addr));
-
-        if (family == AF_INET) {
+        switch (addr->sa.sa_family) {
+        case AF_INET:
                 ret = 1;
                 ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
                                  &ret, sizeof(ret));
@@ -727,38 +877,28 @@ static int create_server_sock(int family, unsigned short port,
                         LOG_ERR("Could not set SO_REUSEADDR - %s\n",
                                 strerror(errno));
                 }
-                addr.in.sin_family = AF_INET;
-                addr.in.sin_addr.s_addr = INADDR_ANY;
-                addr.in.sin_port = htons(port);
-                addrlen = sizeof(addr.in);
-        } else if (family == AF_SERVAL) {
-                addr.sv.sv_family = AF_SERVAL;
-                addr.sv.sv_srvid.s_sid32[0] = htonl(port);
-                /* Listen to a prefix, since, in case of cross
-                 * translation, the incoming connections will have a
-                 * serviceID with the lower order bits being the IP
-                 * address and port. */
-                if (cross_translate)
-                        addr.sv.sv_prefix_bits = 128;
-                addrlen = sizeof(addr.sv);
-        } else {
+                addrlen = sizeof(addr->in);
+                break;
+        case AF_SERVAL:
+                addrlen = sizeof(addr->sv);
+                break;
+        default:
                 close(sock);
+                LOG_ERR("Bad address family %ud\n", addr->sa.sa_family);
                 return -1;
         }
 
-        ret = bind(sock, &addr.sa, addrlen);
+        ret = bind(sock, &addr->sa, addrlen);
 
         if (ret == -1) {
-		LOG_ERR("inet bind: %s\n",
-			strerror(errno));
+		LOG_ERR("bind: %s\n", strerror(errno));
                 goto failure;
 	}
 
         ret = listen(sock, 10);
 
         if (ret == -1) {
-                LOG_ERR("inet listen: %s\n",
-			strerror(errno));
+                LOG_ERR("listen: %s\n", strerror(errno));
                 goto failure;
         }
 
@@ -818,7 +958,7 @@ static struct client *accept_client(int sock, int port,
         LOG_DBG("client %u %s from %s addrlen=%u fd=%d\n", 
                 c->id, family_to_str(addr.sa.sa_family), ip,
                 addrlen, client_sock);
-               
+
         c->translator_port = port;
 
         list_add_tail(&c->lh, &client_list);
@@ -902,39 +1042,110 @@ static void schedule_client(struct client *c)
                 return;
 
         c->is_scheduled = 1;
-        //LOG_DBG("client %u scheduling\n", c->id);
-        client_epoll_set(c, EPOLL_CTL_DEL);
+        /* LOG_DBG("client %u scheduled\n", c->id); */
         pthread_mutex_lock(&work_mutex);
         list_add_tail(&c->wq, &workq);
         pthread_mutex_unlock(&work_mutex);
         pthread_cond_signal(&work_cond);        
 }
 
-/*
-static void print_events(struct socket *s, uint32_t events)
+static void check_socket_events(struct client *c, struct socket *s, 
+                                unsigned int events)
 {
-        struct client *c = s->c;
+        struct socket *s2;
+        
+        if (s->state == SS_CLOSED)
+                return;
 
-        if (s == &c->sock[ST_INET]) {
-                LOG_DBG("client %u ST_INET state=%u R=%d W=%d\n",
-                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
-        } else {
-                LOG_DBG("client %u ST_SERVAL state=%u R=%d W=%d\n",
-                        c->id, s->state, (events & EPOLLIN) > 0, (events & EPOLLOUT) > 0);
+        if (s == &c->sock[ST_INET])
+                s2 = &c->sock[ST_SERVAL];
+        else
+                s2 = &c->sock[ST_INET];
+        /*
+        LOG_DBG("s(fd=%d) state=%s events[R=%d W=%d] "
+                "active[R=%d W=%d] monitored[R=%d W=%d] "
+                "s2(fd=%d) active[R=%d W=%d] monitored[R=%d W=%d]\n",
+                s->fd, 
+                socket_state_str[s->state],
+                (events & EPOLLIN) > 0,
+                (events & EPOLLOUT) > 0,
+                (s->active_events & EPOLLIN) > 0, 
+                (s->active_events & EPOLLOUT) > 0,
+                (s->monitored_events & EPOLLIN) > 0, 
+                (s->monitored_events & EPOLLOUT) > 0,
+                s2->fd, 
+                (s2->active_events & EPOLLIN) > 0, 
+                (s2->active_events & EPOLLOUT) > 0,
+                (s2->monitored_events & EPOLLIN) > 0, 
+                (s2->monitored_events & EPOLLOUT) > 0);
+        */
+
+        if (events & EPOLLIN) {
+                if (s2->active_events & EPOLLOUT) {
+                        /* We can translate stuff from s to s2 */
+                        s->active_events &= ~EPOLLIN;
+
+                        if (s == &c->sock[ST_INET])
+                                client_add_work(c, work_inet_to_serval);
+                        else
+                                client_add_work(c, work_serval_to_inet);
+                } else {
+                        s2->monitored_events |= EPOLLOUT;
+                }
+                s->monitored_events &= ~EPOLLIN;
+        } 
+
+        if (events & EPOLLOUT) {
+                if (s->state == SS_CONNECTING) {
+                        s->monitored_events &= ~EPOLLOUT;
+                        s->active_events &= ~EPOLLOUT;
+                        client_add_work(c, client_connect_result);
+                        return;
+                }
+                if (s2->active_events & EPOLLIN) {
+                        /* We can translate stuff from s2 to s */
+                        s->active_events &= ~EPOLLOUT;
+                        
+                        if (s2 == &c->sock[ST_INET]) 
+                                client_add_work(c, work_inet_to_serval);
+                        else
+                                client_add_work(c, work_serval_to_inet);
+                } else {
+                        s2->monitored_events |= EPOLLIN;
+                }
+                s->monitored_events &= ~EPOLLOUT;
         }
 }
-*/
+
+void rearm_clients(void)
+{
+        struct client *c, *tmp;
+
+        list_for_each_entry_safe(c, tmp, &client_list, lh) {
+                if (!c->is_garbage && !c->is_scheduled)
+                        client_epoll_set_all(c, EPOLL_CTL_MOD, EPOLLONESHOT);
+        }
+}
 
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
 
-int run_translator(unsigned short port, int cross_translate, 
-                   int inet_server_only)
+enum translator_mode {
+        DUAL_MODE = 0,
+        INET_ONLY_MODE,
+        SERVAL_ONLY_MODE,
+};
+
+int run_translator(unsigned short port,
+                   struct sockaddr_sv *sv,
+                   int cross_translate, 
+                   unsigned int mode)
 {
 	struct sigaction action;
 	int inet_sock, serval_sock = -1, ret = 0, running = 1, sig_fd;
         struct epoll_event ev, events[MAX_EVENTS];
         int gc_timeout = GC_TIMEOUT;
+        sockaddr_generic_t addr;
 
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
@@ -945,8 +1156,8 @@ int run_translator(unsigned short port, int cross_translate,
 	    sigaction(SIGINT, &action, 0);
         sigaction(SIGPIPE, &action, 0);
         
-        signal_init(&exit_signal);
-        sig_fd = signal_get_fd(&exit_signal);
+        signal_init(&main_signal);
+        sig_fd = signal_get_fd(&main_signal);
 
         epollfd = epoll_create(10);
         
@@ -966,44 +1177,70 @@ int run_translator(unsigned short port, int cross_translate,
                 goto err_epoll_create;
         }
         
-        inet_sock = create_server_sock(AF_INET, port, cross_translate);
+        if (mode == INET_ONLY_MODE || mode == DUAL_MODE) {
+                memset(&addr, 0, sizeof(addr));
+                addr.in.sin_family = AF_INET;
+                addr.in.sin_addr.s_addr = INADDR_ANY;
+                addr.in.sin_port = htons(port);
 
-        if (inet_sock == -1) {
-                LOG_ERR("could not create AF_INET server sock\n");
-                ret = inet_sock;
-                goto err_inet_sock;
-        }
-        
-        /* Set events. EPOLLERR and EPOLLHUP may always be returned,
-         * even if not set here */
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN;
-        ev.data.ptr = &inet_sock;
-        
-        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev) == -1) {
-                LOG_ERR("Could not add listen sock to epoll events: %s\n",
-                        strerror(errno));
-                goto err_epoll_ctl_inet;
+                inet_sock = create_server_sock(&addr);
+                
+                if (inet_sock == -1) {
+                        LOG_ERR("could not create AF_INET server sock\n");
+                        ret = inet_sock;
+                        goto err_inet_sock;
+                }
+                
+                /* Set events. EPOLLERR and EPOLLHUP may always be returned,
+                 * even if not set here */
+                memset(&ev, 0, sizeof(ev));
+                ev.events = EPOLLIN;
+                ev.data.ptr = &inet_sock;
+                
+                ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev);
+
+                if (ret == -1) {
+                        LOG_ERR("epoll_ctl INET listen: %s\n",
+                                strerror(errno));
+                        goto err_epoll_ctl_inet;
+                }
+                LOG_DBG("listening on port %u\n", port);
         }
 
-        if (!inet_server_only) {
-                serval_sock = create_server_sock(AF_SERVAL, port, cross_translate);
+        if (mode == SERVAL_ONLY_MODE || mode == DUAL_MODE) {
+                memset(&addr, 0, sizeof(addr));
+                memcpy(&addr.sv, sv, sizeof(*sv));
+                addr.sv.sv_family = AF_SERVAL;
+
+                /* Listen to a prefix, since, in case of cross
+                 * translation, the incoming connections will have a
+                 * serviceID with the lower order bits being the IP
+                 * address and port. */
+                if (cross_translate && sv->sv_prefix_bits == 0)
+                        addr.sv.sv_prefix_bits = 128;
+                
+                serval_sock = create_server_sock(&addr);              
                 
                 if (serval_sock == -1) {
                         LOG_ERR("could not create AF_SERVAL server sock\n");
                         ret = serval_sock;
                         goto err_serval_sock;
                 }
-
+                
                 memset(&ev, 0, sizeof(ev));
                 ev.events = EPOLLIN;
                 ev.data.ptr = &serval_sock;
         
-                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, serval_sock, &ev) == -1) {
-                        LOG_ERR("Could not add listen sock to epoll events: %s\n",
+                ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, serval_sock, &ev);
+
+                if (ret == -1) {
+                        LOG_ERR("epoll_ctl SERVAL listen sock: %s\n",
                                 strerror(errno));
                         goto err_epoll_ctl_serval;
                 }
+                LOG_DBG("listening on serviceID %s:%u\n",
+                        service_id_to_str(&sv->sv_srvid), 
+                        sv->sv_prefix_bits);
         }
 
         ret = start_workers(num_workers);
@@ -1011,7 +1248,7 @@ int run_translator(unsigned short port, int cross_translate,
         if (ret == -1)
                 goto err_workers;
 
-        LOG_DBG("translator running on port/serviceID %u\n", port);
+        LOG_DBG("translator running\n");
 
         while (running) {
                 struct timespec prev_time, now;
@@ -1026,7 +1263,8 @@ int run_translator(unsigned short port, int cross_translate,
 
                 timespec_sub(&now, &prev_time);
                 
-                gc_timeout = GC_TIMEOUT - ((now.tv_sec * 1000) + (now.tv_nsec / 1000000));
+                gc_timeout = GC_TIMEOUT - ((now.tv_sec * 1000) + 
+                                           (now.tv_nsec / 1000000));
 
                 /* LOG_DBG("gc_timeout=%d\n", gc_timeout); */
                 
@@ -1051,8 +1289,8 @@ int run_translator(unsigned short port, int cross_translate,
                         struct socket *s = (struct socket *)events[i].data.ptr;
 
                         if (s->fd == inet_sock || s->fd == serval_sock) {
-                                struct client *c;
-                                
+                                struct client *c;                                
+
                                 c = accept_client(s->fd, port, cross_translate); 
                                 
                                 if (!c) {
@@ -1062,40 +1300,34 @@ int run_translator(unsigned short port, int cross_translate,
                                         schedule_client(c);
                                 }
                         } else if (s->fd == sig_fd) {
-                                running = 0;
+                                int val;
+
+                                signal_clear_val(&main_signal, &val);
+                                
+                                switch (val) {
+                                case SIGNAL_EXIT:
+                                        running = 0;
+                                        break;
+                                case SIGNAL_EPOLL_REARM:
+                                        /* Just indicates that we should rearm */
+                                default:
+                                        break;
+                                }
                         } else {
                                 struct client *c = s->c;
-                                uint32_t monitored_events = 
-                                        EPOLLIN | EPOLLERR | EPOLLHUP ; 
-                                
-                                /* print_events(s, events[i].events); */
 
-                                if ((&c->sock[ST_INET] == s && 
-                                     (events[i].events & monitored_events)) ||
-                                    (&c->sock[ST_SERVAL] == s && 
-                                     (events[i].events & EPOLLOUT))) {
-                                        if (s->state == SS_CONNECTING)
-                                                client_add_work(c, client_connect_result);
-                                        else
-                                                client_add_work(c, work_inet_to_serval);
-                                } else if ((&c->sock[ST_SERVAL] == s && 
-                                            (events[i].events & monitored_events)) ||
-                                           (&c->sock[ST_INET] == s && 
-                                            (events[i].events & EPOLLOUT))) {
-                                        if (s->state == SS_CONNECTING)
-                                                client_add_work(c, client_connect_result);
-                                        else
-                                                client_add_work(c, work_serval_to_inet);
-                                }
-                                
+                                s->active_events |= events[i].events;
+                                check_socket_events(c, s, events[i].events);
+
                                 if (c->num_work) {
                                         schedule_client(c);
                                 }
                         }
                 }
+                rearm_clients();
         }
         LOG_DBG("Translator exits.\n");
- err_workers:
+err_workers:
         stop_workers();
         LOG_DBG("Cleaning up clients\n");
         cleanup_clients();
@@ -1109,7 +1341,7 @@ int run_translator(unsigned short port, int cross_translate,
  err_inet_sock:
         close(epollfd);
  err_epoll_create:
-        signal_destroy(&exit_signal);
+        signal_destroy(&main_signal);
 
         return ret;
 }
@@ -1122,10 +1354,14 @@ static void print_usage(void)
         printf("where OPTIONS:\n");
         printf("\t-d, --daemon\t\t\t run in the background as a daemon.\n");
         printf("\t-f, --file-limit LIMIT\t\t set the maximum number of open file descriptors.\n");
-        printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
+        printf("\t-p, --port PORT\t\t\t port to listen on.\n");
+        printf("\t-s, --serviceid SERVICE_ID\t\t serviceID to listen on.\n");
+        
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
+        printf("\t-io, --inet-only\t\t listen only for AF_INET connections.\n");
+        printf("\t-so, --serval-only\t\t listen only for AF_SERVAL connections.\n");
         printf("\t-x, --cross-translate\t\t allow connections from another AF_SERVAL->AF_INET.\n");
 }
 
@@ -1189,12 +1425,71 @@ static int daemonize(void)
         return 0;
 }
 
+static int parse_serviceid(const char *str, struct sockaddr_sv *sv)
+{
+        int len;
+        char *buf, *ptr, *id, *prefix = NULL;
+
+        /* Allocate a non-const string buffer we can manipulate */
+        buf = malloc(strlen(str) + 1);
+        
+        if (!buf)
+                return -1;
+        
+        strcpy(buf, str);
+
+        ptr = buf;
+
+        if (buf[0] == '0' && buf[1] == 'x')
+                ptr += 2;
+        
+        id = ptr;
+
+        while (*ptr != ':' && *ptr != '\0')
+                ptr++;
+        
+        if (*ptr == ':') {
+                prefix = ptr + 1;
+                *ptr = '\0';
+        }
+        
+        len = strlen(id);
+        
+        if (len > 64)
+                len = 64;
+        
+        if (serval_pton(id, &sv->sv_srvid) == -1) {
+                free(buf);
+                return -1;
+        }
+
+        if (prefix) {
+                long bits = strtoul(prefix, &ptr, 10);
+
+                if (*ptr == '\0' && *prefix != '\0') {
+                        if (bits > 255)
+                                bits = 0;
+                        sv->sv_prefix_bits = bits & 0xff;
+                }
+        }
+
+        free(buf);
+
+        return 0;
+}
+
 int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
+        const char *serviceid = DEFAULT_SERVICE_ID;
         int ret = 0, daemon = 0, cross_translate = 0;
         struct rlimit limit;
         rlim_t file_limit = 0;
+        unsigned int mode = DUAL_MODE;
+        struct sockaddr_sv sv;
+
+        memset(&sv, 0, sizeof(sv));
+        sv.sv_family = AF_SERVAL;
 
         argc--;
 	argv++;
@@ -1208,6 +1503,15 @@ int main(int argc, char **argv)
                         }
                         
                         port = atoi(argv[1]);
+                        argv++;
+                        argc--;
+                } else if (strcmp(argv[0], "-s") == 0 ||
+                           strcmp(argv[0], "--serviceid") == 0) {
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        serviceid = argv[1];
                         argv++;
                         argc--;
                 } else if (strcmp(argv[0], "-h") == 0 ||
@@ -1227,6 +1531,12 @@ int main(int argc, char **argv)
                 } else if (strcmp(argv[0], "-x") == 0 ||
                            strcmp(argv[0], "--cross-translate") ==  0) {
                         cross_translate = 1;
+                } else if (strcmp(argv[0], "-io") == 0 ||
+                           strcmp(argv[0], "--inet-only") ==  0) {
+                        mode = INET_ONLY_MODE;
+                } else if (strcmp(argv[0], "-so") == 0 ||
+                           strcmp(argv[0], "--serval-only") ==  0) {
+                        mode = SERVAL_ONLY_MODE;
                 } else if (strcmp(argv[0], "-w") == 0 ||
                            strcmp(argv[0], "--workers") ==  0) {
                         unsigned long n;
@@ -1272,6 +1582,13 @@ int main(int argc, char **argv)
 		argv++;
 	}	
 
+
+        if (mode != INET_ONLY_MODE && 
+            parse_serviceid(serviceid, &sv) != 0) {
+                print_usage();
+                goto fail;
+        }
+
         if (daemon) {
                 LOG_DBG("going daemon...\n");
                 ret = daemonize();
@@ -1305,7 +1622,7 @@ int main(int argc, char **argv)
                 }
         }
         
-        ret = run_translator(port, cross_translate, 0);
+        ret = run_translator(port, &sv, cross_translate, mode);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);
