@@ -5,6 +5,8 @@ noinst_JAVA = \
 	org/servalarch/servalctrl/HostCtrlCallbacks.java \
 	org/servalarch/servalctrl/ServiceInfo.java \
 	org/servalarch/servalctrl/ServiceInfoStat.java \
+	org/servalarch/servalctrl/FlowStat.java \
+	org/servalarch/servalctrl/FlowTCPStat.java \
 	org/servalarch/servalctrl/TestApp.java
 
 EXTRA_DIST = $(noinst_JAVA)

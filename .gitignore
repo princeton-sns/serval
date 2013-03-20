@@ -88,4 +88,5 @@ Makefile
 *.class
 *.stamp
 *.jar
+.*.swp
 .DS_Store

@@ -148,7 +148,6 @@ int udp_encap_recv(struct sock *sk, struct sk_buff *skb)
         serval_sal_rcv(skb);
 
         return 0;
-
 pass_up:
 	return 1;
 }

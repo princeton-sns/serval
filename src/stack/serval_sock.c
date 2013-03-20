@@ -19,6 +19,7 @@
 #include <serval/netdevice.h>
 #include <netinet/serval.h>
 #include <serval_sock.h>
+#include <serval_tcp_sock.h>
 #include <serval_sal.h>
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
@@ -277,6 +278,58 @@ void serval_sock_migrate_service(struct service_id *old_s, int new_dev)
                 release_sock(sk);
                 sock_put(sk);
         }
+}
+
+struct flow_info *serval_sock_stats_flow(struct flow_id *flow, 
+                                         struct ctrlmsg_stats_response *resp,
+                                         int idx)
+{
+        struct sock *sk = serval_sock_lookup_flow(flow);
+        struct flow_info *ret = NULL;
+
+        if (sk) {
+                int info_size = sizeof(struct flow_id) + sizeof(uint8_t) + 
+                                sizeof(unsigned long) + sizeof(uint16_t);
+                struct socket *socket = sk->sk_socket;
+                if (sk->sk_protocol == IPPROTO_TCP) {
+                        struct serval_tcp_sock *tsk = 
+                                (struct serval_tcp_sock *) sk;
+                        struct stats_proto_tcp *st = NULL;
+                        info_size += sizeof(struct stats_proto_tcp);
+                        ret = kmalloc(info_size, GFP_KERNEL);
+                        memset(ret, 0, info_size);
+                        ret->len = info_size;
+
+                        st = (struct stats_proto_tcp *)&ret->stats;
+                        st->retrans = tsk->total_retrans;
+                        st->lost = tsk->lost_out;
+                        st->srtt = tsk->srtt;
+                        st->rttvar = tsk->mdev;
+                        st->mss = tsk->mss_cache;
+                        st->snd_ssthresh = tsk->snd_ssthresh;
+                        st->snd_cwnd = tsk->snd_cwnd;
+                        st->snd_wnd = tsk->snd_wnd;
+                        st->snd_una = tsk->snd_una;
+                        st->snd_nxt = tsk->snd_nxt;
+                        st->rcv_wnd = tsk->rcv_wnd;
+                        st->rcv_nxt = tsk->rcv_nxt;      
+                } else {
+                        info_size += sizeof(struct stats_proto_base);
+                        ret = kmalloc(info_size, GFP_KERNEL);
+                        memset(ret, 0, info_size);
+                        ret->len = info_size;
+                }
+                ret->proto = sk->sk_protocol;
+                ret->inode = get_socket_inode(socket);
+                memcpy(&ret->flow, flow, sizeof(struct flow_id));
+                ret->pkts_sent = serval_sk(sk)->tot_pkts_sent;
+                ret->pkts_recv = serval_sk(sk)->tot_pkts_recv;
+                ret->bytes_sent = serval_sk(sk)->tot_bytes_sent;
+                ret->bytes_recv = serval_sk(sk)->tot_bytes_recv;
+                sock_put(sk);
+                LOG_DBG("Flow %s, proto %d\n", flow_id_to_str(flow), ret->proto);
+        }
+        return ret;
 }
 
 static struct sock *serval_sock_lookup(struct serval_table *table,
@@ -936,6 +989,65 @@ void flow_table_read_unlock(void)
         read_unlock_bh(&sock_list_lock);
 }
 
+void sock_list_iterator_init(struct sock_list_iterator *iter)
+{
+        read_lock_bh(&sock_list_lock);
+        iter->head = &sock_list;
+        iter->curr = iter->head;
+        iter->sk = NULL;
+}
+
+void sock_list_iterator_destroy(struct sock_list_iterator *iter)
+{
+        read_unlock_bh(&sock_list_lock);
+}
+
+struct sock *sock_list_iterator_next(struct sock_list_iterator *iter)
+{
+        iter->curr = iter->curr->next;
+        
+        if (iter->curr == iter->head)
+                iter->sk = NULL;
+        else
+                iter->sk = (struct sock *)list_entry(iter->curr, 
+                                                     struct serval_sock, 
+                                                     sock_node);
+        return iter->sk;
+}
+
+int serval_sock_flow_print_header(char *buf, size_t buflen)
+{
+        return snprintf(buf, buflen, 
+                        "%-10s %-10s %-17s %-17s %-10s %s\n",
+                        "srcFlowID", "dstFlowID", 
+                        "srcIP", "dstIP", "state", "dev");
+}
+
+int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        char src[18], dst[18];
+        int len;
+        struct net_device *dev = dev_get_by_index(sock_net(sk), 
+                                                  sk->sk_bound_dev_if);
+        
+        len = snprintf(buf, buflen, 
+                       "%-10s %-10s %-17s %-17s %-10s %s\n",
+                       flow_id_to_str(&ssk->local_flowid), 
+                       flow_id_to_str(&ssk->peer_flowid),
+                       inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
+                                 src, 18),
+                       inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
+                                 dst, 18),
+                       serval_sock_state_str(sk),
+                       dev ? dev->name : "unbound");
+        
+        if (dev)
+                dev_put(dev);
+        
+        return len;
+}
+
 /*
   If this function is called with buflen == 0, the buffer size
   required for fitting the entire table will be returned. In that
@@ -943,51 +1055,37 @@ void flow_table_read_unlock(void)
  */
 int __flow_table_print(char *buf, size_t buflen) 
 {
-        int tot_len = 0, len;
-        struct serval_sock *ssk;
-        
-        len = snprintf(buf, buflen, 
-                       "%-10s %-10s %-17s %-17s %-10s %s\n",
-                       "srcFlowID", "dstFlowID", 
-                       "srcIP", "dstIP", "state", "dev");
-        
-        if (len > 0) {
-                if (buflen >= len) 
-                        buflen -= len;
-                else
-                        buflen = 0;
+        int tot_len, len;
+        struct sock_list_iterator iter;
+
+        sock_list_iterator_init(&iter);
+
+        len = serval_sock_flow_print_header(buf, buflen);
+
+        tot_len = len;
+
+        if (len > buflen)
+                buflen = 0;
+        else
+                buflen -= len;
+
+        while (1) {
+                struct sock *sk = sock_list_iterator_next(&iter);
+
+                if (!sk)
+                        break;
+                
+                len = serval_sock_flow_print(sk, buf + tot_len, 
+                                             buflen - tot_len);
+                
                 tot_len += len;
+
+                if (len > buflen)
+                        buflen = 0;
+                else
+                        buflen -= len;
         }
-
-        list_for_each_entry(ssk, &sock_list, sock_node) {
-                char src[18], dst[18];
-                struct sock *sk = (struct sock *)ssk;
-                struct net_device *dev = dev_get_by_index(sock_net(sk), 
-                                                          sk->sk_bound_dev_if);
-
-                len = snprintf(buf + tot_len, buflen, 
-                               "%-10s %-10s %-17s %-17s %-10s %s\n",
-                               flow_id_to_str(&ssk->local_flowid), 
-                               flow_id_to_str(&ssk->peer_flowid),
-                               inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
-                                         src, 18),
-                               inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
-                                         dst, 18),
-                               serval_sock_state_str(sk),
-                               dev ? dev->name : "unbound");
-
-                if (dev)
-                        dev_put(dev);
-
-                if (len > 0) {
-                        if (buflen >= len) 
-                                buflen -= len;
-                        else
-                                buflen = 0;
-                        tot_len += len;
-                }
-        }
-
+      
         return tot_len;
 }
 

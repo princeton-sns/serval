@@ -229,7 +229,12 @@ struct sock *service_find_sock(struct service_id *srvid, int protocol);
 void service_entry_hold(struct service_entry *se);
 void service_entry_put(struct service_entry *se);
 int service_entry_print(struct service_entry *se, char *buf, size_t buflen);
+int service_table_print_header(char *buf, size_t buflen);
 
+typedef struct radix_tree_iterator service_table_iterator_t;
+void service_table_iterator_init(service_table_iterator_t *iter);
+void service_table_iterator_destroy(service_table_iterator_t *iter);
+struct service_entry *service_table_iterator_next(service_table_iterator_t *iter);
 void service_table_read_lock(void);
 void service_table_read_unlock(void);
 int __service_table_print(char *buf, size_t buflen);

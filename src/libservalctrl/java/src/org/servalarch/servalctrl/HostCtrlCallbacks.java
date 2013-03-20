@@ -125,4 +125,7 @@ public abstract class HostCtrlCallbacks {
 	public void onServiceDelayed(long xid, long pktId, ServiceID service) {
 
 	}
+
+    public void onFlowStatUpdate(long xid, int retval, FlowStat[] stats, boolean more) {
+    }
 }

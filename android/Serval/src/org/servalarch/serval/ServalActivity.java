@@ -6,10 +6,10 @@ import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.List;
@@ -23,6 +23,7 @@ import org.servalarch.servalctrl.HostCtrlCallbacks;
 import org.servalarch.servalctrl.ServiceInfo;
 import org.servalarch.servalctrl.ServiceInfoStat;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.v4.app.Fragment;
@@ -108,6 +109,7 @@ public class ServalActivity extends FragmentActivity {
 						t.show();
 					}
 				} else {
+					stopService(new Intent(ServalActivity.this, TableService.class));
 					AppHostCtrl.fini();
 
 					if (!isLoaded) {
@@ -122,7 +124,8 @@ public class ServalActivity extends FragmentActivity {
 					setUdpEncap(false);
 				} else {
 					setModuleLoaded(true);
-
+					
+					startService(new Intent(ServalActivity.this, TableService.class));
 					AppHostCtrl.init(cbs);
 					/* insert persistent rules */
 					if (addPersistent) {
@@ -221,7 +224,7 @@ public class ServalActivity extends FragmentActivity {
 		return executeSuCommand("rmmod "
 				+ new File(filesDir, name).getAbsolutePath());
 	}
-
+	
 	boolean executeSuCommand(final String cmd) {
 		Log.d("Serval", "executing su command: " + cmd);
 		return executeSuCommand(cmd, false);
@@ -312,9 +315,8 @@ public class ServalActivity extends FragmentActivity {
 	}
 
 	public void setModuleLoaded(boolean loaded) {
-		CharSequence text = Html
-				.fromHtml(getString(loaded ? R.string.module_loaded
-						: R.string.module_unloaded));
+		CharSequence text = Html.fromHtml(getString(loaded ?
+				R.string.module_loaded : R.string.module_unloaded));
 		moduleStatusButton.setSelected(loaded);
 		moduleStatusButton.setText(text);
 		if (servalFrag.autoMigrationButton != null)
@@ -389,9 +391,7 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Added service";
-						if (servalFrag != null
-								&& servalFrag.servicePerm != null
-								&& servalFrag.servicePerm.isChecked()) {
+						if (servalFrag != null && servalFrag.servicePerm != null && servalFrag.servicePerm.isChecked()) {
 							Log.d("Serval", "Saving rule...");
 							prefs.edit()
 									.putString(
@@ -421,9 +421,6 @@ public class ServalActivity extends FragmentActivity {
 					String msg;
 					if (retval == RETVAL_OK) {
 						msg = "Removed service";
-						prefs.edit()
-								.remove(servalFrag.editServiceText.getText()
-										.toString()).commit();
 					} else
 						msg = "Remove service failed retval=" + retval + " "
 								+ getRetvalString(retval);

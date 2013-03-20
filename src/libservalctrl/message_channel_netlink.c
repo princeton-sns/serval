@@ -1,3 +1,4 @@
+
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- 
  *
  * Netlink-based backend for message channels.
@@ -307,8 +308,8 @@ static ssize_t netlink_recv(message_channel_t *channel, struct message **msg)
     bytes_left = ret;
 
     /* Channel already locked by receiver task */
-    /* LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
-       datalen); */
+     /*LOG_DBG("Received NETLINK %zu byte message from the local stack\n",
+       datalen);*/
 
     ret = -1;
 
@@ -316,7 +317,7 @@ static ssize_t netlink_recv(message_channel_t *channel, struct message **msg)
          NLMSG_OK(nlm, bytes_left);
          nlm = NLMSG_NEXT(nlm, bytes_left)) {
         struct nlmsgerr *nlmerr = NULL;
-        
+
         num_msgs++;
         
         /* check for ack'ing */
@@ -332,8 +333,10 @@ static ssize_t netlink_recv(message_channel_t *channel, struct message **msg)
 
         switch (nlm->nlmsg_type) {
         case NLMSG_NOOP:
+            LOG_DBG("NLMSG NOOP\n");
             break;
         case NLMSG_ERROR:
+            LOG_DBG("NLMSG ERROR\n");
             nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
             if (nlmerr->error == 0) {
                 /*
@@ -346,7 +349,6 @@ static ssize_t netlink_recv(message_channel_t *channel, struct message **msg)
             }
             break;
         case NLMSG_DONE:
-            /* LOG_DBG("NLMSG_DONE\n"); */
             break;
         case NLMSG_SERVAL:
             /* Strip off netlink headers */

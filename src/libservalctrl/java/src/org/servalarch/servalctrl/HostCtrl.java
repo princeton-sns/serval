@@ -47,6 +47,7 @@ public abstract class HostCtrl {
 	public native int migrateFlow(long flowID, String toDevice);
 
 	public native int migrateInterface(String fromDevice, String toDevice);
+	public native int statsFlow(long[] flowIDs, int flows);
 
 	private native int addService4(int type, ServiceID id,
 			int prority, int weight, Inet4Address addr);

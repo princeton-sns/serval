@@ -886,44 +886,77 @@ void service_table_read_unlock(void)
         read_unlock_bh(&srvtable.lock);
 }
 
-int __service_table_print(char *buf, size_t buflen)
+void service_table_iterator_init(service_table_iterator_t *iter)
 {
-        struct print_buf pb = { buf, buflen, 0 };
-        int len = 0;
+        read_lock_bh(&srvtable.lock);
+        radix_tree_iterator_init(&srvtable.tree, iter);
+}
 
-#if defined(OS_USER)
-        /* Adding this stuff prints garbage in the kernel */
-        len = snprintf(pb.buf + pb.totlen, pb.buflen, 
-                       "bytes resolved: "
-                       "%u packets resolved: %u bytes dropped: "
-                       "%u packets dropped %u\n",
-                       atomic_read(&srvtable.bytes_resolved),
-                       atomic_read(&srvtable.packets_resolved),
-                       atomic_read(&srvtable.bytes_dropped),
-                       atomic_read(&srvtable.packets_dropped));
-        
+void service_table_iterator_destroy(service_table_iterator_t *iter)
+{
+        read_unlock_bh(&srvtable.lock);
+}
 
-        update_print_buf(&pb, len);
-#endif
-        len = snprintf(pb.buf + pb.totlen, pb.buflen, 
-                       "%-64s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
-                       "prefix", "type", "flags", "prio", "weight", 
-                       "resolved", "dropped", "target(s)");
-        
-        update_print_buf(&pb, len);        
+struct service_entry *
+service_table_iterator_next(service_table_iterator_t *iter)
+{
+        struct radix_node *n = radix_tree_iterator_next(iter);
 
-        radix_tree_foreach(&srvtable.tree, __service_entry_print, &pb);
+        if (!n)
+                return NULL;
 
-        return (int)pb.totlen;
+        return get_service(n);
+}
+
+int service_table_print_header(char *buf, size_t buflen)
+{
+        return snprintf(buf, buflen, 
+                        "%-64s %-4s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
+                        "prefix", "bits", "type", "flags", "prio", "weight", 
+                        "resolved", "dropped", "target(s)");
 }
 
 int service_table_print(char *buf, size_t buflen)
 {
-        int ret;
+        int tot_len = 0, len = 0;
+        struct radix_tree_iterator iter;
+        struct radix_node *n;
+
+        radix_tree_iterator_init(&srvtable.tree, &iter);
+        
+        len = service_table_print_header(buf, buflen);
+
+        tot_len += len;
+        
+        if (len > buflen)
+                buflen = 0;
+        else
+                buflen -= len;
+
         read_lock_bh(&srvtable.lock);
-        ret = __service_table_print(buf, buflen);
+        
+        while (1) {
+                n = radix_tree_iterator_next(&iter);
+
+                if (!n)
+                        break;
+
+                len = service_entry_print(get_service(n), buf + tot_len, 
+                                          buflen - tot_len);
+
+                tot_len += len;
+                
+                if (len > buflen)
+                        buflen = 0;
+                else
+                        buflen -= len;
+        }
+                
         read_unlock_bh(&srvtable.lock);
-        return ret;
+       
+        radix_tree_iterator_destroy(&iter);
+
+        return tot_len;
 }
 
 static int service_entry_local_match(struct radix_node *n)

@@ -29,54 +29,67 @@ import android.widget.ToggleButton;
 public class TranslatorFragment extends Fragment {
 
 	private static final String[] ADD_HTTP_RULES = {
-			"ifconfig dummy0 192.168.25.25 -arp",
-			"ip rule add to 128.112.7.146 table main priority 10", // TODO this
-																	// change
-																	// based on
-																	// the proxy
-																	// IP
-			"ip rule add from 192.168.25.0/24 table main priority 20",
-			"ip rule add from all table 1 priority 30",
-			"ip route add default via 192.168.25.25 dev dummy0 table 1",
-			"echo 1 > /proc/sys/net/ipv4/ip_forward",
-			"echo 1024 > /proc/sys/net/ipv4/neigh/default/gc_thresh1",
-			"echo 2048 > /proc/sys/net/ipv4/neigh/default/gc_thresh2",
-			"echo 4096 > /proc/sys/net/ipv4/neigh/default/gc_thresh3",
-			"iptables -t nat -A OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -t nat -A OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -t nat -A OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
-			"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
-			"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
-			"iptables -A FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-			"iptables -t nat -A POSTROUTING ! -o dummy0 -j MASQUERADE" };
-
-	private static final String[] ADD_ALL_RULES = { "iptables -t nat -A OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080" };
-
+		"ifconfig dummy0 192.168.25.25 -arp",
+		"ip rule add to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
+		"ip rule add from 192.168.25.0/24 table main priority 20",
+		"ip rule add from all table 1 priority 30",
+		"ip route add default via 192.168.25.25 dev dummy0 table 1",
+		"echo 1 > /proc/sys/net/ipv4/ip_forward",
+		"echo 1024 > /proc/sys/net/ipv4/neigh/default/gc_thresh1",
+		"echo 2048 > /proc/sys/net/ipv4/neigh/default/gc_thresh2",
+		"echo 4096 > /proc/sys/net/ipv4/neigh/default/gc_thresh3",
+		
+		"iptables -t nat -N serval_OUTPUT",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
+		"iptables -t nat -A serval_OUTPUT -j RETURN",
+		"iptables -t nat -I OUTPUT 1 -j serval_OUTPUT",
+		
+		"iptables -N serval_FORWARD",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
+		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -j RETURN",
+		"iptables -I FORWARD 1 -j serval_FORWARD",
+		
+		"iptables -t nat -N serval_POSTROUTING",
+		"iptables -t nat -A serval_POSTROUTING ! -o dummy0 -j MASQUERADE",
+		"iptables -t nat -A serval_POSTROUTING -j RETURN",
+		"iptables -t nat -I POSTROUTING 1 ! -o lo -j serval_POSTROUTING"
+	};
+	
+	private static final String[] ADD_ALL_RULES = {
+		"iptables -t nat -A OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	
 	private static final String[] DEL_HTTP_RULES = {
-			"ifconfig dummy0 down",
-			"ip rule del to 128.112.7.54 table main priority 10", // TODO this
-																	// change
-																	// based on
-																	// the proxy
-																	// IP
-			"ip rule del from 192.168.25.0/24 table main priority 20",
-			"ip rule del from all table 1 priority 30",
-			"echo 0 > /proc/sys/net/ipv4/ip_forward",
-			"iptables -t nat -D OUTPUT -p tcp --dport 80 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -t nat -D OUTPUT -p tcp --dport 443 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -t nat -D OUTPUT -p tcp --dport 5001 -m tcp --syn -j REDIRECT --to-ports 8080",
-			"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 80 -j DROP",
-			"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 443 -j DROP",
-			"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -p tcp --dport 5001 -j DROP",
-			"iptables -D FORWARD -s 192.168.25.0/255.255.255.0 -j ACCEPT",
-			"iptables -t nat -D POSTROUTING ! -o dummy0 -j MASQUERADE" };
-
-	private static final String[] DEL_ALL_RULES = { "iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080" };
-
+		"ifconfig dummy0 down",
+		"ip rule del to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
+		"ip rule del from 192.168.25.0/24 table main priority 20",
+		"ip rule del from all table 1 priority 30",
+		"echo 0 > /proc/sys/net/ipv4/ip_forward",
+		"iptables -t nat -F serval_OUTPUT",
+		"iptables -t nat -D OUTPUT -j serval_OUTPUT",
+		"iptables -t nat -X serval_OUTPUT",
+		
+		"iptables -F serval_FORWARD",
+		"iptables -D FORWARD -j serval_FORWARD",
+		"iptables -X serval_FORWARD",
+		
+		"iptables -t nat -F serval_POSTROUTING",
+		"iptables -t nat -D POSTROUTING ! -o lo -j serval_POSTROUTING",
+		"iptables -t nat -X serval_POSTROUTING"
+	};
+	
+	private static final String[] DEL_ALL_RULES = {
+		"iptables -t nat -D OUTPUT -p tcp -m tcp --syn -j REDIRECT --to-ports 8080"
+	};
+	
+	private static boolean dummyTested = false;
+	
 	private Button translatorButton;
 	private ToggleButton transHttpButton, transAllButton, hijackButton;
-
 	private View view;
 
 	public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -84,8 +97,7 @@ public class TranslatorFragment extends Fragment {
 		super.onCreateView(inflater, container, savedInstanceState);
 		view = inflater.inflate(R.layout.frag_translator, container, false);
 
-		this.translatorButton = (Button) view
-				.findViewById(R.id.translator_toggle);
+		this.translatorButton = (Button) view.findViewById(R.id.translator_toggle);
 		this.translatorButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View view) {

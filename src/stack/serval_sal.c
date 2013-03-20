@@ -801,8 +801,7 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
         s32 seq_rtt = -1;
         int err = 0;
        
-        while ((skb = serval_sal_ctrl_queue_head(sk)) && 
-               skb != serval_sal_send_head(sk)) {
+        while ((skb = serval_sal_ctrl_queue_head(sk))) {
                 if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
 
@@ -822,6 +821,10 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
                         LOG_PKT("cleaned rtxQ verno=%u HZ=%u seq_rtt=%d\n", 
                                 SAL_SKB_CB(skb)->verno, 
                                 HZ, seq_rtt);
+
+                        if (skb == serval_sal_send_head(sk)) {
+                                serval_sal_advance_send_head(sk, skb);
+                        }
 
                         kfree_skb(skb);
                         skb = serval_sal_ctrl_queue_head(sk);
@@ -2883,6 +2886,8 @@ int serval_sal_state_process(struct sock *sk,
                                 err = serval_sal_rcv_rsyn(sk, skb, ctx);
                 }
         }
+        serval_sk(sk)->tot_pkts_recv++;
+        serval_sk(sk)->tot_bytes_recv += skb->len;
 
         switch (sk->sk_state) {
         case SAL_INIT:
@@ -3470,7 +3475,6 @@ int serval_sal_rcv(struct sk_buff *skb)
                 default:
                         LOG_PKT("SAL DROPPING %s\n", sal_hdr_to_str(ctx.hdr));
                         goto drop;
-                        break;
                 }
         }
 
@@ -3580,7 +3584,8 @@ void serval_sal_rexmit_timeout(unsigned long data)
                         net_serval.sysctl_sal_max_retransmits);
                 serval_sal_write_err(sk);
         } else {
-                LOG_SSK(sk, "ReXmit and rescheduling timer\n");
+                LOG_SSK(sk, "ReXmit and rescheduling timer (attempt %d)\n",
+                        ssk->retransmits);
                 serval_sal_rexmit(sk);
 
                 ssk->backoff++;
@@ -3803,6 +3808,11 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
 
         if (err < 0) {
                 LOG_ERR("xmit failed err=%d\n", err);
+        }
+        else {
+            ssk->tot_pkts_sent++;
+            LOG_DBG("SKB things: %d %d\n", skb->len, skb->data_len);
+            ssk->tot_bytes_sent += skb->len;
         }
 
         if (mig_dev)

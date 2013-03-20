@@ -33,6 +33,8 @@ enum ctrlmsg_type {
         CTRLMSG_TYPE_SERVICE_STAT,
         CTRLMSG_TYPE_CAPABILITIES,
         CTRLMSG_TYPE_MIGRATE,
+        CTRLMSG_TYPE_STATS_QUERY,
+        CTRLMSG_TYPE_STATS_RESP,
         CTRLMSG_TYPE_DELAY_NOTIFY,
         CTRLMSG_TYPE_DELAY_VERDICT,
         CTRLMSG_TYPE_DUMMY,
@@ -261,6 +263,76 @@ struct ctrlmsg_delay {
 #define CTRLMSG_DELAY_SIZE (sizeof(struct ctrlmsg_delay))
 
 CTRLMSG_ASSERT(sizeof(struct ctrlmsg_delay) == 122)
+
+#define CTRLMSG_MIGRATE_SIZE (sizeof(struct ctrlmsg_migrate))
+
+struct ctrlmsg_stats_query {
+        struct ctrlmsg cmh;
+        struct flow_id flows[0];
+} CTRLMSG_PACKED;
+
+#define CTRLMSG_STATS_QUERY_SIZE(cmsg) \
+        (cmsg)->cmh.len
+#define CTRLMSG_STATS_NUM_FLOWS(cmsg) \
+        (((cmsg)->cmh.len - sizeof(struct ctrlmsg)) /                  \
+         sizeof(struct flow_id))
+
+/* Base stats type included for all protocols. Equivalent to protocol
+ * stats for UDP. */
+struct stats_proto_base {
+        unsigned long pkts_sent;
+        unsigned long pkts_recv;
+
+        unsigned long bytes_sent;
+        unsigned long bytes_recv;
+};
+
+/* Stats type for the TCP protocol. */
+struct stats_proto_tcp {
+        struct stats_proto_base base; // needs to be first
+
+        uint32_t retrans;
+        uint32_t lost;
+        uint32_t srtt;
+        uint32_t rttvar;  
+        uint32_t mss;
+
+        uint32_t snd_wnd;
+        uint32_t snd_cwnd;
+        uint32_t snd_ssthresh;    
+        uint32_t snd_una;  /* next ACK we want */
+        uint32_t snd_nxt;  /* next # we'll send */
+
+        uint32_t rcv_wnd;
+        uint32_t rcv_nxt;
+};
+
+/* Contains the individual flow statistics */
+struct flow_info {
+        struct flow_id flow;
+        uint8_t proto;
+        unsigned long inode;
+        uint16_t len;
+
+        struct stats_proto_base stats; // needs to be last
+#define pkts_sent stats.pkts_sent
+#define pkts_recv stats.pkts_recv
+#define bytes_sent stats.bytes_sent
+#define bytes_recv stats.bytes_recv
+};
+
+/* Flags for stats responses */
+#define STATS_RESP_F_MORE 0x01
+
+struct ctrlmsg_stats_response {
+        struct ctrlmsg cmh;
+        uint8_t flags;
+        uint8_t num_infos;
+        unsigned char info[0];
+} CTRLMSG_PACKED;
+
+#define CTRLMSG_STATS_RESP_SIZE(cmsg) \
+        (cmsg)->cmh.len
 
 enum {
         CTRL_MODE_NET = 0, 

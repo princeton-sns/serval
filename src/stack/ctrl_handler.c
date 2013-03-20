@@ -461,6 +461,51 @@ static int ctrl_handle_migrate_msg(struct ctrlmsg *cm, int peer)
         return ret;
 }
 
+static int ctrl_handle_stats_query_msg(struct ctrlmsg *cm, int peer)
+{
+        struct ctrlmsg_stats_query *csm = (struct ctrlmsg_stats_query*) cm;
+        int num_flows = CTRLMSG_STATS_NUM_FLOWS(csm);
+        int info_size = 2048 - sizeof(struct ctrlmsg) - 1;
+        int offset = 0;
+        int i, ret = 0;
+        
+        struct ctrlmsg_stats_response *temp = kmalloc(2048, GFP_KERNEL);
+        if (!temp) {
+                LOG_ERR("Could not allocate message\n");
+                return -1;
+        }
+        memset(temp, 0, 2048);
+        for (i = 0; i < num_flows; i++) {
+                struct flow_info *info;
+                LOG_DBG("Got a stats query for flow %s\n", 
+                        flow_id_to_str(&csm->flows[i]));
+                info = serval_sock_stats_flow(&csm->flows[i], temp, i);
+                if (info) {
+                        int info_len = info->len;
+                        LOG_DBG("Got a response for flow %s (%d)\n",
+                                flow_id_to_str(&info->flow), info->len);
+                        if (info_len > info_size - offset) {
+                                temp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
+                                temp->cmh.len = sizeof(struct ctrlmsg) + 1 + 
+                                                offset;
+                                temp->flags |= STATS_RESP_F_MORE;
+                                ctrl_sendmsg(&temp->cmh, peer, GFP_KERNEL);
+                                memset(temp, 0, 2048);
+                                offset = 0;
+                        }
+                        memcpy(&temp->info[offset], info, info->len);
+                        offset += info->len;
+                        temp->num_infos += 1;
+                        kfree(info);
+                }
+        }
+        temp->cmh.type = CTRLMSG_TYPE_STATS_RESP;
+        temp->cmh.len = sizeof(struct ctrlmsg) + 1 + offset;
+        ctrl_sendmsg(&temp->cmh, peer, GFP_KERNEL);
+        kfree(temp);
+        return ret;
+}
+
 static int ctrl_handle_delay_verdict_msg(struct ctrlmsg *cm, int peer)
 {
         struct ctrlmsg_delay *cmd = (struct ctrlmsg_delay *)cm;
@@ -483,6 +528,8 @@ ctrlmsg_handler_t handlers[] = {
         [CTRLMSG_TYPE_SERVICE_STAT] = ctrl_handle_service_stats_msg,
         [CTRLMSG_TYPE_CAPABILITIES] = ctrl_handle_capabilities_msg,
         [CTRLMSG_TYPE_MIGRATE] = ctrl_handle_migrate_msg,
+        [CTRLMSG_TYPE_STATS_QUERY] = ctrl_handle_stats_query_msg,
+        [CTRLMSG_TYPE_STATS_RESP] = dummy_ctrlmsg_handler,
         [CTRLMSG_TYPE_DELAY_NOTIFY] = dummy_ctrlmsg_handler,
         [CTRLMSG_TYPE_DELAY_VERDICT] = ctrl_handle_delay_verdict_msg,
         [CTRLMSG_TYPE_DUMMY] = dummy_ctrlmsg_handler,

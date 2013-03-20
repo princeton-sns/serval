@@ -13,6 +13,9 @@ struct hostctrl_ops {
 	int (*service_migrate)(struct hostctrl *hc, 
                            struct service_id *srvid,
                            const char *to_iface);
+    int (*flow_stats_query)(struct hostctrl *hc, 
+                            struct flow_id *flowids,
+                            int flows);
     int (*service_register)(struct hostctrl *hc, 
                             const struct service_id *srvid, 
                             const struct in_addr *old_ip);

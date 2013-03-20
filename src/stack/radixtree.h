@@ -34,6 +34,12 @@ struct radix_tree {
         struct radix_node root;
 };
 
+struct radix_tree_iterator {
+        struct radix_tree *tree;
+        struct radix_node *curr;
+        struct list_head queue;
+};
+
 #define RADIX_TREE_DEFINE(t)                                            \
         struct radix_tree t = {                                         \
                 .root = {                                               \
@@ -62,6 +68,7 @@ int radix_node_is_active(struct radix_node *n);
 
 void *radix_node_get_priv(struct radix_node *n);
 int radix_node_print(struct radix_node *n, char *buf, size_t buflen);
+int radix_tree_print_bfs(struct radix_tree *tree, char *buf, size_t buflen);
 int radix_tree_add(struct radix_tree *tree, const char *str, 
                    void *private, struct radix_node **node, gfp_t alloc);
 struct radix_node *radix_tree_find(struct radix_tree *tree, const char *str,
@@ -73,6 +80,10 @@ void radix_tree_destroy(struct radix_tree *tree,
 int radix_tree_foreach(struct radix_tree *tree, 
                        int (*func)(struct radix_node *, void *arg),
                        void *arg);
+void radix_tree_iterator_init(struct radix_tree *tree, 
+                              struct radix_tree_iterator *iter);
+void radix_tree_iterator_destroy(struct radix_tree_iterator *iter);
+struct radix_node *radix_tree_iterator_next(struct radix_tree_iterator *iter);
 
 #define radix_node_private(n, type) ((type *)n->private)
 

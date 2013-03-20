@@ -46,9 +46,10 @@ static int ctrl_rcv_msg(struct sk_buff *skb, struct nlmsghdr *nlh)
                                 cm->type);
                 }
         }
-
+        
         return ret;
 }
+
 
 static DEFINE_MUTEX(ctrl_mutex);
 

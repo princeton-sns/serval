@@ -21,6 +21,7 @@
 #define jlong_to_ptr(l) ((void *) (((uintptr_t)l) & 0xffffffff))
 #endif
 
+
 static JavaVM *jvm = NULL;
 
 /* Cached classes */
@@ -30,6 +31,8 @@ static jclass serviceinfo_cls;
 static jclass serviceinfostat_cls;
 static jclass serviceid_cls;
 static jclass inetaddress_cls;
+static jclass flowstat_cls;
+static jclass flowtcpstat_cls;
 
 struct jni_context {
     JNIEnv *env;
@@ -233,6 +236,7 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
         return NULL;
     
     service_id = new_service_id(env, &si->srvid);
+    LOG_ERR("serv info\n");
 
     if (!service_id) {
         LOG_ERR("could not create service_id\n");
@@ -310,6 +314,49 @@ static jobject new_service_info_stat(JNIEnv *env,
     return obj;
 }
 
+static jobject new_flow_stat(JNIEnv *env, struct flow_info *info) {
+    jmethodID mid;
+    jobject  obj;
+
+    if (info->proto == 6) {
+        mid = (*env)->GetMethodID(env, flowtcpstat_cls, "<init>",
+                                    "(JIJJJJJJJJJJJJJJJJJ)V");
+        struct stats_proto_tcp *tcp_info;
+
+        if (!mid) {
+            LOG_ERR("Constructor does not exist.\n");
+            return NULL;
+        }
+        tcp_info = (struct stats_proto_tcp *) &info->stats;
+    
+        obj = (*env)->NewObject(env, flowtcpstat_cls, mid,
+                            (jlong)ntohl(info->flow.s_id32),
+                            (jint)info->proto,
+                            (jlong)info->inode,
+                            (jlong)info->pkts_sent,
+                            (jlong)info->bytes_sent,
+                            (jlong)info->pkts_recv,
+                            (jlong)info->bytes_recv,
+                            (jlong)tcp_info->retrans,
+                            (jlong)tcp_info->lost,
+                            (jlong)tcp_info->srtt >> 3,
+                            (jlong)tcp_info->rttvar,
+                            (jlong)tcp_info->mss,
+                            (jlong)tcp_info->snd_wnd,
+                            (jlong)tcp_info->snd_cwnd,
+                            (jlong)tcp_info->snd_ssthresh,
+                            (jlong)tcp_info->snd_una,
+                            (jlong)tcp_info->snd_nxt,
+                            (jlong)tcp_info->rcv_wnd,
+                            (jlong)tcp_info->rcv_nxt);
+    }
+    else {
+        LOG_ERR("Flow %d is not TCP (%d)!\n", ntohl(info->flow.s_id32), info->proto);
+    }
+
+    return obj;
+}
+
 static int on_service_registration(struct hostctrl *hc,
                                    const struct service_id *srvid,
                                    unsigned short flags,
@@ -320,6 +367,7 @@ static int on_service_registration(struct hostctrl *hc,
     JNIEnv *env = ctx->env;
     jobject service_id, addr, old_addr = NULL;
     jmethodID mid;
+    jobject cb;
     jthrowable exc;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, 
@@ -353,8 +401,9 @@ static int on_service_registration(struct hostctrl *hc,
             goto err_old_addr;
         }
     }
-
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, service_id, 
+    
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, service_id, 
                            (jint)flags, addr, old_addr);
 
     exc = (*env)->ExceptionOccurred(env);
@@ -365,6 +414,7 @@ static int on_service_registration(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, old_addr);
 err_old_addr:
     (*env)->DeleteLocalRef(env, addr);
@@ -381,7 +431,7 @@ static int on_service_unregistration(struct hostctrl *hc,
 {
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
-    jobject service_id, addr;
+    jobject service_id, addr, cb;
     jmethodID mid;
     jthrowable exc;
 
@@ -402,7 +452,9 @@ static int on_service_unregistration(struct hostctrl *hc,
     if (!addr)
         goto err_addr;
    
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid, 
+    
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, 
                            service_id, (jint)flags, addr);
     
     exc = (*env)->ExceptionOccurred(env);
@@ -413,6 +465,7 @@ static int on_service_unregistration(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, addr);
 err_addr:
     (*env)->DeleteLocalRef(env, service_id);
@@ -445,6 +498,7 @@ static int on_service_info_callback(struct hostctrl *hc,
     JNIEnv *env = ctx->env;
     jobjectArray arr = NULL;
     jthrowable exc;
+    jobject cb;
     
     if (num > 0) {
         unsigned int i;
@@ -470,8 +524,9 @@ static int on_service_info_callback(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), 
-                           mid, (jlong)xid, (jint)retval, arr);
+
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid, (jlong)xid, (jint)retval, arr);
 
     exc = (*env)->ExceptionOccurred(env);
     
@@ -481,6 +536,7 @@ static int on_service_info_callback(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
     
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, arr);
 
     return 0;
@@ -556,6 +612,7 @@ static int on_service_remove(struct hostctrl *hc,
     jmethodID mid;
     jobjectArray arr = NULL;
     jthrowable exc;
+    jobject cb;
 
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls, "onServiceRemove", 
                               "(JI[Lorg/servalarch/servalctrl/ServiceInfoStat;)V");
@@ -584,7 +641,8 @@ static int on_service_remove(struct hostctrl *hc,
         }
     }
 
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
                            (jlong)xid, (jint)retval, arr);
 
     exc = (*env)->ExceptionOccurred(env);
@@ -595,6 +653,80 @@ static int on_service_remove(struct hostctrl *hc,
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
+    (*env)->DeleteLocalRef(env, arr);
+
+    return 0;
+}
+
+static int on_flow_stat_update(struct hostctrl *hc,
+                               unsigned int xid,
+                               int retval,
+                               struct ctrlmsg_stats_response *csr)
+{
+    struct jni_context *ctx = (struct jni_context *)hc->context;
+    JNIEnv *env = ctx->env;
+    jmethodID mid;
+    unsigned long info_size = csr->cmh.len - sizeof(struct ctrlmsg) - 1;
+    jobjectArray arr = NULL;
+    jthrowable exc;
+    jboolean more = (csr->flags & STATS_RESP_F_MORE) ? JNI_TRUE : JNI_FALSE;
+
+    
+
+    mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls,
+                              "onFlowStatUpdate",
+                              "(JI[Lorg/servalarch/servalctrl/FlowStat;Z)V");
+    
+    if (!mid) {
+        LOG_ERR("Callback method does not exist\n");
+        return -1;
+    }
+
+    if (info_size > 0) {
+        unsigned int i = 0;
+        int offset = 0;
+        unsigned int num_flows = csr->num_infos;
+        LOG_DBG("Callback for %u flows!\n", num_flows);
+        arr = (*env)->NewObjectArray(env, num_flows, flowstat_cls, NULL);
+
+        if (!arr) {
+            LOG_ERR("could not create array\n");
+            return -1;
+        }
+
+        while (i < num_flows) {
+            struct flow_info *temp = (struct flow_info *)(csr->info + offset);
+            jobject flow_stat = new_flow_stat(env, temp);
+
+            if (!flow_stat) {
+                LOG_ERR("Could not create flow stat object\n");
+                (*env)->DeleteLocalRef(env, arr);
+                return -1;
+            }
+
+            (*env)->SetObjectArrayElement(env, arr, i, flow_stat);
+            (*env)->DeleteLocalRef(env, flow_stat);
+            i++;
+            offset += temp->len;
+        }
+
+    }
+
+    jobject cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
+                           (jlong)xid, (jint)retval, arr, more);
+
+    
+    exc = (*env)->ExceptionOccurred(env);
+
+    if (exc) {
+        LOG_ERR("Callback threw exception\n");
+        (*env)->ExceptionDescribe(env);
+        (*env)->ExceptionClear(env);
+    }
+
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, arr);
 
     return 0;
@@ -608,6 +740,7 @@ static int on_service_delayed(struct hostctrl *hc,
     struct jni_context *ctx = (struct jni_context *)hc->context;
     JNIEnv *env = ctx->env;
     jobject service_id;
+    jobject cb;
     jmethodID mid;
     jthrowable exc;
 
@@ -619,22 +752,25 @@ static int on_service_delayed(struct hostctrl *hc,
 
     service_id = new_service_id(env, service);
 
-    if (!service_id)
+    if (!service_id) {
         return -1;
+    }
     
-    (*env)->CallVoidMethod(env, get_callbacks(env, ctx), mid,
+    cb = get_callbacks(env, ctx);
+    (*env)->CallVoidMethod(env, cb, mid,
                            (jlong)xid, (jlong)pkt_id, service_id);
 
     exc = (*env)->ExceptionOccurred(env);
     
     if (exc) {
-        LOG_DBG("Callback threw exception\n");
+        LOG_ERR("Callback threw exception\n");
         (*env)->ExceptionDescribe(env);
         (*env)->ExceptionClear(env);
     }
 
+    (*env)->DeleteLocalRef(env, cb);
     (*env)->DeleteLocalRef(env, service_id);
-
+    
     return 0;
 }
 
@@ -668,6 +804,7 @@ static struct hostctrl_callback cb = {
     .service_add_result = on_service_add,
     .service_mod_result = on_service_mod,
     .service_remove_result = on_service_remove,
+    .flow_stat_update = on_flow_stat_update,
     .service_delay_notification = on_service_delayed,
 };
 
@@ -774,6 +911,24 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_migrateInterface(JNIEnv *en
 
     return ret;
 }
+
+jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_statsFlow(JNIEnv *env, jobject obj, jlongArray flowids, jint flows)
+{
+    struct jni_context *ctx = get_native_context(env, obj);
+    struct flow_id fls[flows];
+    jlong flowids_longs[flows];
+    int ret, i;
+    
+    (*env)->GetLongArrayRegion(env, flowids, 0, flows, flowids_longs);
+    for (i = 0; i < flows; i++) {
+        fls[i].s_id32 = htonl(flowids_longs[i]);
+    }
+
+    ret = hostctrl_flow_stats_query(ctx->hc, fls, flows);
+
+    return ret;
+}
+
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env, 
                                                                  jobject obj,
@@ -954,13 +1109,27 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
         return -1;
     }
 
+    flowstat_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/FlowStat");
+    if (!flowstat_cls) {
+        LOG_ERR("could not find FlowStat class\n");
+        return -1;
+    }
+    
+    flowtcpstat_cls = (*env)->FindClass(env, "org/servalarch/servalctrl/FlowTCPStat");
+    if (!flowtcpstat_cls) {
+        LOG_ERR("could not find FlowTCPStat class\n");
+        return -1;
+    }
+
     hostctrl_cls = (*env)->NewGlobalRef(env, hostctrl_cls);
     hostctrlcallbacks_cls = (*env)->NewGlobalRef(env, hostctrlcallbacks_cls);
     serviceinfo_cls  = (*env)->NewGlobalRef(env, serviceinfo_cls);
     serviceinfostat_cls = (*env)->NewGlobalRef(env, serviceinfostat_cls);
     serviceid_cls = (*env)->NewGlobalRef(env, serviceid_cls);
     inetaddress_cls = (*env)->NewGlobalRef(env, inetaddress_cls);
-    
+    flowstat_cls = (*env)->NewGlobalRef(env, flowstat_cls);
+    flowtcpstat_cls = (*env)->NewGlobalRef(env, flowtcpstat_cls);    
+
 	return ret == 0 ? JNI_VERSION_1_4 : ret;
 }
 
@@ -976,6 +1145,8 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
     (*env)->DeleteGlobalRef(env, serviceinfostat_cls);
     (*env)->DeleteGlobalRef(env, serviceid_cls);
     (*env)->DeleteGlobalRef(env, inetaddress_cls);
+    (*env)->DeleteGlobalRef(env, flowstat_cls);
+    (*env)->DeleteGlobalRef(env, flowtcpstat_cls);
 
     if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
         LOG_ERR("Could not get JNI env in JNI_OnUnload\n");

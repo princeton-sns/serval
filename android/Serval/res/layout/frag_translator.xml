@@ -97,6 +97,7 @@
                	android:textOff = "No" />
 
         </RelativeLayout>
+>>>>>>> master
         
         <TextView
             android:id="@+id/error_msg"

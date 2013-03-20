@@ -777,7 +777,7 @@ static enum work_status client_connect(struct client *c)
                 if (c->cross_translate) {
                         char buf[SERVICE_ID_MAX_LEN+1];
                         struct sockaddr_in orig_addr;
-                        socklen_t orig_addrlen;
+                        socklen_t orig_addrlen = sizeof(orig_addr);
 
                         /* We are cross translating, i.e., this
                          * AF_INET to AF_SERVAL translator connects to
@@ -795,8 +795,7 @@ static enum work_status client_connect(struct client *c)
                                          &orig_addr, &orig_addrlen);
                         
                         if (ret == -1) {
-                                LOG_DBG("client %u, could not get original port."
-                                        "Probably not NAT'ed\n", c->id);
+                                LOG_ERR("client %u: could not get original port: %s\n", c->id, strerror(errno));
                                 return WORK_ERROR;
                         } 
                         
@@ -957,24 +956,20 @@ static void cleanup_clients(void)
         }
 }
 
-static int create_server_sock(int family, unsigned short port, 
-                              int cross_translate)
+static int create_server_sock(sockaddr_generic_t *addr)
 {
-        sockaddr_generic_t addr;
         socklen_t addrlen = 0;
         int sock, ret = 0;               
 
-	sock = socket(family, SOCK_STREAM, 0);
+	sock = socket(addr->sa.sa_family, SOCK_STREAM, 0);
 
 	if (sock == -1) {
-		LOG_ERR("inet socket: %s\n",
-			strerror(errno));
+		LOG_ERR("socket: %s\n", strerror(errno));
                 return -1;
 	}
         
-        memset(&addr, 0, sizeof(addr));
-
-        if (family == AF_INET) {
+        switch (addr->sa.sa_family) {
+        case AF_INET:
                 ret = 1;
                 ret = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
                                  &ret, sizeof(ret));
@@ -983,32 +978,18 @@ static int create_server_sock(int family, unsigned short port,
                         LOG_ERR("Could not set SO_REUSEADDR - %s\n",
                                 strerror(errno));
                 }
-                addr.in.sin_family = AF_INET;
-                addr.in.sin_addr.s_addr = INADDR_ANY;
-                addr.in.sin_port = htons(port);
-                addrlen = sizeof(addr.in);
-        } else if (family == AF_SERVAL) {
-                addr.sv.sv_family = AF_SERVAL;
-                
-                if (cross_translate) {
-                        /* Listen to a "prefix", since, in case of cross
-                         * translation, the incoming connections will have a
-                         * serviceID ending with the IP address and port. */
-
-                        char buf[SERVICE_ID_MAX_LEN+1];
-                        snprintf(buf, sizeof(buf), "*.%s", translator_service_name);
-                        serval_pton(buf, &addr.sv.sv_srvid);
-                } else {
-                        serval_pton(translator_service_name, 
-                                    &addr.sv.sv_srvid);
-                }
-                addrlen = sizeof(addr.sv);
-        } else {
+                addrlen = sizeof(addr->in);
+                break;
+        case AF_SERVAL:
+                addrlen = sizeof(addr->sv);
+                break;
+        default:
                 close(sock);
+                LOG_ERR("Bad address family %ud\n", addr->sa.sa_family);
                 return -1;
         }
 
-        ret = bind(sock, &addr.sa, addrlen);
+        ret = bind(sock, &addr->sa, addrlen);
 
         if (ret == -1) {
 		LOG_ERR("bind: %s\n", strerror(errno));
@@ -1018,8 +999,7 @@ static int create_server_sock(int family, unsigned short port,
         ret = listen(sock, 10);
 
         if (ret == -1) {
-                LOG_ERR("inet listen: %s\n",
-			strerror(errno));
+                LOG_ERR("listen: %s\n", strerror(errno));
                 goto failure;
         }
 
@@ -1251,21 +1231,30 @@ void rearm_clients(void)
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
 
-int run_translator(unsigned short port, int cross_translate, 
-                   int inet_server_only)
+enum translator_mode {
+        DUAL_MODE = 0,
+        INET_ONLY_MODE,
+        SERVAL_ONLY_MODE,
+};
+
+int run_translator(unsigned short port,
+                   struct sockaddr_sv *sv,
+                   int cross_translate, 
+                   unsigned int mode)
 {
 	struct sigaction action;
 	int inet_sock, serval_sock = -1, ret = 0, running = 1, sig_fd;
         struct epoll_event ev, events[MAX_EVENTS];
         int gc_timeout = GC_TIMEOUT;
+        sockaddr_generic_t addr;
 
         memset(&action, 0, sizeof(struct sigaction));
         action.sa_handler = signal_handler;
         
 	/* The server should shut down on these signals. */
         sigaction(SIGTERM, &action, 0);
-	sigaction(SIGHUP, &action, 0);
-	sigaction(SIGINT, &action, 0);
+	    sigaction(SIGHUP, &action, 0);
+	    sigaction(SIGINT, &action, 0);
         sigaction(SIGPIPE, &action, 0);
         
         signal_init(&main_signal);
@@ -1289,44 +1278,62 @@ int run_translator(unsigned short port, int cross_translate,
                 goto err_epoll_create;
         }
         
-        inet_sock = create_server_sock(AF_INET, port, cross_translate);
+        if (mode == INET_ONLY_MODE || mode == DUAL_MODE) {
+                memset(&addr, 0, sizeof(addr));
+                addr.in.sin_family = AF_INET;
+                addr.in.sin_addr.s_addr = INADDR_ANY;
+                addr.in.sin_port = htons(port);
 
-        if (inet_sock == -1) {
-                LOG_ERR("could not create AF_INET server sock\n");
-                ret = inet_sock;
-                goto err_inet_sock;
-        }
-        
-        /* Set events. EPOLLERR and EPOLLHUP may always be returned,
-         * even if not set here */
-        memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN;
-        ev.data.ptr = &inet_sock;
-        
-        if (epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev) == -1) {
-                LOG_ERR("Could not add listen sock to epoll events: %s\n",
-                        strerror(errno));
-                goto err_epoll_ctl_inet;
+                inet_sock = create_server_sock(&addr);
+                
+                if (inet_sock == -1) {
+                        LOG_ERR("could not create AF_INET server sock\n");
+                        ret = inet_sock;
+                        goto err_inet_sock;
+                }
+                
+                /* Set events. EPOLLERR and EPOLLHUP may always be returned,
+                 * even if not set here */
+                memset(&ev, 0, sizeof(ev));
+                ev.events = EPOLLIN;
+                ev.data.ptr = &inet_sock;
+                
+                ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, inet_sock, &ev);
+
+                if (ret == -1) {
+                        LOG_ERR("epoll_ctl INET listen: %s\n",
+                                strerror(errno));
+                        goto err_epoll_ctl_inet;
+                }
+                LOG_DBG("listening on port %u\n", port);
         }
 
-        if (!inet_server_only) {
-                serval_sock = create_server_sock(AF_SERVAL, port, cross_translate);
+        if (mode == SERVAL_ONLY_MODE || mode == DUAL_MODE) {
+                memset(&addr, 0, sizeof(addr));
+                memcpy(&addr.sv, sv, sizeof(*sv));
+                addr.sv.sv_family = AF_SERVAL;
+                
+                serval_sock = create_server_sock(&addr);              
                 
                 if (serval_sock == -1) {
                         LOG_ERR("could not create AF_SERVAL server sock\n");
                         ret = serval_sock;
                         goto err_serval_sock;
                 }
-
+                
                 memset(&ev, 0, sizeof(ev));
                 ev.events = EPOLLIN;
                 ev.data.ptr = &serval_sock;
         
-                if (epoll_ctl(epollfd, EPOLL_CTL_ADD, serval_sock, &ev) == -1) {
-                        LOG_ERR("Could not add listen sock to epoll events: %s\n",
+                ret = epoll_ctl(epollfd, EPOLL_CTL_ADD, serval_sock, &ev);
+
+                if (ret == -1) {
+                        LOG_ERR("epoll_ctl SERVAL listen sock: %s\n",
                                 strerror(errno));
                         goto err_epoll_ctl_serval;
                 }
+                LOG_DBG("listening on serviceID %s\n",
+                        service_id_to_str(&sv->sv_srvid));
         }
 
         ret = start_workers(num_workers);
@@ -1335,7 +1342,7 @@ int run_translator(unsigned short port, int cross_translate,
                 goto err_workers;
 
         LOG_DBG("translator running\n");
-        
+
         while (running) {
                 struct timespec prev_time, now;
                 int nfds, i;
@@ -1349,7 +1356,8 @@ int run_translator(unsigned short port, int cross_translate,
 
                 timespec_sub(&now, &prev_time);
                 
-                gc_timeout = GC_TIMEOUT - ((now.tv_sec * 1000) + (now.tv_nsec / 1000000));
+                gc_timeout = GC_TIMEOUT - ((now.tv_sec * 1000) + 
+                                           (now.tv_nsec / 1000000));
 
                 /* LOG_DBG("gc_timeout=%d\n", gc_timeout); */
                 
@@ -1440,10 +1448,14 @@ static void print_usage(void)
         printf("\t-d, --daemon\t\t\t run in the background as a daemon.\n");
         printf("\t-n, --name\t\t\t service name to listen on in case of AF_SERVAL->AF_INET.\n");
         printf("\t-f, --file-limit LIMIT\t\t set the maximum number of open file descriptors.\n");
-        printf("\t-p, --port PORT\t\t\t port/serviceID to listen on.\n");
+        printf("\t-p, --port PORT\t\t\t port to listen on.\n");
+        printf("\t-s, --serviceid SERVICE_ID\t\t serviceID to listen on.\n");
+        
         printf("\t-l, --log LOG_FILE\t\t file to write client IPs to.\n");
         printf("\t-w, --workers NUM_WORKERS\t number of worker threads (default %u).\n", 
                num_workers);
+        printf("\t-io, --inet-only\t\t listen only for AF_INET connections.\n");
+        printf("\t-so, --serval-only\t\t listen only for AF_SERVAL connections.\n");
         printf("\t-x, --cross-translate\t\t allow connections from another AF_SERVAL->AF_INET.\n");
 }
 
@@ -1507,13 +1519,45 @@ static int daemonize(void)
         return 0;
 }
 
+static int parse_serviceid(const char *str, struct sockaddr_sv *sv,
+                           int cross_translate)
+{
+        char *buf;
+
+        /* Allocate a non-const string buffer we can manipulate */
+        buf = malloc(strlen(str) + 3);
+        
+        if (!buf)
+                return -1;
+        
+        if (cross_translate) {
+                snprintf(buf, sizeof(buf), "*.%s", str);
+        } else {
+                strcpy(buf, str);
+        }
+        
+        if (serval_pton(buf, &sv->sv_srvid) == -1) {
+                free(buf);
+                return -1;
+        }
+
+        free(buf);
+
+        return 0;
+}
+
 int main(int argc, char **argv)
 {       
         unsigned short port = DEFAULT_TRANSLATOR_PORT;
+        const char *serviceid = translator_service_name;
         int ret = 0, daemon = 0, cross_translate = 0;
         struct rlimit limit;
         rlim_t file_limit = 0;
-        int inet_only = 0;
+        unsigned int mode = DUAL_MODE;
+        struct sockaddr_sv sv;
+
+        memset(&sv, 0, sizeof(sv));
+        sv.sv_family = AF_SERVAL;
 
         argc--;
 	argv++;
@@ -1529,19 +1573,19 @@ int main(int argc, char **argv)
                         port = atoi(argv[1]);
                         argv++;
                         argc--;
-                } else if (strcmp(argv[0], "-h") == 0 ||
-                           strcmp(argv[0], "--help") ==  0) {
-                        print_usage();
-                        goto fail;
-                } else if (strcmp(argv[0], "-n") == 0 ||
-                           strcmp(argv[0], "--name") ==  0) {
+                } else if (strcmp(argv[0], "-s") == 0 ||
+                           strcmp(argv[0], "--serviceid") == 0) {
                         if (argc == 1) {
                                 print_usage();
                                 goto fail;
                         }
-                        translator_service_name = argv[1];
+                        serviceid = argv[1];
                         argv++;
                         argc--;
+                } else if (strcmp(argv[0], "-h") == 0 ||
+                           strcmp(argv[0], "--help") ==  0) {
+                        print_usage();
+                        goto fail;
                 } else if (strcmp(argv[0], "-f") == 0 ||
                            strcmp(argv[0], "--file-limit") ==  0) {
                         if (argc == 1) {
@@ -1557,7 +1601,10 @@ int main(int argc, char **argv)
                         cross_translate = 1;
                 } else if (strcmp(argv[0], "-io") == 0 ||
                            strcmp(argv[0], "--inet-only") ==  0) {
-                        inet_only = 1;
+                        mode = INET_ONLY_MODE;
+                } else if (strcmp(argv[0], "-so") == 0 ||
+                           strcmp(argv[0], "--serval-only") ==  0) {
+                        mode = SERVAL_ONLY_MODE;
                 } else if (strcmp(argv[0], "-w") == 0 ||
                            strcmp(argv[0], "--workers") ==  0) {
                         unsigned long n;
@@ -1603,6 +1650,13 @@ int main(int argc, char **argv)
 		argv++;
 	}	
 
+
+        if (mode != INET_ONLY_MODE && 
+            parse_serviceid(serviceid, &sv, cross_translate) != 0) {
+                print_usage();
+                goto fail;
+        }
+
         if (daemon) {
                 LOG_DBG("going daemon...\n");
                 ret = daemonize();
@@ -1636,7 +1690,7 @@ int main(int argc, char **argv)
                 }
         }
         
-        ret = run_translator(port, cross_translate, inet_only);
+        ret = run_translator(port, &sv, cross_translate, mode);
 fail:
         if (log_is_open(&logh))
                 log_close(&logh);

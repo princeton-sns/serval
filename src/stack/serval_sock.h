@@ -3,6 +3,7 @@
 #define _SERVAL_SOCK_H
 
 #include <netinet/serval.h>
+#include <serval/ctrlmsg.h>
 #include <serval/list.h>
 #include <serval/lock.h>
 #include <serval/hash.h>
@@ -187,6 +188,7 @@ struct serval_sock {
 	u32                     rtt_seq; /* sequence number to update rttvar */
         unsigned long           timeout;
         unsigned long           tot_bytes_sent;
+        unsigned long           tot_bytes_recv;
         unsigned long           tot_pkts_recv;
         unsigned long           tot_pkts_sent;
 };
@@ -238,6 +240,8 @@ struct serval_hslot *serval_hashslot(struct serval_table *table,
 	return &table->hash[serval_hashfn(net, key, keylen, table->mask)];
 }
 
+struct flow_info *serval_sock_stats_flow(struct flow_id *flow, 
+                            struct ctrlmsg_stats_response *resp, int idx);
 void serval_sock_migrate_iface(int old_dev, int new_dev);
 void serval_sock_migrate_flow(struct flow_id *old_f, int new_dev);
 void serval_sock_migrate_service(struct service_id *old_s, int new_if);
@@ -344,6 +348,16 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 }
 
 int serval_sock_rebuild_header(struct sock *sk);
+
+struct sock_list_iterator {
+        struct list_head *head, *curr;
+        struct sock *sk;
+};
+void sock_list_iterator_init(struct sock_list_iterator *iter);
+void sock_list_iterator_destroy(struct sock_list_iterator *iter);
+struct sock *sock_list_iterator_next(struct sock_list_iterator *iter);
+int serval_sock_flow_print_header(char *buf, size_t buflen);
+int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen);
 
 void flow_table_read_lock(void);
 void flow_table_read_unlock(void);

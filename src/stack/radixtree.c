@@ -299,10 +299,7 @@ int radix_tree_add(struct radix_tree *tree,
         
         if (!n) 
                 return -1;
-        
-        /* printf("insert '%s' found '%s' str_index=%zu\n", 
-           str, n->str, str_index); */
-                 
+
         if (str[str_index] == '\0' && n->str[match_len] == '\0') {
                 /* Full match, string already in tree */
                 if (node)
@@ -508,14 +505,13 @@ static int radix_tree_foreach_bfs(struct radix_tree *tree,
         queue_add(&queue, n);
 
         while (!list_empty(&queue)) {
-                struct radix_node *c, *tmp;
+                struct radix_node *c;
                 int ret;
                 
                 n = queue_first(&queue);
                 
-                list_for_each_entry_safe(c, tmp, &n->children, lh) {
+                list_for_each_entry(c, &n->children, lh)
                         queue_add(&queue, c);
-                }
 
                 if (n != &tree->root) {
                         ret = func(n, arg);
@@ -534,6 +530,41 @@ int radix_tree_foreach(struct radix_tree *tree,
                        void *arg)
 {
         return radix_tree_foreach_bfs(tree, func, arg);
+}
+
+
+void radix_tree_iterator_init(struct radix_tree *tree, 
+                              struct radix_tree_iterator *iter)
+{
+        iter->tree = tree;
+        iter->curr = &tree->root;
+        INIT_LIST_HEAD(&iter->queue);
+        queue_add(&iter->queue, iter->curr);
+}
+
+void radix_tree_iterator_destroy(struct radix_tree_iterator *iter)
+{
+        /* Nothing to do really, but keep this function for future
+           needs */
+}
+
+struct radix_node *radix_tree_iterator_next(struct radix_tree_iterator *iter)
+{
+        struct radix_node *c, *n = NULL;
+
+        while (!list_empty(&iter->queue)) {
+                n = queue_first(&iter->queue);
+                
+                list_for_each_entry(c, &n->children, lh)
+                        queue_add(&iter->queue, c);
+
+                if (n->private && n != &iter->tree->root)
+                        break;
+        }
+
+        iter->curr = n;
+
+        return n;
 }
 
 static int radix_node_destroy(struct radix_node *n, void *arg)

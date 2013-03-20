@@ -58,6 +58,10 @@ struct hostctrl_callback {
                                  int retval,
                                  const struct service_info_stat *sis,
                                  unsigned int num);
+    int (*flow_stat_update)(struct hostctrl *hc,
+                            unsigned int xid,
+                            int retval,
+                            struct ctrlmsg_stats_response *csr);
     int (*service_delay_notification)(struct hostctrl *hc,
                                       unsigned int xid,
                                       unsigned int pkt_id,
@@ -106,6 +110,9 @@ int hostctrl_flow_migrate(struct hostctrl *hc, struct flow_id *flow,
 int hostctrl_service_migrate(struct hostctrl *hc, 
                              struct service_id *srvid,
                              const char *to_iface);
+int hostctrl_flow_stats_query(struct hostctrl *hc, struct flow_id *flowids,
+                              int flows);
+
 int hostctrl_service_register(struct hostctrl *hc, 
                               const struct service_id *srvid, 
                               const struct in_addr *old_ip);

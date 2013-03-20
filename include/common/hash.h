@@ -99,7 +99,7 @@ static inline unsigned long end_name_hash(unsigned long hash)
 }
 
 /* Compute the hash for a name string. */
-static inline unsigned int
+static inline unsigned long
 full_name_hash(const char *name, unsigned int len)
 {
 	unsigned long hash = init_name_hash();
@@ -110,7 +110,7 @@ full_name_hash(const char *name, unsigned int len)
 
 /* Compute the hash for the bitprefix of a binary data structure. 
    The num_bits argument is the size of the prefix to use in bits. */
-static inline unsigned int
+static inline unsigned long
 full_bitstring_hash(const void *bits_in, unsigned int num_bits)
 {
 	const unsigned char *bits = (const unsigned char *)bits_in;
