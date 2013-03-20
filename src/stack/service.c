@@ -1023,13 +1023,76 @@ int __service_table_print(char *buf, size_t buflen)
         return tot_len;
 }
 
+void service_table_iterator_init(service_table_iterator_t *iter)
+{
+        read_lock_bh(&srvtable.lock);
+        bst_iterator_init(&srvtable.tree, iter);
+}
+
+void service_table_iterator_destroy(service_table_iterator_t *iter)
+{
+        read_unlock_bh(&srvtable.lock);
+}
+
+struct service_entry *
+service_table_iterator_next(service_table_iterator_t *iter)
+{
+        struct bst_node *n = bst_iterator_next(iter);
+
+        if (!n)
+                return NULL;
+
+        return get_service(n);
+}
+
+int service_table_print_header(char *buf, size_t buflen)
+{
+        return snprintf(buf, buflen, 
+                        "%-64s %-4s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
+                        "prefix", "bits", "type", "flags", "prio", "weight", 
+                        "resolved", "dropped", "target(s)");
+}
+
 int service_table_print(char *buf, size_t buflen)
 {
-        int ret;
+        int tot_len = 0, len = 0;
+        struct bst_iterator iter;
+        struct bst_node *n;
+
+        LOG_DBG("printing service table\n");
+        bst_iterator_init(&srvtable.tree, &iter);
+        
+        len = service_table_print_header(buf, buflen);
+
+        tot_len += len;
+        
+        if (len > buflen)
+                buflen = 0;
+        else
+                buflen -= len;
+
         read_lock_bh(&srvtable.lock);
-        ret = __service_table_print(buf, buflen);
+        
+        while (1) {
+                n = bst_iterator_next(&iter);
+
+                if (!n)
+                        break;
+
+                len = bst_node_print(iter.curr, buf + tot_len, 
+                                     buflen - tot_len);
+
+                tot_len += len;
+                
+                if (len > buflen)
+                        buflen = 0;
+                else
+                        buflen -= len;
+        }
+                
         read_unlock_bh(&srvtable.lock);
-        return ret;
+        
+        return tot_len;
 }
 
 static int service_entry_local_match(struct bst_node *n)

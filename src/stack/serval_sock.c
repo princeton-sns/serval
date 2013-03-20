@@ -993,6 +993,65 @@ void flow_table_read_unlock(void)
         read_unlock_bh(&sock_list_lock);
 }
 
+void sock_list_iterator_init(struct sock_list_iterator *iter)
+{
+        read_lock_bh(&sock_list_lock);
+        iter->head = &sock_list;
+        iter->curr = iter->head;
+        iter->sk = NULL;
+}
+
+void sock_list_iterator_destroy(struct sock_list_iterator *iter)
+{
+        read_unlock_bh(&sock_list_lock);
+}
+
+struct sock *sock_list_iterator_next(struct sock_list_iterator *iter)
+{
+        iter->curr = iter->curr->next;
+        
+        if (iter->curr == iter->head)
+                iter->sk = NULL;
+        else
+                iter->sk = (struct sock *)list_entry(iter->curr, 
+                                                     struct serval_sock, 
+                                                     sock_node);
+        return iter->sk;
+}
+
+int serval_sock_flow_print_header(char *buf, size_t buflen)
+{
+        return snprintf(buf, buflen, 
+                        "%-10s %-10s %-17s %-17s %-10s %s\n",
+                        "srcFlowID", "dstFlowID", 
+                        "srcIP", "dstIP", "state", "dev");
+}
+
+int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
+{
+        struct serval_sock *ssk = serval_sk(sk);
+        char src[18], dst[18];
+        int len;
+        struct net_device *dev = dev_get_by_index(sock_net(sk), 
+                                                  sk->sk_bound_dev_if);
+        
+        len = snprintf(buf, buflen, 
+                       "%-10s %-10s %-17s %-17s %-10s %s\n",
+                       flow_id_to_str(&ssk->local_flowid), 
+                       flow_id_to_str(&ssk->peer_flowid),
+                       inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
+                                 src, 18),
+                       inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
+                                 dst, 18),
+                       serval_sock_state_str(sk),
+                       dev ? dev->name : "unbound");
+        
+        if (dev)
+                dev_put(dev);
+        
+        return len;
+}
+
 /*
   If this function is called with buflen < 0, the buffer size required
   for fitting the entire table will be returned. In that case, any
@@ -1001,12 +1060,12 @@ void flow_table_read_unlock(void)
 int __flow_table_print(char *buf, size_t buflen) 
 {
         int tot_len, len;
-        struct serval_sock *ssk;
+        struct sock_list_iterator iter;
 
-        len = snprintf(buf, buflen, 
-                       "%-10s %-10s %-17s %-17s %-10s %s\n",
-                       "srcFlowID", "dstFlowID", 
-                       "srcIP", "dstIP", "state", "dev");
+        sock_list_iterator_init(&iter);
+
+        len = serval_sock_flow_print_header(buf, buflen);
+
         tot_len = len;
 
         if (len > buflen)
@@ -1014,26 +1073,15 @@ int __flow_table_print(char *buf, size_t buflen)
         else
                 buflen -= len;
 
-        list_for_each_entry(ssk, &sock_list, sock_node) {
-                char src[18], dst[18];
-                struct sock *sk = (struct sock *)ssk;
-                struct net_device *dev = dev_get_by_index(sock_net(sk), 
-                                                          sk->sk_bound_dev_if);
+        while (1) {
+                struct sock *sk = sock_list_iterator_next(&iter);
 
-                len = snprintf(buf + tot_len, buflen, 
-                               "%-10s %-10s %-17s %-17s %-10s %s\n",
-                               flow_id_to_str(&ssk->local_flowid), 
-                               flow_id_to_str(&ssk->peer_flowid),
-                               inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
-                                         src, 18),
-                               inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
-                                         dst, 18),
-                               serval_sock_state_str(sk),
-                               dev ? dev->name : "unbound");
-
-                if (dev)
-                        dev_put(dev);
-
+                if (!sk)
+                        break;
+                
+                len = serval_sock_flow_print(sk, buf + tot_len, 
+                                             buflen - tot_len);
+                
                 tot_len += len;
 
                 if (len > buflen)
@@ -1041,7 +1089,7 @@ int __flow_table_print(char *buf, size_t buflen)
                 else
                         buflen -= len;
         }
-
+      
         return tot_len;
 }
 
