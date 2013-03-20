@@ -51,18 +51,12 @@ public class AppHostCtrl {
 			final String ipStr, int op) {
 		ServiceID sid;
 		InetAddress addr = null;
-		int prefixBits = 0;
 		int type = HostCtrl.SERVICE_RULE_FORWARD;
 
 		if (hc == null)
 			return;
-
-		String res[] = serviceStr.split(":");
 		
-		if (res.length == 2)
-			prefixBits = Integer.parseInt(res[1]);
-		
-		sid = AppHostCtrl.createServiceID(res[0]);
+		sid = AppHostCtrl.createServiceID(serviceStr);
 
 		if (sid == null) {
 			Toast t = Toast.makeText(context, "Not a valid serviceID",
