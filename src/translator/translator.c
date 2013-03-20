@@ -249,7 +249,7 @@ static int resolve_service(struct service_id *srvid, struct sockaddr *sa)
         ret = getaddrinfo(host, port, &hints, &ai);
 
         if (ret != 0) {
-                LOG_ERR("%s", gai_strerror(ret));
+                LOG_ERR("%s err: %s\n", host, gai_strerror(ret));
                 return ret;
         }
 
@@ -1522,14 +1522,13 @@ static int parse_serviceid(const char *str, struct sockaddr_sv *sv,
         
         if (!buf)
                 return -1;
-        
-        if (cross_translate) {
+
+        if (cross_translate && str[0] != '*') {
                 snprintf(buf, len, "*.%s", str);
         } else {
                 strcpy(buf, str);
         }
 
-        LOG_DBG("Service is %s was %s\n", buf, str);
         if (serval_pton(buf, &sv->sv_srvid) == -1) {
                 free(buf);
                 return -1;

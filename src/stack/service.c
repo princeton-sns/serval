@@ -911,8 +911,8 @@ service_table_iterator_next(service_table_iterator_t *iter)
 int service_table_print_header(char *buf, size_t buflen)
 {
         return snprintf(buf, buflen, 
-                        "%-64s %-4s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
-                        "prefix", "bits", "type", "flags", "prio", "weight", 
+                        "%-64s %-4s %-5s %-6s %-6s %-8s %-7s %s\n", 
+                        "prefix", "type", "flags", "prio", "weight", 
                         "resolved", "dropped", "target(s)");
 }
 
