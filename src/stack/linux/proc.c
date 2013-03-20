@@ -11,7 +11,6 @@
 #include <serval_sock.h>
 #include "log.h"
 
-
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,23))
 #define proc_net init_net.proc_net
 #endif
@@ -23,121 +22,129 @@
 
 static struct proc_dir_entry *serval_dir = NULL;
 
-static int proc_generic_read(char **static_buf, size_t *static_buflen,
-                             char *page, char **start, 
-                             off_t off, int count, 
-                             int *eof, void *data,
-                             int (*print_func)(char *buf, size_t buflen),
-                             void (*lock_func)(void),
-                             void (*unlock_func)(void))
+static void *service_table_seq_start(struct seq_file *seq, loff_t *pos)
 {
-        if (!*static_buf) {
-                int len;
-
-                if (off > 0) {
-                        /* Since no static_buf was allocated in the
-                           previous call, and off > 0, we know that
-                           everything printed fitted in the first
-                           page. Therefore, just return 0 and indicate
-                           that we are done. */
-                        *start = NULL;
-                        *eof = 1;
-                        return 0;
-                }
-                
-                lock_func();
-
-                /* Find the size needed for printing */
-                len = print_func(page, 0);
-                
-                /* Check if everything will fit in a single page */
-                if (len < count) {
-                        len = print_func(page, count);
-                        *eof = 1;
-                        /* Set the start pointer so that off will be
-                           non-zero in the next call. */
-                        *start = page;
-                        unlock_func();
-                        return len;
-                }
-                /* Ok, it didn't fit. Allocate a buffer large enough
-                   to hold everything we print */
-                *static_buflen = len + 1;
-                *static_buf = kmalloc(*static_buflen, GFP_ATOMIC);
-                
-                if (!*static_buf) {
-                        *eof = 1;
-                        *static_buflen = 0;
-                        unlock_func();
-                        return 0;
-                }
-                len = print_func(*static_buf, *static_buflen);
-                unlock_func();
-        }
-        /* If we get here, we have allocated memory and printed the
-           information into it. Now output the info into each page
-           through recursive calls to this function. */
-
-
-        /* Check if we are done, i.e., static_buflen has reached
-           zero */
-        if (*static_buflen == 0) {
-                if (*static_buf)
-                        kfree(*static_buf);
-                *static_buf = NULL;
-                *start = NULL;
-                *eof = 1;
-                return 0;
-        }
-
-        /* Check if this is the last page to output stuff into. */
-        if (count >= *static_buflen) {
-                /* We should not write a complete page. */
-                count = *static_buflen;
-                *static_buflen = 0;
-                *eof = 1;
-        } else {
-                /* Not the last page, just decrement the buflen */
-                *static_buflen -= count;
-        }
-
-        /* Copy the information from our memory area into the page */
-        strncpy(page, *static_buf + off, count);
-
-        /* Make sure the offset (off) is updated in the next call by
-           pointing start to our page. */
-        *start = page;
-
-        return count;
-}
-
-static int proc_service_table_read(char *page, char **start, 
-                                   off_t off, int count, 
-                                   int *eof, void *data)
-{
-        static char *buf = NULL;
-        static size_t buflen = 0;
-
-        return proc_generic_read(&buf, &buflen, page, start, off, 
-                                 count, eof, data,
-                                 __service_table_print,
-                                 service_table_read_lock,
-                                 service_table_read_unlock);
-}
-
-static int proc_flow_table_read(char *page, char **start, 
-                                off_t off, int count, 
-                                int *eof, void *data)
-{
-        static char *buf = NULL;
-        static size_t buflen = 0;
+        service_table_iterator_t *iter = seq->private;
         
-        return proc_generic_read(&buf, &buflen, page, start, off, 
-                                 count, eof, data,
-                                 __flow_table_print,
-                                 flow_table_read_lock,
-                                 flow_table_read_unlock);
+        service_table_iterator_init(iter);
+
+        if (*pos == 0)
+                return SEQ_START_TOKEN;
+        return NULL;
 }
+
+static void service_table_seq_stop(struct seq_file *seq, void *v)
+{
+        service_table_iterator_t *iter = seq->private;
+        service_table_iterator_destroy(iter);
+}
+
+static void *service_table_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+        service_table_iterator_t *iter = seq->private;
+        ++*pos;
+        return service_table_iterator_next(iter);
+}
+
+static int service_table_seq_show(struct seq_file *seq, void *v)
+{
+        char buf[1000];
+        int len;
+       
+        if (v == SEQ_START_TOKEN) {
+                len = service_table_print_header(buf, sizeof(buf));
+        } else {
+                struct service_entry *se = (struct service_entry *)v;
+                len = service_entry_print(se, buf, sizeof(buf));
+        }
+
+        seq_write(seq, buf, len);
+
+        return 0;
+}
+
+static const struct seq_operations service_table_seq_ops = {
+        .start = service_table_seq_start,
+        .next  = service_table_seq_next,
+        .stop  = service_table_seq_stop,
+        .show  = service_table_seq_show,
+};
+
+static int service_table_seq_open(struct inode *inode, struct file *file)
+{
+        return seq_open_private(file, &service_table_seq_ops, 
+                                sizeof(service_table_iterator_t));
+}
+
+static const struct file_operations service_table_fops = {
+        .owner   = THIS_MODULE,
+        .open    = service_table_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release_private,
+};
+
+static void *flow_table_seq_start(struct seq_file *seq, loff_t *pos)
+{
+        struct sock_list_iterator *iter = seq->private;
+
+        sock_list_iterator_init(iter);
+
+        if (*pos == 0)
+                return SEQ_START_TOKEN;
+        return NULL;
+}
+
+static void flow_table_seq_stop(struct seq_file *seq, void *v)
+{
+        struct sock_list_iterator *iter = seq->private;
+        sock_list_iterator_destroy(iter);
+}
+
+static void *flow_table_seq_next(struct seq_file *seq, void *v, loff_t *pos)
+{
+        struct sock_list_iterator *iter = seq->private;
+        ++*pos;
+        return sock_list_iterator_next(iter);
+}
+
+static int flow_table_seq_show(struct seq_file *seq, void *v)
+{
+        char buf[1000];
+        int len;
+
+        if (v == SEQ_START_TOKEN) {
+                len = serval_sock_flow_print_header(buf, sizeof(buf));
+        } else {
+                struct sock *sk = (struct sock *)v;
+                len = serval_sock_flow_print(sk, buf, sizeof(buf));
+        }
+
+        seq_write(seq, buf, len);
+
+        return 0;
+}
+
+static const struct seq_operations flow_table_seq_ops = {
+        .start = flow_table_seq_start,
+        .next  = flow_table_seq_next,
+        .stop  = flow_table_seq_stop,
+        .show  = flow_table_seq_show,
+};
+
+static int flow_table_seq_open(struct inode *inode, struct file *file)
+{
+        return seq_open_private(file, &flow_table_seq_ops,
+                                sizeof(struct sock_list_iterator));
+}
+
+static const struct file_operations flow_table_fops = {
+        .owner   = THIS_MODULE,
+        .open    = flow_table_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release_private,
+};
 
 /*
   Debug output through /proc/serval/dbg based on linux kernel
@@ -174,7 +181,7 @@ static unsigned int dbg_poll(struct file *file, poll_table *wait)
 	return 0;
 }
 
-static const struct file_operations proc_dbg_operations = {
+static const struct file_operations proc_dbg_fops = {
 	.read		= dbg_read,
 	.poll		= dbg_poll,
 	.open		= dbg_open,
@@ -216,23 +223,23 @@ int __init proc_init(void)
 #endif
       
 	proc = proc_create(SERVAL_PROC_DBG, S_IRUGO, serval_dir, 
-                           &proc_dbg_operations);
+                           &proc_dbg_fops);
 
         if (!proc)
                 goto fail_dbg;
 
-        proc = create_proc_read_entry(SERVAL_PROC_FILE_SERVICE_TBL, 0, 
-                                      serval_dir, 
-                                      proc_service_table_read, 
-                                      NULL);
-
+        proc = proc_create(SERVAL_PROC_FILE_SERVICE_TBL, 
+                           S_IRUGO, 
+                           serval_dir, 
+                           &service_table_fops);
+        
         if (!proc)
                 goto fail_service_tbl;
 
-        proc = create_proc_read_entry(SERVAL_PROC_FILE_FLOW_TBL, 0, 
-                                      serval_dir, 
-                                      proc_flow_table_read, 
-                                      NULL);
+        proc = proc_create(SERVAL_PROC_FILE_FLOW_TBL,
+                           S_IRUGO, 
+                           serval_dir, 
+                           &flow_table_fops);
 
         if (!proc)
                 goto fail_flow_tbl;

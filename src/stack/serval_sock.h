@@ -346,6 +346,16 @@ static inline void skb_serval_set_owner_r(struct sk_buff *skb,
 
 int serval_sock_rebuild_header(struct sock *sk);
 
+struct sock_list_iterator {
+        struct list_head *head, *curr;
+        struct sock *sk;
+};
+void sock_list_iterator_init(struct sock_list_iterator *iter);
+void sock_list_iterator_destroy(struct sock_list_iterator *iter);
+struct sock *sock_list_iterator_next(struct sock_list_iterator *iter);
+int serval_sock_flow_print_header(char *buf, size_t buflen);
+int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen);
+
 void flow_table_read_lock(void);
 void flow_table_read_unlock(void);
 int __flow_table_print(char *buf, size_t buflen);

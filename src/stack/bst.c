@@ -74,6 +74,7 @@ void *bst_node_get_private(struct bst_node *n)
         return n->private;
 }
 
+
 int bst_node_print_prefix(struct bst_node *n, char *buf, size_t buflen)
 {
         unsigned int i;
@@ -118,6 +119,54 @@ static struct bst_node *stack_pop(struct list_head *stack)
         return n;
 }
 
+void bst_iterator_init(struct bst *tree, struct bst_iterator *iter)
+{
+        iter->curr = tree->root;
+        INIT_LIST_HEAD(&iter->stack);
+        stack_push(&iter->stack, tree->root);
+}
+
+struct bst_node *bst_iterator_node(struct bst_iterator *iter)
+{
+        return iter->curr;
+}
+
+struct bst_node *bst_iterator_next(struct bst_iterator *iter)
+{
+        struct bst_node *n = NULL;
+
+        /* Skip over entries without private pointer set (i.e., those
+           nodes without data) */
+        while (!list_empty(&iter->stack)) {
+                n = stack_pop(&iter->stack);
+                
+                if (n->left)
+                        stack_push(&iter->stack, n->left);
+                
+                if (n->right)
+                        stack_push(&iter->stack, n->right);
+
+                if (n->private)
+                        break;
+        }
+
+        iter->curr = n;
+
+        return n;
+}
+
+int bst_node_print(struct bst_node *n, char *buf, size_t buflen)
+{
+        int len = 0;
+
+        buf[0] = '\0';
+
+        if (n->private && n->ops && n->ops->print)
+                len = n->ops->print(n, buf, buflen);
+
+        return len;
+}
+
 int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
 {
         struct list_head stack;
@@ -154,9 +203,9 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
 }
 
 /*
-  Print using recursing. Cannot use this in kernel due to limited
+  Print using recursion. Cannot use this in kernel due to limited
   stack space. Must instead use the non-recursive version above that
-  implements its own stack.
+  implements its own heap-based stack.
  */
 int bst_node_print_recursive(struct bst_node *n, char *buf, size_t buflen)
 {
@@ -483,7 +532,7 @@ static struct bst_node *bst_create_node(struct bst_node *parent,
 {
         struct bst_node *n;
 
-	n = (struct bst_node *)MALLOC(sizeof(*n) + prefix_size, alloc);
+	n = (struct bst_node *)kmalloc(sizeof(*n) + prefix_size, alloc);
 	
 	if (!n)
 		return NULL;
@@ -619,8 +668,7 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
         struct bst_node *n;
 
         if (tree->entries == 0) {
-                tree->root = (struct bst_node *)MALLOC(sizeof(struct bst_node), 
-                                                       alloc);
+                tree->root = kmalloc(sizeof(struct bst_node), alloc);
                 
                 if (!tree->root)
                         return NULL;
