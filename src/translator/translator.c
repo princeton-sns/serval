@@ -41,9 +41,11 @@
 #include <pthread.h>
 #include <linux/netfilter_ipv4.h>
 #include "log.h"
+#include "translator.h"
 
 #if defined(OS_ANDROID)
 #include "splice.h"
+#define EPOLLONESHOT (1u << 30)
 #endif
 
 /* 
@@ -207,11 +209,6 @@ static LOG_DEFINE(logh);
 static LIST_HEAD(client_list);
 static int epollfd = -1;
 struct signal main_signal;
-
-enum signal_types {
-        SIGNAL_EXIT = 1,
-        SIGNAL_EPOLL_REARM,
-};
 
 static int client_add_work(struct client *c, work_t work);
 static enum work_status client_close(struct client *c);
@@ -1119,22 +1116,17 @@ static void check_socket_events(struct client *c, struct socket *s,
 
 void rearm_clients(void)
 {
-        struct client *c, *tmp;
+        struct client *c;
 
-        list_for_each_entry_safe(c, tmp, &client_list, lh) {
-                if (!c->is_garbage && !c->is_scheduled)
+        list_for_each_entry(c, &client_list, lh) {
+                if (!c->is_garbage && !c->is_scheduled) {
                         client_epoll_set_all(c, EPOLL_CTL_MOD, EPOLLONESHOT);
+                }
         }
 }
 
 #define MAX_EVENTS 10
 #define GC_TIMEOUT 3000
-
-enum translator_mode {
-        DUAL_MODE = 0,
-        INET_ONLY_MODE,
-        SERVAL_ONLY_MODE,
-};
 
 int run_translator(unsigned short port,
                    struct sockaddr_sv *sv,
