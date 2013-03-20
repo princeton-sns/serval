@@ -1057,7 +1057,7 @@ int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
   for fitting the entire table will be returned. In that case, any
   output in buf should be ignored.
  */
-int __flow_table_print(char *buf, size_t buflen) 
+int flow_table_print(char *buf, size_t buflen) 
 {
         int tot_len, len;
         struct sock_list_iterator iter;
@@ -1089,18 +1089,9 @@ int __flow_table_print(char *buf, size_t buflen)
                 else
                         buflen -= len;
         }
+
+        sock_list_iterator_destroy(&iter);
       
         return tot_len;
 }
-
-int flow_table_print(char *buf, size_t buflen) 
-{
-        int ret;
-        
-        read_lock_bh(&sock_list_lock);
-        ret = __flow_table_print(buf, buflen);
-        read_unlock_bh(&sock_list_lock);
-        return ret;
-}
-
 
