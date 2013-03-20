@@ -1522,20 +1522,22 @@ static int daemonize(void)
 static int parse_serviceid(const char *str, struct sockaddr_sv *sv,
                            int cross_translate)
 {
+        int len = strlen(str) + 3;
         char *buf;
 
         /* Allocate a non-const string buffer we can manipulate */
-        buf = malloc(strlen(str) + 3);
+        buf = malloc(len);
         
         if (!buf)
                 return -1;
         
         if (cross_translate) {
-                snprintf(buf, sizeof(buf), "*.%s", str);
+                snprintf(buf, len, "*.%s", str);
         } else {
                 strcpy(buf, str);
         }
-        
+
+        LOG_DBG("Service is %s was %s\n", buf, str);
         if (serval_pton(buf, &sv->sv_srvid) == -1) {
                 free(buf);
                 return -1;

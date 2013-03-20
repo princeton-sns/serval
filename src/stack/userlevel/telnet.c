@@ -45,8 +45,7 @@ static void cmd_services_print(struct telnet_client *tc,
 	send(tc->sock, buf, strlen(buf), 0);	
 }
 
-static void cmd_flows_print(struct telnet_client *tc, 
-                            char *buf, size_t buflen)
+static void cmd_flows_print(struct telnet_client *tc, char *buf, size_t buflen)
 {
 	int ret;
 	
