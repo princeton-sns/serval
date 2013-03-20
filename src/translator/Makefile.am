@@ -7,7 +7,8 @@ translator_SOURCES = \
 	log.c
 
 noinst_HEADERS = \
-	log.h
+	translator.h \
+	log.h 
 
 translator_CPPFLAGS =-I$(top_srcdir)/include
 translator_LDFLAGS =-lpthread
@@ -21,6 +22,7 @@ EXTRA_DIST = \
 	splice.c \
 	splice.h \
 	sys_splice.S \
+	translator.h \
 	translator_jni.c
 
 clean-local:

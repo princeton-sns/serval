@@ -12,27 +12,25 @@
  */
 #include <jni.h>
 #include <netinet/in.h>
-
-extern int run_translator(int, int, unsigned int);
-extern struct signal exit_signal;
+#include "translator.h"
 
 JNIEXPORT 
 jint JNICALL Java_org_servalarch_serval_TranslatorService_runTranslator(JNIEnv *env, 
                                                                         jobject obj, jint port, jboolean xtranslate)
 {
-        return run_translator((int)port, (int)xtranslate, 1);
+        return run_translator(port & 0xffff, NULL, (int)xtranslate, INET_ONLY_MODE);
 }
 
 JNIEXPORT 
 jint JNICALL Java_org_servalarch_serval_TranslatorService_shutdown(JNIEnv *env , jobject obj)
 {
-	signal_raise(&exit_signal);
+        signal_raise_val(&main_signal, 1);
 }
 
 JNIEXPORT 
 jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 {
-	signal_init(&exit_signal);
+        signal_raise_val(&main_signal, SIGNAL_EXIT);
 
 	return JNI_VERSION_1_4;
 }

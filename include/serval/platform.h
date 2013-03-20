@@ -44,8 +44,10 @@ const char *inet_ntop(int af, const void *src, char *dst, socklen_t size);
 
 #include <serval/checksum.h>
 
+#if !defined(OS_ANDROID)
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT) /* 4096 bytes */
+#endif
 
 int ilog2(unsigned long n);
 
