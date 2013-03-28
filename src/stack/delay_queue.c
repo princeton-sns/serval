@@ -256,7 +256,7 @@ static struct notifier_block delay_queue_nl_notifier = {
 
 #endif /* OS_LINUX_KERNEL */
 
-int __init delay_queue_init(void)
+int delay_queue_init(void)
 {
         peer_pid = 0;
 #if defined(OS_LINUX_KERNEL)
@@ -265,7 +265,7 @@ int __init delay_queue_init(void)
         return 0;
 }
 
-void __exit delay_queue_fini(void)
+void delay_queue_fini(void)
 {
         __delay_queue_reset();
 #if defined(OS_LINUX_KERNEL)

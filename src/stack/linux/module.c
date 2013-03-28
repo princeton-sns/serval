@@ -41,9 +41,9 @@ static char *ifname = NULL;
 module_param(ifname, charp, S_IRUGO);
 MODULE_PARM_DESC(ifname, "Resolve only on this device");
 
-extern int __init proc_init(void);
-extern void __exit proc_fini(void);
-extern int __net_init serval_sysctl_register(struct net *net);
+extern int proc_init(void);
+extern void proc_fini(void);
+extern int serval_sysctl_register(struct net *net);
 extern void serval_sysctl_unregister(struct net *net);
 extern int udp_encap_init(void);
 extern void udp_encap_fini(void);
@@ -202,7 +202,7 @@ static struct notifier_block inetaddr_notifier = {
 	.notifier_call = serval_inetaddr_event,
 };
 
-int serval_module_init(void)
+int __init serval_module_init(void)
 {
 	int err = 0;
 

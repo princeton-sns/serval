@@ -67,14 +67,14 @@ static const char *sock_sal_state_str[] = {
 
 static void serval_sock_destruct(struct sock *sk);
 
-int __init serval_table_init(struct serval_table *table,
-                             unsigned int (*hashfn)(struct serval_table *tbl, 
-                                                    struct sock *sk),
-                             struct serval_hslot *(*hashslot)(struct serval_table *tbl,
-                                                              struct net *net,
-                                                              void *key,
-                                                              size_t keylen),
-                             const char *name)
+int serval_table_init(struct serval_table *table,
+                      unsigned int (*hashfn)(struct serval_table *tbl, 
+                                             struct sock *sk),
+                      struct serval_hslot *(*hashslot)(struct serval_table *tbl,
+                                                       struct net *net,
+                                                       void *key,
+                                                       size_t keylen),
+                      const char *name)
 {
 	unsigned int i;
 
@@ -99,7 +99,7 @@ int __init serval_table_init(struct serval_table *table,
 	return 0;
 }
 
-void __exit serval_table_fini(struct serval_table *table)
+void serval_table_fini(struct serval_table *table)
 {
         unsigned int i;
 
@@ -529,7 +529,7 @@ void serval_sock_unhash(struct sock *sk)
         }
 }
 
-int __init serval_sock_tables_init(void)
+int serval_sock_tables_init(void)
 {
         int ret;
 
@@ -550,7 +550,7 @@ fail_table:
         return ret;
 }
 
-void __exit serval_sock_tables_fini(void)
+void serval_sock_tables_fini(void)
 {
         serval_table_fini(&request_table);
         serval_table_fini(&established_table);

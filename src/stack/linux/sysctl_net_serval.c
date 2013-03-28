@@ -184,7 +184,7 @@ static struct ctl_path serval_path[] = {
 };
 #endif
 
-int __net_init serval_sysctl_register(struct net *net)
+int serval_sysctl_register(struct net *net)
 {
 	struct ctl_table *table;
 

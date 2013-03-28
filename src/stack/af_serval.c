@@ -27,8 +27,8 @@
 #include <linux/export.h>
 #endif
 
-extern int __init inet_to_serval_init(void);
-extern void __exit inet_to_serval_fini(void);
+extern int inet_to_serval_init(void);
+extern void inet_to_serval_fini(void);
 
 #elif defined(OS_USER)
 /* User-level declarations */
@@ -55,12 +55,12 @@ extern void __exit inet_to_serval_fini(void);
 #include <serval_sal.h>
 #include <service.h>
 
-extern int __init packet_init(void);
-extern void __exit packet_fini(void);
-extern int __init service_init(void);
-extern void __exit service_fini(void);
-extern int __init delay_queue_init(void);
-extern void __exit delay_queue_fini(void);
+extern int packet_init(void);
+extern void packet_fini(void);
+extern int service_init(void);
+extern void service_fini(void);
+extern int delay_queue_init(void);
+extern void delay_queue_fini(void);
 
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
@@ -1047,7 +1047,7 @@ static struct net_proto_family serval_family_ops = {
 	.owner	= THIS_MODULE,
 };
 
-int __init serval_init(void)
+int serval_init(void)
 {
         int err = 0;
 
@@ -1129,7 +1129,7 @@ int __init serval_init(void)
 #include <net/ip.h>
 #endif
 
-void __exit serval_fini(void)
+void serval_fini(void)
 {
 #if defined(OS_LINUX_KERNEL)
         inet_to_serval_fini();

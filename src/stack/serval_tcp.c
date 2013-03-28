@@ -383,7 +383,7 @@ void serval_tcp_done(struct sock *sk)
 	serval_tcp_clear_xmit_timers(sk);
 }
 
-void __init serval_tcp_init(void)
+void serval_tcp_init(void)
 {
         unsigned long limit;
         int max_rshare, max_wshare;

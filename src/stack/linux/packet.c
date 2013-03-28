@@ -154,7 +154,7 @@ static struct net_protocol serval_protocol = {
 
 #endif /* USE_IPPROTO */
 
-int __init packet_init(void)
+int packet_init(void)
 {
 #if defined(USE_NETFILTER)
         if (nf_register_hook(&ip_hook) < 0)
@@ -171,7 +171,7 @@ int __init packet_init(void)
 	return 0;
 }
 
-void __exit packet_fini(void)
+void packet_fini(void)
 {
 #if defined(USE_NETFILTER)
         nf_unregister_hook(&ip_hook);

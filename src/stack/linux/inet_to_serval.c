@@ -186,7 +186,7 @@ void inet_to_serval_disable(void)
         }
 }
 
-int __init inet_to_serval_init(void)
+int inet_to_serval_init(void)
 {
         memcpy(&serval_inet_stream_ops, &serval_stream_ops, 
                sizeof(serval_inet_stream_ops));
@@ -197,7 +197,7 @@ int __init inet_to_serval_init(void)
         return 0;
 }
 
-void __exit inet_to_serval_fini(void)
+void inet_to_serval_fini(void)
 {
         inet_to_serval_disable();
 }

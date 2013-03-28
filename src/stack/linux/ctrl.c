@@ -88,7 +88,7 @@ int ctrl_sendmsg(struct ctrlmsg *msg, int peer, int mask)
         return netlink_unicast(nl_sk, skb, peer, MSG_DONTWAIT);
 }
 
-int __init ctrl_init(void)
+int ctrl_init(void)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
         struct netlink_kernel_cfg cfg = {
@@ -115,7 +115,7 @@ int __init ctrl_init(void)
 	return 0;
 }
 
-void __exit ctrl_fini(void)
+void ctrl_fini(void)
 {
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
 	struct sock *sk = nl_sk;
