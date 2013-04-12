@@ -89,7 +89,7 @@ public class AppHostCtrl {
 		switch (op) {
 		case AppHostCtrl.SERVICE_ADD:
 			Log.d("Serval", "adding service " + sid + " type " + type + " address " + addr);
-			AppHostCtrl.hc.addService(type, sid, prefixBits, 1, 1, addr);
+			AppHostCtrl.hc.addService(sid, prefixBits, 1, 1, addr);
 			break;
 		case AppHostCtrl.SERVICE_REMOVE:
 			AppHostCtrl.hc.removeService(sid, prefixBits, addr);
