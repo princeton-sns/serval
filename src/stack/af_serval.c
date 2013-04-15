@@ -1055,7 +1055,6 @@ int serval_init(void)
 
         if (err < 0) {
                 LOG_CRIT("Cannot initialize service table\n");
-                pr_alert("ERROR: Cannot initialize service table\n");
                 goto fail_service;
         }
 
@@ -1063,14 +1062,12 @@ int serval_init(void)
 
         if (err < 0) {
                 LOG_CRIT("Cannot initialize serval sockets\n");
-                pr_alert("ERROR: Cannot initialize serval sockets\n");
                 goto fail_sock;
         }
 
         err = packet_init();
 
         if (err != 0) {
-                pr_alert("ERROR: Cannot init packet socket!\n");
 		        LOG_CRIT("Cannot init packet socket!\n");
 		        goto fail_packet;
 	    }
@@ -1079,7 +1076,6 @@ int serval_init(void)
 
     	if (err != 0) {
 		        LOG_CRIT("Cannot register UDP proto\n");
-                pr_alert("ERROR: Cannot register UDP proto\n");
 		        goto fail_udp_proto;
 	    }
                 
@@ -1087,7 +1083,6 @@ int serval_init(void)
 
 	    if (err != 0) {
 		        LOG_CRIT("Cannot register TCP proto\n");
-                pr_alert("ERROR: Cannot register TCP proto\n");
 		        goto fail_tcp_proto;
 	    }
 
@@ -1095,7 +1090,6 @@ int serval_init(void)
 
         if (err != 0) {
                 LOG_CRIT("Cannot register socket family\n");
-                pr_alert("ERROR: Cannot register socket family\n");
                 goto fail_sock_register;
         }
 
@@ -1104,7 +1098,6 @@ int serval_init(void)
 
         if (err != 0) {
                 LOG_CRIT("Cannot initialize INET to SERVAL support\n");
-                pr_alert("ERROR: Cannot initialize INET to SERVAL support\n");
                 goto fail_inet_to_serval;
         }
 #endif
