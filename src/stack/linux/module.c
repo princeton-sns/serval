@@ -212,6 +212,7 @@ int __init serval_module_init(void)
         
         if (err < 0) {
                 LOG_CRIT("Cannot create proc entries\n");
+                pr_alert("ERROR: Cannot create proc entries\n");
                 goto fail_proc;
         }
 
@@ -219,6 +220,7 @@ int __init serval_module_init(void)
         
 	if (err < 0) {
                 LOG_CRIT("Cannot create netlink control socket\n");
+                pr_alert("ERROR: Cannot create netlink control socket\n");
                 goto fail_ctrl;
         }
 
@@ -226,6 +228,7 @@ int __init serval_module_init(void)
 
 	if (err < 0) {
 		 LOG_CRIT("Cannot initialize serval protocol\n");
+         pr_alert("ERROR: Cannot initialize serval protocol\n");
 		 goto fail_serval;
 	}
 
@@ -233,6 +236,7 @@ int __init serval_module_init(void)
 
 	if (err < 0) {
                 LOG_CRIT("Cannot register netdevice notifier\n");
+                pr_alert("ERROR: Cannot register netdevice notifier\n");
                 goto fail_netdev_notifier;
         }
 
@@ -240,6 +244,7 @@ int __init serval_module_init(void)
 
 	if (err < 0) {
                 LOG_CRIT("Cannot register inetaddr notifier\n");
+                pr_alert("ERROR: Cannot register inetaddr notifier\n");
                 goto fail_inetaddr_notifier;
         }
 
@@ -249,6 +254,7 @@ int __init serval_module_init(void)
 
         if (err < 0) {
                 LOG_CRIT("Cannot register Serval sysctl interface\n");
+                pr_alert("ERROR: Cannot register Serval sysctl interface\n");
                 goto fail_sysctl;
 
         }
@@ -257,10 +263,12 @@ int __init serval_module_init(void)
         
         if (err != 0) {
                 LOG_CRIT("UDP encapsulation init failed\n");
+                pr_alert("ERROR: UDP encapsulation init failed\n");
                 goto fail_udp_encap;
         }
         
  out:
+    pr_alert("Init return status: %d\n", err);
 	return err;
  fail_udp_encap:
         serval_sysctl_unregister(&init_net);
