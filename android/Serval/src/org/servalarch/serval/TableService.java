@@ -71,14 +71,9 @@ public class TableService extends Service  {
 								continue;
 							Log.v(TAG, "Checking " + srvID);
 							String res[] = srvID.split(":");
-							int prefixBits = 256;
-							
-							if (res.length == 2)
-								prefixBits = Integer.parseInt(res[1]);
-							
 							ServiceID sid = AppHostCtrl.createServiceID(res[0]);
-							for (String s : existing) {
-								if (sid.toString().equals(s))
+							for (String s : existing) {								
+								if (sid.toString().substring(0, s.length()).equals(s))
 									continue persist;
 							}
 							String addr = (String) idMap.get(srvID);
