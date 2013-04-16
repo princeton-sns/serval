@@ -69,8 +69,14 @@ public class TableService extends Service  {
 						for (String srvID : idMap.keySet()) {
 							if (!(idMap.get(srvID) instanceof String))
 								continue;
-							ServiceID sid = AppHostCtrl.createServiceID(srvID);
 							Log.v(TAG, "Checking " + srvID);
+							String res[] = srvID.split(":");
+							int prefixBits = 256;
+							
+							if (res.length == 2)
+								prefixBits = Integer.parseInt(res[1]);
+							
+							ServiceID sid = AppHostCtrl.createServiceID(res[0]);
 							for (String s : existing) {
 								if (sid.toString().equals(s))
 									continue persist;

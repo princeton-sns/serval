@@ -261,8 +261,10 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
 static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat *sis)
 {
     const struct service_info *si = &sis->service;
+    struct service_id null_service = { .s_sid = { 0 } };
     jmethodID mid;
     jobject service_id, addr, obj;
+    jint prefix_bits = 256;
 
     mid = (*env)->GetMethodID(env, serviceinfostat_cls, "<init>", 
                                     "(Lorg/servalarch/net/ServiceID;SSLjava/net/InetAddress;JJJJJJJJJJJ)V");
@@ -272,10 +274,13 @@ static jobject new_service_info_stat(JNIEnv *env, const struct service_info_stat
 
     service_id = new_service_id(env, &si->srvid);
     addr = new_inet4addr(env, &si->address);
+    if (memcmp(&service_id, &null_service, sizeof(null_service)) == 0 ||
+        si->srvid_prefix_bits > 0)
+        prefix_bits = si->srvid_prefix_bits;
 
     obj = (*env)->NewObject(env, serviceinfostat_cls, mid, 
                             service_id,
-                            (jint)si->srvid_prefix_bits, 
+                            prefix_bits, 
                             (jint)si->srvid_flags,
                             addr,
                             (jlong)si->if_index, 

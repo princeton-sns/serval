@@ -176,6 +176,7 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                     entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
                 
+                stat->service.srvid_prefix_bits = prefix_bits;
                 se = service_find_exact(&entry->srvid, 
                                         prefix_bits);
 
@@ -202,10 +203,11 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                         stat->packets_dropped = tstat.packets_dropped;
                         stat->bytes_dropped = tstat.packets_dropped;
 
-                        if (index < i) {
+                        //if (index < i) {
                                 memcpy(&stat->service, entry, 
                                        sizeof(*entry));
-                        }
+                        //}
+                        LOG_DBG("Service ID %s:%u\n", service_id_to_str(&stat->service.srvid), stat->service.srvid_prefix_bits);
                         index++;
                 } else if (err == 0) {
                         LOG_ERR("Could not find target for service %s\n", 
