@@ -848,6 +848,7 @@ static void cleanup_clients(void)
                 c = list_first_entry(&client_list, struct client, lh);
                 list_del(&c->lh);
                 LOG_DBG("cleaning up client %u\n", c->id);
+                client_close(c);
                 client_free(c);
         }
 }
