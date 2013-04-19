@@ -69,12 +69,12 @@ struct bst_node {
         /* Begin Ming's code */
         
         union {
-                unsigned int src_size; // in terms of # of bytes
+                unsigned int src_bits; // in terms of # of bytes
                 unsigned int prefix_bits;
         };
 
         union {
-                unsigned int src_bits;
+                unsigned int src_size;
                 unsigned int prefix_size;
         };
         
@@ -293,6 +293,48 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                         }
                 }
         }
+
+        /*
+          Ming:
+          search source node
+        */
+        if (n && n->source_tree && n->source_tree->root && srcaddr) {                
+                n = n->source_tree->root;
+                while (1) {
+/* Keep track of the previous matching node */
+                        if (bst_node_flag(n, BST_FLAG_SOURCE)) {
+                                if (match == NULL || match(n))
+                                        *prev = n;
+                        }
+                /*
+                  We are matching the root node, or we hit the prefix
+                  length we are matching.
+                */
+                        if (src_bits == 0 || n->src_bits == src_bits)
+                                break;
+                
+                /* check if next bit is zero or one and, based on that, go
+                 * left or right */
+                /*
+                LOG_DBG("checking byte %u, bits=%u\n",
+                        PREFIX_BYTE(n->prefix_bits), n->prefix_bits);
+                */
+                        if (CHECK_BIT(srcaddr, n->src_bits)) {
+                                if (n->right) {
+                                        n = n->right;
+                                } else {
+                                        break;
+                                }
+                        } else {
+                                if (n->left) {
+                                        n = n->left;
+                                } else {
+                                        break;
+                                }
+                        }
+                }
+        } 
+         
         return n;
 }
 
