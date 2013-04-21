@@ -298,42 +298,6 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
           Ming:
           search source node
         */
-        if (n && n->source_tree && n->source_tree->root && srcaddr) {                
-                n = n->source_tree->root;
-                while (1) {
-/* Keep track of the previous matching node */
-                        if (bst_node_flag(n, BST_FLAG_SOURCE)) {
-                                if (match == NULL || match(n))
-                                        *prev = n;
-                        }
-                /*
-                  We are matching the root node, or we hit the prefix
-                  length we are matching.
-                */
-                        if (src_bits == 0 || n->src_bits == src_bits)
-                                break;
-                
-                /* check if next bit is zero or one and, based on that, go
-                 * left or right */
-                /*
-                LOG_DBG("checking byte %u, bits=%u\n",
-                        PREFIX_BYTE(n->prefix_bits), n->prefix_bits);
-                */
-                        if (CHECK_BIT(srcaddr, n->src_bits)) {
-                                if (n->right) {
-                                        n = n->right;
-                                } else {
-                                        break;
-                                }
-                        } else {
-                                if (n->left) {
-                                        n = n->left;
-                                } else {
-                                        break;
-                                }
-                        }
-                }
-        } 
          
         return n;
 }
@@ -692,7 +656,7 @@ static struct bst_node *bst_create_source_node(struct bst_node *parent,
         struct bst_node *n;
 
         if (bst_node_flag(parent, BST_FLAG_ACTIVE))
-                n = (struct bst_node *)MALLOC(sizeof(*n) + parent->prefix_bits, alloc);
+                n = (struct bst_node *)MALLOC(sizeof(*n) + parent->prefix_size, alloc);
         else 
                 n = (struct bst_node *)MALLOC(sizeof(*n) + src_size, alloc);
 	
@@ -924,9 +888,9 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
           bst_node_flag(n, BST_FLAG_ACTIVE));
 
           Ming:
-          insert node based on destination service
-          
+          insert node based on destination service          
         */
+        
         if (n->prefix_bits < prefix_bits) {
                 n = bst_destination_node_new(n, ops, private, prefix, prefix_bits, alloc);
 		
@@ -951,8 +915,26 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 
         if (srcaddr) {
 
-                n->source_tree = (struct bst *)MALLOC(sizeof(struct bst), alloc);
-                bst_init(n->source_tree);
+                if (!n->source_tree)
+                {
+                        n->source_tree = (struct bst *)MALLOC(sizeof(struct bst), alloc);
+                        bst_init(n->source_tree);
+
+                        n->source_tree->root = (struct bst_node *)MALLOC(sizeof(struct bst_node), 
+                                                       alloc);
+
+                        if (!n->source_tree->root)
+                                return NULL;
+
+                        memset(n->source_tree->root, 0, sizeof(*n->source_tree->root));
+                        n->source_tree->root->left = n->source_tree->root->right = NULL;
+                        n->source_tree->root->parent = n;
+                        n->source_tree->root->ops = NULL;
+                        n->source_tree->root->private = NULL;
+                        n->source_tree->root->flags = 0;
+                        n->source_tree->root->src_bits = 0;
+                        n->source_tree->root->tree = n->source_tree;
+                }
 
                 n = bst_source_node_new(n, ops, private, srcaddr, src_bits, alloc);
 
