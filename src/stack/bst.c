@@ -4,7 +4,7 @@
  * called a bitwise trie. It works well for LPM lookups of arbitrary
  * length bit strings. Do not confuse with binary search trees.
  * 
- * The code is not particularly optimized at this point.
+ * The code is not particularly optimized this point.
  *
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  * 
@@ -52,7 +52,6 @@
   to source address
 
  */
-
 enum bst_node_flag {
         BST_FLAG_ACTIVE,
         BST_FLAG_SOURCE
@@ -64,6 +63,7 @@ struct bst_node {
         struct bst_node_ops *ops;
         struct list_head lh; /* Used for printing trees non-recursively */
 	unsigned char flags;
+        bst_node_type_t type;
         void *private;
 
         /* Begin Ming's code */
@@ -260,7 +260,7 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
         if (!n)
                 return NULL;
 
-        while (1) {
+        while (n->type != SOURCE) {
                 /* Keep track of the previous matching node */
                 if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                         if (match == NULL || match(n))
@@ -294,10 +294,51 @@ struct bst_node *bst_node_find_longest_prefix(struct bst_node *n,
                 }
         }
 
+        if (!n->source_tree || !n->source_tree->root)
+                return n;
+
+        if (!srcaddr || src_bits < 0)
+                return n;
+
         /*
           Ming:
           search source node
         */
+        n = n->source_tree->root;
+        
+        while (n->type != DESTINATION) {
+                /* Keep track of the previous matching node */
+                if (bst_node_flag(n, BST_FLAG_SOURCE)) {
+                        if (match == NULL || match(n))
+                                *prev = n;
+                }
+                /*
+                  We are matching the root node, or we hit the prefix
+                  length we are matching.
+                */
+                if (src_bits == 0 || n->src_bits == src_bits)
+                        break;
+                
+                /* check if next bit is zero or one and, based on that, go
+                 * left or right */
+                /*
+                LOG_DBG("checking byte %u, bits=%u\n",
+                        PREFIX_BYTE(n->prefix_bits), n->prefix_bits);
+                */
+                if (CHECK_BIT(srcaddr, n->src_bits)) {
+                        if (n->right) {
+                                n = n->right;
+                        } else {
+                                break;
+                        }
+                } else {
+                        if (n->left) {
+                                n = n->left;
+                        } else {
+                                break;
+                        }
+                }
+        }
          
         return n;
 }
@@ -615,6 +656,7 @@ static struct bst_node *bst_create_destination_node(struct bst_node *parent,
 		parent->left = n;
 	}
 
+        n->type = DESTINATION;
         n->tree = parent->tree;
 	n->left = NULL;
 	n->right = NULL;
@@ -655,10 +697,7 @@ static struct bst_node *bst_create_source_node(struct bst_node *parent,
 {
         struct bst_node *n;
 
-        if (bst_node_flag(parent, BST_FLAG_ACTIVE))
-                n = (struct bst_node *)MALLOC(sizeof(*n) + parent->prefix_size, alloc);
-        else 
-                n = (struct bst_node *)MALLOC(sizeof(*n) + src_size, alloc);
+        n = (struct bst_node *)MALLOC(sizeof(*n) + src_size, alloc);
 	
 	if (!n)
 		return NULL;
@@ -670,22 +709,14 @@ static struct bst_node *bst_create_source_node(struct bst_node *parent,
           create the root node of the source tree.
         */
 
-        if (bst_node_flag(parent, BST_FLAG_ACTIVE)) {
-                n->source_tree = parent->source_tree;
-                n->source_tree->root = n;
-                memcpy(n->prefix, parent->prefix, parent->prefix_bits);
-                n->prefix_bits = parent->prefix_bits;
-                bst_node_set_flag(n, BST_FLAG_SOURCE);
-                return n;
-        }
-
 	if (CHECK_BIT(srcaddr, parent->src_bits)) {
 		parent->right = n;
 	} else {
 		parent->left = n;
 	}
 
-        n->tree = parent->tree;
+        n->type = SOURCE;
+        n->source_tree = parent->source_tree;
 	n->left = NULL;
 	n->right = NULL;
         n->ops = NULL;
@@ -830,7 +861,7 @@ static struct bst_node *bst_source_node_new(struct bst_node *parent,
 
         struct bst_node *n = NULL;
 
-        if (!parent)
+        if (!parent || !srcaddr || src_bits < 0)
                 return NULL; /* Ming: check for NULL */
         
         while (1) {
@@ -875,7 +906,7 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 	struct bst_node *n, *prev = NULL;
         
 	n = bst_node_find_longest_prefix(root, &prev, prefix, 
-                                         prefix_bits, srcaddr, src_bits, NULL);	
+                                         prefix_bits, NULL, 0, NULL);	
 
         if (!n)
                 return NULL;  /* Ming: check for NULL */
@@ -927,6 +958,7 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
                                 return NULL;
 
                         memset(n->source_tree->root, 0, sizeof(*n->source_tree->root));
+                        n->source_tree->root->type = SOURCE;
                         n->source_tree->root->left = n->source_tree->root->right = NULL;
                         n->source_tree->root->parent = n;
                         n->source_tree->root->ops = NULL;
@@ -936,7 +968,7 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
                         n->source_tree->root->tree = n->source_tree;
                 }
 
-                n = bst_source_node_new(n, ops, private, srcaddr, src_bits, alloc);
+                n = bst_source_node_new(n->source_tree->root, ops, private, srcaddr, src_bits, alloc);
 
                 bst_node_set_flag(n, BST_FLAG_SOURCE);
         }
