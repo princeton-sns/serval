@@ -599,7 +599,7 @@ static void *worker_thread(void *arg)
         
         w->running = 1;
 
-        LOG_DBG("Worker %u running\n", w->id);
+        LOG_DBG("Worker %u running (%d)\n", w->id, worker_running);
 
         while (worker_running) {
                 unsigned int i;
@@ -997,6 +997,7 @@ static int start_workers(unsigned int num)
                 return -1;
         
         memset(workers, 0, sizeof(struct worker) * num);
+        worker_running = 1;
 
         for (i = 0; i < num; i++) {
                 struct worker *w = &workers[i];
@@ -1573,7 +1574,7 @@ int main(int argc, char **argv)
 
 		argc--;
 		argv++;
-	}	
+	}
 
 
         if (mode != INET_ONLY_MODE && 
