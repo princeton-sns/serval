@@ -946,8 +946,16 @@ static int __service_entry_print(struct bst_node *n, char *buf,
         struct target_set *set;
         struct target *t;
         char dststr[18]; /* Currently sufficient for IPv4 */
+        char srcstr[18];
         int len = 0, tot_len = 0;
         unsigned int bits = 0;
+
+        /*
+          Ming:
+        */
+        char buff[2000];
+
+        print_ip_entry(n, buff, 2000);
 
         read_lock_bh(&se->lock);
 
@@ -991,6 +999,13 @@ static int __service_entry_print(struct bst_node *n, char *buf,
                                                inet_ntop(AF_INET,
                                                          t->dst, 
                                                          dststr, 18));
+                                printf("Interface: %-5s %s\n",
+                                               t->out.dev ? 
+                                               t->out.dev->name : "any",
+                                               inet_ntop(AF_INET,
+                                                         t->dst, 
+                                                         dststr, 18));
+                                
                         } else {
                                 len = snprintf(buf + tot_len, buflen, 
                                                "-\n");

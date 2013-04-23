@@ -22,6 +22,8 @@ struct bst_node_ops {
   Indicates whether a bst_node contains the source rule for service forwarding.
 */
 
+int print_ip_entry(struct bst_node *n, char *buf, size_t buflen);
+
 typedef enum bst_node_type {
         DESTINATION, /* specifies the forwarding rule according to destination service */
         SOURCE,      /* specifies the forwarding rule according to source address */

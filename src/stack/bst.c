@@ -165,6 +165,9 @@ static struct bst_node *stack_pop(struct list_head *stack)
         return n;
 }
 
+/*
+  Ming: print both destination node and source node
+*/
 int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
 {
         struct list_head stack;
@@ -177,7 +180,7 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
         while (!list_empty(&stack)) {
                 n = stack_pop(&stack);
                 if (n) {
-                        if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
+                        if (bst_node_flag(n, BST_FLAG_ACTIVE) || bst_node_flag(n, BST_FLAG_SOURCE)) {
                                 if (n->ops && n->ops->print) {
                                         len = n->ops->print(n, buf + tot_len, 
                                                             buflen);
@@ -189,7 +192,11 @@ int bst_node_print_nonrecursive(struct bst_node *n, char *buf, size_t buflen)
                                         else
                                                 buflen -= len;
                                 }
+
+                                if (n->type == DESTINATION && n->source_tree && n->source_tree->root)
+                                        stack_push(&stack, n->source_tree->root);
                         }
+                        
                         if (n->right)
                                 stack_push(&stack, n->right);
                         
@@ -1153,20 +1160,28 @@ int main(int argc, char **argv)
 
 #define BUFLEN 2000
 
-static int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
+int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
 {
 	struct in_addr addr, addr2;
+        char dststr[18];
+        char srcstr[18];
         
         memset(&addr, 0, sizeof(addr));
         memset(&addr2, 0, sizeof(addr2));
 
         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                 memcpy(&addr, n->prefix, PREFIX_SIZE(n->prefix_bits));
+                inet_ntop(AF_INET, &addr, dststr, 18);
+                printf("\tService prefix: %s/%-4u ", dststr, n->prefix_bits);
                 return snprintf(buf, buflen, "\t%s : any", inet_ntoa(addr));
         }
-        else {
+        else if (bst_node_flag(n, BST_FLAG_SOURCE)) {
                 memcpy(&addr, n->source_tree->root->prefix, PREFIX_SIZE(n->source_tree->root->prefix_bits));
                 memcpy(&addr2, n->srcaddr, PREFIX_SIZE(n->src_bits));
+                inet_ntop(AF_INET, &addr, dststr, 18);
+                inet_ntop(AF_INET, &addr2, srcstr, 18);
+                printf("\tService prefix: %s/%-4u, srcaddr: %s/%-4u", dststr, n->source_tree->root->prefix_bits, srcstr,
+                n->src_bits);
                 return snprintf(buf, buflen, "\t%s : %s", inet_ntoa(addr), inet_ntoa(addr2));
         }
 }
