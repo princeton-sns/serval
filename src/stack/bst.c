@@ -123,7 +123,8 @@ void bst_iterator_init(struct bst *tree, struct bst_iterator *iter)
 {
         iter->curr = tree->root;
         INIT_LIST_HEAD(&iter->stack);
-        stack_push(&iter->stack, tree->root);
+        if (tree->root)
+                stack_push(&iter->stack, tree->root);
 }
 
 struct bst_node *bst_iterator_node(struct bst_iterator *iter)
