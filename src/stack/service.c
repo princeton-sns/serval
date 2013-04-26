@@ -733,7 +733,7 @@ int service_iter_init(struct service_iter *iter,
                 return -1;
 
         set = list_first_entry(&se->target_set, struct target_set, lh);
-
+        
         if (!set)
                 return -1;
         

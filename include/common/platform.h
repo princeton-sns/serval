@@ -55,6 +55,11 @@
 #define HAVE_OFFSETOF 1
 #endif
 #include <stddef.h>
+/* For passing credentials over UNIX domain sockets */
+typedef struct ucred ucred_t;
+#define ucred_uid uid
+#define ucred_pid pid
+#define ucred_gid gid
 #endif
 
 #if defined(OS_ANDROID)
@@ -67,7 +72,21 @@
 
 #if defined(OS_BSD)
 #define EBADFD EBADF
-#endif
+/* For passing credentials over UNIX domain sockets */
+#define SO_PASSCRED LOCAL_PEERCRED
+#define SCM_CREDENTIALS SCM_CREDS
+#if defined(OS_MACOSX)
+typedef struct xucred ucred_t;
+#define ucred_uid cr_uid
+#define ucred_pid cr_uid
+#else
+#include <sys/socket.h>
+typedef struct scmsgcred ucred_t;
+#define ucred_uid cmcred_uid
+#define ucred_pid cmcred_pid
+#define ucred_gid cmcred_gid
+#endif /* OS_MACOSX */
+#endif /* OS_BSD */
 
 #if defined(OS_USER)
 #include <stdint.h>

@@ -15,7 +15,7 @@
 #include "common.h"
 
 static const char *progname = "foo";
-static unsigned short DEFAULT_SERVER_SID = 16385;
+static unsigned short DEFAULT_SERVER_SID = 16386;
 static struct service_id server_srvid;
 static int should_exit = 0;
 #define RECVBUF_SIZE (sizeof(long) * 1460)

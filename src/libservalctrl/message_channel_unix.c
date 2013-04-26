@@ -39,11 +39,30 @@ static int message_channel_unix_initialize(message_channel_t *channel)
 {
     int peer = getpid();
     struct ctrlmsg cm;
+    ssize_t ret;
     struct iovec iov = { &cm, sizeof(cm) };
     message_channel_base_t *base = (message_channel_base_t *)channel;
     struct msghdr msg = { &base->peer.sa, base->peer_len, 
-                          &iov, 1, &peer, sizeof(peer), 0 };
-    ssize_t ret;
+                          &iov, 1, NULL, 0, 0 };
+#if !defined(OS_MACOSX)
+    /* Send credentials. On Mac OS X, the credentials are based on
+     * whatever process called listen() or connect() */
+    unsigned char cmsgbuf[CMSG_SPACE(sizeof(ucred_t))];
+    struct cmsghdr *cmsg;
+    struct ucred *cred;
+
+    msg.msg_control = cmsgbuf;
+    msg.msg_controllen = CMSG_SPACE(sizeof(ucred_t));
+    cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_CREDENTIALS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(ucred_t));
+    cred = CMSG_DATA(cmsg);
+    cred->ucred_pid = channel->peer_pid;
+    cred->ucred_uid = getuid();
+    cred->ucred_gid = getgid();
+    msg.msg_controllen = cmsg->cmsg_len;
+#endif
 
     message_channel_base_initialize(channel);
 
@@ -57,8 +76,8 @@ static int message_channel_unix_initialize(message_channel_t *channel)
     ret = sendmsg(base->sock, &msg, 0);
     
     if (ret == -1) {
-        LOG_ERR("%s could not send hello message on channel: %s\n",
-                channel->name, strerror(errno));
+        LOG_ERR("%s could not send HELLO message (fd=%d): %s\n",
+                channel->name, base->sock, strerror(errno));
     }
 
     return ret >= 0 ? 0 : ret;

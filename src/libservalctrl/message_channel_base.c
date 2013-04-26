@@ -23,6 +23,7 @@
 #include <common/atomic.h>
 #include <common/hash.h>
 #include <common/debug.h>
+#include <serval/ctrlmsg.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -179,10 +180,25 @@ int message_channel_base_initialize(message_channel_t *channel)
         }
 #endif
     }
-    
+
     if (err == -1) {
-        fprintf(stderr, "Error binding socket: %s\n", strerror(errno));
+        fprintf(stderr, "bind: %s\n", strerror(errno));
         goto bind_error;
+    }
+    
+    if (base->sock_type == SOCK_STREAM) {
+        if (base->native_socket) {
+            err = connect(base->sock, &base->peer.sa, base->peer_len);
+        } 
+#if defined(ENABLE_USERMODE)
+        else {
+            err = connect_sv(base->sock, &base->peer.sa, base->peer_len);
+        }
+#endif
+        if (err == -1) {
+            fprintf(stderr, "connect: %s\n", strerror(errno));
+            goto bind_error;
+        }
     }
 
     set_reuse_ok(base->sock);
@@ -370,11 +386,29 @@ int message_channel_base_send(message_channel_t *channel,
     struct msghdr msgh = { &base->peer, 
                            base->peer_len,
                            &iov, 1,
-                           &channel->peer_pid,
-                           sizeof(channel->peer_pid), 0 };
-    
-    assert(channel);
+                           NULL, 0, 0 };
+#if !defined(OS_MACOSX)
+    /* Send credentials. On Mac OS X, the credentials are based on
+     * whatever process called listen() or bind() */
+    unsigned char cmsgbuf[CMSG_SPACE(sizeof(ucred_t))];
+    struct cmsghdr *cmsg;
+    struct ucred *cred;
 
+    msg.msg_control = cmsgbuf;
+    msg.msg_controllen = CMSG_SPACE(sizeof(ucred_t));
+    cmsg = CMSG_FIRSTHDR(&msg);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_CREDENTIALS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(ucred_t));
+    cred = CMSG_DATA(cmsg);
+    cred->ucred_pid = channel->peer_pid;
+    cred->ucred_uid = getuid();
+    cred->ucred_gid = getgid();
+    msg.msg_controllen = cmsg->cmsg_len;
+#endif
+
+    assert(channel);
+    
     if (!msg)
         return -1;
     
