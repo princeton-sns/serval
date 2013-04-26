@@ -268,7 +268,6 @@ int __init serval_module_init(void)
         }
         
  out:
-    pr_alert("Init return status: %d\n", err);
 	return err;
  fail_udp_encap:
         serval_sysctl_unregister(&init_net);
