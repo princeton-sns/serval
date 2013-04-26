@@ -9,7 +9,8 @@ if [ ! -f $MODULE ]; then
     exit -1
 fi
 
-UTS_RELEASE=`strings $MODULE | awk '/^UTS_RELEASE/ { print substr($2,2,length($2)-2) }'`
+#UTS_RELEASE=`strings $MODULE | awk '/^UTS_RELEASE/ { print substr($2,2,length($2)-2) }'`
+VERMAGIC=`strings $MODULE | awk '/^vermagic/ { print substr($1,10,length($1)-2) }'`
 
-cp $MODULE assets/serval-$UTS_RELEASE.ko
+cp $MODULE assets/serval-$VERMAGIC.ko
 
