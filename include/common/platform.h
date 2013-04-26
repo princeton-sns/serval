@@ -48,6 +48,11 @@
 #endif
 
 #if defined(OS_LINUX)
+/* For passing credentials over UNIX domain sockets */
+typedef struct ucred ucred_t;
+#define ucred_uid uid
+#define ucred_pid pid
+#define ucred_gid gid
 #if !defined(OS_ANDROID)
 #define HAVE_LIBIO 1
 #define HAVE_PPOLL 1
@@ -55,11 +60,6 @@
 #define HAVE_OFFSETOF 1
 #endif
 #include <stddef.h>
-/* For passing credentials over UNIX domain sockets */
-typedef struct ucred ucred_t;
-#define ucred_uid uid
-#define ucred_pid pid
-#define ucred_gid gid
 #endif
 
 #if defined(OS_ANDROID)

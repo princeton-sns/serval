@@ -103,15 +103,12 @@ int ctrl_recvmsg(void)
         cmsg = CMSG_FIRSTHDR(&mh);
         
         while (cmsg) {
-                LOG_DBG("ancillary data\n");
                 if (cmsg->cmsg_level == SOL_SOCKET) {
-                        LOG_DBG("go SOL_SOCKET cmsg\n");
                         switch (cmsg->cmsg_type) {
                         case SCM_CREDENTIALS:
                                 if (cmsg->cmsg_len == CMSG_LEN(sizeof(ucred_t))) {
                                         ucred_t *cred = (ucred_t *)CMSG_DATA(cmsg);
                                         peer = cred->ucred_pid;
-                                        LOG_DBG("peer pid is %d\n", peer);
                                 }
                                 break;
                         default:
