@@ -52,10 +52,6 @@
   to source address
 
  */
-enum bst_node_flag {
-        BST_FLAG_ACTIVE,
-        BST_FLAG_SOURCE
-};
 
 struct bst_node {       
         struct bst *tree, *source_tree; /* Ming */
@@ -101,7 +97,12 @@ unsigned long bst_node_get_prefix_bits(const struct bst_node *n)
         return n->prefix_bits;
 }
 
-static int bst_node_flag(struct bst_node *n, enum bst_node_flag flag)
+unsigned long bst_node_get_src_bits(const struct bst_node *n)
+{
+        return n->src_bits;
+}
+
+int bst_node_flag(struct bst_node *n, enum bst_node_flag flag)
 {
         return (n->flags & (0x1 << flag));
 }
@@ -723,6 +724,7 @@ static struct bst_node *bst_create_source_node(struct bst_node *parent,
 	}
 
         n->type = SOURCE;
+        n->tree = parent->tree;
         n->source_tree = parent->source_tree;
 	n->left = NULL;
 	n->right = NULL;
@@ -977,6 +979,12 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 
                 n = bst_source_node_new(n->source_tree->root, ops, private, srcaddr, src_bits, alloc);
 
+                if (bst_node_init(n, ops, private) == -1) {
+                        LOG_ERR("source node_init failed\n");
+                        /* TODO: handle init failure... cleanup tree? */
+                        return NULL;
+        }
+
                 bst_node_set_flag(n, BST_FLAG_SOURCE);
         }
         
@@ -1172,17 +1180,17 @@ int print_ip_entry(struct bst_node *n, char *buf, size_t buflen)
         if (bst_node_flag(n, BST_FLAG_ACTIVE)) {
                 memcpy(&addr, n->prefix, PREFIX_SIZE(n->prefix_bits));
                 inet_ntop(AF_INET, &addr, dststr, 18);
-                printf("\tService prefix: %s/%-4u ", dststr, n->prefix_bits);
-                return snprintf(buf, buflen, "\t%s : any", inet_ntoa(addr));
+                printf("\tService prefix: %s/%-4u\n ", dststr, n->prefix_bits);
+                return snprintf(buf, buflen, "\t%s : any\n", inet_ntoa(addr));
         }
         else if (bst_node_flag(n, BST_FLAG_SOURCE)) {
-                memcpy(&addr, n->source_tree->root->prefix, PREFIX_SIZE(n->source_tree->root->prefix_bits));
+                memcpy(&addr, n->tree->root->parent->prefix, PREFIX_SIZE(n->tree->root->parent->prefix_bits));
                 memcpy(&addr2, n->srcaddr, PREFIX_SIZE(n->src_bits));
                 inet_ntop(AF_INET, &addr, dststr, 18);
                 inet_ntop(AF_INET, &addr2, srcstr, 18);
-                printf("\tService prefix: %s/%-4u, srcaddr: %s/%-4u", dststr, n->source_tree->root->prefix_bits, srcstr,
-                n->src_bits);
-                return snprintf(buf, buflen, "\t%s : %s", inet_ntoa(addr), inet_ntoa(addr2));
+                printf("\tService prefix: %s/%-4u, srcaddr: %s/%-4u\n", dststr, n->tree->root->parent->prefix_bits,
+                srcstr, n->src_bits);
+                return snprintf(buf, buflen, "\t%s : %s\n", dststr, srcstr);
         }
 }
 
@@ -1213,25 +1221,101 @@ int bst_test()
 	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, NULL, 0, 0);
 
 
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 20, &addr, 1, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 21, &addr, 2, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 22, &addr, 4, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 23, &addr, 8, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, &addr, 16, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, &addr, 20, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, &addr, 24, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, &addr, 28, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 28, &addr, 29, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 29, &addr, 30, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 30, &addr, 31, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 31, &addr, 32, 0);
+
+
+        /*
+        inet_aton("292.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 20, &addr, 1, 0);
+
+        inet_aton("192.268.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 21, &addr, 2, 0);
+
+        inet_aton("192.138.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 22, &addr, 4, 0);
+
+        inet_aton("172.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 23, &addr, 8, 0);
+
+        inet_aton("192.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 24, &addr, 16, 0);
+
+        inet_aton("182.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 25, &addr, 20, 0);
+
+        inet_aton("192.123.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 26, &addr, 24, 0);
+
+        inet_aton("182.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 27, &addr, 28, 0);
+
+        inet_aton("59.168.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 28, &addr, 29, 0);
+
+        inet_aton("192.73.2.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 29, &addr, 30, 0);
+
+        inet_aton("192.168.202.250", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 30, &addr, 31, 0);
+
+        inet_aton("166.111.8.28", &addr);
+	bst_insert_prefix(&root, &ip_ops, NULL, &addr, 31, &addr, 32, 0);
+        */
+
+
 	bst_insert_prefix(&root, &ip_ops, NULL, NULL, 0, NULL, 0, 0);
 
 	bst_print(&root, buf, BUFLEN);
         
-        printf("%s", buf);
+//        printf("%s", buf);
        
-	printf("remove:\n");
+//	printf("remove:\n");
 
-	inet_aton("192.168.1.0", &addr);
+//	inet_aton("192.168.1.0", &addr);
 
         /*
           Ming:
         */
         //bst_remove_prefix(&root, &addr, 24, 0);
-        bst_remove_prefix(&root, &addr, 24);
+//        bst_remove_prefix(&root, &addr, 24);
 
-	bst_print(&root, buf, BUFLEN);
+//	bst_print(&root, buf, BUFLEN);
 
-        printf("%s", buf);
+//        printf("%s", buf);
        
 	bst_destroy(&root);
 

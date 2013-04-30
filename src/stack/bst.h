@@ -71,6 +71,7 @@ int bst_print(struct bst *tree, char *buf, size_t buflen);
 void *bst_node_get_private(struct bst_node *n);
 const unsigned char *bst_node_get_prefix(const struct bst_node *n);
 unsigned int bst_node_get_prefix_size(const struct bst_node *n);
+unsigned long bst_node_get_src_bits(const struct bst_node *n);
 unsigned long bst_node_get_prefix_bits(const struct bst_node *n);
 int bst_subtree_func(struct bst_node *n, 
                      int (*func)(struct bst_node *, void *arg), 
@@ -82,6 +83,13 @@ int bst_subtree_func(struct bst_node *n,
   Ming:
   Test program for two dimentional tree
 */
+
+enum bst_node_flag {
+        BST_FLAG_ACTIVE,
+        BST_FLAG_SOURCE
+};
+
+int bst_node_flag(struct bst_node *n, enum bst_node_flag flag);
 
 int bst_test();
 

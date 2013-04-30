@@ -534,6 +534,7 @@ int main(int argc, char **argv)
 */
 #ifdef BST_TEST
         bst_test();
+        return 0;
 #endif
 
         

@@ -203,8 +203,8 @@ enum {
 
 static int is_target(struct target *t, 
                      service_rule_type_t type, 
-                     const void *dst,
-                     int dstlen)
+                     const void *dst, int dstlen,
+                     const void *src, int srclen)
 {
         if (t->type != type)
                 return 0;
@@ -215,7 +215,7 @@ static int is_target(struct target *t,
                         return 1;
                 break;
         case SERVICE_RULE_FORWARD:
-                if (!dst || memcmp(t->dst, dst, dstlen) == 0)
+                if ((!dst || memcmp(t->dst, dst, dstlen)) == 0 && (!src || memcmp(t->src, src, srclen)))
                         return 1;
                 break;
         default:
@@ -226,8 +226,8 @@ static int is_target(struct target *t,
 
 static struct target * __service_entry_get_target(struct service_entry *se,
                                                   service_rule_type_t type,
-                                                  const void *dst,
-                                                  int dstlen,
+                                                  const void *dst, int dstlen,
+                                                  const void *src, int srclen,
                                                   const union target_out out,
                                                   struct target_set **set_p,
                                                   int protocol) 
@@ -240,7 +240,7 @@ static struct target * __service_entry_get_target(struct service_entry *se,
                         if (t->type != type )
                                 continue;
 
-                        if (is_target(t, type, dst, dstlen)) {
+                        if (is_target(t, type, dst, dstlen, src, srclen)) {
                                 if (type == SERVICE_RULE_DEMUX) {
                                         if ((t->out.sk->sk_protocol ==
                                              protocol) || 
@@ -336,6 +336,7 @@ static int __service_entry_add_target(struct service_entry *se,
         struct target *t;
         
         t = __service_entry_get_target(se, type, dst, dstlen,
+                                       src, srclen,
                                        out, &set,
                                        dstlen == 0 ? 
                                        out.sk->sk_protocol :
@@ -415,7 +416,9 @@ static int __service_entry_modify_target(struct service_entry *se,
                                          uint16_t flags, uint32_t priority,
                                          uint32_t weight, 
                                          const void *dst, 
-                                         int dstlen, 
+                                         int dstlen,
+                                         const void *src,
+                                         int srclen,
                                          const void *new_dst, 
                                          int new_dstlen, 
                                          const union target_out out, 
@@ -429,7 +432,8 @@ static int __service_entry_modify_target(struct service_entry *se,
                 return -1;
         }
         
-        t = __service_entry_get_target(se, type, dst, dstlen, 
+        t = __service_entry_get_target(se, type, dst, dstlen,
+                                       src, srclen,
                                        out, &set,
                                        MATCH_NO_PROTOCOL);
         
@@ -505,7 +509,9 @@ int service_entry_modify_target(struct service_entry *se,
                                 uint16_t flags, uint32_t priority,
                                 uint32_t weight, 
                                 const void *dst, 
-                                int dstlen, 
+                                int dstlen,
+                                const void *src,
+                                int srclen,
                                 const void *new_dst, 
                                 int new_dstlen, 
                                 const union target_out out,
@@ -515,7 +521,7 @@ int service_entry_modify_target(struct service_entry *se,
         
         write_lock_bh(&se->lock);
         ret = __service_entry_modify_target(se, type, flags, priority, 
-                                            weight, dst, dstlen, 
+                                            weight, dst, dstlen, src, srclen,
                                             new_dst, new_dstlen,
                                             out, alloc);
         write_unlock_bh(&se->lock);
@@ -526,11 +532,12 @@ int service_entry_modify_target(struct service_entry *se,
 
 static void __service_entry_inc_target_stats(struct service_entry *se, 
                                              service_rule_type_t type,
-                                             const void *dst, int dstlen, 
+                                             const void *dst, int dstlen,
+                                             //const void *src, int srclen,
                                              int packets, int bytes) 
 {
         struct target_set* set = NULL;
-        struct target *t = __service_entry_get_target(se, type, dst, dstlen, 
+        struct target *t = __service_entry_get_target(se, type, dst, dstlen, NULL, 0,
                                                       make_target(NULL), &set, 
                                                       MATCH_NO_PROTOCOL);
 
@@ -1096,7 +1103,7 @@ static int service_entry_local_match(struct bst_node *n)
         struct target *t;
 
         t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, 
-                                       NULL, 0, 
+                                       NULL, 0, NULL, 0, 
                                        make_target(NULL), NULL, 
                                        MATCH_ANY_PROTOCOL);
         
@@ -1112,7 +1119,7 @@ static int service_entry_global_match(struct bst_node *n)
         struct target *t;
 
         t = __service_entry_get_target(se, SERVICE_RULE_FORWARD, 
-                                       NULL, 0, 
+                                       NULL, 0, NULL, 0, 
                                        make_target(NULL), NULL, 
                                        MATCH_NO_PROTOCOL);
         
@@ -1215,7 +1222,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         
         if (se) {
                 struct target *t;
-                t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, NULL, 0, 
+                t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, NULL, 0, NULL, 0,
                                                make_target(NULL), 
                                                NULL, protocol);
                 
@@ -1291,7 +1298,9 @@ static int service_table_modify(struct service_table *tbl,
                                 uint32_t priority, 
                                 uint32_t weight, 
                                 const void *dst,
-                                int dstlen, 
+                                int dstlen,
+                                const void *src,
+                                int srclen,
                                 const void *new_dst,
                                 int new_dstlen, 
                                 const union target_out out) 
@@ -1313,6 +1322,7 @@ static int service_table_modify(struct service_table *tbl,
                 ret = service_entry_modify_target(get_service(n), type, 
                                                   flags, priority, 
                                                   weight, dst, dstlen,
+                                                  src, srclen,
                                                   new_dst, new_dstlen,
                                                   out, GFP_ATOMIC);
         } else {
@@ -1338,7 +1348,7 @@ int service_modify(struct service_id *srvid,
 {
         return service_table_modify(&srvtable, srvid, prefix_bits, type, flags,
                                     priority, weight == 0 ? 1 : weight, 
-                                    dst, dstlen, new_dst, new_dstlen, 
+                                    dst, dstlen, NULL, 0, new_dst, new_dstlen, 
                                     out);
 }
 
@@ -1361,7 +1371,7 @@ static int service_table_add(struct service_table *tbl,
                              const union target_out out, 
                              gfp_t alloc) {
         struct service_entry *se;
-        struct bst_node *n;
+        struct bst_node *n, *n1;
         int ret = 0;
         
         if (!srvid)
@@ -1388,7 +1398,13 @@ static int service_table_add(struct service_table *tbl,
 
         write_lock_bh(&tbl->lock);
 
-        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, src, src_bits);
+        /*
+          Ming: In case no source is provided when routing a packet,
+          we first add all destinations to an active destination node
+        */
+
+        n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, NULL, 0);
+        n1 = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, src, src_bits);
 
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 struct service_iter iter;
@@ -1401,7 +1417,7 @@ static int service_table_add(struct service_table *tbl,
                 while (target) {
                         /* Check for duplicates and that we do not add
                            multiple DROP and DELAY targets */
-                        if (is_target(target, type, dst, dstlen) ||
+                        if (is_target(target, type, dst, dstlen, src, srclen) ||
                             target->type == SERVICE_RULE_DROP || 
                             target->type == SERVICE_RULE_DELAY) {
                                 service_iter_destroy(&iter);
