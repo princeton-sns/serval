@@ -41,6 +41,8 @@
 #include <delay_queue.h>
 #include <af_serval.h>
 
+void print_to_dmesg(struct sock *sk, struct sk_buff *skb, char *text);
+
 extern atomic_t serval_nr_socks;
 
 int sysctl_sal_fin_timeout __read_mostly = SAL_FIN_TIMEOUT;
@@ -868,6 +870,7 @@ static void serval_sal_queue_ctrl_skb(struct sock *sk, struct sk_buff *skb)
         /* Check if the skb became first in queue, in that case update
          * unacknowledged verno. */
         if (skb == serval_sal_ctrl_queue_head(sk)) {
+                print_to_dmesg(sk, serval_sal_ctrl_queue_head(sk), " first in queue");
                 serval_sk(sk)->snd_seq.una = SAL_SKB_CB(skb)->verno;
                 LOG_PKT("setting snd_una=%u\n",
                         serval_sk(sk)->snd_seq.una);
@@ -900,6 +903,7 @@ static int serval_sal_write_xmit(struct sock *sk, unsigned int limit,
                         break;
 
                 SAL_SKB_CB(skb)->when = sal_time_stamp;
+                print_to_dmesg(sk, skb, "Sending");
                                 
                 err = serval_sal_transmit_skb(sk, skb, 1, gfp);
                 
@@ -937,6 +941,7 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
            (re)migration). It is not strictly necessary to use a queue
            for this, but we use it anyway for convenience and future
            proofness (in case we want to implement a send window). */
+        print_to_dmesg(sk, skb, "before clean");
         serval_sal_clean_rtx_queue(sk, 0, 1, &cb);
 
         /* We need to merge the state in unacknowledged packets with
@@ -945,6 +950,7 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         SAL_SKB_CB(skb)->flags |= cb.flags;
 
         /* Queue the new packet */
+        print_to_dmesg(sk, skb, "before queue");
         serval_sal_queue_ctrl_skb(sk, skb);
 
         /* 
@@ -952,7 +958,7 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         */
         if (skb == serval_sal_ctrl_queue_head(sk))
                 serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
-
+        
         /* 
            Write packets in queue to network.
         */
@@ -973,7 +979,9 @@ static struct sk_buff *sk_sal_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 
         if (!skb)
                 return NULL;
-        
+
+        LOG_DBG("Alloc'd %d bytes (%d len). Proto max: %d\n", 
+                size, skb->len, sk->sk_prot->max_header);        
         skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
         skb->protocol = IPPROTO_SERVAL;
@@ -1159,6 +1167,7 @@ int serval_sal_send_fin(struct sock *sk)
                         break;
                 yield();
         }
+        print_to_dmesg(sk, skb, " alloc'd for fin");
         
         LOG_SSK(sk, "Sending SAL FIN\n");
         SAL_SKB_CB(skb)->flags = SVH_FIN;
@@ -3810,7 +3819,7 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         }
         else {
             ssk->tot_pkts_sent++;
-            LOG_DBG("SKB things: %d %d\n", skb->len, skb->data_len);
+            LOG_SSK(sk, "SKB things: %d %d\n", skb->len, skb->data_len);
             ssk->tot_bytes_sent += skb->len;
         }
 
@@ -3907,6 +3916,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
         }
 
         /* Add SAL base header */
+        print_to_dmesg(sk, skb, "pushing");
+        
         sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
         hdr_len += SAL_HEADER_LEN;
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
@@ -3938,7 +3949,9 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
                                     extra 8 bytes are coming from at
                                     this point */
-    
+        print_to_dmesg(sk, skb, "in trasmit");
+
+    LOG_SSK(sk, "SKB in transmit: %p\n", skb);
 	if (likely(use_copy)) {
                 /* pskb_copy will make a copy of header and
                    non-fragmented data. Making a copy is necessary
@@ -3946,6 +3959,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    every copy we send (retransmission or copies for
                    packets matching multiple rules). */
                 skb = pskb_copy(skb, gfp_mask);
+                print_to_dmesg(sk, skb, "after copy");
+
 
 		if (unlikely(!skb)) {
                         /* Shouldn't free the passed skb here, since
@@ -3977,6 +3992,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                    SALF_FINWAIT2 | 
                                    SALF_CLOSING | 
                                    SALF_CLOSEWAIT)) {
+                print_to_dmesg(sk, skb, "build header");
                 sh = serval_sal_build_header(sk, skb);
                 serval_sal_send_check(sh);
 
@@ -4066,6 +4082,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
+                        LOG_SSK(sk, "SKB copy 2: %p\n", skb);
                         cskb = pskb_copy(skb, GFP_ATOMIC);
                         
 			if (!cskb) {
@@ -4215,4 +4232,12 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 int serval_sal_xmit_skb(struct sk_buff *skb) 
 {
         return serval_sal_transmit_skb(skb->sk, skb, 0, GFP_ATOMIC);
+}
+
+void print_to_dmesg(struct sock *sk, struct sk_buff *skb, char *text) {
+#if defined(OS_LINUX_KERNEL)
+        printk(KERN_ALERT "SAL %s (%p): %p and %p %s\n", 
+               flow_id_to_str(&serval_sk(sk)->local_flowid), 
+                skb, skb->data, skb->head, text);
+#endif
 }
