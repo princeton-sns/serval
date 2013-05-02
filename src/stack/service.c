@@ -1371,7 +1371,7 @@ static int service_table_add(struct service_table *tbl,
                              const union target_out out, 
                              gfp_t alloc) {
         struct service_entry *se;
-        struct bst_node *n, *n1;
+        struct bst_node *n;
         int ret = 0;
         
         if (!srvid)
@@ -1404,7 +1404,6 @@ static int service_table_add(struct service_table *tbl,
         */
 
         n = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, NULL, 0);
-        n1 = bst_find_longest_prefix(&tbl->tree, srvid, prefix_bits, src, src_bits);
 
         if (n && bst_node_get_prefix_bits(n) >= prefix_bits) {
                 struct service_iter iter;
@@ -1455,6 +1454,19 @@ static int service_table_add(struct service_table *tbl,
                 goto out;
         }
 
+        if (src != NULL)
+        {
+                ret = __service_entry_add_target(se, type, flags, priority,
+                                                 weight, dst, dstlen, NULL, 0,
+                                                 out, GFP_ATOMIC);
+                if (ret < 0)
+                {
+                        service_entry_free(se);
+                        ret = -ENOMEM;
+                        goto out;
+                }
+        }        
+
         
         ret = __service_entry_add_target(se, type, flags, priority, 
                                          weight, dst, dstlen, src, srclen,
@@ -1471,6 +1483,19 @@ static int service_table_add(struct service_table *tbl,
           Ming:
           add source address and src_len.
         */
+
+        if (src != NULL)
+        {
+                se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops,
+                                            se, srvid, prefix_bits, NULL, 0, GFP_ATOMIC);
+                
+                if (!se->node) {
+                        service_entry_free(se);
+                        ret = -ENOMEM;
+                } else {
+                        tbl->services++;
+                }
+        }  
 
         se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
                                      se, srvid, prefix_bits, src, src_bits, GFP_ATOMIC);

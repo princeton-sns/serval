@@ -1154,6 +1154,7 @@ int main(int argc, char **argv)
 
 #endif
 
+#if defined(OS_USER)
 /*
   Ming:
   Test program for two dimentional trie tree
@@ -1321,3 +1322,5 @@ int bst_test()
 
 	return 0;
 }
+
+#endif

@@ -84,6 +84,7 @@ struct arguments {
           forward packets according to source address
         */
         struct in_addr srcaddr, *ip_src;
+        unsigned short src_bits;
         /* End Ming's code */
         
         unsigned int priority;
@@ -269,7 +270,24 @@ static int service_parse_args(int argc, char **argv, void **result)
                         argc--;
                         argv++;
                       
-                } /* End Ming's code */
+                } else if (strcmp("src_bits", argv[0]) == 0) {
+
+                        // my_buff[18];
+
+                        if (argc < 2) {
+                                fprintf(stderr, "No source bits given\n");
+                                return -1;
+                        }
+
+                        // printf("Source IP address: %s\n", argv[1]);
+
+                        args.src_bits = atoi(argv[1]);
+
+                        argc--;
+                        argv++;
+                }
+                
+                /* End Ming's code */
                 
                 else {
                         ret = name_to_inet_addr(argv[0], &args.ipaddr2);
