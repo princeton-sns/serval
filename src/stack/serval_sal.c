@@ -3574,6 +3574,8 @@ void serval_sal_rexmit_timeout(unsigned long data)
         struct sock *sk = (struct sock *)data;
         struct serval_sock *ssk = serval_sk(sk);
 
+        LOG_SSK(sk, "Retransmit timeout\n");
+
         bh_lock_sock(sk);
 
         LOG_SSK(sk, "Transmit timeout sock=%p rto_msecs=%u backoff=%u\n", 
@@ -4038,6 +4040,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (service_iter_init(&iter, se, 
                               net_serval.sysctl_resolution_mode) < 0) {
                 kfree_skb(skb);
+                LOG_ERR("Could not initialize service iterator\n");
                 return -1;
         }
 
@@ -4045,7 +4048,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
           Send to all destinations resolved for this service.
         */
 	target = service_iter_next(&iter);
-	
+
         if (!target) {
                 LOG_SSK(sk, "No device to transmit on!\n");
                 service_iter_inc_stats(&iter, -1, -dlen);
@@ -4059,7 +4062,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		struct target *next_target;
                 struct net_device *dev = NULL;
                 int local_err = 0;
-
+                
                 if (cskb == NULL) {
                         service_iter_inc_stats(&iter, 1, dlen);
                 }
@@ -4092,6 +4095,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 } else if (target->type == SERVICE_RULE_DROP) {
                         kfree_skb(cskb);
                         err = -EHOSTUNREACH;
+                        target = next_target;
                         continue;
                 }
 
@@ -4107,10 +4111,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
+#if defined(OS_BSD)
+                        dev = __dev_get_by_name(sock_net(sk), "lo0");
+#else
                         dev = __dev_get_by_name(sock_net(sk), "lo");
+#endif
 
-                        if (!dev)
+                        if (!dev) {
+                                target = next_target;
+                                err = -ENODEV;
                                 continue;
+                        }
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,
@@ -4213,6 +4224,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    
         service_iter_destroy(&iter);
 	service_entry_put(se);
+        LOG_DBG("Returning %d\n", err);
 
 	return err;
 }

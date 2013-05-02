@@ -93,13 +93,20 @@ int ctrl_init(void)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,6,0)
         struct netlink_kernel_cfg cfg = {
                 .groups = 1,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
+                .flags = NL_CFG_F_NONROOT_RECV,
+#endif
                 .input = ctrl_rcv_skb,
                 .cb_mutex = NULL,
                 .bind = NULL,
         };
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
+        nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL, &cfg);
+#else
         nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL,
                                       THIS_MODULE, &cfg);
+#endif
 #else
 	nl_sk = netlink_kernel_create(&init_net, NETLINK_SERVAL, 1, 
 				      ctrl_rcv_skb, NULL, THIS_MODULE);
@@ -107,11 +114,12 @@ int ctrl_init(void)
 	if (!nl_sk)
 		return -ENOMEM;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
         /* Allow non-root daemons to receive notifications. This is
            something that probably shouldn't be allowed in a
            production system. */
 	netlink_set_nonroot(NETLINK_SERVAL, NL_NONROOT_RECV);
-
+#endif
 	return 0;
 }
 

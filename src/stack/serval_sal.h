@@ -58,26 +58,7 @@ enum sal_ctrl_flags {
 
 static inline struct sal_skb_cb *__sal_skb_cb(struct sk_buff *skb)
 {
-        struct sal_skb_cb * sscb = 
-                (struct sal_skb_cb *)&(skb)->cb[0];
-#if defined(ENABLE_DEBUG)
-        /*
-          if (sizeof(struct sal_skb_cb) > sizeof(skb->cb)) {
-                 LOG_WARN("sal_skb_cb (%zu bytes) > skb->cb (%zu bytes). "
-                          "skb->cb may overflow!\n", 
-                          sizeof(struct sal_skb_cb), 
-                          sizeof(skb->cb));
-         } 
-         */
-         /*
-            else {
-                LOG_WARN("sal_skb_cb (%zu bytes) skb->cb (%zu bytes).\n", 
-                         sizeof(struct sal_skb_cb), 
-                         sizeof(skb->cb));
-                 } 
-          */
-#endif
-	return sscb;
+        return (struct sal_skb_cb *)&(skb)->cb[0];
 }
 
 #define SAL_SKB_CB(__skb) __sal_skb_cb(__skb)

@@ -33,6 +33,10 @@ static unsigned int queue_maxlen = DELAY_QUEUE_MAX_DEFAULT;
 static DEFINE_SPINLOCK(queue_lock);
 static struct list_head delay_queue = { &delay_queue, &delay_queue };
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0)
+#define portid pid
+#endif
+
 struct delay_entry {
         struct list_head lh;
         unsigned int id;
@@ -243,7 +247,7 @@ static int delay_queue_rcv_nl_event(struct notifier_block *this,
 
 	if (event == NETLINK_URELEASE && n->protocol == NETLINK_SERVAL) {
 		spin_lock_bh(&queue_lock);
-		if ((net_eq(n->net, &init_net)) && (n->pid == peer_pid))
+		if ((net_eq(n->net, &init_net)) && (n->portid == peer_pid))
                         __delay_queue_reset();
 		spin_unlock_bh(&queue_lock);
 	}

@@ -1116,6 +1116,246 @@ int serval_tcp_sendpage(struct sock *sk, struct page *page, int offset,
 #endif /* ENABLE_SPLICE */
 #endif /* OS_LINUX_KERNEL */
 
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)
+int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
+                       size_t size)
+{
+	struct iovec *iov;
+	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	struct sk_buff *skb;
+	int iovlen, flags, err, copied = 0;
+	int mss_now = 0, size_goal, copied_syn = 0, offset = 0;
+	bool sg;
+	long timeo;
+
+	lock_sock(sk);
+
+	flags = msg->msg_flags;
+
+#if defined(ENABLE_TCP_FASTOPEN)
+	if (flags & MSG_FASTOPEN) {
+		err = serval_tcp_sendmsg_fastopen(sk, msg, &copied_syn);
+		if (err == -EINPROGRESS && copied_syn > 0)
+			goto out;
+		else if (err)
+			goto out_err;
+		offset = copied_syn;
+	}
+#endif
+
+	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
+
+	/* Wait for a connection to finish. One exception is TCP Fast Open
+	 * (passive side) where data is allowed to be sent before a connection
+	 * is fully established.
+	 */
+	if (((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT)) 
+#if defined(ENABLE_TCP_FASTOPEN)
+            && !serval_tcp_passive_fastopen(sk)
+#endif
+            ) {
+		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
+			goto do_error;
+	}
+
+#if defined(ENABLE_TCP_REPAIR)
+	if (unlikely(tp->repair)) {
+		if (tp->repair_queue == TCP_RECV_QUEUE) {
+			copied = serval_tcp_send_rcvq(sk, msg, size);
+			goto out;
+		}
+
+		err = -EINVAL;
+		if (tp->repair_queue == TCP_NO_QUEUE)
+			goto out_err;
+
+		/* 'common' sending to sendq */
+	}
+#endif
+	/* This should be in poll */
+	clear_bit(SOCK_ASYNC_NOSPACE, &sk->sk_socket->flags);
+
+	mss_now = serval_tcp_send_mss(sk, &size_goal, flags);
+
+	/* Ok commence sending. */
+	iovlen = msg->msg_iovlen;
+	iov = msg->msg_iov;
+	copied = 0;
+
+	err = -EPIPE;
+	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
+		goto out_err;
+
+	sg = !!(sk->sk_route_caps & NETIF_F_SG);
+
+	while (--iovlen >= 0) {
+		size_t seglen = iov->iov_len;
+		unsigned char __user *from = iov->iov_base;
+
+		iov++;
+		if (unlikely(offset > 0)) {  /* Skip bytes copied in SYN */
+			if (offset >= seglen) {
+				offset -= seglen;
+				continue;
+			}
+			seglen -= offset;
+			from += offset;
+			offset = 0;
+		}
+
+		while (seglen > 0) {
+			int copy = 0;
+			int max = size_goal;
+
+			skb = serval_tcp_write_queue_tail(sk);
+			if (serval_tcp_send_head(sk)) {
+				if (skb->ip_summed == CHECKSUM_NONE)
+					max = mss_now;
+				copy = max - skb->len;
+			}
+
+			if (copy <= 0) {
+new_segment:
+				/* Allocate new segment. If the interface is SG,
+				 * allocate skb fitting to single page.
+				 */
+				if (!sk_stream_memory_free(sk))
+					goto wait_for_sndbuf;
+
+				skb = sk_stream_alloc_skb(sk,
+							  select_size(sk, sg),
+							  sk->sk_allocation);
+				if (!skb)
+					goto wait_for_memory;
+
+				/*
+				 * Check whether we can use HW checksum.
+				 */
+				if (sk->sk_route_caps & NETIF_F_ALL_CSUM)
+					skb->ip_summed = CHECKSUM_PARTIAL;
+
+				skb_entail(sk, skb);
+				copy = size_goal;
+				max = size_goal;
+			}
+
+			/* Try to append data to the end of skb. */
+			if (copy > seglen)
+				copy = seglen;
+
+			/* Where to copy to? */
+			if (skb_availroom(skb) > 0) {
+				/* We have some space in skb head. Superb! */
+				copy = min_t(int, copy, skb_availroom(skb));
+				err = skb_add_data_nocache(sk, skb, from, copy);
+				if (err)
+					goto do_fault;
+			} else {
+				bool merge = true;
+				int i = skb_shinfo(skb)->nr_frags;
+				struct page_frag *pfrag = sk_page_frag(sk);
+
+				if (!sk_page_frag_refill(sk, pfrag))
+					goto wait_for_memory;
+
+				if (!skb_can_coalesce(skb, i, pfrag->page,
+						      pfrag->offset)) {
+					if (i == MAX_SKB_FRAGS || !sg) {
+						serval_tcp_mark_push(tp, skb);
+						goto new_segment;
+					}
+					merge = false;
+				}
+
+				copy = min_t(int, copy, pfrag->size - pfrag->offset);
+
+				if (!sk_wmem_schedule(sk, copy))
+					goto wait_for_memory;
+
+				err = skb_copy_to_page_nocache(sk, from, skb,
+							       pfrag->page,
+							       pfrag->offset,
+							       copy);
+				if (err)
+					goto do_error;
+
+				/* Update the skb. */
+				if (merge) {
+					skb_frag_size_add(&skb_shinfo(skb)->frags[i - 1], copy);
+				} else {
+					skb_fill_page_desc(skb, i, pfrag->page,
+							   pfrag->offset, copy);
+					get_page(pfrag->page);
+				}
+				pfrag->offset += copy;
+			}
+
+			if (!copied)
+				TCP_SKB_CB(skb)->tcp_flags &= ~TCPHDR_PSH;
+
+			tp->write_seq += copy;
+			TCP_SKB_CB(skb)->end_seq += copy;
+			skb_shinfo(skb)->gso_segs = 0;
+
+			from += copy;
+			copied += copy;
+			if ((seglen -= copy) == 0 && iovlen == 0)
+				goto out;
+
+			if (skb->len < max || (flags & MSG_OOB) 
+#if defined(ENABLE_TCP_REPAIR)
+                            || unlikely(tp->repair)
+#endif
+                            )
+				continue;
+
+			if (forced_push(tp)) {
+				serval_tcp_mark_push(tp, skb);
+				__serval_tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
+			} else if (skb == tcp_send_head(sk))
+				serval_tcp_push_one(sk, mss_now);
+			continue;
+
+wait_for_sndbuf:
+			set_bit(SOCK_NOSPACE, &sk->sk_socket->flags);
+wait_for_memory:
+			if (copied)
+				serval_tcp_push(sk, flags & ~MSG_MORE, mss_now, TCP_NAGLE_PUSH);
+
+			if ((err = sk_stream_wait_memory(sk, &timeo)) != 0)
+				goto do_error;
+
+			mss_now = serval_tcp_send_mss(sk, &size_goal, flags);
+		}
+	}
+
+out:
+	if (copied)
+		serval_tcp_push(sk, flags, mss_now, tp->nonagle);
+	release_sock(sk);
+	return copied + copied_syn;
+
+do_fault:
+	if (!skb->len) {
+		serval_tcp_unlink_write_queue(skb, sk);
+		/* It is the one place in all of TCP, except connection
+		 * reset, where we can be unlinking the send_head.
+		 */
+		serval_tcp_check_send_head(sk, skb);
+		sk_wmem_free_skb(sk, skb);
+	}
+
+do_error:
+	if (copied + copied_syn)
+		goto out;
+out_err:
+	err = sk_stream_error(sk, flags, err);
+	release_sock(sk);
+	return err;
+}
+#else
+
 static int serval_tcp_sendmsg(struct kiocb *iocb, struct sock *sk, 
                               struct msghdr *msg, size_t len)
 {
@@ -1352,6 +1592,8 @@ out_err:
 	release_sock(sk);
 	return err;
 }
+#endif
+
 /*
  *	Handle reading urgent data. BSD has very simple semantics for
  *	this, no blocking and very strange errors 8)
@@ -2187,13 +2429,6 @@ static int serval_do_tcp_setsockopt(struct sock *sk, int level,
 		else
 			tp->keepalive_probes = val;
 		break;
-	case TCP_SYNCNT:
-		if (val < 1 || val > MAX_TCP_SYNCNT)
-			err = -EINVAL;
-		else
-			tp->syn_retries = val;
-		break;
-
 	case TCP_LINGER2:
 		if (val < 0)
 			tp->linger2 = -1;
@@ -2296,9 +2531,6 @@ static int serval_do_tcp_getsockopt(struct sock *sk, int level,
 		break;
 	case TCP_KEEPCNT:
 		val = serval_keepalive_probes(tp);
-		break;
-	case TCP_SYNCNT:
-		val = tp->syn_retries ? : sysctl_serval_tcp_syn_retries;
 		break;
 	case TCP_LINGER2:
 		val = tp->linger2;
@@ -2875,7 +3107,7 @@ static void serval_tcp_destroy_sock(struct sock *sk)
 	/* Clean prequeue, it must be empty really */
 	__skb_queue_purge(&tp->ucopy.prequeue);
 
-#if defined(OS_LINUX_KERNEL)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,7,0)) && defined(OS_LINUX_KERNEL)
 	if (sk->sk_sndmsg_page) {
 		__free_page(sk->sk_sndmsg_page);
 		sk->sk_sndmsg_page = NULL;
@@ -2884,7 +3116,7 @@ static void serval_tcp_destroy_sock(struct sock *sk)
         
 	//percpu_counter_dec(&tcp_sockets_allocated);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 25)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,25)
         return 0;
 #endif
 }

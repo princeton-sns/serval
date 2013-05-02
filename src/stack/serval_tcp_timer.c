@@ -4,8 +4,6 @@
 #include <serval_tcp.h>
 #include <serval_tcp_sock.h>
 
-int sysctl_serval_tcp_syn_retries __read_mostly = TCP_SYN_RETRIES;
-int sysctl_serval_tcp_synack_retries __read_mostly = TCP_SYNACK_RETRIES;
 int sysctl_serval_tcp_keepalive_time __read_mostly = TCP_KEEPALIVE_TIME;
 int sysctl_serval_tcp_keepalive_probes __read_mostly = TCP_KEEPALIVE_PROBES;
 int sysctl_serval_tcp_keepalive_intvl __read_mostly = TCP_KEEPALIVE_INTVL;

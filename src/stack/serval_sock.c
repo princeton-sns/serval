@@ -817,16 +817,10 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct net_device *dev = dev_get_by_index(sock_net(sk), 
-                                                  sk->sk_bound_dev_if);
 
-        snprintf(buf, buflen, "[%s:%s %s]",
+        snprintf(buf, buflen, "[%s:%s]",
                  flow_id_to_str(&ssk->local_flowid),
-                 flow_id_to_str(&ssk->peer_flowid),
-                 dev ? dev->name : "nodev");
-
-        if (dev)
-                dev_put(dev);
+                 flow_id_to_str(&ssk->peer_flowid));
 
         return buf;
 }

@@ -540,8 +540,8 @@ int netdev_populate_table(int sizeof_priv,
 
                 /* Get and save ip configuration */
                 if (ioctl(fd, SIOCGIFADDR, ifr) == -1) {
-                        LOG_ERR("SIOCGIFADDR: %s\n",
-                                strerror(errno));
+                        LOG_ERR("SIOCGIFADDR %s: %s\n",
+                                dev->name, strerror(errno));
                         free_netdev(dev);
                         continue;
                 }
@@ -551,8 +551,8 @@ int netdev_populate_table(int sizeof_priv,
                                 
                 if (strncmp(name, "lo", 2) != 0 && 
                     ioctl(fd, SIOCGIFBRDADDR, ifr) == -1) {
-                        LOG_ERR("SIOCGIFBRDADDR: %s\n",
-                                strerror(errno));
+                        LOG_ERR("SIOCGIFBRDADDR %s: %s\n",
+                                dev->name, strerror(errno));
                         free_netdev(dev);
                         continue;
                 }
@@ -561,8 +561,8 @@ int netdev_populate_table(int sizeof_priv,
                        &((struct sockaddr_in *)&ifr->ifr_broadaddr)->sin_addr, 4);
 
                 if (ioctl(fd, SIOCGIFNETMASK, ifr) == -1) {
-                        LOG_ERR("SIOCGIFNETMASK: %s\n",
-                                strerror(errno));
+                        LOG_ERR("SIOCGIFNETMASK %s: %s\n",
+                                dev->name, strerror(errno));
                         free_netdev(dev);
                         continue;
                 }
