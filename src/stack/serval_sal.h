@@ -75,7 +75,7 @@ static inline void serval_sal_ctrl_queue_purge(struct sock *sk)
 {
     struct sk_buff *skb = serval_sk(sk)->ctrl_queue;
     if (skb) {
-            FREE_SKB(skb);
+            kfree_skb(skb);
             serval_sk(sk)->ctrl_queue = NULL;
     }
 }

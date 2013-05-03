@@ -1001,7 +1001,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 verno)
 
                 if (err) {
                         LOG_SSK(sk, "Transport protocol returned error\n");
-                        kfree_skb(skb);
+                        __kfree_skb(skb);
                         return err;
                 }
         }
@@ -1609,7 +1609,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         dst_release(dst);
  drop_response:
 #endif
-        kfree_skb(rskb);
+        __kfree_skb(rskb);
         return;
 }
 
@@ -1800,7 +1800,7 @@ static int serval_sal_send_synack(struct sock *sk,
 #if defined(OS_LINUX_KERNEL)
  drop_response:
 #endif
-        kfree_skb(rskb);
+        __kfree_skb(rskb);
         return 0;
 }
 
@@ -3864,6 +3864,9 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
 }
 
 /*
+  We currently have no use for PAD extension, because all SAL headers
+  are 32-bit aligned.
+
 static inline int serval_sal_add_pad_ext(struct sock *sk, 
                                          struct sk_buff *skb,
                                          unsigned short pad_bytes)
@@ -3897,7 +3900,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                    serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
                     SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
-                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
+                        hdr_len += serval_sal_add_service_ext(sk, skb, 
+                                                              &ssk->peer_srvid);
                 }
 
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb);                
@@ -3923,7 +3927,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
 
         skb->protocol = IPPROTO_SERVAL;
 
-#if defined(ENABLED_DEBUG)
+#if defined(ENABLE_DEBUG)
         BUG_ON(hdr_len % 4 != 0);
 #endif
         return sh;

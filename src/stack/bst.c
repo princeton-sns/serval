@@ -74,7 +74,6 @@ void *bst_node_get_private(struct bst_node *n)
         return n->private;
 }
 
-
 int bst_node_print_prefix(struct bst_node *n, char *buf, size_t buflen)
 {
         unsigned int i;
@@ -121,10 +120,10 @@ static struct bst_node *stack_pop(struct list_head *stack)
 
 void bst_iterator_init(struct bst *tree, struct bst_iterator *iter)
 {
-        iter->curr = tree->root;
         INIT_LIST_HEAD(&iter->stack);
-        if (tree->root)
-                stack_push(&iter->stack, tree->root);
+        iter->curr = tree->root;
+        if (iter->curr)
+                stack_push(&iter->stack, iter->curr);
 }
 
 struct bst_node *bst_iterator_node(struct bst_iterator *iter)
@@ -493,7 +492,7 @@ int bst_init(struct bst *t)
 
 void bst_destroy(struct bst *tree)
 {
-        if (tree->entries > 0) {
+        if (tree->entries > 0 && tree->root) {
                 __bst_destroy_subtree(tree->root);
                 tree->root = NULL;
                 tree->entries = 0;
