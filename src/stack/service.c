@@ -863,6 +863,14 @@ struct target *service_iter_next(struct service_iter *iter)
                                 t = NULL;
                                 break;
                         } else {
+                                if (!t)
+                                {
+#if defined(OS_USER)
+                                        printf("t is NULL!\n");
+                                        return NULL;
+#endif
+                                }
+                                
                                 iter->pos = t->lh.next;
                                 
                                 if (iter->mode == SERVICE_ITER_ALL)
@@ -955,20 +963,23 @@ static int __service_entry_print(struct bst_node *n, char *buf,
         char dststr[18]; /* Currently sufficient for IPv4 */
         char srcstr[18];
         int len = 0, tot_len = 0;
-        unsigned int bits = 0;
+        unsigned int bits, src_bits;
 
         /*
           Ming:
         */
         char buff[2000];
+        bits = 0;
+        src_bits = 0;
 
-        print_ip_entry(n, buff, 2000);
+//        print_ip_entry(n, buff, 2000);
 
         read_lock_bh(&se->lock);
 
         bst_node_print_prefix(n, prefix, PREFIX_BUFLEN);
 
         bits = bst_node_get_prefix_bits(n);
+        src_bits = bst_node_get_src_bits(n);
 
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
@@ -1006,12 +1017,17 @@ static int __service_entry_print(struct bst_node *n, char *buf,
                                                inet_ntop(AF_INET,
                                                          t->dst, 
                                                          dststr, 18));
-                                printf("Interface: %-5s %s\n",
+#if defined(OS_USER)
+                                inet_ntop(AF_INET, t->dst, dststr, 18);
+                                inet_ntop(AF_INET, t->src, srcstr, 18);
+                                /*
+                                  printf("Interface: %-5s, service prefix: %s/%d, source address: %s/%d\n",
                                                t->out.dev ? 
                                                t->out.dev->name : "any",
-                                               inet_ntop(AF_INET,
-                                                         t->dst, 
-                                                         dststr, 18));
+                                       dststr, bits, srcstr, src_bits);
+                                */
+                                printf("%s", buf);
+#endif
                                 
                         } else {
                                 len = snprintf(buf + tot_len, buflen, 
@@ -1484,6 +1500,7 @@ static int service_table_add(struct service_table *tbl,
           add source address and src_len.
         */
 
+        /*
         if (src != NULL)
         {
                 se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops,
@@ -1495,7 +1512,8 @@ static int service_table_add(struct service_table *tbl,
                 } else {
                         tbl->services++;
                 }
-        }  
+        }
+        */
 
         se->node = bst_insert_prefix(&tbl->tree, &tbl->srv_ops, 
                                      se, srvid, prefix_bits, src, src_bits, GFP_ATOMIC);

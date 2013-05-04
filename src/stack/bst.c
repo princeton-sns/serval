@@ -53,6 +53,8 @@
 
  */
 
+#pragma pack(push)
+#pragma pack(2)
 struct bst_node {       
         struct bst *tree, *source_tree; /* Ming */
 	struct bst_node *parent, *left, *right, *source_node;
@@ -81,6 +83,7 @@ struct bst_node {
         
         /* End Ming's code */
 };
+#pragma pack(pop)
 
 const unsigned char *bst_node_get_prefix(const struct bst_node *n)
 {
@@ -94,7 +97,10 @@ unsigned int bst_node_get_prefix_size(const struct bst_node *n)
 
 unsigned long bst_node_get_prefix_bits(const struct bst_node *n)
 {
-        return n->prefix_bits;
+        if (n->type == DESTINATION)
+                return n->prefix_bits;
+        else
+                return n->tree->root->parent->prefix_bits;
 }
 
 unsigned long bst_node_get_src_bits(const struct bst_node *n)
@@ -979,6 +985,15 @@ struct bst_node *bst_node_insert_prefix(struct bst_node *root,
 
                 n = bst_source_node_new(n->source_tree->root, ops, private, srcaddr, src_bits, alloc);
 
+                if (!n)
+                {
+#if defined(OS_USER)
+                        printf("In bst_node_insert_prefix, n = NULL!\n");
+#endif
+                        return NULL;
+                }
+                
+
                 if (bst_node_init(n, ops, private) == -1) {
                         LOG_ERR("source node_init failed\n");
                         /* TODO: handle init failure... cleanup tree? */
@@ -1004,6 +1019,10 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
 {
         struct bst_node *n;
 
+#if defined(OS_USER)
+        char buf[2000];
+#endif
+
         if (tree->entries == 0) {
                 tree->root = (struct bst_node *)MALLOC(sizeof(struct bst_node), 
                                                        alloc);
@@ -1027,6 +1046,13 @@ struct bst_node *bst_insert_prefix(struct bst *tree, struct bst_node_ops *ops,
         if (n) {
                 tree->entries++;
         }
+
+#if defined(OS_USER)
+        if (!n)
+                printf("n is NULL!\n");
+        else
+                print_ip_entry(n, buf, 2000);
+#endif
 
         return n;
 }

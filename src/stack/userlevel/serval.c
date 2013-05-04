@@ -533,8 +533,8 @@ int main(int argc, char **argv)
   test for trie tree
 */
 #ifdef BST_TEST
-        bst_test();
-        return 0;
+//        bst_test();
+//        return 0;
 #endif
 
         
