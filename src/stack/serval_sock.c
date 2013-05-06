@@ -319,7 +319,7 @@ struct sock *serval_sock_lookup_flow(struct flow_id *flowid)
 
 struct sock *serval_sock_lookup_service(struct service_id *srvid, int protocol)
 {
-        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS, protocol);
+        return service_find_sock(srvid, SERVICE_ID_MAX_PREFIX_BITS, NULL, 0, protocol);
 }
 
 static inline unsigned int serval_sock_ehash(struct serval_table *table,

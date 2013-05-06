@@ -1145,21 +1145,36 @@ static int service_entry_global_match(struct bst_node *n)
         return 0;
 }
 
+/*
+  Ming: for source address
+*/
+static int service_entry_src_dst_match(struct bst_node *n)
+{
+        struct service_entry *se = get_service(n);        
+        struct target *t;
+
+        t = __service_entry_get_target(se, SERVICE_RULE_FORWARD, 
+                                       NULL, 0, NULL, 0, 
+                                       make_target(NULL), NULL, 
+                                       MATCH_NO_PROTOCOL);
+        
+        if (t)
+                return 1;
+
+        return 0;
+}
+
 static int service_entry_any_match(struct bst_node *n)
 {
         /* Any entry will match */        
         return 1;
 }
 
-static int service_entry_src_dst_match(struct bst_node *n)
-{
-        /* Match entry accroding to source address and destination service */
-        return 1;
-}
-
 static struct service_entry *__service_table_find(struct service_table *tbl,
                                                   struct service_id *srvid, 
-                                                  int prefix, 
+                                                  int prefix,
+                                                  void *srcaddr,
+                                                  unsigned short src_bits,
                                                   rule_match_t match) 
 {
         struct service_entry *se = NULL;
@@ -1192,7 +1207,7 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                 break;
         }
 
-        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, NULL, 0, func);
+        n = bst_find_longest_prefix_match(&tbl->tree, srvid, prefix, srcaddr, src_bits, func);
         
         if (n) {
                 if (match != RULE_MATCH_EXACT ||
@@ -1205,14 +1220,16 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
 
 static struct service_entry *service_table_find(struct service_table *tbl,
                                                 struct service_id *srvid, 
-                                                int prefix, 
+                                                int prefix,
+                                                void *srcaddr,
+                                                unsigned short src_bits,
                                                 rule_match_t match)
 {
         struct service_entry *se = NULL;
 
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, match);
+        se = __service_table_find(tbl, srvid, prefix, srcaddr, src_bits, match);
 
         if (se)
                 service_entry_hold(se);
@@ -1224,7 +1241,8 @@ static struct service_entry *service_table_find(struct service_table *tbl,
 
 static struct sock* service_table_find_sock(struct service_table *tbl, 
                                             struct service_id *srvid,
-                                            int prefix, int protocol) 
+                                            int prefix, void *srcaddr,
+                                            unsigned short src_bits, int protocol) 
 {
         struct service_entry *se = NULL;
         struct sock *sk = NULL;
@@ -1234,7 +1252,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         
         read_lock_bh(&tbl->lock);
 
-        se = __service_table_find(tbl, srvid, prefix, RULE_MATCH_LOCAL);
+        se = __service_table_find(tbl, srvid, prefix, srcaddr, src_bits, RULE_MATCH_LOCAL);
         
         if (se) {
                 struct target *t;
@@ -1295,15 +1313,17 @@ void service_get_stats(struct table_stats* tstats)
 }
 
 struct service_entry *service_find_type(struct service_id *srvid, int prefix,
+                                        void *srcaddr, unsigned short src_bits,
                                         rule_match_t match) 
 {
-        return service_table_find(&srvtable, srvid, prefix, match);
+        return service_table_find(&srvtable, srvid, prefix, srcaddr, src_bits, match);
 }
 
-struct sock *service_find_sock(struct service_id *srvid, int prefix, 
+struct sock *service_find_sock(struct service_id *srvid, int prefix,
+                               void *srcaddr, unsigned short src_bits,
                                int protocol) 
 {
-        return service_table_find_sock(&srvtable, srvid, prefix, protocol);
+        return service_table_find_sock(&srvtable, srvid, prefix, srcaddr, src_bits, protocol);
 }
 
 static int service_table_modify(struct service_table *tbl,

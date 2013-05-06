@@ -77,15 +77,18 @@ static inline int between(__u32 seq1, __u32 seq2, __u32 seq3)
 }
 
 /* 
-   Context for parsed Serval headers 
+   Context for parsed Serval headers
+   Ming: add src_bits and srcaddr
 */   
 struct sal_context {
         struct sk_buff *skb;
         struct sal_hdr *hdr;
         unsigned short length; /* Total length of all headers */
         unsigned short flags;
+        unsigned short src_bits;
         uint32_t verno; /* Version number of control information */
         uint32_t ackno; /* Acknowledgement number of control information */
+        void * srcaddr;
         struct sal_ext *ext[MAX_NUM_SAL_EXTENSIONS];
         struct sal_control_ext *ctrl_ext;
         struct sal_address_ext *addr_ext;
@@ -3074,7 +3077,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
          * probably be in a separate function call
          * serval_sal_transit_rcv or resolve something
          */
-        se = service_find(srvid, SERVICE_ID_MAX_PREFIX_BITS);
+        se = service_find(srvid, SERVICE_ID_MAX_PREFIX_BITS, ctx->srcaddr, ctx->src_bits);
 
         if (!se) {
                 LOG_INF("No matching service entry for serviceID %s\n",
@@ -3389,16 +3392,17 @@ int serval_sal_rcv(struct sk_buff *skb)
         struct sal_context ctx;
         unsigned int sal_length;
         int err = 0;
+        struct iphdr *iph = ip_hdr(skb);
         
 #if defined(ENABLE_DEBUG)
         {
-                struct iphdr *iph = ip_hdr(skb);
+                
                 char src[18], dst[18];
+                inet_ntop(AF_INET, &iph->saddr, src, 18);
+                inet_ntop(AF_INET, &iph->daddr, dst, 18);
 
                 LOG_PKT("skb->len=%u : %s -> %s\n",
-                        skb->len, 
-                        inet_ntop(AF_INET, &iph->saddr, src, 18),
-                        inet_ntop(AF_INET, &iph->daddr, dst, 18));
+                        skb->len, src, dst);
         }
 #endif
 
@@ -3449,6 +3453,11 @@ int serval_sal_rcv(struct sk_buff *skb)
         
         if (!sk) {
                 /* Resolve on serviceID */
+                /* Ming */
+                ctx.srcaddr = &iph->saddr;
+                ctx.src_bits = 32;
+                /* End Ming */
+                
                 err = serval_sal_resolve(skb, &ctx, &sk);
                 
                 switch (err) {
@@ -4012,7 +4021,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         LOG_SSK(sk, "Resolving service %s\n",
                 service_id_to_str(&ssk->peer_srvid));
 
-        se = service_find(&ssk->peer_srvid, SERVICE_ID_MAX_PREFIX_BITS);
+        se = service_find(&ssk->peer_srvid, SERVICE_ID_MAX_PREFIX_BITS, NULL, 0);
 
 	if (!se) {
 		LOG_SSK(sk, "service lookup failed for [%s]\n",

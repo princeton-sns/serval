@@ -187,9 +187,12 @@ static int ctrl_handle_del_service_msg(struct ctrlmsg *cm, int peer)
                            sizeof(null_service)) == 0 ||
                     entry->srvid_prefix_bits > 0)
                         prefix_bits = entry->srvid_prefix_bits;
-                
+
+                /*
+                  Ming: add srcaddr = NULL and src_bits = 0
+                */
                 se = service_find_exact(&entry->srvid, 
-                                        prefix_bits);
+                                        prefix_bits, &entry->srcaddr, &entry->src_bits);
 
                 if (!se) {
                         LOG_DBG("No match for serviceID %s:(%u)\n",
@@ -347,7 +350,7 @@ static int ctrl_handle_get_service_msg(struct ctrlmsg *cm, int peer)
                 prefix_bits = cmg->service[0].srvid_prefix_bits;
 
         se = service_find(&cmg->service[0].srvid, 
-                          prefix_bits);
+                          prefix_bits, &cmg->service[0].srcaddr, &cmg->service[0].src_bits);
 
         if (se) {
                 struct ctrlmsg_service *cres;
