@@ -30,7 +30,8 @@ public class TranslatorFragment extends Fragment {
 
 	private static final String[] ADD_HTTP_RULES = {
 		"ifconfig dummy0 192.168.25.25 -arp",
-		"ip rule add to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
+		"ip rule add fwmark 0x4 table main prio 10",
+		//"ip rule add to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule add from 192.168.25.0/24 table main priority 20",
 		"ip rule add from all table 1 priority 30",
 		"ip route add default via 192.168.25.25 dev dummy0 table 1",
@@ -54,6 +55,11 @@ public class TranslatorFragment extends Fragment {
 		"iptables -A serval_FORWARD -s 192.168.25.0/255.255.255.0 -j RETURN",
 		"iptables -I FORWARD 1 -j serval_FORWARD",
 		
+		"iptables -t mangle -N serval_OUTPUT",
+		"iptables -t mangle -A serval_OUTPUT ! -p tcp -j MARK --set-mark 0x4",
+		"iptables -t mangle -A serval_OUTPUT -j RETURN",
+		"iptables -t mangle -I OUTPUT 1 -j serval_OUTPUT",
+		
 		"iptables -t nat -N serval_POSTROUTING",
 		"iptables -t nat -A serval_POSTROUTING ! -o dummy0 -j MASQUERADE",
 		"iptables -t nat -A serval_POSTROUTING -j RETURN",
@@ -66,7 +72,8 @@ public class TranslatorFragment extends Fragment {
 	
 	private static final String[] DEL_HTTP_RULES = {
 		"ifconfig dummy0 down",
-		"ip rule del to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
+		"ip rule del fwmark 0x4 table main prio 10",
+		//"ip rule del to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule del from 192.168.25.0/24 table main priority 20",
 		"ip rule del from all table 1 priority 30",
 		"echo 0 > /proc/sys/net/ipv4/ip_forward",
@@ -78,6 +85,10 @@ public class TranslatorFragment extends Fragment {
 		"iptables -F serval_FORWARD",
 		"iptables -D FORWARD -j serval_FORWARD",
 		"iptables -X serval_FORWARD",
+		
+		"iptables -t mangle -F serval_OUTPUT",
+		"iptables -t mangle -D OUTPUT -j serval_OUTPUT",
+		"iptables -t mangle -X serval_OUTPUT",
 		
 		"iptables -t nat -F serval_POSTROUTING",
 		"iptables -t nat -D POSTROUTING ! -o lo -j serval_POSTROUTING",
