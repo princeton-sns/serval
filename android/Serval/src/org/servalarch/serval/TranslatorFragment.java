@@ -29,7 +29,7 @@ import android.widget.ToggleButton;
 public class TranslatorFragment extends Fragment {
 
 	private static final String[] ADD_HTTP_RULES = {
-		"ifconfig dummy0 192.168.25.25 -arp",
+		"ifconfig dummy0 192.168.25.25 arp on",
 		"ip rule add fwmark 0x4 table main prio 10",
 		//"ip rule add to 128.112.7.54 table main priority 10", // TODO this change based on the proxy IP
 		"ip rule add from 192.168.25.0/24 table main priority 20",
