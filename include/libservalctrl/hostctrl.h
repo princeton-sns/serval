@@ -128,7 +128,8 @@ int hostctrl_service_add(struct hostctrl *hc,
                          unsigned int priority,
                          unsigned int weight,
                          const struct in_addr *ipaddr,
-                         const struct in_addr *srcaddr);
+                         const struct in_addr *srcaddr,
+                         unsigned short src_bits);
 
 int hostctrl_service_remove(struct hostctrl *hc,
                             enum service_rule_type type,

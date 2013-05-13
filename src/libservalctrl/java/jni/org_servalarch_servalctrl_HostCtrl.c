@@ -780,7 +780,7 @@ jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_addService4(JNIEnv *env,
                                 &srvid, 
                                 (unsigned short)prefix_bits, 
                                 (unsigned int)priority, 
-                                (unsigned int)weight, &ipaddr, NULL);
+                                (unsigned int)weight, &ipaddr, NULL, 0);
 }
 
 jint JNICALL Java_org_servalarch_servalctrl_HostCtrl_getService4(JNIEnv *env, jobject obj, 

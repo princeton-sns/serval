@@ -78,7 +78,8 @@ static int remote_service_add_dummy(struct hostctrl *hc,
                                     unsigned int priority,
                                     unsigned int weight,
                                     const struct in_addr *ipaddr,
-                                    const struct in_addr *srcaddr)
+                                    const struct in_addr *srcaddr,
+                                    unsigned short src_bits)
 {
     return 0;
 }

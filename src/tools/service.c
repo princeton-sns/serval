@@ -332,7 +332,7 @@ static int service_execute(struct hostctrl *hctl, void *in_args)
                                            &args->srvid, 
                                            args->prefix_bits, 
                                            args->priority, 
-                                           args->weight, args->ip1, args->ip_src);
+                                           args->weight, args->ip1, args->ip_src, args->src_bits);
                 break;
         case SERVICE_OP_DEL:
                 ret = hostctrl_service_remove(hctl, args->type, &args->srvid, 

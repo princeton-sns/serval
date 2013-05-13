@@ -18,7 +18,8 @@ static int local_service_generic(struct hostctrl *hc,
                                  unsigned int priority,
                                  unsigned int weight,
                                  const struct in_addr *ipaddr,
-                                 const struct in_addr *srcaddr)
+                                 const struct in_addr *srcaddr,
+                                 unsigned short src_bits)
 {
     struct {
 		struct ctrlmsg_service cm;
@@ -50,7 +51,12 @@ static int local_service_generic(struct hostctrl *hc,
     */
 
     if (srcaddr)
+    {
         memcpy(&req.cm.service[0].srcaddr, srcaddr, sizeof(*srcaddr));
+        req.cm.service[0].src_bits = src_bits;
+    }
+    else
+        req.cm.service[0].src_bits = 0;
 
     /*
       End Ming's code
@@ -76,11 +82,12 @@ static int local_service_add(struct hostctrl *hc,
                              unsigned int priority,
                              unsigned int weight,
                              const struct in_addr *ipaddr,
-                             const struct in_addr *srcaddr)
+                             const struct in_addr *srcaddr,
+                             unsigned short src_bits)
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_ADD_SERVICE,
                                  type, srvid, prefix_bits, priority, 
-                                 weight, ipaddr, srcaddr);
+                                 weight, ipaddr, srcaddr, src_bits);
 }
 
 static int local_service_remove(struct hostctrl *hc, 
@@ -91,7 +98,7 @@ static int local_service_remove(struct hostctrl *hc,
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_DEL_SERVICE, 
                                  type, srvid, prefix_bits, 
-                                 0, 0, ipaddr, NULL);
+                                 0, 0, ipaddr, NULL, 0);
 }
 
 static int local_service_modify(struct hostctrl *hc, 
@@ -146,7 +153,7 @@ static int local_service_get(struct hostctrl *hc,
 {
 	return local_service_generic(hc, CTRLMSG_TYPE_GET_SERVICE,
                                  SERVICE_RULE_UNDEFINED, srvid, prefix_bits, 
-                                 0, 0, ipaddr, NULL);
+                                 0, 0, ipaddr, NULL, 0);
 }
 
 static int local_service_register_dummy(struct hostctrl *hc, 
