@@ -20,7 +20,7 @@ enum translator_mode {
 enum debug_level {
     DBG_LVL_NONE,
     DBG_LVL_MIN,
-    DBG_LVL_MID,
+    DBG_LVL_MED,
     DBG_LVL_MAX,
 };
 
@@ -31,8 +31,8 @@ extern enum debug_level debuglevel;
 		LOG_DBG(format, ## __VA_ARGS__);	\
 	    }						\
 	})
-#define LOG_MID(format, ...) ({				\
-	    if (debuglevel >= DBG_LVL_MID) {		\
+#define LOG_MED(format, ...) ({				\
+	    if (debuglevel >= DBG_LVL_MED) {		\
 		LOG_DBG(format, ## __VA_ARGS__);	\
 	    }						\
 	})

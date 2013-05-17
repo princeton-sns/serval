@@ -68,7 +68,7 @@ static enum work_status work_translate(struct socket *from,
                                        struct socket *to,
                                        int splicefd[2])
 {
-        ssize_t ret;
+        ssize_t ret = 0, bytes_read = 0;
         size_t readlen, nbytes = 0;
         enum work_status status = WORK_OK;
         int bytes_queued = 0;
@@ -85,7 +85,7 @@ static enum work_status work_translate(struct socket *from,
                  * for writability on the "to" socket. */
                 from->monitored_events &= ~EPOLLIN;
                 to->monitored_events |= EPOLLOUT;
-                LOG_MID("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
+                LOG_MED("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
                         to->fd, bytes_queued, to->sndbuf);
                 return WORK_NOSPACE;
         }
@@ -95,35 +95,50 @@ static enum work_status work_translate(struct socket *from,
         if (readlen > PIPE_BUF)
                 readlen = PIPE_BUF;
         
-        ret = splice(from->fd, NULL, splicefd[1], NULL, 
-                     readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
-        
-        if (ret == -1) {
-                if (errno == EWOULDBLOCK) {
-                        /* Just return and retry */
-                } else { 
-                        status = WORK_ERROR;
-                        LOG_ERR("client %u splice1 from %s %s\n",
-                                from->c->id, 
-                                &from->c->sock[ST_INET] == from ? "INET" : "SERVAL",
-                                strerror(errno));
-                }                
-                goto out;
-        } else if (ret == 0) {
-                LOG_DBG("client %u splice1: %s end closed\n", 
-                        from->c->id, 
-                        &from->c->sock[ST_INET] == from ? "INET" : "SERVAL");
-                status = WORK_CLOSE;
-                goto out;
-        }       
-        
-        readlen = ret;
-        from->bytes_read += readlen;
-        
-        LOG_MID("splice1 %zu bytes\n", readlen);
-        
-        while (readlen && status == WORK_OK) {
+        while (bytes_read < readlen && status == WORK_OK) {
+                ret = splice(from->fd, NULL, splicefd[1], NULL, 
+                                     readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+                
+                if (ret == -1) {
+                        if (errno == EWOULDBLOCK) {
+                                /* Stop splicing to pipe if we block */
+                                LOG_MED("splice1 would block\n");
+                                break;
+                        } else { 
+                                LOG_ERR("client %u splice1 from %s %s\n",
+                                        from->c->id, 
+                                        &from->c->sock[ST_INET] == from ? 
+                                        "INET" : "SERVAL",
+                                        strerror(errno));
 
+                                if (bytes_read > 0)
+                                        break;
+                                status = WORK_ERROR;
+                        }
+                        goto out;
+                } else if (ret == 0) {
+                        LOG_DBG("client %u splice1: %s end closed\n", 
+                                from->c->id, 
+                                &from->c->sock[ST_INET] == from ? 
+                                "INET" : "SERVAL");
+
+                         if (bytes_read > 0)
+                                break;
+                        status = WORK_CLOSE;
+
+                        goto out;
+                } else if (ret > 0) {
+                        bytes_read += ret;
+                        readlen -= ret;
+                }
+        }
+        
+        readlen = bytes_read;
+        from->bytes_read += bytes_read;
+        
+        LOG_MED("splice1 %zu bytes\n", readlen);
+       
+        while (readlen && status == WORK_OK) {
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
                              readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
                 
@@ -156,7 +171,7 @@ static enum work_status work_translate(struct socket *from,
         
  out:
 
-        LOG_MID("splice2 %zu bytes\n", nbytes);
+        LOG_MED("splice2 %zu bytes\n", nbytes);
 
         to->monitored_events &= ~EPOLLOUT;
         from->monitored_events |= EPOLLIN;
