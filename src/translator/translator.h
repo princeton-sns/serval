@@ -5,6 +5,7 @@ struct sockaddr_sv;
 
 enum signal_types {
         SIGNAL_EXIT = 1,
+	SIGNAL_NEW_CLIENT,
         SIGNAL_EPOLL_REARM,
 };
 

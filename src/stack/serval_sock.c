@@ -136,7 +136,7 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                 local_bh_disable();
                 spin_lock(&slot->lock);
                                 
-                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
+                hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {
                         int should_migrate = 0;
 
                         if (old_dev > 0 && new_dev > 0) {
@@ -233,7 +233,7 @@ void serval_sock_freeze_flows(struct net_device *dev)
                 
                 spin_lock_bh(&slot->lock);
                                 
-                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
+                hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {          
                         struct serval_sock *ssk = serval_sk(sk);                       
                         
                         if (sk->sk_bound_dev_if > 0 && 
@@ -350,7 +350,7 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
 
         spin_lock_bh(&slot->lock);
         
-        hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
+        hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {
                 struct serval_sock *ssk = serval_sk(sk);
                 if (memcmp(key, ssk->hash_key, keylen) == 0) {
                         sock_hold(sk);

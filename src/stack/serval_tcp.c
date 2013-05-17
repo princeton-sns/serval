@@ -606,12 +606,12 @@ static void serval_tcp_service_net_dma(struct sock *sk, bool wait)
 		return;
 
 	last_issued = tp->ucopy.dma_cookie;
-	dma_async_memcpy_issue_pending(tp->ucopy.dma_chan);
-
+	dma_async_issue_pending(tp->ucopy.dma_chan);
+        
 	do {
-		if (dma_async_memcpy_complete(tp->ucopy.dma_chan,
-					      last_issued, &done,
-					      &used) == DMA_SUCCESS) {
+		if (dma_async_is_tx_complete(tp->ucopy.dma_chan,
+                                             last_issued, &done,
+                                             &used) == DMA_SUCCESS) {
 			/* Safe to free early-copied skbs now */
 			__skb_queue_purge(&sk->sk_async_wait_queue);
 			break;
@@ -629,6 +629,7 @@ static void serval_tcp_service_net_dma(struct sock *sk, bool wait)
 #endif
 
 #if defined(OS_LINUX_KERNEL)
+
 /*
  *	Wait for a TCP event.
  *
@@ -636,23 +637,21 @@ static void serval_tcp_service_net_dma(struct sock *sk, bool wait)
  *	take care of normal races (between the test and the event) and we don't
  *	go look at any of the socket buffers directly.
  */
-unsigned int serval_tcp_poll(struct file *file, 
-                             struct socket *sock, 
+unsigned int serval_tcp_poll(struct file *file, struct socket *sock, 
                              poll_table *wait)
 {
 	unsigned int mask;
 	struct sock *sk = sock->sk;
-	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
+	const struct serval_tcp_sock *tp = serval_tcp_sk(sk);
 
 	sock_poll_wait(file, sk_sleep(sk), wait);
-        
         if (sk->sk_state == TCP_LISTEN) {
                 struct serval_sock *ssk = serval_sk(sk);
                 return list_empty(&ssk->accept_queue) ? 0 :
                         (POLLIN | POLLRDNORM);
         }
 
-        /* Socket is not locked. We are protected from async events
+	/* Socket is not locked. We are protected from async events
 	 * by poll logic and correct handling of state changes
 	 * made by other threads is impossible in any case.
 	 */
@@ -686,16 +685,18 @@ unsigned int serval_tcp_poll(struct file *file,
 	 * NOTE. Check for TCP_CLOSE is added. The goal is to prevent
 	 * blocking on fresh not-connected or disconnected socket. --ANK
 	 */
-	if (sk->sk_shutdown == SHUTDOWN_MASK || sk->sk_state == TCP_CLOSE) {
+	if (sk->sk_shutdown == SHUTDOWN_MASK || sk->sk_state == TCP_CLOSE)
 		mask |= POLLHUP;
-                LOG_SSK(sk, "POLLHUP\n");
-        }
-	if (sk->sk_shutdown & RCV_SHUTDOWN) {
+	if (sk->sk_shutdown & RCV_SHUTDOWN)
 		mask |= POLLIN | POLLRDNORM | POLLRDHUP;
-        }
 
-	/* Connected? */
-	if ((1 << sk->sk_state) & ~(TCPF_SYN_SENT | TCPF_SYN_RECV)) {
+	/* Connected or passive Fast Open socket? */
+	if (sk->sk_state != TCP_SYN_SENT &&
+	    (sk->sk_state != TCP_SYN_RECV 
+#if defined(ENABLE_TCP_FASTOPEN)
+             || tp->fastopen_rsk != NULL
+#endif
+            )) {
 		int target = sock_rcvlowat(sk, 0, INT_MAX);
 
 		if (tp->urg_seq == tp->copied_seq &&
@@ -732,10 +733,9 @@ unsigned int serval_tcp_poll(struct file *file,
 	}
 	/* This barrier is coupled with smp_wmb() in serval_sal_rcv_reset() */
 	smp_rmb();
-	if (sk->sk_err) {
-                LOG_SSK(sk, "POLLERR returned\n");
+	if (sk->sk_err)
 		mask |= POLLERR;
-        }
+
 	return mask;
 }
 
@@ -1939,7 +1939,7 @@ static int serval_tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 
 #ifdef CONFIG_NET_DMA
 		if (tp->ucopy.dma_chan)
-			dma_async_memcpy_issue_pending(tp->ucopy.dma_chan);
+			dma_async_issue_pending(tp->ucopy.dma_chan);
 #endif
 		if (copied >= target) {
 			/* Do not sleep, just process backlog. */
@@ -2041,7 +2041,7 @@ do_prequeue:
 					break;
 				}
 
-				dma_async_memcpy_issue_pending(tp->ucopy.dma_chan);
+				dma_async_issue_pending(tp->ucopy.dma_chan);
 
 				if ((offset + used) == skb->len)
 					copied_early = 1;
