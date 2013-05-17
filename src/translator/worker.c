@@ -28,6 +28,7 @@
 #endif
 
 #define MAX_EVENTS 100
+#define ENABLE_SPLICE_DEBUG 1
 
 static int socket_is_writable(struct socket *s, int *bytes)
 {
@@ -48,6 +49,21 @@ static int socket_is_writable(struct socket *s, int *bytes)
 
 #define writable_bytes(s,b) socket_is_writable(s,b)
 
+/*
+  Move data from one socket to another via a pipe. 
+
+  For this to work, the 'from' socket must be readable, and the 'to'
+  socket must be writable. Also, we want to make sure that we can
+  always write as much as we read, because we do not want to leave
+  data in the pipe connecting the sockets. To ensure that we do not
+  read too much, we first check the available send buffer space on the
+  'to' socket and only read this amount.
+
+  If there isn't any buffer space in the 'to' socket, we must wait for
+  writability on that socket. In the meantime, we must also stop
+  monitoring readability on the 'from' socket, otherwise we will just
+  continue to try and translate.
+ */
 static enum work_status work_translate(struct socket *from, 
                                        struct socket *to,
                                        int splicefd[2])
@@ -59,10 +75,9 @@ static enum work_status work_translate(struct socket *from,
         
         readlen = writable_bytes(to, &bytes_queued);
         
-#if defined(ENABLE_SPLICE_DEBUG)
-        LOG_DBG("translating up to %zu bytes from fd %d to %d\n", 
-                readlen, from->fd, to->fd);
-#endif
+        LOG_MIN("%d -> %d translating up to %zu\n", 
+                from->fd, to->fd, readlen);
+        
         if (readlen == 0) {
                 /* There wasn't enough space in send buffer of the
                  * socket we are writing to, we need to stop monitor
@@ -70,7 +85,7 @@ static enum work_status work_translate(struct socket *from,
                  * for writability on the "to" socket. */
                 from->monitored_events &= ~EPOLLIN;
                 to->monitored_events |= EPOLLOUT;
-                LOG_DBG("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
+                LOG_MID("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
                         to->fd, bytes_queued, to->sndbuf);
                 return WORK_NOSPACE;
         }
@@ -105,10 +120,8 @@ static enum work_status work_translate(struct socket *from,
         readlen = ret;
         from->bytes_read += readlen;
         
-#if defined(ENABLE_SPLICE_DEBUG)
-        LOG_DBG("splice1 %zu bytes\n", readlen);
-#endif
-
+        LOG_MID("splice1 %zu bytes\n", readlen);
+        
         while (readlen && status == WORK_OK) {
 
                 ret = splice(splicefd[0], NULL, to->fd, NULL,
@@ -142,9 +155,9 @@ static enum work_status work_translate(struct socket *from,
 #endif
         
  out:
-#if defined(ENABLE_SPLICE_DEBUG)
-        LOG_DBG("splice2 %zu bytes\n", nbytes);
-#endif
+
+        LOG_MID("splice2 %zu bytes\n", nbytes);
+
         to->monitored_events &= ~EPOLLOUT;
         from->monitored_events |= EPOLLIN;
         return status;
@@ -183,8 +196,8 @@ static void check_socket_events(struct client *c, struct socket *s,
         } else {
                 s2 = &c->sock[ST_INET];
         }
-        /*
-        LOG_DBG("s(fd=%d) state=%s events[R=%d W=%d H=%u] "
+
+        LOG_MAX("s(fd=%d) state=%s events[R=%d W=%d H=%u] "
                 "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u] "
                 "s2(fd=%d) active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u]\n",
                 s->fd, 
@@ -205,16 +218,20 @@ static void check_socket_events(struct client *c, struct socket *s,
                 (s2->monitored_events & EPOLLIN) > 0, 
                 (s2->monitored_events & EPOLLOUT) > 0,
                 (s2->monitored_events & EPOLLRDHUP) > 0);
-        */
+
         if (events & EPOLLRDHUP) {
                 /* Other end of this socket's connection closed */
                 s->active_events &= ~EPOLLRDHUP;
-                LOG_DBG("RDHUP\n");
                 client_add_work(c, work_close);          
         }
         
-        if (events & EPOLLIN) {
-                if (s2->active_events & EPOLLOUT) {
+        /* 
+           There is something to read on a socket. We must make sure
+           that the other socket is also writable for splicing to
+           work. If, not, stop monitoring reads, and wait for a write
+           event. 
+        */
+        if (events & EPOLLIN) { if (s2->active_events & EPOLLOUT) {
                         /* We can translate stuff from s to s2 */
                         s->active_events &= ~EPOLLIN;
                        
@@ -228,7 +245,14 @@ static void check_socket_events(struct client *c, struct socket *s,
                 s->monitored_events &= ~EPOLLIN;
         } 
 
+        /*
+          A socket (s) is writable. If the other socket (s2) was
+          previously readable, then we are ready to execute a splice
+          between the sockets. Otherwise, wait for read event on s2. */
         if (events & EPOLLOUT) {
+                /* Socket was in async connect(). EPOLLOUT means the
+                 * connect-call has completed. We must check the
+                 * results. */
                 if (s->state == SS_CONNECTING) {
                         s->monitored_events &= ~EPOLLOUT;
                         s->active_events &= ~EPOLLOUT;
@@ -275,6 +299,11 @@ static void worker_cleanup_clients(struct worker *w)
         }
 }
 
+/*
+  After a worker has been notified by the main thread that it has been
+  assigned a new client, the worker moves the client to its active
+  client list, and starts to monitor events on the client's sockets.
+ */
 static void worker_accept_clients(struct worker *w)
 {
         pthread_mutex_lock(&w->lock);
@@ -294,6 +323,19 @@ static void worker_accept_clients(struct worker *w)
         pthread_mutex_unlock(&w->lock);
 }
 
+/*
+  A worker's main loop. The worker waits and acts on three types of
+  events: 
+
+  1) exit signal
+  2) new client assigned
+  3) socket event on active client
+
+  1,2 are straightforward. On 3), the worker will check for which
+  socket events are active, and then determine which type of work to
+  execute (e.g., close, or translate INET-to-SERVAL or
+  SERVAL-to-INET).  
+*/  
 static void *worker_thread(void *arg)
 {
         struct worker *w = (struct worker *)arg;
@@ -343,13 +385,12 @@ static void *worker_thread(void *arg)
                                 }
                         } else {
                                 struct client *c = s->c;
-                                unsigned int j;
-
+                                unsigned int j, exit = 0;
+                                
                                 s->active_events |= events[i].events;
                                 check_socket_events(c, s, events[i].events);
                                 
-                                for (j = 0; j < c->num_work && 
-                                             !c->is_garbage; j++) {
+                                for (j = 0; j < c->num_work && !exit; j++) {
                                         enum work_status status;
                                         
                                         status = c->work[j](c);
@@ -359,6 +400,7 @@ static void *worker_thread(void *arg)
                                                 LOG_ERR("work error, closing socket\n");
                                         case WORK_CLOSE:
                                                 client_close(c);
+                                                exit = 1;
                                                 break;
                                         case WORK_NOSPACE:
                                         case WORK_OK:
@@ -368,13 +410,15 @@ static void *worker_thread(void *arg)
                                 }
                                 c->num_work = 0;
                                 
-                                if (c->is_garbage) {
+                                if (exit) {
+                                        /* The client is done */
                                         client_free(c);
                                 } else {
+                                        /* Reactivate socket monitoring */
                                         client_epoll_set_all(c, EPOLL_CTL_MOD,
                                                              EPOLLONESHOT);
                                 }
-                        }               
+                        }
                 }     
         }
         

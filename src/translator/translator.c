@@ -42,7 +42,7 @@
 
    The translator moves data between two sockets (AF_INET and
    AF_SERVAL) using the splice system call. With this call, the data
-   never leaves kernel space, and the whole operation is therefore
+   never leaves kernel space, and the operation is therefore
    very efficient. The translator can accept connections on both types
    of sockets simultaneously and then automatically create a socket of
    the other type, connecting to the final server destination.
@@ -53,8 +53,7 @@
 
    fd_inet ---> fd_pipe_w PIPE fd_pipe_r ---> fd_serval
 
-   All in all, this leaves us with four file descriptors per client
-   that connects to the translator.
+   All in all, this leaves us with four file descriptors per client.
 
    There are tricky blocking situations to consider between these file
    descriptors: for instance, there may be incoming data on the SERVAL
@@ -99,14 +98,14 @@
    scalability. The number of worker threads to use is a runtime
    configurable setting.
 
-   The main thread monitors a client's file descriptors for
-   events. When the right conditions occur for translating data, the
-   main thread schedules the client on a work queue for processing,
-   and stops monitoring its file descriptors. A worker thread will
-   pick the client off the work queue and perform the
-   translation. When translation has finished, the worker signals the
-   main thread to "rearm" all non-scheduled clients so that the client
-   that just finished will have its file descriptors monitored again.
+   The main thread is responsible for initially launching workers and
+   to accept new clients on "listening" sockets. The new clients are
+   assigned to workers based on how many clients each worker already
+   have assigned (trying to maintain a uniform spread across
+   workers). A worker takes complete responsiblity for its clients
+   once assigned. The worker monitors its clients' file descriptors
+   using its own epoll runloop, executing work in response to file
+   descriptor events.
  */
 #define DEFAULT_TRANSLATOR_PORT 8080
 #define DEFAULT_SERVICE_ID "0x0000005"
@@ -118,6 +117,7 @@ struct signal main_signal;
 
 static struct worker *workers;
 static unsigned int num_workers = 4;
+enum debug_level debuglevel = DBG_LVL_NONE;
 
 static const char *family_to_str(int family)
 {
@@ -154,7 +154,6 @@ static void assign_client_to_worker(struct client *c)
         
         worker_add_client(&workers[c_num], c);
 }
-
 
 static void signal_handler(int sig)
 {
@@ -719,12 +718,29 @@ int main(int argc, char **argv)
                                 goto fail;
                         }
                         file_limit = atoi(argv[1]);
+                        argv++;
+                        argc--;
                 } else if (strcmp(argv[0], "-d") == 0 ||
                            strcmp(argv[0], "--daemon") ==  0) {
                         daemon = 1;
                 } else if (strcmp(argv[0], "-x") == 0 ||
                            strcmp(argv[0], "--cross-translate") ==  0) {
                         cross_translate = 1;
+                } else if (strcmp(argv[0], "-dl") == 0 ||
+                           strcmp(argv[0], "--debug-level") ==  0) {
+                        int level;
+                        if (argc == 1) {
+                                print_usage();
+                                goto fail;
+                        }
+                        level = atoi(argv[1]);
+                        if (level >= 0) {
+                                if (level > DBG_LVL_MAX)
+                                        level = DBG_LVL_MAX;
+                                debuglevel = level;
+                        }
+                        argv++;
+                        argc--;
                 } else if (strcmp(argv[0], "-io") == 0 ||
                            strcmp(argv[0], "--inet-only") ==  0) {
                         mode = INET_ONLY_MODE;
@@ -752,6 +768,8 @@ int main(int argc, char **argv)
                                 goto fail;
                         }
                         num_workers = n;
+                        argv++;
+                        argc--;
                 } else if (strcmp(argv[0], "-l") == 0 ||
                            strcmp(argv[0], "--log") ==  0) {
                         if (argc == 1 || log_is_open(&logh)) {

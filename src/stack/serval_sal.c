@@ -1674,7 +1674,7 @@ static int serval_sal_send_synack(struct sock *sk,
                                             0, sk->sk_bound_dev_if);
                 
                 if (!rt) {
-                        LOG_ERR("RESPONSE not routable\n");
+                        LOG_DBG("RESPONSE not routable\n");
                         goto drop_response;
                 }
                 

@@ -58,9 +58,8 @@ static int fd_set_nonblock(int fd)
         
         if (ret == -1) {
                 LOG_ERR("fctnl(F_SETFL): %s\n", strerror(errno));
-        } else {
-                LOG_DBG("fd=%u is nonblock\n", fd);
-        }
+        } 
+
         return ret;
 }
 
@@ -70,19 +69,11 @@ int client_epoll_set(struct client *c, struct socket *s,
         struct epoll_event ev;
         int ret = 0;
         
-        if (c->is_garbage)
-                return -1;
-        
-        if (s->monitored_events == 0) {
-                LOG_DBG("fd=%d No events to monitor\n", s->fd);
-                return ret;
-        }
-       
         memset(&ev, 0, sizeof(ev));
         ev.events = s->monitored_events | extra_event;
         ev.data.ptr = s;
-        /*
-        LOG_DBG("client=%u op=%s fd=%d events[R=%d W=%d H=%d]\n",
+
+        LOG_MAX("client=%u op=%s fd=%d events[R=%d W=%d H=%d]\n",
                 c->id,
                 EPOLL_CTL_MOD == op ?                                
                 "EPOLL_CTL_MOD" :
@@ -91,7 +82,7 @@ int client_epoll_set(struct client *c, struct socket *s,
                 (ev.events & EPOLLIN) > 0, 
                 (ev.events & EPOLLOUT) > 0,
                 (ev.events & EPOLLRDHUP) > 0);
-        */
+
         ret = epoll_ctl(c->w->epollfd, op, s->fd, &ev);
         
         if (ret == -1) {
@@ -107,9 +98,6 @@ int client_epoll_set_all(struct client *c, int op,
 {               
         unsigned int i;
         int ret = 0;
-
-        if (c->is_garbage)
-                return -1;
 
         for (i = 0; i < 2; i++) {
                 ret = client_epoll_set(c, &c->sock[i],
@@ -136,7 +124,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
         memset(c, 0, sizeof(struct client));
         c->id = client_num++;
         c->from_family = sa->sa_family;
-        c->is_garbage = 0;
         c->cross_translate = cross_translate == 1;
         c->sock[0].c = c->sock[1].c = c;
         INIT_LIST_HEAD(&c->lh);
@@ -362,7 +349,6 @@ enum work_status client_connect(struct client *c)
                 s->state = SS_CONNECTED;
                 s->active_events = s2->active_events = 0;
                 s->monitored_events = s2->monitored_events = EPOLLIN | EPOLLOUT;
-                //client_epoll_set(c, s, EPOLL_CTL_MOD, EPOLLONESHOT);
         }
   
         return WORK_OK;
@@ -396,8 +382,6 @@ enum work_status client_connect_result(struct client *c)
                         EPOLLIN | EPOLLOUT;
                 s->active_events = s2->active_events = 0;
                 s->state = SS_CONNECTED;
-                //client_epoll_set(c, s, EPOLL_CTL_MOD, EPOLLONESHOT);
-                //client_epoll_set(c, s2, EPOLL_CTL_ADD, EPOLLONESHOT);
                 LOG_DBG("client %u connected\n", c->id);
                 break;
         case EINPROGRESS:
@@ -424,11 +408,6 @@ enum work_status client_close(struct client *c)
                 c->sock[ST_INET].bytes_read, 
                 c->sock[ST_INET].bytes_written);
 
-        c->is_garbage = 1;
-        /*
-          epoll_ctl(c->w->epollfd, EPOLL_CTL_DEL, c->sock[ST_SERVAL].fd, NULL);
-        epoll_ctl(c->w->epollfd, EPOLL_CTL_DEL, c->sock[ST_INET].fd, NULL);
-        */
         close(c->sock[ST_SERVAL].fd);
         close(c->sock[ST_INET].fd);
         close(c->splicefd[0]);

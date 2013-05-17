@@ -65,9 +65,9 @@ enum work_status {
         WORK_ERROR,
 };
 
-#define MAX_WORK 4
-
 typedef enum work_status (*work_t)(struct client *c);
+
+#define MAX_WORK 4
 
 struct client {
         int from_family;
@@ -78,8 +78,6 @@ struct client {
         struct worker *w;
         unsigned int num_work;
         work_t work[MAX_WORK];
-        unsigned char is_scheduled:1;
-        unsigned char is_garbage:1;
         unsigned char cross_translate:1;
         struct list_head lh;
 };

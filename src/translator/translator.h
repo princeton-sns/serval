@@ -17,6 +17,31 @@ enum translator_mode {
         SERVAL_ONLY_MODE,
 };
 
+enum debug_level {
+    DBG_LVL_NONE,
+    DBG_LVL_MIN,
+    DBG_LVL_MID,
+    DBG_LVL_MAX,
+};
+
+extern enum debug_level debuglevel;
+
+#define LOG_MIN(format, ...) ({				\
+	    if (debuglevel >= DBG_LVL_MIN) {		\
+		LOG_DBG(format, ## __VA_ARGS__);	\
+	    }						\
+	})
+#define LOG_MID(format, ...) ({				\
+	    if (debuglevel >= DBG_LVL_MID) {		\
+		LOG_DBG(format, ## __VA_ARGS__);	\
+	    }						\
+	})
+#define LOG_MAX(format, ...) ({				\
+	    if (debuglevel >= DBG_LVL_MAX) {		\
+		LOG_DBG(format, ## __VA_ARGS__);	\
+	    }						\
+	})
+
 int run_translator(unsigned short port,
                    struct sockaddr_sv *sv,
                    int cross_translate, 
