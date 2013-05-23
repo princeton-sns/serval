@@ -62,6 +62,7 @@ enum sockettype {
 enum work_status {
         WORK_OK,
         WORK_CLOSE,
+        WORK_EXIT,
         WORK_WOULDBLOCK,
         WORK_ERROR,
 };

@@ -418,11 +418,12 @@ enum work_status client_close(struct client *c)
 
         close(c->sock[ST_SERVAL].fd);
         close(c->sock[ST_INET].fd);
-        close(c->sock[0].splicefd[0]);
-        close(c->sock[0].splicefd[1]);
-        close(c->sock[1].splicefd[0]);
-        close(c->sock[1].splicefd[1]);
-
+        close(c->sock[ST_SERVAL].splicefd[0]);
+        close(c->sock[ST_SERVAL].splicefd[1]);
+        close(c->sock[ST_INET].splicefd[0]);
+        close(c->sock[ST_INET].splicefd[1]);
+        c->sock[ST_SERVAL].state = SS_CLOSED;
+        c->sock[ST_INET].state = SS_CLOSED;
 
         return WORK_OK;
 }

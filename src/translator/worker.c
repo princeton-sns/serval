@@ -85,7 +85,7 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                 if (ret == -1) {
                         if (errno == EPIPE) {
                                 LOG_DBG("client %u: EPIPE\n", from->c->id);
-                                status = WORK_ERROR;
+                                status = WORK_CLOSE;
                         } else if (errno == EWOULDBLOCK) {
                                 /* Try again */
                                 break;
@@ -183,7 +183,7 @@ static enum work_status work_serval_to_inet(struct client *c)
 static enum work_status work_close(struct client *c)
 {
         client_close(c);
-        return WORK_OK;
+        return WORK_EXIT;
 }
 
 static void check_socket_events(struct client *c, struct socket *s, 
@@ -225,7 +225,8 @@ static void check_socket_events(struct client *c, struct socket *s,
         if (events & EPOLLRDHUP) {
                 /* Other end of this socket's connection closed */
                 s->active_events &= ~EPOLLRDHUP;
-                client_add_work(c, work_close);          
+                client_add_work(c, work_close);
+                return;
         }
         
         /* 
@@ -403,11 +404,11 @@ static void *worker_thread(void *arg)
                                                 LOG_ERR("work error, closing socket\n");
                                         case WORK_CLOSE:
                                                 client_close(c);
+                                        case WORK_EXIT:
                                                 exit = 1;
                                                 break;
                                         case WORK_WOULDBLOCK:
                                         case WORK_OK:
-                                        default:
                                                 break;
                                         }
                                 }
