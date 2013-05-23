@@ -21,10 +21,6 @@
 #include "translator.h"
 #include "client.h"
 #include "worker.h"
-#if defined(OS_ANDROID)
-#include "splice.h"
-#define EPOLLONESHOT (1u << 30)
-#endif
 
 #define MAX_EVENTS 100
 #define ENABLE_SPLICE_DEBUG 1

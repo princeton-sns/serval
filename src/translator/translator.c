@@ -246,12 +246,15 @@ static struct client *accept_client(int sock, int port,
         if (addr.sa.sa_family == AF_SERVAL) {
                 /* Serval accept() could also returns IP appended after
                    serviceID */
-                
+#if defined(ENABLE_DEBUG)
                 inet_ntop(AF_INET, &addr.sv_in.in.sin_addr, ip, 18);
+#endif
                 /* Only make serviceID visible */
                 addrlen = sizeof(addr.sv);
         } else {
+#if defined(ENABLE_DEBUG)
                 inet_ntop(AF_INET, &addr.in.sin_addr, ip, 18);
+#endif
         }
 
         c = client_create(client_sock, &addr.sa, 

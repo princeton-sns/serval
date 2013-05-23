@@ -14,6 +14,11 @@
 #include <pthread.h>
 #include <common/signal.h>
 #include <common/list.h>
+#if defined(OS_ANDROID)
+#include "splice.h"
+#define EPOLLRDHUP   (0x2000)
+#define EPOLLONESHOT (1u << 30)
+#endif
 
 struct worker {
         unsigned int id;
