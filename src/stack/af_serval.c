@@ -29,8 +29,10 @@
 
 extern int inet_to_serval_init(void);
 extern void inet_to_serval_fini(void);
+#if 0
 extern int serval_tcp_offload_init(void);
 extern void serval_tcp_offload_fini(void);
+#endif 
 
 #elif defined(OS_USER)
 /* User-level declarations */
@@ -1096,13 +1098,14 @@ int serval_init(void)
         }
 
 #if defined(OS_LINUX_KERNEL)
+#if 0
         err = serval_tcp_offload_init();
 
         if (err != 0) {
                 LOG_CRIT("Cannot initialize TCP offloading\n");
                 goto fail_tcp_offload;
         }
-
+#endif
         err = inet_to_serval_init();
 
         if (err != 0) {
@@ -1117,8 +1120,10 @@ int serval_init(void)
         return err;
 #if defined(OS_LINUX_KERNEL)
  fail_inet_to_serval:
+#if 0
         serval_tcp_offload_fini();
  fail_tcp_offload:
+#endif
         sock_unregister(PF_SERVAL);
 #endif
  fail_sock_register:
@@ -1143,7 +1148,9 @@ void serval_fini(void)
 {
 #if defined(OS_LINUX_KERNEL)
         inet_to_serval_fini();
+#if 0
         serval_tcp_offload_fini();
+#endif
 #endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);

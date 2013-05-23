@@ -112,7 +112,6 @@ SERVAL_KERNEL_HDR = \
 
 SERVAL_KERNEL_SRC = \
 	$(serval_common_SRC) \
-	serval_tcp_offload.c \
 	linux/ctrl.c \
 	linux/packet.c \
 	linux/proc.c \
