@@ -43,13 +43,14 @@ extern const char *socket_state_str[];
 
 struct socket {
         int fd; /* Must be first */
+        int splicefd[2];
         enum socket_state state;
         struct client *c;
         uint32_t monitored_events;
         uint32_t active_events;
         sockaddr_generic_t addr;
         socklen_t addrlen;
-        size_t bytes_written, bytes_read;
+        size_t bytes_in_pipe, bytes_written, bytes_read;
         socklen_t sndbuf;
 };
 
@@ -61,7 +62,7 @@ enum sockettype {
 enum work_status {
         WORK_OK,
         WORK_CLOSE,
-        WORK_NOSPACE,
+        WORK_WOULDBLOCK,
         WORK_ERROR,
 };
 
@@ -74,7 +75,6 @@ struct client {
         unsigned int id;
         struct socket sock[2];
         int translator_port;
-        int splicefd[2];
         struct worker *w;
         unsigned int num_work;
         work_t work[MAX_WORK];

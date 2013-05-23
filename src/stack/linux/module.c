@@ -37,6 +37,10 @@ unsigned int checksum_mode = 0;
 module_param(checksum_mode, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(debug, "Set checksum mode (0=software, 1=hardware)");
 
+unsigned int gso = 0;
+module_param(gso, uint, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(debug, "Set generic segmentation offloading (0=off, 1=on)");
+
 static char *ifname = NULL;
 module_param(ifname, charp, S_IRUGO);
 MODULE_PARM_DESC(ifname, "Resolve only on this device");

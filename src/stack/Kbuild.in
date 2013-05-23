@@ -25,6 +25,7 @@ serval-y := \
 	   serval_tcp_cong.o \
 	   serval_tcp_timer.o \
 	   serval_tcp_metrics.o \
+	   serval_tcp_offload.o \
 	   linux/ctrl.o \
 	   linux/proc.o \
 	   linux/packet.o \

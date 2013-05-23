@@ -128,14 +128,6 @@ struct client *client_create(int sock, struct sockaddr *sa,
         c->sock[0].c = c->sock[1].c = c;
         INIT_LIST_HEAD(&c->lh);
         
-        ret = pipe(c->splicefd);
-
-        if (ret == -1) {
-                LOG_ERR("pipe: %s\n",
-			strerror(errno));
-                goto fail_pipe;
-        }
-
         if (c->from_family == AF_INET) {
                 /* We're translating from AF_INET to AF_SERVAL */
                 c->sock[ST_INET].fd = sock;
@@ -215,7 +207,21 @@ struct client *client_create(int sock, struct sockaddr *sa,
                         LOG_ERR("getsockopt(sndbuf) - %s\n", strerror(errno));
                 }
                 
-                ret = fd_set_nonblock(c->splicefd[i]);
+
+                ret = pipe(c->sock[i].splicefd);
+                
+                if (ret == -1) {
+                        LOG_ERR("pipe: %s\n",
+                                strerror(errno));
+                        goto fail_post_sock;
+                }
+
+                ret = fd_set_nonblock(c->sock[i].splicefd[0]);
+
+                if (ret == -1)
+                        goto fail_post_sock;
+
+                ret = fd_set_nonblock(c->sock[i].splicefd[1]);
 
                 if (ret == -1)
                         goto fail_post_sock;
@@ -229,14 +235,16 @@ struct client *client_create(int sock, struct sockaddr *sa,
         return c;
 
 fail_post_sock:
+        close(c->sock[0].splicefd[0]);
+        close(c->sock[0].splicefd[1]);
+        close(c->sock[1].splicefd[0]);
+        close(c->sock[1].splicefd[1]);
+
         if (c->sock[1].fd == sock)
                 close(c->sock[0].fd);
         else
                 close(c->sock[1].fd);
  fail_sock:
-        close(c->splicefd[0]);
-        close(c->splicefd[1]);
- fail_pipe:
         close(sock);
         free(c);
         return NULL;
@@ -410,8 +418,11 @@ enum work_status client_close(struct client *c)
 
         close(c->sock[ST_SERVAL].fd);
         close(c->sock[ST_INET].fd);
-        close(c->splicefd[0]);
-        close(c->splicefd[1]);
+        close(c->sock[0].splicefd[0]);
+        close(c->sock[0].splicefd[1]);
+        close(c->sock[1].splicefd[0]);
+        close(c->sock[1].splicefd[1]);
+
 
         return WORK_OK;
 }

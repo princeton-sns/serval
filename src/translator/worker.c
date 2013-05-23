@@ -16,7 +16,6 @@
 #include <common/debug.h>
 #include <sys/epoll.h>
 #include <errno.h>
-#include <sys/ioctl.h>
 #include <unistd.h>
 #include <linux/netfilter_ipv4.h>
 #include "translator.h"
@@ -30,25 +29,81 @@
 #define MAX_EVENTS 100
 #define ENABLE_SPLICE_DEBUG 1
 
-static int socket_is_writable(struct socket *s, int *bytes)
+static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
 {
-        int bytes_queued = 0;
-        int ret;
+        ssize_t ret;
+        size_t readlen = 4096;
+        enum work_status status = WORK_OK;
 
-        ret = ioctl(s->fd, TIOCOUTQ, &bytes_queued);
-        
-        if (ret == -1) {
-                LOG_ERR("ioctl error - %s\n", strerror(errno));
-                return 0;
+        while (status == WORK_OK) {
+                ret = splice(from->fd, NULL, from->splicefd[1], NULL, 
+                             readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+                
+                if (ret == -1) {
+                        if (errno == EWOULDBLOCK) {
+                                /* Stop splicing to pipe if we block */
+                                if (from->bytes_in_pipe > 0)
+                                        status = WORK_OK;
+                                else {
+                                        LOG_MED("would block\n");
+                                        status = WORK_WOULDBLOCK;
+                                }
+                                break;
+                        } else {
+                                LOG_ERR("client %u from %s %s\n",
+                                        from->c->id, 
+                                        &from->c->sock[ST_INET] == from ? 
+                                        "INET" : "SERVAL",
+                                        strerror(errno));
+                                status = WORK_ERROR;
+                        }
+                } else if (ret == 0) {
+                        LOG_DBG("client %u: %s end closed\n", 
+                                from->c->id, 
+                                &from->c->sock[ST_INET] == from ? 
+                                "INET" : "SERVAL");
+                        status = WORK_CLOSE;
+                } else if (ret > 0) {
+                        from->bytes_in_pipe += ret;
+                        from->bytes_read += ret;
+                }
         }
-        if (bytes)
-                *bytes = bytes_queued;
-
-        return s->sndbuf - bytes_queued;
+        
+        return status;
 }
 
-#define writable_bytes(s,b) socket_is_writable(s,b)
+static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
+{
+        ssize_t ret;
+        enum work_status status = WORK_OK;
 
+        while (from->bytes_in_pipe > 0 && status == WORK_OK) {
+                ret = splice(from->splicefd[0], NULL, to->fd, NULL,
+                             from->bytes_in_pipe, 
+                             SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
+                
+                if (ret == -1) {
+                        if (errno == EPIPE) {
+                                LOG_DBG("client %u: EPIPE\n", from->c->id);
+                                status = WORK_ERROR;
+                        } else if (errno == EWOULDBLOCK) {
+                                /* Try again */
+                                break;
+                        } else {
+                                LOG_ERR("client %u: to %s: %s\n",
+                                        to->c->id,
+                                        &to->c->sock[ST_INET] == to ? 
+                                        "INET" : "SERVAL",
+                                        strerror(errno));
+                                status = WORK_ERROR;
+                        }
+                } else if (ret > 0) {
+                        to->bytes_written += ret;
+                        from->bytes_in_pipe -= ret;
+                }
+        }
+        return status;
+}
 /*
   Move data from one socket to another via a pipe. 
 
@@ -65,114 +120,49 @@ static int socket_is_writable(struct socket *s, int *bytes)
   continue to try and translate.
  */
 static enum work_status work_translate(struct socket *from, 
-                                       struct socket *to,
-                                       int splicefd[2])
+                                       struct socket *to)
 {
-        ssize_t ret = 0, bytes_read = 0;
-        size_t readlen, nbytes = 0;
         enum work_status status = WORK_OK;
-        int bytes_queued = 0;
         
-        readlen = writable_bytes(to, &bytes_queued);
-        
-        LOG_MIN("%d -> %d translating up to %zu\n", 
-                from->fd, to->fd, readlen);
-        
-        if (readlen == 0) {
-                /* There wasn't enough space in send buffer of the
-                 * socket we are writing to, we need to stop monitor
-                 * readability on the "from" socket and instead watch
-                 * for writability on the "to" socket. */
-                from->monitored_events &= ~EPOLLIN;
-                to->monitored_events |= EPOLLOUT;
-                LOG_MED("fd=%d bufspace is 0, bytes_queued=%d sndbuf_size=%u\n",
-                        to->fd, bytes_queued, to->sndbuf);
-                return WORK_NOSPACE;
-        }
-        
-        /* Make sure we write to the pipe atomically without
-         * blocking */
-        if (readlen > PIPE_BUF)
-                readlen = PIPE_BUF;
-        
-        while (bytes_read < readlen && status == WORK_OK) {
-                ret = splice(from->fd, NULL, splicefd[1], NULL, 
-                                     readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
-                
-                if (ret == -1) {
-                        if (errno == EWOULDBLOCK) {
-                                /* Stop splicing to pipe if we block */
-                                LOG_MED("splice1 would block\n");
-                                break;
-                        } else { 
-                                LOG_ERR("client %u splice1 from %s %s\n",
-                                        from->c->id, 
-                                        &from->c->sock[ST_INET] == from ? 
-                                        "INET" : "SERVAL",
-                                        strerror(errno));
+        /* Transfer any bytes left in pipe from last time */
+        while (from->bytes_in_pipe > 0) {
+                LOG_MED("w=%u c=%u %zu bytes left in pipe\n", 
+                        from->c->w->id, from->c->id, from->bytes_in_pipe);
+                status = pipe_to_sock(from, to);
 
-                                if (bytes_read > 0)
-                                        break;
-                                status = WORK_ERROR;
-                        }
-                        goto out;
-                } else if (ret == 0) {
-                        LOG_DBG("client %u splice1: %s end closed\n", 
-                                from->c->id, 
-                                &from->c->sock[ST_INET] == from ? 
-                                "INET" : "SERVAL");
-
-                         if (bytes_read > 0)
-                                break;
-                        status = WORK_CLOSE;
-
-                        goto out;
-                } else if (ret > 0) {
-                        bytes_read += ret;
-                        readlen -= ret;
+                if (status == WORK_WOULDBLOCK) {
+                        from->monitored_events &= ~EPOLLIN;
+                        to->monitored_events |= EPOLLOUT;
+                        return status;
+                } else if (status != WORK_OK) {
+                        return status;
                 }
         }
-        
-        readlen = bytes_read;
-        from->bytes_read += bytes_read;
-        
-        LOG_MED("splice1 %zu bytes\n", readlen);
-       
-        while (readlen && status == WORK_OK) {
-                ret = splice(splicefd[0], NULL, to->fd, NULL,
-                             readlen, SPLICE_F_MOVE | SPLICE_F_NONBLOCK);
-                
-                if (ret == -1) {
-                        if (errno == EPIPE) {
-                                LOG_DBG("client %u splice2: EPIPE\n", from->c->id);
-                                status = WORK_ERROR;
-                        } else if (errno == EWOULDBLOCK) {
-                                /* Try again */
-                        } else {
-                                LOG_ERR("client %u splice2: to %s %s\n",
-                                        from->c->id,
-                                        &to->c->sock[ST_INET] == to ? "INET" : "SERVAL",
-                                        strerror(errno));
-                                status = WORK_ERROR;
-                        }
-                } else if (ret > 0) {
-                        to->bytes_written += ret;
-                        nbytes += ret;
-                        readlen -= ret;
+
+        status = sock_to_pipe(from, to);
+
+        if (status == WORK_WOULDBLOCK) {
+                goto out;
+        } else if (status != WORK_OK) {
+                return status;
+        }
+
+
+        LOG_MED("w=%u c=%u %zu bytes in pipe\n", 
+                from->c->w->id, from->c->id, from->bytes_in_pipe);
+
+        while (from->bytes_in_pipe > 0) {
+                status = pipe_to_sock(from, to);
+
+                if (status == WORK_WOULDBLOCK) {
+                        from->monitored_events &= ~EPOLLIN;
+                        to->monitored_events |= EPOLLOUT;
+                        return status;
+                } else if (status != WORK_OK) {
+                        return status;
                 }
         }
-        
-#if defined(ENABLE_DEBUG)
-        if (readlen) {
-                LOG_ERR("client %u read/write mismatch (%zu bytes)\n",
-                        from->c->id, readlen);
-        }
-#endif
-        
  out:
-
-        LOG_MED("splice2 %zu bytes\n", nbytes);
-
         to->monitored_events &= ~EPOLLOUT;
         from->monitored_events |= EPOLLIN;
         return status;
@@ -181,15 +171,13 @@ static enum work_status work_translate(struct socket *from,
 static enum work_status work_inet_to_serval(struct client *c)
 {
         /* LOG_DBG("INET to SERVAL\n"); */
-        return work_translate(&c->sock[ST_INET], 
-                              &c->sock[ST_SERVAL], c->splicefd);
+        return work_translate(&c->sock[ST_INET], &c->sock[ST_SERVAL]);
 }
 
 static enum work_status work_serval_to_inet(struct client *c)
 {
         /* LOG_DBG("SERVAL to INET\n"); */
-        return work_translate(&c->sock[ST_SERVAL], 
-                              &c->sock[ST_INET], c->splicefd);
+        return work_translate(&c->sock[ST_SERVAL], &c->sock[ST_INET]);
 }
 
 static enum work_status work_close(struct client *c)
@@ -417,7 +405,7 @@ static void *worker_thread(void *arg)
                                                 client_close(c);
                                                 exit = 1;
                                                 break;
-                                        case WORK_NOSPACE:
+                                        case WORK_WOULDBLOCK:
                                         case WORK_OK:
                                         default:
                                                 break;

@@ -29,6 +29,8 @@
 
 extern int inet_to_serval_init(void);
 extern void inet_to_serval_fini(void);
+extern int serval_tcp_offload_init(void);
+extern void serval_tcp_offload_fini(void);
 
 #elif defined(OS_USER)
 /* User-level declarations */
@@ -1068,24 +1070,24 @@ int serval_init(void)
         err = packet_init();
 
         if (err != 0) {
-		        LOG_CRIT("Cannot init packet socket!\n");
-		        goto fail_packet;
-	    }
-
+                LOG_CRIT("Cannot init packet socket!\n");
+                goto fail_packet;
+        }
+        
         err = proto_register(&serval_udp_proto, 1);
-
+        
     	if (err != 0) {
-		        LOG_CRIT("Cannot register UDP proto\n");
-		        goto fail_udp_proto;
-	    }
-                
+                LOG_CRIT("Cannot register UDP proto\n");
+                goto fail_udp_proto;
+        }
+        
         err = proto_register(&serval_tcp_proto, 1);
-
-	    if (err != 0) {
-		        LOG_CRIT("Cannot register TCP proto\n");
-		        goto fail_tcp_proto;
-	    }
-
+        
+        if (err != 0) {
+                LOG_CRIT("Cannot register TCP proto\n");
+                goto fail_tcp_proto;
+        }
+        
         err = sock_register(&serval_family_ops);
 
         if (err != 0) {
@@ -1094,6 +1096,13 @@ int serval_init(void)
         }
 
 #if defined(OS_LINUX_KERNEL)
+        err = serval_tcp_offload_init();
+
+        if (err != 0) {
+                LOG_CRIT("Cannot initialize TCP offloading\n");
+                goto fail_tcp_offload;
+        }
+
         err = inet_to_serval_init();
 
         if (err != 0) {
@@ -1108,6 +1117,8 @@ int serval_init(void)
         return err;
 #if defined(OS_LINUX_KERNEL)
  fail_inet_to_serval:
+        serval_tcp_offload_fini();
+ fail_tcp_offload:
         sock_unregister(PF_SERVAL);
 #endif
  fail_sock_register:
@@ -1132,6 +1143,7 @@ void serval_fini(void)
 {
 #if defined(OS_LINUX_KERNEL)
         inet_to_serval_fini();
+        serval_tcp_offload_fini();
 #endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);

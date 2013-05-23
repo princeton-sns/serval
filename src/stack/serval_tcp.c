@@ -26,6 +26,7 @@
 #endif
 
 extern int serval_udp_encap_xmit(struct sk_buff *skb);
+extern unsigned int gso;
 
 int sysctl_serval_tcp_fin_timeout __read_mostly = TCP_FIN_TIMEOUT;
 int sysctl_serval_tcp_low_latency __read_mostly = 0;
@@ -444,7 +445,7 @@ static unsigned int serval_tcp_xmit_size_goal(struct sock *sk, u32 mss_now,
 
 	xmit_size_goal = mss_now;
 
-	if (large_allowed && 0 /* sk_can_gso(sk) */) {
+	if (large_allowed && sk_can_gso(sk) && gso) {
 		xmit_size_goal = ((sk->sk_gso_max_size - 1) -
 				  serval_sk(sk)->af_ops->net_header_len -
                                   serval_sk(sk)->ext_hdr_len -
@@ -490,21 +491,6 @@ static inline int forced_push(struct serval_tcp_sock *tp)
 	return after(tp->write_seq, tp->pushed_seq + (tp->max_window >> 1));
 }
 
-static void serval_tcp_skb_free(struct sk_buff *skb)
-{
-        /* LOG_PKT("Freeing skb data packet, skb->len=%u\n", skb->len); */
-}
-
-static inline void skb_serval_tcp_set_owner(struct sk_buff *skb, 
-                                            struct sock *sk)
-{
-	skb_orphan(skb);
-	skb->sk = sk;
-	skb->destructor = serval_tcp_skb_free;
-        /* Guarantees the socket is not free'd for in-flight packets */
-        //sock_hold(sk);
-}
-
 /* From net/ipv4/tcp.c */
 struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 {
@@ -516,6 +502,7 @@ struct sk_buff *sk_stream_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 	skb = alloc_skb(size + sk->sk_prot->max_header, gfp);
 
 	if (skb) {
+                skb_linearize(skb);
 		if (sk_wmem_schedule(sk, skb->truesize)) {
 			/*
 			 * Make sure that we have exactly size bytes
@@ -558,7 +545,7 @@ static inline int select_size(struct sock *sk, int sg)
 	int tmp = tp->mss_cache;
 
 	if (sg) {
-		if (0 /* sk_can_gso(sk) */)
+		if (sk_can_gso(sk) && gso)
 			tmp = 0;
 		else {
 			int pgbreak = SKB_MAX_HEAD(MAX_SERVAL_TCP_HEADER);
@@ -2170,12 +2157,10 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
         unsigned long len = skb_tail_pointer(skb) - skb_transport_header(skb);
 
         if (!checksum_mode) {
-                /* Force checksum calculation by protocol */
+                /* Force checksum calculation in software */
                 skb->ip_summed = CHECKSUM_NONE;
                 th->check = serval_tcp_v4_check(len, saddr, daddr,
-                                                csum_partial(th,
-                                                             len,
-                                                             0));
+                                                csum_partial(th, len, 0));
         } else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		th->check = ~serval_tcp_v4_check(len, saddr, daddr, 0);
 		skb->csum_start = skb_transport_header(skb) - skb->head;
@@ -2192,7 +2177,6 @@ void __serval_tcp_v4_send_check(struct sk_buff *skb,
 void serval_tcp_v4_send_check(struct sock *sk, struct sk_buff *skb)
 {
 	struct inet_sock *inet = inet_sk(sk);
-
 	__serval_tcp_v4_send_check(skb, inet->inet_saddr, inet->inet_daddr);
 }
 
@@ -2206,7 +2190,6 @@ static int serval_do_tcp_setsockopt(struct sock *sk, int level,
                                     unsigned int optlen)
 {
 	struct serval_tcp_sock *tp = serval_tcp_sk(sk);
-        //struct serval_sock *ssk = serval_sk(sk);
 	int val;
 	int err = 0;
 
@@ -2711,7 +2694,6 @@ int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
                 else
                         answ = tp->write_seq - tp->snd_una;
                 break;
-/*
         case SIOCOUTQNSD:
                 if (sk->sk_state == TCP_LISTEN)
                         return -EINVAL;
@@ -2721,7 +2703,6 @@ int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
                 else
                         answ = tp->write_seq - tp->snd_nxt;
                 break;
-*/
         default:
                 return -ENOIOCTLCMD;
         }
@@ -2979,14 +2960,25 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 
         newsk = serval_tcp_create_openreq_child(sk, req, newsk, skb);
 
-        /* FIXME: can we support GSO with Serval? */
-	newsk->sk_gso_type = 0 /* SKB_GSO_TCPV4 */;
-	sk_setup_caps(newsk, dst);
-	
 	newinet->inet_id = newtp->write_seq ^ jiffies;
 
 	serval_tcp_mtup_init(newsk);
 #if defined(OS_LINUX_KERNEL)
+	sk_setup_caps(newsk, dst);
+
+        if (gso) {
+                newsk->sk_gso_type = SKB_GSO_TCPV4;
+                sk_nocaps_add(sk, NETIF_F_ALL_TSO);
+        } else {
+                sk_nocaps_add(sk, NETIF_F_GSO_MASK);
+                newsk->sk_gso_type = 0;
+        }
+        /* Remove these capabilities because they are
+           not supported in hardware when we have a
+           SAL header */
+        //sk->sk_route_caps &= ~NETIF_F_ALL_TSO;
+        //sk->sk_route_caps &= ~NETIF_F_ALL_CSUM;
+
         serval_tcp_sync_mss(newsk, dst_mtu(dst));
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38))
 	newtp->advmss = dst_metric(dst, RTAX_ADVMSS);

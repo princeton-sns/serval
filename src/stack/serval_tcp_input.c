@@ -3387,7 +3387,7 @@ static __sum16 __serval_tcp_checksum_complete_user(struct sock *sk,
 }
 
 static inline int serval_tcp_checksum_complete_user(struct sock *sk,
-					     struct sk_buff *skb)
+                                                    struct sk_buff *skb)
 {
 	return !skb_csum_unnecessary(skb) &&
                 __serval_tcp_checksum_complete_user(sk, skb);
@@ -3682,7 +3682,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			}
 			if (!eaten) {
 				if (serval_tcp_checksum_complete_user(sk, skb)) {
-                                        LOG_ERR("Csum error!\n");
+                                        LOG_ERR("Csum error skb->csum=%u!\n", 
+                                                skb->csum);
 					goto csum_error;
                                 }
 				/* Predicted packet is in window by definition.
@@ -3744,7 +3745,7 @@ slow_path:
                 goto csum_error;
         }
         if (serval_tcp_checksum_complete_user(sk, skb)) {
-                LOG_PKT("checksum error\n");
+                LOG_DBG("checksum error skb->csum=%u\n", skb->csum);
                 goto csum_error;
         }
 	/*
