@@ -95,5 +95,6 @@ void client_assign_worker(struct client *c);
 void client_free(struct client *c);
 enum work_status client_connect(struct client *c);
 enum work_status client_connect_result(struct client *c);
+void socket_close(struct socket *s);
 
 #endif /* __CLIENT_H__ */

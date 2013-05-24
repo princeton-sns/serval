@@ -15,6 +15,7 @@
 #include <netinet/in.h>
 #include <common/debug.h>
 #include <sys/epoll.h>
+#include <poll.h>
 #include <errno.h>
 #include <unistd.h>
 #include <linux/netfilter_ipv4.h>
@@ -25,11 +26,27 @@
 #define MAX_EVENTS 100
 #define ENABLE_SPLICE_DEBUG 1
 
+static inline int socket_is_readable(struct socket *s)
+{
+        struct pollfd pfd = { s->fd, POLLIN, 0 };
+        return poll(&pfd, 1, 0);
+}
+
 static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
 {
         ssize_t ret;
         size_t readlen = 4096;
         enum work_status status = WORK_OK;
+
+        if (from->state != SS_CONNECTED ||
+            to->state != SS_CONNECTED)
+                return WORK_CLOSE;
+
+        if (!socket_is_readable(from)) {
+                LOG_MAX("client %u: fd=%d not readable [bytes_in_pipe=%zu]\n",
+                        from->c->id, from->fd, from->bytes_in_pipe);
+                return WORK_WOULDBLOCK;
+        }
 
         while (status == WORK_OK) {
                 ret = splice(from->fd, NULL, from->splicefd[1], NULL, 
@@ -58,6 +75,7 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
                                 from->c->id, 
                                 &from->c->sock[ST_INET] == from ? 
                                 "INET" : "SERVAL");
+                        socket_close(from);
                         status = WORK_CLOSE;
                 } else if (ret > 0) {
                         from->bytes_in_pipe += ret;
@@ -73,6 +91,9 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
         ssize_t ret;
         enum work_status status = WORK_OK;
 
+        if (to->state != SS_CONNECTED)
+                return WORK_CLOSE;
+
         while (from->bytes_in_pipe > 0 && status == WORK_OK) {
                 ret = splice(from->splicefd[0], NULL, to->fd, NULL,
                              from->bytes_in_pipe, 
@@ -80,8 +101,15 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                 
                 if (ret == -1) {
                         if (errno == EPIPE) {
-                                LOG_DBG("client %u: EPIPE\n", from->c->id);
+                                LOG_DBG("client %u: writing to %s socket "
+                                        "fd=%d when other end already closed "
+                                        "(EPIPE)\n", 
+                                        from->c->id,
+                                        &to->c->sock[ST_INET] == to ? 
+                                        "INET" : "SERVAL",
+                                        to->fd);
                                 status = WORK_CLOSE;
+                                socket_close(to);
                         } else if (errno == EWOULDBLOCK) {
                                 /* Try again */
                                 break;
@@ -93,6 +121,8 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                                         strerror(errno));
                                 status = WORK_ERROR;
                         }
+                } else if (ret == 0) {
+                        LOG_ERR("pipe closed\n");
                 } else if (ret > 0) {
                         to->bytes_written += ret;
                         from->bytes_in_pipe -= ret;
@@ -121,44 +151,70 @@ static enum work_status work_translate(struct socket *from,
         enum work_status status = WORK_OK;
         
         /* Transfer any bytes left in pipe from last time */
-        while (from->bytes_in_pipe > 0) {
+        
+        if (from->bytes_in_pipe > 0) {
                 LOG_MED("w=%u c=%u %zu bytes left in pipe\n", 
                         from->c->w->id, from->c->id, from->bytes_in_pipe);
+         
                 status = pipe_to_sock(from, to);
-
+                
                 if (status == WORK_WOULDBLOCK) {
                         from->monitored_events &= ~EPOLLIN;
                         to->monitored_events |= EPOLLOUT;
                         return status;
-                } else if (status != WORK_OK) {
+                } else if (status != WORK_OK)
                         return status;
-                }
         }
 
         status = sock_to_pipe(from, to);
 
-        if (status == WORK_WOULDBLOCK) {
+        switch (status) {
+        case WORK_WOULDBLOCK:
+                if (from->bytes_in_pipe > 0)
+                        break;
                 goto out;
-        } else if (status != WORK_OK) {
+        case WORK_OK:
+                break;
+        case WORK_CLOSE:
+                LOG_MED("CLOSE w=%u c=%u bytes_in_pipe: from=%zu to=%zu\n", 
+                        from->c->w->id, from->c->id, 
+                        from->bytes_in_pipe,
+                        to->bytes_in_pipe);
+
+                        
+                /* from sock closed, but we managed to read some bytes
+                   into the pipe first, which we now must write to the
+                   other sock. */
+                if (from->bytes_in_pipe > 0)
+                        break;
+        default:
                 return status;
         }
-
-
-        LOG_MED("w=%u c=%u %zu bytes in pipe\n", 
+                   
+        LOG_MED("1. w=%u c=%u %zu bytes in pipe\n", 
                 from->c->w->id, from->c->id, from->bytes_in_pipe);
 
-        while (from->bytes_in_pipe > 0) {
-                status = pipe_to_sock(from, to);
-
-                if (status == WORK_WOULDBLOCK) {
-                        from->monitored_events &= ~EPOLLIN;
-                        to->monitored_events |= EPOLLOUT;
+        status = pipe_to_sock(from, to);
+        
+        switch (status) {
+        case WORK_WOULDBLOCK:
+                from->monitored_events &= ~EPOLLIN;
+                to->monitored_events |= EPOLLOUT;
+                return status;
+        case WORK_CLOSE:
+                if (to->bytes_in_pipe == 0)
+                        /* We do not have anything to write in the
+                           other direction, so we are ready to
+                           close. */
                         return status;
-                } else if (status != WORK_OK) {
-                        return status;
-                }
+        case WORK_OK:
+        default:
+                break;
         }
  out:
+
+        LOG_MED("2. w=%u c=%u %zu bytes in pipe\n", 
+                from->c->w->id, from->c->id, from->bytes_in_pipe);
         to->monitored_events &= ~EPOLLOUT;
         from->monitored_events |= EPOLLIN;
         return status;
@@ -178,6 +234,7 @@ static enum work_status work_serval_to_inet(struct client *c)
 
 static enum work_status work_close(struct client *c)
 {
+        LOG_DBG("client %u closing\n", c->id);
         client_close(c);
         return WORK_EXIT;
 }
@@ -231,7 +288,8 @@ static void check_socket_events(struct client *c, struct socket *s,
            work. If, not, stop monitoring reads, and wait for a write
            event. 
         */
-        if (events & EPOLLIN) { if (s2->active_events & EPOLLOUT) {
+        if (events & EPOLLIN) { 
+                if (s2->active_events & EPOLLOUT) {
                         /* We can translate stuff from s to s2 */
                         s->active_events &= ~EPOLLIN;
                        

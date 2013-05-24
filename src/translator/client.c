@@ -86,7 +86,7 @@ int client_epoll_set(struct client *c, struct socket *s,
         ret = epoll_ctl(c->w->epollfd, op, s->fd, &ev);
         
         if (ret == -1) {
-                LOG_ERR("epoll_ctl op=%d fd=%d: %s\n",
+                LOG_MAX("epoll_ctl op=%d fd=%d: %s\n",
                         op, s->fd, strerror(errno));
         }
         
@@ -406,6 +406,20 @@ enum work_status client_connect_result(struct client *c)
         return WORK_OK;
 }
 
+void socket_close(struct socket *s)
+{
+        s->state = SS_CLOSED;
+        close(s->fd);
+        
+        if (s->bytes_in_pipe) {
+                LOG_ERR("warning: socket fd=%d closed with "
+                        "%zu bytes still in pipe\n",
+                        s->fd, s->bytes_in_pipe);
+        }
+        close(s->splicefd[0]);
+        close(s->splicefd[1]);
+}
+
 enum work_status client_close(struct client *c)
 {
         LOG_DBG("client %u exits, "
@@ -416,14 +430,11 @@ enum work_status client_close(struct client *c)
                 c->sock[ST_INET].bytes_read, 
                 c->sock[ST_INET].bytes_written);
 
-        close(c->sock[ST_SERVAL].fd);
-        close(c->sock[ST_INET].fd);
-        close(c->sock[ST_SERVAL].splicefd[0]);
-        close(c->sock[ST_SERVAL].splicefd[1]);
-        close(c->sock[ST_INET].splicefd[0]);
-        close(c->sock[ST_INET].splicefd[1]);
-        c->sock[ST_SERVAL].state = SS_CLOSED;
-        c->sock[ST_INET].state = SS_CLOSED;
-
+        if (c->sock[ST_INET].state != SS_CLOSED)
+                socket_close(&c->sock[ST_INET]);
+        
+        if (c->sock[ST_SERVAL].state != SS_CLOSED)
+                socket_close(&c->sock[ST_SERVAL]);
+        
         return WORK_OK;
 }
