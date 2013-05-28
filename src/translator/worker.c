@@ -44,8 +44,9 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
                 return WORK_CLOSE;
 
         if (!socket_is_readable(from)) {
-                LOG_MAX("client %u: fd=%d not readable [bytes_in_pipe=%zu]\n",
-                        from->c->id, from->fd, from->bytes_in_pipe);
+                LOG_MAX("w=%u c=%u: fd=%d not readable [bytes_in_pipe=%zu]\n",
+                        from->c->w->id, from->c->id, 
+                        from->fd, from->bytes_in_pipe);
                 return WORK_WOULDBLOCK;
         }
 
@@ -64,8 +65,14 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
                                         status = WORK_WOULDBLOCK;
                                 }
                                 break;
+                        } else if (errno == ECONNRESET) {
+                                LOG_DBG("w=%u c=%u connection reset by peer\n",
+                                        from->c->w->id, from->c->id);
+                                status = WORK_CLOSE;
+                                socket_close(from);
                         } else {
-                                LOG_ERR("client %u from %s %s\n",
+                                LOG_ERR("w=%u c=%u from %s: %s\n",
+                                        from->c->w->id, 
                                         from->c->id, 
                                         &from->c->sock[ST_INET] == from ? 
                                         "INET" : "SERVAL",
@@ -73,7 +80,8 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
                                 status = WORK_ERROR;
                         }
                 } else if (ret == 0) {
-                        LOG_DBG("client %u: %s end closed\n", 
+                        LOG_DBG("w=%u c=%u: %s end closed\n", 
+                                from->c->w->id, 
                                 from->c->id, 
                                 &from->c->sock[ST_INET] == from ? 
                                 "INET" : "SERVAL");
@@ -106,9 +114,10 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                 
                 if (ret == -1) {
                         if (errno == EPIPE) {
-                                LOG_DBG("client %u: writing to %s socket "
+                                LOG_DBG("w=%u c=%u: writing to %s socket "
                                         "fd=%d when other end already closed "
-                                        "(EPIPE)\n", 
+                                        "(EPIPE)\n",
+                                        from->c->w->id, 
                                         from->c->id,
                                         &to->c->sock[ST_INET] == to ? 
                                         "INET" : "SERVAL",
@@ -118,7 +127,8 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                         } else if (errno == EWOULDBLOCK) {
                                 status = WORK_WOULDBLOCK;
                         } else {
-                                LOG_ERR("client %u: to %s: %s\n",
+                                LOG_ERR("w=%u c=%u: to %s: %s\n",
+                                        from->c->w->id,
                                         to->c->id,
                                         &to->c->sock[ST_INET] == to ? 
                                         "INET" : "SERVAL",
@@ -157,9 +167,10 @@ static enum work_status work_translate(struct socket *from,
         
         /* Transfer any bytes left in pipe from last time */
         
+        /*
         LOG_MED("w=%u c=%u fd=%d --> fd=%d\n",
                 from->c->w->id, from->c->id, from->fd, to->fd);
-
+        */
         if (from->bytes_in_pipe > 0) {
                 LOG_MED("w=%u c=%u %zu bytes left in pipe\n", 
                         from->c->w->id, from->c->id, from->bytes_in_pipe);
