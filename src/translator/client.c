@@ -341,12 +341,14 @@ enum work_status client_connect(struct client *c)
         }
 
         s->state = SS_CONNECTING;
-       
+        s->active_events = 0;
         ret = connect(s->fd, &addr.sa, addrlen);
         
         if (ret == -1) {
                 if (errno == EINPROGRESS) {
                         s->monitored_events = EPOLLOUT;
+                        LOG_DBG("client %u fd=%d connection in progress...\n",
+                                c->id, s->fd);
                 } else {
                         LOG_ERR("client %u connect failed: %s\n",
                                 c->id, strerror(errno));
@@ -400,7 +402,6 @@ enum work_status client_connect_result(struct client *c)
                 s->state = SS_CLOSED;
                 LOG_DBG("client %u connection error\n", c->id);
                 s->monitored_events = s2->monitored_events = 0;
-
                 return WORK_ERROR;
         }
         

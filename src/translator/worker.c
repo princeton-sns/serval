@@ -27,6 +27,70 @@
 #define MAX_EVENTS 100
 #define ENABLE_SPLICE_DEBUG 1
 
+/*
+static void print_events(struct client *c)
+{
+        struct socket *s = &c->sock[ST_INET], *s2 = &c->sock[ST_SERVAL];
+        
+        LOG_MAX("s(fd=%d) state=%s "
+                "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u] "
+                "s2(fd=%d) state=%s "
+                "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u]\n",
+                s->fd, 
+                socket_state_str[s->state],
+                (s->active_events & EPOLLIN) > 0, 
+                (s->active_events & EPOLLOUT) > 0,
+                (s->active_events & EPOLLRDHUP) > 0,
+                (s->monitored_events & EPOLLIN) > 0, 
+                (s->monitored_events & EPOLLOUT) > 0,
+                (s->monitored_events & EPOLLRDHUP) > 0,
+                s2->fd, 
+                socket_state_str[s2->state],
+                (s2->active_events & EPOLLIN) > 0, 
+                (s2->active_events & EPOLLOUT) > 0,
+                (s2->active_events & EPOLLRDHUP) > 0,
+                (s2->monitored_events & EPOLLIN) > 0, 
+                (s2->monitored_events & EPOLLOUT) > 0,
+                (s2->monitored_events & EPOLLRDHUP) > 0);
+}
+
+
+static void set_socket_events(struct client *c)
+{
+        c->sock[ST_INET].monitored_events = 0;
+        c->sock[ST_SERVAL].monitored_events = 0;
+        
+        if (c->sock[ST_INET].state == SS_CONNECTED) {
+                if (c->sock[ST_INET].bytes_in_pipe > 0) {
+                        c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
+                } else {
+                        c->sock[ST_INET].monitored_events |= EPOLLIN;
+                        c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
+                }
+        } else if (c->sock[ST_INET].state == SS_CONNECTING) {
+                c->sock[ST_INET].monitored_events |= EPOLLOUT;
+        } 
+        
+        if (c->sock[ST_SERVAL].state == SS_CONNECTED) {
+                if (c->sock[ST_SERVAL].bytes_in_pipe > 0) {
+                        c->sock[ST_INET].monitored_events |= EPOLLOUT;
+                } else {
+                        c->sock[ST_SERVAL].monitored_events |= EPOLLIN;
+                        c->sock[ST_INET].monitored_events |= EPOLLOUT;
+                }
+        } else if (c->sock[ST_SERVAL].state == SS_CONNECTING) {
+                c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
+        }       
+
+        //print_events(c);
+        c->sock[ST_INET].monitored_events &= ~c->sock[ST_INET].active_events;
+        c->sock[ST_SERVAL].monitored_events &= ~c->sock[ST_SERVAL].active_events;
+        c->sock[ST_INET].monitored_events |= EPOLLRDHUP;
+        c->sock[ST_SERVAL].monitored_events |= EPOLLRDHUP;
+
+        print_events(c);
+}
+*/
 static inline int socket_is_readable(struct socket *s)
 {
         struct pollfd pfd = { s->fd, POLLIN, 0 };
@@ -40,7 +104,8 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
         enum work_status status = WORK_OK;
 
         if (from->state != SS_CONNECTED ||
-            to->state != SS_CONNECTED)
+            (to->state != SS_CONNECTED && 
+             to->state != SS_CONNECTING))
                 return WORK_CLOSE;
 
         if (!socket_is_readable(from)) {
@@ -92,6 +157,9 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
         ssize_t ret;
         enum work_status status = WORK_OK;
 
+        if (to->state == SS_CONNECTING)
+                return WORK_WOULDBLOCK;
+
         if (to->state != SS_CONNECTED)
                 return WORK_CLOSE;
 
@@ -112,8 +180,7 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                                 status = WORK_CLOSE;
                                 socket_close(to);
                         } else if (errno == EWOULDBLOCK) {
-                                /* Try again */
-                                break;
+                                status = WORK_WOULDBLOCK;
                         } else {
                                 LOG_ERR("client %u: to %s: %s\n",
                                         to->c->id,
@@ -124,6 +191,7 @@ static enum work_status pipe_to_sock(struct socket *from, struct socket *to)
                         }
                 } else if (ret == 0) {
                         LOG_ERR("pipe closed\n");
+                        status = WORK_ERROR;
                 } else if (ret > 0) {
                         to->bytes_written += ret;
                         from->bytes_in_pipe -= ret;
@@ -153,6 +221,9 @@ static enum work_status work_translate(struct socket *from,
         
         /* Transfer any bytes left in pipe from last time */
         
+        LOG_MED("w=%u c=%u fd=%d --> fd=%d\n",
+                from->c->w->id, from->c->id, from->fd, to->fd);
+
         if (from->bytes_in_pipe > 0) {
                 LOG_MED("w=%u c=%u %zu bytes left in pipe\n", 
                         from->c->w->id, from->c->id, from->bytes_in_pipe);
@@ -181,19 +252,19 @@ static enum work_status work_translate(struct socket *from,
                         from->c->w->id, from->c->id, 
                         from->bytes_in_pipe,
                         to->bytes_in_pipe);
-
                         
                 /* from sock closed, but we managed to read some bytes
-                   into the pipe first, which we now must write to the
-                   other sock. */
+                   into the pipe first. We must write these bytes to
+                   the other sock before closing that end. */
                 if (from->bytes_in_pipe > 0)
                         break;
         default:
                 return status;
         }
                    
-        LOG_MED("1. w=%u c=%u %zu bytes in pipe\n", 
-                from->c->w->id, from->c->id, from->bytes_in_pipe);
+        LOG_MED("1. w=%u c=%u fd=%d --> fd=%d %zu bytes in pipe\n", 
+                from->c->w->id, from->c->id, 
+                from->fd, to->fd, from->bytes_in_pipe);
 
         status = pipe_to_sock(from, to);
         
@@ -209,15 +280,21 @@ static enum work_status work_translate(struct socket *from,
                            close. */
                         return status;
         case WORK_OK:
-        default:
+                break;
+        case WORK_ERROR:
+                LOG_DBG("w=%u c=%u work error\n",
+                        from->c->w->id, from->c->id);
+        case WORK_EXIT:
                 break;
         }
  out:
 
         LOG_MED("2. w=%u c=%u %zu bytes in pipe\n", 
                 from->c->w->id, from->c->id, from->bytes_in_pipe);
+
         to->monitored_events &= ~EPOLLOUT;
         from->monitored_events |= EPOLLIN;
+
         return status;
 }
 
@@ -245,23 +322,22 @@ static void check_socket_events(struct client *c, struct socket *s,
 {
         struct socket *s2;
         
-        if (s->state == SS_CLOSED)
-                return;
-
         if (s == &c->sock[ST_INET]) {
                 s2 = &c->sock[ST_SERVAL];
         } else {
                 s2 = &c->sock[ST_INET];
         }
 
-        LOG_MAX("s(fd=%d) state=%s events[R=%d W=%d H=%u] "
+        LOG_MAX("events[R=%d W=%d H=%u] "
+                "s(fd=%d) state=%s "
                 "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u] "
-                "s2(fd=%d) active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u]\n",
-                s->fd, 
-                socket_state_str[s->state],
+                "s2(fd=%d) state=%s "
+                "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u]\n",
                 (events & EPOLLIN) > 0,
                 (events & EPOLLOUT) > 0,
                 (events & EPOLLRDHUP) > 0,
+                s->fd, 
+                socket_state_str[s->state],
                 (s->active_events & EPOLLIN) > 0, 
                 (s->active_events & EPOLLOUT) > 0,
                 (s->active_events & EPOLLRDHUP) > 0,
@@ -269,12 +345,18 @@ static void check_socket_events(struct client *c, struct socket *s,
                 (s->monitored_events & EPOLLOUT) > 0,
                 (s->monitored_events & EPOLLRDHUP) > 0,
                 s2->fd, 
+                socket_state_str[s2->state],
                 (s2->active_events & EPOLLIN) > 0, 
                 (s2->active_events & EPOLLOUT) > 0,
                 (s2->active_events & EPOLLRDHUP) > 0,
                 (s2->monitored_events & EPOLLIN) > 0, 
                 (s2->monitored_events & EPOLLOUT) > 0,
                 (s2->monitored_events & EPOLLRDHUP) > 0);
+
+        if (s->state == SS_CLOSED) {
+                LOG_MED("fd=%d socket is closed\n", s->fd);
+                return;
+        }
 
         if (events & EPOLLRDHUP) {
                 /* Other end of this socket's connection closed */
@@ -293,7 +375,7 @@ static void check_socket_events(struct client *c, struct socket *s,
                 if (s2->active_events & EPOLLOUT) {
                         /* We can translate stuff from s to s2 */
                         s->active_events &= ~EPOLLIN;
-                       
+                        
                         if (s == &c->sock[ST_INET])
                                 client_add_work(c, work_inet_to_serval);
                         else
@@ -448,7 +530,7 @@ static void *worker_thread(void *arg)
                                 
                                 s->active_events |= events[i].events;
                                 check_socket_events(c, s, events[i].events);
-                                
+
                                 for (j = 0; j < c->num_work && !exit; j++) {
                                         enum work_status status;
                                         
@@ -474,6 +556,7 @@ static void *worker_thread(void *arg)
                                         client_free(c);
                                 } else {
                                         /* Reactivate socket monitoring */
+                                        //set_socket_events(c);
                                         client_epoll_set_all(c, EPOLL_CTL_MOD,
                                                              EPOLLONESHOT);
                                 }
