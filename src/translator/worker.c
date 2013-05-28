@@ -124,7 +124,8 @@ static enum work_status sock_to_pipe(struct socket *from, struct socket *to)
                                 if (from->bytes_in_pipe > 0)
                                         status = WORK_OK;
                                 else {
-                                        LOG_MED("would block\n");
+                                        LOG_MED("w=%u c=%u would block\n",
+                                                from->c->w->id, from->c->id);
                                         status = WORK_WOULDBLOCK;
                                 }
                                 break;
@@ -270,10 +271,17 @@ static enum work_status work_translate(struct socket *from,
         
         switch (status) {
         case WORK_WOULDBLOCK:
-                from->monitored_events &= ~EPOLLIN;
-                to->monitored_events |= EPOLLOUT;
-                return status;
+                LOG_DBG("w=%u c=%u write blocked with %zu bytes still in pipe\n",
+                        from->c->w->id, from->c->id, from->bytes_in_pipe);
+                if (from->bytes_in_pipe > 0) {
+                        from->monitored_events &= ~EPOLLIN;
+                        to->monitored_events |= EPOLLOUT;
+                        return status;
+                }
+                break;
         case WORK_CLOSE:
+                LOG_DBG("w=%u c=%u CLOSE with %zu bytes still in pipe\n",
+                        from->c->w->id, from->c->id, from->bytes_in_pipe);
                 if (to->bytes_in_pipe == 0)
                         /* We do not have anything to write in the
                            other direction, so we are ready to
@@ -300,13 +308,13 @@ static enum work_status work_translate(struct socket *from,
 
 static enum work_status work_inet_to_serval(struct client *c)
 {
-        /* LOG_DBG("INET to SERVAL\n"); */
+        LOG_DBG("w=%u c=%u INET to SERVAL\n", c->w->id, c->id);
         return work_translate(&c->sock[ST_INET], &c->sock[ST_SERVAL]);
 }
 
 static enum work_status work_serval_to_inet(struct client *c)
 {
-        /* LOG_DBG("SERVAL to INET\n"); */
+        LOG_DBG("w=%u c=%u SERVAL to INET\n", c->w->id, c->id);
         return work_translate(&c->sock[ST_SERVAL], &c->sock[ST_INET]);
 }
 
@@ -400,7 +408,7 @@ static void check_socket_events(struct client *c, struct socket *s,
                         client_add_work(c, client_connect_result);
                         return;
                 }
-                if (s2->active_events & EPOLLIN) {
+                if (s2->active_events & EPOLLIN || s2->bytes_in_pipe > 0) {
                         /* We can translate stuff from s2 to s */
                         s->active_events &= ~EPOLLOUT;
                         

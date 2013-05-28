@@ -101,11 +101,13 @@ int client_epoll_set_all(struct client *c, int op,
         int ret = 0;
 
         for (i = 0; i < 2; i++) {
-                ret = client_epoll_set(c, &c->sock[i],
-                                       op, extra_event);
-                
-                if (ret == -1)
-                        break;
+                if (c->sock[i].state != SS_CLOSED) {
+                        ret = client_epoll_set(c, &c->sock[i],
+                                               op, extra_event);
+                        
+                        if (ret == -1)
+                                break;
+                }
         }
         
         return ret;
@@ -418,8 +420,6 @@ void socket_close(struct socket *s)
                         "%zu bytes still in pipe\n",
                         s->fd, s->bytes_in_pipe);
         }
-        close(s->splicefd[0]);
-        close(s->splicefd[1]);
 }
 
 enum work_status client_close(struct client *c)
@@ -437,6 +437,11 @@ enum work_status client_close(struct client *c)
         
         if (c->sock[ST_SERVAL].state != SS_CLOSED)
                 socket_close(&c->sock[ST_SERVAL]);
+
+        close(c->sock[ST_INET].splicefd[0]);
+        close(c->sock[ST_INET].splicefd[1]);
+        close(c->sock[ST_SERVAL].splicefd[0]);
+        close(c->sock[ST_SERVAL].splicefd[1]);
         
         return WORK_OK;
 }
