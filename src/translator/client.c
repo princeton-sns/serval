@@ -414,12 +414,6 @@ void socket_close(struct socket *s)
 {
         s->state = SS_CLOSED;
         close(s->fd);
-        
-        if (s->bytes_in_pipe) {
-                LOG_ERR("warning: socket fd=%d closed with "
-                        "%zu bytes still in pipe\n",
-                        s->fd, s->bytes_in_pipe);
-        }
 }
 
 enum work_status client_close(struct client *c)
@@ -431,6 +425,20 @@ enum work_status client_close(struct client *c)
                 c->sock[ST_SERVAL].bytes_written,
                 c->sock[ST_INET].bytes_read, 
                 c->sock[ST_INET].bytes_written);
+        
+        if (c->sock[ST_INET].bytes_in_pipe > 0) {
+                LOG_ERR("warning: INET socket fd=%d still has "
+                        "%zu bytes in pipe\n",
+                        c->sock[ST_INET].fd, 
+                        c->sock[ST_INET].bytes_in_pipe);
+        }
+        
+        if (c->sock[ST_SERVAL].bytes_in_pipe > 0) {
+                LOG_ERR("warning: SERVAL socket fd=%d still has "
+                        "%zu bytes in pipe\n",
+                        c->sock[ST_SERVAL].fd, 
+                        c->sock[ST_SERVAL].bytes_in_pipe);
+        }
 
         if (c->sock[ST_INET].state != SS_CLOSED)
                 socket_close(&c->sock[ST_INET]);

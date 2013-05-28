@@ -25,72 +25,7 @@
 #include "worker.h"
 
 #define MAX_EVENTS 100
-#define ENABLE_SPLICE_DEBUG 1
 
-/*
-static void print_events(struct client *c)
-{
-        struct socket *s = &c->sock[ST_INET], *s2 = &c->sock[ST_SERVAL];
-        
-        LOG_MAX("s(fd=%d) state=%s "
-                "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u] "
-                "s2(fd=%d) state=%s "
-                "active[R=%d W=%d H=%u] monitored[R=%d W=%d H=%u]\n",
-                s->fd, 
-                socket_state_str[s->state],
-                (s->active_events & EPOLLIN) > 0, 
-                (s->active_events & EPOLLOUT) > 0,
-                (s->active_events & EPOLLRDHUP) > 0,
-                (s->monitored_events & EPOLLIN) > 0, 
-                (s->monitored_events & EPOLLOUT) > 0,
-                (s->monitored_events & EPOLLRDHUP) > 0,
-                s2->fd, 
-                socket_state_str[s2->state],
-                (s2->active_events & EPOLLIN) > 0, 
-                (s2->active_events & EPOLLOUT) > 0,
-                (s2->active_events & EPOLLRDHUP) > 0,
-                (s2->monitored_events & EPOLLIN) > 0, 
-                (s2->monitored_events & EPOLLOUT) > 0,
-                (s2->monitored_events & EPOLLRDHUP) > 0);
-}
-
-
-static void set_socket_events(struct client *c)
-{
-        c->sock[ST_INET].monitored_events = 0;
-        c->sock[ST_SERVAL].monitored_events = 0;
-        
-        if (c->sock[ST_INET].state == SS_CONNECTED) {
-                if (c->sock[ST_INET].bytes_in_pipe > 0) {
-                        c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
-                } else {
-                        c->sock[ST_INET].monitored_events |= EPOLLIN;
-                        c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
-                }
-        } else if (c->sock[ST_INET].state == SS_CONNECTING) {
-                c->sock[ST_INET].monitored_events |= EPOLLOUT;
-        } 
-        
-        if (c->sock[ST_SERVAL].state == SS_CONNECTED) {
-                if (c->sock[ST_SERVAL].bytes_in_pipe > 0) {
-                        c->sock[ST_INET].monitored_events |= EPOLLOUT;
-                } else {
-                        c->sock[ST_SERVAL].monitored_events |= EPOLLIN;
-                        c->sock[ST_INET].monitored_events |= EPOLLOUT;
-                }
-        } else if (c->sock[ST_SERVAL].state == SS_CONNECTING) {
-                c->sock[ST_SERVAL].monitored_events |= EPOLLOUT;
-        }       
-
-        //print_events(c);
-        c->sock[ST_INET].monitored_events &= ~c->sock[ST_INET].active_events;
-        c->sock[ST_SERVAL].monitored_events &= ~c->sock[ST_SERVAL].active_events;
-        c->sock[ST_INET].monitored_events |= EPOLLRDHUP;
-        c->sock[ST_SERVAL].monitored_events |= EPOLLRDHUP;
-
-        print_events(c);
-}
-*/
 static inline int socket_is_readable(struct socket *s)
 {
         struct pollfd pfd = { s->fd, POLLIN, 0 };
@@ -564,7 +499,6 @@ static void *worker_thread(void *arg)
                                         client_free(c);
                                 } else {
                                         /* Reactivate socket monitoring */
-                                        //set_socket_events(c);
                                         client_epoll_set_all(c, EPOLL_CTL_MOD,
                                                              EPOLLONESHOT);
                                 }
