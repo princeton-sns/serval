@@ -2120,7 +2120,7 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
         /* Enable GSO for TCP */
         if (gso) {
                 sk->sk_gso_type = SKB_GSO_TCPV4;
-                sk_nocaps_add(sk, NETIF_F_ALL_TSO);
+                //sk_nocaps_add(sk, NETIF_F_ALL_TSO);
         } else {
                 sk_nocaps_add(sk, NETIF_F_GSO_MASK);
                 sk->sk_gso_type = 0;

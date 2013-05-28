@@ -28,6 +28,7 @@
 #include <common/debug.h>
 #include <sys/epoll.h>
 #include <pthread.h>
+#include <limits.h>
 #include <linux/netfilter_ipv4.h>
 #include <fcntl.h>
 #include "translator.h"

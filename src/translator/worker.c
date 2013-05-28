@@ -18,6 +18,7 @@
 #include <poll.h>
 #include <errno.h>
 #include <unistd.h>
+#include <limits.h>
 #include <linux/netfilter_ipv4.h>
 #include "translator.h"
 #include "client.h"

@@ -2694,6 +2694,7 @@ int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
                 else
                         answ = tp->write_seq - tp->snd_una;
                 break;
+                /*
         case SIOCOUTQNSD:
                 if (sk->sk_state == TCP_LISTEN)
                         return -EINVAL;
@@ -2703,6 +2704,7 @@ int serval_tcp_ioctl(struct sock *sk, int cmd, unsigned long arg)
                 else
                         answ = tp->write_seq - tp->snd_nxt;
                 break;
+                */
         default:
                 return -ENOIOCTLCMD;
         }
@@ -2968,7 +2970,7 @@ int serval_tcp_syn_recv_sock(struct sock *sk,
 
         if (gso) {
                 newsk->sk_gso_type = SKB_GSO_TCPV4;
-                sk_nocaps_add(sk, NETIF_F_ALL_TSO);
+                //sk_nocaps_add(sk, NETIF_F_ALL_TSO);
         } else {
                 sk_nocaps_add(sk, NETIF_F_GSO_MASK);
                 newsk->sk_gso_type = 0;
