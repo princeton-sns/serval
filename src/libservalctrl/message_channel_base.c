@@ -23,6 +23,7 @@
 #include <common/atomic.h>
 #include <common/hash.h>
 #include <common/debug.h>
+#include <serval/ctrlmsg.h>
 #include "message_channel_internal.h"
 #include "message_channel_base.h"
 
@@ -179,10 +180,25 @@ int message_channel_base_initialize(message_channel_t *channel)
         }
 #endif
     }
-    
+
     if (err == -1) {
-        fprintf(stderr, "Error binding socket: %s\n", strerror(errno));
+        fprintf(stderr, "bind: %s\n", strerror(errno));
         goto bind_error;
+    }
+    
+    if (base->sock_type == SOCK_STREAM) {
+        if (base->native_socket) {
+            err = connect(base->sock, &base->peer.sa, base->peer_len);
+        } 
+#if defined(ENABLE_USERMODE)
+        else {
+            err = connect_sv(base->sock, &base->peer.sa, base->peer_len);
+        }
+#endif
+        if (err == -1) {
+            fprintf(stderr, "connect: %s\n", strerror(errno));
+            goto bind_error;
+        }
     }
 
     set_reuse_ok(base->sock);
@@ -370,11 +386,9 @@ int message_channel_base_send(message_channel_t *channel,
     struct msghdr msgh = { &base->peer, 
                            base->peer_len,
                            &iov, 1,
-                           &channel->peer_pid,
-                           sizeof(channel->peer_pid), 0 };
-    
+                           NULL, 0, 0 };
     assert(channel);
-
+    
     if (!msg)
         return -1;
     

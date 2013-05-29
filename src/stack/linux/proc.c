@@ -208,7 +208,7 @@ struct proc_dir_entry *proc_create(const char *name, mode_t mode,
 }
 #endif
 
-int __init proc_init(void)
+int proc_init(void)
 {
         struct proc_dir_entry *proc;
         int ret = -ENOMEM;

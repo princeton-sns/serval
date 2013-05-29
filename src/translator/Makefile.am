@@ -4,10 +4,14 @@ bin_PROGRAMS = translator
 
 translator_SOURCES = \
 	translator.c \
+	client.c \
+	worker.c \
 	log.c
 
 noinst_HEADERS = \
 	translator.h \
+	client.h \
+	worker.h \
 	log.h 
 
 translator_CPPFLAGS =-I$(top_srcdir)/include
@@ -22,7 +26,6 @@ EXTRA_DIST = \
 	splice.c \
 	splice.h \
 	sys_splice.S \
-	translator.h \
 	translator_jni.c
 
 clean-local:

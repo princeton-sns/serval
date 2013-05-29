@@ -1,6 +1,6 @@
 #!/bin/bash
 
-KERNEL_DIR=../../src/stack/
+KERNEL_DIR=../../src/stack
 MODULE=$KERNEL_DIR/serval.ko
 
 if [ ! -f $MODULE ]; then
@@ -9,7 +9,8 @@ if [ ! -f $MODULE ]; then
     exit -1
 fi
 
-UTS_RELEASE=`strings $MODULE | awk '/^UTS_RELEASE/ { print substr($2,2,length($2)-2) }'`
+VERMAGIC=`strings ../../src/stack/serval.ko | awk '/^vermagic=/ { split($1,a,"="); print a[2] }'`
 
-cp $MODULE assets/serval-$UTS_RELEASE.ko
+echo "copying $MODULE to assets/serval-$VERMAGIC.ko"
+cp $MODULE assets/serval-$VERMAGIC.ko
 

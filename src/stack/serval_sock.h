@@ -152,7 +152,8 @@ struct serval_sock {
         struct service_id       peer_srvid;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
-	struct sk_buff_head	ctrl_queue;
+	//struct sk_buff_head	ctrl_queue;
+	    struct sk_buff          *ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
         u8                      local_nonce[SAL_NONCE_SIZE];
         u8                      peer_nonce[SAL_NONCE_SIZE];
@@ -323,8 +324,8 @@ const char *serval_sal_state_str(unsigned int state);
 int serval_sock_set_sal_state(struct sock *sk, unsigned int new_state);
 void serval_sock_rexmit_timeout(unsigned long data);
 
-int __init serval_sock_tables_init(void);
-void __exit serval_sock_tables_fini(void);
+int serval_sock_tables_init(void);
+void serval_sock_tables_fini(void);
 
 void serval_sock_wfree(struct sk_buff *skb);
 void serval_sock_rfree(struct sk_buff *skb);

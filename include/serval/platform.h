@@ -363,10 +363,6 @@ int ppoll(struct pollfd fds[], nfds_t nfds, struct timespec *timeout, sigset_t *
 const char *mac_ntop(const void *src, char *dst, size_t size);
 const char *get_strtime(void);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,37))
-#define route_dst(rt) (&(rt)->u.dst)
-#else
-#define route_dst(rt) (&(rt)->dst)
-#endif /* LINUX_VERSION_CODE */
+#include <serval/compat.h>
 
 #endif /* _PLATFORM_H */

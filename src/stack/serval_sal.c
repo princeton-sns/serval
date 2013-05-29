@@ -23,7 +23,7 @@
 #include <netinet/serval.h>
 #if defined(OS_LINUX_KERNEL)
 #include <linux/if_ether.h>
-#include <linux/if_ether.h>
+#include <linux/netdevice.h>
 #include <linux/inetdevice.h>
 #include <linux/netfilter_ipv4.h>
 #include <net/route.h>
@@ -953,7 +953,7 @@ static int serval_sal_queue_and_push(struct sock *sk, struct sk_buff *skb)
         */
         if (skb == serval_sal_ctrl_queue_head(sk))
                 serval_sock_reset_xmit_timer(sk, ssk->rto, SAL_RTO_MAX);
-
+        
         /* 
            Write packets in queue to network.
         */
@@ -974,7 +974,7 @@ static struct sk_buff *sk_sal_alloc_skb(struct sock *sk, int size, gfp_t gfp)
 
         if (!skb)
                 return NULL;
-        
+
         skb_reserve(skb, sk->sk_prot->max_header);
         skb_serval_set_owner_w(skb, sk);
         skb->protocol = IPPROTO_SERVAL;
@@ -1000,7 +1000,7 @@ static int serval_sal_send_syn(struct sock *sk, u32 verno)
 
                 if (err) {
                         LOG_SSK(sk, "Transport protocol returned error\n");
-                        kfree_skb(skb);
+                        __kfree_skb(skb);
                         return err;
                 }
         }
@@ -1049,9 +1049,6 @@ int serval_sal_connect(struct sock *sk, struct sockaddr *uaddr,
                 }
         }
 
-        /* Disable segmentation offload */
-        sk->sk_gso_type = 0;
-        
         return serval_sal_send_syn(sk, ssk->snd_seq.iss);
 }
 
@@ -1608,7 +1605,7 @@ static void serval_sal_send_reset(struct sock *sk, struct sk_buff *skb,
         dst_release(dst);
  drop_response:
 #endif
-        kfree_skb(rskb);
+        __kfree_skb(rskb);
         return;
 }
 
@@ -1673,7 +1670,7 @@ static int serval_sal_send_synack(struct sock *sk,
                                             0, sk->sk_bound_dev_if);
                 
                 if (!rt) {
-                        LOG_ERR("RESPONSE not routable\n");
+                        LOG_DBG("RESPONSE not routable\n");
                         goto drop_response;
                 }
                 
@@ -1793,13 +1790,14 @@ static int serval_sal_send_synack(struct sock *sk,
         err = serval_ipv4_build_and_send_pkt(rskb, sk, 
                                              srsk->reply_saddr,
                                              inet_rsk(rsk)->rmt_addr, NULL);
+
         return 0;
  drop_and_release:
         dst_release(dst);
 #if defined(OS_LINUX_KERNEL)
  drop_response:
 #endif
-        kfree_skb(rskb);
+        __kfree_skb(rskb);
         return 0;
 }
 
@@ -2623,6 +2621,33 @@ static int serval_sal_request_state_process(struct sock *sk,
                 }
         }
         
+#if defined(OS_LINUX_KERNEL)
+        /*
+          For kernel, we need the outgoing route entry to set
+          capabilities */
+        {
+                struct rtable *rt;
+                int ifindex = sk->sk_bound_dev_if > 0 ? 
+                        sk->sk_bound_dev_if : skb->dev->ifindex;
+
+                rt = serval_ip_route_output(sock_net(sk),
+                                            ip_hdr(skb)->saddr,
+                                            ip_hdr(skb)->daddr,
+                                            0, ifindex);
+                
+                if (rt) {
+                        LOG_DBG("setting up caps for sock %p bound_dev=%d\n", 
+                                sk, sk->sk_bound_dev_if);
+                        sk_setup_caps(sk, route_dst(rt));
+                        /* Remove these capabilities because they are
+                           not supported in hardware when we have a
+                           SAL header */
+                        //sk->sk_route_caps &= ~NETIF_F_ALL_TSO;
+                        //sk->sk_route_caps &= ~NETIF_F_ALL_CSUM;
+                }
+        }
+#endif /* OS_LINUX_KERNEL */
+
         /* Update control block */
         SAL_SKB_CB(rskb)->flags = SVH_ACK | SVH_CONN_ACK;
 
@@ -3573,6 +3598,8 @@ void serval_sal_rexmit_timeout(unsigned long data)
         struct sock *sk = (struct sock *)data;
         struct serval_sock *ssk = serval_sk(sk);
 
+        LOG_SSK(sk, "Retransmit timeout\n");
+
         bh_lock_sock(sk);
 
         LOG_SSK(sk, "Transmit timeout sock=%p rto_msecs=%u backoff=%u\n", 
@@ -3811,7 +3838,6 @@ static int serval_sal_do_xmit(struct sk_buff *skb)
         }
         else {
             ssk->tot_pkts_sent++;
-            LOG_DBG("SKB things: %d %d\n", skb->len, skb->data_len);
             ssk->tot_bytes_sent += skb->len;
         }
 
@@ -3861,6 +3887,10 @@ static inline int serval_sal_add_service_ext(struct sock *sk,
         return ext_len;
 }
 
+/*
+  We currently have no use for PAD extension, because all SAL headers
+  are 32-bit aligned.
+*/
 static inline int serval_sal_add_pad_ext(struct sock *sk, 
                                          struct sk_buff *skb,
                                          unsigned short pad_bytes)
@@ -3893,7 +3923,8 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                    serviceID. */
                 if (SAL_SKB_CB(skb)->flags & SVH_SYN ||
                     SAL_SKB_CB(skb)->flags & SVH_CONN_ACK) {
-                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
+                        hdr_len += serval_sal_add_service_ext(sk, skb, 
+                                                              &ssk->peer_srvid);
                 }
 
                 hdr_len += serval_sal_add_ctrl_ext(sk, skb);                
@@ -3915,6 +3946,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
         }
 
         /* Add SAL base header */
+        
         sh = (struct sal_hdr *)skb_push(skb, SAL_HEADER_LEN);
         hdr_len += SAL_HEADER_LEN;
         memcpy(&sh->src_flowid, &ssk->local_flowid, 
@@ -3926,7 +3958,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
 
         skb->protocol = IPPROTO_SERVAL;
 
-#if defined(ENABLED_DEBUG)
+#if defined(ENABLE_DEBUG)
         BUG_ON(hdr_len % 4 != 0);
 #endif
         return sh;
@@ -3946,7 +3978,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         int dlen = skb->len - 8; /* KLUDGE?! TODO not sure where the
                                     extra 8 bytes are coming from at
                                     this point */
-    
+
 	if (likely(use_copy)) {
                 /* pskb_copy will make a copy of header and
                    non-fragmented data. Making a copy is necessary
@@ -3954,6 +3986,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    every copy we send (retransmission or copies for
                    packets matching multiple rules). */
                 skb = pskb_copy(skb, gfp_mask);
+
 
 		if (unlikely(!skb)) {
                         /* Shouldn't free the passed skb here, since
@@ -3966,19 +3999,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 skb_serval_set_owner_w(skb, sk);
 	}
 
-        /* NOTE:
-         *
-         * Do not use skb_set_owner_w(skb, sk) here as that will
-         * reserve write space for the socket on the transport
-
-         * packets as they might then fill up the write queue/buffer
-         * for the socket. However, skb_set_owner_w(skb, sk) also
-         * guarantees that the socket is not released until skb is
-         * free'd, which is good. I guess we could implement our own
-         * version of skb_set_owner_w() and grab a socket refcount
-         * instead, which is released in the skb's destructor.
-         */
-
+        LOG_DBG("checksum=%u\n", skb->ip_summed);
+        
         /* If we are connected, transmit immediately */
         if ((1 << sk->sk_state) & (SALF_CONNECTED | 
                                    SALF_FINWAIT1 | 
@@ -4041,6 +4063,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 	if (service_iter_init(&iter, se, 
                               net_serval.sysctl_resolution_mode) < 0) {
                 kfree_skb(skb);
+                LOG_ERR("Could not initialize service iterator\n");
                 return -1;
         }
 
@@ -4048,7 +4071,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
           Send to all destinations resolved for this service.
         */
 	target = service_iter_next(&iter);
-	
+
         if (!target) {
                 LOG_SSK(sk, "No device to transmit on!\n");
                 service_iter_inc_stats(&iter, -1, -dlen);
@@ -4062,7 +4085,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		struct target *next_target;
                 struct net_device *dev = NULL;
                 int local_err = 0;
-
+                
                 if (cskb == NULL) {
                         service_iter_inc_stats(&iter, 1, dlen);
                 }
@@ -4094,6 +4117,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                 } else if (target->type == SERVICE_RULE_DROP) {
                         kfree_skb(cskb);
                         err = -EHOSTUNREACH;
+                        target = next_target;
                         continue;
                 }
 
@@ -4109,10 +4133,17 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                          * default device TODO - make sure this is
                          * appropriate for kernel operation as well
                          */
+#if defined(OS_BSD)
+                        dev = __dev_get_by_name(sock_net(sk), "lo0");
+#else
                         dev = __dev_get_by_name(sock_net(sk), "lo");
+#endif
 
-                        if (!dev)
+                        if (!dev) {
+                                target = next_target;
+                                err = -ENODEV;
                                 continue;
+                        }
 		} else {
                         memcpy(&inet->inet_daddr,
                                target->dst,
@@ -4215,6 +4246,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    
         service_iter_destroy(&iter);
 	service_entry_put(se);
+        LOG_DBG("Returning %d\n", err);
 
 	return err;
 }

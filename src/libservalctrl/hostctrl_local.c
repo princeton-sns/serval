@@ -356,6 +356,7 @@ int local_ctrlmsg_recv(struct hostctrl *hc, struct ctrlmsg *cm,
         struct ctrlmsg_stats_response *csr = (struct ctrlmsg_stats_response*)cm;
         if (hc->cbs->flow_stat_update)
             ret = hc->cbs->flow_stat_update(hc, cm->xid, cm->retval, csr);
+        break;
     }
     case CTRLMSG_TYPE_DELAY_NOTIFY: {
         struct ctrlmsg_delay *cmd = 

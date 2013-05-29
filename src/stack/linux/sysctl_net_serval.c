@@ -94,15 +94,15 @@ static int proc_udp_encap_port(struct ctl_table *table, int write,
 }
 
 static ctl_table serval_table[] = {
-        {
+        {   
                 .procname = "auto_migrate",
-		.data = &net_serval.sysctl_auto_migrate,
-		.maxlen = sizeof(unsigned int),
-		.mode = 0644,
-		.proc_handler = proc_dointvec_minmax,
+                .data = &net_serval.sysctl_auto_migrate,
+                .maxlen = sizeof(unsigned int),
+                .mode = 0644,
+                .proc_handler = proc_dointvec_minmax,
                 .extra1 = &zero,
                 .extra2 = &one,
-	},
+        },
         {
                 .procname = "debug",
 		.data = &net_serval.sysctl_debug,
@@ -130,18 +130,9 @@ static ctl_table serval_table[] = {
 	},
 	{
 		.procname= "sal_forward",
-		.data= &net_serval.sysctl_sal_forward,
+		.data = &net_serval.sysctl_sal_forward,
 		.maxlen= sizeof(unsigned int),
 		.mode= 0644,
-		.proc_handler = proc_dointvec_minmax,
-                .extra1 = &zero,
-                .extra2 = &one,
-	},
-	{
-		.procname = "udp_encap",
-		.data = &net_serval.sysctl_udp_encap,
-		.maxlen = sizeof(unsigned int),
-		.mode = 0644,
 		.proc_handler = proc_dointvec_minmax,
                 .extra1 = &zero,
                 .extra2 = &one,
@@ -164,6 +155,15 @@ static ctl_table serval_table[] = {
 		.extra1 = &zero,
 		.extra2 = &three,
 	},
+        {
+                .procname = "udp_encap",
+                .data = &net_serval.sysctl_udp_encap,
+                .maxlen = sizeof(unsigned int),
+                .mode = 0644,
+                .proc_handler = proc_dointvec_minmax,
+                .extra1 = &zero,
+                .extra2 = &one,
+        },
 	{
 		.procname = "udp_encap_client_port",
 		.data = &net_serval.sysctl_udp_encap_client_port,
@@ -193,7 +193,7 @@ static struct ctl_path serval_path[] = {
 };
 #endif
 
-int __net_init serval_sysctl_register(struct net *net)
+int serval_sysctl_register(struct net *net)
 {
 	struct ctl_table *table;
 
@@ -201,7 +201,6 @@ int __net_init serval_sysctl_register(struct net *net)
 	if (table == NULL)
 		goto err_alloc;
 
-	table[0].data = &net_serval;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 	net_serval.ctl = register_net_sysctl(net, "net/serval", table);
 #else

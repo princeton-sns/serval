@@ -346,6 +346,9 @@ enum {
 #define SVGRP_CTRL 0x1
 #endif /* __linux__ */
 
+/* Ancillary CMSG data types */
+#define CMSG_TYPE_CLIENT_PID 0x1
+
 #if defined(OS_ANDROID)
 #define SERVAL_STACK_CTRL_PATH "/data/local/tmp/serval-stack-ctrl.sock"
 #else

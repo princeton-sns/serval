@@ -41,13 +41,13 @@
 #endif
 #endif
 
-#define SERVAL_ASSERT(predicate) __ASSERT(predicate, __LINE__)
+#define SERVAL_ASSERT(predicate) __ASSERT__(predicate, __LINE__)
 
-#define __PASTE(a,b) a##b
-#define __ASSERT(predicate,line)                                 \
-        typedef char __PASTE(assertion_failed_,line)[2*!!(predicate)-1];
+#define __PASTE__(a,b) a##b
+#define __ASSERT__(predicate,line)                                 \
+        typedef char __PASTE__(assertion_failed_,line)[2*!!(predicate)-1];
 
-#define AF_SERVAL 27
+#define AF_SERVAL 28
 #define PF_SERVAL AF_SERVAL   /* include/linux/socket.h */
 
 #define SERVAL_PROTO_TCP 6

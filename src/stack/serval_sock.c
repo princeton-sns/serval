@@ -67,14 +67,14 @@ static const char *sock_sal_state_str[] = {
 
 static void serval_sock_destruct(struct sock *sk);
 
-int __init serval_table_init(struct serval_table *table,
-                             unsigned int (*hashfn)(struct serval_table *tbl, 
-                                                    struct sock *sk),
-                             struct serval_hslot *(*hashslot)(struct serval_table *tbl,
-                                                              struct net *net,
-                                                              void *key,
-                                                              size_t keylen),
-                             const char *name)
+int serval_table_init(struct serval_table *table,
+                      unsigned int (*hashfn)(struct serval_table *tbl, 
+                                             struct sock *sk),
+                      struct serval_hslot *(*hashslot)(struct serval_table *tbl,
+                                                       struct net *net,
+                                                       void *key,
+                                                       size_t keylen),
+                      const char *name)
 {
 	unsigned int i;
 
@@ -99,7 +99,7 @@ int __init serval_table_init(struct serval_table *table,
 	return 0;
 }
 
-void __exit serval_table_fini(struct serval_table *table)
+void serval_table_fini(struct serval_table *table)
 {
         unsigned int i;
 
@@ -136,7 +136,7 @@ void serval_sock_migrate_iface(int old_dev, int new_dev)
                 local_bh_disable();
                 spin_lock(&slot->lock);
                                 
-                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
+                hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {
                         int should_migrate = 0;
 
                         if (old_dev > 0 && new_dev > 0) {
@@ -233,7 +233,7 @@ void serval_sock_freeze_flows(struct net_device *dev)
                 
                 spin_lock_bh(&slot->lock);
                                 
-                hlist_for_each_entry(sk, walk, &slot->head, sk_node) {          
+                hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {          
                         struct serval_sock *ssk = serval_sk(sk);                       
                         
                         if (sk->sk_bound_dev_if > 0 && 
@@ -350,7 +350,7 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
 
         spin_lock_bh(&slot->lock);
         
-        hlist_for_each_entry(sk, walk, &slot->head, sk_node) {
+        hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {
                 struct serval_sock *ssk = serval_sk(sk);
                 if (memcmp(key, ssk->hash_key, keylen) == 0) {
                         sock_hold(sk);
@@ -525,7 +525,7 @@ void serval_sock_unhash(struct sock *sk)
         }
 }
 
-int __init serval_sock_tables_init(void)
+int serval_sock_tables_init(void)
 {
         int ret;
 
@@ -546,7 +546,7 @@ fail_table:
         return ret;
 }
 
-void __exit serval_sock_tables_fini(void)
+void serval_sock_tables_fini(void)
 {
         serval_table_fini(&request_table);
         serval_table_fini(&established_table);
@@ -813,16 +813,10 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 const char *serval_sock_print(struct sock *sk, char *buf, size_t buflen)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct net_device *dev = dev_get_by_index(sock_net(sk), 
-                                                  sk->sk_bound_dev_if);
 
-        snprintf(buf, buflen, "[%s:%s %s]",
+        snprintf(buf, buflen, "[%s:%s]",
                  flow_id_to_str(&ssk->local_flowid),
-                 flow_id_to_str(&ssk->peer_flowid),
-                 dev ? dev->name : "nodev");
-
-        if (dev)
-                dev_put(dev);
+                 flow_id_to_str(&ssk->peer_flowid));
 
         return buf;
 }

@@ -27,8 +27,12 @@
 #include <linux/export.h>
 #endif
 
-extern int __init inet_to_serval_init(void);
-extern void __exit inet_to_serval_fini(void);
+extern int inet_to_serval_init(void);
+extern void inet_to_serval_fini(void);
+#if 0
+extern int serval_tcp_offload_init(void);
+extern void serval_tcp_offload_fini(void);
+#endif 
 
 #elif defined(OS_USER)
 /* User-level declarations */
@@ -55,12 +59,12 @@ extern void __exit inet_to_serval_fini(void);
 #include <serval_sal.h>
 #include <service.h>
 
-extern int __init packet_init(void);
-extern void __exit packet_fini(void);
-extern int __init service_init(void);
-extern void __exit service_fini(void);
-extern int __init delay_queue_init(void);
-extern void __exit delay_queue_fini(void);
+extern int packet_init(void);
+extern void packet_fini(void);
+extern int service_init(void);
+extern void service_fini(void);
+extern int delay_queue_init(void);
+extern void delay_queue_fini(void);
 
 extern struct proto serval_udp_proto;
 extern struct proto serval_tcp_proto;
@@ -68,7 +72,7 @@ extern struct proto serval_tcp_proto;
 struct netns_serval net_serval = {
         .sysctl_sal_forward = 0,
         .sysctl_inet_to_serval = 0,
-        .sysctl_auto_migrate = 1,
+        .sysctl_auto_migrate = 0,
         .sysctl_debug = 0,
         .sysctl_udp_encap = 0,
         .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
@@ -1058,7 +1062,7 @@ static struct net_proto_family serval_family_ops = {
 	.owner	= THIS_MODULE,
 };
 
-int __init serval_init(void)
+int serval_init(void)
 {
         int err = 0;
 
@@ -1072,31 +1076,31 @@ int __init serval_init(void)
         err = serval_sock_tables_init();
 
         if (err < 0) {
-                  LOG_CRIT("Cannot initialize serval sockets\n");
-                  goto fail_sock;
+                LOG_CRIT("Cannot initialize serval sockets\n");
+                goto fail_sock;
         }
 
         err = packet_init();
 
         if (err != 0) {
-		LOG_CRIT("Cannot init packet socket!\n");
-		goto fail_packet;
-	}
-
+                LOG_CRIT("Cannot init packet socket!\n");
+                goto fail_packet;
+        }
+        
         err = proto_register(&serval_udp_proto, 1);
-
-	if (err != 0) {
-		LOG_CRIT("Cannot register UDP proto\n");
-		goto fail_udp_proto;
-	}
-                
+        
+    	if (err != 0) {
+                LOG_CRIT("Cannot register UDP proto\n");
+                goto fail_udp_proto;
+        }
+        
         err = proto_register(&serval_tcp_proto, 1);
-
-	if (err != 0) {
-		LOG_CRIT("Cannot register TCP proto\n");
-		goto fail_tcp_proto;
-	}
-
+        
+        if (err != 0) {
+                LOG_CRIT("Cannot register TCP proto\n");
+                goto fail_tcp_proto;
+        }
+        
         err = sock_register(&serval_family_ops);
 
         if (err != 0) {
@@ -1105,6 +1109,14 @@ int __init serval_init(void)
         }
 
 #if defined(OS_LINUX_KERNEL)
+#if 0
+        err = serval_tcp_offload_init();
+
+        if (err != 0) {
+                LOG_CRIT("Cannot initialize TCP offloading\n");
+                goto fail_tcp_offload;
+        }
+#endif
         err = inet_to_serval_init();
 
         if (err != 0) {
@@ -1115,11 +1127,14 @@ int __init serval_init(void)
         serval_tcp_init();
         
         delay_queue_init();
-        net_serval.sysctl_auto_migrate = 1;
  out:
         return err;
 #if defined(OS_LINUX_KERNEL)
  fail_inet_to_serval:
+#if 0
+        serval_tcp_offload_fini();
+ fail_tcp_offload:
+#endif
         sock_unregister(PF_SERVAL);
 #endif
  fail_sock_register:
@@ -1140,10 +1155,13 @@ int __init serval_init(void)
 #include <net/ip.h>
 #endif
 
-void __exit serval_fini(void)
+void serval_fini(void)
 {
 #if defined(OS_LINUX_KERNEL)
         inet_to_serval_fini();
+#if 0
+        serval_tcp_offload_fini();
+#endif
 #endif
      	sock_unregister(PF_SERVAL);
 	proto_unregister(&serval_udp_proto);

@@ -4,8 +4,8 @@
 
 #include <serval/platform.h>
 
-int __init serval_init(void);
-void __exit serval_fini(void);
+int serval_init(void);
+void serval_fini(void);
 
 struct ctl_table_header;
 

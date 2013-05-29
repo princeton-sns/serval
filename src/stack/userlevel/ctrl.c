@@ -1,12 +1,18 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
+#define _GNU_SOURCE 1
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <serval/debug.h>
 #include <serval/ctrlmsg.h>
 #include <common/hashtable.h>
+#include <common/platform.h>
 #include <ctrl.h>
 #include "client.h"
+
+#if defined (OS_MACOSX)
+#include <sys/ucred.h>
+#endif
 
 static int ctrl_sock = -1;
 struct sockaddr_un unaddr;
@@ -65,13 +71,17 @@ static struct ctrl_client *ctrl_client_new(struct sockaddr_un *un)
         return cc;
 }
 
+#define CMSGBUF_LEN 512
+
 int ctrl_recvmsg(void)
 {
         int peer = 0;
         struct sockaddr_un un;
+        struct cmsghdr *cmsg;
+        unsigned char cmsgbuf[CMSGBUF_LEN];
         struct iovec iov = { rbuf, RCV_BUFSIZE };
 	struct msghdr mh = { &un, sizeof(un), &iov, 1,
-                             &peer, sizeof(peer), 0 };
+                             cmsgbuf, CMSGBUF_LEN, 0 };
 	struct ctrlmsg *cm;
 	ssize_t nbytes;
         int ret = 0;
@@ -89,6 +99,26 @@ int ctrl_recvmsg(void)
 		return -1;
 	}
 
+        /* Parse ancillary control information */
+        cmsg = CMSG_FIRSTHDR(&mh);
+        
+        while (cmsg) {
+                if (cmsg->cmsg_level == SOL_SOCKET) {
+                        switch (cmsg->cmsg_type) {
+                        case SCM_CREDENTIALS:
+                                if (cmsg->cmsg_len == CMSG_LEN(sizeof(ucred_t))) {
+                                        ucred_t *cred = (ucred_t *)CMSG_DATA(cmsg);
+                                        peer = cred->ucred_pid;
+                                }
+                                break;
+                        default:
+                                LOG_DBG("Unknown ancillary data in control msg\n");
+                                break;
+                        }
+                }
+                cmsg = CMSG_NXTHDR(&mh, cmsg);
+        }
+                
 	if (mh.msg_iovlen == 0) {
 		LOG_ERR("control message missing\n");
 		return -1;
@@ -160,7 +190,8 @@ int ctrl_getfd(void)
 int ctrl_init(void)
 {
 	int ret;
-        
+        int on = 1;
+
         hashtable_init(&ctrl_clients, 32);
 
 	ctrl_sock = socket(AF_UNIX, SOCK_DGRAM, 0);
@@ -170,9 +201,16 @@ int ctrl_init(void)
 		return -1;
 	}
 
+        ret = setsockopt(ctrl_sock, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on));
+
+        if (ret == -1) {
+                LOG_ERR("setsockopt: %s\n", strerror(errno));
+                goto out_close_sock;
+        }
+
 	memset(&unaddr, 0, sizeof(unaddr));
 	unaddr.sun_family = AF_UNIX;
-
+        
         strcpy(unaddr.sun_path, SERVAL_STACK_CTRL_PATH);
 
 	ret = bind(ctrl_sock,

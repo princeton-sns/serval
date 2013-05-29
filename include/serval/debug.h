@@ -3,7 +3,6 @@
 #define __DEBUG_H_
 
 #include <serval/platform.h>
-#include <serval/sock.h>
 
 #if defined(OS_LINUX_KERNEL)
 #include <linux/kernel.h>
@@ -15,6 +14,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <string.h>
+
+struct sock;
 
 /* Allows convenient wrapping of kernel-style error codes (negative
  * error codes) into userlevel ones. */

@@ -625,7 +625,7 @@ int service_iter_init(struct service_iter *iter,
                 return -1;
 
         set = list_first_entry(&se->target_set, struct target_set, lh);
-
+        
         if (!set)
                 return -1;
         
@@ -1573,14 +1573,14 @@ void service_table_init(struct service_table *tbl)
         rwlock_init(&tbl->lock);
 }
 
-int __init service_init(void) 
+int service_init(void) 
 {
         service_table_init(&srvtable);
 
         return 0;
 }
 
-void __exit service_fini(void) 
+void service_fini(void) 
 {
         service_table_destroy(&srvtable);
 }

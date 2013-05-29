@@ -7,17 +7,6 @@ EXTRA_CFLAGS =-I$(top_builddir)/include -I$(PWD) \
 
 obj-m := serval.o 
 serval-y := \
-	   linux/ctrl.o \
-	   linux/proc.o \
-	   linux/packet.o \
-	   linux/module.o \
-	   linux/log.o \
-	   linux/splice.o \
-	   linux/user_dma.o \
-	   linux/iovlock.o \
-	   linux/udp_encap.o \
-	   linux/sysctl_net_serval.o \
-	   linux/inet_to_serval.o \
 	   debug.o \
 	   delay_queue.o \
 	   platform.o \
@@ -35,4 +24,15 @@ serval-y := \
 	   serval_tcp_input.o \
 	   serval_tcp_cong.o \
 	   serval_tcp_timer.o \
-	   serval_tcp_metrics.o
+	   serval_tcp_metrics.o \
+	   linux/ctrl.o \
+	   linux/proc.o \
+	   linux/packet.o \
+	   linux/module.o \
+	   linux/log.o \
+	   linux/splice.o \
+	   linux/user_dma.o \
+	   linux/iovlock.o \
+	   linux/udp_encap.o \
+	   linux/sysctl_net_serval.o \
+	   linux/inet_to_serval.o

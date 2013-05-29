@@ -320,6 +320,136 @@ static void sock_spd_release(struct splice_pipe_desc *spd, unsigned int i)
 }
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+static struct page *linear_to_page(struct page *page, unsigned int *len,
+				   unsigned int *offset,
+				   struct sock *sk)
+{
+	struct page_frag *pfrag = sk_page_frag(sk);
+
+	if (!sk_page_frag_refill(sk, pfrag))
+		return NULL;
+
+	*len = min_t(unsigned int, *len, pfrag->size - pfrag->offset);
+
+	memcpy(page_address(pfrag->page) + pfrag->offset,
+	       page_address(page) + *offset, *len);
+	*offset = pfrag->offset;
+	pfrag->offset += *len;
+
+	return pfrag->page;
+}
+
+static bool spd_can_coalesce(const struct splice_pipe_desc *spd,
+			     struct page *page,
+			     unsigned int offset)
+{
+	return	spd->nr_pages &&
+		spd->pages[spd->nr_pages - 1] == page &&
+		(spd->partial[spd->nr_pages - 1].offset +
+		 spd->partial[spd->nr_pages - 1].len == offset);
+}
+
+/*
+ * Fill page/offset/length into spd, if it can hold more pages.
+ */
+static bool spd_fill_page(struct splice_pipe_desc *spd,
+			  struct pipe_inode_info *pipe, struct page *page,
+			  unsigned int *len, unsigned int offset,
+			  bool linear,
+			  struct sock *sk)
+{
+	if (unlikely(spd->nr_pages == MAX_SKB_FRAGS))
+		return true;
+
+	if (linear) {
+		page = linear_to_page(page, len, &offset, sk);
+		if (!page)
+			return true;
+	}
+	if (spd_can_coalesce(spd, page, offset)) {
+		spd->partial[spd->nr_pages - 1].len += *len;
+		return false;
+	}
+	get_page(page);
+	spd->pages[spd->nr_pages] = page;
+	spd->partial[spd->nr_pages].len = *len;
+	spd->partial[spd->nr_pages].offset = offset;
+	spd->nr_pages++;
+
+	return false;
+}
+
+static bool __splice_segment(struct page *page, unsigned int poff,
+			     unsigned int plen, unsigned int *off,
+			     unsigned int *len,
+			     struct splice_pipe_desc *spd, bool linear,
+			     struct sock *sk,
+			     struct pipe_inode_info *pipe)
+{
+	if (!*len)
+		return true;
+
+	/* skip this segment if already processed */
+	if (*off >= plen) {
+		*off -= plen;
+		return false;
+	}
+
+	/* ignore any bits we already processed */
+	poff += *off;
+	plen -= *off;
+	*off = 0;
+
+	do {
+		unsigned int flen = min(*len, plen);
+
+		if (spd_fill_page(spd, pipe, page, &flen, poff,
+				  linear, sk))
+			return true;
+		poff += flen;
+		plen -= flen;
+		*len -= flen;
+	} while (*len && plen);
+
+	return false;
+}
+
+static bool __skb_splice_bits(struct sk_buff *skb, struct pipe_inode_info *pipe,
+			      unsigned int *offset, unsigned int *len,
+			      struct splice_pipe_desc *spd, struct sock *sk)
+{
+	int seg;
+
+	/* map the linear part :
+	 * If skb->head_frag is set, this 'linear' part is backed by a
+	 * fragment, and if the head is not shared with any clones then
+	 * we can avoid a copy since we own the head portion of this page.
+	 */
+	if (__splice_segment(virt_to_page(skb->data),
+			     (unsigned long) skb->data & (PAGE_SIZE - 1),
+			     skb_headlen(skb),
+			     offset, len, spd,
+			     skb_head_is_locked(skb),
+			     sk, pipe))
+		return true;
+
+	/*
+	 * then map the fragments
+	 */
+	for (seg = 0; seg < skb_shinfo(skb)->nr_frags; seg++) {
+		const skb_frag_t *f = &skb_shinfo(skb)->frags[seg];
+
+		if (__splice_segment(skb_frag_page(f),
+				     f->page_offset, skb_frag_size(f),
+				     offset, len, spd, false, sk, pipe))
+			return true;
+	}
+
+	return false;
+}
+
+#else
 static inline struct page *linear_to_page(struct page *page, unsigned int *len,
 					  unsigned int *offset,
 					  struct sk_buff *skb, struct sock *sk)
@@ -379,7 +509,6 @@ static inline int spd_fill_page(struct splice_pipe_desc *spd,
 
 	return 0;
 }
-
 static inline void __segment_seek(struct page **page, unsigned int *poff,
 				  unsigned int *plen, unsigned int off)
 {
@@ -433,6 +562,7 @@ static inline int __splice_segment(struct page *page, unsigned int poff,
 	return 0;
 }
 
+
 /*
  * Map linear and fragment data from the skb to spd. It reports failure if the
  * pipe is full or if we already spliced the requested length.
@@ -466,6 +596,7 @@ static int __skb_splice_bits(struct sk_buff *skb, struct pipe_inode_info *pipe,
 
 	return 0;
 }
+#endif
 
 /*
  * Map data from the skb to a pipe. Should handle both the linear part,

@@ -88,13 +88,6 @@
 				 * 15 is ~13-30min depending on RTO.
 				 */
 
-#define TCP_SYN_RETRIES	 5	/* number of times to retry active opening a
-				 * connection: ~180sec is RFC minimum	*/
-
-#define TCP_SYNACK_RETRIES 5	/* number of times to retry passive opening a
-				 * connection: ~180sec is RFC minimum	*/
-
-
 #define TCP_ORPHAN_RETRIES 7	/* number of times to retry on an orphaned
 				 * socket. 7 is ~50sec-16min.
 				 */

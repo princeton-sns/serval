@@ -37,4 +37,9 @@
     <string name="inet_hijack">Hijack AF_INET sockets:</string>
     <string name="auto_migration_label">Automatic migration:</string>
     <string name="toggle_auto_migration">Auto migration</string>
+    <string name="default_service_id">0x00005</string>
+    <string name="default_service_type">FWD</string>
+    <string name="default_address">128.112.7.146</string>
+    <string name="service_table_resolved_label">Resolved:</string>
+    <string name="service_table_resolved_default">0</string>
 </resources>

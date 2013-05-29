@@ -8,6 +8,9 @@
 #include <userlevel/serval_tcp_user.h>
 #endif
 
+/* Generic segmentation offloading (linux/module.c) */
+extern unsigned int gso;
+
 /* People can turn this off for buggy TCP's found in printers etc. */
 int sysctl_serval_tcp_retrans_collapse __read_mostly = 0;
 int sysctl_serval_tcp_mtu_probing __read_mostly = 0;
@@ -334,8 +337,8 @@ static inline void serval_tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
 static void serval_tcp_set_skb_tso_segs(struct sock *sk, struct sk_buff *skb,
 					unsigned int mss_now)
 {
-	if (1 /* Disable GSO */ || skb->len <= mss_now || 1 /* !sk_can_gso(sk) */ ||
-            skb->ip_summed == CHECKSUM_NONE) {
+	if (skb->len <= mss_now || !sk_can_gso(sk)||
+            skb->ip_summed == CHECKSUM_NONE || !gso) {
 		/* Avoid the costly divide in the normal
 		 * non-TSO case.
 		 */
@@ -887,7 +890,6 @@ int serval_tcp_may_send_now(struct sock *sk)
                                      tp->nonagle : TCP_NAGLE_PUSH));
 }
 
-
 /* Remove acked data from a packet in the transmit queue. */
 int serval_tcp_trim_head(struct sock *sk, struct sk_buff *skb, u32 len)
 {
@@ -1023,7 +1025,13 @@ static int serval_tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
 
 	skb_push(skb, tcp_header_size);
 	skb_reset_transport_header(skb);
-	skb_set_owner_w(skb, sk);
+
+        /* The following is the same as calling skb_set_owner_w(). */
+	skb_orphan(skb);
+	skb->sk = sk;
+	skb->destructor = sock_wfree; /*(sysctl_tcp_limit_output_bytes > 0) ?
+                                        tcp_wfree : sock_wfree; */
+	atomic_add(skb->truesize, &sk->sk_wmem_alloc);
 
 	/* Build TCP header and checksum it. */
 	th = tcp_hdr(skb);
@@ -2108,6 +2116,18 @@ int serval_tcp_connection_build_syn(struct sock *sk, struct sk_buff *skb)
 	serval_tcp_options_write((__be32 *)(th + 1), tp, &opts);
 
         LOG_SSK(sk, "Sending TCP SYN %s\n", tcphdr_to_str(th));
+
+        /* Enable GSO for TCP */
+        if (gso) {
+                sk->sk_gso_type = SKB_GSO_TCPV4;
+                //sk_nocaps_add(sk, NETIF_F_ALL_TSO);
+        } else {
+                sk_nocaps_add(sk, NETIF_F_GSO_MASK);
+                sk->sk_gso_type = 0;
+        }
+        /* We have no cached route since we resolve the service on the
+           SYN. How do we setup caps? Probably on SYN_ACK... */
+	/* sk_setup_caps(sk, &rt->dst); */
 
         /* On SYN the checksum is deferred until after
            resolution. This is because we do not know the route and

@@ -536,10 +536,13 @@ int radix_tree_foreach(struct radix_tree *tree,
 void radix_tree_iterator_init(struct radix_tree *tree, 
                               struct radix_tree_iterator *iter)
 {
-        iter->tree = tree;
-        iter->curr = &tree->root;
         INIT_LIST_HEAD(&iter->queue);
-        queue_add(&iter->queue, iter->curr);
+
+        if (tree) {
+                iter->tree = tree;
+                iter->curr = &tree->root;
+                queue_add(&iter->queue, iter->curr);
+        }
 }
 
 void radix_tree_iterator_destroy(struct radix_tree_iterator *iter)

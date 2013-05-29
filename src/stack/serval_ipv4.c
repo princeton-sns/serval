@@ -109,13 +109,30 @@ int serval_ipv4_forward_out(struct sk_buff *skb)
         /* Redo input routing with new destination address. IP
            forwarding must be enabled for this to work. */
         err = ip_route_input_noref(skb, 
-                                   iph->daddr, 
+                                   iph->daddr,
                                    iph->saddr, 
-                                   iph->tos, 
+                                   iph->tos,
                                    skb->dev);
         
         if (err < 0) {
-                LOG_ERR("Could not forward SAL packet, NO route [err=%d]\n", err);
+                switch (-err) {
+                case EINVAL:
+                        LOG_ERR("SAL INPUT forwarding: Invalid argument\n");
+                        break;
+                case EHOSTUNREACH:
+                        LOG_ERR("SAL INPUT forwarding: Host unreachable\n");
+                        break;
+                case ENETUNREACH:
+                        LOG_ERR("SAL INPUT forwarding: Network unreachable\n");
+                        break;
+                case ENOBUFS:
+                        LOG_ERR("SAL INPUT forwarding: NOBUFS\n");
+                        break;
+                default:
+                        LOG_ERR("Could not forward SAL packet, NO INPUT route [err=%d]\n", err);
+                        break;
+                }
+
                 kfree_skb(skb);
                 return NET_RX_DROP;
         }

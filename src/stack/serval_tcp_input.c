@@ -2170,8 +2170,12 @@ static int serval_tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	}
 
 #if defined(OS_LINUX_KERNEL)
-	if ((flag & FLAG_FORWARD_PROGRESS) || !(flag & FLAG_NOT_DUP))
-		dst_confirm(__sk_dst_get(sk));
+
+	if ((flag & FLAG_FORWARD_PROGRESS) || !(flag & FLAG_NOT_DUP)) {
+		struct dst_entry *dst = __sk_dst_get(sk);
+		if (dst)
+			dst_confirm(dst);
+	}
 #endif
 	return 1;
 
@@ -3383,7 +3387,7 @@ static __sum16 __serval_tcp_checksum_complete_user(struct sock *sk,
 }
 
 static inline int serval_tcp_checksum_complete_user(struct sock *sk,
-					     struct sk_buff *skb)
+                                                    struct sk_buff *skb)
 {
 	return !skb_csum_unnecessary(skb) &&
                 __serval_tcp_checksum_complete_user(sk, skb);
@@ -3426,7 +3430,10 @@ int serval_tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		case TCP_FIN_WAIT1:
 			if (tp->snd_una == tp->write_seq) {
 #if defined(OS_LINUX_KERNEL)
-				dst_confirm(__sk_dst_get(sk));
+				struct dst_entry *dst;
+                                dst = __sk_dst_get(sk);
+				if (dst)
+					dst_confirm(dst);
 #endif
 
 				if (sock_flag(sk, SOCK_DEAD)) {
@@ -3675,7 +3682,8 @@ int serval_tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			}
 			if (!eaten) {
 				if (serval_tcp_checksum_complete_user(sk, skb)) {
-                                        LOG_ERR("Csum error!\n");
+                                        LOG_ERR("Csum error skb->csum=%u!\n", 
+                                                skb->csum);
 					goto csum_error;
                                 }
 				/* Predicted packet is in window by definition.
@@ -3737,7 +3745,7 @@ slow_path:
                 goto csum_error;
         }
         if (serval_tcp_checksum_complete_user(sk, skb)) {
-                LOG_PKT("checksum error\n");
+                LOG_DBG("checksum error skb->csum=%u\n", skb->csum);
                 goto csum_error;
         }
 	/*

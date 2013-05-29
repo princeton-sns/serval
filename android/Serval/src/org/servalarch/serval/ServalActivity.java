@@ -415,6 +415,23 @@ public class ServalActivity extends FragmentActivity {
 		@Override
 		public void onServiceRemove(long xid, final int retval,
 				ServiceInfoStat[] info) {
+			Map<String, ?> idMap = prefs.getAll();
+			for (ServiceInfoStat i : info) {
+				for (String srvID : idMap.keySet()) {
+					int prefixBits = 256;
+					String res[] = srvID.split(":");
+					
+					if (res.length == 2)
+						prefixBits = Integer.parseInt(res[1]);
+					
+					String key = AppHostCtrl.createServiceID(res[0]).toString();
+					if (key.equals(i.getServiceID().toString())) {
+
+                        Log.v("Serval", "Remove key: " + key);
+						prefs.edit().remove(srvID).commit();
+					}
+				}
+			}
 			runOnUiThread(new Runnable() {
 				@Override
 				public void run() {

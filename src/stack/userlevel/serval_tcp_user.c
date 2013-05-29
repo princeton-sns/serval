@@ -37,3 +37,5 @@ int sysctl_serval_tcp_cookie_size = 0; /* TCP_COOKIE_MAX */
 /* tcp_ipv4.c */
 
 int sysctl_serval_tcp_tw_reuse = 0;
+
+unsigned int gso = 0;
