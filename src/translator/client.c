@@ -264,6 +264,11 @@ struct client *client_create(int sock, struct sockaddr *sa,
                                 LOG_ERR("Could not extract IP and port from serviceID %s\n",
                                         service_id_to_str(&sv.sv_srvid));
                         }
+                        LOG_DBG("%s is %s:%u\n", 
+                                service_id_to_str(&sv.sv_srvid),
+                                inet_ntoa(c->sock[ST_INET].addr.in.sin_addr),
+                                ntohs(c->sock[ST_INET].addr.in.sin_port));
+                                
                 } else {
                         ret = resolve_service(&sv.sv_srvid, &c->sock[ST_INET].addr.sa);
 
@@ -378,9 +383,6 @@ enum work_status client_connect(struct client *c)
                 
                 inet_ntop(AF_INET, &addr.in.sin_addr, 
                           ipstr, sizeof(ipstr));
-                
-                LOG_DBG("client %u connecting to %s:%u on fd=%d\n",
-                        c->id, ipstr, ntohs(addr.in.sin_port), s->fd);
         } else if (c->from_family == AF_INET) {
                 addr.sv.sv_family = AF_SERVAL;
 
@@ -405,7 +407,8 @@ enum work_status client_connect(struct client *c)
                                          &orig_addr, &orig_addrlen);
                         
                         if (ret == -1) {
-                                LOG_ERR("client %u: could not get original port: %s\n", c->id, strerror(errno));
+                                LOG_ERR("client %u: could not get original port: %s\n", 
+                                        c->id, strerror(errno));
                                 return WORK_ERROR;
                         } 
                         
@@ -417,7 +420,7 @@ enum work_status client_connect(struct client *c)
                         
                         sprintf(buf, "%s-%u.%s",
                                 ipstr,
-                                ntohs(c->sock[ST_INET].addr.in.sin_port), 
+                                ntohs(orig_addr.sin_port), 
                                 translator_service_name);
 
                         serval_pton(buf, &addr.sv.sv_srvid);
