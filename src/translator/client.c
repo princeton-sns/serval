@@ -37,12 +37,14 @@
 
 static unsigned int client_num = 0;
 
+#if defined(ENABLE_DEBUG)
 const char *socket_state_str[] = {
-        "CLOSED",
+        "INIT",
         "CONNECTING",
         "CONNECTED",
-        "CLOSING"
+        "CLOSED"
 };
+#endif
 
 static int fd_set_nonblock(int fd)
 {
@@ -140,7 +142,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_INET].state = SS_CONNECTED;
                 c->sock[ST_INET].monitored_events = EPOLLRDHUP;
                 c->sock[ST_INET].active_events = 0;
-                c->sock[ST_SERVAL].state = SS_CLOSED;
+                c->sock[ST_SERVAL].state = SS_INIT;
                 c->sock[ST_SERVAL].monitored_events = EPOLLOUT;
                 c->sock[ST_SERVAL].active_events = 0;
 
@@ -163,7 +165,7 @@ struct client *client_create(int sock, struct sockaddr *sa,
                 c->sock[ST_SERVAL].state = SS_CONNECTED;
                 c->sock[ST_SERVAL].monitored_events = EPOLLRDHUP;
                 c->sock[ST_SERVAL].active_events = 0;
-                c->sock[ST_INET].state = SS_CLOSED;
+                c->sock[ST_INET].state = SS_INIT;
                 c->sock[ST_INET].monitored_events = EPOLLOUT;
                 c->sock[ST_INET].active_events = 0;
 
@@ -412,6 +414,7 @@ enum work_status client_connect_result(struct client *c)
 
 void socket_close(struct socket *s)
 {
+        LOG_DBG("c=%u closing socket %d\n", s->c->id, s->fd);
         s->state = SS_CLOSED;
         close(s->fd);
 }
@@ -451,5 +454,5 @@ enum work_status client_close(struct client *c)
         close(c->sock[ST_SERVAL].splicefd[0]);
         close(c->sock[ST_SERVAL].splicefd[1]);
         
-        return WORK_OK;
+        return WORK_EXIT;
 }

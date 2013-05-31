@@ -30,6 +30,7 @@ struct worker {
         unsigned int num_clients; /* num active clients */
         struct list_head new_clients;
         struct list_head active_clients;
+        struct list_head garbage_clients;
 };
 
 int worker_start(struct worker *w);

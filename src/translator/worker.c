@@ -242,7 +242,6 @@ static enum work_status work_translate(struct socket *from,
                 break;
         }
  out:
-
         LOG_MED("2. w=%u c=%u %zu bytes in pipe\n", 
                 from->c->w->id, from->c->id, from->bytes_in_pipe);
 
@@ -307,8 +306,10 @@ static void check_socket_events(struct client *c, struct socket *s,
                 (s2->monitored_events & EPOLLOUT) > 0,
                 (s2->monitored_events & EPOLLRDHUP) > 0);
 
-        if (s->state == SS_CLOSED) {
-                LOG_MED("fd=%d socket is closed\n", s->fd);
+        if (s->state == SS_CLOSED ||
+            s->state == SS_INIT) {
+                LOG_MED("fd=%d socket is in state %s\n", 
+                        s->fd, socket_state_str[s->state]);
                 return;
         }
 
@@ -316,6 +317,8 @@ static void check_socket_events(struct client *c, struct socket *s,
                 /* Other end of this socket's connection closed */
                 s->active_events &= ~EPOLLRDHUP;
                 client_add_work(c, work_close);
+                LOG_DBG("w=%u c=%u RDHUP on fd=%d\n", 
+                        c->w->id, c->id, s->fd);
                 return;
         }
         
@@ -394,6 +397,29 @@ static void worker_cleanup_clients(struct worker *w)
         }
 }
 
+static void worker_close_clients(struct worker *w)
+{
+        while (!list_empty(&w->garbage_clients)) {
+                struct client *c;
+
+                c = list_first_entry(&w->garbage_clients, 
+                                     struct client, lh);
+		
+                LOG_DBG("w=%u closing client %u\n", w->id, c->id);
+                client_close(c);
+                /* client_free removes client from list */
+                client_free(c);
+        }
+}
+
+static void worker_dispose_client(struct worker *w, struct client *c)
+{
+        if (!c->is_garbage) {
+                list_move_tail(&c->lh, &w->garbage_clients);
+                c->is_garbage = 1;
+        }
+}
+
 /*
   After a worker has been notified by the main thread that it has been
   assigned a new client, the worker moves the client to its active
@@ -436,7 +462,7 @@ static void *worker_thread(void *arg)
         struct worker *w = (struct worker *)arg;
         struct epoll_event events[MAX_EVENTS];
         int sig_fd = signal_get_fd(&w->sig);
-
+        
         w->running = 1;
 
         LOG_DBG("Worker %u running\n", w->id);
@@ -478,7 +504,9 @@ static void *worker_thread(void *arg)
                                 default:
                                         break;
                                 }
-                        } else {
+                        } else if (s->state == SS_INIT ||
+                                   s->state == SS_CONNECTING ||
+                                   s->state == SS_CONNECTED) {
                                 struct client *c = s->c;
                                 unsigned int j, exit = 0;
                                 
@@ -494,8 +522,8 @@ static void *worker_thread(void *arg)
                                         case WORK_ERROR:
                                                 LOG_ERR("work error, closing socket\n");
                                         case WORK_CLOSE:
-                                                client_close(c);
                                         case WORK_EXIT:
+                                                worker_dispose_client(w, c);
                                                 exit = 1;
                                                 break;
                                         case WORK_WOULDBLOCK:
@@ -505,16 +533,36 @@ static void *worker_thread(void *arg)
                                 }
                                 c->num_work = 0;
                                 
-                                if (exit) {
-                                        /* The client is done */
-                                        client_free(c);
-                                } else {
+                                if (!exit) {
                                         /* Reactivate socket monitoring */
                                         client_epoll_set_all(c, EPOLL_CTL_MOD,
                                                              EPOLLONESHOT);
                                 }
+                        } else {
+                                /* Socket had event in SS_CLOSED state */
+                                /* This can happen if we are
+                                 * processing two events that happen
+                                 * on a client's two sockets
+                                 * simultaneously. For instance, the
+                                 * client is connecting on one socket
+                                 * and gets a connection result event,
+                                 * while simultaneously the other
+                                 * socket's peer closes (causing
+                                 * EPOLLRDHUP). 
+                                 *
+                                 * We just ignore these events as the
+                                 * client is closing anyway.
+                                 */
+                                /*
+                                LOG_DBG("socket %d in weird state=%s events=[R=%d W=%d H=%d]\n", 
+                                        s->fd, socket_state_str[s->state], 
+                                        (events[i].events & EPOLLIN) > 0,
+                                        (events[i].events & EPOLLOUT) > 0,
+                                        (events[i].events & EPOLLRDHUP) > 0);
+                                */
                         }
-                }     
+                }
+                worker_close_clients(w);
         }
         
         w->running = 0;
@@ -545,6 +593,8 @@ int worker_init(struct worker *w, unsigned id)
         memset(w, 0, sizeof(struct worker));
         INIT_LIST_HEAD(&w->new_clients);
         INIT_LIST_HEAD(&w->active_clients);
+        INIT_LIST_HEAD(&w->garbage_clients);
+
         w->id = id;
         w->epollfd = epoll_create(10);
         
