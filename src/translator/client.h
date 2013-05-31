@@ -33,13 +33,15 @@ typedef union sockaddr_generic {
 } sockaddr_generic_t;
 
 enum socket_state {
-        SS_CLOSED,
+        SS_INIT,
         SS_CONNECTING,
         SS_CONNECTED,
-        SS_CLOSING,
+        SS_CLOSED,
 };
 
+#if defined(ENABLE_DEBUG)
 extern const char *socket_state_str[];
+#endif
 
 struct socket {
         int fd; /* Must be first */
@@ -80,6 +82,7 @@ struct client {
         unsigned int num_work;
         work_t work[MAX_WORK];
         unsigned char cross_translate:1;
+        unsigned char is_garbage:1;
         struct list_head lh;
 };
 
