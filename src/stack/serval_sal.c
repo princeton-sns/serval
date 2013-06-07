@@ -5,6 +5,7 @@
  * Authors: Erik Nordström <enordstr@cs.princeton.edu>
  *          David Shue <dshue@cs.princeton.edu>
  *          Rob Kiefer <rkiefer@cs.princeton.edu>
+            Zhongxing Ming <zming@cs.princeton.edu>
  * 
  *
  *	This program is free software; you can redistribute it and/or
@@ -3067,10 +3068,25 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
         unsigned int data_len = skb->len - hdr_len;
         int err = SAL_RESOLVE_NO_MATCH;
 
+#if defined(OS_USER)
+        struct in_addr srcaddr;
+        char srcstr[18];
+        memset(&srcaddr, 0, sizeof(srcaddr));
+#endif
+
         *sk = NULL;
 
         LOG_DBG("Resolve or demux inbound packet on serviceID %s\n", 
                 service_id_to_str(srvid));
+
+#if defined(OS_USER)
+       memcpy(&srcaddr, ctx->srcaddr, 4);
+       inet_ntop(AF_INET, &srcaddr, srcstr, 18);
+       printf("Resolve or demux inbound packet on serviceID %s\n", 
+                service_id_to_str(srvid));
+       printf("Resolve or demux inbound packet on source address %s\n",
+              srcstr);
+#endif
 
         /* Match on the highest priority srvid rule, even if it's not
          * the sock TODO - use flags/prefix in resolution This should

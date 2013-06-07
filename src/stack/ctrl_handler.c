@@ -94,6 +94,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
 
                 if (entry->src_bits > 0)
                         src_bits = entry->src_bits;
+                else
+                        src_bits = 0;
          
 #if defined(ENABLE_DEBUG)
                 {
