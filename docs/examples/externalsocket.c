@@ -43,6 +43,9 @@
 
 #include <errno.h>
 
+#include <libserval/serval.h>
+#include <netinet/serval.h>
+
 /* The IP address and port number to connect to */
 #define IPADDR "127.0.0.1"
 #define PORTNUM 80
@@ -54,6 +57,7 @@
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream)
 {
   int written = fwrite(ptr, size, nmemb, (FILE *)stream);
+  printf("In write_data.\n");
   return written;
 }
 
@@ -62,6 +66,10 @@ static curl_socket_t opensocket(void *clientp,
                                 struct curl_sockaddr *address)
 {
   curl_socket_t sockfd;
+
+  printf("In opensocket.\n");
+  address->family = AF_SERVAL;
+
   (void)purpose;
   (void)address;
   sockfd = *(curl_socket_t *)clientp;
@@ -86,6 +94,7 @@ int main(void)
   CURLcode res;
   struct sockaddr_in servaddr;  /*  socket address structure  */
   curl_socket_t sockfd;
+  curl_socket_t sock;
 
 #ifdef WIN32
   WSADATA wsaData;
@@ -103,7 +112,9 @@ int main(void)
      * Note that libcurl will internally think that you connect to the host
      * and port that you specify in the URL option.
      */
-    curl_easy_setopt(curl, CURLOPT_URL, "http://99.99.99.99:9999");
+    curl_easy_setopt(curl, CURLOPT_URL, "http://128.112.7.80/index.php");
+
+    sock = socket(AF_SERVAL, SOCK_STREAM, 0);
 
     /* Create the socket "manually" */
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == CURL_SOCKET_BAD ) {
@@ -111,19 +122,20 @@ int main(void)
       return 3;
     }
 
-    memset(&servaddr, 0, sizeof(servaddr));
+    //    memset(&servaddr, 0, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port   = htons(PORTNUM);
+    //    servaddr.sin_port   = htons(PORTNUM);
 
-    if (INADDR_NONE == (servaddr.sin_addr.s_addr = inet_addr(IPADDR)))
-      return 2;
-
+    //    if (INADDR_NONE == (servaddr.sin_addr.s_addr = inet_addr(IPADDR)))
+    // return 2;
+    /*
     if(connect(sockfd,(struct sockaddr *) &servaddr, sizeof(servaddr)) ==
        -1) {
       close(sockfd);
       printf("client error: connect: %s\n", strerror(errno));
       return 1;
     }
+    */
 
     /* no progress meter please */
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
@@ -133,10 +145,10 @@ int main(void)
 
     /* call this function to get a socket */
     curl_easy_setopt(curl, CURLOPT_OPENSOCKETFUNCTION, opensocket);
-    curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, &sockfd);
+    curl_easy_setopt(curl, CURLOPT_OPENSOCKETDATA, &sock);
 
     /* call this function to set options for the socket */
-    curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, sockopt_callback);
+    //    curl_easy_setopt(curl, CURLOPT_SOCKOPTFUNCTION, sockopt_callback);
 
     curl_easy_setopt(curl, CURLOPT_VERBOSE, 1);
 

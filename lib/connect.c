@@ -77,6 +77,11 @@
 #include "conncache.h"
 #include "multihandle.h"
 
+/* Support Serval */
+#include <netinet/serval.h>
+#include <libserval/serval.h>
+#include <stdio.h>
+
 /* The last #include file should be: */
 #include "memdebug.h"
 
@@ -1000,6 +1005,7 @@ singleipconnect(struct connectdata *conn,
 
   /* possibly bind the local end to an IP, interface or port */
   res = bindlocal(conn, sockfd, addr.family);
+  printf("addr.family: %d\n", addr.family);
   if(res) {
     Curl_closesocket(conn, sockfd); /* close socket and bail out */
     if(res == CURLE_UNSUPPORTED_PROTOCOL) {
@@ -1020,8 +1026,10 @@ singleipconnect(struct connectdata *conn,
   /* Connect TCP sockets, bind UDP */
   if(!isconnected && (conn->socktype == SOCK_STREAM)) {
     rc = connect(sockfd, &addr.sa_addr, addr.addrlen);
-    if(-1 == rc)
+    if(-1 == rc) {
       error = SOCKERRNO;
+      printf("Error occured when trying connect...\n");
+    }
   }
   else {
     *sockp = sockfd;

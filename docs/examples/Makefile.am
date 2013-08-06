@@ -36,7 +36,7 @@ EXTRA_DIST = README Makefile.example Makefile.inc Makefile.m32 \
 
 AM_CPPFLAGS = -I$(top_builddir)/include/curl \
               -I$(top_builddir)/include      \
-              -I$(top_srcdir)/include
+              -I$(top_srcdir)/include	    
 
 LIBDIR = $(top_builddir)/lib
 

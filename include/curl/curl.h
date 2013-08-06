@@ -1589,6 +1589,7 @@ typedef enum {
                                      versions that your system allows */
 #define CURL_IPRESOLVE_V4       1 /* resolve to ipv4 addresses */
 #define CURL_IPRESOLVE_V6       2 /* resolve to ipv6 addresses */
+#define CURL_IPRESOLVE_SERVAL   3 /* resolve to serval addresses */
 
   /* three convenient "aliases" that follow the name scheme better */
 #define CURLOPT_WRITEDATA CURLOPT_FILE
