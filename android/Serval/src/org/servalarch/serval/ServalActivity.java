@@ -455,12 +455,20 @@ public class ServalActivity extends FragmentActivity {
 			});
 		}
 
+		final String DEFAULT_ID = 
+			"0000000000000000000000000000000000000000000000000000000000000000";
 		@Override
 		public void onServiceGet(long xid, final int retval, ServiceInfo[] info) {
 			for (int i = 0; i < info.length; i++) {
 				Log.d("Serval", "RETRIEVED: Service " + info[i].getServiceID()
 						+ "address " + info[i].getAddress());
+				synchronized(TableService.LOCK) {
+					boolean found = !info[i].getServiceID().toString().equals(DEFAULT_ID);
+					TableService.LOCK.set(found);
+					TableService.LOCK.notifyAll();
+				}
 			}
+			
 		}
 		
 		@Override

@@ -82,7 +82,7 @@ public abstract class HostCtrl {
 	}
 
 	public int addService(ServiceID id, InetAddress addr) {
-		return addService(id, 0, 1, 1, addr);
+		return addService(id, id.getLength() * 8, 1, 1, addr);
 	}
 
 	public int addServiceDelay(ServiceID id, int prefixBits, int priority, int weight) {
@@ -116,7 +116,7 @@ public abstract class HostCtrl {
 	}
 
 	public int getService(ServiceID id, InetAddress addr) {
-		return getService(id, addr);
+		return getService(id, id.getLength() * 8, addr);
 	}
 
 	public int removeService(ServiceID id, int prefixBits, InetAddress addr) {
