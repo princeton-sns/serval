@@ -1209,6 +1209,8 @@ static int service_table_add(struct service_table *tbl,
         if (!srvid)
                 return -EINVAL;
 
+        //        printf("In service_table_add, srvid: %s\n", srvid->s_sid);
+
         /* Sanity checks */
         switch (type) {
         case SERVICE_RULE_UNDEFINED:
@@ -1364,6 +1366,46 @@ int service_add(struct service_id *srvid,
                 const union target_out out, 
                 gfp_t alloc) 
 {
+        struct service_id srvid_temp;
+        //        struct service_id srvid1, srvid2, srvid3;
+        char *p;
+        int i = 0;
+
+        //strcpy(srvid1.s_sid, "com");
+        //strcpy(srvid2.s_sid, "google.com");
+        //strcpy(srvid3.s_sid, "www.google.com");
+       
+        memset(&srvid_temp, 0, sizeof(srvid_temp));
+        p = srvid->s_sid;
+        
+        while (i++ < strlen(srvid->s_sid)) {
+                if (*p == '.') {
+                         strncpy(srvid_temp.s_sid, srvid->s_sid, i - 1);
+                         printf("srvid: %s\n", srvid_temp.s_sid);
+                         service_table_add(&srvtable, &srvid_temp, 
+                                           type, flags, priority, 
+                                           weight == 0 ? 1 : weight, dst, dstlen,
+                                           out, alloc);
+                        }
+                ++p;
+        }
+       
+        /*
+        service_table_add(&srvtable, &srvid1, 
+                                 type, flags, priority, 
+                                 weight == 0 ? 1 : weight, dst, dstlen,
+                                 out, alloc);
+        service_table_add(&srvtable, &srvid2, 
+                                 type, flags, priority, 
+                                 weight == 0 ? 1 : weight, dst, dstlen,
+                                 out, alloc);
+        service_table_add(&srvtable, &srvid3, 
+                                 type, flags, priority, 
+                                 weight == 0 ? 1 : weight, dst, dstlen,
+                                 out, alloc);
+        */
+
+        printf("srvid: %s\n", srvid->s_sid);
         return service_table_add(&srvtable, srvid, 
                                  type, flags, priority, 
                                  weight == 0 ? 1 : weight, dst, dstlen,
