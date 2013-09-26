@@ -617,7 +617,8 @@ int netdev_populate_table(int sizeof_priv,
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT,  
                             &dev->ipv4.broadcast, 
-                            sizeof(dev->ipv4.broadcast), make_target(dev), 0);
+                            sizeof(dev->ipv4.broadcast), 
+                            make_dev_target(dev), 0);
 
                 ret = pthread_create(&dev->thr, NULL, dev_thread, dev);
 
@@ -935,10 +936,6 @@ void netdev_fini(void)
                 dev = list_first_entry(&dev_base_head, 
                                        struct net_device, dev_list);
           	read_unlock(&dev_base_lock);       
-                     
-                /*
-                  service_del_dev(dev->name);
-                */
 
                 unregister_netdev(dev);
 

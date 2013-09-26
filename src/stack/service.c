@@ -104,10 +104,7 @@ static struct target *target_create(service_rule_type_t type,
         t->dstlen = dstlen;
 
         if (dstlen > 0) {
-                if (out.raw != NULL) {
-                        t->out.dev = out.dev;
-                        dev_hold(t->out.dev);
-                }
+                t->out.oif = out.oif;
                 memcpy(t->dst, dst, dstlen);
         } else {
                 t->out.sk = out.sk;
@@ -122,9 +119,7 @@ static struct target *target_create(service_rule_type_t type,
 
 static void target_free(struct target *t) 
 {
-        if (!is_sock_target(t) && t->out.dev)
-                dev_put(t->out.dev);
-        else if (is_sock_target(t) && t->out.sk)
+        if (is_sock_target(t) && t->out.sk)
                 sock_put(t->out.sk);
         kfree(t);
 }
@@ -162,17 +157,16 @@ static void target_set_free(struct target_set *set)
 }
 
 static struct target *__service_entry_get_dev(struct service_entry *se, 
-                                              const char *ifname) 
+                                              unsigned int ifindex) 
 {
         struct target *t;
         struct target_set* set = NULL;
         
         list_for_each_entry(set, &se->target_set, lh) {
                 list_for_each_entry(t, &set->list, lh) {
-                        if (!is_sock_target(t) && t->out.dev && 
-                            strcmp(t->out.dev->name, ifname) == 0) {
+                        if (!is_sock_target(t) && 
+                            t->out.oif == ifindex)
                                 return t;
-                        }
                 }
         }
 
@@ -250,20 +244,24 @@ static struct target * __service_entry_get_target(struct service_entry *se,
    function.
 */
 struct net_device *service_entry_get_dev(struct service_entry *se, 
-                                         const char *ifname) 
+                                         unsigned int ifindex) 
 {
         struct target *t = NULL;
+        struct net_device *dev = NULL;
 
         read_lock_bh(&se->lock);
 
-        t = __service_entry_get_dev(se, ifname);
+        t = __service_entry_get_dev(se, ifindex);
 
-        if (t)
-                dev_hold(t->out.dev);
+        if (t) {
+                dev = __dev_get_by_index(&init_net, ifindex);
 
+                if (dev)
+                        dev_hold(dev);
+        }
         read_unlock_bh(&se->lock);
 
-        return t ? t->out.dev : NULL;
+        return dev;
 }
 
 static void target_set_add_target(struct target_set *set, 
@@ -422,8 +420,7 @@ static int __service_entry_modify_target(struct service_entry *se,
                    input... */
                 rt = serval_ip_route_output(&init_net, 
                                             dst_ip,
-                                            0, 0, 
-                                            t->out.dev->ifindex);
+                                            0, 0, t->out.oif);
                 if (!rt)
                         return 0;
         }
@@ -501,7 +498,8 @@ static void __service_entry_inc_target_stats(struct service_entry *se,
 {
         struct target_set* set = NULL;
         struct target *t = __service_entry_get_target(se, type, dst, dstlen, 
-                                                      make_target(NULL), &set, 
+                                                      make_sock_target(NULL), 
+                                                      &set, 
                                                       MATCH_NO_PROTOCOL);
 
         if (!t)
@@ -541,7 +539,7 @@ void service_entry_inc_target_stats(struct service_entry *se,
 }
 
 int __service_entry_remove_target_by_dev(struct service_entry *se, 
-                                         const char *ifname) 
+                                         unsigned int ifindex) 
 {
         struct target *t;
         struct target *dtemp = NULL;
@@ -551,11 +549,11 @@ int __service_entry_remove_target_by_dev(struct service_entry *se,
 
         list_for_each_entry_safe(set, setemp, &se->target_set, lh) {
                 list_for_each_entry_safe(t, dtemp, &set->list, lh) {
-                        if (t->type == SERVICE_RULE_FORWARD && t->out.dev && 
-                            strcmp(t->out.dev->name, ifname) == 0) {
+                        if (t->type == SERVICE_RULE_FORWARD && 
+                            t->out.oif == ifindex) {
                                 target_set_remove_target(set, t);
                                 target_free(t);
-
+                                
                                 if (set->count == 0) {
                                         list_del(&set->lh);
                                         target_set_free(set);
@@ -570,14 +568,14 @@ int __service_entry_remove_target_by_dev(struct service_entry *se,
 }
 
 int service_entry_remove_target_by_dev(struct service_entry *se, 
-                                       const char *ifname) {
+                                       unsigned int ifindex) {
         int ret;
-
+        
         service_entry_hold(se);
 
         write_lock_bh(&se->lock);
         
-        ret = __service_entry_remove_target_by_dev(se, ifname);
+        ret = __service_entry_remove_target_by_dev(se, ifindex);
         
         if (ret > 0) {
                 if (list_empty(&se->target_set)) {
@@ -940,12 +938,13 @@ static int __service_entry_print(struct bst_node *n, char *buf,
                                                "sock" : "NULL",
                                                protocol_to_str(t->out.sk->sk_protocol));
                                 
-                        } else if (t->type == SERVICE_RULE_FORWARD && 
-                                   t->out.dev) {
+                        } else if (t->type == SERVICE_RULE_FORWARD) {
+                                struct net_device *dev;
+
+                                dev = __dev_get_by_index(&init_net, t->out.oif);
                                 len = snprintf(buf + tot_len, buflen, 
                                                "%-5s %s\n",
-                                               t->out.dev ? 
-                                               t->out.dev->name : "any",
+                                               dev ? dev->name : "any",
                                                inet_ntop(AF_INET,
                                                          t->dst, 
                                                          dststr, 18));
@@ -1102,7 +1101,7 @@ static int service_entry_local_match(struct bst_node *n)
 
         t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, 
                                        NULL, 0, 
-                                       make_target(NULL), NULL, 
+                                       make_sock_target(NULL), NULL, 
                                        MATCH_ANY_PROTOCOL);
         
         if (t && t->out.sk) 
@@ -1118,7 +1117,7 @@ static int service_entry_global_match(struct bst_node *n)
 
         t = __service_entry_get_target(se, SERVICE_RULE_FORWARD, 
                                        NULL, 0, 
-                                       make_target(NULL), NULL, 
+                                       make_sock_target(NULL), NULL, 
                                        MATCH_NO_PROTOCOL);
         
         if (t)
@@ -1207,7 +1206,7 @@ static struct sock* service_table_find_sock(struct service_table *tbl,
         if (se) {
                 struct target *t;
                 t = __service_entry_get_target(se, SERVICE_RULE_DEMUX, NULL, 0, 
-                                               make_target(NULL), 
+                                               make_sock_target(NULL), 
                                                NULL, protocol);
                 
                 if (t) {
@@ -1545,14 +1544,14 @@ void service_del_target(struct service_id *srvid,
 static int del_dev_func(struct bst_node *n, void *arg) 
 {
         struct service_entry *se = get_service(n);
-        char *devname = (char *)arg;
+        unsigned int ifindex = *(unsigned int *)arg;
         int ret = 0;
         
         service_entry_hold(se);
 
         write_lock_bh(&se->lock);
         
-        ret = __service_entry_remove_target_by_dev(se, devname);
+        ret = __service_entry_remove_target_by_dev(se, ifindex);
         
         if (ret == 1 && list_empty(&se->target_set)) {
                 bst_node_release(n);
@@ -1567,7 +1566,7 @@ static int del_dev_func(struct bst_node *n, void *arg)
 }
 
 static int service_table_del_dev_all(struct service_table *tbl, 
-                                     const char *devname) 
+                                     unsigned int ifindex) 
 {
         int ret = 0;
         
@@ -1575,15 +1574,15 @@ static int service_table_del_dev_all(struct service_table *tbl,
         
         if (tbl->tree.root)
                 ret = bst_subtree_func(tbl->tree.root, del_dev_func, 
-                                       (void *) devname);
+                                       (void *)&ifindex);
         write_unlock_bh(&tbl->lock);
 
         return ret;
 }
 
-int service_del_dev_all(const char *devname) 
+int service_del_dev_all(unsigned int ifindex) 
 {
-        return service_table_del_dev_all(&srvtable, devname);
+        return service_table_del_dev_all(&srvtable, ifindex);
 }
 
 static int del_target_func(struct bst_node *n, void *arg) 

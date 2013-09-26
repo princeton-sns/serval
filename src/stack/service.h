@@ -9,6 +9,7 @@
 #include <serval/dst.h>
 #include <serval/sock.h>
 #include <serval/ctrlmsg.h>
+#include <serval/netdevice.h>
 #include "bst.h"
 
 #define LOCAL_SERVICE_DEFAULT_PRIORITY 32000
@@ -95,16 +96,25 @@ struct target_set {
 
 union target_out {
         void *raw;
-        struct net_device *dev;
+        unsigned int oif;
         struct sock *sk;
 };
 
 /*
-  Wraps a pointer to a socket or a network device.
+  Creates a target union from a network device pointer.
 */
-static inline union target_out make_target(void *t)
+static inline union target_out make_dev_target(struct net_device *dev)
 {
-        union target_out out = { t };
+        union target_out out = { .oif = dev->ifindex };
+        return out;
+}
+
+/*
+  Creates a target union from a socket pointer.
+*/
+static inline union target_out make_sock_target(struct sock *sk)
+{
+        union target_out out = { .sk = sk };
         return out;
 }
 
@@ -135,9 +145,9 @@ void service_inc_stats(int packets, int bytes);
 void service_get_stats(struct table_stats* tstats);
 
 struct net_device *service_entry_get_dev(struct service_entry *se,
-                                         const char *ifname);
+                                         unsigned int ifindex);
 int service_entry_remove_target_by_dev(struct service_entry *se,
-                                       const char *ifname);
+                                       unsigned int ifindex);
 
 int service_entry_remove_target(struct service_entry *se,
                                 service_rule_type_t type,
@@ -208,7 +218,7 @@ void service_del_target(struct service_id *srvid,
 
 int service_del_target_all(service_rule_type_t type, 
                            const void *dst, int dstlen);
-int service_del_dev_all(const char *devname);
+int service_del_dev_all(unsigned int ifindex);
 
 struct service_entry *service_find_type(struct service_id *srvid,
                                         int prefix,
