@@ -797,8 +797,9 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        snprintf(buf, buflen, "%s snd_seq[una=%u nxt=%u wnd=%u iss=%u] "
+        snprintf(buf, buflen, "%s %s snd_seq[una=%u nxt=%u wnd=%u iss=%u] "
                  "rcv_seq[nxt=%u wnd=%u iss=%u]",
+                 serval_sock_state_str(sk),
                  serval_sock_sal_state_str(sk), 
                  ssk->snd_seq.una, 
                  ssk->snd_seq.nxt, 
