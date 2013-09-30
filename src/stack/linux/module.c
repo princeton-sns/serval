@@ -113,7 +113,7 @@ static int dev_configuration(struct net_device *dev)
                             SERVICE_RULE_FORWARD, 0, 
                             BROADCAST_SERVICE_DEFAULT_PRIORITY,
                             BROADCAST_SERVICE_DEFAULT_WEIGHT, 
-                            &dst, sizeof(dst), make_target(dev), 
+                            &dst, sizeof(dst), make_dev_target(dev), 
                             GFP_ATOMIC);
         } 
         return ret;
@@ -140,7 +140,7 @@ static int serval_netdev_event(struct notifier_block *this,
 	case NETDEV_GOING_DOWN:
         {           
                 LOG_DBG("netdev GOING DOWN %s\n", dev->name);
-                service_del_dev_all(dev->name);
+                service_del_dev_all(dev->ifindex);
 		break;
         }
 	case NETDEV_DOWN:
@@ -186,7 +186,7 @@ static int serval_inetaddr_event(struct notifier_block *this,
                 LOG_DBG("inetdev DOWN %s - Freezing all flows\n", 
                         dev->name);
                 serval_sock_freeze_flows(dev);
-                service_del_dev_all(dev->name);
+                service_del_dev_all(dev->ifindex);
                 if (net_serval.sysctl_auto_migrate)
                         serval_sock_migrate_iface(dev->ifindex, 0);
                 break;

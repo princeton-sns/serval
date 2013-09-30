@@ -8,7 +8,9 @@ import java.io.InputStreamReader;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.support.v4.app.Fragment;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -22,20 +24,22 @@ public class ServiceTableFragment extends Fragment {
 	public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
 		super.onCreateView(inflater, container, savedInstanceState);
 		View view = inflater.inflate(R.layout.frag_service_table, container, false);
-		serviceTable = (TextView) view.findViewById(R.id.service_table);
-		thread = new ServiceTableThread();
-		thread.start();
-		
+		serviceTable = (TextView) view.findViewById(R.id.service_table);		
 		return view;
 	}
 	
 	@Override
-	public void onDetach() {
-		if (thread != null)
+	public void setUserVisibleHint(boolean isVisibleToUser) {
+		super.setUserVisibleHint(isVisibleToUser);
+		if (isVisibleToUser) {
+			thread = new ServiceTableThread();
+			thread.start();
+		}
+		else if (thread != null) {
 			thread.end();
-		super.onDetach();
+			thread = null;
+		}
 	}
-	
 	
 	private class ServiceTableThread extends Thread {
 		
@@ -54,11 +58,7 @@ public class ServiceTableFragment extends Fragment {
 						serviceTable.setText(getTable());
 					}
 				});
-				try {
-					sleep(1000);
-				} 
-				catch (InterruptedException e) {
-				}
+				SystemClock.sleep(1000);
 			}
 		}
 		

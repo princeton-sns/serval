@@ -236,7 +236,6 @@ static jobject new_service_info(JNIEnv *env, const struct service_info *si)
         return NULL;
     
     service_id = new_service_id(env, &si->srvid);
-    LOG_ERR("serv info\n");
 
     if (!service_id) {
         LOG_ERR("could not create service_id\n");

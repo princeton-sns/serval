@@ -453,7 +453,8 @@ void serval_sock_hash(struct sock *sk)
                                   SERVICE_RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
-                                  NULL, 0, make_target(sk), GFP_ATOMIC);
+                                  NULL, 0, make_sock_target(sk), 
+                                  GFP_ATOMIC);
                 if (err < 0) {
 #if defined(OS_LINUX_KERNEL)
                         LOG_ERR("could not add service for listening demux\n");
