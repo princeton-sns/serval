@@ -453,7 +453,8 @@ void serval_sock_hash(struct sock *sk)
                                   SERVICE_RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
-                                  NULL, 0, make_target(sk), GFP_ATOMIC);
+                                  NULL, 0, make_sock_target(sk), 
+                                  GFP_ATOMIC);
                 if (err < 0) {
 #if defined(OS_LINUX_KERNEL)
                         LOG_ERR("could not add service for listening demux\n");
@@ -796,8 +797,9 @@ const char *serval_sock_print_state(struct sock *sk, char *buf, size_t buflen)
 {
         struct serval_sock *ssk = serval_sk(sk);
 
-        snprintf(buf, buflen, "%s snd_seq[una=%u nxt=%u wnd=%u iss=%u] "
+        snprintf(buf, buflen, "%s %s snd_seq[una=%u nxt=%u wnd=%u iss=%u] "
                  "rcv_seq[nxt=%u wnd=%u iss=%u]",
+                 serval_sock_state_str(sk),
                  serval_sock_sal_state_str(sk), 
                  ssk->snd_seq.una, 
                  ssk->snd_seq.nxt, 

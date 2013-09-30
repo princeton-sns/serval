@@ -3194,8 +3194,18 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                  * out device specified in the dst_entry route
                  * and assumes that skb->dev is the input
                  * interface*/
-                if (target->out.dev)
-                        cskb->dev = target->out.dev;
+                {
+                        struct net_device *dev;
+                        
+                        dev = __dev_get_by_index(&init_net, target->out.oif);
+                        if (dev == NULL) {
+                                LOG_ERR("Could not resolve interface\n");
+                                err = SAL_RESOLVE_DROP;
+                                break;
+                                
+                        }
+                        cskb->dev = dev;
+                }
 #endif /* OS_LINUX_KERNEL */
                 
                 /* Set the true overlay source address if the
@@ -4145,12 +4155,21 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                                 continue;
                         }
 		} else {
+                        struct net_device *dev;
+
                         memcpy(&inet->inet_daddr,
                                target->dst,
                                sizeof(inet->inet_daddr) < target->dstlen ? 
                                sizeof(inet->inet_daddr) : target->dstlen);
-                       
-                        dev = target->out.dev;
+                        
+                        dev = __dev_get_by_index(sock_net(sk), 
+                                                 target->out.oif);
+
+                        if (dev == NULL) {
+                                LOG_ERR("Could not resolve interface\n");
+                                err = -ENODEV;
+                                continue;
+                        }
                 }
                 
                 cskb->dev = dev;

@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.servalarch.net.ServiceID;
 
@@ -14,11 +15,13 @@ import android.app.Service;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.IBinder;
+import android.os.SystemClock;
 import android.util.Log;
 
 public class TableService extends Service  {
 
 	private static final String TAG = "TableService";
+	public static final AtomicBoolean LOCK = new AtomicBoolean(true);
 	
 	@Override
 	public IBinder onBind(Intent arg0) {
@@ -63,25 +66,27 @@ public class TableService extends Service  {
 				public void run() {
 					while (running) {
 						Map<String, ?> idMap = prefs.getAll();
-						String[] existing = getExistingIds();
-						
-						persist:
-						for (String srvID : idMap.keySet()) {
-							if (!(idMap.get(srvID) instanceof String))
-								continue;
-							Log.v(TAG, "Checking " + srvID);
-							String res[] = srvID.split(":");
-							ServiceID sid = AppHostCtrl.createServiceID(res[0]);
-							for (String s : existing) {								
-								if (sid.toString().substring(0, s.length()).equals(s))
-									continue persist;
-							}
-							String addr = (String) idMap.get(srvID);
-							Log.v(TAG, "Adding " + srvID + " | " + addr);
-							AppHostCtrl.performOp(TableService.this, srvID, addr, AppHostCtrl.SERVICE_ADD);
-						}
 						try {
-							Thread.sleep(3000);
+							for (String srvID : idMap.keySet()) {
+								if (!(idMap.get(srvID) instanceof String))
+									continue;
+								String res[] = srvID.split(":");
+								ServiceID sid = AppHostCtrl
+										.createServiceID(res[0]);
+								String addr = (String) idMap.get(srvID);
+								synchronized(LOCK) {
+									AppHostCtrl.performOp(TableService.this,
+										srvID, addr, AppHostCtrl.SERVICE_GET);
+									Log.v(TAG, "Checking " + srvID);
+									LOCK.wait();
+									if (!LOCK.get()) {
+										Log.v(TAG, "Adding " + srvID + " | " + addr);
+										AppHostCtrl.performOp(TableService.this, srvID,
+												addr, AppHostCtrl.SERVICE_ADD);
+									}
+								}
+							}
+							SystemClock.sleep(3000);
 						} catch (InterruptedException e) {
 						}
 					}

@@ -106,7 +106,8 @@ static int ctrl_handle_add_service_msg(struct ctrlmsg *cm, int peer)
                                   entry->weight,
                                   &entry->address, 
                                   sizeof(entry->address),
-                                  make_target(dev), GFP_KERNEL);
+                                  make_dev_target(dev), 
+                                  GFP_KERNEL);
                 if (dev)
                         dev_put(dev);
 
@@ -274,7 +275,7 @@ static int ctrl_handle_mod_service_msg(struct ctrlmsg *cm, int peer)
                                      sizeof(entry_old->address),
                                      &entry_new->address,
                                      sizeof(entry_new->address), 
-                                     make_target(dev));
+                                     make_dev_target(dev));
                 if (err > 0) {
                         if (index < i) {
                                 /* copy it over */
