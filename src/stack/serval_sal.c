@@ -4143,11 +4143,10 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         if (!dev) {
                                 target = next_target;
                                 err = -ENODEV;
+                                kfree_skb(cskb);
                                 continue;
                         }
 		} else {
-                        struct net_device *dev;
-
                         memcpy(&inet->inet_daddr,
                                target->dst,
                                sizeof(inet->inet_daddr) < target->dstlen ? 
@@ -4159,6 +4158,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         if (dev == NULL) {
                                 LOG_ERR("Could not resolve interface\n");
                                 err = -ENODEV;
+                                kfree_skb(cskb);
                                 continue;
                         }
                 }
@@ -4172,6 +4172,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         LOG_ERR("No source IPv4 address for interface %s\n",
                                 dev->name);
                         target = next_target;
+                        kfree_skb(cskb);
                         continue;
                 }
 

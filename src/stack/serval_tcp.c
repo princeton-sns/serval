@@ -3126,7 +3126,7 @@ struct request_sock_ops serval_tcp_request_sock_ops __read_mostly = {
 };
 
 struct proto serval_tcp_proto = {
-	.name			= "SERVAL_TCP",
+	.name			= "TCP",
 	.owner			= THIS_MODULE,
         .init                   = serval_tcp_init_sock,
         .destroy                = serval_tcp_destroy_sock,

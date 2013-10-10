@@ -884,7 +884,7 @@ struct request_sock_ops udp_request_sock_ops __read_mostly = {
 };
 
 struct proto serval_udp_proto = {
-	.name			= "SERVAL_UDP",
+	.name			= "UDP",
 	.owner			= THIS_MODULE,
         .init                   = serval_udp_init_sock,
         .destroy                = serval_udp_destroy_sock,

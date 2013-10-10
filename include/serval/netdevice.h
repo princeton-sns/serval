@@ -43,8 +43,7 @@ static inline int dev_get_ipv4_addr(struct net_device *dev,
                         }
                         ret = 1;
                         break;
-                }
-                endfor_ifa(indev);
+                } endfor_ifa(indev);
         }
 	rcu_read_unlock();
 

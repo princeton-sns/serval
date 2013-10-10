@@ -153,8 +153,7 @@ struct serval_sock {
         struct service_id       peer_srvid;
         struct list_head        syn_queue;
         struct list_head        accept_queue;
-	//struct sk_buff_head	ctrl_queue;
-	    struct sk_buff          *ctrl_queue;
+        struct sk_buff          *ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
         u8                      local_nonce[SAL_NONCE_SIZE];
         u8                      peer_nonce[SAL_NONCE_SIZE];
