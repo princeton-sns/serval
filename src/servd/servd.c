@@ -361,7 +361,15 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
 
 static void signal_handler(int sig)
 {
-        signal_raise(&exit_signal);
+        switch (sig) {
+        case SIGQUIT:
+        case SIGINT:
+        case SIGTERM:
+                signal_raise(&exit_signal);
+                break;
+        default:
+                break;
+        }
 }
 
 /*
@@ -769,6 +777,7 @@ int main(int argc, char **argv)
         pthread_mutex_init(&ctx.lock, NULL);
 
 	sigact.sa_handler = &signal_handler;
+	sigaction(SIGQUIT, &sigact, NULL);
 	sigaction(SIGINT, &sigact, NULL);
 	sigaction(SIGTERM, &sigact, NULL);
 	sigaction(SIGHUP, &sigact, NULL);
