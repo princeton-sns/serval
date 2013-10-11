@@ -1,0 +1,70 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          servd
+# Required-Start:    
+# Required-Stop:     
+# Should-Start:      $named
+# Default-Start:     2 3 4 5
+# Default-Stop:      
+# Short-Description: Service router daemon for Serval hosts
+### END INIT INFO
+
+set -e
+
+# /etc/init.d/servd: start and stop the servd daemon
+
+DAEMON=@INSTALL_BINDIR@/servd
+
+test -x $DAEMON || exit 0
+
+PID_FILE=/tmp/servd.pid
+SERVD_OPTS='-r'
+. /lib/lsb/init-functions
+
+export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+
+servd_start() {
+    if start-stop-daemon --start --quiet --exec $DAEMON \
+        -- -d $SERVD_OPTS
+    then
+        rc=0
+    else
+        rc=1
+    fi
+    if [ $rc -eq 0 ]; then
+        log_end_msg 0
+    else
+        log_end_msg 1
+    fi
+} # rsync_start
+
+
+case "$1" in
+  start)
+	log_daemon_msg "Starting service daemon" "servd"
+	servd_start
+
+	;;
+  stop)
+	log_daemon_msg "Stopping service daemon" "servd"
+	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
+	log_end_msg $?
+	;;
+
+  reload|force-reload)
+	;;
+
+  restart)
+	set +e
+	log_daemon_msg "Restarting service daemon" "servd"
+	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON || true
+	sleep 1
+        servd_start
+	;;
+
+  *)
+	echo "Usage: /etc/init.d/servd {start|stop|reload|force-reload|restart}"
+	exit 1
+esac
+
+exit 0
