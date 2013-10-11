@@ -1,11 +1,11 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:          translator
-# Required-Start:    
-# Required-Stop:     
-# Should-Start:      $named
+# Required-Start:    $network servd
+# Required-Stop:     $network servd
+# Should-Start:      
 # Default-Start:     2 3 4 5
-# Default-Stop:      
+# Default-Stop:      0 1 6
 # Short-Description: Serval translator for legacy clients
 ### END INIT INFO
 

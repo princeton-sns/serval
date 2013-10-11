@@ -1,11 +1,11 @@
 #! /bin/sh
 ### BEGIN INIT INFO
 # Provides:          servd
-# Required-Start:    
-# Required-Stop:     
-# Should-Start:      $named
+# Required-Start:    $network
+# Required-Stop:     $network
+# Should-Start:      
 # Default-Start:     2 3 4 5
-# Default-Stop:      
+# Default-Stop:      0 1 6
 # Short-Description: Service router daemon for Serval hosts
 ### END INIT INFO
 
