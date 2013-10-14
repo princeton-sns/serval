@@ -28,5 +28,8 @@ EXTRA_DIST = \
 	sys_splice.S \
 	translator_jni.c
 
+install-exec-hook: sysvinit
+	install -m 755 $^ /etc/init.d/translator
+
 clean-local:
 	rm -f *~

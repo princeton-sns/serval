@@ -1,0 +1,70 @@
+#! /bin/sh
+### BEGIN INIT INFO
+# Provides:          translator
+# Required-Start:    $network servd
+# Required-Stop:     $network servd
+# Should-Start:      
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Serval translator for legacy clients
+### END INIT INFO
+
+set -e
+
+# /etc/init.d/translator: start and stop the translator daemon
+
+DAEMON=@INSTALL_BINDIR@/translator
+
+test -x $DAEMON || exit 0
+
+PID_FILE=/tmp/translator.pid
+TRANSLATOR_OPTS='-r -io -p 80 -l /var/log/serval-translator.log'
+. /lib/lsb/init-functions
+
+export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
+
+translator_start() {
+    if start-stop-daemon --start --quiet --exec $DAEMON \
+        -- -d $TRANSLATOR_OPTS
+    then
+        rc=0
+    else
+        rc=1
+    fi
+    if [ $rc -eq 0 ]; then
+        log_end_msg 0
+    else
+        log_end_msg 1
+    fi
+} # rsync_start
+
+
+case "$1" in
+  start)
+	log_daemon_msg "Starting Serval" "translator"
+	translator_start
+
+	;;
+  stop)
+	log_daemon_msg "Stopping Serval" "translator"
+	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON
+	log_end_msg $?
+	;;
+
+  reload|force-reload)
+	;;
+
+  restart)
+	set +e
+	log_daemon_msg "Restarting Serval" "translator"
+	start-stop-daemon --stop --quiet --oknodo --exec $DAEMON || true
+	sleep 1
+        translator_start
+	;;
+
+  *)
+	echo "Usage: /etc/init.d/translator {start|stop|reload|force-reload|restart}"
+	exit 1
+esac
+
+exit 0

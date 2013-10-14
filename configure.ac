@@ -289,6 +289,9 @@ CPPFLAGS="${CPPFLAGS} ${EXTRA_DEFINES}"
 AC_SUBST(EXTRA_DEFINES)
 AC_SUBST(KERNEL_EXTRA_CFLAGS)
 
+INSTALL_BINDIR=${prefix}/bin
+AC_SUBST(INSTALL_BINDIR)
+
 dnl
 dnl Output
 dnl
@@ -304,7 +307,9 @@ AC_CONFIG_FILES([Makefile
 	src/libservalctrl/java/src/Makefile
 	src/libserval/Makefile
 	src/servd/Makefile
+	src/servd/sysvinit
 	src/translator/Makefile
+	src/translator/sysvinit
 	src/tools/Makefile
 	src/test/Makefile
 	src/javasock/Makefile

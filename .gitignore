@@ -22,6 +22,7 @@ m4/ltsugar.m4
 m4/ltversion.m4
 m4/lt~obsolete.m4
 src/servd/servd
+src/servd/sysvinit
 src/servicerouter/servr
 src/servicerouter/messagetest
 src/servicerouter/stabletest
@@ -51,6 +52,7 @@ src/test/tcp_server_user
 src/test/tcp_server
 src/test/automigrated
 src/translator/translator
+src/translator/sysvinit
 src/translator/transproxy
 src/translator/servtransproxy
 src/tools/serv

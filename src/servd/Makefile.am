@@ -38,5 +38,8 @@ noinst_HEADERS = \
 
 EXTRA_DIST = Android.mk
 
+install-exec-hook: sysvinit
+	install -m 755 $^ /etc/init.d/servd
+
 clean-local:
 	rm -f *~
