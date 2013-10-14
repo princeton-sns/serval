@@ -1086,7 +1086,7 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
             sk->sk_state == SAL_CLOSED) {
                 LOG_SSK(sk, "Cannot send RSYN in state %s\n",
                         serval_sock_state_str(sk));
-                return 0;
+                return -1;
         }
 
         switch (ssk->sal_state) {
@@ -1136,8 +1136,16 @@ static int serval_sal_send_rsyn(struct sock *sk, u32 verno)
 
 int serval_sal_migrate(struct sock *sk)
 {
+        int ret;
+
         LOG_SSK(sk, "Sending RSYN\n");
-        return serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
+
+        ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt + 1);
+
+        if (ret == 0)
+                serval_sk(sk)->snd_seq.nxt++;
+
+        return ret;
 }
 
 int serval_sal_send_fin(struct sock *sk)
