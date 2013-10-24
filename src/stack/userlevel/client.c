@@ -498,8 +498,8 @@ int client_handle_accept_req_msg(struct client *c, struct client_msg *msg)
         }
 
         /* Write the service id of the parent in the response */
-        memcpy(&rsp.local_srvid, &ssk->local_srvid, 
-               sizeof(ssk->local_srvid));
+        memcpy(&rsp.local_srvid, &ssk->local_srvid[0], 
+               sizeof(ssk->local_srvid[0]));
         memcpy(&rsp.flowid, &ssk->local_flowid, 
                sizeof(ssk->local_flowid));
 

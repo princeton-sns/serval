@@ -620,7 +620,7 @@ int main(int argc, char **argv)
                         return -1;
                 }
         }
-
+       
 	ret = serval_init();
 
 	if (ret == -1) {

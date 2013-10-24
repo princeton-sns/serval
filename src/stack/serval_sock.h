@@ -20,6 +20,8 @@
 #include <net/tcp_states.h>
 #endif
 
+#define MAX_HASH_NUMBER 10
+
 /*
   TCP states from net/tcp_states.h, should be as compatible as
   possible.
@@ -139,8 +141,9 @@ struct serval_sock {
         u8                      flags;
         int                     mig_dev_if;
         u32                     mig_daddr;
-        void                    *hash_key;
-        u32                     hash_key_len;  /* Keylen in bytes */
+        void                    *hash_key[MAX_HASH_NUMBER];
+        u32                     hash_key_len[MAX_HASH_NUMBER];  /* Keylen in bytes */
+        u32                     srvid_num;   /* Number of hashed keys */
         struct list_head        sock_node;
         struct serval_sock_af_ops *af_ops;
         struct sk_buff_head     tx_queue;
@@ -148,7 +151,7 @@ struct serval_sock {
 	struct timer_list	tw_timer;
         struct flow_id          local_flowid;
         struct flow_id          peer_flowid;
-        struct service_id       local_srvid;
+        struct service_id       local_srvid[MAX_HASH_NUMBER];
         struct service_id       peer_srvid;
         struct list_head        syn_queue;
         struct list_head        accept_queue;

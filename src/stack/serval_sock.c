@@ -352,7 +352,7 @@ static struct sock *serval_sock_lookup(struct serval_table *table,
         
         hlist_for_each_entry_compat(sk, walk, &slot->head, sk_node) {
                 struct serval_sock *ssk = serval_sk(sk);
-                if (memcmp(key, ssk->hash_key, keylen) == 0) {
+                if (memcmp(key, ssk->hash_key[0], keylen) == 0) {
                         sock_hold(sk);
                         goto out;
                 }
@@ -379,8 +379,8 @@ static inline unsigned int serval_sock_ehash(struct serval_table *table,
                                              struct sock *sk)
 {
         return serval_hashfn(sock_net(sk), 
-                             serval_sk(sk)->hash_key,
-                             serval_sk(sk)->hash_key_len,
+                             serval_sk(sk)->hash_key[0],
+                             serval_sk(sk)->hash_key_len[0],
                              table->mask);
 }
 
@@ -418,8 +418,8 @@ static void __serval_sock_hash(struct sock *sk)
             sk->sk_state == SAL_RESPOND) {
                 LOG_SSK(sk, "hashing socket %p based on socket id %s\n",
                         sk, flow_id_to_str(&ssk->local_flowid));
-                ssk->hash_key = &ssk->local_flowid;
-                ssk->hash_key_len = sizeof(ssk->local_flowid);
+                ssk->hash_key[0] = &ssk->local_flowid;
+                ssk->hash_key_len[0] = sizeof(ssk->local_flowid);
 
                 __serval_table_hash(&established_table, sk);
         }
@@ -428,11 +428,27 @@ static void __serval_sock_hash(struct sock *sk)
 void serval_sock_hash(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+
+        int i;
+
+#if defined (OS_USER)
+        printf("In serval_sock_hash\n");
+#endif
         
-        /* Do not hash if closed or already hashed */
+        /* Do not hash if closed or already hashed MAX_HASH_NUMBER IDs */
         if (sk->sk_state == SAL_CLOSED ||
-            ssk->hash_key_len > 0)
+            ssk->hash_key_len[MAX_HASH_NUMBER - 1] > 0)
+                {
+#if defined (OS_USER)
+                        printf("sk->sk_state == SAL_CLOSED || ssk->hash_key_len > 0");
+#endif
                 return;
+                }
+
+        /* Do not hash if already hashed  */
+        for (i = 0; i < ssk->srvid_num; i++) {
+                
+        }
 
         if (sk->sk_state == SAL_REQUEST ||
             sk->sk_state == SAL_RESPOND) {
@@ -444,12 +460,12 @@ void serval_sock_hash(struct sock *sk)
                 int err = 0;
                 
                 LOG_SSK(sk, "adding socket %p based on service id %s\n",
-                        sk, service_id_to_str(&ssk->local_srvid));
+                        sk, service_id_to_str(&ssk->local_srvid[0]));
 
-                ssk->hash_key = &ssk->local_srvid;
-                ssk->hash_key_len = sizeof(ssk->local_srvid);
+                ssk->hash_key[0] = &ssk->local_srvid[0];
+                ssk->hash_key_len[0] = sizeof(ssk->local_srvid[0]);
 
-                err = service_add(&ssk->local_srvid,
+                err = service_add(&ssk->local_srvid[0],
                                   SERVICE_RULE_DEMUX, 0, 
                                   LOCAL_SERVICE_DEFAULT_PRIORITY, 
                                   LOCAL_SERVICE_DEFAULT_WEIGHT,
@@ -481,14 +497,14 @@ void serval_sock_unhash(struct sock *sk)
         struct net *net = sock_net(sk);
         spinlock_t *lock;
 
-        if (ssk->hash_key_len == 0)
+        if (ssk->hash_key_len[0] == 0)
                 return;
                 
         if (sk->sk_state == SAL_LISTEN ||
             sk->sk_state == SAL_INIT) {
                 LOG_SSK(sk, "removing socket %p from service table\n", sk);
 
-                service_del_target(&ssk->local_srvid,
+                service_del_target(&ssk->local_srvid[0],
                                    SERVICE_RULE_DEMUX,
                                    NULL, 0, NULL,
                                    GFP_ATOMIC);
@@ -500,7 +516,7 @@ void serval_sock_unhash(struct sock *sk)
 #endif
 #endif
                 serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
-                ssk->hash_key_len = 0;
+                ssk->hash_key_len[0] = 0;
                 return;
         } 
 
@@ -508,7 +524,7 @@ void serval_sock_unhash(struct sock *sk)
 
         lock = &established_table.hashslot(&established_table,
                                            net, &ssk->local_flowid, 
-                                           ssk->hash_key_len)->lock;       
+                                           ssk->hash_key_len[0])->lock;       
 
         if (!hlist_unhashed(&sk->sk_node)) {
                 spin_lock_bh(lock);
@@ -521,7 +537,7 @@ void serval_sock_unhash(struct sock *sk)
 #endif
 #endif
                 serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
-                ssk->hash_key_len = 0;        
+                ssk->hash_key_len[0] = 0;        
                 spin_unlock_bh(lock);
         }
 }
@@ -648,8 +664,8 @@ void serval_sock_init(struct sock *sk)
                 }
         }       
 #endif
-        ssk->hash_key = NULL;
-        ssk->hash_key_len = 0;
+        ssk->hash_key[0] = NULL;
+        ssk->hash_key_len[0] = 0;
         ssk->rcv_seq.nxt = 0;        
         ssk->snd_seq.una = 0;
         ssk->snd_seq.nxt = 0;

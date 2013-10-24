@@ -2091,7 +2091,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                         memcpy(&nssk->peer_flowid, &srsk->peer_flowid, 
                                sizeof(srsk->peer_flowid));
                         service_id_copy(&nssk->peer_srvid, &srsk->peer_srvid);
-                        service_id_copy(&nssk->local_srvid, &srsk->target_srvid);
+                        service_id_copy(&nssk->local_srvid[0], &srsk->target_srvid);
                         memcpy(&newinet->inet_daddr, &irsk->rmt_addr,
                                sizeof(newinet->inet_daddr));
                         memcpy(&newinet->inet_saddr, &irsk->loc_addr,
@@ -2860,9 +2860,9 @@ static int serval_sal_init_state_process(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         int err = 0;
 
-        if (ssk->hash_key && ctx->srv_ext[0] && ctx->srv_ext[1]) {
+        if (ssk->hash_key[0] && ctx->srv_ext[0] && ctx->srv_ext[1]) {
                 LOG_SSK(sk, "Receiving unconnected datagram for service %s\n", 
-                        service_id_to_str((struct service_id*) ssk->hash_key));
+                        service_id_to_str((struct service_id*) ssk->hash_key[0]));
         } else {
                 LOG_SSK(sk, "Non-matching datagram\n");
                 return -1;
@@ -3942,7 +3942,7 @@ static struct sal_hdr *serval_sal_build_header(struct sock *sk,
                 /* Unconnected datagram, add service extensions */
                 if (sk->sk_state == SAL_INIT && 
                     sk->sk_type == SOCK_DGRAM) {
-                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->local_srvid);
+                        hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->local_srvid[0]);
                         hdr_len += serval_sal_add_service_ext(sk, skb, &ssk->peer_srvid);
                 }
         }
