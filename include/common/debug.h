@@ -33,7 +33,8 @@
 #define LOG_DBG(format, ...) ({                                         \
             struct timeval now;                                         \
             gettimeofday(&now, NULL);                                   \
-            printf("%ld.%06ld %s: "format, now.tv_sec, now.tv_usec, __func__, ## __VA_ARGS__); \
+            printf("%ld.%06ld %s: "format, (long)now.tv_sec,            \
+                   (long)now.tv_usec, __func__, ## __VA_ARGS__);        \
         })
 #else
 #define LOG_DBG(format, ...)

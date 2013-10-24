@@ -657,8 +657,6 @@ static int on_flow_stat_update(struct hostctrl *hc,
     jthrowable exc;
     jboolean more = (csr->flags & STATS_RESP_F_MORE) ? JNI_TRUE : JNI_FALSE;
 
-    
-
     mid = (*env)->GetMethodID(env, hostctrlcallbacks_cls,
                               "onFlowStatUpdate",
                               "(JI[Lorg/servalarch/servalctrl/FlowStat;Z)V");
@@ -1125,6 +1123,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved)
 JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
 {
 	JNIEnv *env = NULL;
+
+    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
+        LOG_ERR("Could not get JNI env in JNI_OnUnload\n");
+        return;
+    }         
     
     libservalctrl_fini();
 
@@ -1136,9 +1139,4 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved)
     (*env)->DeleteGlobalRef(env, inetaddress_cls);
     (*env)->DeleteGlobalRef(env, flowstat_cls);
     (*env)->DeleteGlobalRef(env, flowtcpstat_cls);
-
-    if ((*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_4) != JNI_OK) {
-        LOG_ERR("Could not get JNI env in JNI_OnUnload\n");
-        return;
-    }         
 }

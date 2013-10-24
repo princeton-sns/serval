@@ -560,6 +560,9 @@ static inline int has_valid_verno(struct sal_context *ctx, struct sock *sk)
         if (ctx->flags == SVH_ACK)
                 ret = 1;
 
+        if (ctx->flags == (SVH_RSYN | SVH_ACK))
+                ret = 1;
+
         if (ret == 0) {
                 LOG_DBG("Invalid version number received=%u next=%u.\n",
                         ctx->verno, ssk->rcv_seq.nxt);
@@ -2170,7 +2173,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 break;
         case SAL_RSYN_SENT_RECV:
                 if (!(ctx->flags & SVH_RSYN))
-                        serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
+                        serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
                 break;
         default:
                 return 0;
@@ -2314,7 +2317,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         }
 #endif /* OS_LINUX_KERNEL */
 
-        ssk->rcv_seq.nxt = ctx->verno + 1;        
+        ssk->rcv_seq.nxt = ctx->verno + 1;
         memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
         rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                 GFP_ATOMIC);
@@ -2322,7 +2325,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                 return -ENOMEM;
         
         SAL_SKB_CB(rskb)->flags = SVH_RSYN | SVH_ACK;
-        SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt++;
+        SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt;
         SAL_SKB_CB(rskb)->when = sal_time_stamp;
 
         return serval_sal_queue_and_push(sk, rskb);
@@ -2929,6 +2932,7 @@ int serval_sal_state_process(struct sock *sk,
                                 err = serval_sal_rcv_rsyn(sk, skb, ctx);
                 }
         }
+
         serval_sk(sk)->tot_pkts_recv++;
         serval_sk(sk)->tot_bytes_recv += skb->len;
 
