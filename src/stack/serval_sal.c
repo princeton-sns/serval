@@ -542,7 +542,7 @@ static inline int has_service_extension_dst(struct sal_context *ctx)
         return has_service_extension(ctx, 1);
 }
 
-static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
+static inline int has_valid_verno(struct sal_context *ctx, struct sock *sk)
 {        
         struct serval_sock *ssk = serval_sk(sk);
         int ret = 0;
@@ -551,13 +551,16 @@ static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
             sk->sk_state == SAL_REQUEST)
                 return 1;
 
-        if (!before(seg_seq, ssk->rcv_seq.nxt)) 
+        if (!before(ctx->verno, ssk->rcv_seq.nxt)) 
+                ret = 1;
+
+        // Pure ACKs are okay.
+        if (ctx->flags == SVH_ACK)
                 ret = 1;
 
         if (ret == 0) {
-                LOG_DBG("Invalid version number received=%u next=%u."
-                        " Could be ACK though...\n",
-                        seg_seq, ssk->rcv_seq.nxt);
+                LOG_DBG("Invalid version number received=%u next=%u.\n",
+                        ctx->verno, ssk->rcv_seq.nxt);
         }
         return ret;
 }
@@ -1143,7 +1146,7 @@ int serval_sal_migrate(struct sock *sk)
         ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt + 1);
 
         if (ret == 0)
-                serval_sk(sk)->snd_seq.nxt++;
+               serval_sk(sk)->snd_seq.nxt++;
 
         return ret;
 }
@@ -2201,19 +2204,19 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                                   struct sal_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        struct net_device *mig_dev = dev_get_by_index(sock_net(sk), 
-                                                      ssk->mig_dev_if);
         int err = 0;
 
         LOG_SSK(sk, "received RSYN-ACK\n");
 
-        if (!mig_dev) {
-                LOG_ERR("No migration device set\n");
-                return -1;
-        }
-
         switch (ssk->sal_state) {
         case SAL_RSYN_SENT:
+        {
+                struct net_device *mig_dev = dev_get_by_index(sock_net(sk), 
+                                                              ssk->mig_dev_if);
+                if (!mig_dev) {
+                        LOG_ERR("No migration device set\n");
+                        return -1;
+                }
                 LOG_SSK(sk, "Migration complete for flow %s!\n",
                         flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_RSYN_INITIAL);
@@ -2226,21 +2229,23 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
 
                 if (ssk->af_ops->migration_completed)
                         ssk->af_ops->migration_completed(sk);
+                dev_put(mig_dev);
                 break;
+        }
         case SAL_RSYN_SENT_RECV:
                 serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
                 memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
                 sk_dst_reset(sk);
                 break;
         default:
+                LOG_DBG("Not in migration state; may be old RSYN-ACK.\n");
                 goto out;
         }
         
         ssk->rcv_seq.nxt = ctx->verno + 1;
 
-        err = serval_sal_send_ack(sk);
-out:        
-        dev_put(mig_dev);
+out:
+        err = serval_sal_send_ack(sk);        
 
         return err;
 }
@@ -2901,8 +2906,10 @@ int serval_sal_state_process(struct sock *sk,
         }
 #endif
         if (ctx->ctrl_ext) {                
-                if (!has_valid_verno(ctx->verno, sk))
+                if (!has_valid_verno(ctx, sk)) {
+                        serval_sal_send_ack(sk);
                         goto drop;
+                }
 
                 /* Is this a reset packet */
                 if (ctx->ctrl_ext->rst) {
