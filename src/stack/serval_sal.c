@@ -542,7 +542,7 @@ static inline int has_service_extension_dst(struct sal_context *ctx)
         return has_service_extension(ctx, 1);
 }
 
-static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
+static inline int has_valid_verno(struct sal_context *ctx, struct sock *sk)
 {        
         struct serval_sock *ssk = serval_sk(sk);
         int ret = 0;
@@ -551,13 +551,17 @@ static inline int has_valid_verno(uint32_t seg_seq, struct sock *sk)
             sk->sk_state == SAL_REQUEST)
                 return 1;
 
-        if (!before(seg_seq, ssk->rcv_seq.nxt)) 
+        if (!before(ctx->verno, ssk->rcv_seq.nxt)) 
+                ret = 1;
+
+        // Pure ACKs are okay.
+        LOG_PKT("flags: %u; pure ack: %u\n", ctx->flags, SVH_ACK);
+        if (ctx->flags == SVH_ACK)
                 ret = 1;
 
         if (ret == 0) {
-                LOG_DBG("Invalid version number received=%u next=%u."
-                        " Could be ACK though...\n",
-                        seg_seq, ssk->rcv_seq.nxt);
+                LOG_DBG("Invalid version number received=%u next=%u.\n",
+                        ctx->verno, ssk->rcv_seq.nxt);
         }
         return ret;
 }
@@ -800,7 +804,10 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
         s32 seq_rtt = -1;
         int err = 0;
        
+        LOG_PKT("Cleaning out ACK'd SKBs\n");
         while ((skb = serval_sal_ctrl_queue_head(sk))) {
+                LOG_PKT("SKB has verno=%u; ackno=%u\n", SAL_SKB_CB(skb)->verno,
+                        ackno);
                 if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
 
@@ -2901,8 +2908,10 @@ int serval_sal_state_process(struct sock *sk,
         }
 #endif
         if (ctx->ctrl_ext) {                
-                if (!has_valid_verno(ctx->verno, sk))
+                if (!has_valid_verno(ctx, sk)) {
+                        serval_sal_send_ack(sk);
                         goto drop;
+                }
 
                 /* Is this a reset packet */
                 if (ctx->ctrl_ext->rst) {
