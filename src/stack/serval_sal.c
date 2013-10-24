@@ -551,10 +551,12 @@ static inline int has_valid_verno(struct sal_context *ctx, struct sock *sk)
             sk->sk_state == SAL_REQUEST)
                 return 1;
 
+        LOG_PKT("verno: %u, rcv_nxt: %u\n", ctx->verno, ssk->rcv_seq.nxt);
         if (!before(ctx->verno, ssk->rcv_seq.nxt)) 
                 ret = 1;
 
         // Pure ACKs are okay.
+        LOG_PKT("flags: %u; pure ack: %u; ret: %d\n", ctx->flags, SVH_ACK, ret);
         if (ctx->flags == SVH_ACK)
                 ret = 1;
 
@@ -804,6 +806,8 @@ static int serval_sal_clean_rtx_queue(struct sock *sk, uint32_t ackno, int all,
         int err = 0;
        
         while ((skb = serval_sal_ctrl_queue_head(sk))) {
+                LOG_PKT("SKB has verno=%u; ackno=%u\n", SAL_SKB_CB(skb)->verno,
+                        ackno);
                 if (after(ackno, SAL_SKB_CB(skb)->verno) || all) {
                         serval_sal_unlink_ctrl_queue(skb, sk);
 
@@ -1143,10 +1147,10 @@ int serval_sal_migrate(struct sock *sk)
 
         LOG_SSK(sk, "Sending RSYN\n");
 
-        ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt + 1);
+        ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 
-        if (ret == 0)
-               serval_sk(sk)->snd_seq.nxt++;
+        //if (ret == 0)
+        //       serval_sk(sk)->snd_seq.nxt++;
 
         return ret;
 }
