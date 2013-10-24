@@ -144,8 +144,8 @@ static int send_file(int sock, const char *filepath,
                            n, total_bytes_session);
                         */
                         print_tick();
-
-                        count =+ n;
+                        
+                        count += n;
                         total_bytes += n;
                         total_bytes_session += n;
                 }
