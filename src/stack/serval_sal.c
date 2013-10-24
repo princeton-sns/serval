@@ -551,12 +551,16 @@ static inline int has_valid_verno(struct sal_context *ctx, struct sock *sk)
             sk->sk_state == SAL_REQUEST)
                 return 1;
 
+        LOG_PKT("verno: %u, rcv_nxt: %u\n", ctx->verno, ssk->rcv_seq.nxt);
         if (!before(ctx->verno, ssk->rcv_seq.nxt)) 
                 ret = 1;
 
         // Pure ACKs are okay.
-        LOG_PKT("flags: %u; pure ack: %u\n", ctx->flags, SVH_ACK);
+        LOG_PKT("flags: %u; pure ack: %u; ret: %d\n", ctx->flags, SVH_ACK, ret);
         if (ctx->flags == SVH_ACK)
+                ret = 1;
+
+        if (ctx->flags == (SVH_RSYN | SVH_ACK))
                 ret = 1;
 
         if (ret == 0) {
@@ -1147,10 +1151,10 @@ int serval_sal_migrate(struct sock *sk)
 
         LOG_SSK(sk, "Sending RSYN\n");
 
-        ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt + 1);
+        ret = serval_sal_send_rsyn(sk, serval_sk(sk)->snd_seq.nxt++);
 
-        if (ret == 0)
-               serval_sk(sk)->snd_seq.nxt++;
+        //if (ret == 0)
+        //       serval_sk(sk)->snd_seq.nxt++;
 
         return ret;
 }
@@ -2221,6 +2225,10 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                         LOG_ERR("No migration device set\n");
                         return -1;
                 }
+                if (ctx->ackno == ssk->snd_seq.nxt) {
+                        LOG_DBG("Old RSYN+ACK, ignore.\n");
+                        return -1;
+                }
                 LOG_SSK(sk, "Migration complete for flow %s!\n",
                         flow_id_to_str(&ssk->local_flowid));
                 serval_sock_set_sal_state(sk, SAL_RSYN_INITIAL);
@@ -2314,7 +2322,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
         }
 #endif /* OS_LINUX_KERNEL */
 
-        ssk->rcv_seq.nxt = ctx->verno + 1;        
+        ssk->rcv_seq.nxt = ctx->verno + 1;
         memcpy(&ssk->mig_daddr, &ip_hdr(skb)->saddr, 4);
         rskb = sk_sal_alloc_skb(sk, sk->sk_prot->max_header,
                                 GFP_ATOMIC);
@@ -2322,7 +2330,7 @@ static int serval_sal_rcv_rsyn(struct sock *sk,
                 return -ENOMEM;
         
         SAL_SKB_CB(rskb)->flags = SVH_RSYN | SVH_ACK;
-        SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt++;
+        SAL_SKB_CB(rskb)->verno = ssk->snd_seq.nxt;
         SAL_SKB_CB(rskb)->when = sal_time_stamp;
 
         return serval_sal_queue_and_push(sk, rskb);
@@ -2929,6 +2937,7 @@ int serval_sal_state_process(struct sock *sk,
                                 err = serval_sal_rcv_rsyn(sk, skb, ctx);
                 }
         }
+
         serval_sk(sk)->tot_pkts_recv++;
         serval_sk(sk)->tot_bytes_recv += skb->len;
 

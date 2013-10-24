@@ -692,7 +692,7 @@ int dev_get_ipv4_addr(struct net_device *dev, enum addr_type type, void *addr)
 
 enum signal_event dev_read_signal(struct net_device *dev)
 {
-        unsigned char s;
+        unsigned char s = 0;
         struct pollfd fds;
 
         fds.fd = dev->pipefd[0];
