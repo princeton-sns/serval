@@ -2173,7 +2173,7 @@ static int serval_sal_ack_process(struct sock *sk,
                 break;
         case SAL_RSYN_SENT_RECV:
                 if (!(ctx->flags & SVH_RSYN))
-                        serval_sock_set_sal_state(sk, SAL_RSYN_RECV);
+                        serval_sock_set_sal_state(sk, SAL_RSYN_SENT);
                 break;
         default:
                 return 0;
@@ -2222,6 +2222,10 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                                                               ssk->mig_dev_if);
                 if (!mig_dev) {
                         LOG_ERR("No migration device set\n");
+                        return -1;
+                }
+                if (ctx->ackno == ssk->snd_seq.nxt) {
+                        LOG_DBG("Old RSYN+ACK, ignore.\n");
                         return -1;
                 }
                 LOG_SSK(sk, "Migration complete for flow %s!\n",
