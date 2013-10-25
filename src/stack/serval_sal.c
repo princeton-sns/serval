@@ -2143,23 +2143,28 @@ static int serval_sal_ack_process(struct sock *sk,
                                   struct sal_context *ctx)
 {
         struct serval_sock *ssk = serval_sk(sk);
-        
+        int all = 0;        
+
         if (!(ctx->flags & SVH_ACK))
                 return -1;
 
-	/* If the ack is older than previous acks
-	 * then we can probably ignore it.
-	 */
-	if (before(ctx->ackno, ssk->snd_seq.una))
-		goto old_ack;
+	    /* If the ack is older than previous acks
+         * then we can probably ignore it.
+	     */
+	    if (before(ctx->ackno, ssk->snd_seq.una))
+		        goto old_ack;
 
-	/* If the ack corresponds to something we haven't sent yet,
-           ignore.
-	 */
-	if (after(ctx->ackno, ssk->snd_seq.nxt))
-		goto invalid_ack;
+	    /* If the ack corresponds to something we haven't sent yet AND is not
+         * part of a migration handshake, ignore.
+	     */
+	    if (after(ctx->ackno, ssk->snd_seq.nxt) &&
+            !(ssk->sal_state == SAL_RSYN_RECV || 
+              ssk->sal_state == SAL_RSYN_SENT_RECV))
+		        goto invalid_ack;
 
-        serval_sal_clean_rtx_queue(sk, ctx->ackno, 0, NULL);
+        all = (ssk->sal_state == SAL_RSYN_RECV || 
+               ssk->sal_state == SAL_RSYN_SENT_RECV);
+        serval_sal_clean_rtx_queue(sk, ctx->ackno, all, NULL);
         ssk->snd_seq.una = ctx->ackno;
         ssk->ack_rcv_tstamp = sal_time_stamp;
 
