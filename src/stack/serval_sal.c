@@ -2230,8 +2230,8 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                         LOG_ERR("No migration device set\n");
                         return -1;
                 }
-                if (ctx->ackno == ssk->snd_seq.nxt) {
-                        LOG_DBG("Old RSYN+ACK, ignore.\n");
+                if (ctx->ackno != ssk->snd_seq.una + 1) {
+                        LOG_DBG("Invalid RSYN+ACK, ignore.\n");
                         return -1;
                 }
                 LOG_SSK(sk, "Migration complete for flow %s!\n",
