@@ -2259,7 +2259,7 @@ static int serval_sal_rcv_rsynack(struct sock *sk,
                 goto out;
         }
         
-        ssk->rcv_seq.nxt = ctx->verno + 1;
+        //ssk->rcv_seq.nxt = ctx->verno + 1;
 
 out:
         err = serval_sal_send_ack(sk);        
