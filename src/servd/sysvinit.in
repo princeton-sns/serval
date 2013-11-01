@@ -18,7 +18,7 @@ DAEMON=@INSTALL_BINDIR@/servd
 test -x $DAEMON || exit 0
 
 PID_FILE=/tmp/servd.pid
-SERVD_OPTS='-r'
+SERVD_OPTS=''
 . /lib/lsb/init-functions
 
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
@@ -36,7 +36,7 @@ servd_start() {
     else
         log_end_msg 1
     fi
-} # rsync_start
+}
 
 
 case "$1" in
