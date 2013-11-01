@@ -36,6 +36,8 @@
 #include <common/list.h>
 #include <pthread.h>
 #include <poll.h>
+#include <stdbool.h>
+#include "config.h"
 
 #if defined(OS_LINUX)
 #include "rtnl.h"
@@ -50,10 +52,10 @@ static struct service_id default_service;
 
 struct servd_context {
         struct timer_queue tq;
-        int router; /* Whether this service daemon is a stub
-                       end-host or a router */
+        unsigned char router:1; /* Whether this service daemon is a
+                                   stub end-host or a router */
+        unsigned char router_ip_set:1;
         struct in_addr router_ip;
-        int router_ip_set;
         struct sockaddr_sv raddr, caddr;
         struct hostctrl *lhc, *rhc;
         struct list_head reglist;
@@ -751,11 +753,47 @@ static void print_usage(void)
                "where OPTIONS:\n"
                "\t-d,--daemon\t\t\t - Run in the background as a daemon.\n"
                "\t-r,--router\t\t\t - Run in router mode, accepting registrations.\n"
+               "\t-c,--config CONFIG_FILE\t - Specify the configuration file to use.\n"
                "\t-rid,--router-id SERVICEID\t - Specify the SERVICEID of a router.\n"
                "\t-cid,--client-id SERVICEID\t - Specify the SERVICEID of a client.\n"
                "\t-rip,--router-ip ROUTER_IP\t - Specify the IP of a service router.\n"
                "\t-h,--help\t\t\t - Print this help message.\n");
 }
+
+static struct servd_context ctx;
+static bool router = false;
+static bool godaemon = false;
+static unsigned int router_id = 88888;
+static unsigned int client_id = 55555;
+
+struct config configuration[] = {
+    {
+	.type = CONFIG_TYPE_BOOL,
+	.name = "router",
+	.value = &router,
+    },
+    {
+	.type = CONFIG_TYPE_BOOL,
+	.name = "daemon",
+	.value = &godaemon,
+    },
+    {
+	.type = CONFIG_TYPE_UINT,
+	.name = "router_id",
+	.value = &router_id,
+    },
+    {
+	.type = CONFIG_TYPE_UINT,
+	.name = "client_id",
+	.value = &client_id,
+    },
+    {
+	.type = CONFIG_TYPE_IPADDR,
+	.name = "router_ip",
+	.value = &ctx.router_ip,
+    },
+    null_config
+};
 
 
 int main(int argc, char **argv)
@@ -765,10 +803,8 @@ int main(int argc, char **argv)
         struct netlink_handle nlh;
 #endif
         fd_set readfds;
-        int daemon = 0;
 	int ret = EXIT_SUCCESS;
-        unsigned int router_id = 88888, client_id = 55555;
-        struct servd_context ctx;
+        const char *config_file = "/usr/local/etc/servd.conf";
 
         memset(&default_service, 0, sizeof(default_service));
 	memset(&sigact, 0, sizeof(struct sigaction));
@@ -783,6 +819,11 @@ int main(int argc, char **argv)
 	sigaction(SIGHUP, &sigact, NULL);
 	sigaction(SIGPIPE, &sigact, NULL);
 
+        config_read(config_file, configuration);
+
+        if (ctx.router_ip.s_addr != 0) 
+                ctx.router_ip_set = 1;
+
         argc--;
 	argv++;
         
@@ -793,11 +834,20 @@ int main(int argc, char **argv)
                         return 0;
                 } else if (strcmp(argv[0], "-d") == 0 ||
                     strcmp(argv[0], "--daemon") == 0) {
-                        daemon = 1;
+                        godaemon = true;
                 } else if (strcmp(argv[0], "-r") == 0 ||
                            strcmp(argv[0], "--router") == 0) {
                         LOG_DBG("Host is service router\n");
                         ctx.router = 1;
+                } else if (strcmp(argv[0], "-c") == 0 ||
+                           strcmp(argv[0], "--config") == 0) {
+                        if (argc < 1) {
+                                fprintf(stderr, "No config file given\n");
+                                return -1;
+                        }
+                        config_file = argv[1];
+                        argc--;
+                        argv++;
                 } else if (strcmp(argv[0], "-rid") == 0 ||
                            strcmp(argv[0], "--router-id") == 0) {
                         char *ptr;
@@ -854,7 +904,7 @@ int main(int argc, char **argv)
 		argv++;
 	}	
       
-        if (daemon) {
+        if (godaemon) {
                 LOG_DBG("going daemon...\n");
                 ret = daemonize();
                 

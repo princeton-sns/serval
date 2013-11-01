@@ -5,10 +5,12 @@ include $(CLEAR_VARS)
 # Servd
 #
 LOCAL_HDR_FILES := \
+	config.h \
 	rtnl.h 
 
 LOCAL_SRC_FILES := \
 	rtnl.c \
+	config.c \
 	servd.c
 
 SERVAL_INCLUDE_DIR=$(LOCAL_PATH)/../../include

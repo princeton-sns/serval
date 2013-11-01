@@ -2,6 +2,7 @@ bin_PROGRAMS = \
 	servd
 
 servd_SOURCES = \
+	config.c \
 	servd.c
 
 if OS_LINUX
@@ -15,6 +16,7 @@ servd_SOURCES += \
 endif
 
 servd_headers = \
+	config.h \
 	ifa.h \
 	rtnl.h
 
