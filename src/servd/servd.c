@@ -835,6 +835,9 @@ int main(int argc, char **argv)
         if (ctx.router_ip.s_addr != 0) 
                 ctx.router_ip_set = 1;
 
+        if (router)
+                ctx.router = 1;
+
         argc--;
 	argv++;
         
@@ -913,6 +916,10 @@ int main(int argc, char **argv)
 		argc--;
 		argv++;
 	}	
+
+        if (ctx.router) {
+                LOG_DBG("Acting as service router\n");
+        }
 
         if (ctx.router_ip_set) {
 #if defined(ENABLE_DEBUG)
