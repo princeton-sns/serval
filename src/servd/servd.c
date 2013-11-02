@@ -1084,6 +1084,8 @@ int main(int argc, char **argv)
 
 	LOG_DBG("servd exits\n");
 
+        registration_clear(&ctx);
+
         if (ctx.router_ip_set && !ctx.router) {
                 hostctrl_service_remove(ctx.lhc, 
                                         SERVICE_RULE_FORWARD,
@@ -1112,7 +1114,6 @@ int main(int argc, char **argv)
  fail_exit_signal:
         timer_queue_fini(&ctx.tq);
 
-        registration_clear(&ctx);
         pthread_mutex_destroy(&ctx.lock);
 	LOG_DBG("done\n");
 
