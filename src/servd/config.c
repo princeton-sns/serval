@@ -50,7 +50,6 @@ static int parse_uint(struct config *cfg, const char *value)
 
 static int parse_ipaddr(struct config *cfg, const char *value)
 {
-    printf("parsing ip %s\n", value);
     return inet_pton(AF_INET, value, cfg->value);
 }
 

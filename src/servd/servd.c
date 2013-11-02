@@ -77,10 +77,12 @@ struct registration {
         unsigned short prefix;
         struct in_addr ipaddr;
         struct timer timer;
-        int ip_set;
+        unsigned char ip_set:1;
 };
 
-#define LOCAL_SERVICE_TIMEOUT (20)
+/* Timeout for a service entry in seconds */
+static unsigned service_timeout = 20;
+#define LOCAL_SERVICE_TIMEOUT (service_timeout)
 #define REMOTE_SERVICE_TIMEOUT ((LOCAL_SERVICE_TIMEOUT * 2) + 10)
 
 static void registration_timeout_local(struct timer *t)
@@ -93,7 +95,7 @@ static void registration_timeout_local(struct timer *t)
                 char ip1[18];
                 LOG_DBG("Refreshing registration of service %s:%u %s\n",
                         service_id_to_str(&r->srvid), r->prefix,
-                        inet_ntop(AF_INET, &r->ipaddr, ip1, 18));
+                        inet_ntop(AF_INET, &r->ipaddr, ip1, sizeof(ip1)));
         }
 #endif
         ret = hostctrl_service_register(r->ctx->rhc, 
@@ -326,6 +328,13 @@ static void registration_clear(struct servd_context *ctx)
                         list_first_entry(&ctx->reglist, 
                                         struct registration, lh);
                 list_del(&reg->lh);
+
+                if (reg->type == SERVICE_REMOTE) {
+                        hostctrl_service_remove(ctx->lhc, 
+                                                SERVICE_RULE_FORWARD,
+                                                &reg->srvid, reg->prefix, 
+                                                &reg->ipaddr);
+                }
                 free(reg);
         }
 }
@@ -341,7 +350,7 @@ static int name_to_inet_addr(const char *name, struct in_addr *ip)
         ret = getaddrinfo(name, "0", &hints, &ai);
         
         if (ret != 0) {
-                fprintf(stderr, "getaddrinfo error=%d\n", ret);
+                fprintf(stderr, "getaddrinfo error=%s\n", gai_strerror(ret));
                 return -1;
         }
 
@@ -477,7 +486,9 @@ static int register_service_remotely(struct hostctrl *hc,
                         if (ret == -1) {
                                 fprintf(stderr, "could not get local channel address\n");
                         }
-                        registration_add(ctx, SERVICE_LOCAL, srvid, prefix, &addr.in.sin_addr);
+
+                        registration_add(ctx, SERVICE_LOCAL, srvid, 
+                                         prefix, &addr.in.sin_addr);
 
                         LOG_DBG("Local service %s @ %s registered\n", 
                                 service_id_to_str(srvid),
@@ -876,7 +887,6 @@ int main(int argc, char **argv)
                         }
                         if (name_to_inet_addr(argv[1], &ctx.router_ip) == 1 ||
                             inet_pton(AF_INET, argv[1], &ctx.router_ip) == 1) {
-                                LOG_DBG("Service router IP is %s\n", argv[1]);
                                 ctx.router_ip_set = 1;
                         }
                 } else if (strcmp(argv[0], "-cid") == 0 ||
@@ -903,7 +913,15 @@ int main(int argc, char **argv)
 		argc--;
 		argv++;
 	}	
-      
+
+        if (ctx.router_ip_set) {
+#if defined(ENABLE_DEBUG)
+                char addr[18];
+                LOG_DBG("Service router IP is %s\n", 
+                        inet_ntop(AF_INET, &ctx.router_ip, addr, sizeof(addr)));
+#endif
+        }
+
         if (godaemon) {
                 LOG_DBG("going daemon...\n");
                 ret = daemonize();

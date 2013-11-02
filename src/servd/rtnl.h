@@ -23,7 +23,8 @@ int rtnl_get_fd(struct netlink_handle *nlh);
 
 #define rtnl_getlink(nl) rtnl_request(nl, RTM_GETLINK)
 #define rtnl_getneigh(nl) rtnl_request(nl, RTM_GETNEIGH)
-#define rtnl_getaddr(nl) rtnl_request(nl, RTM_GETADDR | RTM_GETLINK)
+#define rtnl_getaddr(nl) rtnl_request(nl, RTM_GETADDR)
+int rtnl_get_interfaces(struct netlink_handle *nlh);
 int rtnl_request(struct netlink_handle *nlh, int type);
 int rtnl_read(struct netlink_handle *nlh);
 

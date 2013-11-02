@@ -122,7 +122,7 @@ static char *eth_to_str(unsigned char *addr)
 }
 #endif
 
-static char *iface_blacklist[] = { "lo", "dummy", NULL };
+static char *iface_blacklist[] = { "lo", "dummy", "virbr", NULL };
 
 static int is_blacklist_iface(const char *name)
 {
@@ -321,13 +321,38 @@ static int get_ipconf(struct if_info *ifinfo)
 }
 */
 
+static int do_callback(struct netlink_handle *nlh, struct if_info *ifi)
+{
+        struct if_info *ifi2;
+
+        ifi2 = iflist_find(&nlh->iflist, ifi->ifindex);
+        
+        if (ifi2 && !is_blacklist_iface(ifi->ifname)) {
+                servd_interface_up(ifi->ifname,
+                                   &ifi->ipaddr.sin_addr,
+                                   &ifi2->ipaddr.sin_addr,
+                                   nlh->data);
+                
+                memcpy(&ifi2->ipaddr, &ifi->ipaddr, 
+                       sizeof(ifi->ipaddr));
+                
+        } else if (!is_blacklist_iface(ifi->ifname)) {
+                servd_interface_up(ifi->ifname,
+                                   &ifi->ipaddr.sin_addr,
+                                   NULL,
+                                   nlh->data);
+                iflist_add(&nlh->iflist, ifi);
+                return 0;
+        }
+        return 1;
+}
+
 int rtnl_read(struct netlink_handle *nlh)
 {
 	int len, num_msgs = 0;
 	socklen_t addrlen;
 	struct nlmsghdr *nlm;
-	struct if_info *ifi, *ifi2;
-        int msg_type = -1;
+	struct if_info *ifi;
 #define BUFLEN 2000
 	char buf[BUFLEN];
 
@@ -344,15 +369,11 @@ int rtnl_read(struct netlink_handle *nlh)
 		return -1;
 	}
 
-        ifi = if_info_new();
-        
-        if (!ifi)
-                return -1;
-
 	for (nlm = (struct nlmsghdr *)buf; 
 	     NLMSG_OK(nlm, (unsigned int) len); 
 	     nlm = NLMSG_NEXT(nlm, len)) {
 		struct nlmsgerr *nlmerr = NULL;
+                int should_free_ifi = 1;
 		int ret = 0;
 
 		num_msgs++;
@@ -361,10 +382,11 @@ int rtnl_read(struct netlink_handle *nlh)
                         nlm->nlmsg_type);
                 */
 
-                if (nlm->nlmsg_type != NLMSG_ERROR &&
-                    nlm->nlmsg_type != NLMSG_DONE)
-                        msg_type = nlm->nlmsg_type;
-
+                ifi = if_info_new();
+                
+                if (!ifi)
+                        return -1;
+                
 		switch(nlm->nlmsg_type) {
 		case NLMSG_ERROR:
 			nlmerr = (struct nlmsgerr *) NLMSG_DATA(nlm);
@@ -432,6 +454,7 @@ int rtnl_read(struct netlink_handle *nlh)
                                 LOG_DBG("Interface newaddr %s %s\n", 
                                         ifi->ifname, 
                                         inet_ntoa(ifi->ipaddr.sin_addr));
+                                should_free_ifi = do_callback(nlh, ifi);
                         }
 			break;
 		case NLMSG_DONE:
@@ -441,35 +464,10 @@ int rtnl_read(struct netlink_handle *nlh)
 			LOG_DBG("Unknown netlink message\n");
 			break;
 		}
-	}
-
-        switch (msg_type) {
-        case RTM_NEWADDR:
-                ifi2 = iflist_find(&nlh->iflist, ifi->ifindex);
-                
-                if (ifi2 && !is_blacklist_iface(ifi->ifname)) {
-                        servd_interface_up(ifi->ifname,
-                                           &ifi->ipaddr.sin_addr,
-                                           &ifi2->ipaddr.sin_addr,
-                                           nlh->data);
-                        
-                        memcpy(&ifi2->ipaddr, &ifi->ipaddr, 
-                               sizeof(ifi->ipaddr));
+        
+                if (should_free_ifi)
                         if_info_free(ifi);
-                } else if (!is_blacklist_iface(ifi->ifname)) {
-                        servd_interface_up(ifi->ifname,
-                                           &ifi->ipaddr.sin_addr,
-                                           NULL,
-                                           nlh->data);
-                        iflist_add(&nlh->iflist, ifi);
-                }
-                break;
-        case RTM_DELADDR:
-        case RTM_DELLINK:
-        default:
-                if_info_free(ifi);
-                break;
-        }
+	}
 
         /* LOG_DBG("read %u messages\n", num_msgs); */
 
@@ -494,4 +492,10 @@ int rtnl_request(struct netlink_handle *nlh, int type)
 
 	// Request interface information
 	return rtnl_send(nlh, &req.nh);
+}
+
+int rtnl_get_interfaces(struct netlink_handle *nlh)
+{
+        rtnl_getlink(nlh);
+        return rtnl_getaddr(nlh);
 }
