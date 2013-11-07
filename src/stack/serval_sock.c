@@ -388,9 +388,22 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 {
         struct serval_hslot *slot;
 
+#if defined (OS_USER)
+        printf("In __serval_table_hash, before table->hashfn\n");
+#endif
+
         sk->sk_hash = table->hashfn(table, sk);
 
+#if defined (OS_USER)
+        printf("In __serval_table_hash, before table->hash\n");
+#endif
+
         slot = &table->hash[sk->sk_hash];
+
+#if defined (OS_USER)
+        printf("In __serval_table_hash, after table->hashfn\n");
+#endif
+
         
         /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
@@ -404,6 +417,11 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 #endif
 #endif
         spin_unlock(&slot->lock);     
+
+#if defined (OS_USER)
+        printf("In __serval_table_hash, after spin_unlock\n");
+#endif
+
 }
 
 static void __serval_sock_hash(struct sock *sk)
@@ -420,7 +438,6 @@ static void __serval_sock_hash(struct sock *sk)
                         sk, flow_id_to_str(&ssk->local_flowid));
                 ssk->hash_key[0] = &ssk->local_flowid;
                 ssk->hash_key_len[0] = sizeof(ssk->local_flowid);
-
                 __serval_table_hash(&established_table, sk);
         }
 }
@@ -428,6 +445,7 @@ static void __serval_sock_hash(struct sock *sk)
 void serval_sock_hash(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        int srvid_num = ssk->srvid_num > 0 ? ssk->srvid_num - 1 : ssk->srvid_num;
 
         int i;
 
@@ -437,56 +455,57 @@ void serval_sock_hash(struct sock *sk)
         
         /* Do not hash if closed or already hashed MAX_HASH_NUMBER IDs */
         if (sk->sk_state == SAL_CLOSED ||
-            ssk->hash_key_len[MAX_HASH_NUMBER - 1] > 0)
+            ssk->srvid_num == MAX_HASH_NUMBER)
                 {
-#if defined (OS_USER)
-                        printf("sk->sk_state == SAL_CLOSED || ssk->hash_key_len > 0");
-#endif
-                return;
+                        LOG_ERR("Socket closed or already hashed MAX_HASH_NUMBER IDs");
+                        return;
                 }
 
         /* Do not hash if already hashed  */
-        for (i = 0; i < ssk->srvid_num; i++) {
-                
-        }
 
         if (sk->sk_state == SAL_REQUEST ||
             sk->sk_state == SAL_RESPOND) {
+#if defined(OS_USER)
+                printf("sk->sk_state == SAL_REQUEST || sk->sk_state == SAL_RESPOND\n");
+#endif
 		local_bh_disable();
 		__serval_sock_hash(sk);
                 serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
 		local_bh_enable();
         } else {
                 int err = 0;
-                
-                LOG_SSK(sk, "adding socket %p based on service id %s\n",
-                        sk, service_id_to_str(&ssk->local_srvid[0]));
 
-                ssk->hash_key[0] = &ssk->local_srvid[0];
-                ssk->hash_key_len[0] = sizeof(ssk->local_srvid[0]);
+                for (i = 0; i < ssk->srvid_num; i++) {
+                        
+                        LOG_SSK(sk, "adding socket %p based on service id %s\n",
+                                sk, service_id_to_str(&ssk->local_srvid[i]));
 
-                err = service_add(&ssk->local_srvid[0],
-                                  SERVICE_RULE_DEMUX, 0, 
-                                  LOCAL_SERVICE_DEFAULT_PRIORITY, 
-                                  LOCAL_SERVICE_DEFAULT_WEIGHT,
-                                  NULL, 0, make_sock_target(sk), 
-                                  GFP_ATOMIC);
-                if (err < 0) {
+                        ssk->hash_key[i] = &ssk->local_srvid[i];
+                        ssk->hash_key_len[i] = sizeof(ssk->local_srvid[i]);
+
+                        err = service_add(&ssk->local_srvid[i],
+                                          SERVICE_RULE_DEMUX, 0, 
+                                          LOCAL_SERVICE_DEFAULT_PRIORITY, 
+                                          LOCAL_SERVICE_DEFAULT_WEIGHT,
+                                          NULL, 0, make_sock_target(sk), 
+                                          GFP_ATOMIC);
+                        if (err < 0) {
 #if defined(OS_LINUX_KERNEL)
-                        LOG_ERR("could not add service for listening demux\n");
+                                LOG_ERR("could not add service for listening demux\n");
 #else
-                        LOG_ERR("could not add service for listening demux: %s\n", strerror(-err));
+                                LOG_ERR("could not add service for listening demux: %s\n", strerror(-err));
 #endif
-                } else {
+                        } else {
                         
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
-                        sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
+                                sock_prot_inuse_add(sock_net(sk), sk->sk_prot, 1);
 #else
-                        sock_prot_inc_use(sk->sk_prot);
+                                sock_prot_inc_use(sk->sk_prot);
 #endif
 #endif
-                        serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
+                                serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
+                        }
                 }
 	}
 }
@@ -496,18 +515,24 @@ void serval_sock_unhash(struct sock *sk)
         struct serval_sock *ssk = serval_sk(sk);
         struct net *net = sock_net(sk);
         spinlock_t *lock;
+        int i;
 
         if (ssk->hash_key_len[0] == 0)
                 return;
                 
         if (sk->sk_state == SAL_LISTEN ||
             sk->sk_state == SAL_INIT) {
+
                 LOG_SSK(sk, "removing socket %p from service table\n", sk);
 
-                service_del_target(&ssk->local_srvid[0],
-                                   SERVICE_RULE_DEMUX,
-                                   NULL, 0, NULL,
-                                   GFP_ATOMIC);
+                for (i = 0; i < ssk->srvid_num; i++) {
+                        service_del_target(&ssk->local_srvid[i],
+                                           SERVICE_RULE_DEMUX,
+                                           NULL, 0, NULL,
+                                           GFP_ATOMIC);
+                        ssk->hash_key_len[i] = 0;
+                }
+
 #if defined(OS_LINUX_KERNEL)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,25)
                 sock_prot_inuse_add(sock_net(sk), sk->sk_prot, -1);
@@ -516,7 +541,6 @@ void serval_sock_unhash(struct sock *sk)
 #endif
 #endif
                 serval_sock_reset_flag(ssk, SSK_FLAG_HASHED);
-                ssk->hash_key_len[0] = 0;
                 return;
         } 
 

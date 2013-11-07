@@ -193,6 +193,7 @@ int message_channel_base_initialize(message_channel_t *channel)
 #if defined(ENABLE_USERMODE)
         else {
             err = connect_sv(base->sock, &base->peer.sa, base->peer_len);
+            printf("In message_channel_base.c\n");
         }
 #endif
         if (err == -1) {

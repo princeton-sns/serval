@@ -2092,6 +2092,7 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
                                sizeof(srsk->peer_flowid));
                         service_id_copy(&nssk->peer_srvid, &srsk->peer_srvid);
                         service_id_copy(&nssk->local_srvid[0], &srsk->target_srvid);
+                        nssk->srvid_num = 1;
                         memcpy(&newinet->inet_daddr, &irsk->rmt_addr,
                                sizeof(newinet->inet_daddr));
                         memcpy(&newinet->inet_saddr, &irsk->loc_addr,
@@ -3111,7 +3112,7 @@ static int serval_sal_resolve_service(struct sk_buff *skb,
                 return SAL_RESOLVE_NO_MATCH;
         }
         
-	if (service_iter_init(&iter, se, SERVICE_ITER_ANYCAST) < 0)
+	if (service_iter_init(&iter, se, net_serval.sysctl_resolution_mode) < 0)
                 return SAL_RESOLVE_ERROR;
         
         /*

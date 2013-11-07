@@ -70,6 +70,7 @@
  */
 #define SERVICE_ID_MIN_LEN (2)
 #define SERVICE_ID_MAX_LEN (105)
+#define SERVICE_ID_MAX_NUM (10)
 
 struct service_id {
         char s_sid[SERVICE_ID_MAX_LEN+1];

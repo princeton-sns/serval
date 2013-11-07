@@ -76,7 +76,7 @@ struct netns_serval net_serval = {
         .sysctl_debug = 0,
         .sysctl_udp_encap = 0,
         .sysctl_sal_max_retransmits = SAL_RETRANSMITS_MAX,
-        .sysctl_resolution_mode = SERVICE_ITER_ANYCAST,
+        .sysctl_resolution_mode = SERVICE_ITER_ALL,
 };
 
 extern void serval_tcp_init(void);
@@ -142,10 +142,6 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         char * p;
         int i = 0;
 
-#if defined (OS_USER)
-        printf("In serval_bind()...\n");
-#endif
-
         if ((unsigned int)addr_len < sizeof(*svaddr)) {
                 LOG_ERR("serviceID length %u too small\n",
                         addr_len);
@@ -166,58 +162,57 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
 
         /* TODO: Handle binding to a serviceID and an IP address at
            the same time */
+
+        /* 
+         */
         memset(&srvid_temp, 0, sizeof(srvid_temp));
         p = svaddr->sv_srvid.s_sid;
 
-                while (*p != '\0' && i < 105) {
-                        if (*p == '.' || *(p+1) == '\0') {
-                        
-                                if (*(p+1) == '\0')
-                                        memcpy(srvid_temp.s_sid, svaddr->sv_srvid.s_sid, i + 1);
-                                else
-                                        memcpy(srvid_temp.s_sid, svaddr->sv_srvid.s_sid, i);      
-                        
-        LOG_INF("bind on %s\n", 
-                service_id_to_str(&srvid_temp));
-                //             service_id_to_str(&svaddr->sv_srvid));
+        while (*p != '\0' && i < 105) {
+                if (*p == '.' || *(p+1) == '\0') {
+                         if (*(p+1) == '\0')
+                                 memcpy(srvid_temp.s_sid, svaddr->sv_srvid.s_sid, i + 1);
+                         else
+                                 memcpy(srvid_temp.s_sid, svaddr->sv_srvid.s_sid, i);      
 
-#if defined (OS_USER)
-        printf("bind on %s\n", 
-                service_id_to_str(&srvid_temp));
-#endif
+                         if (memcmp(&srvid_temp, &null_service, 
+                                    sizeof(null_service)) == 0) {
+                                 
+                                 LOG_ERR("Cannot bind a null serviceID\n");
+                                 return -EINVAL;
+                         }
+                         
+                         memcpy(&serval_sk(sk)->local_srvid[ssk->srvid_num], &srvid_temp,
+                                 sizeof(srvid_temp));
+
+                         LOG_INF("bind on %s\n", 
+                                 service_id_to_str(&srvid_temp));
+
+                         ssk->srvid_num++;
+                }
         
-        if (memcmp(&srvid_temp, &null_service, 
-                   sizeof(null_service)) == 0) {
-                LOG_ERR("Cannot bind a null serviceID\n");
-#if defined (OS_USER)
-                printf("Cannot bind a null serviceID\n");
-#endif
-                return -EINVAL;
+                ++p;
+                ++i;
         }
         
         /* Call the protocol's own bind, if it exists */
-	if (sk->sk_prot->bind) {
+        if (sk->sk_prot->bind) {
                 int err = sk->sk_prot->bind(sk, addr, addr_len);
                
                 if (err == 0) 
                         return err;
         } else {
                 lock_sock(sk);
-                
+               
                 /* Already bound? */
                 if (serval_sock_flag(ssk, SSK_FLAG_BOUND)) {
-                        //                        sk->sk_prot->unhash(sk);
-#if defined (OS_USER)
-                        printf("Already bound\n");
-#endif
+                        sk->sk_prot->unhash(sk);
+                        LOG_ERR("Already bound\n");
                 } else {
                         /* Mark socket as bound */
                         serval_sock_set_flag(ssk, SSK_FLAG_BOUND);
                 }
-                
-                memcpy(&serval_sk(sk)->local_srvid[0], &srvid_temp,
-                       sizeof(srvid_temp));
-                                
+                                                
                 release_sock(sk);
         }
 
@@ -230,18 +225,16 @@ int serval_bind(struct socket *sock, struct sockaddr *addr, int addr_len)
         }
 
         /* Notify the service daemon */
-        memset(&cm, 0, sizeof(cm));
-        cm.cmh.type = CTRLMSG_TYPE_REGISTER;
-        cm.cmh.len = sizeof(cm);
-        memcpy(&cm.srvid, &ssk->local_srvid[0], sizeof(ssk->local_srvid));
+        for (i = 0; i < ssk->srvid_num; i++) {
+                memset(&cm, 0, sizeof(cm));
+                cm.cmh.type = CTRLMSG_TYPE_REGISTER;
+                cm.cmh.len = sizeof(cm);
+                memcpy(&cm.srvid, &ssk->local_srvid[ssk->srvid_num-1], sizeof(ssk->local_srvid[ssk->srvid_num-1]));
 
-        if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
-                LOG_INF("No service daemon running?\n");
-        }
-                        }
-                ++p;
-                ++i;
+                if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
+                        LOG_INF("No service daemon running?\n");
                 }
+        }
 
         return 0;
 }
@@ -698,6 +691,7 @@ static int serval_recvmsg(struct kiocb *iocb, struct socket *sock,
 static void unregister_service(struct sock *sk)
 {
         struct serval_sock *ssk = serval_sk(sk);
+        int i;
 
         if (serval_sock_flag(ssk, SSK_FLAG_BOUND) &&
             !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND) && 
@@ -705,14 +699,16 @@ static void unregister_service(struct sock *sk)
                 struct ctrlmsg_register cm;
                 
                 /* Notify user space */
-                memset(&cm, 0, sizeof(cm));
-                cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
-                cm.cmh.len = sizeof(cm);
-                memcpy(&cm.srvid, &serval_sk(sk)->local_srvid[0], 
-                       sizeof(cm.srvid));
+                for (i = 0; i < &serval_sk(sk)->srvid_num; i++) {
+                        memset(&cm, 0, sizeof(cm));
+                        cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
+                        cm.cmh.len = sizeof(cm);
+                        memcpy(&cm.srvid, &serval_sk(sk)->local_srvid[i], 
+                               sizeof(cm.srvid));
                 
-                if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
-                        LOG_INF("No service daemon running?\n");
+                        if (ctrl_sendmsg(&cm.cmh, 0, GFP_KERNEL) < 0) {
+                                LOG_INF("No service daemon running?\n");
+                        }
                 }
         }
 }
