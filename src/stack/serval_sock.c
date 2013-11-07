@@ -388,23 +388,10 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 {
         struct serval_hslot *slot;
 
-#if defined (OS_USER)
-        printf("In __serval_table_hash, before table->hashfn\n");
-#endif
-
         sk->sk_hash = table->hashfn(table, sk);
-
-#if defined (OS_USER)
-        printf("In __serval_table_hash, before table->hash\n");
-#endif
 
         slot = &table->hash[sk->sk_hash];
 
-#if defined (OS_USER)
-        printf("In __serval_table_hash, after table->hashfn\n");
-#endif
-
-        
         /* Bottom halfs already disabled here */
         spin_lock(&slot->lock);
         slot->count++;
@@ -417,11 +404,6 @@ static void __serval_table_hash(struct serval_table *table, struct sock *sk)
 #endif
 #endif
         spin_unlock(&slot->lock);     
-
-#if defined (OS_USER)
-        printf("In __serval_table_hash, after spin_unlock\n");
-#endif
-
 }
 
 static void __serval_sock_hash(struct sock *sk)
@@ -449,10 +431,6 @@ void serval_sock_hash(struct sock *sk)
 
         int i;
 
-#if defined (OS_USER)
-        printf("In serval_sock_hash\n");
-#endif
-        
         /* Do not hash if closed or already hashed MAX_HASH_NUMBER IDs */
         if (sk->sk_state == SAL_CLOSED ||
             ssk->srvid_num == MAX_HASH_NUMBER)
@@ -465,9 +443,9 @@ void serval_sock_hash(struct sock *sk)
 
         if (sk->sk_state == SAL_REQUEST ||
             sk->sk_state == SAL_RESPOND) {
-#if defined(OS_USER)
-                printf("sk->sk_state == SAL_REQUEST || sk->sk_state == SAL_RESPOND\n");
-#endif
+
+                LOG_INF("sk->sk_state == SAL_REQUEST || sk->sk_state == SAL_RESPOND\n");
+
 		local_bh_disable();
 		__serval_sock_hash(sk);
                 serval_sock_set_flag(ssk, SSK_FLAG_HASHED);
