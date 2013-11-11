@@ -1831,16 +1831,21 @@ static int serval_sal_rcv_syn(struct sock *sk,
         int err = 0;
 
         if (!has_valid_control_extension(sk, ctx) ||
-            !has_service_extension_src(ctx))
+            !has_service_extension_src(ctx)) {
+                LOG_SSK(sk, "bad control or service extension\n");
                 goto drop;
+        }
 
         /* Make compiler be quiet */
         memset(&myaddr, 0, sizeof(myaddr));
 
         LOG_SSK(sk, "REQUEST verno=%u\n", ctx->verno);
 
-        if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) 
+        if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) {
+                LOG_ERR("ack backlog is full (size=%u max=%u)\n",
+                        sk->sk_ack_backlog, sk->sk_max_ack_backlog);
                 goto drop;
+        }
 
         /* Try to figure out the source address for the incoming
          * interface so that we can use it in our reply.  
@@ -1857,9 +1862,10 @@ static int serval_sal_rcv_syn(struct sock *sk,
 
         rsk = serval_reqsk_alloc(sk->sk_prot->rsk_prot);
 
-        if (!rsk)
+        if (!rsk) {
+                LOG_ERR("Could not allocate request sock\n");
                 goto drop;
-
+        }
         srsk = serval_rsk(rsk);
 
         /* Copy fields in request packet into request sock */
@@ -1960,6 +1966,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
                 if (err) {
                         /* Transport will free the skb on error */
                         reqsk_free(rsk);
+                        LOG_ERR("Transport callback error=%d\n", err);
                         goto done;
                 }
         }
