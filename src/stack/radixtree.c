@@ -101,6 +101,8 @@ int radix_node_set_key(struct radix_node *n,
                 strncpy(n->str, str, strlen);
         n->str[n->strlen] = '\0';
 
+        printf("Str: %s\n", str);
+
         return 0;
 }
 

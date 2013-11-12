@@ -697,9 +697,12 @@ static void unregister_service(struct sock *sk)
             !serval_sock_flag(ssk, SSK_FLAG_AUTOBOUND) && 
             !serval_sock_flag(ssk, SSK_FLAG_CHILD)) {
                 struct ctrlmsg_register cm;
-                
+
+                LOG_SSK(sk, "\n");
+                             
                 /* Notify user space */
-                for (i = 0; i < &serval_sk(sk)->srvid_num; i++) {
+                for (i = 0; i < serval_sk(sk)->srvid_num; i++) {
+
                         memset(&cm, 0, sizeof(cm));
                         cm.cmh.type = CTRLMSG_TYPE_UNREGISTER;
                         cm.cmh.len = sizeof(cm);
@@ -794,7 +797,7 @@ int serval_release(struct socket *sock)
 			timeout = sk->sk_lingertime;
 
                 sock->sk = NULL;
-                
+
                 unregister_service(sk);
 
                 lock_sock(sk);
@@ -839,12 +842,13 @@ int serval_release(struct socket *sock)
                 /* Other cleanup stuff goes here */
                 if (sk->sk_state == SAL_CLOSED)
                         serval_sock_destroy(sk);
+                
         out:
                 bh_unlock_sock(sk);
                 local_bh_enable();
                 sock_put(sk);
         }
-
+        
         return err;
 }
 

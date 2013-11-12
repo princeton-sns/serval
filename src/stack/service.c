@@ -1390,33 +1390,6 @@ int service_add(struct service_id *srvid,
                 const union target_out out, 
                 gfp_t alloc) 
 {
-        /*
-        struct service_id srvid_temp;
-        char *p;
-        int i = 0;
-
-        memset(&srvid_temp, 0, sizeof(srvid_temp));
-        p = srvid->s_sid;
-        
-        while (*p != '\0' && i < SERVICE_ID_MAX_LEN) {
-                if (*p == '.') {
-                         memcpy(srvid_temp.s_sid, srvid->s_sid, i);
-#if defined(OS_USER)
-                         printf("srvid: %s\n", srvid_temp.s_sid);
-#endif
-                         service_table_add(&srvtable, &srvid_temp, 
-                                           type, flags, priority, 
-                                           weight == 0 ? 1 : weight, dst, dstlen,
-                                           out, alloc);
-                        }
-                ++p;
-                ++i;
-        }
-       
-#if defined(OS_USER)
-        printf("srvid: %s\n", srvid->s_sid);
-#endif
-        */
         return service_table_add(&srvtable, srvid, 
                                  type, flags, priority, 
                                  weight == 0 ? 1 : weight, dst, dstlen,
