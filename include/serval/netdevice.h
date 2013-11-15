@@ -3,6 +3,7 @@
 #define _NETDEVICE_H_
 
 #include <serval/platform.h>
+#include <serval/debug.h>
 
 enum addr_type {
         IFADDR_LOCAL,
@@ -20,8 +21,12 @@ static inline int dev_get_ipv4_addr(struct net_device *dev,
 {
         struct in_device *in_dev;
         int ret = 0;
+
+        LOG_DBG("Before rcu_read_lock()\n");
         
 	rcu_read_lock();
+
+        LOG_DBG("Before __in_dev_get_rcu\n");
 
 	in_dev = __in_dev_get_rcu(dev);
 
@@ -46,6 +51,8 @@ static inline int dev_get_ipv4_addr(struct net_device *dev,
                 }
                 endfor_ifa(indev);
         }
+
+        LOG_DBG("After if(in_dev)\n");
 	rcu_read_unlock();
 
         return ret;

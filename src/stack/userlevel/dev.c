@@ -675,6 +675,11 @@ int dev_signal(struct net_device *dev, enum signal_event type)
 
 int dev_get_ipv4_addr(struct net_device *dev, enum addr_type type, void *addr)
 {
+        if (dev == NULL) {
+                LOG_DBG("dev == null!\n");
+                return 0;
+        }
+  
         switch (type) {
         case IFADDR_LOCAL:
                 memcpy(addr, &dev->ipv4.addr, 4);

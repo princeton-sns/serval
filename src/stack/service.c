@@ -1049,6 +1049,8 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
         }
 
         n = radix_tree_find(&tbl->tree, srvid->s_sid, func);
+
+        LOG_DBG("After radix_tree_find\n");
         
         if (n) {
                 if (match == RULE_MATCH_EXACT) {
@@ -1061,6 +1063,8 @@ static struct service_entry *__service_table_find(struct service_table *tbl,
                 se = get_service(n);
                 service_entry_hold(se);
         }
+
+        LOG_DBG("Before return\n");
 
         return se;
 }

@@ -11,6 +11,7 @@
  *	the License, or (at your option) any later version.
  */
 #include <serval/platform.h>
+#include <serval/debug.h>
 #if defined(OS_USER)
 #include <stdlib.h>
 #include <string.h>
@@ -217,6 +218,9 @@ static struct radix_node *radix_node_find_lpm(struct radix_node *n,
                 
                 /* Avoid matching root node (parent == NULL) */
                 if (n->parent) {
+
+                        LOG_DBG("str: %s\n", &str[*str_index]);
+
                         *match_len = str_match(n->str, 
                                                &str[*str_index], 
                                                str_len);
@@ -276,6 +280,8 @@ struct radix_node *radix_tree_find(struct radix_tree *tree,
         n = radix_node_find_lpm(&tree->root, str, &str_index, 
                                 &str_len, &match_len, match, 
                                 &wildcard);
+
+        LOG_DBG("After radix_node_find_lpm\n");
         
         if (n && ((str[str_index] == '\0' && n->str[match_len] == '\0') 
                   || n->str[match_len] == '*') && n != &tree->root)

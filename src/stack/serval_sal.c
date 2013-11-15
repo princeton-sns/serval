@@ -3864,6 +3864,8 @@ static inline int serval_sal_add_ctrl_ext(struct sock *sk,
         struct serval_sock *ssk = serval_sk(sk);
         struct sal_control_ext *ctrl_ext;
 
+
+
         ctrl_ext = (struct sal_control_ext *)
                 skb_push(skb, SAL_CONTROL_EXT_LEN);
 
@@ -4071,6 +4073,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		return -EADDRNOTAVAIL;
 	}
 
+        LOG_DBG("Before service_iter_init()\n");
 	if (service_iter_init(&iter, se, 
                               net_serval.sysctl_resolution_mode) < 0) {
                 kfree_skb(skb);
@@ -4081,6 +4084,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
         /*
           Send to all destinations resolved for this service.
         */
+        LOG_DBG("Before service_iter_next()\n");
 	target = service_iter_next(&iter);
 
         if (!target) {
@@ -4105,6 +4109,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 		
                 if (next_target == NULL) {
 			cskb = skb;
+                        LOG_DBG("1\n");
 		} else {
                         /* Always be atomic here since we are holding
                          * socket lock */
@@ -4118,20 +4123,25 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 			}
                         /* skb copy will have no socket set. */
                         skb_serval_set_owner_w(cskb, sk);
+
+                        LOG_DBG("2\n");
 		}
 
                 if (target->type == SERVICE_RULE_DELAY) {
                         err = delay_queue_skb(cskb, 
                                               &serval_sk(sk)->peer_srvid);
                         target = next_target;
+                        LOG_DBG("3\n");
                         continue;
                 } else if (target->type == SERVICE_RULE_DROP) {
                         kfree_skb(cskb);
                         err = -EHOSTUNREACH;
                         target = next_target;
+                        LOG_DBG("4\n");
                         continue;
                 }
 
+                LOG_DBG("Before is_sock_target()\n");
                 /* Remember the flow destination */
 		if (is_sock_target(target)) {
                         /* use a localhost address and bounce it off
@@ -4149,14 +4159,13 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
 #else
                         dev = __dev_get_by_name(sock_net(sk), "lo");
 #endif
-
                         if (!dev) {
                                 target = next_target;
                                 err = -ENODEV;
                                 continue;
                         }
 		} else {
-                        struct net_device *dev;
+                        //                        struct net_device *dev;
 
                         memcpy(&inet->inet_daddr,
                                target->dst,
@@ -4165,7 +4174,7 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         
                         dev = __dev_get_by_index(sock_net(sk), 
                                                  target->out.oif);
-
+                        
                         if (dev == NULL) {
                                 LOG_ERR("Could not resolve interface\n");
                                 err = -ENODEV;
@@ -4184,6 +4193,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                         target = next_target;
                         continue;
                 }
+
+                LOG_DBG("After dev_get_ipv4_addr()\n");
 
 #if defined(ENABLE_DEBUG)
                 {
@@ -4230,6 +4241,8 @@ int serval_sal_transmit_skb(struct sock *sk, struct sk_buff *skb,
                    calculation since transport send_check requires
                    access to transport header */
                 skb_reset_transport_header(cskb);
+
+                LOG_DBG("Before ssk->af_ops->queue_xmit()\n");
 
 		local_err = ssk->af_ops->queue_xmit(cskb);
 
