@@ -195,7 +195,7 @@ ngx_serval_addr(u_char *text, size_t len, u_char *addr)
 	len -= 8;
     }
     */
-    if (serval_pton((const char*)text, srvid->s_sid))
+    if (srvid != NULL && serval_pton((const char*)text, srvid->s_sid))
       return NGX_OK;
     else
       return NGX_ERROR;
