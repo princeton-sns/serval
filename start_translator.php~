@@ -1,0 +1,15 @@
+<?php
+
+$translator_dir = "/src/serval/src/translator/";
+
+$cmd = "$translator_dir" . "translator -x -p 8080 -s 0x000019f:128";
+
+echo "cmd: " . $cmd . '<br>';
+
+$s = exec($cmd, $out, $return_val);
+
+foreach ($out as $o) {
+  echo $o."<br>";
+}
+
+?>

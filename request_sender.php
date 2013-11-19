@@ -1,0 +1,148 @@
+<?php
+
+require('curl.php');
+
+static $cer_dir = "/usr/local/apache/httpd/conf/cers/";
+
+# Get parameter;
+$parameters = array();
+get_request_parameters($parameters);
+
+$cdir = null;
+if (isset($parameters['machine']))
+    $cdir = $cer_dir . $parameters['machine'] . "/";
+
+# Deal with operations
+if ($parameters['operation'] == "AddService") {
+
+  $response = send_add_service_message($parameters['router_ip'], $parameters['prefix'], $parameters['prefix_bits'], $parameters['IP'], $parameters['service_type'], $cdir);
+
+# Insert the service rule to controller's service table
+  include_once('db.php');
+  $db = get_serval_db();
+  insert_service($db, $parameters['machine'], $parameters['router_ip'], $parameters['prefix'], $parameters['prefix_bits'], $parameters['IP'], $parameters['service_type']);
+  $db = null;
+
+  echo $response;
+
+} else if ($parameters['operation'] == "DelService") {
+
+  $response = send_remove_service_message($parameters['router_ip'], $parameters['prefix'], $parameters['prefix_bits'], $parameters['IP'], $cdir);
+
+# Delete the service rule from controller's service table
+  include_once('db.php');
+  $db = get_serval_db();
+  remove_service($db, $parameters['machine'], $parameters['prefix'], $parameters['prefix_bits'], $parameters['IP']);
+  $db = null;
+
+}
+
+echo '<br><br><br>' . '<a href="operation_board.php"><b>Go back</b></a>';
+
+
+###############################self defined functions#############################
+
+## add a service rule
+function send_add_service_message($router_ip, $prefix, $prefix_bits, $IP, $service_type, $cdir) {
+  
+  $url = "https://$router_ip/add_service.php?prefix=$prefix&prefix_bits=$prefix_bits&IP=$IP&service_type=$service_type";
+
+  $ch = get_curl_channel($url, $cdir);
+
+  $response = send_curl_message($ch);
+
+  $response .= '<br><br>' . $url;
+
+  release_curl_channel($ch);
+
+  return $response;
+}
+
+## remove a service rule
+function send_remove_service_message($router_ip, $prefix, $prefix_bits, $IP, $cdir) {
+  
+  $url = "https://$router_ip/remove_service.php?prefix=$prefix&prefix_bits=$prefix_bits&IP=$IP";
+
+  $ch = get_curl_channel($url, $cdir);
+
+  $response = send_curl_message($ch);
+
+  release_curl_channel($ch);
+
+  return $response;
+}
+
+
+## show service rules
+function send_show_service_message($router_ip, $cdir) {
+
+  $url = "https://$router_ip/show_service.php";
+
+  $ch = get_curl_channel($url, $cdir);
+
+  $response = send_curl_message($ch);
+
+  release_curl_channel($ch);
+
+  return $response;
+}
+
+
+## start a translator
+function send_start_translator_message($router_ip, $cdir) {
+
+  $url = "https://$router_ip/start_translator.php";
+
+  $ch = get_curl_channel($url, $cdir);
+
+  $response = send_curl_message($ch);
+
+  release_curl_channel($ch);
+
+  return $response;
+}
+
+## start a translator
+function send_stop_translator_message($router_ip, $cdir) {
+
+  $url = "https://$router_ip/stop_translator.php";
+
+  $ch = get_curl_channel($url, $cdir);
+
+  $response = send_curl_message($ch);
+
+  release_curl_channel($ch);
+
+  return $response;
+}
+
+
+# Get parameters from previous page using 'post' method
+function get_request_parameters(&$parameters) {
+
+  if (isset($_POST['operation']))
+    $parameters['operation'] = $_POST['operation'];
+
+  if (isset($_POST['router_ip']))
+    $parameters['router_ip'] = $_POST['router_ip'];
+
+  if (isset($_POST['machine']))
+    $parameters['machine'] = $_POST['machine'];
+
+  if (isset($_POST['prefix']))
+    $parameters['prefix'] = $_POST['prefix'];
+
+  if (isset($_POST['prefix_bits']))
+    $parameters['prefix_bits'] = $_POST['prefix_bits'];
+  else $parameters['prefix_bits'] = 256;
+
+  if (isset($_POST['service_type']))
+    $parameters['service_type'] = $_POST['service_type'];
+  else $parameters['service_type'] = "service";
+
+  if (isset($_POST['IP']))
+    $parameters['IP'] = $_POST['IP'];
+
+}
+
+?>

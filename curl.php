@@ -1,0 +1,48 @@
+<?php
+
+function get_curl_channel($url, $cer_dir) {
+
+  $ch = curl_init();
+
+  curl_setopt($ch, CURLOPT_URL, $url);
+  curl_setopt($ch, CURLOPT_PORT, 443);
+  curl_setopt($ch, CURLOPT_VERBOSE, 0);
+  curl_setopt($ch, CURLOPT_HEADER, 0);
+  curl_setopt($ch, CURLOPT_SSLVERSION, 3);
+  curl_setopt($ch, CURLOPT_SSLCERTPASSWD, "realmzx");
+  curl_setopt($ch, CURLOPT_SSLCERT, $cer_dir . "client.crt");
+  curl_setopt($ch, CURLOPT_CAPATH, $cer_dir . "client.pem");
+  curl_setopt($ch, CURLOPT_SSLCERTTYPE, 'PEM');
+  curl_setopt($ch, CURLOPT_SSLKEY, $cer_dir . "client.key");
+  curl_setopt($ch, CURLOPT_CAINFO, $cer_dir . "ca.crt");
+  curl_setopt($ch, CURLOPT_POST, 1);
+  curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 1);
+  curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+  curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+  return $ch;
+
+}
+
+function send_curl_message($ch) {
+
+  $response = curl_exec($ch);
+
+  if (!curl_errno($ch)) {
+    $info = curl_getinfo($ch);
+#    echo 'Took ' . $info['total_time'] . 'seconds to send a request to ' . $info['url']; 
+    return $response;
+  } 
+  else {  
+    return 'Curl error: ' . curl_error($ch);
+  }
+
+}
+
+function release_curl_channel(&$ch) {
+  
+  curl_close($ch);
+
+}
+
+?>

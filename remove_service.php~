@@ -1,0 +1,106 @@
+<?php
+
+final class ServiceValidator {
+
+  private function __construct() {
+
+  }
+
+  public static function validate ($prefix, $IP) {
+    $errors = array();
+    $prefix = trim($prefix);
+
+    $preg="\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}";
+    
+    if (!$prefix) {
+      $errors[] = new Error('prefix', 'Empty prefix!');
+    } #elseif (!preg_match('/^[0-9]+$/', $prefix)) {
+      #$errors[] = new Error('prefix', 'Bad prefix format!');
+   # } 
+    elseif (!trim($IP)) {
+      $errors[] = new Error('IP address', 'Empty IP address!');
+    } elseif (!filter_var($IP, FILTER_VALIDATE_IP)) {
+      $errors[] = new Error('IP address', 'Bad IP format!');
+    }
+
+    return $errors;
+
+  }
+}
+
+final class Error {
+  private $source;
+  private $message;
+
+  /**
+   * Create new error.
+   * @param mixed $source source of the error
+   * @param string $message error message
+   */
+
+  function __construct($source, $message) {
+    $this->source = $source;
+    $this->message = $message;
+  }
+
+  /**
+   * Get source of the error.
+   * @return mixed source of the error
+   */
+  public function getSource() {
+    return $this->source;
+  }
+
+  /**
+   * Get error message.
+   * @return string error message
+   */
+  public function getMessage() {
+    return $this->message;
+  }
+}
+
+$prefix = null;
+$IP = null;
+
+$cmd = "";
+
+$msg = "";
+
+if (!isset($_GET['prefix'])) {
+  echo "prefix unset!";
+} elseif (!isset($_GET['IP'])) {
+  echo "IP unset!";
+} else {
+    $prefix = $_GET['prefix'];
+    $IP = $_GET['IP'];
+
+    if (isset($_GET['prefix_bits']))
+      $prefix_bits = $_GET['prefix_bits'];
+    else
+      $prefix_bits = 256;
+    
+    // validate
+ 
+    $errors = ServiceValidator::validate($prefix, $IP);
+
+  foreach ($errors as $e) {
+    $msg .= $e->getMessage()."<br>";
+  }
+
+  if ($msg != "") {
+    echo $msg;
+  }
+  else {
+    $cmd .= "/src/serval/src/tools/serv service del " .$prefix. " " .$IP;
+    $s = exec($cmd, $out, $return_val);
+    foreach ($out as $o) {
+      echo $o;
+      echo "<br>";
+    }
+    $msg .= "Successfully removed service rule: ".$prefix." -> ".$IP;
+    echo $msg;
+  }
+} 
+
+?>

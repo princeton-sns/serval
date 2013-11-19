@@ -1,0 +1,27 @@
+<?php
+
+#$con = mysqli_connect('localhost', 'root', '2965086realmzx', 'information_schema');
+
+#if (!$con) {
+#  die('Could not connect: ' . mysql_error());
+#}
+
+$db = new PDO('mysql:host=localhost;dbname=information_schema;charset=utf8', 'root', '2965086realmzx');
+
+#$result = $db->exec("select * from SERVAL.ServiceRouter");
+
+#echo $result;
+
+$rs = $db->query("SELECT * from SERVAL.ServiceRouter");
+
+while ($row = $rs->fetch()) {
+  print_r($row);
+}
+
+#foreach($db->query("SELECT * from SERVAL.ServiceRouter")) {
+#    print_r($row);
+#}
+
+$db = null;
+
+?>

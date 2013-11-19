@@ -1,0 +1,45 @@
+<?php
+
+$db = new PDO('mysql:host=localhost; dbname=SERVAL; charset=utf8', 'root', '2965086realmzx');
+
+$rs = $db->query("SELECT * from ServiceRouter");
+
+echo "<html>";
+echo "<title>Serval Controller</title>";
+echo "<b>Select your operation:</b>";
+
+echo '<br>';
+
+echo '<form id="operation" name="operation" method="post" action="operation_handler.php">';
+echo '<select name="operation">';
+echo '<option value="AddService">Add Service</option>';
+echo '<option value="RemoveService">Remove Service</option>';
+echo '<option value="ShowService">Show Service</option>';
+echo '<option value="StartTranslator">Start Translator</option>';
+echo '<option value="StopTranslator">Stop Translator</option>';
+echo '</select>';
+
+echo '<br>';
+
+echo '<b>Select your machine:</b>';
+
+echo '<br>';
+
+echo '<select name="machine">';
+while ($row = $rs->fetch()) {
+  print_r($row);
+  $machine_name = $row['machine_name'];
+  echo '<br>';
+  echo "<option value=$machine_name>$machine_name</option>";
+}
+echo '</select>';
+
+echo '<br>';
+
+echo '<input type="submit" value="Here we go!">';
+
+echo '</form>';
+
+$db = null;
+
+?>

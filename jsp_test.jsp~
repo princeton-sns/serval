@@ -1,0 +1,14 @@
+<%@ page contentType="text/html;charset=GB2312" %>
+
+<HTML>
+<BODY>
+<%!
+	int i = 10;
+%>
+
+<P>
+
+sdfsdfsdf  <%=i%>
+
+</BODY>
+</HTML>

@@ -1,0 +1,231 @@
+<?php
+
+require('db.php');
+
+$parameters = array();
+get_parameters($parameters);
+
+if ($parameters['operation'] == "AddService") {
+
+  gen_add_service_form($parameters);
+
+} else if ($parameters['operation'] == "RemoveService") {
+
+  gen_remove_service_form($parameters);
+  
+  echo "==============================Existing Service Rules=========================";
+  $service_rules = show_service($parameters);
+  echo '<br><br>' . $service_rules;
+
+} else if ($parameters['operation'] == "ShowService") {
+
+  $response = show_service($parameters);
+  echo $response;
+  echo '<input type="button" value="Back" onClick="history.go(-1);" />';
+  
+} else if ($parameters['operation'] == "StartTranslator") {
+
+  $response = start_translator($parameters);
+  echo $response;
+
+} else if ($parameters['operation'] == "StopTranslator") {
+
+  $response = stop_translator($parameters);
+  echo $response;
+
+}
+
+
+###############################self defined functions#############################
+
+# Add a service rule
+function gen_add_service_form($parameters)
+{
+  $machine = $parameters['machine'];
+  $db = get_serval_db();
+  $router_ip = get_router_address($db, $machine);
+
+  echo "Add service rule to " . $machine;
+
+  echo '<p>';
+
+  echo '<form method="post" action="request_sender.php">';
+
+    echo "<input type=\"hidden\" name=\"router_ip\" value=$router_ip />";
+    echo "<input type=\"hidden\" name=\"machine\" value=$machine />";
+    echo "<input type=\"hidden\" name=\"operation\" value=\"AddService\" />";
+
+
+    echo '<b>Prefix: </b> <input type="text" name="prefix" /><br>';
+    echo '<b>IP:&nbsp;&nbsp;&nbsp;&nbsp; </b> <input type="text" name="IP" /><br>';
+    echo '<b>Prefix bits: </b> <input type="text" value="256" name="prefix_bits" size=4/><br>';
+    echo '<b>Service type</b> ';
+    echo '<select name="service_type">';
+      echo '<option value="service">Service</option>';
+      echo '<option value="translator">Translator</option>';
+      echo '</select>';
+    
+    echo '<br><input type="submit" value="add service">';
+
+    echo '&nbsp;' . '<input type="button" value="Back" onCLick="history.go(-1);" />';
+
+  echo '</form>';
+
+  $db = null;
+}
+
+# Remove a service rule
+function gen_remove_service_form($parameters)
+{
+  $machine = $parameters['machine'];
+  $db = get_serval_db();
+  $router_ip = get_router_address($db, $machine);
+
+  echo '<br><b>' . "Remove service rule from " . $machine . '</b>';
+
+  echo '<p>';
+
+  echo '<form method="post" action="request_sender.php">';
+
+    echo "<input type=\"hidden\" name=\"router_ip\" value=$router_ip />";
+    echo "<input type=\"hidden\" name=\"machine\" value=$machine />";
+    echo "<input type=\"hidden\" name=\"operation\" value=\"DelService\" />";
+
+
+    echo '<b>Prefix: </b> <input type="text" name="prefix" />';
+    echo '<br><b>Prefix bits: </b> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <input type="text" value="256" name="prefix_bits" size=4 />';
+    echo '<br><b>IP: &nbsp;&nbsp;&nbsp;</b> <input type="text" name="IP" />';
+    
+    echo '<br><input type="submit" value="remove service">';
+
+    echo '&nbsp;' . '<input type="button" value="Back" onCLick="history.go(-1);" />';
+
+  echo '</form>';
+
+  $db = null;
+} 
+ 
+
+# Show service rules
+function show_service($parameters) {
+
+  #$db = get_serval_db();
+  #$router_ip = get_router_address($db, $parameters['machine']);
+
+  #$cdir = "/usr/local/apache/httpd/conf/cers/" . $parameters['machine'] . "/";
+
+  #include('request_sender.php');
+  #$response = send_show_service_message($router_ip, $cdir);
+
+  #$db = null;
+  
+  $rs = show_service_by_router($parameters['machine']);
+
+  #$separator = '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+
+  #$response = "prefix" . $separator . "prefix_bits" . $separator . "ip" . $separator . "dst_type" . '<br>';
+  $response = '<table border="1" bordercolor="black">';
+    $response = $response . '<tr>';
+      $response = $response . '<td>prefix</td>';
+      $response = $response . '<td>prefix_bits</td>';
+      $response = $response . '<td align="center">ip</td>';
+      $response = $response . '<td>dst_type</td>';
+    $response = $response . '</tr>';
+
+
+  if ($rs != null) {
+    while ($row = $rs->fetch()) {
+      $response = $response . '<tr">';
+        $response = $response . '<td align="right">' . $row['prefix'] . '</td>';
+	$response = $response . '<td align="center">' . $row['prefix_bits'] . '</td>';
+	$response = $response . '<td>' . $row['ip'] . '</td>';
+	$response = $response . '<td align="center">' . $row['dst_type'] . '</td>';
+      $response = $response . '</tr>';
+    }
+  }
+
+  $response = $response . '</table>' . '<br><br>';
+
+#  $response = $response . '<input type="button" value="Back" onClick="history.go(-1);" />';
+
+  return $response;
+
+}
+
+# Start a translator
+function start_translator($parameters) {
+
+  $upstream_router_ip = "128.112.7.80";
+  $translator_prefix = "0x00001f9";
+  $prefix_bits = "128";
+  
+  $db = get_serval_db();
+  $translator_ip = get_router_address($db, $parameters['machine']);
+
+  $cdir = "/usr/local/apache/httpd/conf/cers/" . $parameters['machine'] . "/";
+
+  include('request_sender.php');
+  $response = send_start_translator_message($translator_ip, $cdir);
+
+  $response .= '<br><br>' . send_add_service_message($upstream_router_ip, $translator_prefix, $prefix_bits, $translator_ip, "translator", $cdir);
+
+  $db = null;
+
+  return $response;
+
+}
+
+# Stop a translator
+function stop_translator($parameters) {
+
+  $upstream_router_ip = "128.112.7.80";
+  $translator_prefix = "0x00001f9";
+  $prefix_bits = "128";
+ 
+  $db = get_serval_db();
+  $translator_ip = get_router_address($db, $parameters['machine']);
+
+  $cdir = "/usr/local/apache/httpd/conf/cers/" . $parameters['machine'] . "/";
+
+  include('request_sender.php');
+  $response = send_stop_translator_message($translator_ip, $cdir);
+
+  $response .= '<br><br>' . send_remove_service_message($upstream_router_ip, $translator_prefix, $prefix_bits, $translator_ip, $cdir); 
+  
+  $db = null;
+
+  return $response;
+
+}
+
+# Get parameters from previous page using 'post' method
+function get_parameters(&$parameters) {
+
+  if (isset($_POST['operation']))
+    $parameters['operation'] = $_POST['operation'];
+  else if (isset($_GET['operation']))
+    $parameters['operation'] = $_GET['operation'];
+
+  if (isset($_POST['router_ip']))
+    $parameters['router_ip'] = $_POST['router_ip'];
+  else if (isset($_GET['router_ip']))
+    $parameters['router_ip'] = $_GET['router_ip'];
+
+  if (isset($_POST['machine']))
+    $parameters['machine'] = $_POST['machine'];
+  else if (isset($_GET['machine']))
+    $parameters['machine'] = $_GET['machine'];
+
+  if (isset($_POST['prefix']))
+    $parameters['prefix'] = $_POST['prefix'];
+  else if (isset($_GET['prefix']))
+    $parameters['prefix'] = $_GET['prefix'];
+
+  if (isset($_POST['IP']))
+    $parameters['IP'] = $_POST['IP'];
+  else if (isset($_GET['IP']))
+    $parameters['IP'] = $_GET['IP'];
+}
+
+
+?>

@@ -1,0 +1,121 @@
+<?php
+
+function get_serval_db()
+{
+  try {
+    $db = new PDO('mysql:host=localhost; dbname=SERVAL; charset=utf8', 'root', '2965086realmzx');
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+
+  return $db;
+}
+
+# Show service rules of service router $router_name
+function show_service_by_router($router_name) {
+  try {
+    $db = get_serval_db();
+    $sql = "select * from ServiceTable where router_name=\"$router_name\"";
+    $rs = $db->query($sql);
+    return $rs;
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+}
+
+# Get Service Router's IP address by its machine name, e.g., sns1
+function get_router_address($db, $machine)
+{
+  try {
+    $rs = $db->query("SELECT address from ServiceRouter where machine_name=\"$machine\"");
+
+    if ($rs != null) {
+      $row = $rs->fetch();
+      return $row['address'];
+    }
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+
+  return null;
+}
+
+# Get Service Router's current state (on/off) by its machine name
+function get_router_state($db, $machine)
+{
+  try {
+    $rs = $db->query("SELECT state from ServiceRouter where machine_name=\"$machine\"");
+
+    if ($rs != null) {
+      $row = $rs->fetch();
+      return $row['address'];
+    }
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+
+  return null;
+}
+
+# Get the router machine names from ServiceRouter table
+function get_router_names($db)
+{
+  try {
+    $rs = $db->query("SELECT machine_name from ServiceRouter");
+
+    if ($rs != null) {
+      return $rs;
+    }
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+
+  return null;
+}
+
+# Insert a service rule to SERVAL.ServiceTable
+function insert_service($db, $router_name, $router_ip, $prefix, $prefix_bits, $ip, $service_type)
+{
+  $select_query = "SELECT * from SERVAL.ServiceTable where router_name=\"$router_name\" and prefix=\"$prefix\" and prefix_bits=$prefix_bits and ip=\"$ip\""; 
+
+  $insert_query = "INSERT INTO SERVAL.ServiceTable (router_name, router_ip, prefix, prefix_bits, ip, dst_type) values (\"$router_name\", \"$router_ip\", \"$prefix\", $prefix_bits, \"$ip\", \"$service_type\")";
+  
+  try {
+    echo $select_query . '<br>';
+    $route = $db->query($select_query);
+    if ($route->rowCount() == 0) {
+      $db->exec($insert_query);
+      echo "Service rule inserted!";
+    }
+    else {
+      echo "Service rule exist!";
+    }
+  }  
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+
+}
+
+# Remove a service rule from SERVAL.ServiceTable
+function remove_service($db, $router_name, $prefix, $prefix_bits, $ip)
+{
+  $delete_query = "DELETE from SERVAL.ServiceTable where router_name='$router_name' and prefix='$prefix' and prefix_bits=$prefix_bits and ip='$ip'";
+
+  echo $delete_query . '<br>';
+
+  try {
+    $count = $db->exec($delete_query);
+    echo "$count rule deleted";
+  }
+  catch (PDOException $e) {
+    echo $e->getMessage();
+  }
+}
+
+?>

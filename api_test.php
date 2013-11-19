@@ -1,0 +1,10 @@
+<?php
+$prefix=$_GET['prefix'];
+$IP=$_GET['IP'];
+
+echo $prefix;
+echo '<br>';
+echo $IP;
+echo '<br>';
+
+?>
