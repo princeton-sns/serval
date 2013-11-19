@@ -407,6 +407,8 @@ int Curl_resolv(struct connectdata *conn,
 
   *entry = NULL;
 
+  printf("hostname: %s\n", hostname);
+
   /* Create an entry id, based upon the hostname and port */
   entry_id = create_hostcache_id(hostname, port);
   /* If we can't create the entry id, fail */
@@ -438,6 +440,8 @@ int Curl_resolv(struct connectdata *conn,
 
   if(!dns) {
     /* The entry was not in the cache. Resolve it to IP address */
+
+    printf("!dns\n");
 
     Curl_addrinfo *addr;
     int respwait;

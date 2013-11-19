@@ -23,6 +23,8 @@
  ***************************************************************************/
 
 #include "curl_setup.h"
+#include <netinet/serval.h>
+#include <libserval/serval.h>
 
 struct Curl_sockaddr_storage {
   union {
@@ -31,6 +33,7 @@ struct Curl_sockaddr_storage {
 #ifdef ENABLE_IPV6
     struct sockaddr_in6 sa_in6;
 #endif
+    struct sockaddr_sv sa_sv;
 #ifdef HAVE_STRUCT_SOCKADDR_STORAGE
     struct sockaddr_storage sa_stor;
 #else

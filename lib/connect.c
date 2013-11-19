@@ -58,6 +58,7 @@
 
 #define _MPRINTF_REPLACE /* use our functions only */
 #include <curl/mprintf.h>
+#include <curl/curl.h>
 
 #include "urldata.h"
 #include "sendf.h"
@@ -78,9 +79,10 @@
 #include "multihandle.h"
 
 /* Support Serval */
-#include <netinet/serval.h>
-#include <libserval/serval.h>
+//#include <netinet/serval.h>
+//#include <libserval/serval.h>
 #include <stdio.h>
+#define SERVAL_FQDN
 
 /* The last #include file should be: */
 #include "memdebug.h"
@@ -166,6 +168,47 @@ tcpkeepalive(struct SessionHandle *data,
   }
 }
 
+static curl_socket_t opensocket(void *clientp,
+                                curlsocktype purpose,
+                                struct curl_sockaddr *address)
+{
+  curl_socket_t sockfd;
+  struct Curl_sockaddr_ex *saddr;
+  struct service_id server_srvid;
+
+  sockfd = socket(AF_SERVAL, SOCK_STREAM, 0);
+
+  printf("In opensocket.\n");
+  saddr = (struct Curl_sockaddr_ex *)address;
+  saddr->family = AF_SERVAL;
+  saddr->socktype = SOCK_STREAM;
+#ifndef SERVAL_FQDN
+  printf("IP in opensock: %d\n", saddr->sa_addr_sv.sv_srvid.s_sid32[0]);
+#endif
+  memset(&saddr->sa_addr_sv, 0, sizeof(saddr->sa_addr_sv));
+#ifndef SERVAL_FQDN
+  saddr->sa_addr_sv.sv_srvid.s_sid32[0] = htonl(16385);
+#else
+  strcpy(saddr->sa_addr_sv.sv_srvid.s_sid, "edu");
+#endif
+  saddr->sa_addr_sv.sv_family = AF_SERVAL;
+#ifndef SERVAL_FQDN
+  printf("sid: %d\n", saddr->sa_addr_sv.sv_srvid.s_sid32[0]);
+#else
+  printf("sid: %s\n", saddr->sa_addr_sv.sv_srvid.s_sid);
+#endif
+  printf("sv_family: %d\n", saddr->sa_addr_sv.sv_family);
+  //memcpy(&saddr->sa_addr_sv.sv_srvid, &server_srvid, sizeof(server_srvid));
+  saddr->addrlen = sizeof(saddr->sa_addr_sv);
+  printf("saddr->addrlen: %d\n", saddr->addrlen);
+  (void)purpose;
+  (void)address;
+  //  sockfd = *(curl_socket_t *)clientp;
+  /* the actual externally set socket is passed in via the OPENSOCKETDATA
+     option */
+  return sockfd;
+}
+
 static CURLcode
 singleipconnect(struct connectdata *conn,
                 const Curl_addrinfo *ai, /* start connecting to this */
@@ -188,7 +231,7 @@ singleipconnect(struct connectdata *conn,
  */
 long Curl_timeleft(struct SessionHandle *data,
                    struct timeval *nowp,
-                   bool duringconnect)
+                  bool duringconnect)
 {
   int timeout_set = 0;
   long timeout_ms = duringconnect?DEFAULT_CONNECT_TIMEOUT:0;
@@ -307,9 +350,14 @@ static CURLcode bindlocal(struct connectdata *conn,
   /*************************************************************
    * Select device to bind socket to
    *************************************************************/
-  if(!dev && !port)
+
+  printf("In localbind()\n");
+
+  if(!dev && !port) {
     /* no local kind of binding was requested */
+    printf("no local kind of binding was requested\n");
     return CURLE_OK;
+  }
 
   memset(&sa, 0, sizeof(struct Curl_sockaddr_storage));
 
@@ -371,6 +419,9 @@ static CURLcode bindlocal(struct connectdata *conn,
           break;
       }
     }
+
+    printf("At line 380\n");
+
     if(!is_interface) {
       /*
        * This was not an interface, resolve the name as a host name
@@ -389,6 +440,8 @@ static CURLcode bindlocal(struct connectdata *conn,
       else if(af == AF_INET6)
         conn->ip_version = CURL_IPRESOLVE_V6;
 #endif
+      else if(af == AF_SERVAL)
+        conn->ip_version = CURL_IPRESOLVE_SERVAL;
 
       rc = Curl_resolv(conn, dev, 0, &h);
       if(rc == CURLRESOLV_PENDING)
@@ -411,6 +464,8 @@ static CURLcode bindlocal(struct connectdata *conn,
         done = -1;
       }
     }
+
+    printf("At line 420\n");
 
     if(done > 0) {
 #ifdef ENABLE_IPV6
@@ -469,6 +524,7 @@ static CURLcode bindlocal(struct connectdata *conn,
   }
 
   for(;;) {
+    printf("sock -> family: %d\n", sock->sa_family);
     if(bind(sockfd, sock, sizeof_sa) >= 0) {
       /* we succeeded to bind */
       struct Curl_sockaddr_storage add;
@@ -667,6 +723,11 @@ static bool getaddressinfo(struct sockaddr* sa, char* addr,
       *port = 0;
       return TRUE;
 #endif
+
+  case AF_SERVAL:
+    return TRUE;
+    break;
+
     default:
       break;
   }
@@ -953,11 +1014,18 @@ singleipconnect(struct connectdata *conn,
   struct SessionHandle *data = conn->data;
   curl_socket_t sockfd;
   CURLcode res = CURLE_OK;
+  static const char *host_prefix = "host!";
+  char * hostname = conn->data->set.str[STRING_DEVICE];
 
   *sockp = CURL_SOCKET_BAD;
   *connected = FALSE; /* default is not connected */
 
+  //  curl_easy_setopt(cur
+
   res = Curl_socket(conn, ai, &addr, &sockfd);
+  hostname += strlen(host_prefix);
+  addr.family = AF_SERVAL;
+
   if(res)
     /* Failed to create the socket, but still return OK since we signal the
        lack of socket as well. This allows the parent function to keep looping
@@ -1005,7 +1073,6 @@ singleipconnect(struct connectdata *conn,
 
   /* possibly bind the local end to an IP, interface or port */
   res = bindlocal(conn, sockfd, addr.family);
-  printf("addr.family: %d\n", addr.family);
   if(res) {
     Curl_closesocket(conn, sockfd); /* close socket and bail out */
     if(res == CURLE_UNSUPPORTED_PROTOCOL) {
@@ -1017,15 +1084,26 @@ singleipconnect(struct connectdata *conn,
   }
 
   /* set socket non-blocking */
-  curlx_nonblock(sockfd, TRUE);
+  //curlx_nonblock(sockfd, TRUE);
 
   conn->connecttime = Curl_tvnow();
   if(conn->num_addr > 1)
     Curl_expire(data, conn->timeoutms_per_addr);
 
+  //sockfd = socket(AF_SERVAL, SOCK_STREAM, 0);
+  //addr.sa_addr_sv.sv_family = AF_SERVAL;
+  //addr.sa_addr_sv.sv_srvid.s_sid32[0] = htonl(16385);
+  //addr.addrlen = sizeof(addr.sa_addr_sv);
+  //curlx_nonblock(sockfd, TRUE);
+#ifndef SERVAL_FQDN
+  printf("sid: %d\n", addr._sa_ex_u.addr_sv.sv_srvid.s_sid32[0]);
+#else
+  printf("sid: %s\n", addr._sa_ex_u.addr_sv.sv_srvid.s_sid);
+#endif
+
   /* Connect TCP sockets, bind UDP */
   if(!isconnected && (conn->socktype == SOCK_STREAM)) {
-    rc = connect(sockfd, &addr.sa_addr, addr.addrlen);
+    rc = connect(sockfd, (struct sockaddr *)&addr.sa_addr_sv, addr.addrlen);
     if(-1 == rc) {
       error = SOCKERRNO;
       printf("Error occured when trying connect...\n");
@@ -1043,14 +1121,20 @@ singleipconnect(struct connectdata *conn,
   if(-1 == rc) {
     switch (error) {
     case EINPROGRESS:
+      printf("EINPROGRESS\n");
+      break;
     case EWOULDBLOCK:
+      printf("EWOULDBLOCK\n");
 #if defined(EAGAIN)
 #if (EAGAIN) != (EWOULDBLOCK)
       /* On some platforms EAGAIN and EWOULDBLOCK are the
        * same value, and on others they are different, hence
        * the odd #if
        */
+      printf("EAGAIN\n");
+      break;
     case EAGAIN:
+      printf("EAGAIN\n");
 #endif
 #endif
       *sockp = sockfd;
@@ -1284,6 +1368,7 @@ CURLcode Curl_socket(struct connectdata *conn,
 {
   struct SessionHandle *data = conn->data;
   struct Curl_sockaddr_ex dummy;
+  int serval_sock;
 
   if(!addr)
     /* if the caller doesn't want info back, use a local temp copy */
@@ -1302,9 +1387,13 @@ CURLcode Curl_socket(struct connectdata *conn,
   addr->protocol = conn->socktype==SOCK_DGRAM?IPPROTO_UDP:ai->ai_protocol;
   addr->addrlen = ai->ai_addrlen;
 
+  printf("ai -> addr in Curl_socket: %d\n", ai->ai_addr->sa_data);
+
   if(addr->addrlen > sizeof(struct Curl_sockaddr_storage))
      addr->addrlen = sizeof(struct Curl_sockaddr_storage);
   memcpy(&addr->sa_addr, ai->ai_addr, addr->addrlen);
+
+  serval_sock = socket(AF_SERVAL, SOCK_STREAM, 0);
 
   if(data->set.fopensocket)
    /*
@@ -1316,12 +1405,14 @@ CURLcode Curl_socket(struct connectdata *conn,
     * might have been changed and this 'new' address will actually be used
     * here to connect.
     */
-    *sockfd = data->set.fopensocket(data->set.opensocket_client,
-                                    CURLSOCKTYPE_IPCXN,
-                                    (struct curl_sockaddr *)addr);
+    //    *sockfd = data->set.fopensocket(data->set.opensocket_client,
+    //                              CURLSOCKTYPE_IPCXN,
+    //                              (struct curl_sockaddr *)addr);
+    *sockfd = opensocket(0, CURLSOCKTYPE_IPCXN, (struct curl_sockaddr *)addr);
   else
     /* opensocket callback not set, so simply create the socket now */
-    *sockfd = socket(addr->family, addr->socktype, addr->protocol);
+    //*sockfd = socket(addr->family, addr->socktype, addr->protocol);
+    *sockfd = opensocket(0, CURLSOCKTYPE_IPCXN, (struct curl_sockaddr *)addr);
 
   if(*sockfd == CURL_SOCKET_BAD)
     /* no socket, no connection */

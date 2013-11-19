@@ -34,6 +34,9 @@
 #include "curlbuild.h"       /* libcurl build definitions */
 #include "curlrules.h"       /* libcurl rules enforcement */
 
+#include <netinet/serval.h>
+#include <libserval/serval.h>
+
 /*
  * Define WIN32 when build target is Win32 API
  */
@@ -334,7 +337,8 @@ struct curl_sockaddr {
   unsigned int addrlen; /* addrlen was a socklen_t type before 7.18.0 but it
                            turned really ugly and painful on the systems that
                            lack this type */
-  struct sockaddr addr;
+    struct sockaddr addr;
+  //   struct sockaddr_sv addr_sv;
 };
 
 typedef curl_socket_t

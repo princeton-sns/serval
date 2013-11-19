@@ -26,6 +26,9 @@
 #include "nonblock.h" /* for curlx_nonblock(), formerly Curl_nonblock() */
 #include "sockaddr.h"
 
+#include <netinet/serval.h>
+#include <libserval/serval.h>
+
 CURLcode Curl_is_connected(struct connectdata *conn,
                            int sockindex,
                            bool *connected);
@@ -87,10 +90,12 @@ struct Curl_sockaddr_ex {
   unsigned int addrlen;
   union {
     struct sockaddr addr;
+    struct sockaddr_sv addr_sv;
     struct Curl_sockaddr_storage buff;
   } _sa_ex_u;
 };
 #define sa_addr _sa_ex_u.addr
+#define sa_addr_sv _sa_ex_u.addr_sv
 
 /*
  * Create a socket based on info from 'conn' and 'ai'.

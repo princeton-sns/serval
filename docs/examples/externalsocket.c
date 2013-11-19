@@ -27,6 +27,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <curl/curl.h>
+//#include <connect.h>
+//#include <sockaddr.h>
+//#include <curl_addrinfo.h>
+
 
 #ifdef WIN32
 #include <windows.h>
@@ -54,6 +58,39 @@
 #define INADDR_NONE 0xffffffff
 #endif
 
+
+struct Curl_sockaddr_storage {
+ union {
+    struct sockaddr sa;
+    struct sockaddr_in sa_in;
+#ifdef ENABLE_IPV6
+    struct sockaddr_in6 sa_in6;
+#endif
+    struct sockaddr_sv sa_sv;
+#ifdef HAVE_STRUCT_SOCKADDR_STORAGE
+    struct sockaddr_storage sa_stor;
+#else
+    char cbuf[256];   /* this should be big enough to fit a lot */
+#endif
+  } buffer;
+};
+
+
+struct Curl_sockaddr_ex {
+  int family;
+  int socktype;
+  int protocol;
+  unsigned int addrlen;
+  union {
+    struct sockaddr addr;
+    struct sockaddr_sv addr_sv;
+    struct Curl_sockaddr_storage buff;
+  } _sa_ex_u;
+};
+#define sa_addr _sa_ex_u.addr
+#define sa_addr_sv _sa_ex_u.addr_sv
+
+
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream)
 {
   int written = fwrite(ptr, size, nmemb, (FILE *)stream);
@@ -66,9 +103,28 @@ static curl_socket_t opensocket(void *clientp,
                                 struct curl_sockaddr *address)
 {
   curl_socket_t sockfd;
+  struct Curl_sockaddr_ex *saddr;
+  struct service_id server_srvid;
 
   printf("In opensocket.\n");
-  address->family = AF_SERVAL;
+
+  saddr = (struct Curl_sockaddr_ex *)address;
+
+  saddr->family = AF_SERVAL;
+  saddr->socktype = SOCK_STREAM;
+  
+  //server_srvid.s_sid32[0] = htonl(12345);
+  //printf("IP in opensock: %d\n", saddr->sa_addr_sv.sv_srvid.s_sid32[0]);
+  memset(&saddr->sa_addr_sv, 0, sizeof(saddr->sa_addr_sv));
+  //  saddr->sa_addr_sv.sv_srvid.s_sid32[0] = htonl(16385);
+  strcpy(saddr->sa_addr_sv.sv_srvid.s_sid, "www.princeton.edu");
+  saddr->sa_addr_sv.sv_family = AF_SERVAL;
+  //printf("sid: %d\n", saddr->sa_addr_sv.sv_srvid.s_sid32[0]);
+  printf("sid: %d\n", saddr->sa_addr_sv.sv_srvid.s_sid);
+  printf("sv_family: %d\n", saddr->sa_addr_sv.sv_family);
+  //memcpy(&saddr->sa_addr_sv.sv_srvid, &server_srvid, sizeof(server_srvid));
+  saddr->addrlen = sizeof(saddr->sa_addr_sv);
+  printf("saddr->addrlen: %d\n", saddr->addrlen);
 
   (void)purpose;
   (void)address;
@@ -112,9 +168,12 @@ int main(void)
      * Note that libcurl will internally think that you connect to the host
      * and port that you specify in the URL option.
      */
-    curl_easy_setopt(curl, CURLOPT_URL, "http://128.112.7.80/index.php");
+    curl_easy_setopt(curl, CURLOPT_URL, "www.princeton.edu");
 
-    sock = socket(AF_SERVAL, SOCK_STREAM, 0);
+    if ( (sock = socket(AF_SERVAL, SOCK_STREAM, 0)) == CURL_SOCKET_BAD) {
+      printf("Error creating SERVAL socket.\n");
+      return 3;
+    }
 
     /* Create the socket "manually" */
     if( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) == CURL_SOCKET_BAD ) {
