@@ -151,8 +151,12 @@ struct serval_sock {
         struct flow_id          peer_flowid;
         struct service_id       local_srvid;
         struct service_id       peer_srvid;
+        /* The request queue consists of two sub-queues: syn queue and
+         * accept queue. The request_qlen is the total length of both
+         * sub-queues. */
         struct list_head        syn_queue;
         struct list_head        accept_queue;
+        unsigned long           request_qlen;
         struct sk_buff          *ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
         u8                      local_nonce[SAL_NONCE_SIZE];
@@ -250,8 +254,34 @@ void serval_sock_freeze_flows(struct net_device *dev);
 struct sock *serval_sock_lookup_service(struct service_id *, int protocol);
 struct sock *serval_sock_lookup_flow(struct flow_id *);
 
+
+void serval_sock_delete_keepalive_timer(struct sock *sk);
+void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len);
 void serval_sock_hash(struct sock *sk);
 void serval_sock_unhash(struct sock *sk);
+
+
+void serval_sock_request_queue_prune(struct sock *parent,
+                                     const unsigned long interval,
+                                     const unsigned long timeout,
+                                     const unsigned long max_rto);
+
+static inline void serval_sock_request_queue_added(struct sock *sk,
+                                                   unsigned long timeout)
+{
+        if (serval_sk(sk)->request_qlen == 0)
+                serval_sock_reset_keepalive_timer(sk, timeout);
+        serval_sk(sk)->request_qlen++;
+}
+
+static inline void serval_sock_request_queue_removed(struct sock *sk)
+{
+        if (--serval_sk(sk)->request_qlen == 0)
+                serval_sock_delete_keepalive_timer(sk);
+}
+
+void serval_sock_reqsk_queue_add(struct sock *sk, struct request_sock *rsk,
+                                 unsigned long timeout);
 
 static inline void serval_sock_set_flag(struct serval_sock *ssk, 
                                         enum serval_sock_flags flag)
@@ -291,9 +321,6 @@ static inline void serval_sock_reset_xmit_timer(struct sock *sk,
         ssk->timeout = jiffies + when;
         sk_reset_timer(sk, &ssk->retransmit_timer, ssk->timeout);
 }
-
-void serval_sock_delete_keepalive_timer(struct sock *sk);
-void serval_sock_reset_keepalive_timer(struct sock *sk, unsigned long len);
 
 int __serval_assign_flowid(struct sock *sk);
 struct sock *serval_sk_alloc(struct net *net, struct socket *sock, 

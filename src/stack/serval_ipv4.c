@@ -507,8 +507,13 @@ int serval_ipv4_xmit(struct sk_buff *skb)
                 */
 	}
         
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,12) || (LINUX_VERSION_CODE == 197173))
+        ip_select_ident_more(skb, route_dst(rt), sk,
+			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+#else
         ip_select_ident_more(iph, route_dst(rt), sk,
 			     (skb_shinfo(skb)->gso_segs ?: 1) - 1);
+#endif
 
 	skb->priority = sk->sk_priority;
 

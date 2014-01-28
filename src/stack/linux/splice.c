@@ -11,12 +11,15 @@
 #include <linux/wait.h>
 #include <net/sock.h>
 
+                        
 #define UBUNTU_NON_STANDARD_KERNEL                      \
         ((LINUX_VERSION_CODE == 197144) ||              \
          (LINUX_VERSION_CODE == 197148) ||              \
          (LINUX_VERSION_CODE == 197150) ||              \
          (LINUX_VERSION_CODE == 197157) ||              \
          (LINUX_VERSION_CODE == 197171) ||              \
+         (LINUX_VERSION_CODE == 197172) ||              \
+         (LINUX_VERSION_CODE == 197173) ||              \
          (LINUX_VERSION_CODE == 197159))
         
 /* This is pure unmodified Linux kernel code. It is provided here

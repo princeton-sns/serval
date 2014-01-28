@@ -331,7 +331,10 @@ static int serval_listen_stop(struct sock *sk)
                 LOG_SSK(sk, "deleting SYN queued request socket\n");
 
                 reqsk_free(&srsk->rsk.req);
-                sk->sk_ack_backlog--;
+                serval_sock_request_queue_removed(sk);
+
+                /* Decrease backlog */
+                sk_acceptq_removed(sk);
         }
         /* Destroy accept queue of sockets that completed three-way
            handshake (and send appropriate packets to other ends) */
@@ -375,7 +378,8 @@ static int serval_listen_stop(struct sock *sk)
                         sock_put(child);
                 }
                 reqsk_free(&srsk->rsk.req);
-                sk->sk_ack_backlog--;
+                serval_sock_request_queue_removed(sk);
+                sk_acceptq_removed(sk);
         }
 
         return 0;
@@ -438,7 +442,8 @@ struct sock *serval_accept_dequeue(struct sock *parent,
 
                 list_del(&srsk->lh);
                 reqsk_free(&srsk->rsk.req);
-                parent->sk_ack_backlog--;
+                serval_sock_request_queue_removed(parent);
+                sk_acceptq_removed(parent);
                 return sk;
         }
 

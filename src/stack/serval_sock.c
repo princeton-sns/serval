@@ -20,6 +20,7 @@
 #include <netinet/serval.h>
 #include <serval_sock.h>
 #include <serval_tcp_sock.h>
+#include <serval_request_sock.h>
 #include <serval_sal.h>
 #include <service.h>
 #if defined(OS_LINUX_KERNEL)
@@ -330,6 +331,48 @@ struct flow_info *serval_sock_stats_flow(struct flow_id *flow,
                 LOG_DBG("Flow %s, proto %d\n", flow_id_to_str(flow), ret->proto);
         }
         return ret;
+}
+
+void serval_sock_request_queue_prune(struct sock *parent,
+                                     const unsigned long interval,
+                                     const unsigned long timeout,
+                                     const unsigned long max_rto)
+{
+        struct serval_sock *pssk = serval_sk(parent);
+        struct serval_request_sock *srsk, *tmp;
+        unsigned long now = jiffies;
+
+        if (pssk->request_qlen == 0)
+                return;
+
+        LOG_DBG("Pruning request queue (len=%lu)\n", pssk->request_qlen);
+
+        list_for_each_entry_safe(srsk, tmp, &pssk->syn_queue, lh) {
+                if (time_after_eq(now, srsk->rsk.req.expires)) {
+                        struct request_sock *req = &srsk->rsk.req;
+                        list_del(&srsk->lh);
+                        serval_sock_request_queue_removed(parent);
+                        reqsk_free(req);
+                }
+        }
+        list_for_each_entry_safe(srsk, tmp, &pssk->accept_queue, lh) {
+                if (time_after_eq(now, srsk->rsk.req.expires)) {
+                        struct request_sock *req = &srsk->rsk.req;
+                        list_del(&srsk->lh);
+                        serval_sock_request_queue_removed(parent);
+                        if (req->sk)
+                                sock_put(req->sk);
+                        reqsk_free(req);
+                }
+        }
+}
+
+void serval_sock_reqsk_queue_add(struct sock *sk, struct request_sock *rsk,
+                                  unsigned long timeout)
+{
+        serval_reqsk_queue(rsk, &serval_sk(sk)->syn_queue, timeout);
+        sk_acceptq_added(sk);
+        serval_sock_request_queue_added(sk, timeout);
 }
 
 static struct sock *serval_sock_lookup(struct serval_table *table,

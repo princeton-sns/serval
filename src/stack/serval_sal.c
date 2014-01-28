@@ -1972,8 +1972,7 @@ static int serval_sal_rcv_syn(struct sock *sk,
         }
         
         /* Add the new request socket to the SYN queue. */
-        list_add(&srsk->lh, &ssk->syn_queue);
-        sk->sk_ack_backlog++;
+        serval_sock_reqsk_queue_add(sk, rsk, SAL_TIMEOUT_INIT);
        
         err = serval_sal_send_synack(sk, rsk, skb, ctx);
  drop:

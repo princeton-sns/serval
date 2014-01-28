@@ -71,4 +71,13 @@ serval_reqsk_alloc(const struct request_sock_ops *ops)
         return rsk;
 }
 
+static inline 
+void serval_reqsk_queue(struct request_sock *rsk, 
+                        struct list_head *queue,
+                        unsigned long timeout)
+{
+        list_add(&serval_rsk(rsk)->lh, queue);
+        rsk->expires = jiffies + timeout;
+}
+
 #endif /* _SERVAL_REQUEST_SOCK_H_ */

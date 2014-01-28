@@ -219,6 +219,7 @@ void serval_sal_update_rtt(struct sock *sk, const s32 seq_rtt);
 
 extern int serval_sal_forwarding;
 
+#define SAL_SYNQ_INTERVAL	(HZ/5)	/* Period of SYNACK timer */
 
 #define SAL_RTO_MAX	((unsigned)(120*HZ))
 #define SAL_RTO_MIN	((unsigned)(HZ/5))
