@@ -10,8 +10,8 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
-#ifndef __SIGNAL_H_
-#define __SIGNAL_H_
+#ifndef _COMMON_SIGNAL_H
+#define _COMMON_SIGNAL_H
 
 #include "atomic.h"
 
@@ -33,4 +33,4 @@ int signal_raise_val(struct signal *s, int val);
 int signal_raise(struct signal *s);
 unsigned int signal_num_waiting(struct signal *s);
 
-#endif /* __SIGNAL_H_ */
+#endif /* _COMMON_SIGNAL_H */

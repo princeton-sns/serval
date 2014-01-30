@@ -11,10 +11,11 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
-#ifndef _DEBUG_H_
-#define _DEBUG_H_
+#ifndef _COMMON_DEBUG_H
+#define _COMMON_DEBUG_H
 
 #include <stdio.h>
+#include "log.h"
 #include "platform.h"
 
 #if defined(OS_ANDROID)
@@ -29,18 +30,15 @@
                                                  __func__, ## __VA_ARGS__)
 #else
 #if defined(ENABLE_DEBUG)
-#include <sys/time.h>
 #define LOG_DBG(format, ...) ({                                         \
-            struct timeval now;                                         \
-            gettimeofday(&now, NULL);                                   \
-            printf("%ld.%06ld %s: "format, (long)now.tv_sec,            \
-                   (long)now.tv_usec, __func__, ## __VA_ARGS__);        \
+            log_printf(DEFAULT_LOG, "%s: "format, __func__, ## __VA_ARGS__); \
         })
 #else
 #define LOG_DBG(format, ...)
 #endif
-#define LOG_ERR(format, ...) fprintf(stderr, "%s: ERROR "format,    \
-                                     __func__, ## __VA_ARGS__)
+#define LOG_ERR(format, ...) ({                                         \
+            log_printf(DEFAULT_ERR_LOG, "%s: "format, __func__, ## __VA_ARGS__); \
+        })
 #endif /* OS_ANDROID */
 
-#endif /* _DEBUG_H_ */
+#endif /* _COMMON_DEBUG_H */

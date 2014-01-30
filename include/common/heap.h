@@ -10,8 +10,8 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
-#ifndef _HEAP_H_
-#define _HEAP_H_
+#ifndef _COMMON_HEAP_H_
+#define _COMMON_HEAP_H_
 
 #include "platform.h"
 
@@ -50,4 +50,4 @@ static inline struct heapitem *heap_remove_first(struct heap *h)
 #define heap_remove_first_entry(heap, type, member)  \
     container_of(heap_remove_first(heap), type, member)
 
-#endif /* _HEAP_H_ */
+#endif /* _COMMON_HEAP_H_ */

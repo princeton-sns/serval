@@ -5,8 +5,8 @@
   Modified for usage in user level code.
  */
 
-#ifndef _LIST_H
-#define _LIST_H
+#ifndef _COMMON_LIST_H
+#define _COMMON_LIST_H
 
 #include <stdlib.h>
 #include "platform.h"
@@ -721,4 +721,4 @@ static inline void hlist_move_list(struct hlist_head *old,
 		({ tpos = hlist_entry(pos, typeof(*tpos), member); 1;}); \
 	     pos = n)
 
-#endif /* _LIST_H */
+#endif /* _COMMON_LIST_H */

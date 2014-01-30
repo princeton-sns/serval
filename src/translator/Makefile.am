@@ -5,14 +5,12 @@ bin_PROGRAMS = translator
 translator_SOURCES = \
 	translator.c \
 	client.c \
-	worker.c \
-	log.c
+	worker.c
 
 noinst_HEADERS = \
 	translator.h \
 	client.h \
-	worker.h \
-	log.h 
+	worker.h
 
 translator_CPPFLAGS =-I$(top_srcdir)/include
 translator_LDFLAGS =-lpthread

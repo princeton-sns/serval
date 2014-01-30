@@ -20,6 +20,7 @@ static int parse_bool(struct config *cfg, const char *value)
 
 static int parse_string(struct config *cfg, const char *value)
 {
+    strncpy(((char *)cfg->value), value, cfg->size);
     
     return 0;
 }
@@ -32,8 +33,6 @@ static int parse_int(struct config *cfg, const char *value)
     
     if (*endptr == '\0')
 	return 1;
-    return 0;
-
     return 0;
 }
 
@@ -72,6 +71,7 @@ int config_read(const char *config_file, struct config *config)
 		config_file, strerror(errno));
 	return -1;
     }
+
     while (true) {
 	char name[128], value[128];
     	int ret;

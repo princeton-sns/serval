@@ -1,6 +1,6 @@
 /* -*- Mode: C; tab-width: 8; indent-tabs-mode: nil; c-basic-offset: 8 -*- */
-#ifndef _ATOMIC_H_
-#define _ATOMIC_H_
+#ifndef _COMMON_ATOMIC_H_
+#define _COMMON_ATOMIC_H_
 
 #if defined(__linux__) && defined(__KERNEL__)
 #include <linux/kernel.h>
@@ -156,4 +156,4 @@ static inline void atomic_dec(atomic_t *v)
 
 #endif /* __linux__ && __KERNEL__ */
 
-#endif /* _ATOMIC_H_ */
+#endif /* _COMMON_ATOMIC_H_ */

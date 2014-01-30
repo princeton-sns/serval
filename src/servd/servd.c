@@ -34,6 +34,7 @@
 #include <common/signal.h>
 #include <common/debug.h>
 #include <common/list.h>
+#include <common/log.h>
 #include <pthread.h>
 #include <poll.h>
 #include <stdbool.h>
@@ -764,7 +765,8 @@ static void print_usage(void)
                "where OPTIONS:\n"
                "\t-d,--daemon\t\t\t - Run in the background as a daemon.\n"
                "\t-r,--router\t\t\t - Run in router mode, accepting registrations.\n"
-               "\t-c,--config CONFIG_FILE\t - Specify the configuration file to use.\n"
+               "\t-c,--config CONFIG_FILE\t - Path to the configuration file to use.\n"
+               "\t-l,--log LOG_DIR\t - Write log to LOG_DIR directory.\n"
                "\t-rid,--router-id SERVICEID\t - Specify the SERVICEID of a router.\n"
                "\t-cid,--client-id SERVICEID\t - Specify the SERVICEID of a client.\n"
                "\t-rip,--router-ip ROUTER_IP\t - Specify the IP of a service router.\n"
@@ -776,32 +778,47 @@ static bool router = false;
 static bool godaemon = false;
 static unsigned int router_id = 88888;
 static unsigned int client_id = 55555;
+static char log_path[256] = { "" };
+
+#define LOG_FILE "/servd.log"
+#define LOG_ERROR_FILE "/servd-error.log"
 
 struct config configuration[] = {
     {
 	.type = CONFIG_TYPE_BOOL,
 	.name = "router",
 	.value = &router,
+        .size = sizeof(router),
     },
     {
 	.type = CONFIG_TYPE_BOOL,
 	.name = "daemon",
 	.value = &godaemon,
+        .size = sizeof(godaemon),
     },
     {
 	.type = CONFIG_TYPE_UINT,
 	.name = "router_id",
 	.value = &router_id,
+        .size = sizeof(router_id),
     },
     {
 	.type = CONFIG_TYPE_UINT,
 	.name = "client_id",
 	.value = &client_id,
+        .size = sizeof(client_id),
+    },
+    {
+	.type = CONFIG_TYPE_STRING,
+	.name = "log_path",
+	.value = log_path,
+        .size = sizeof(log_path) - sizeof(LOG_ERROR_FILE),
     },
     {
 	.type = CONFIG_TYPE_IPADDR,
 	.name = "router_ip",
 	.value = &ctx.router_ip,
+        .size = sizeof(ctx.router_ip),
     },
     null_config
 };
@@ -862,6 +879,15 @@ int main(int argc, char **argv)
                         config_file = argv[1];
                         argc--;
                         argv++;
+                } else if (strcmp(argv[0], "-l") == 0 ||
+                           strcmp(argv[0], "--log") == 0) {
+                        if (argc < 1) {
+                                fprintf(stderr, "No log file specified\n");
+                                return -1;
+                        }
+                        strncpy(log_path, argv[1], sizeof(log_path));
+                        argc--;
+                        argv++;
                 } else if (strcmp(argv[0], "-rid") == 0 ||
                            strcmp(argv[0], "--router-id") == 0) {
                         char *ptr;
@@ -917,6 +943,18 @@ int main(int argc, char **argv)
 		argv++;
 	}	
 
+        if (strlen(log_path) > 0) {
+                size_t len = strlen(log_path);
+
+                strncpy(log_path + len, LOG_FILE, sizeof(log_path) - len);
+                log_open(DEFAULT_LOG, log_path, LOG_APPEND);
+                log_set_flag(DEFAULT_LOG, LOG_F_TIMESTAMP);
+
+                strncpy(log_path + len, LOG_ERROR_FILE, sizeof(log_path) - len);
+                log_open(DEFAULT_ERR_LOG, log_path, LOG_APPEND);
+                log_set_flag(DEFAULT_ERR_LOG, LOG_F_TIMESTAMP);
+        }
+
         if (ctx.router) {
                 LOG_DBG("Acting as service router\n");
         }
@@ -935,7 +973,7 @@ int main(int argc, char **argv)
                 
                 if (ret < 0) {
                         LOG_ERR("Could not make daemon\n");
-                        return ret;
+                        goto fail_daemon;
                 } 
         }
 
@@ -943,7 +981,7 @@ int main(int argc, char **argv)
 
         if (ret == -1) {
                 LOG_ERR("timer_queue_init failure\n");
-                return -1;
+                goto fail_timer_queue;
         }
 
 	ret = signal_init(&exit_signal);
@@ -1120,9 +1158,14 @@ int main(int argc, char **argv)
         signal_destroy(&exit_signal);
  fail_exit_signal:
         timer_queue_fini(&ctx.tq);
+fail_timer_queue:
+fail_daemon:
+	LOG_DBG("done\n");
+
+        if (log_is_open(DEFAULT_LOG))
+                log_close(DEFAULT_LOG);
 
         pthread_mutex_destroy(&ctx.lock);
-	LOG_DBG("done\n");
 
         return ret;
 }

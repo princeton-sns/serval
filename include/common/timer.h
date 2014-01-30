@@ -10,8 +10,8 @@
  *	published by the Free Software Foundation; either version 2 of
  *	the License, or (at your option) any later version.
  */
-#ifndef _TIMER_H_
-#define _TIMER_H_
+#ifndef _COMMON_TIMER_H_
+#define _COMMON_TIMER_H_
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -134,4 +134,4 @@ void timer_queue_fini(struct timer_queue *tq);
 #define timespec_eq(t1, t2) ((t1)->tv_sec == (t2)->tv_sec &&    \
                              (t1)->tv_nsec == (t2)->tv_nsec)
 
-#endif /* _TIMER_H_ */
+#endif /* _COMMON_TIMER_H_ */

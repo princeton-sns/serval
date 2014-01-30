@@ -2,7 +2,6 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_HDR_FILES := \
-	log.h \
 	translator.h \
 	client.h \
 	worker.h
@@ -10,7 +9,6 @@ LOCAL_HDR_FILES := \
 LOCAL_SRC_FILES := \
 	splice.c \
 	sys_splice.S \
-	log.c \
 	translator.c \
 	client.c \
 	worker.c \

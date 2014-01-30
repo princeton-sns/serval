@@ -8,6 +8,7 @@ LOCAL_HDR_FILES := \
 	$(LOCAL_PATH)/../../include/common/hashtable.h \
 	$(LOCAL_PATH)/../../include/common/heap.h \
 	$(LOCAL_PATH)/../../include/common/list.h \
+	$(LOCAL_PATH)/../../include/common/log.h \
 	$(LOCAL_PATH)/../../include/common/platform.h \
 	$(LOCAL_PATH)/../../include/common/timer.h \
 	$(LOCAL_PATH)/../../include/common/signal.h \
@@ -16,6 +17,7 @@ LOCAL_HDR_FILES := \
 LOCAL_SRC_FILES := \
 	hashtable.c \
 	heap.c \
+	log.c \
 	signal.c \
 	timer.c
 

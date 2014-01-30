@@ -31,8 +31,8 @@
 #include <common/list.h>
 #include <common/timer.h>
 #include <common/debug.h>
+#include <common/log.h>
 #include <sys/epoll.h>
-#include "log.h"
 #include "translator.h"
 #include "client.h"
 #include "worker.h"
@@ -280,10 +280,10 @@ static struct client *accept_client(int sock, int port,
                 /* Cast to const char * to quell compiler on Android */
                 h = gethostbyaddr((const char *)&addr.in.sin_addr, 4, AF_INET);
                 
-                log_write_line(&logh, "c %s %s",
-                               inet_ntop(AF_INET, &addr.in.sin_addr, 
-                                         buf, sizeof(buf)),
-                               h ? h->h_name : "unknown hostname");
+                log_printf(&logh, "c %s %s",
+                           inet_ntop(AF_INET, &addr.in.sin_addr, 
+                                     buf, sizeof(buf)),
+                           h ? h->h_name : "unknown hostname");
         }
         
         return c;       
@@ -779,13 +779,15 @@ int main(int argc, char **argv)
                                 print_usage();
                                 goto fail;
                         }
-                        ret = log_open(&logh, argv[1]);
+                        ret = log_open(&logh, argv[1], LOG_APPEND);
 
                         if (ret == -1) {
                                 LOG_ERR("bad log file %s\n",
                                         argv[1]);
                                 goto fail;
                         }
+
+                        log_set_flag(&logh, LOG_F_TIMESTAMP);
 
                         LOG_DBG("Writing client log to '%s'\n",
                                 argv[1]);

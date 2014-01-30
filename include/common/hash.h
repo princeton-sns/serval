@@ -1,5 +1,5 @@
-#ifndef _HASH_H_
-#define _HASH_H_
+#ifndef _COMMON_HASH_H_
+#define _COMMON_HASH_H_
 /* Fast hashing routine for ints,  longs and pointers.
    (C) 2002 William Lee Irwin III, IBM */
 
@@ -133,4 +133,4 @@ full_bitstring_hash(const void *bits_in, unsigned int num_bits)
 	return end_name_hash(hash);
 }
 
-#endif /* _HASH_H */
+#endif /* _COMMON_HASH_H */
