@@ -254,7 +254,7 @@ int timer_handle_timeout(struct timer_queue *tq)
 		pthread_mutex_unlock(&tq->lock);
 		return -1;
 	}
-	
+
 	t = heap_remove_first_entry(&tq->queue, struct timer, hi);
 
 	pthread_mutex_unlock(&tq->lock);

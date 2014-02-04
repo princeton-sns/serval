@@ -122,7 +122,7 @@ int heap_insert(struct heap *h, struct heapitem *item)
 	parent = (i - 1) / 2;
 
 	/* find the correct place to insert */
-	while ((i > 0) && h->cmp(h->map[parent], item)) {
+	while ((i > 0) && h->cmp(item, h->map[parent])) {
 		h->map[i] = h->map[parent];
 		h->map[i]->index = i;
 		i = parent;

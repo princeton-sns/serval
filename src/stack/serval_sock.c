@@ -1060,9 +1060,9 @@ struct sock *sock_list_iterator_next(struct sock_list_iterator *iter)
 int serval_sock_flow_print_header(char *buf, size_t buflen)
 {
         return snprintf(buf, buflen, 
-                        "%-10s %-10s %-15s %-15s %-6s %-10s %s\n",
+                        "%-10s %-10s %-15s %-15s %-6s %-8s %-10s %s\n",
                         "srcFlowID", "dstFlowID", 
-                        "srcIP", "dstIP", "proto", "state", "dev");
+                        "srcIP", "dstIP", "proto", "backlog", "state", "dev");
 }
 
 int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
@@ -1074,7 +1074,7 @@ int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
                                                   sk->sk_bound_dev_if);
         
         len = snprintf(buf, buflen, 
-                       "%-10s %-10s %-15s %-15s %-6s %-10s %s\n",
+                       "%-10s %-10s %-15s %-15s %-6s %-8u %-10s %s\n",
                        flow_id_to_str(&ssk->local_flowid), 
                        flow_id_to_str(&ssk->peer_flowid),
                        inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
@@ -1082,6 +1082,7 @@ int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
                        inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
                                  dst, 18),
                        sk->sk_prot->name,
+                       sk->sk_ack_backlog,
                        serval_sock_state_str(sk),
                        dev ? dev->name : "unbound");
         

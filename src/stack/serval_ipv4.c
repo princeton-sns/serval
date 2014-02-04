@@ -491,8 +491,8 @@ int serval_ipv4_xmit(struct sk_buff *skb)
 		iph->frag_off = 0;
 	iph->ttl      = ip_select_ttl(inet, route_dst(rt));
 	iph->protocol = skb->protocol;
-	iph->saddr    = inet->inet_saddr; //rt->rt_src;
-	iph->daddr    = inet->inet_daddr; //rt->rt_dst;
+	iph->saddr    = rt->rt_src;
+	iph->daddr    = rt->rt_dst;
 
 	if (opt && opt->optlen) {
                 LOG_WARN("IP options not implemented\n");

@@ -31,8 +31,7 @@ void log_unset_flag(struct log_handle *lh, enum log_flag flag)
 int log_open(struct log_handle *lh, const char *path, enum log_mode lmode)
 {
     char *mode;
-
-    memset(lh, 0, sizeof(*lh));
+    FILE *fp;
     
     switch (lmode) {
     case LOG_APPEND:
@@ -43,11 +42,14 @@ int log_open(struct log_handle *lh, const char *path, enum log_mode lmode)
 	break;
     }
     
-    lh->fp = fopen(path, mode);
+    fp = fopen(path, mode);
     
-    if (!lh->fp)
+    if (!fp)
 	return -1;
-    
+
+    memset(lh, 0, sizeof(*lh));
+    lh->fp = fp;
+
     return 0;
 }
 
