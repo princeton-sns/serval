@@ -661,6 +661,7 @@ void serval_sock_init(struct sock *sk)
         ssk->sal_state = SAL_RSYN_INITIAL;
         ssk->udp_encap_sport = 0;
         ssk->udp_encap_dport = 0;
+        ssk->request_qlen = 0;
         ssk->max_request_qlen = DEFAULT_MAX_REQUEST_QLEN;
         INIT_LIST_HEAD(&ssk->sock_node);
         INIT_LIST_HEAD(&ssk->accept_queue);
