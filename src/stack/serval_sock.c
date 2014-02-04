@@ -44,6 +44,8 @@ static DEFINE_RWLOCK(sock_list_lock);
 /* The number of (prefix) bytes to hash on in the serviceID */
 #define SERVICE_KEY_LEN (8)
 
+#define DEFAULT_MAX_REQUEST_QLEN 500
+
 static const char *sock_state_str[] = {
         [ SAL_INIT ]      = "INIT",
         [ SAL_CONNECTED ] = "CONNECTED",
@@ -342,8 +344,10 @@ void serval_sock_request_queue_prune(struct sock *parent,
         struct serval_request_sock *srsk, *tmp;
         unsigned long now = jiffies;
 
-        if (pssk->request_qlen == 0)
+        if (pssk->request_qlen == 0) {
+                LOG_DBG("Request queue len=0, no pruning needed\n");
                 return;
+        }
 
         LOG_DBG("Pruning request queue (len=%lu)\n", pssk->request_qlen);
 
@@ -355,23 +359,15 @@ void serval_sock_request_queue_prune(struct sock *parent,
                         reqsk_free(req);
                 }
         }
-        list_for_each_entry_safe(srsk, tmp, &pssk->accept_queue, lh) {
-                if (time_after_eq(now, srsk->rsk.req.expires)) {
-                        struct request_sock *req = &srsk->rsk.req;
-                        list_del(&srsk->lh);
-                        serval_sock_request_queue_removed(parent);
-                        if (req->sk)
-                                sock_put(req->sk);
-                        reqsk_free(req);
-                }
-        }
+
+        if (pssk->request_qlen)
+                serval_sock_reset_keepalive_timer(parent, interval);
 }
 
 void serval_sock_reqsk_queue_add(struct sock *sk, struct request_sock *rsk,
-                                  unsigned long timeout)
+                                 unsigned long timeout)
 {
         serval_reqsk_queue(rsk, &serval_sk(sk)->syn_queue, timeout);
-        sk_acceptq_added(sk);
         serval_sock_request_queue_added(sk, timeout);
 }
 
@@ -665,6 +661,7 @@ void serval_sock_init(struct sock *sk)
         ssk->sal_state = SAL_RSYN_INITIAL;
         ssk->udp_encap_sport = 0;
         ssk->udp_encap_dport = 0;
+        ssk->max_request_qlen = DEFAULT_MAX_REQUEST_QLEN;
         INIT_LIST_HEAD(&ssk->sock_node);
         INIT_LIST_HEAD(&ssk->accept_queue);
         INIT_LIST_HEAD(&ssk->syn_queue);
@@ -1060,9 +1057,9 @@ struct sock *sock_list_iterator_next(struct sock_list_iterator *iter)
 int serval_sock_flow_print_header(char *buf, size_t buflen)
 {
         return snprintf(buf, buflen, 
-                        "%-10s %-10s %-15s %-15s %-6s %-8s %-10s %s\n",
+                        "%-10s %-10s %-15s %-15s %-6s %-8s %-8s %-10s %s\n",
                         "srcFlowID", "dstFlowID", 
-                        "srcIP", "dstIP", "proto", "backlog", "state", "dev");
+                        "srcIP", "dstIP", "proto", "reqQ", "backlog", "state", "dev");
 }
 
 int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
@@ -1074,7 +1071,7 @@ int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
                                                   sk->sk_bound_dev_if);
         
         len = snprintf(buf, buflen, 
-                       "%-10s %-10s %-15s %-15s %-6s %-8u %-10s %s\n",
+                       "%-10s %-10s %-15s %-15s %-6s %-8lu %-8u %-10s %s\n",
                        flow_id_to_str(&ssk->local_flowid), 
                        flow_id_to_str(&ssk->peer_flowid),
                        inet_ntop(AF_INET, &inet_sk(sk)->inet_saddr,
@@ -1082,6 +1079,7 @@ int serval_sock_flow_print(struct sock *sk, char *buf, size_t buflen)
                        inet_ntop(AF_INET, &inet_sk(sk)->inet_daddr,
                                  dst, 18),
                        sk->sk_prot->name,
+                       serval_sk(sk)->request_qlen,
                        sk->sk_ack_backlog,
                        serval_sock_state_str(sk),
                        dev ? dev->name : "unbound");

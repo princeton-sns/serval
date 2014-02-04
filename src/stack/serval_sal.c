@@ -1841,7 +1841,12 @@ static int serval_sal_rcv_syn(struct sock *sk,
 
         LOG_SSK(sk, "REQUEST verno=%u\n", ctx->verno);
 
-        if (sk->sk_ack_backlog >= sk->sk_max_ack_backlog) {
+        if (serval_sock_request_queue_is_full(sk)) {
+                LOG_DBG("Request queue is full, potential SYN flood!\n");
+                goto drop;
+        }
+
+        if (sk_acceptq_is_full(sk)) {
                 LOG_ERR("ack backlog is full (size=%u max=%u)\n",
                         sk->sk_ack_backlog, sk->sk_max_ack_backlog);
                 goto drop;
@@ -2103,6 +2108,8 @@ static struct sock * serval_sal_request_sock_handle(struct sock *sk,
 
                         /* Move request sock to accept queue */
                         list_move_tail(&srsk->lh, &ssk->accept_queue);
+                        serval_sock_request_queue_removed(sk);
+                        sk_acceptq_added(sk);
                         nsk->sk_ack_backlog = 0;
 
                         newinet = inet_sk(nsk);
