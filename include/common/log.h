@@ -21,7 +21,8 @@ enum log_mode {
 };
 
 enum log_flag {
-    LOG_F_TIMESTAMP = 1 << 0,
+    LOG_F_TIMESTAMP = 1 << 0, /* Add a timestamp to each log entry */
+    LOG_F_SYNC = 1 << 1,      /* Flush log to disk after each write */
 };
 
 struct log_handle {

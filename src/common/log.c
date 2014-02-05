@@ -85,6 +85,9 @@ int log_vprintf(struct log_handle *lh, const char *format, va_list ap)
     }
 	
     ret += vfprintf(lh->fp, format, ap);
-    
+
+    if (lh->flags & LOG_F_SYNC)
+	fflush(lh->fp);
+
     return ret;
 }

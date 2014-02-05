@@ -948,11 +948,11 @@ int main(int argc, char **argv)
 
                 strncpy(log_path + len, LOG_FILE, sizeof(log_path) - len);
                 log_open(DEFAULT_LOG, log_path, LOG_APPEND);
-                log_set_flag(DEFAULT_LOG, LOG_F_TIMESTAMP);
+                log_set_flag(DEFAULT_LOG, LOG_F_TIMESTAMP | LOG_F_SYNC);
 
                 strncpy(log_path + len, LOG_ERROR_FILE, sizeof(log_path) - len);
                 log_open(DEFAULT_ERR_LOG, log_path, LOG_APPEND);
-                log_set_flag(DEFAULT_ERR_LOG, LOG_F_TIMESTAMP);
+                log_set_flag(DEFAULT_ERR_LOG, LOG_F_TIMESTAMP | LOG_F_SYNC);
         }
 
         if (ctx.router) {
