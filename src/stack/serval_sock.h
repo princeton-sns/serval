@@ -157,6 +157,7 @@ struct serval_sock {
         struct list_head        syn_queue;
         struct list_head        accept_queue;
         unsigned long           request_qlen;
+        unsigned long           max_request_qlen;
         struct sk_buff          *ctrl_queue;
 	struct sk_buff		*ctrl_send_head;
         u8                      local_nonce[SAL_NONCE_SIZE];
@@ -265,6 +266,11 @@ void serval_sock_request_queue_prune(struct sock *parent,
                                      const unsigned long interval,
                                      const unsigned long timeout,
                                      const unsigned long max_rto);
+
+static inline int serval_sock_request_queue_is_full(struct sock *sk)
+{
+        return serval_sk(sk)->request_qlen > serval_sk(sk)->max_request_qlen;
+}
 
 static inline void serval_sock_request_queue_added(struct sock *sk,
                                                    unsigned long timeout)
