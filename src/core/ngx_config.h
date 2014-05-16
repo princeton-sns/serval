@@ -43,11 +43,6 @@
 
 #endif
 
-#if (NGX_HAVE_NETINET_SERVAL_H)
-#define NGX_HAVE_SERVAL 1
-#include <netinet/serval.h>
-#endif
-
 #ifndef NGX_HAVE_SO_SNDLOWAT
 #define NGX_HAVE_SO_SNDLOWAT     1
 #endif

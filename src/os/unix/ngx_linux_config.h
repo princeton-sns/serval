@@ -96,6 +96,10 @@ typedef struct iocb  ngx_aiocb_t;
 
 #define NGX_LISTEN_BACKLOG        511
 
+#if (NGX_HAVE_SERVAL)
+#include <netinet/serval.h>
+#endif
+
 
 #ifndef NGX_HAVE_SO_SNDLOWAT
 /* setsockopt(SO_SNDLOWAT) returns ENOPROTOOPT */

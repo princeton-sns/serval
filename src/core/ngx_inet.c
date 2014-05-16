@@ -968,7 +968,7 @@ ngx_parse_serval_url(ngx_pool_t *pool, ngx_url_t *u)
     u->host.len = len + 2;
     u->host.data = host - 1;
 
-    if (ngx_serval_addr(host, len, (u_char *)ssv->sv_srvid.s_sid) != NGX_OK) {
+    if (ngx_serval_addr(host, len, ssv->sv_srvid.s_sid) != NGX_OK) {
         u->err = "invalid service ID";
         return NGX_ERROR;
     }

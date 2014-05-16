@@ -1081,7 +1081,7 @@ ngx_http_variable_binary_remote_addr(ngx_http_request_t *r,
         v->valid = 1;
         v->no_cacheable = 0;
         v->not_found = 0;
-        v->data = (u_char *)ssv->sv_srvid.s_sid;
+        v->data = ssv->sv_srvid.s_sid;
 
         break;
 #endif

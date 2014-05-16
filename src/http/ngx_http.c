@@ -1967,7 +1967,7 @@ ngx_http_add_serviceid(ngx_conf_t *cf, ngx_http_port_t *hport,
 
         ssv = &addr[i].opt.u.sockaddr_sv;
         memcpy(&sids[i].srvid, &ssv->sv_srvid, sizeof(ssv->sv_srvid));
-	//	sids[i].prefix_bits = ssv->sv_prefix_bits;
+	sids[i].prefix_bits = ssv->sv_prefix_bits;
         sids[i].conf.default_server = addr[i].default_server;
 #if (NGX_HTTP_SSL)
         sids[i].conf.ssl = addr[i].opt.ssl;
