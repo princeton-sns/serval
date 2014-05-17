@@ -178,9 +178,9 @@ ngx_int_t
 ngx_serval_addr(u_char *text, size_t len, u_char *addr)
 {
 
-  //ngx_int_t i = 0;
+	ngx_int_t i = 0;
     struct service_id *srvid = (struct service_id *)addr;
-    /*        
+       
     while (1) {
 	u_char hex32[9];
 	
@@ -194,9 +194,11 @@ ngx_serval_addr(u_char *text, size_t len, u_char *addr)
 
 	len -= 8;
     }
-    */
-    if (srvid != NULL && serval_pton((const char*)text, srvid->s_sid))
-      return NGX_OK;
+
+    if (srvid != NULL && serval_pton((const char*)text, srvid->s_sid)) {
+		printf("Serval service-id: %s\n", service_id_to_str(srvid));
+		return NGX_OK;
+	}
     else
       return NGX_ERROR;
 }
