@@ -496,6 +496,18 @@ if [ $NGX_IPV6 = YES ]; then
     . auto/feature
 fi
 
+if [ $NGX_SERVAL = YES ]; then
+    ngx_feature="AF_SERVAL"
+    ngx_feature_name="NGX_HAVE_SERVAL"
+    ngx_feature_run=no
+    ngx_feature_incs="#include <netinet/serval.h>"
+    ngx_feature_path=
+    ngx_feature_libs=
+    ngx_feature_test="struct sockaddr_sv	ssv;
+                      ssv.sv_family = AF_SERVAL;"
+    . auto/feature
+fi
+
 
 ngx_feature="setproctitle()"
 ngx_feature_name="NGX_HAVE_SETPROCTITLE"

@@ -75,6 +75,10 @@ case $NGX_LIBATOMIC in
     *)     echo "  + using libatomic_ops library: $NGX_LIBATOMIC" ;;
 esac
 
+if [ $NGX_SERVAL = YES ]; then
+    echo "  + using serval active sockets"
+fi
+
 echo
 
 
